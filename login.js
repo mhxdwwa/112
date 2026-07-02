@@ -1,5 +1,5 @@
 // Supabase 配置
-const SUPABASE_URL = 'https://xbygoadskfqlnlnhwmet.supabase.co';
+const SUPABASE_URL = 'https://xbygooadskfqllnhwmet.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
 
 // 使用 db 作为变量名，避免和 window.supabase 冲突
