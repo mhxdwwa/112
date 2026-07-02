@@ -154,8 +154,8 @@ async function loadFromSupabase() {
       return false;
     }
 
-    // 过滤掉已标记删除的班级
-    // 孤儿班级的清理交给 _syncToSupabase 的 orphan cleanup 来做（同步执行，不异步）
+    // 过滤掉已标记删除的班级（防止删除后重新出现）
+    // 同时检测并删除 Supabase 中的孤儿班级（本地不存在但 Supabase 中残留的）
     var localData = null;
     try {
       var saved = localStorage.getItem('classPetData');
@@ -175,10 +175,12 @@ async function loadFromSupabase() {
         console.log('[DAL] Skipping deleted Supabase class:', sc.id);
         continue;
       }
-      // 如果本地有数据，且 Supabase 班级名在本地不存在，标记为待清理（不异步删除，避免竞态）
+      // 如果本地有数据，且 Supabase 班级名在本地不存在，说明是孤儿
       if (hasLocalData && !localClassNames[sc.name]) {
-        console.log('[DAL] Detected orphan class in Supabase (will clean in sync):', sc.id, sc.name);
+        console.log('[DAL] Detected orphan class in Supabase:', sc.id, sc.name, '- marking deleted');
         _markClassDeleted(sc.id);
+        // 不再异步删除（会与 _syncToSupabase 产生竞态条件）
+        // 由 _syncToSupabase 的孤儿清理统一处理
         continue;
       }
       filteredClasses.push(sc);
@@ -187,19 +189,18 @@ async function loadFromSupabase() {
       console.log('[DAL] All Supabase classes are marked as deleted or orphaned');
       return false;
     }
-    supaClasses = filteredClasses;
 
-    // 去重：如果 Supabase 中有多个同名班级（之前 bug 导致的重复），只保留第一个，其余标记为待清理
+    // 去重：如果 Supabase 中有多个同名班级（之前 bug 创建的重复），只保留 ID 最小的
     var seenNames = {};
     var dedupedClasses = [];
-    for (var di = 0; di < supaClasses.length; di++) {
-      var dsc = supaClasses[di];
-      if (!seenNames[dsc.name]) {
-        seenNames[dsc.name] = true;
-        dedupedClasses.push(dsc);
+    for (var di = 0; di < filteredClasses.length; di++) {
+      var dc = filteredClasses[di];
+      if (seenNames[dc.name]) {
+        console.log('[DAL] Deduplicating same-name class in Supabase:', dc.id, dc.name, '- marking as deleted');
+        _markClassDeleted(dc.id);
       } else {
-        console.log('[DAL] Duplicate class name in Supabase, marking extra:', dsc.id, dsc.name);
-        _markClassDeleted(dsc.id);
+        seenNames[dc.name] = true;
+        dedupedClasses.push(dc);
       }
     }
     supaClasses = dedupedClasses;
@@ -557,39 +558,43 @@ async function _pushClassToSupabase(classObj) {
       var upd = await db.from('classes').update({ name: classObj.name }).eq('id', supaClassId);
       if (upd.error) console.warn('[DAL] update class:', upd.error);
     } else {
-      // Supabase 中该 ID 已不存在，先查找是否有同名班级（防止创建重复）
-      console.log('[DAL] Supabase class', supaClassId, 'no longer exists, checking for same-name class');
-      var findResult = await db.from('classes')
-        .select('id')
-        .eq('teacher_id', teacherId)
-        .eq('name', classObj.name)
-        .maybeSingle();
-      if (findResult.data) {
-        // 找到同名班级，使用已有 ID
-        console.log('[DAL] Found existing same-name class in Supabase, id:', findResult.data.id);
-        supaClassId = findResult.data.id;
-        _idMap.classes[String(classObj.id)] = supaClassId;
-      } else {
-        // 确实没有，才插入新的
-        console.log('[DAL] No same-name class found, inserting new');
-        delete _idMap.classes[String(classObj.id)];
-        supaClassId = null;
-      }
+      // Supabase 中已不存在，清除旧映射，走插入逻辑
+      console.log('[DAL] Supabase class', supaClassId, 'no longer exists, re-inserting');
+      delete _idMap.classes[String(classObj.id)];
+      supaClassId = null;
     }
   }
   if (!supaClassId) {
-    console.log('[DAL] Inserting class:', classObj.name);
-    var ins = await db.from('classes')
-      .insert([{ teacher_id: teacherId, name: classObj.name }])
+    // 关键修复：插入前先查 Supabase 是否已有同名班级（防止创建重复/孤儿）
+    console.log('[DAL] No mapped supaClassId, checking for existing same-name class...');
+    var findExisting = await db.from('classes')
       .select('id')
-      .single();
-    if (ins.error) {
-      console.error('[DAL] insert class:', ins.error);
-      return;
+      .eq('teacher_id', teacherId)
+      .eq('name', classObj.name)
+      .maybeSingle();
+    if (findExisting.data) {
+      console.log('[DAL] Found existing class with same name, reusing id:', findExisting.data.id);
+      supaClassId = findExisting.data.id;
+      _idMap.classes[String(classObj.id)] = supaClassId;
+      _saveIdMap();
+      // 更新名称（以防万一）
+      var upd = await db.from('classes').update({ name: classObj.name }).eq('id', supaClassId);
+      if (upd.error) console.warn('[DAL] update reused class:', upd.error);
+    } else {
+      console.log('[DAL] No existing class found, inserting new:', classObj.name);
+      var ins = await db.from('classes')
+        .insert([{ teacher_id: teacherId, name: classObj.name }])
+        .select('id')
+        .single();
+      if (ins.error) {
+        console.error('[DAL] insert class:', ins.error);
+        return;
+      }
+      console.log('[DAL] Class inserted, id=', ins.data.id);
+      supaClassId = ins.data.id;
+      _idMap.classes[String(classObj.id)] = supaClassId;
+      _saveIdMap();
     }
-    console.log('[DAL] Class inserted, id=', ins.data.id);
-    supaClassId = ins.data.id;
-    _idMap.classes[String(classObj.id)] = supaClassId;
   }
 
   // 2. 同步学生
@@ -1003,26 +1008,10 @@ async function _loadArchiveFromSupabase() {
   }
 }
 
-// 推送已删除班级
-async function _pushDeletedClassesToSupabase() {
-  if (!currentUser || currentUser.type !== 'teacher') return;
-  try {
-    var deleted = typeof deletedClasses !== 'undefined' ? deletedClasses : [];
-    for (var i = 0; i < deleted.length; i++) {
-      var cls = deleted[i];
-      var data = {
-        teacher_id: currentUser.id,
-        class_name: cls.name || 'Unknown',
-        data: JSON.stringify(cls)
-      };
-      
-      await db.from('deleted_classes').insert([data]);
-    }
-    console.log('[DAL] Deleted classes synced:', deleted.length);
-  } catch (e) {
-    console.warn('[DAL] pushDeletedClasses error:', e);
-  }
-}
+// 注意：_pushDeletedClassesToSupabase 已移除
+// 原因：Supabase 中没有 deleted_classes 表，调用会导致整个同步崩溃
+// 已删除班级的追踪通过 _deletedSupaClassIds（localStorage）管理
+// 实际删除操作在 _syncToSupabase 的孤儿清理中完成
 
 // ===== 导出所有数据到本地（U盘同步） =====
 async function exportAllDataToUSB() {
@@ -1315,9 +1304,8 @@ async function _executeImportCombinedData(data) {
   try {
     showNotification('正在导入数据...', '请稍候', 'info');
     
-    // 清空已删除班级追踪（导入数据为最新标准）
-    _deletedSupaClassIds = {};
-    _saveDeletedClassIds();
+    // 先保存旧的已删除追踪（导入成功后再清空）
+    var oldDeletedIds = JSON.parse(JSON.stringify(_deletedSupaClassIds));
     
     // 替换各类数据
     if (data.classPetData && Array.isArray(data.classPetData)) {
@@ -1368,6 +1356,10 @@ async function _executeImportCombinedData(data) {
     await _pushLogsToSupabase();
     await _pushArchiveToSupabase();
     
+    // 全部成功后才清空已删除追踪（导入数据为最新标准）
+    _deletedSupaClassIds = {};
+    _saveDeletedClassIds();
+    
     // 重新渲染页面
     if (typeof init === 'function') {
       currentClassId = classesData.length > 0 ? classesData[0].id : null;
@@ -1413,10 +1405,6 @@ function _confirmImportFullBackup(data) {
 async function _executeImportFullBackup(data) {
   try {
     showNotification('正在导入数据...', '请稍候', 'info');
-    
-    // 清空已删除班级追踪（导入数据为最新标准）
-    _deletedSupaClassIds = {};
-    _saveDeletedClassIds();
     
     // 直接用导入数据替换所有现有数据
     if (data.classPetData && Array.isArray(data.classPetData)) {
@@ -1468,6 +1456,10 @@ async function _executeImportFullBackup(data) {
     await _pushLogsToSupabase();
     await _pushArchiveToSupabase();
     
+    // 全部成功后才清空已删除追踪
+    _deletedSupaClassIds = {};
+    _saveDeletedClassIds();
+    
     // 重新渲染页面
     if (typeof init === 'function') {
       currentClassId = classesData.length > 0 ? classesData[0].id : null;
@@ -1508,10 +1500,6 @@ async function _executeImportClassData(data) {
   try {
     showNotification('正在导入数据...', '请稍候', 'info');
     
-    // 清空已删除班级追踪（导入数据为最新标准）
-    _deletedSupaClassIds = {};
-    _saveDeletedClassIds();
-    
     // 直接替换
     classesData = data;
     
@@ -1531,6 +1519,10 @@ async function _executeImportClassData(data) {
     await _pushCustomActionsToSupabase();
     await _pushLogsToSupabase();
     await _pushArchiveToSupabase();
+    
+    // 全部成功后才清空已删除追踪
+    _deletedSupaClassIds = {};
+    _saveDeletedClassIds();
     
     if (typeof init === 'function') {
       currentClassId = classesData.length > 0 ? classesData[0].id : null;
