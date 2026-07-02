@@ -654,8 +654,27 @@ async function initDAL() {
       init();
     }
   } else {
-    console.log('[DAL] No data in Supabase yet, using localStorage data (will sync on first save)');
-    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('');
+    console.log('[DAL] No data in Supabase, checking localStorage for initial sync...');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
+
+    // 如果 Supabase 为空但 localStorage 有旧数据，立即推送到云端
+    if (currentUser.type === 'teacher' && classesData.length > 0) {
+      console.log('[DAL] Found', classesData.length, 'classes in localStorage, pushing to Supabase...');
+      try {
+        for (var i = 0; i < classesData.length; i++) {
+          await _pushClassToSupabase(classesData[i]);
+        }
+        await _pushCustomActionsToSupabase();
+        await _pushLogsToSupabase();
+        console.log('[DAL] Initial sync complete — localStorage data pushed to Supabase');
+        if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
+      } catch (e) {
+        console.error('[DAL] Initial sync failed:', e);
+        if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
+      }
+    } else {
+      if (typeof _updateCloudStatus === 'function') _updateCloudStatus('');
+    }
   }
 
   // 包装保存函数（使每次保存自动同步到 Supabase）
