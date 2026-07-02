@@ -2,7 +2,19 @@
 const SUPABASE_URL = 'https://xbygoadskfqlnlnhwmet.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabase;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase connected');
+  } else {
+    console.error('Supabase SDK not loaded');
+    alert('Supabase SDK 加载失败，请刷新页面重试');
+  }
+} catch (e) {
+  console.error('Supabase init error:', e);
+  alert('Supabase 初始化失败：' + e.message);
+}
 
 // 切换标签页
 function switchTab(type) {
