@@ -1987,6 +1987,82 @@ async function initDAL() {
   _setupCloseSync();
 }
 
+// ===== 手动同步（老师点击云端状态按钮触发） =====
+async function forceManualSync() {
+  if (!currentUser || currentUser.type !== 'teacher') {
+    if (typeof showNotification === 'function') {
+      showNotification('提示', '手动同步仅限老师模式', 'info');
+    }
+    return;
+  }
+  if (!db) {
+    if (typeof showNotification === 'function') {
+      showNotification('同步失败', 'Supabase 未连接，请刷新页面', 'error');
+    }
+    return;
+  }
+  if (_dalSyncing) {
+    if (typeof showNotification === 'function') {
+      showNotification('同步中', '正在同步，请稍候...', 'info');
+    }
+    return;
+  }
+
+  if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
+  if (typeof showNotification === 'function') {
+    showNotification('手动同步', '正在同步数据到云端...', 'info');
+  }
+
+  try {
+    // 测试连接（检查 session 是否有效）
+    var testResult = await db.from('classes').select('id').limit(1);
+    if (testResult.error) {
+      if (testResult.message && (testResult.message.indexOf('JWT') >= 0 || testResult.message.indexOf('expired') >= 0 || testResult.message.indexOf('auth') >= 0)) {
+        if (typeof showNotification === 'function') {
+          showNotification('登录已过期', '请退出后重新登录，然后再次同步', 'error');
+        }
+      } else {
+        throw new Error('Supabase 连接失败: ' + testResult.error.message);
+      }
+      return;
+    }
+
+    // 推送所有班级
+    for (var i = 0; i < classesData.length; i++) {
+      await _pushClassToSupabase(classesData[i]);
+    }
+
+    // 推送自定义奖惩和操作日志
+    await _pushCustomActionsToSupabase();
+    await _pushLogsToSupabase();
+    await _pushArchiveToSupabase();
+
+    // 验证同步结果
+    var verifyResult = await db.from('classes').select('id, name').eq('teacher_id', currentUser.id);
+    var supaClassCount = (verifyResult.data || []).length;
+    var localClassCount = classesData.length;
+
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
+
+    var msg = '同步完成！本地 ' + localClassCount + ' 个班级，云端 ' + supaClassCount + ' 个班级。';
+    if (localClassCount === supaClassCount) {
+      msg += ' ✅ 数据一致';
+    } else {
+      msg += ' ⚠️ 数量不一致，请检查';
+    }
+    if (typeof showNotification === 'function') {
+      showNotification('同步成功', msg, 'success');
+    }
+    console.log('[DAL] Manual sync complete:', msg);
+  } catch (e) {
+    console.error('[DAL] Manual sync failed:', e);
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
+    if (typeof showNotification === 'function') {
+      showNotification('同步失败', e.message || '请检查网络和 Supabase 配置', 'error');
+    }
+  }
+}
+
 // ===== 学生模式：隐藏老师专属 UI =====
 function applyStudentRestrictions() {
   if (!currentUser || currentUser.type !== 'student') return;

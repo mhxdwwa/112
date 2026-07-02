@@ -22,7 +22,7 @@
 <div class="deco-bubble" style="left:80%;width:45px;height:45px;background:radial-gradient(circle,#d0ffd0,#a0e8a0);--float-dur:20s;--float-delay:2s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:40%;width:55px;height:55px;background:radial-gradient(circle,#ffe0ff,#e0b0e0);--float-dur:15s;--float-delay:8s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:70%;width:70px;height:70px;background:radial-gradient(circle,#ffd0c0,#ffb0a0);--float-dur:17s;--float-delay:5s;--bubble-opacity:0.07;"></div>
-<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><span id="cloudSyncStatus" style="display:flex;align-items:center;gap:4px;font-size:13px;color:#6a9955;font-weight:600;background:linear-gradient(135deg,#e8ffe8,#d0f0d0);border-radius:20px;padding:6px 14px;box-shadow:0 2px 8px rgba(100,180,100,0.15);">☁️ 云端同步</span><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
+<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><span id="cloudSyncStatus" onclick="forceManualSync()" style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:13px;color:#6a9955;font-weight:600;background:linear-gradient(135deg,#e8ffe8,#d0f0d0);border-radius:20px;padding:6px 14px;box-shadow:0 2px 8px rgba(100,180,100,0.15);transition:all 0.2s;" title="点击手动同步到云端">☁️ 云端同步</span><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
 <!-- 背景音乐控制面板 -->
 <div class="music-panel" id="musicPanel">
   <button class="music-toggle" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button>
@@ -122,7 +122,7 @@
       el.style.color = '#6a9955';
       el.style.background = 'linear-gradient(135deg,#e8ffe8,#d0f0d0)';
     } else if (state === 'error') {
-      el.innerHTML = '☁️ 同步失败';
+      el.innerHTML = '☁️ 同步失败(点击重试)';
       el.style.color = '#cc4444';
       el.style.background = 'linear-gradient(135deg,#ffe8e8,#ffd0d0)';
     } else {
