@@ -288,11 +288,3 @@ async function handleStudentRegister(e) {
     showError('studentRegError', '注册失败：' + err.message);
   }
 }
-
-// 检查是否已登录（暂时禁用自动跳转，等主页面改造完成后再启用）
-// async function checkAuth() {
-//   const userType = localStorage.getItem('userType');
-//   if (userType) {
-//     window.location.href = 'index.html';
-//   }
-// }
