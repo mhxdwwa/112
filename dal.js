@@ -534,7 +534,7 @@ async function _pushLogsToSupabase() {
 
 // ===== 主同步函数（防抖） =====
 async function _syncToSupabase() {
-  if (!db || !currentUser || currentUser.type !== 'teacher') return;
+  if (!db || !currentUser) return;
   if (_dalSyncing) {
     _dalSyncQueued = true;
     return;
@@ -545,34 +545,40 @@ async function _syncToSupabase() {
   if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
 
   try {
-    for (var i = 0; i < classesData.length; i++) {
-      await _pushClassToSupabase(classesData[i]);
-    }
+    if (currentUser.type === 'student') {
+      // 学生模式：只同步自己的宠物数据
+      await _syncStudentToSupabase();
+    } else {
+      // 老师模式：同步全部班级数据
+      for (var i = 0; i < classesData.length; i++) {
+        await _pushClassToSupabase(classesData[i]);
+      }
 
-    // 删除 Supabase 中已不存在的班级
-    var supaClassIds = classesData.map(function(c) { return _getSupaClassId(c.id); }).filter(Boolean);
-    if (supaClassIds.length > 0) {
-      // 找出 Supabase 中有但本地没有的班级
-      var allResult = await db.from('classes')
-        .select('id')
-        .eq('teacher_id', currentUser.id);
-      if (allResult.data) {
-        for (var j = 0; j < allResult.data.length; j++) {
-          var sid = allResult.data[j].id;
-          if (supaClassIds.indexOf(sid) === -1) {
-            // 这个班级在本地已删除
-            await db.from('pets').in('student_id',
-              db.from('students').select('id').eq('class_id', sid)
-            ).delete();
-            await db.from('students').eq('class_id', sid).delete();
-            await db.from('classes').eq('id', sid).delete();
+      // 删除 Supabase 中已不存在的班级
+      var supaClassIds = classesData.map(function(c) { return _getSupaClassId(c.id); }).filter(Boolean);
+      if (supaClassIds.length > 0) {
+        // 找出 Supabase 中有但本地没有的班级
+        var allResult = await db.from('classes')
+          .select('id')
+          .eq('teacher_id', currentUser.id);
+        if (allResult.data) {
+          for (var j = 0; j < allResult.data.length; j++) {
+            var sid = allResult.data[j].id;
+            if (supaClassIds.indexOf(sid) === -1) {
+              // 这个班级在本地已删除
+              await db.from('pets').in('student_id',
+                db.from('students').select('id').eq('class_id', sid)
+              ).delete();
+              await db.from('students').eq('class_id', sid).delete();
+              await db.from('classes').eq('id', sid).delete();
+            }
           }
         }
       }
-    }
 
-    await _pushCustomActionsToSupabase();
-    await _pushLogsToSupabase();
+      await _pushCustomActionsToSupabase();
+      await _pushLogsToSupabase();
+    }
 
     console.log('[DAL] Synced to Supabase');
     if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
@@ -586,6 +592,62 @@ async function _syncToSupabase() {
       _syncToSupabase();
     }
   }
+}
+
+// ===== 学生模式：同步自己的宠物数据到 Supabase =====
+async function _syncStudentToSupabase() {
+  var studentId = parseInt(localStorage.getItem('studentId'));
+  if (!studentId) {
+    console.warn('[DAL] Student sync: no studentId in localStorage');
+    return;
+  }
+
+  // 在 classesData 中找到自己
+  var classObj = classesData[0];
+  if (!classObj) return;
+  var student = classObj.students.find(function(s) {
+    return s.id.toString() === studentId.toString();
+  });
+  if (!student) return;
+
+  console.log('[DAL] Student syncing data for:', student.name);
+
+  // 1. 同步学生金币
+  var stuUpd = await db.from('students')
+    .update({ coins: student.coins || 0 })
+    .eq('id', studentId);
+  if (stuUpd.error) console.warn('[DAL] Student sync: update coins error:', stuUpd.error);
+
+  // 2. 同步每只宠物
+  for (var k = 0; k < (student.pets || []).length; k++) {
+    var pet = student.pets[k];
+    var petData = {
+      name: pet.name,
+      nickname: pet.nickname || pet.name,
+      level: pet.level || 1,
+      growth: pet.growth || 0,
+      coins: pet.coins || 0,
+      is_active: pet.is_active !== false,
+      is_dead: pet.isDead || false,
+      last_feed_date: pet.lastFeedDate || null,
+      last_play_date: pet.lastPlayDate || null,
+      today_feed_count: pet.todayFeedCount || 0,
+      today_play_count: pet.todayPlayCount || 0,
+      penalty_streak: pet.penaltyStreak || 0
+    };
+
+    // 宠物 ID 映射：从 Supabase 加载时用的是真实整数 ID
+    var supaPetId = pet.id;
+    if (supaPetId && typeof supaPetId === 'number' && supaPetId % 1 === 0) {
+      var petUpd = await db.from('pets').update(petData).eq('id', supaPetId);
+      if (petUpd.error) console.warn('[DAL] Student sync: update pet error:', petUpd.error);
+      else console.log('[DAL] Student sync: pet', pet.name, 'synced');
+    } else {
+      console.warn('[DAL] Student sync: pet', pet.name, 'has no valid Supabase ID, skipping');
+    }
+  }
+
+  console.log('[DAL] Student sync complete');
 }
 
 // ===== 包装 app.js 的保存函数 =====
@@ -768,7 +830,7 @@ var _dalSyncInterval = 30000; // 30秒
 function _startAutoSync() {
   if (_dalAutoSyncTimer) clearInterval(_dalAutoSyncTimer);
   _dalAutoSyncTimer = setInterval(function() {
-    if (currentUser && currentUser.type === 'teacher' && !_dalSyncing) {
+    if (currentUser && !_dalSyncing) {
       console.log('[DAL] Auto-sync triggered');
       _syncToSupabase();
     }
@@ -780,9 +842,8 @@ function _startAutoSync() {
 function _setupCloseSync() {
   // 页面关闭前同步
   window.addEventListener('beforeunload', function() {
-    if (currentUser && currentUser.type === 'teacher') {
+    if (currentUser) {
       console.log('[DAL] Page closing, syncing...');
-      // 使用 sendBeacon 或同步请求（但 Supabase 不支持，所以只能尽力而为）
       _syncToSupabase();
     }
   });
@@ -790,7 +851,7 @@ function _setupCloseSync() {
   // 页面隐藏时同步（切换标签页、最小化等）
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') {
-      if (currentUser && currentUser.type === 'teacher') {
+      if (currentUser) {
         console.log('[DAL] Page hidden, syncing...');
         _syncToSupabase();
       }
