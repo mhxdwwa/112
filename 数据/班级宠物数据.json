@@ -1,0 +1,3423 @@
+[
+  {
+    "id": "1780779847256",
+    "name": "03-11",
+    "students": [
+      {
+        "id": 1780779903104.7783,
+        "name": "小周",
+        "coins": 126,
+        "pets": [
+          {
+            "id": 1780780048910.4983,
+            "name": "九尾天狐",
+            "nickname": "九尾天狐",
+            "level": 9,
+            "growth": 64802,
+            "lastFeedDate": "2026-06-06T21:07:28.910Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.077Z",
+        "activePetId": 1780780048910.4983,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_gold",
+          "topAccessory": "top_bow",
+          "particles": "ptcl_sakura",
+          "titles": "title_legend",
+          "scenes": "scene_sakura",
+          "baseEffect": "base_galaxy"
+        },
+        "shopItems": [
+          "border_gold",
+          "top_flower",
+          "base_rainbow",
+          "base_magic",
+          "base_galaxy",
+          "ptcl_stars",
+          "ptcl_snow",
+          "ptcl_firefly",
+          "ptcl_sakura",
+          "title_legend",
+          "scene_space",
+          "scene_beach",
+          "scene_meadow",
+          "scene_sakura",
+          "scene_volcano",
+          "top_crown",
+          "top_bow"
+        ],
+        "lastJianghuDate": "Wed Jun 24 2026"
+      },
+      {
+        "id": 1780779867800.57,
+        "name": "小王",
+        "coins": 3279,
+        "pets": [
+          {
+            "id": 1780779950271.636,
+            "name": "七彩貂",
+            "nickname": "七彩貂",
+            "level": 9,
+            "growth": 64947,
+            "lastFeedDate": "2026-06-06T21:05:50.271Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.092Z",
+        "activePetId": 1780779950271.636,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "topAccessory": "top_flower",
+          "baseEffect": "base_cloud",
+          "scenes": "scene_sakura",
+          "particles": "ptcl_hearts",
+          "titles": "title_xueba",
+          "borders": "border_flame"
+        },
+        "shopItems": [
+          "top_halo",
+          "top_flower",
+          "base_rainbow",
+          "border_starry",
+          "scene_sakura",
+          "ptcl_hearts",
+          "title_legend",
+          "border_gold",
+          "title_xueba",
+          "base_cloud",
+          "border_flame"
+        ],
+        "lastJianghuDate": "Wed Jun 24 2026"
+      },
+      {
+        "id": 1780779889642.1907,
+        "name": "小韦",
+        "coins": 158128,
+        "pets": [
+          {
+            "id": 1780780031846.1648,
+            "name": "考拉",
+            "nickname": "考拉",
+            "level": 9,
+            "growth": 150511,
+            "lastFeedDate": "2026-06-06T21:07:11.846Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.110Z",
+        "activePetId": 1780780031846.1648,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_volcano",
+          "titles": "title_xueba",
+          "particles": "ptcl_hearts",
+          "baseEffect": "base_magic",
+          "topAccessory": "top_horns",
+          "borders": "border_starry"
+        },
+        "shopItems": [
+          "scene_aurora",
+          "title_juanwang",
+          "title_legend",
+          "title_xueba",
+          "ptcl_stars",
+          "base_cloud",
+          "top_bow",
+          "border_starry",
+          "top_horns",
+          "ptcl_sakura",
+          "ptcl_firefly",
+          "scene_meadow",
+          "scene_beach",
+          "scene_space",
+          "scene_sakura",
+          "ptcl_hearts",
+          "base_magic",
+          "border_rainbow",
+          "border_flame",
+          "border_ice",
+          "base_rainbow",
+          "base_lava",
+          "base_galaxy",
+          "scene_volcano"
+        ],
+        "lastJianghuDate": "Wed Jun 24 2026"
+      },
+      {
+        "id": 1781058808243.7231,
+        "name": "小龙",
+        "coins": 177,
+        "pets": [
+          {
+            "id": 1781058845450.2117,
+            "name": "熊猫大侠",
+            "nickname": "熊猫大侠",
+            "level": 9,
+            "growth": 64821,
+            "lastFeedDate": "2026-06-10T02:34:05.450Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.129Z",
+        "activePetId": 1781058845450.2117,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_gold",
+          "topAccessory": "top_halo",
+          "particles": "ptcl_snow",
+          "titles": "title_dragon",
+          "scenes": "scene_sakura",
+          "baseEffect": "base_magic"
+        },
+        "shopItems": [
+          "border_gold",
+          "border_flame",
+          "top_halo",
+          "top_crown",
+          "top_flower",
+          "base_rainbow",
+          "base_magic",
+          "ptcl_thunder",
+          "ptcl_snow",
+          "title_dragon",
+          "scene_aurora",
+          "scene_sakura"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1780779871938.6692,
+        "name": "小覃",
+        "coins": 1005406,
+        "pets": [
+          {
+            "id": 1780779993743.1726,
+            "name": "小老鼠",
+            "nickname": "小老鼠",
+            "level": 9,
+            "growth": 64832,
+            "lastFeedDate": "2026-06-06T21:06:33.743Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.149Z",
+        "activePetId": 1780779993743.1726,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_ice",
+          "topAccessory": "top_crown",
+          "baseEffect": "base_magic",
+          "particles": "ptcl_snow",
+          "titles": "title_juanwang",
+          "scenes": "scene_meadow"
+        },
+        "shopItems": [
+          "border_ice",
+          "top_crown",
+          "base_magic",
+          "ptcl_firefly",
+          "title_dragon",
+          "scene_beach",
+          "scene_space",
+          "scene_sakura",
+          "scene_volcano",
+          "scene_meadow",
+          "ptcl_stars",
+          "ptcl_snow",
+          "title_juanwang"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1780779881178.1472,
+        "name": "小吴",
+        "coins": 275,
+        "pets": [
+          {
+            "id": 1780780022814.0964,
+            "name": "刺猬",
+            "nickname": "刺猬",
+            "level": 9,
+            "growth": 64696,
+            "lastFeedDate": "2026-06-06T21:07:02.814Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.170Z",
+        "activePetId": 1780780022814.0964,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_ice",
+          "scenes": "scene_space",
+          "baseEffect": "base_galaxy",
+          "particles": "ptcl_stars",
+          "titles": "title_xueba"
+        },
+        "shopItems": [
+          "border_starry",
+          "top_halo",
+          "base_galaxy",
+          "ptcl_sakura",
+          "title_juanwang",
+          "scene_space",
+          "scene_beach",
+          "border_gold",
+          "border_ice",
+          "border_rainbow",
+          "ptcl_stars",
+          "ptcl_hearts",
+          "ptcl_snow",
+          "ptcl_firefly",
+          "scene_volcano",
+          "title_wulin",
+          "title_legend",
+          "title_xueba"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1780779875946.2935,
+        "name": "小刘",
+        "coins": 1183,
+        "pets": [
+          {
+            "id": 1780780007871.0974,
+            "name": "火凤凰",
+            "nickname": "火凤凰",
+            "level": 9,
+            "growth": 65155,
+            "lastFeedDate": "2026-06-06T21:06:47.871Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.190Z",
+        "activePetId": 1780780007871.0974,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "particles": "ptcl_thunder",
+          "titles": "title_wulin",
+          "baseEffect": "base_lava",
+          "topAccessory": "top_bow",
+          "scenes": "scene_volcano",
+          "borders": "border_flame"
+        },
+        "shopItems": [
+          "ptcl_thunder",
+          "title_wulin",
+          "base_lava",
+          "top_bow",
+          "scene_volcano",
+          "border_flame"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1781424262337.2441,
+        "name": "小张",
+        "coins": 66519,
+        "pets": [
+          {
+            "id": 1781424391528.1082,
+            "name": "海马",
+            "nickname": "海马",
+            "level": 9,
+            "growth": 45165,
+            "lastFeedDate": "2026-06-14T08:06:31.528Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.210Z",
+        "activePetId": 1781424391528.1082,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_sakura",
+          "titles": "title_juanwang",
+          "particles": "ptcl_stars",
+          "baseEffect": "base_galaxy",
+          "topAccessory": "top_crown",
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "scene_beach",
+          "scene_space",
+          "scene_sakura",
+          "title_juanwang",
+          "ptcl_stars",
+          "base_galaxy",
+          "top_crown",
+          "border_ice",
+          "base_magic"
+        ],
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1781424297681.467,
+        "name": "小孙",
+        "coins": 253234,
+        "pets": [
+          {
+            "id": 1781424468182.925,
+            "name": "北美浣熊",
+            "nickname": "北美浣熊",
+            "level": 9,
+            "growth": 105129,
+            "lastFeedDate": "2026-06-14T08:07:48.182Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.231Z",
+        "activePetId": 1781424468182.925,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_flame",
+          "topAccessory": "top_flower",
+          "baseEffect": "base_cloud",
+          "particles": "ptcl_snow",
+          "titles": "title_xueba",
+          "scenes": "scene_space"
+        },
+        "shopItems": [
+          "border_flame",
+          "top_flower",
+          "base_cloud",
+          "ptcl_snow",
+          "title_xueba",
+          "scene_space"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1781332856792.2122,
+        "name": "小徐",
+        "coins": 46776,
+        "pets": [
+          {
+            "id": 1781334075102.5593,
+            "name": "宠物56",
+            "nickname": "宠物56",
+            "level": 9,
+            "growth": 51156,
+            "lastFeedDate": "2026-06-13T07:01:15.102Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.252Z",
+        "activePetId": 1781334075102.5593,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_gold",
+          "scenes": "scene_aurora",
+          "titles": "title_dragon",
+          "particles": "ptcl_hearts",
+          "baseEffect": "base_rainbow",
+          "topAccessory": "top_bow"
+        },
+        "shopItems": [
+          "border_gold",
+          "scene_aurora",
+          "title_dragon",
+          "ptcl_hearts",
+          "base_rainbow",
+          "top_crown",
+          "top_bow"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1781422465887.8728,
+        "name": "小金",
+        "coins": 53678,
+        "pets": [
+          {
+            "id": 1781422494919.8245,
+            "name": "宠物57",
+            "nickname": "和蓝高地牛",
+            "level": 9,
+            "growth": 48609,
+            "lastFeedDate": "2026-06-14T07:34:54.919Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.270Z",
+        "activePetId": 1781422494919.8245,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_sakura",
+          "titles": "title_wulin",
+          "baseEffect": "base_magic",
+          "topAccessory": "top_flower",
+          "borders": "border_gold",
+          "particles": "ptcl_thunder"
+        },
+        "shopItems": [
+          "scene_beach",
+          "scene_meadow",
+          "title_wulin",
+          "ptcl_sakura",
+          "base_magic",
+          "top_bow",
+          "border_rainbow",
+          "border_flame",
+          "border_ice",
+          "border_starry",
+          "border_gold",
+          "top_flower",
+          "scene_space",
+          "scene_sakura",
+          "ptcl_firefly",
+          "ptcl_snow",
+          "ptcl_stars",
+          "ptcl_thunder",
+          "base_cloud"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1781423785319.5535,
+        "name": "小李",
+        "coins": 169405,
+        "pets": [
+          {
+            "id": 1781423801271.0288,
+            "name": "宠物58",
+            "nickname": "丛猴",
+            "level": 9,
+            "growth": 98850,
+            "lastFeedDate": "2026-06-14T07:56:41.271Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-14T07:57:56.272Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.292Z",
+        "activePetId": 1781423801271.0288,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_starry",
+          "topAccessory": "top_horns",
+          "baseEffect": "base_rainbow",
+          "particles": "ptcl_thunder",
+          "titles": "title_legend",
+          "scenes": "scene_aurora"
+        },
+        "shopItems": [
+          "border_starry",
+          "top_horns",
+          "base_lava",
+          "base_galaxy",
+          "base_rainbow",
+          "ptcl_thunder",
+          "title_dragon",
+          "scene_aurora",
+          "title_legend"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1781424345664.6306,
+        "name": "小陈",
+        "coins": 6239,
+        "pets": [
+          {
+            "id": 1781424577022.9773,
+            "name": "果冻蝾螈",
+            "nickname": "果冻蝾螈",
+            "level": 9,
+            "growth": 32964,
+            "lastFeedDate": "2026-06-14T08:09:37.022Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.312Z",
+        "activePetId": 1781424577022.9773,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "topAccessory": "top_bow",
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "scene_sakura",
+          "title_dragon",
+          "ptcl_hearts",
+          "base_rainbow",
+          "top_bow",
+          "border_ice",
+          "title_juanwang",
+          "base_galaxy",
+          "scene_aurora",
+          "title_legend",
+          "ptcl_thunder",
+          "ptcl_sakura"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1781424364176.1458,
+        "name": "小杨",
+        "coins": 4176,
+        "pets": [
+          {
+            "id": 1781424683661.3125,
+            "name": "黄牛",
+            "nickname": "黄牛",
+            "level": 9,
+            "growth": 33933,
+            "lastFeedDate": "2026-06-14T08:11:23.661Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-26T01:16:08.332Z",
+        "activePetId": 1781424683661.3125,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_rainbow",
+          "topAccessory": "top_crown",
+          "baseEffect": "base_galaxy",
+          "particles": "ptcl_stars",
+          "titles": "title_xueba",
+          "scenes": "scene_meadow"
+        },
+        "shopItems": [
+          "border_starry",
+          "border_rainbow",
+          "top_crown",
+          "base_galaxy",
+          "ptcl_stars",
+          "ptcl_hearts",
+          "title_xueba",
+          "scene_meadow"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      }
+    ],
+    "pauseGrowth": {
+      "start": "2026-06-19",
+      "end": "2026-06-21"
+    }
+  },
+  {
+    "id": "1778555634247",
+    "name": "253",
+    "students": [
+      {
+        "id": 1778555645062.952,
+        "name": "罗俊昌",
+        "coins": 270,
+        "pets": [
+          {
+            "id": 1778589104766.7124,
+            "name": "猫猫虎",
+            "nickname": "蜗牛",
+            "level": 4,
+            "growth": 379,
+            "lastFeedDate": "2026-06-30T02:58:17.814Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:12.592Z",
+        "activePetId": 1778589104766.7124,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "titles": "title_juanwang",
+          "scenes": "scene_space"
+        },
+        "shopItems": [
+          "title_juanwang",
+          "scene_space"
+        ],
+        "lastJianghuDate": "Wed Jun 24 2026"
+      },
+      {
+        "id": 1778555645062.685,
+        "name": "韦永洪",
+        "coins": 10,
+        "pets": [
+          {
+            "id": 1781169560983.808,
+            "name": "六耳猕狗",
+            "nickname": "六耳猕狗",
+            "level": 4,
+            "growth": 216,
+            "lastFeedDate": "2026-06-30T02:58:17.893Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:12.658Z",
+        "activePetId": 1781169560983.808,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_volcano",
+          "titles": "title_juanwang"
+        },
+        "shopItems": [
+          "scene_volcano",
+          "title_juanwang"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.45,
+        "name": "覃海斌",
+        "coins": 10,
+        "pets": [
+          {
+            "id": 1781233744051.4307,
+            "name": "哮天犬",
+            "nickname": "斌言",
+            "level": 3,
+            "growth": 130,
+            "lastFeedDate": "2026-06-30T02:58:18.001Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-16T03:05:06.659Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:12.780Z",
+        "activePetId": 1781233744051.4307,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "border_ice"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.3315,
+        "name": "韦其夆",
+        "coins": 10,
+        "pets": [
+          {
+            "id": 1778589525858.247,
+            "name": "多萌肉",
+            "nickname": "章鱼",
+            "level": 6,
+            "growth": 848,
+            "lastFeedDate": "2026-06-30T02:58:18.140Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:12.902Z",
+        "activePetId": 1778589525858.247,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "topAccessory": "top_horns",
+          "titles": "title_dragon",
+          "scenes": "scene_volcano",
+          "particles": "ptcl_thunder",
+          "baseEffect": "base_magic",
+          "borders": "border_starry"
+        },
+        "shopItems": [
+          "top_halo",
+          "title_juanwang",
+          "scene_volcano",
+          "title_dragon",
+          "ptcl_thunder",
+          "base_magic",
+          "top_horns",
+          "border_starry"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.1614,
+        "name": "杨胡兴",
+        "coins": 10,
+        "pets": [
+          {
+            "id": 1778589606272.2349,
+            "name": "大神龟",
+            "nickname": "凤凰",
+            "level": 5,
+            "growth": 538,
+            "lastFeedDate": "2026-06-30T02:58:18.267Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.009Z",
+        "activePetId": 1778589606272.2349,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_aurora"
+        },
+        "lastJianghuDate": "Fri Jun 26 2026",
+        "shopItems": [
+          "scene_aurora"
+        ]
+      },
+      {
+        "id": 1778555645062.3938,
+        "name": "覃天立",
+        "coins": 60,
+        "pets": [
+          {
+            "id": 1781169544619.2222,
+            "name": "恐龙",
+            "nickname": "恐龙",
+            "level": 2,
+            "growth": 86,
+            "lastFeedDate": "2026-06-30T02:58:18.394Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.092Z",
+        "activePetId": 1781169544619.2222,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_space"
+        },
+        "shopItems": [
+          "scene_space"
+        ],
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778555645062.31,
+        "name": "周慧林",
+        "coins": 40,
+        "pets": [
+          {
+            "id": 1778589379862.9177,
+            "name": "孔雀",
+            "nickname": "杨珊",
+            "level": 4,
+            "growth": 215,
+            "lastFeedDate": "2026-06-30T02:58:18.527Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.213Z",
+        "activePetId": 1778589379862.9177,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_beach",
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "scene_beach",
+          "border_ice"
+        ]
+      },
+      {
+        "id": 1778555645062.121,
+        "name": "申念文",
+        "coins": 61,
+        "pets": [
+          {
+            "id": 1778589232597.9778,
+            "name": "荷兰猪",
+            "nickname": "猪美",
+            "level": 5,
+            "growth": 561,
+            "lastFeedDate": "2026-06-30T02:58:18.671Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-26T04:01:23.230Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.348Z",
+        "activePetId": 1778589232597.9778,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "borders": "border_rainbow",
+          "baseEffect": "base_rainbow",
+          "scenes": "scene_space"
+        },
+        "lastJianghuDate": "Fri Jun 26 2026",
+        "shopItems": [
+          "border_rainbow",
+          "base_rainbow",
+          "scene_space"
+        ]
+      },
+      {
+        "id": 1778555645062.4067,
+        "name": "陆雅琴",
+        "coins": 25,
+        "pets": [
+          {
+            "id": 1778589695931.8523,
+            "name": "青云龙",
+            "nickname": "青龙",
+            "level": 4,
+            "growth": 381,
+            "lastFeedDate": "2026-06-30T02:58:18.808Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.478Z",
+        "activePetId": 1778589695931.8523,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "topAccessory": "top_bow",
+          "borders": "border_rainbow",
+          "baseEffect": "base_rainbow",
+          "titles": "title_wulin"
+        },
+        "lastJianghuDate": "Wed Jun 24 2026",
+        "shopItems": [
+          "top_bow",
+          "border_rainbow",
+          "base_rainbow",
+          "title_wulin"
+        ]
+      },
+      {
+        "id": 1778555645062.6064,
+        "name": "陈士伟",
+        "coins": 60,
+        "pets": [
+          {
+            "id": 1778589941262.4067,
+            "name": "恐龙",
+            "nickname": "龙",
+            "level": 4,
+            "growth": 210,
+            "lastFeedDate": "2026-06-30T02:58:18.935Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.590Z",
+        "activePetId": 1778589941262.4067,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_beach"
+        },
+        "shopItems": [
+          "scene_beach"
+        ],
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778555645062.9983,
+        "name": "覃珮浠",
+        "coins": 235,
+        "pets": [
+          {
+            "id": 1778589578601.6873,
+            "name": "七彩貂",
+            "nickname": "baby浠",
+            "level": 4,
+            "growth": 346,
+            "lastFeedDate": "2026-06-30T02:58:19.069Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.729Z",
+        "activePetId": 1778589578601.6873,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "topAccessory": "top_halo"
+        },
+        "shopItems": [
+          "top_halo"
+        ],
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778555645062.0928,
+        "name": "韦茗洋",
+        "coins": 32,
+        "pets": [
+          {
+            "id": 1778589875183.1401,
+            "name": "白白东",
+            "nickname": "鸭神力",
+            "level": 4,
+            "growth": 307,
+            "lastFeedDate": "2026-06-30T02:58:19.197Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-05-19T04:00:07.364Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.864Z",
+        "activePetId": 1778589875183.1401,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "topAccessory": "top_halo"
+        },
+        "shopItems": [
+          "top_halo"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.385,
+        "name": "韦金炫",
+        "coins": 35,
+        "pets": [
+          {
+            "id": 1778590065254.3887,
+            "name": "火凤凰",
+            "nickname": "无敌爆龙战士",
+            "level": 4,
+            "growth": 377,
+            "lastFeedDate": "2026-06-30T02:58:19.319Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-12T03:59:44.016Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:13.990Z",
+        "activePetId": 1778590065254.3887,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.25,
+        "name": "覃铭",
+        "coins": 400,
+        "pets": [
+          {
+            "id": 1781166314158.4258,
+            "name": "九尾天狐",
+            "nickname": "九尾天狐",
+            "level": 3,
+            "growth": 151,
+            "lastFeedDate": "2026-06-30T02:58:19.454Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.084Z",
+        "activePetId": 1781166314158.4258,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "topAccessory": "top_flower"
+        },
+        "shopItems": [
+          "top_flower"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.4963,
+        "name": "韦思佩",
+        "coins": 10,
+        "pets": [
+          {
+            "id": 1778590165323.5452,
+            "name": "白白东",
+            "nickname": "杨芝甘露",
+            "level": 4,
+            "growth": 305,
+            "lastFeedDate": "2026-06-30T02:58:19.592Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.213Z",
+        "activePetId": 1778590165323.5452,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.6118,
+        "name": "蒙炎之",
+        "coins": 55,
+        "pets": [
+          {
+            "id": 1778589291617.1318,
+            "name": "泰迪",
+            "nickname": "平安",
+            "level": 4,
+            "growth": 244,
+            "lastFeedDate": "2026-06-30T02:58:19.726Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.337Z",
+        "activePetId": 1778589291617.1318,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778555645062.2854,
+        "name": "莫近习",
+        "coins": 40,
+        "pets": [
+          {
+            "id": 1778590336204.718,
+            "name": "美杜莎",
+            "nickname": "人皇",
+            "level": 4,
+            "growth": 376,
+            "lastFeedDate": "2026-06-30T02:58:19.858Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.468Z",
+        "activePetId": 1778590336204.718,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "particles": "ptcl_snow"
+        },
+        "lastJianghuDate": "Wed Jun 24 2026",
+        "shopItems": [
+          "ptcl_snow"
+        ]
+      },
+      {
+        "id": 1778555645062.7065,
+        "name": "韦嘉湲",
+        "coins": 657,
+        "pets": [
+          {
+            "id": 1778590240745.7695,
+            "name": "七彩貂",
+            "nickname": "闹闹",
+            "level": 3,
+            "growth": 165,
+            "lastFeedDate": "2026-06-30T02:58:19.974Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.610Z",
+        "activePetId": 1778590240745.7695,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Wed Jun 24 2026"
+      },
+      {
+        "id": 1778555645062.7278,
+        "name": "唐夏慧",
+        "coins": 50,
+        "pets": [
+          {
+            "id": 1778589775061.0657,
+            "name": "萌萌羊",
+            "nickname": "小白",
+            "level": 4,
+            "growth": 272,
+            "lastFeedDate": "2026-06-30T02:58:20.102Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-23T11:50:31.273Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.745Z",
+        "activePetId": 1778589775061.0657,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Wed Jun 24 2026"
+      },
+      {
+        "id": 1778555645062.1414,
+        "name": "蒙才锦",
+        "coins": 10,
+        "pets": [
+          {
+            "id": 1778746139383.6274,
+            "name": "萌萌羊",
+            "nickname": "锦可",
+            "level": 4,
+            "growth": 214,
+            "lastFeedDate": "2026-06-30T02:58:20.226Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:06.096Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.865Z",
+        "activePetId": 1778746139383.6274,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778555645062.9617,
+        "name": "韦铃宣",
+        "coins": 60,
+        "pets": [
+          {
+            "id": 1779422431445.2153,
+            "name": "黑白犬",
+            "nickname": "屁屁",
+            "level": 4,
+            "growth": 284,
+            "lastFeedDate": "2026-06-30T02:58:20.351Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:14.984Z",
+        "activePetId": 1779422431445.2153,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778555645062.278,
+        "name": "梁馨心",
+        "coins": 220,
+        "pets": [
+          {
+            "id": 1781052595265.575,
+            "name": "荷兰猪",
+            "nickname": "快乐不打烊",
+            "level": 3,
+            "growth": 178,
+            "lastFeedDate": "2026-06-30T02:58:20.485Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:15.113Z",
+        "activePetId": 1781052595265.575,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778555645062.179,
+        "name": "郭万稳",
+        "coins": 60,
+        "pets": [
+          {
+            "id": 1781165154526.282,
+            "name": "六耳猕狗",
+            "nickname": "郭盖",
+            "level": 3,
+            "growth": 155,
+            "lastFeedDate": "2026-06-30T02:58:20.610Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:15.245Z",
+        "activePetId": 1781165154526.282,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778555645062.9521,
+        "name": "覃丽烨",
+        "coins": 85,
+        "pets": [
+          {
+            "id": 1782184091751.0146,
+            "name": "六角恐龙",
+            "nickname": "快乐不打杨",
+            "level": 2,
+            "growth": 62,
+            "lastFeedDate": "2026-06-30T02:58:20.749Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-30T02:58:15.374Z",
+        "activePetId": 1782184091751.0146,
+        "pkCountToday": 0,
+        "lastPkDate": "Tue Jun 30 2026",
+        "equippedItems": {
+          "scenes": "scene_sakura"
+        },
+        "shopItems": [
+          "scene_sakura"
+        ]
+      },
+      {
+        "id": 1778555645062.6013,
+        "name": "韦智云",
+        "coins": 370,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.433Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.8533,
+        "name": "覃汉潮",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.438Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.5847,
+        "name": "韦覃雲",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.448Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.721,
+        "name": "覃斯亮",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.457Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.5776,
+        "name": "韦嘉乐",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.464Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.0107,
+        "name": "覃伟祺",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.471Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.46,
+        "name": "覃忠俊",
+        "coins": 330,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.476Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.0847,
+        "name": "韦文立",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.482Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.815,
+        "name": "覃丽雪",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.487Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.658,
+        "name": "陆杰新",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.492Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.0415,
+        "name": "韦宗炳",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.509Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.185,
+        "name": "覃汉松",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.515Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.4856,
+        "name": "黄慧婷",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.520Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.1016,
+        "name": "卢海优",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.526Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.3823,
+        "name": "覃路铭",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.533Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.7373,
+        "name": "申祖鸿",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.538Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.7214,
+        "name": "覃炜烨",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.544Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.3496,
+        "name": "韦建滔",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.549Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.7136,
+        "name": "覃增福",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.556Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.0818,
+        "name": "罗晓鹏",
+        "coins": 310,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.564Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.5264,
+        "name": "韦鸿",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.570Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.1484,
+        "name": "覃丽静",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.588Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.925,
+        "name": "吕显泽",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.599Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.5981,
+        "name": "韦浩宇",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.607Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.2478,
+        "name": "魏嘉乐",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.612Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.8496,
+        "name": "韦宝雄",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.626Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.8726,
+        "name": "覃语涵",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.632Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.144,
+        "name": "韦宣羽",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.653Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.6338,
+        "name": "罗美兰",
+        "coins": 300,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.661Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      },
+      {
+        "id": 1778555645062.2283,
+        "name": "韦俞良",
+        "coins": 360,
+        "pets": [],
+        "lastCheckinDate": "2026-05-19T03:33:02.668Z",
+        "activePetId": null,
+        "pkCountToday": 0,
+        "lastPkDate": null
+      }
+    ],
+    "pauseGrowth": {
+      "start": "2026-06-30",
+      "end": "2026-09-01"
+    }
+  },
+  {
+    "id": "1778394784473",
+    "name": "258",
+    "students": [
+      {
+        "id": 1778394791786.8027,
+        "name": "谭琼晰",
+        "coins": 390,
+        "pets": [
+          {
+            "id": 1779088433880.3105,
+            "name": "送财龙",
+            "nickname": "清晰",
+            "level": 3,
+            "growth": 190,
+            "lastFeedDate": "2026-06-29T11:22:11.176Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.290Z",
+        "activePetId": 1779088433880.3105,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_beach",
+          "borders": "border_rainbow"
+        },
+        "shopItems": [
+          "scene_beach",
+          "border_rainbow"
+        ]
+      },
+      {
+        "id": 1778394791786.8665,
+        "name": "覃柳凤",
+        "coins": 55,
+        "pets": [
+          {
+            "id": 1778637227993.1018,
+            "name": "小老鼠",
+            "nickname": "福西西",
+            "level": 4,
+            "growth": 252,
+            "lastFeedDate": "2026-06-29T11:22:11.256Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-22T12:16:50.637Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.469Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.343Z",
+        "activePetId": 1778637227993.1018,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_beach",
+          "borders": "border_rainbow"
+        },
+        "shopItems": [
+          "scene_beach",
+          "border_rainbow"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1778394791786.6277,
+        "name": "覃鹏革",
+        "coins": 80,
+        "pets": [
+          {
+            "id": 1778724295407.2712,
+            "name": "恐龙",
+            "nickname": "教主",
+            "level": 6,
+            "growth": 744,
+            "lastFeedDate": "2026-06-29T11:22:11.352Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-05-14T02:11:49.321Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.406Z",
+        "activePetId": 1778724295407.2712,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "lastJianghuDate": "Fri Jun 26 2026",
+        "equippedItems": {
+          "baseEffect": "base_rainbow",
+          "topAccessory": "top_crown",
+          "titles": "title_juanwang",
+          "scenes": "scene_volcano",
+          "borders": "border_starry"
+        },
+        "shopItems": [
+          "base_rainbow",
+          "top_crown",
+          "title_juanwang",
+          "scene_volcano",
+          "border_starry"
+        ]
+      },
+      {
+        "id": 1778394791786.498,
+        "name": "石韦明",
+        "coins": 35,
+        "pets": [
+          {
+            "id": 1778743389529.652,
+            "name": "雪貂",
+            "nickname": "布鲁斯",
+            "level": 5,
+            "growth": 414,
+            "lastFeedDate": "2026-06-29T11:22:11.445Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-25T01:58:23.466Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.496Z",
+        "activePetId": 1778743389529.652,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_aurora",
+          "titles": "title_legend",
+          "baseEffect": "base_galaxy",
+          "topAccessory": "top_flower",
+          "borders": "border_gold",
+          "particles": "ptcl_thunder"
+        },
+        "lastJianghuDate": "Thu Jun 25 2026",
+        "shopItems": [
+          "top_flower",
+          "scene_aurora",
+          "title_legend",
+          "base_galaxy",
+          "border_gold",
+          "ptcl_thunder"
+        ]
+      },
+      {
+        "id": 1778394791786.5098,
+        "name": "覃莹楸",
+        "coins": 135,
+        "pets": [
+          {
+            "id": 1778483364401.4421,
+            "name": "胖仓鼠",
+            "nickname": "摆烂",
+            "level": 4,
+            "growth": 243,
+            "lastFeedDate": "2026-06-29T11:22:11.534Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-03T09:26:16.959Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.586Z",
+        "activePetId": 1778483364401.4421,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_beach",
+          "particles": "ptcl_hearts",
+          "topAccessory": "top_bow"
+        },
+        "shopItems": [
+          "scene_beach",
+          "ptcl_hearts",
+          "top_bow"
+        ]
+      },
+      {
+        "id": 1778394791786.238,
+        "name": "覃雅娜",
+        "coins": 30,
+        "pets": [
+          {
+            "id": 1778747284495.8247,
+            "name": "大白兔",
+            "nickname": "艾玛",
+            "level": 4,
+            "growth": 256,
+            "lastFeedDate": "2026-06-29T11:22:11.622Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.679Z",
+        "activePetId": 1778747284495.8247,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_bow",
+          "particles": "ptcl_hearts",
+          "scenes": "scene_sakura"
+        },
+        "shopItems": [
+          "top_bow",
+          "ptcl_hearts",
+          "scene_sakura"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.6023,
+        "name": "韦月青",
+        "coins": 90,
+        "pets": [
+          {
+            "id": 1778483785554.9592,
+            "name": "考拉",
+            "nickname": "青",
+            "level": 4,
+            "growth": 354,
+            "lastFeedDate": "2026-06-29T11:22:11.720Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.771Z",
+        "activePetId": 1778483785554.9592,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_halo",
+          "titles": "title_juanwang",
+          "scenes": "scene_beach",
+          "borders": "border_rainbow"
+        },
+        "shopItems": [
+          "top_halo",
+          "title_juanwang",
+          "scene_beach",
+          "border_rainbow"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.2236,
+        "name": "覃国纯",
+        "coins": 30,
+        "pets": [
+          {
+            "id": 1778724351534.616,
+            "name": "踏天马",
+            "nickname": "C",
+            "level": 4,
+            "growth": 223,
+            "lastFeedDate": "2026-06-29T11:22:11.811Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-05-14T02:11:59.739Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.859Z",
+        "activePetId": 1778724351534.616,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_meadow",
+          "baseEffect": "base_magic",
+          "titles": "title_juanwang",
+          "topAccessory": "top_horns"
+        },
+        "shopItems": [
+          "scene_meadow",
+          "base_magic",
+          "title_juanwang",
+          "top_horns"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778394791786.842,
+        "name": "崖晨熙",
+        "coins": 205,
+        "pets": [
+          {
+            "id": 1778638045293.8547,
+            "name": "吉祥神兽",
+            "nickname": "初一数学",
+            "level": 3,
+            "growth": 163,
+            "lastFeedDate": "2026-06-29T11:22:11.896Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:06.948Z",
+        "activePetId": 1778638045293.8547,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_volcano"
+        },
+        "shopItems": [
+          "scene_volcano"
+        ],
+        "lastJianghuDate": "Mon Jun 15 2026"
+      },
+      {
+        "id": 1778394791786.8333,
+        "name": "韦彩凤",
+        "coins": 305,
+        "pets": [
+          {
+            "id": 1778483296971.7932,
+            "name": "恐龙",
+            "nickname": "清珮",
+            "level": 3,
+            "growth": 189,
+            "lastFeedDate": "2026-06-29T11:22:11.985Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.052Z",
+        "activePetId": 1778483296971.7932,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "borders": "border_rainbow",
+          "topAccessory": "top_crown"
+        },
+        "shopItems": [
+          "border_rainbow",
+          "top_crown"
+        ]
+      },
+      {
+        "id": 1778394791786.8462,
+        "name": "崖安琪",
+        "coins": 30,
+        "pets": [
+          {
+            "id": 1778483860354.634,
+            "name": "六耳猕狗",
+            "nickname": "雨漓",
+            "level": 4,
+            "growth": 298,
+            "lastFeedDate": "2026-06-29T11:22:12.074Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.139Z",
+        "activePetId": 1778483860354.634,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_bow",
+          "scenes": "scene_beach",
+          "baseEffect": "base_rainbow",
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "top_bow",
+          "scene_beach",
+          "base_rainbow",
+          "border_ice"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.4087,
+        "name": "覃泳淇",
+        "coins": 270,
+        "pets": [
+          {
+            "id": 1778483154264.2083,
+            "name": "六角恐龙",
+            "nickname": "哈士奇",
+            "level": 4,
+            "growth": 231,
+            "lastFeedDate": "2026-06-29T11:22:12.158Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.225Z",
+        "activePetId": 1778483154264.2083,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_horns",
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "top_horns",
+          "border_ice"
+        ],
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1778394791786.3816,
+        "name": "周俊宇",
+        "coins": 30,
+        "pets": [
+          {
+            "id": 1778727975010.2935,
+            "name": "呆呆熊",
+            "nickname": "笑天犬",
+            "level": 4,
+            "growth": 218,
+            "lastFeedDate": "2026-06-29T11:22:12.252Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.324Z",
+        "activePetId": 1778727975010.2935,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "titles": "title_xueba",
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "title_xueba",
+          "border_ice"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.2942,
+        "name": "韦俊鸿",
+        "coins": 30,
+        "pets": [
+          {
+            "id": 1779089258988.9585,
+            "name": "六角恐龙",
+            "nickname": "六角恐龙",
+            "level": 4,
+            "growth": 251,
+            "lastFeedDate": "2026-06-29T11:22:12.343Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.410Z",
+        "activePetId": 1779089258988.9585,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_flower",
+          "scenes": "scene_aurora",
+          "titles": "title_dragon"
+        },
+        "lastJianghuDate": "Thu Jun 25 2026",
+        "shopItems": [
+          "top_flower",
+          "scene_aurora",
+          "title_dragon"
+        ]
+      },
+      {
+        "id": 1778394791786.254,
+        "name": "韦雨璇",
+        "coins": 85,
+        "pets": [
+          {
+            "id": 1778637290490.6038,
+            "name": "火凤凰",
+            "nickname": "茶叶盒",
+            "level": 4,
+            "growth": 218,
+            "lastFeedDate": "2026-06-29T11:22:12.439Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.469Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.500Z",
+        "activePetId": 1778637290490.6038,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_bow",
+          "scenes": "scene_beach"
+        },
+        "shopItems": [
+          "top_bow",
+          "scene_beach"
+        ]
+      },
+      {
+        "id": 1778394791786.8066,
+        "name": "覃人辉",
+        "coins": 237,
+        "pets": [
+          {
+            "id": 1778483508882.7253,
+            "name": "青云龙",
+            "nickname": "天王老子",
+            "level": 4,
+            "growth": 254,
+            "lastFeedDate": "2026-06-29T11:22:12.528Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.469Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.585Z",
+        "activePetId": 1778483508882.7253,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "titles": "title_xueba",
+          "baseEffect": "base_cloud"
+        },
+        "shopItems": [
+          "title_xueba",
+          "base_cloud"
+        ],
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778394791786.8782,
+        "name": "覃增耀",
+        "coins": 218,
+        "pets": [
+          {
+            "id": 1778724687252.2957,
+            "name": "六角恐龙",
+            "nickname": "请为我保持高冷的猪骚起飞",
+            "level": 3,
+            "growth": 175,
+            "lastFeedDate": "2026-06-29T11:22:12.620Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-03T08:27:15.040Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.469Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.667Z",
+        "activePetId": 1778724687252.2957,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "titles": "title_juanwang",
+          "scenes": "scene_volcano"
+        },
+        "shopItems": [
+          "title_juanwang",
+          "scene_volcano"
+        ],
+        "lastJianghuDate": "Tue Jun 23 2026"
+      },
+      {
+        "id": 1778394791786.766,
+        "name": "韦文泰",
+        "coins": 30,
+        "pets": [
+          {
+            "id": 1778483134069.6333,
+            "name": "吉祥神兽",
+            "nickname": "金毛",
+            "level": 4,
+            "growth": 290,
+            "lastFeedDate": "2026-06-29T11:22:12.716Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.743Z",
+        "activePetId": 1778483134069.6333,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_horns",
+          "baseEffect": "base_rainbow",
+          "borders": "border_starry"
+        },
+        "shopItems": [
+          "top_horns",
+          "base_rainbow",
+          "border_starry"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.2915,
+        "name": "龙靖松",
+        "coins": 5,
+        "pets": [
+          {
+            "id": 1778501580161.6333,
+            "name": "胖仓鼠",
+            "nickname": "ZMJJKK",
+            "level": 4,
+            "growth": 357,
+            "lastFeedDate": "2026-06-29T11:22:12.813Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.835Z",
+        "activePetId": 1778501580161.6333,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_crown",
+          "baseEffect": "base_rainbow",
+          "scenes": "scene_beach"
+        },
+        "shopItems": [
+          "top_crown",
+          "base_rainbow",
+          "scene_beach"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778394791786.948,
+        "name": "覃柳萍",
+        "coins": 310,
+        "pets": [
+          {
+            "id": 1779089082184.5962,
+            "name": "淡火狐",
+            "nickname": "述林",
+            "level": 3,
+            "growth": 200,
+            "lastFeedDate": "2026-06-29T11:22:12.906Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-10T00:54:58.441Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:07.934Z",
+        "activePetId": 1779089082184.5962,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_crown",
+          "particles": "ptcl_hearts"
+        },
+        "shopItems": [
+          "top_crown",
+          "ptcl_hearts"
+        ]
+      },
+      {
+        "id": 1778394791786.66,
+        "name": "王婧棋",
+        "coins": 30,
+        "pets": [
+          {
+            "id": 1778728161664.4543,
+            "name": "多萌肉",
+            "nickname": "十六",
+            "level": 4,
+            "growth": 233,
+            "lastFeedDate": "2026-06-29T11:22:13.017Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-10T08:25:45.241Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.038Z",
+        "activePetId": 1778728161664.4543,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_halo",
+          "titles": "title_xueba",
+          "scenes": "scene_beach",
+          "borders": "border_ice"
+        },
+        "shopItems": [
+          "top_halo",
+          "title_xueba",
+          "scene_beach",
+          "border_ice"
+        ],
+        "lastJianghuDate": "Mon Jun 15 2026"
+      },
+      {
+        "id": 1778394791786.5684,
+        "name": "覃忠涛",
+        "coins": 36,
+        "pets": [
+          {
+            "id": 1778483648508.2517,
+            "name": "六角恐龙",
+            "nickname": "猎T神",
+            "level": 5,
+            "growth": 504,
+            "lastFeedDate": "2026-06-29T11:22:13.120Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.127Z",
+        "activePetId": 1778483648508.2517,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_crown",
+          "titles": "title_juanwang"
+        },
+        "shopItems": [
+          "top_crown",
+          "title_juanwang"
+        ],
+        "lastJianghuDate": "Fri Jun 26 2026"
+      },
+      {
+        "id": 1778394791786.422,
+        "name": "申钰嘉",
+        "coins": 80,
+        "pets": [
+          {
+            "id": 1778501666278.8694,
+            "name": "胖仓鼠",
+            "nickname": "魔丸",
+            "level": 5,
+            "growth": 472,
+            "lastFeedDate": "2026-06-29T11:22:13.204Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.215Z",
+        "activePetId": 1778501666278.8694,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_flower"
+        },
+        "shopItems": [
+          "top_flower"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.565,
+        "name": "覃仁桐",
+        "coins": 25,
+        "pets": [
+          {
+            "id": 1778728019955.5525,
+            "name": "荷兰兔",
+            "nickname": "老乐",
+            "level": 4,
+            "growth": 251,
+            "lastFeedDate": "2026-06-29T11:22:13.294Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.301Z",
+        "activePetId": 1778728019955.5525,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "titles": "title_juanwang",
+          "topAccessory": "top_crown"
+        },
+        "shopItems": [
+          "title_juanwang",
+          "top_crown"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.8389,
+        "name": "潘钰瑶",
+        "coins": 440,
+        "pets": [
+          {
+            "id": 1778483232823.8335,
+            "name": "大白兔",
+            "nickname": "煜煜",
+            "level": 3,
+            "growth": 98,
+            "lastFeedDate": "2026-06-29T11:22:13.391Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.469Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.390Z",
+        "activePetId": 1778483232823.8335,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.1882,
+        "name": "覃雨婷",
+        "coins": 250,
+        "pets": [
+          {
+            "id": 1778483193690.0962,
+            "name": "六角恐龙",
+            "nickname": "王橹杰  橹神",
+            "level": 3,
+            "growth": 176,
+            "lastFeedDate": "2026-06-29T11:22:13.490Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-11T03:05:30.888Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.475Z",
+        "activePetId": 1778483193690.0962,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "titles": "title_juanwang",
+          "topAccessory": "top_horns"
+        },
+        "shopItems": [
+          "title_juanwang",
+          "top_horns"
+        ]
+      },
+      {
+        "id": 1778394791786.3074,
+        "name": "覃程昱",
+        "coins": 90,
+        "pets": [
+          {
+            "id": 1778728213012.8438,
+            "name": "非洲象",
+            "nickname": "电视台之王",
+            "level": 5,
+            "growth": 426,
+            "lastFeedDate": "2026-06-29T11:22:13.592Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.553Z",
+        "activePetId": 1778728213012.8438,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_flower",
+          "baseEffect": "base_lava"
+        },
+        "lastJianghuDate": "Thu Jun 25 2026",
+        "shopItems": [
+          "top_flower",
+          "base_lava"
+        ]
+      },
+      {
+        "id": 1778394791786.969,
+        "name": "吴钰锌",
+        "coins": 420,
+        "pets": [
+          {
+            "id": 1778501749439.198,
+            "name": "大神龟",
+            "nickname": "人",
+            "level": 3,
+            "growth": 148,
+            "lastFeedDate": "2026-06-29T11:22:13.688Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-05-14T03:12:34.053Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.641Z",
+        "activePetId": 1778501749439.198,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.2588,
+        "name": "韦晰晨",
+        "coins": 235,
+        "pets": [
+          {
+            "id": 1778728071493.595,
+            "name": "长毛汪",
+            "nickname": "入",
+            "level": 3,
+            "growth": 138,
+            "lastFeedDate": "2026-06-29T11:22:13.776Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-11T03:10:20.657Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.469Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.722Z",
+        "activePetId": 1778728071493.595,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "particles": "ptcl_hearts"
+        },
+        "shopItems": [
+          "ptcl_hearts"
+        ]
+      },
+      {
+        "id": 1778394791786.653,
+        "name": "韦佳嘉",
+        "coins": 370,
+        "pets": [
+          {
+            "id": 1778638219738.5562,
+            "name": "萌萌羊",
+            "nickname": "重生的魁元",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:13.871Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.795Z",
+        "activePetId": 1778638219738.5562,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.3223,
+        "name": "周洛冰",
+        "coins": 45,
+        "pets": [
+          {
+            "id": 1778637541250.9583,
+            "name": "大神龟",
+            "nickname": "柇渊",
+            "level": 4,
+            "growth": 319,
+            "lastFeedDate": "2026-06-29T11:22:13.963Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-25T02:10:01.230Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.881Z",
+        "activePetId": 1778637541250.9583,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "particles": "ptcl_stars"
+        },
+        "shopItems": [
+          "ptcl_stars",
+          "ptcl_snow"
+        ],
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.7124,
+        "name": "吴泉骏",
+        "coins": 164,
+        "pets": [
+          {
+            "id": 1778638321345.1638,
+            "name": "多萌肉",
+            "nickname": "随屿548.",
+            "level": 4,
+            "growth": 228,
+            "lastFeedDate": "2026-06-29T11:22:14.052Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-25T02:09:04.905Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:08.968Z",
+        "activePetId": 1778638321345.1638,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "titles": "title_juanwang",
+          "particles": "ptcl_stars"
+        },
+        "lastJianghuDate": "Thu Jun 25 2026",
+        "shopItems": [
+          "title_juanwang",
+          "ptcl_stars"
+        ]
+      },
+      {
+        "id": 1778394791786.8516,
+        "name": "覃海越",
+        "coins": 235,
+        "pets": [
+          {
+            "id": 1778483439023.9443,
+            "name": "胖仓鼠",
+            "nickname": "八月",
+            "level": 3,
+            "growth": 166,
+            "lastFeedDate": "2026-06-29T11:22:14.149Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.050Z",
+        "activePetId": 1778483439023.9443,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {},
+        "shopItems": [
+          "base_cloud"
+        ]
+      },
+      {
+        "id": 1778394791786.6313,
+        "name": "韦璘丹",
+        "coins": 400,
+        "pets": [
+          {
+            "id": 1778501830831.3572,
+            "name": "孔雀",
+            "nickname": "鸡蛋",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:14.238Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.138Z",
+        "activePetId": 1778501830831.3572,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.4287,
+        "name": "覃香梅",
+        "coins": 295,
+        "pets": [
+          {
+            "id": 1778638150576.7415,
+            "name": "踏天马",
+            "nickname": "祇熙大帝",
+            "level": 3,
+            "growth": 156,
+            "lastFeedDate": "2026-06-29T11:22:14.330Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.216Z",
+        "activePetId": 1778638150576.7415,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "particles": "ptcl_firefly"
+        },
+        "shopItems": [
+          "ptcl_firefly"
+        ]
+      },
+      {
+        "id": 1778394791786.961,
+        "name": "兰佳慧",
+        "coins": 360,
+        "pets": [
+          {
+            "id": 1778637374610.8723,
+            "name": "不萌鼠",
+            "nickname": "火日立",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:14.422Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.303Z",
+        "activePetId": 1778637374610.8723,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.723,
+        "name": "龙怡蓉",
+        "coins": 365,
+        "pets": [
+          {
+            "id": 1778637610459.583,
+            "name": "哮天犬",
+            "nickname": "小骆",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:14.510Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.385Z",
+        "activePetId": 1778637610459.583,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.0771,
+        "name": "潘丽雯",
+        "coins": 360,
+        "pets": [
+          {
+            "id": 1778483272039.101,
+            "name": "胖仓鼠",
+            "nickname": "边牧",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:14.599Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.471Z",
+        "activePetId": 1778483272039.101,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.0916,
+        "name": "谭雯君",
+        "coins": 405,
+        "pets": [
+          {
+            "id": 1778638431236.2192,
+            "name": "泰迪",
+            "nickname": "旺仔",
+            "level": 3,
+            "growth": 141,
+            "lastFeedDate": "2026-06-29T11:22:14.687Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.554Z",
+        "activePetId": 1778638431236.2192,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.5037,
+        "name": "杨晓萱",
+        "coins": 380,
+        "pets": [
+          {
+            "id": 1778743344133.9797,
+            "name": "熊猫大侠",
+            "nickname": "荷包蛋",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:14.776Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.651Z",
+        "activePetId": 1778743344133.9797,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.9612,
+        "name": "张珍珮",
+        "coins": 90,
+        "pets": [
+          {
+            "id": 1778724521179.1177,
+            "name": "六耳猕狗",
+            "nickname": "未闻",
+            "level": 4,
+            "growth": 263,
+            "lastFeedDate": "2026-06-29T11:22:14.870Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.745Z",
+        "activePetId": 1778724521179.1177,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_sakura"
+        },
+        "lastJianghuDate": "Thu Jun 25 2026",
+        "shopItems": [
+          "scene_sakura"
+        ]
+      },
+      {
+        "id": 1778394791786.3704,
+        "name": "韦晓满",
+        "coins": 45,
+        "pets": [
+          {
+            "id": 1778638367702.061,
+            "name": "胖仓鼠",
+            "nickname": "慧颖勾勾哒",
+            "level": 4,
+            "growth": 269,
+            "lastFeedDate": "2026-06-29T11:22:14.963Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-10T00:53:11.709Z",
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.839Z",
+        "activePetId": 1778638367702.061,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "scenes": "scene_sakura"
+        },
+        "shopItems": [
+          "scene_sakura"
+        ]
+      },
+      {
+        "id": 1778394791786.0085,
+        "name": "韦欣怡",
+        "coins": 35,
+        "pets": [
+          {
+            "id": 1778637689612.7441,
+            "name": "荷兰兔",
+            "nickname": "徐坤",
+            "level": 4,
+            "growth": 365,
+            "lastFeedDate": "2026-06-29T11:22:15.058Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": "2026-06-25T02:07:39.221Z",
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:09.928Z",
+        "activePetId": 1778637689612.7441,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.4712,
+        "name": "覃海潮",
+        "coins": 470,
+        "pets": [
+          {
+            "id": 1779088159632.8723,
+            "name": "美杜莎",
+            "nickname": "胡巴",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:15.151Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.015Z",
+        "activePetId": 1779088159632.8723,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.869,
+        "name": "罗文秀",
+        "coins": 510,
+        "pets": [
+          {
+            "id": 1779088195841.7654,
+            "name": "淡火狐",
+            "nickname": "淡火狐",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:15.242Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.107Z",
+        "activePetId": 1779088195841.7654,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.0496,
+        "name": "吴琪卉",
+        "coins": 380,
+        "pets": [
+          {
+            "id": 1779088220181.6272,
+            "name": "小老鼠",
+            "nickname": "小老鼠",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:15.336Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.197Z",
+        "activePetId": 1779088220181.6272,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.0337,
+        "name": "覃敏金",
+        "coins": 510,
+        "pets": [
+          {
+            "id": 1779088358247.6877,
+            "name": "比尔鸭",
+            "nickname": "咯咯哒",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:15.425Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.284Z",
+        "activePetId": 1779088358247.6877,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.669,
+        "name": "覃志文",
+        "coins": 360,
+        "pets": [
+          {
+            "id": 1779088377249.0815,
+            "name": "雪貂",
+            "nickname": "雪貂",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:15.514Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.368Z",
+        "activePetId": 1779088377249.0815,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.6592,
+        "name": "覃汉德",
+        "coins": 265,
+        "pets": [
+          {
+            "id": 1779089406705.0225,
+            "name": "六角恐龙",
+            "nickname": "六角恐龙",
+            "level": 3,
+            "growth": 189,
+            "lastFeedDate": "2026-06-29T11:22:15.605Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.453Z",
+        "activePetId": 1779089406705.0225,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "topAccessory": "top_flower"
+        },
+        "shopItems": [
+          "top_flower"
+        ]
+      },
+      {
+        "id": 1778394791786.636,
+        "name": "段佳宏",
+        "coins": 235,
+        "pets": [
+          {
+            "id": 1779088892101.596,
+            "name": "花斑虎",
+            "nickname": "花斑虎",
+            "level": 4,
+            "growth": 241,
+            "lastFeedDate": "2026-06-29T11:22:15.690Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.545Z",
+        "activePetId": 1779088892101.596,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.613,
+        "name": "覃晶津",
+        "coins": 435,
+        "pets": [
+          {
+            "id": 1779089180620.4321,
+            "name": "胖仓鼠",
+            "nickname": "小欣",
+            "level": 3,
+            "growth": 141,
+            "lastFeedDate": "2026-06-29T11:22:15.786Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.642Z",
+        "activePetId": 1779089180620.4321,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.4612,
+        "name": "韦美秀",
+        "coins": 375,
+        "pets": [
+          {
+            "id": 1779089019165.7805,
+            "name": "黑白犬",
+            "nickname": "黑白犬",
+            "level": 3,
+            "growth": 136,
+            "lastFeedDate": "2026-06-29T11:22:15.881Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.738Z",
+        "activePetId": 1779089019165.7805,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {}
+      },
+      {
+        "id": 1778394791786.22,
+        "name": "覃筱喻",
+        "coins": 341,
+        "pets": [
+          {
+            "id": 1779088986598.2854,
+            "name": "哮天犬",
+            "nickname": "koi",
+            "level": 3,
+            "growth": 143,
+            "lastFeedDate": "2026-06-29T11:22:15.971Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.822Z",
+        "activePetId": 1779088986598.2854,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Mon Jun 22 2026"
+      },
+      {
+        "id": 1778394791786.4844,
+        "name": "黄程楷",
+        "coins": 720,
+        "pets": [
+          {
+            "id": 1779089399632.6992,
+            "name": "青云龙",
+            "nickname": "青云龙",
+            "level": 4,
+            "growth": 211,
+            "lastFeedDate": "2026-06-29T11:22:16.070Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:10.908Z",
+        "activePetId": 1779089399632.6992,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {},
+        "lastJianghuDate": "Thu Jun 25 2026"
+      },
+      {
+        "id": 1778394791786.101,
+        "name": "罗力浩",
+        "coins": 71,
+        "pets": [
+          {
+            "id": 1779089385197.7773,
+            "name": "恐龙",
+            "nickname": "至死方休",
+            "level": 4,
+            "growth": 264,
+            "lastFeedDate": "2026-06-29T11:22:16.160Z",
+            "todayFeedCount": 0,
+            "isDead": false,
+            "todayPlayCount": 0,
+            "lastPlayDate": null,
+            "penaltyStreak": 0,
+            "deathDate": "2026-05-25T01:30:19.470Z"
+          }
+        ],
+        "lastCheckinDate": "2026-06-29T11:22:11.000Z",
+        "activePetId": 1779089385197.7773,
+        "pkCountToday": 0,
+        "lastPkDate": "Mon Jun 29 2026",
+        "equippedItems": {
+          "borders": "border_gold",
+          "topAccessory": "top_flower",
+          "baseEffect": "base_galaxy",
+          "particles": "ptcl_thunder"
+        },
+        "lastJianghuDate": "Tue Jun 23 2026",
+        "shopItems": [
+          "border_gold",
+          "top_flower",
+          "base_galaxy",
+          "ptcl_thunder"
+        ]
+      }
+    ],
+    "pauseGrowth": {
+      "start": "2026-06-29",
+      "end": "2026-09-01"
+    }
+  }
+]

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<title>🍭宠物世界🍭</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- 可爱浮动装饰 -->
+<div class="deco-corner deco-corner-tl">🐾</div>
+<div class="deco-corner deco-corner-br">🌸</div>
+<div class="deco-corner deco-corner-bl">🍀</div>
+<div class="deco-bubble" style="left:5%;width:80px;height:80px;background:radial-gradient(circle,#ffcce0,#ffa0c0);--float-dur:14s;--float-delay:0s;--bubble-opacity:0.08;"></div>
+<div class="deco-bubble" style="left:25%;width:50px;height:50px;background:radial-gradient(circle,#ffe0b0,#ffc880);--float-dur:18s;--float-delay:3s;--bubble-opacity:0.06;"></div>
+<div class="deco-bubble" style="left:55%;width:65px;height:65px;background:radial-gradient(circle,#c8e0ff,#a0c8ff);--float-dur:16s;--float-delay:6s;--bubble-opacity:0.07;"></div>
+<div class="deco-bubble" style="left:80%;width:45px;height:45px;background:radial-gradient(circle,#d0ffd0,#a0e8a0);--float-dur:20s;--float-delay:2s;--bubble-opacity:0.06;"></div>
+<div class="deco-bubble" style="left:40%;width:55px;height:55px;background:radial-gradient(circle,#ffe0ff,#e0b0e0);--float-dur:15s;--float-delay:8s;--bubble-opacity:0.06;"></div>
+<div class="deco-bubble" style="left:70%;width:70px;height:70px;background:radial-gradient(circle,#ffd0c0,#ffb0a0);--float-dur:17s;--float-delay:5s;--bubble-opacity:0.07;"></div>
+<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><button id="usbConnectBtn" onclick="playClickSound();connectUSB()" style="background:linear-gradient(135deg,#ffd6a0,#ffb870);color:#553300;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 4px 10px rgba(255,180,100,0.3);transition:all 0.3s;white-space:nowrap;"><span id="usbIcon">💾</span><span id="usbText">授权保存</span></button></div></div>
+<!-- 背景音乐控制面板 -->
+<div class="music-panel" id="musicPanel">
+  <button class="music-toggle" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button>
+  <button class="music-expand-btn" id="musicExpandBtn" onclick="toggleMusicPanel(event)" title="音量设置">▶</button>
+  <span class="music-name" id="musicName">宠物乐园</span>
+  <div class="music-vol-wrap">
+    <span class="music-vol-icon" id="musicVolIcon" onclick="toggleMute()">🔊</span>
+    <input type="range" class="music-vol-slider" id="musicVolSlider" min="0" max="100" value="40" oninput="setBgMusicVol(this.value)">
+  </div>
+</div>
+<div class="content-container">
+<div class="page active" id="class-pet-page">
+  <div class="paw-deco" style="top:20px;right:30px;--paw-rot:20deg;font-size:45px;">🐾</div>
+  <div class="paw-deco" style="top:80px;right:80px;--paw-rot:-10deg;font-size:28px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;left:20px;--paw-rot:35deg;font-size:32px;">🐾</div>
+  <div class="paw-deco" style="bottom:100px;left:70px;--paw-rot:-25deg;font-size:22px;">🐾</div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:12px;"><div class="page-title" style="margin:0;">🏫班级宠物乐园🏫</div><span onclick="showDeletedClassesModal()" style="cursor:pointer;font-size:12px;color:#b08080;border:1px dashed #ddb8b8;border-radius:12px;padding:2px 10px;white-space:nowrap;opacity:0.7;transition:opacity 0.2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">🗑️ 已删除班级</span></div>
+  <div class="top-section"><div style="width:100%;"><div class="class-actions"><button class="btn btn-primary" onclick="playClickSound();createClass()">➕ 新建班级</button><button class="btn btn-secondary" onclick="playClickSound();importFromTxt()">📁 导入名单</button><button class="btn btn-success" onclick="playClickSound();showStudentListModal()">📋 学生列表</button></div></div><div class="class-list-section"><div class="class-list-wrapper"><div id="classListContainer"></div><div class="home-stat" onclick="clearPetData()" style="cursor:pointer; padding:10px 20px; min-width:auto;"><div>🗑️</div><div>重置班级宠物</div></div><div class="home-stat" onclick="showHistoryModal()" style="cursor:pointer; padding:10px 20px; min-width:auto; background: #b5d8ff;"><div>📜</div><div>历史操作</div></div></div></div></div>
+  <div class="student-grid-section"><div class="student-header"><div class="page-title" style="font-size:20px;">👨‍🎓 成长榜</div><div style="display:flex; gap:8px;"><button class="data-mgmt-btn" onclick="classAllFeed()"><span>🍗</span> 全班喂食</button><button class="data-mgmt-btn" onclick="classDailyCheckin()"><span>📆</span> 全班打卡</button><button class="data-mgmt-btn" onclick="showBatchEditModal()"><span>✏️</span> 批量奖惩</button><button class="data-mgmt-btn" onclick="showPauseGrowthModal()"><span>⏸️</span> 停喂保护</button><button class="data-mgmt-btn" onclick="showCustomActionsModal()"><span>⚙️</span> 奖惩管理</button><button class="data-mgmt-btn" onclick="showPetShopBrowse()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"><span>🏪</span> 宠物商店</button></div></div><div class="home-pet-grid" id="homePetGrid"></div></div>
+</div>
+<div class="page" id="honor-board-page">
+  <div class="paw-deco" style="top:30px;right:40px;--paw-rot:25deg;font-size:40px;">🐾</div>
+  <div class="paw-deco" style="top:120px;right:100px;--paw-rot:-15deg;font-size:25px;">🐾</div>
+  <div class="paw-deco" style="bottom:60px;left:30px;--paw-rot:40deg;font-size:35px;">🐾</div>
+  <div class="page-title">🏆 荣耀殿堂</div>
+  <div id="rankStatsBar"></div>
+  <div class="honor-board-small">
+    <h3>🏅 宠物成长榜</h3>
+    <div id="classTopThree"></div>
+    <div id="honorEmptyHint" style="display:none;" class="rank-empty-state">
+      <div class="empty-icon">🏆</div>
+      <div class="empty-text">还没有成长数据哦</div>
+      <div class="empty-sub">快去喂养宠物，争夺排行榜吧~</div>
+    </div>
+  </div>
+  <div id="fullRankList"></div>
+</div>
+<div class="page" id="pk-page">
+  <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;right:80px;--paw-rot:-30deg;font-size:28px;">🐾</div>
+  <div class="pk-sub-tabs">
+    <div class="pk-sub-tab active" onclick="playClickSound();switchPKSubTab('petPK')">⚔️ 宠物PK对战</div>
+    <div class="pk-sub-tab" onclick="playClickSound();switchPKSubTab('classPK')">📖 课堂PK</div>
+  </div>
+  <div id="pkPetBattleContent"><div id="pkContent"></div></div>
+  <div id="pkClassBattleContent" style="display:none;"></div>
+</div>
+<div class="page" id="jianghu-page">
+  <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;left:60px;--paw-rot:15deg;font-size:30px;">🐾</div>
+  <div class="page-title">🗡️ 萌萌江湖行</div>
+  <div id="jhPageContent"></div>
+</div>
+<div class="cute-footer">
+  <div class="cute-footer-icons">🐱 🐶 🐰 🐸 🦊 🐼</div>
+  <div>用爱陪伴每一只小宠物成长 🌈</div>
+</div>
+</div>
+<input type="file" id="txtImport" style="display:none" accept=".txt">
+<input type="file" id="classpkQuestionImport" style="display:none" accept="image/*" multiple>
+<div id="modalContainer"></div>
+<div id="notificationContainer"></div>
+<div id="upgradeEffectContainer"></div>
+<script src="app.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>
+// staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
