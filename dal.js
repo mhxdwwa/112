@@ -51,7 +51,17 @@ function _saveIdMap() {
 }
 
 function _isLocalId(id) {
-  return typeof id === 'number' && id % 1 !== 0;
+  // 本地生成的ID >= 1e15（Date.now()*1000+counter），Supabase自增ID远小于此
+  // 同时兼容旧版浮点ID（id % 1 !== 0）
+  return typeof id === 'number' && (id % 1 !== 0 || id >= 1e15);
+}
+
+// 安全整数转换：确保写入 Supabase 的值是有效整数
+function _safeInt(val) {
+  if (val === null || val === undefined) return null;
+  var n = Number(val);
+  if (isNaN(n) || !isFinite(n)) return null;
+  return Math.floor(n);
 }
 
 function _stuKey(localClassId, localStuId) {
@@ -650,10 +660,10 @@ async function _upsertStudent(supaClassId, localClassId, stu) {
 
   // 先获取 Supabase 当前数据，然后合并（防止覆盖）
   var supaStudent = null;
-  if (supaStuId && typeof supaStuId === 'number' && supaStuId % 1 === 0) {
+  if (supaStuId && _safeInt(supaStuId) !== null) {
     var fetchResult = await db.from('students')
       .select('id, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
-      .eq('id', supaStuId)
+      .eq('id', _safeInt(supaStuId))
       .single();
     if (fetchResult.data) {
       supaStudent = fetchResult.data;
@@ -675,12 +685,12 @@ async function _upsertStudent(supaClassId, localClassId, stu) {
     last_pk_date: merged.lastPkDate || null
   };
 
-  if (supaStuId && typeof supaStuId === 'number' && supaStuId % 1 === 0) {
+  if (supaStuId && _safeInt(supaStuId) !== null) {
     var upd = await db.from('students')
       .update(studentData)
-      .eq('id', supaStuId);
+      .eq('id', _safeInt(supaStuId));
     if (upd.error) console.warn('[DAL] update student:', upd.error);
-    return supaStuId;
+    return _safeInt(supaStuId);
   } else {
     studentData.class_id = supaClassId;
     studentData.name = stu.name;
@@ -747,10 +757,10 @@ async function _upsertPet(supaStuId, localClassId, localStuId, pet) {
     penalty_streak: pet.penaltyStreak || 0
   };
 
-  if (supaPetId && typeof supaPetId === 'number' && supaPetId % 1 === 0) {
-    var upd = await db.from('pets').update(petData).eq('id', supaPetId);
+  if (supaPetId && _safeInt(supaPetId) !== null) {
+    var upd = await db.from('pets').update(petData).eq('id', _safeInt(supaPetId));
     if (upd.error) console.warn('[DAL] update pet:', upd.error);
-    return supaPetId;
+    return _safeInt(supaPetId);
   } else {
     return await _insertPet(supaStuId, localClassId, localStuId, pet);
   }
@@ -817,8 +827,9 @@ async function _pushCustomActionsToSupabase() {
 async function _pushLogsToSupabase() {
   if (!currentUser) return;  // 学生和老师都要推送日志
   try {
+    // 1. 推送新增的本地日志（ID >= 1e15 或旧版浮点ID）
     var unsyncedLogs = operationLogs.filter(function(log) {
-      return typeof log.id === 'number' && log.id % 1 !== 0;
+      return _isLocalId(log.id);
     });
 
     for (var i = 0; i < unsyncedLogs.length; i++) {
@@ -826,32 +837,56 @@ async function _pushLogsToSupabase() {
       var supaClassId = log.classId ? _getSupaClassId(log.classId) : null;
       var supaStudentId = log.studentId ? _getSupaStuId(log.classId, log.studentId) : null;
 
-      // 如果映射不到，跳过
-      if (!supaClassId) continue;
+      // 如果班级映射不到 Supabase ID，跳过（班级尚未同步）
+      if (!supaClassId) {
+        console.log('[DAL] pushLogs: classId', log.classId, 'not mapped yet, skipping log', log.id);
+        continue;
+      }
 
       var logData = {
-        class_id: supaClassId,
-        student_id: supaStudentId,
+        class_id: _safeInt(supaClassId),
+        student_id: supaStudentId ? _safeInt(supaStudentId) : null,
         student_name: log.studentName || '',
         action_type: log.actionType || '',
         details: log.details || '',
         coin_delta: log.coinDelta || 0,
         exp_delta: log.expDelta || 0,
         extra: log.extra || null,
-        snapshot: log.snapshot || null
+        snapshot: log.snapshot || null,
+        reverted: log.reverted || false
       };
 
       var ins = await db.from('operation_logs').insert([logData]).select('id').single();
       if (ins.data) {
-        // 标记已同步（把本地 float id 改成 Supabase int id）
+        // 标记已同步（把本地 ID 改成 Supabase int id）
         var idx = operationLogs.indexOf(log);
         if (idx !== -1) {
           operationLogs[idx].id = ins.data.id;
+          // classId/studentId 保持原值不变（_isLocalId 只检查 log.id）
         }
       }
     }
 
     if (unsyncedLogs.length > 0) {
+      safeLSSave('operationLogs', operationLogs);
+    }
+
+    // 2. 同步已撤销状态（本地标记了 reverted 但 Supabase 中还没有）
+    var revertedLogs = operationLogs.filter(function(log) {
+      return log.reverted && !_isLocalId(log.id) && !log._revertSynced;
+    });
+    for (var j = 0; j < revertedLogs.length; j++) {
+      var rlog = revertedLogs[j];
+      try {
+        await db.from('operation_logs')
+          .update({ reverted: true })
+          .eq('id', _safeInt(rlog.id));
+        rlog._revertSynced = true;
+      } catch (revertErr) {
+        console.warn('[DAL] sync reverted status error:', revertErr.message || revertErr);
+      }
+    }
+    if (revertedLogs.length > 0) {
       safeLSSave('operationLogs', operationLogs);
     }
   } catch (e) {
@@ -945,13 +980,14 @@ async function _loadLogsFromSupabase() {
           expDelta: log.exp_delta || 0,
           extra: _parseJsonb(log.extra, null),
           snapshot: _parseJsonb(log.snapshot, null),
-          reverted: false
+          reverted: log.reverted || false,
+          _revertSynced: log.reverted || false  // 如果 Supabase 已标记撤销，本地也标记已同步
         };
       });
 
-      // 合并：以 Supabase 为准，保留本地未同步的日志（float id）
+      // 合并：以 Supabase 为准，保留本地未同步的日志
       var localUnsynced = operationLogs.filter(function(l) {
-        return typeof l.id === 'number' && l.id % 1 !== 0;
+        return _isLocalId(l.id);
       });
       operationLogs = loadedLogs.concat(localUnsynced);
       safeLSSave('operationLogs', operationLogs);
@@ -1806,8 +1842,8 @@ async function _syncStudentToSupabase() {
 
     // 宠物 ID 映射：从 Supabase 加载时用的是真实整数 ID
     var supaPetId = pet.id;
-    if (supaPetId && typeof supaPetId === 'number' && supaPetId % 1 === 0) {
-      var petUpd = await db.from('pets').update(petData).eq('id', supaPetId);
+    if (supaPetId && _safeInt(supaPetId) !== null) {
+      var petUpd = await db.from('pets').update(petData).eq('id', _safeInt(supaPetId));
       if (petUpd.error) console.warn('[DAL] Student sync: update pet error:', petUpd.error);
       else console.log('[DAL] Student sync: pet', pet.name, 'synced');
     } else {
