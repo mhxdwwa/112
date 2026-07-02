@@ -94,13 +94,13 @@ function _parseJsonb(val, fallback) {
   return fallback;
 }
 
-// ===== 智能合并学生数据（防止覆盖） =====
+// ===== 智能合并学生数据（本地数据永远优先） =====
 // 合并策略：
 // - shopItems: 取并集（两边都保留）
 // - equippedItems: 合并对象，本地优先
-// - coins: 取最大值
-// - pkCountToday: 取最大值
-// - dates: 取非空值
+// - coins: 本地优先（不用 Math.max，避免逆转购买）
+// - pkCountToday: 本地优先
+// - dates: 本地优先
 // - activePetId: 本地优先，否则用云端
 function _mergeStudentData(local, supabase) {
   if (!supabase) return local;
@@ -120,11 +120,11 @@ function _mergeStudentData(local, supabase) {
   var supaEq = _parseJsonb(supabase.equipped_items, {});
   merged.equippedItems = Object.assign({}, supaEq, localEq);
   
-  // coins: 取最大值
-  merged.coins = Math.max(local.coins || 0, supabase.coins || 0);
+  // coins: 本地数据永远优先（Math.max 会逆转购买操作）
+  merged.coins = local.coins !== undefined ? local.coins : (supabase.coins || 0);
   
-  // pkCountToday: 取最大值
-  merged.pkCountToday = Math.max(local.pkCountToday || 0, supabase.pk_count_today || 0);
+  // pkCountToday: 本地数据永远优先
+  merged.pkCountToday = local.pkCountToday !== undefined ? local.pkCountToday : (supabase.pk_count_today || 0);
   
   // dates: 取非空值
   merged.lastCheckinDate = local.lastCheckinDate || supabase.last_checkin_date || null;
@@ -308,7 +308,7 @@ async function loadFromSupabase() {
       newClassesData.push(classObj);
     }
 
-    // 3. 与 localStorage 数据合并（防止 Supabase 空数据覆盖本地好数据）
+    // 3. 与 localStorage 数据合并（本地数据永远优先）
     // localData 已在前面加载过，直接复用
 
     if (localData && Array.isArray(localData)) {
@@ -321,7 +321,7 @@ async function loadFromSupabase() {
         });
       });
 
-      // 合并每个学生的数据
+      // 合并每个学生的数据 — 本地有数据时，以本地为准
       newClassesData.forEach(function(nc) {
         var localClass = localLookup[nc.name];
         if (!localClass) return;
@@ -330,7 +330,11 @@ async function loadFromSupabase() {
           var localStudent = localClass[ns.name];
           if (!localStudent) return;
           
-          // 合并 shopItems（并集）
+          // 本地有数据时，所有字段以本地为准
+          ns.coins = localStudent.coins !== undefined ? localStudent.coins : (ns.coins || 0);
+          ns.pkCountToday = localStudent.pkCountToday !== undefined ? localStudent.pkCountToday : (ns.pkCountToday || 0);
+          
+          // shopItems: 本地优先，并集补充
           var localShop = localStudent.shopItems || [];
           var supaShop = ns.shopItems || [];
           var shopSet = {};
@@ -338,30 +342,80 @@ async function loadFromSupabase() {
           supaShop.forEach(function(item) { shopSet[item] = true; });
           ns.shopItems = Object.keys(shopSet);
           
-          // 合并 equippedItems（本地优先）
+          // equippedItems: 本地优先
           var localEq = localStudent.equippedItems || {};
           var supaEq = ns.equippedItems || {};
           ns.equippedItems = Object.assign({}, supaEq, localEq);
           
-          // coins: 取最大值
-          ns.coins = Math.max(localStudent.coins || 0, ns.coins || 0);
-          
-          // pkCountToday: 取最大值
-          ns.pkCountToday = Math.max(localStudent.pkCountToday || 0, ns.pkCountToday || 0);
-          
-          // dates: 取非空值
+          // dates: 本地优先
           ns.lastCheckinDate = localStudent.lastCheckinDate || ns.lastCheckinDate || null;
           ns.lastJianghuDate = localStudent.lastJianghuDate || ns.lastJianghuDate || null;
           ns.lastPkDate = localStudent.lastPkDate || ns.lastPkDate || null;
           
           // activePetId: 本地优先
-          if (!ns.activePetId && localStudent.activePetId) {
-            ns.activePetId = localStudent.activePetId;
+          ns.activePetId = localStudent.activePetId || ns.activePetId || null;
+          
+          // 宠物数据：本地有宠物数据时，以本地为准（修复 growth/feeding 等变化丢失的问题）
+          if (localStudent.pets && localStudent.pets.length > 0) {
+            // 构建 Supabase 宠物查找表（by name）
+            var supaPetByName = {};
+            (ns.pets || []).forEach(function(sp) { supaPetByName[sp.name] = sp; });
+            
+            // 用本地宠物数据覆盖 Supabase 数据，但保留 Supabase ID
+            ns.pets = localStudent.pets.map(function(lp) {
+              var supaPet = supaPetByName[lp.name];
+              return {
+                id: (supaPet && supaPet.id) || lp.id,  // 保留 Supabase ID
+                name: lp.name,
+                nickname: lp.nickname || lp.name,
+                level: lp.level !== undefined ? lp.level : 1,
+                growth: lp.growth !== undefined ? lp.growth : 0,
+                coins: lp.coins !== undefined ? lp.coins : 0,
+                is_active: lp.is_active !== undefined ? lp.is_active : true,
+                isDead: lp.isDead || false,
+                lastFeedDate: lp.lastFeedDate || null,
+                lastPlayDate: lp.lastPlayDate || null,
+                todayFeedCount: lp.todayFeedCount || 0,
+                todayPlayCount: lp.todayPlayCount || 0,
+                penaltyStreak: lp.penaltyStreak || 0
+              };
+            });
           }
         });
       });
       
-      console.log('[DAL] Merged with localStorage data');
+      // 补充本地有但 Supabase 没有的学生（添加后尚未同步的情况）
+      newClassesData.forEach(function(nc) {
+        var localClass = localLookup[nc.name];
+        if (!localClass) return;
+        
+        var supaStudentNames = {};
+        nc.students.forEach(function(ns) { supaStudentNames[ns.name] = true; });
+        
+        Object.keys(localClass).forEach(function(stuName) {
+          if (supaStudentNames[stuName]) return;  // 已存在，跳过
+          
+          var ls = localClass[stuName];
+          // 本地独有学生，添加到 classesData
+          var newStu = {
+            id: ls.id,
+            name: ls.name,
+            coins: ls.coins || 0,
+            pets: (ls.pets || []).map(function(p) { return Object.assign({}, p); }),
+            shopItems: ls.shopItems || [],
+            equippedItems: ls.equippedItems || {},
+            lastCheckinDate: ls.lastCheckinDate || null,
+            lastJianghuDate: ls.lastJianghuDate || null,
+            activePetId: ls.activePetId || null,
+            pkCountToday: ls.pkCountToday || 0,
+            lastPkDate: ls.lastPkDate || null
+          };
+          nc.students.push(newStu);
+          console.log('[DAL] Restored local-only student:', stuName, 'in class:', nc.name);
+        });
+      });
+      
+      console.log('[DAL] Merged with localStorage data (local-first)');
     }
 
     // 4. 写入全局变量
@@ -437,7 +491,7 @@ async function _loadStudentFromSupabase() {
       lastPkDate: ss.last_pk_date || null
     };
     
-    // 与 localStorage 数据合并（防止 Supabase 空数据覆盖本地好数据）
+    // 与 localStorage 数据合并（本地数据永远优先）
     try {
       var localData = localStorage.getItem('classPetData');
       if (localData) {
@@ -447,34 +501,58 @@ async function _loadStudentFromSupabase() {
             return s.name === studentObj.name;
           });
           if (localStudent) {
-            // 合并 shopItems（并集）
+            // 本地有数据时，所有字段以本地为准
+            studentObj.coins = localStudent.coins !== undefined ? localStudent.coins : (studentObj.coins || 0);
+            studentObj.pkCountToday = localStudent.pkCountToday !== undefined ? localStudent.pkCountToday : (studentObj.pkCountToday || 0);
+            
+            // shopItems: 本地优先，并集补充
             var localShop = localStudent.shopItems || [];
             var shopSet = {};
             localShop.forEach(function(item) { shopSet[item] = true; });
             studentObj.shopItems.forEach(function(item) { shopSet[item] = true; });
             studentObj.shopItems = Object.keys(shopSet);
             
-            // 合并 equippedItems（本地优先）
+            // equippedItems: 本地优先
             var localEq = localStudent.equippedItems || {};
             studentObj.equippedItems = Object.assign({}, studentObj.equippedItems, localEq);
             
-            // coins: 取最大值
-            studentObj.coins = Math.max(localStudent.coins || 0, studentObj.coins || 0);
-            
-            // pkCountToday: 取最大值
-            studentObj.pkCountToday = Math.max(localStudent.pkCountToday || 0, studentObj.pkCountToday || 0);
-            
-            // dates: 取非空值
+            // dates: 本地优先
             studentObj.lastCheckinDate = localStudent.lastCheckinDate || studentObj.lastCheckinDate || null;
             studentObj.lastJianghuDate = localStudent.lastJianghuDate || studentObj.lastJianghuDate || null;
             studentObj.lastPkDate = localStudent.lastPkDate || studentObj.lastPkDate || null;
             
             // activePetId: 本地优先
-            if (!studentObj.activePetId && localStudent.activePetId) {
-              studentObj.activePetId = localStudent.activePetId;
+            studentObj.activePetId = localStudent.activePetId || studentObj.activePetId || null;
+            
+            // 宠物数据：本地有数据时以本地为准，但保留 Supabase ID
+            if (localStudent.pets && localStudent.pets.length > 0) {
+              var supaPetByName = {};
+              pets.forEach(function(sp) { supaPetByName[sp.name] = sp; });
+              
+              pets = localStudent.pets.map(function(lp) {
+                var supaPet = supaPetByName[lp.name];
+                return {
+                  id: (supaPet && supaPet.id) || lp.id,
+                  name: lp.name,
+                  nickname: lp.nickname || lp.name,
+                  level: lp.level !== undefined ? lp.level : 1,
+                  growth: lp.growth !== undefined ? lp.growth : 0,
+                  coins: lp.coins !== undefined ? lp.coins : 0,
+                  is_active: lp.is_active !== undefined ? lp.is_active : true,
+                  isDead: lp.isDead || false,
+                  lastFeedDate: lp.lastFeedDate || null,
+                  lastPlayDate: lp.lastPlayDate || null,
+                  todayFeedCount: lp.todayFeedCount || 0,
+                  todayPlayCount: lp.todayPlayCount || 0,
+                  penaltyStreak: lp.penaltyStreak || 0
+                };
+              });
+              
+              // 更新 studentObj 的 pets
+              studentObj.pets = pets;
             }
             
-            console.log('[DAL] Merged student data with localStorage');
+            console.log('[DAL] Merged student data with localStorage (local-first)');
           }
         }
       }
@@ -1997,25 +2075,17 @@ async function _syncStudentToSupabase() {
 
   console.log('[DAL] Student syncing data for:', student.name);
 
-  // 1. 先获取 Supabase 当前数据，然后合并（防止覆盖）
-  var fetchResult = await db.from('students')
-    .select('id, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
-    .eq('id', studentId)
-    .single();
-  
-  var merged = _mergeStudentData(student, fetchResult.data);
-
-  // 2. 同步学生数据（包含特效、打卡、PK等）
+  // 1. 直接推送本地学生数据到 Supabase（本地数据永远优先，不合并）
   var stuUpd = await db.from('students')
     .update({
-      coins: merged.coins,
-      shop_items: JSON.stringify(merged.shopItems || []),
-      equipped_items: JSON.stringify(merged.equippedItems || {}),
-      last_checkin_date: merged.lastCheckinDate || null,
-      last_jianghu_date: merged.lastJianghuDate || null,
-      active_pet_id: merged.activePetId || null,
-      pk_count_today: merged.pkCountToday || 0,
-      last_pk_date: merged.lastPkDate || null
+      coins: student.coins || 0,
+      shop_items: JSON.stringify(student.shopItems || []),
+      equipped_items: JSON.stringify(student.equippedItems || {}),
+      last_checkin_date: student.lastCheckinDate || null,
+      last_jianghu_date: student.lastJianghuDate || null,
+      active_pet_id: student.activePetId || null,
+      pk_count_today: student.pkCountToday || 0,
+      last_pk_date: student.lastPkDate || null
     })
     .eq('id', studentId);
   if (stuUpd.error) {
@@ -2023,7 +2093,7 @@ async function _syncStudentToSupabase() {
     throw new Error('学生数据同步失败: ' + stuUpd.error.message);
   }
 
-  // 3. 同步每只宠物（批量处理）
+  // 2. 同步每只宠物（批量处理）
   var petsToUpdate = [];
   for (var k = 0; k < (student.pets || []).length; k++) {
     var pet = student.pets[k];
@@ -2067,11 +2137,11 @@ async function _syncStudentToSupabase() {
     }
   }
 
-  // 4. 推送操作日志（学生操作也要记录）
+  // 3. 推送操作日志（学生操作也要记录）
   await _pushLogsToSupabase();
   await _pushArchiveToSupabase();
 
-  // 5. 清除未同步标记
+  // 4. 清除未同步标记
   _clearDirty();
   try { localStorage.removeItem('_dal_unsyncedFlag'); } catch (e) {}
   
@@ -2421,37 +2491,215 @@ function _hasUnsyncedData() {
 }
 
 // ===== 页面关闭/隐藏时立即同步 =====
-function _setupCloseSync() {
-  // 页面关闭前同步 - 使用 sendBeacon 发送标记，然后尝试同步
-  window.addEventListener('beforeunload', function(e) {
-    if (currentUser && _hasUnsyncedData()) {
-      console.log('[DAL] Page closing with unsynced data, attempting sync...');
-      // 使用同步 XMLHttpRequest 作为后备（在 beforeunload 中比 async 更可靠）
-      try {
-        // 保存一个标记到 localStorage，标记有数据可能未同步
-        localStorage.setItem('_dal_unsyncedFlag', JSON.stringify({
-          time: Date.now(),
-          userType: currentUser.type,
-          userId: currentUser.id
-        }));
-      } catch (e) {}
+// 获取 Supabase 认证 token（从 localStorage 中读取 session）
+function _getSupabaseAuthHeaders() {
+  var headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=minimal'
+  };
+  try {
+    // Supabase JS client 将 session 存在 localStorage 中
+    var sessionKey = 'sb-' + SUPABASE_URL.split('//')[1].split('.')[0] + '-auth-token';
+    var sessionStr = localStorage.getItem(sessionKey);
+    if (sessionStr) {
+      var session = JSON.parse(sessionStr);
+      if (session && session.access_token) {
+        headers['Authorization'] = 'Bearer ' + session.access_token;
+      }
+    }
+  } catch (e) {
+    // 使用 anon key 作为 fallback
+    headers['Authorization'] = 'Bearer ' + SUPABASE_ANON_KEY;
+  }
+  return headers;
+}
+
+// 同步 XHR 请求到 Supabase REST API
+function _syncXhr(method, path, body) {
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open(method, SUPABASE_URL + '/rest/v1/' + path, false);  // false = 同步
+    var headers = _getSupabaseAuthHeaders();
+    Object.keys(headers).forEach(function(key) {
+      xhr.setRequestHeader(key, headers[key]);
+    });
+    xhr.timeout = 5000;  // 5秒超时
+    if (body) {
+      xhr.send(JSON.stringify(body));
+    } else {
+      xhr.send();
+    }
+    return xhr.status >= 200 && xhr.status < 300;
+  } catch (e) {
+    console.warn('[DAL] syncXhr failed:', method, path, e.message);
+    return false;
+  }
+}
+
+// 页面关闭前的同步推送 - 使用同步 XHR 确保数据写入 Supabase
+function _syncPushBeforeClose() {
+  if (!currentUser || !_hasUnsyncedData()) return;
+  
+  console.log('[DAL] Page closing with unsynced data — synchronous push...');
+  
+  try {
+    localStorage.setItem('_dal_unsyncedFlag', JSON.stringify({
+      time: Date.now(),
+      userType: currentUser.type,
+      userId: currentUser.id
+    }));
+  } catch (e) {}
+
+  if (currentUser.type === 'student') {
+    // 学生模式：同步推送学生数据和宠物数据
+    var classObj = classesData[0];
+    if (!classObj) return;
+    var studentId = parseInt(localStorage.getItem('studentId'));
+    if (!studentId) return;
+    
+    var student = classObj.students.find(function(s) {
+      return s.id.toString() === studentId.toString();
+    });
+    if (!student) return;
+
+    // 1. 同步推送学生数据
+    _syncXhr('PATCH', 'students?id=eq.' + studentId, {
+      coins: student.coins || 0,
+      shop_items: JSON.stringify(student.shopItems || []),
+      equipped_items: JSON.stringify(student.equippedItems || {}),
+      last_checkin_date: student.lastCheckinDate || null,
+      last_jianghu_date: student.lastJianghuDate || null,
+      active_pet_id: student.activePetId || null,
+      pk_count_today: student.pkCountToday || 0,
+      last_pk_date: student.lastPkDate || null
+    });
+
+    // 2. 同步推送每只宠物数据
+    (student.pets || []).forEach(function(pet) {
+      var supaPetId = pet.id;
+      if (supaPetId && _safeInt(supaPetId) !== null) {
+        _syncXhr('PATCH', 'pets?id=eq.' + _safeInt(supaPetId), {
+          name: pet.name,
+          nickname: pet.nickname || pet.name,
+          level: pet.level || 1,
+          growth: pet.growth || 0,
+          coins: pet.coins || 0,
+          is_active: pet.is_active !== false,
+          is_dead: pet.isDead || false,
+          last_feed_date: pet.lastFeedDate || null,
+          last_play_date: pet.lastPlayDate || null,
+          today_feed_count: pet.todayFeedCount || 0,
+          today_play_count: pet.todayPlayCount || 0,
+          penalty_streak: pet.penaltyStreak || 0
+        });
+      }
+    });
+
+    console.log('[DAL] Student synchronous push complete');
+    
+  } else {
+    // 老师模式：同步推送所有班级数据
+    classesData.forEach(function(classObj) {
+      var supaClassId = _getSupaClassId(classObj.id);
       
-      // 尝试发送同步请求（不等待结果）
-      // 使用 navigator.sendBeacon 不可行因为需要 POST JSON，
-      // 所以我们用同步 XHR 发送一个轻量级请求来延长页面生命周期
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', SUPABASE_URL + '/rest/v1/', false);  // false = 同步
-        xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
-        xhr.timeout = 3000;  // 3秒超时
-        xhr.send();
-      } catch (e) {
-        // 超时或失败都忽略，至少延长了页面生命周期
+      // 推送班级
+      if (supaClassId) {
+        _syncXhr('PATCH', 'classes?id=eq.' + supaClassId, {
+          name: classObj.name
+        });
+      } else {
+        var createResult = null;
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', SUPABASE_URL + '/rest/v1/classes', false);
+          var headers = _getSupabaseAuthHeaders();
+          headers['Prefer'] = 'return=representation';
+          Object.keys(headers).forEach(function(key) { xhr.setRequestHeader(key, headers[key]); });
+          xhr.send(JSON.stringify({ name: classObj.name, teacher_id: currentUser.id }));
+          if (xhr.status >= 200 && xhr.status < 300) {
+            var created = JSON.parse(xhr.responseText);
+            if (created && created[0] && created[0].id) {
+              supaClassId = created[0].id;
+              _idMap.classes[String(classObj.id)] = supaClassId;
+              _saveIdMap();
+            }
+          }
+        } catch (e) {}
       }
       
-      // 调用同步（虽然不保证完成，但配合上面的延迟可能有机会完成）
-      _syncToSupabase();
-    }
+      if (!supaClassId) return;
+      
+      // 推送每个学生
+      (classObj.students || []).forEach(function(stu) {
+        var supaStuId = _getSupaStuId(classObj.id, stu.id);
+        var stuData = {
+          name: stu.name,
+          class_id: supaClassId,
+          coins: stu.coins || 0,
+          shop_items: JSON.stringify(stu.shopItems || []),
+          equipped_items: JSON.stringify(stu.equippedItems || {}),
+          last_checkin_date: stu.lastCheckinDate || null,
+          last_jianghu_date: stu.lastJianghuDate || null,
+          active_pet_id: stu.activePetId || null,
+          pk_count_today: stu.pkCountToday || 0,
+          last_pk_date: stu.lastPkDate || null
+        };
+        
+        if (supaStuId) {
+          _syncXhr('PATCH', 'students?id=eq.' + supaStuId, stuData);
+        } else {
+          try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', SUPABASE_URL + '/rest/v1/students', false);
+            var headers = _getSupabaseAuthHeaders();
+            headers['Prefer'] = 'return=representation';
+            Object.keys(headers).forEach(function(key) { xhr.setRequestHeader(key, headers[key]); });
+            xhr.send(JSON.stringify(stuData));
+            if (xhr.status >= 200 && xhr.status < 300) {
+              var created = JSON.parse(xhr.responseText);
+              if (created && created[0] && created[0].id) {
+                _idMap.students[_stuKey(classObj.id, stu.id)] = created[0].id;
+                supaStuId = created[0].id;
+                _saveIdMap();
+              }
+            }
+          } catch (e) {}
+        }
+        
+        // 推送宠物
+        (stu.pets || []).forEach(function(pet) {
+          var supaPetId = _getSupaPetId(classObj.id, stu.id, pet.id);
+          if (supaPetId) {
+            _syncXhr('PATCH', 'pets?id=eq.' + _safeInt(supaPetId), {
+              name: pet.name,
+              nickname: pet.nickname || pet.name,
+              level: pet.level || 1,
+              growth: pet.growth || 0,
+              coins: pet.coins || 0,
+              is_active: pet.is_active !== false,
+              is_dead: pet.isDead || false,
+              last_feed_date: pet.lastFeedDate || null,
+              last_play_date: pet.lastPlayDate || null,
+              today_feed_count: pet.todayFeedCount || 0,
+              today_play_count: pet.todayPlayCount || 0,
+              penalty_streak: pet.penaltyStreak || 0
+            });
+          }
+        });
+      });
+    });
+    
+    console.log('[DAL] Teacher synchronous push complete');
+  }
+  
+  _clearDirty();
+}
+
+function _setupCloseSync() {
+  // 页面关闭前同步 - 使用同步 XHR 直接推送数据到 Supabase
+  window.addEventListener('beforeunload', function(e) {
+    _syncPushBeforeClose();
   });
 
   // 页面隐藏时同步（切换标签页、最小化等）
