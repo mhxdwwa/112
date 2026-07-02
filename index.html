@@ -8,6 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
 <title>🍭宠物世界🍭</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-check.js"></script>
 </head>
 <body>
 <!-- 可爱浮动装饰 -->
@@ -20,7 +22,7 @@
 <div class="deco-bubble" style="left:80%;width:45px;height:45px;background:radial-gradient(circle,#d0ffd0,#a0e8a0);--float-dur:20s;--float-delay:2s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:40%;width:55px;height:55px;background:radial-gradient(circle,#ffe0ff,#e0b0e0);--float-dur:15s;--float-delay:8s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:70%;width:70px;height:70px;background:radial-gradient(circle,#ffd0c0,#ffb0a0);--float-dur:17s;--float-delay:5s;--bubble-opacity:0.07;"></div>
-<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><button id="usbConnectBtn" onclick="playClickSound();connectUSB()" style="background:linear-gradient(135deg,#ffd6a0,#ffb870);color:#553300;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 4px 10px rgba(255,180,100,0.3);transition:all 0.3s;white-space:nowrap;"><span id="usbIcon">💾</span><span id="usbText">授权保存</span></button></div></div>
+<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><button id="usbConnectBtn" onclick="playClickSound();connectUSB()" style="background:linear-gradient(135deg,#ffd6a0,#ffb870);color:#553300;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 4px 10px rgba(255,180,100,0.3);transition:all 0.3s;white-space:nowrap;"><span id="usbIcon">💾</span><span id="usbText">授权保存</span></button><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
 <!-- 背景音乐控制面板 -->
 <div class="music-panel" id="musicPanel">
   <button class="music-toggle" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button>
@@ -90,5 +92,6 @@
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
