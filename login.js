@@ -2,24 +2,26 @@
 const SUPABASE_URL = 'https://xbygoadskfqlnlnhwmet.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
 
-let supabase;
-try {
-  if (window.supabase && window.supabase.createClient) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('Supabase connected');
-  } else {
-    console.error('Supabase SDK not loaded');
-    alert('Supabase SDK 加载失败，请刷新页面重试');
+// 使用 db 作为变量名，避免和 window.supabase 冲突
+var db;
+(function initSupabase() {
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      console.log('Supabase connected');
+    } else {
+      console.error('Supabase SDK not loaded, retrying in 1s...');
+      setTimeout(initSupabase, 1000);
+    }
+  } catch (e) {
+    console.error('Supabase init error:', e);
   }
-} catch (e) {
-  console.error('Supabase init error:', e);
-  alert('Supabase 初始化失败：' + e.message);
-}
+})();
 
 // 切换标签页
-function switchTab(type) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
+function switchTab(type, evt) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  if (evt && evt.target) { evt.target.classList.add('active'); }
   
   if (type === 'teacher') {
     document.getElementById('teacherForm').classList.remove('hidden');
@@ -77,7 +79,7 @@ async function handleTeacherLogin(e) {
   const password = document.getElementById('teacherPassword').value;
   
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await db.auth.signInWithPassword({
       email: email,
       password: password
     });
@@ -88,7 +90,7 @@ async function handleTeacherLogin(e) {
     }
     
     // 检查是否是老师
-    const { data: teacher, error: teacherError } = await supabase
+    const { data: teacher, error: teacherError } = await db
       .from('teachers')
       .select('*')
       .eq('id', data.user.id)
@@ -96,7 +98,7 @@ async function handleTeacherLogin(e) {
     
     if (teacherError || !teacher) {
       showError('teacherError', '该账号不是老师账号');
-      await supabase.auth.signOut();
+      await db.auth.signOut();
       return;
     }
     
@@ -128,7 +130,7 @@ async function handleTeacherRegister(e) {
   
   try {
     // 注册账号
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await db.auth.signUp({
       email: email,
       password: password
     });
@@ -139,7 +141,7 @@ async function handleTeacherRegister(e) {
     }
     
     // 创建老师记录
-    const { error: insertError } = await supabase
+    const { error: insertError } = await db
       .from('teachers')
       .insert([{ id: data.user.id, email: email }]);
     
@@ -171,7 +173,7 @@ async function handleStudentLogin(e) {
   
   try {
     // 查找班级
-    const { data: classData, error: classError } = await supabase
+    const { data: classData, error: classError } = await db
       .from('classes')
       .select('id')
       .eq('name', className)
@@ -183,7 +185,7 @@ async function handleStudentLogin(e) {
     }
     
     // 查找学生
-    const { data: student, error: studentError } = await supabase
+    const { data: student, error: studentError } = await db
       .from('students')
       .select('*')
       .eq('class_id', classData.id)
@@ -232,7 +234,7 @@ async function handleStudentRegister(e) {
   
   try {
     // 查找班级
-    const { data: classData, error: classError } = await supabase
+    const { data: classData, error: classError } = await db
       .from('classes')
       .select('id')
       .eq('name', className)
@@ -244,7 +246,7 @@ async function handleStudentRegister(e) {
     }
     
     // 检查学生是否已在名单中
-    const { data: existingStudent } = await supabase
+    const { data: existingStudent } = await db
       .from('students')
       .select('*')
       .eq('class_id', classData.id)
@@ -263,7 +265,7 @@ async function handleStudentRegister(e) {
     }
     
     // 更新密码
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from('students')
       .update({ password: password })
       .eq('id', existingStudent.id);
@@ -287,14 +289,10 @@ async function handleStudentRegister(e) {
   }
 }
 
-// 检查是否已登录
-async function checkAuth() {
-  const userType = localStorage.getItem('userType');
-  if (userType) {
-    // 已登录，跳转到主页面
-    window.location.href = 'index.html';
-  }
-}
-
-// 页面加载时检查登录状态
-checkAuth();
+// 检查是否已登录（暂时禁用自动跳转，等主页面改造完成后再启用）
+// async function checkAuth() {
+//   const userType = localStorage.getItem('userType');
+//   if (userType) {
+//     window.location.href = 'index.html';
+//   }
+// }

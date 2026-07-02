@@ -113,8 +113,8 @@ body {
   <div class="login-title">🍭 宠物世界 🍭</div>
   
   <div class="tab-container">
-    <div class="tab active" onclick="switchTab('teacher')">老师登录</div>
-    <div class="tab" onclick="switchTab('student')">学生登录</div>
+    <div class="tab active" onclick="switchTab('teacher', event)">老师登录</div>
+    <div class="tab" onclick="switchTab('student', event)">学生登录</div>
   </div>
 
   <!-- 老师登录表单 -->
@@ -130,7 +130,7 @@ body {
     <div class="error-msg" id="teacherError"></div>
     <button type="submit" class="btn btn-primary">登录</button>
     <div style="text-align: center; margin-top: 15px; font-size: 14px; color: #886;">
-      还没有账号？<a href="#" onclick="showRegister('teacher')" style="color: #c04058;">立即注册</a>
+      还没有账号？<a href="javascript:void(0)" onclick="showRegister('teacher')" style="color: #c04058;">立即注册</a>
     </div>
   </form>
 
@@ -151,7 +151,7 @@ body {
     <div class="error-msg" id="teacherRegError"></div>
     <button type="submit" class="btn btn-primary">注册</button>
     <div style="text-align: center; margin-top: 15px; font-size: 14px; color: #886;">
-      已有账号？<a href="#" onclick="showLogin('teacher')" style="color: #c04058;">返回登录</a>
+      已有账号？<a href="javascript:void(0)" onclick="showLogin('teacher')" style="color: #c04058;">返回登录</a>
     </div>
   </form>
 
@@ -172,7 +172,7 @@ body {
     <div class="error-msg" id="studentError"></div>
     <button type="submit" class="btn btn-primary">登录</button>
     <div style="text-align: center; margin-top: 15px; font-size: 14px; color: #886;">
-      第一次登录？<a href="#" onclick="showRegister('student')" style="color: #c04058;">设置密码</a>
+      第一次登录？<a href="javascript:void(0)" onclick="showRegister('student')" style="color: #c04058;">设置密码</a>
     </div>
   </form>
 
@@ -197,12 +197,12 @@ body {
     <div class="error-msg" id="studentRegError"></div>
     <button type="submit" class="btn btn-primary">注册并登录</button>
     <div style="text-align: center; margin-top: 15px; font-size: 14px; color: #886;">
-      已有密码？<a href="#" onclick="showLogin('student')" style="color: #c04058;">返回登录</a>
+      已有密码？<a href="javascript:void(0)" onclick="showLogin('student')" style="color: #c04058;">返回登录</a>
     </div>
   </form>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="login.js"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
