@@ -62,10 +62,20 @@ function showLogin(type) {
 async function loadAvailableClasses() {
   if (!db) return;
   try {
-    var result = await db.from('classes').select('id, name').order('name');
+    // 按 ID 升序，确保同名班级优先返回最早创建的
+    var result = await db.from('classes').select('id, name').order('id', { ascending: true });
     if (result.data && result.data.length > 0) {
-      window._availableClasses = result.data;
-      updateClassDatalist(result.data);
+      // 去重：同名班级只保留 ID 最小的那个
+      var seen = {};
+      var uniqueClasses = [];
+      result.data.forEach(function(c) {
+        if (!seen[c.name]) {
+          seen[c.name] = true;
+          uniqueClasses.push(c);
+        }
+      });
+      window._availableClasses = uniqueClasses;
+      updateClassDatalist(uniqueClasses);
     } else {
       window._availableClasses = [];
     }
@@ -243,11 +253,12 @@ async function handleStudentLogin(e) {
   }
   
   try {
-    // 查找班级
+    // 查找班级（按 ID 升序，确保返回最早创建的那个，避免重复班级干扰）
     const { data: classData, error: classError } = await db
       .from('classes')
       .select('id, name')
       .eq('name', className)
+      .order('id', { ascending: true })
       .limit(1);
     
     if (classError) {
@@ -330,11 +341,12 @@ async function handleStudentRegister(e) {
   }
   
   try {
-    // 查找班级
+    // 查找班级（按 ID 升序，确保返回最早创建的那个）
     const { data: classData, error: classError } = await db
       .from('classes')
       .select('id, name')
       .eq('name', className)
+      .order('id', { ascending: true })
       .limit(1);
     
     if (classError) {
