@@ -35,8 +35,8 @@ async function checkLogin() {
     return;
   }
   
-  // 如果有 Supabase 连接，验证 session
-  if (db) {
+  // 如果有 Supabase 连接，验证 session（仅老师需要，学生不走 Supabase Auth）
+  if (db && userType === 'teacher') {
     try {
       const { data: { session }, error } = await db.auth.getSession();
       if (error || !session) {
@@ -44,10 +44,6 @@ async function checkLogin() {
         localStorage.removeItem('userType');
         localStorage.removeItem('userId');
         localStorage.removeItem('userEmail');
-        localStorage.removeItem('studentId');
-        localStorage.removeItem('studentName');
-        localStorage.removeItem('classId');
-        localStorage.removeItem('className');
         window.location.href = 'login.html';
         return;
       }
@@ -59,15 +55,7 @@ async function checkLogin() {
         email: localStorage.getItem('userEmail')
       };
       
-      // 如果是学生，额外设置学生信息
-      if (userType === 'student') {
-        currentUser.studentId = localStorage.getItem('studentId');
-        currentUser.studentName = localStorage.getItem('studentName');
-        currentUser.classId = localStorage.getItem('classId');
-        currentUser.className = localStorage.getItem('className');
-      }
-      
-      console.log('[Auth] User logged in:', currentUser);
+      console.log('[Auth] Teacher logged in:', currentUser);
     } catch (e) {
       console.error('[Auth] Session check error:', e);
       // 出错时允许继续使用（降级模式）
@@ -78,7 +66,7 @@ async function checkLogin() {
       };
     }
   } else {
-    // Supabase 未连接，使用 localStorage 中的信息（降级模式）
+    // Supabase 未连接 或 学生登录（学生用班级+姓名+密码，不走 Supabase Auth）
     currentUser = {
       type: userType,
       id: userId,

@@ -22,7 +22,7 @@
 <div class="deco-bubble" style="left:80%;width:45px;height:45px;background:radial-gradient(circle,#d0ffd0,#a0e8a0);--float-dur:20s;--float-delay:2s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:40%;width:55px;height:55px;background:radial-gradient(circle,#ffe0ff,#e0b0e0);--float-dur:15s;--float-delay:8s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:70%;width:70px;height:70px;background:radial-gradient(circle,#ffd0c0,#ffb0a0);--float-dur:17s;--float-delay:5s;--bubble-opacity:0.07;"></div>
-<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><button id="usbConnectBtn" onclick="playClickSound();connectUSB()" style="background:linear-gradient(135deg,#ffd6a0,#ffb870);color:#553300;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 4px 10px rgba(255,180,100,0.3);transition:all 0.3s;white-space:nowrap;"><span id="usbIcon">💾</span><span id="usbText">授权保存</span></button><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
+<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><span id="cloudSyncStatus" style="display:flex;align-items:center;gap:4px;font-size:13px;color:#6a9955;font-weight:600;background:linear-gradient(135deg,#e8ffe8,#d0f0d0);border-radius:20px;padding:6px 14px;box-shadow:0 2px 8px rgba(100,180,100,0.15);">☁️ 云端同步</span><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
 <!-- 背景音乐控制面板 -->
 <div class="music-panel" id="musicPanel">
   <button class="music-toggle" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button>
@@ -87,25 +87,59 @@
 <div id="notificationContainer"></div>
 <div id="upgradeEffectContainer"></div>
 <script src="app.js"></script>
-<script src="dal.js"></script>
 <script>
-// Supabase 登录后自动跳过文件授权浮层
+// ===== 云端模式：禁用本地文件保存机制 =====
+// 数据完全走 Supabase 云端，不再需要文件授权
 (function(){
-  var _overlayTimer = setInterval(function(){
-    if (typeof currentUser !== 'undefined' && currentUser) {
-      clearInterval(_overlayTimer);
-      var ov = document.getElementById('startOverlay');
-      if (ov) ov.remove();
+  // 1. 阻止文件授权浮层出现
+  window.showStartOverlay = function(){};
+
+  // 2. 禁用 USB 连接 / 文件保存
+  window.connectUSB = function(){
+    showNotification('云端模式', '数据自动保存到云端，无需授权本地文件', 'info');
+  };
+  window.updateUSBStatus = function(){};
+  window.scheduleFileSave = function(){};
+  window.saveAllToFiles = function(){};
+
+  // 3. 移除可能已经出现的浮层
+  var _cleanTimer = setInterval(function(){
+    var ov = document.getElementById('startOverlay');
+    if (ov) ov.remove();
+  }, 100);
+  setTimeout(function(){ clearInterval(_cleanTimer); }, 10000);
+
+  // 4. 更新云端同步状态指示器
+  window._updateCloudStatus = function(state) {
+    var el = document.getElementById('cloudSyncStatus');
+    if (!el) return;
+    if (state === 'syncing') {
+      el.innerHTML = '☁️ 同步中...';
+      el.style.color = '#b08800';
+      el.style.background = 'linear-gradient(135deg,#fff8e0,#ffefb0)';
+    } else if (state === 'synced') {
+      el.innerHTML = '☁️ 已同步';
+      el.style.color = '#6a9955';
+      el.style.background = 'linear-gradient(135deg,#e8ffe8,#d0f0d0)';
+    } else if (state === 'error') {
+      el.innerHTML = '☁️ 同步失败';
+      el.style.color = '#cc4444';
+      el.style.background = 'linear-gradient(135deg,#ffe8e8,#ffd0d0)';
+    } else {
+      el.innerHTML = '☁️ 云端同步';
+      el.style.color = '#6a9955';
+      el.style.background = 'linear-gradient(135deg,#e8ffe8,#d0f0d0)';
     }
-  }, 200);
-  setTimeout(function(){ clearInterval(_overlayTimer); }, 15000);
+  };
 })();
 </script>
+<script src="dal.js"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>

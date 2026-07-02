@@ -535,6 +535,9 @@ async function _syncToSupabase() {
   }
   _dalSyncing = true;
 
+  // 更新云端同步状态
+  if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
+
   try {
     for (var i = 0; i < classesData.length; i++) {
       await _pushClassToSupabase(classesData[i]);
@@ -566,8 +569,10 @@ async function _syncToSupabase() {
     await _pushLogsToSupabase();
 
     console.log('[DAL] Synced to Supabase');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
   } catch (e) {
     console.error('[DAL] sync error:', e);
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
   } finally {
     _dalSyncing = false;
     if (_dalSyncQueued) {
@@ -578,12 +583,15 @@ async function _syncToSupabase() {
 }
 
 // ===== 包装 app.js 的保存函数 =====
+// 原来的 saveClassData/saveCustomActions/saveLogs 保存到 localStorage + 调用 scheduleFileSave（已禁用）
+// 包装后：每次保存自动同步到 Supabase 云端
 function wrapSaveFunctions() {
   if (typeof saveClassData === 'function' && !saveClassData._dalWrapped) {
     var _origSaveClass = saveClassData;
     saveClassData = function() {
-      _origSaveClass();
-      _syncToSupabase();
+      _origSaveClass();  // localStorage 缓存
+      if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
+      _syncToSupabase();  // 云端同步
     };
     saveClassData._dalWrapped = true;
   }
@@ -592,6 +600,7 @@ function wrapSaveFunctions() {
     var _origSaveActions = saveCustomActions;
     saveCustomActions = function() {
       _origSaveActions();
+      if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
       _syncToSupabase();
     };
     saveCustomActions._dalWrapped = true;
@@ -601,6 +610,7 @@ function wrapSaveFunctions() {
     var _origSaveLogs = saveLogs;
     saveLogs = function() {
       _origSaveLogs();
+      if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
       _syncToSupabase();
     };
     saveLogs._dalWrapped = true;
@@ -615,7 +625,7 @@ function wrapSaveFunctions() {
     saveDeletedClasses._dalWrapped = true;
   }
 
-  console.log('[DAL] Save functions wrapped');
+  console.log('[DAL] Save functions wrapped — all changes sync to Supabase cloud');
 }
 
 // ===== DAL 初始化入口 =====
@@ -631,28 +641,31 @@ async function initDAL() {
 
   console.log('[DAL] Initializing for', currentUser.type, currentUser.id);
 
-  // 从 Supabase 加载数据
+  // 从 Supabase 加载数据（云端优先）
+  if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
   var loaded = await loadFromSupabase();
 
   if (loaded) {
     console.log('[DAL] Data loaded from Supabase, re-rendering...');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
     // 重新初始化 app 渲染
     if (typeof init === 'function') {
       currentClassId = classesData.length > 0 ? classesData[0].id : null;
       init();
     }
   } else {
-    console.log('[DAL] No data in Supabase, will sync from localStorage on first save');
+    console.log('[DAL] No data in Supabase yet, using localStorage data (will sync on first save)');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('');
   }
 
-  // 包装保存函数
+  // 包装保存函数（使每次保存自动同步到 Supabase）
   wrapSaveFunctions();
 
   // 学生模式限制
   applyStudentRestrictions();
 
   _dalReady = true;
-  console.log('[DAL] Ready');
+  console.log('[DAL] Ready — data source: Supabase cloud');
 }
 
 // ===== 学生模式：隐藏老师专属 UI =====
