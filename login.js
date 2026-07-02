@@ -253,38 +253,46 @@ async function handleStudentLogin(e) {
   }
   
   try {
-    // 查找班级（按 ID 升序，确保返回最早创建的那个，避免重复班级干扰）
-    const { data: classData, error: classError } = await db
-      .from('classes')
-      .select('id, name')
-      .eq('name', className)
-      .order('id', { ascending: true })
-      .limit(1);
-    
-    if (classError) {
-      console.error('[Login] class query error:', classError);
-      showError('studentError', '网络连接失败，请检查网络后重试');
-      return;
+    // 优先使用缓存的班级列表，避免网络查询
+    var matchedClass = null;
+    if (window._availableClasses && window._availableClasses.length > 0) {
+      matchedClass = window._availableClasses.find(function(c) { return c.name === className; });
     }
     
-    if (!classData || classData.length === 0) {
-      // 班级不存在 - 提供具体帮助
-      var availMsg = '';
-      if (window._availableClasses && window._availableClasses.length > 0) {
-        var names = [];
-        var seen = {};
-        window._availableClasses.forEach(function(c) {
-          if (!seen[c.name]) { seen[c.name] = true; names.push('「' + c.name + '」'); }
-        });
-        availMsg = '\n\n当前可用班级：' + names.join('、') + '\n请检查班级名称是否完全一致。';
-      } else {
-        availMsg = '\n\n云端暂无班级。请联系老师：\n1. 打开宠物世界页面\n2. 确认班级已创建\n3. 确认右上角显示"☁️ 已同步"';
+    // 如果缓存没有，再查询 Supabase
+    if (!matchedClass) {
+      const { data: classData, error: classError } = await db
+        .from('classes')
+        .select('id, name')
+        .eq('name', className)
+        .order('id', { ascending: true })
+        .limit(1);
+      
+      if (classError) {
+        console.error('[Login] class query error:', classError);
+        showError('studentError', '网络连接失败，请检查网络后重试');
+        return;
       }
-      showError('studentError', '班级「' + className + '」不存在。' + availMsg);
-      return;
+      
+      if (!classData || classData.length === 0) {
+        // 班级不存在 - 提供具体帮助
+        var availMsg = '';
+        if (window._availableClasses && window._availableClasses.length > 0) {
+          var names = [];
+          var seen = {};
+          window._availableClasses.forEach(function(c) {
+            if (!seen[c.name]) { seen[c.name] = true; names.push('「' + c.name + '」'); }
+          });
+          availMsg = '\n\n当前可用班级：' + names.join('、') + '\n请检查班级名称是否完全一致。';
+        } else {
+          availMsg = '\n\n云端暂无班级。请联系老师：\n1. 打开宠物世界页面\n2. 确认班级已创建\n3. 确认右上角显示"☁️ 已同步"';
+        }
+        showError('studentError', '班级「' + className + '」不存在。' + availMsg);
+        return;
+      }
+      
+      matchedClass = classData[0];
     }
-    
-    var matchedClass = classData[0];
     
     // 查找学生
     const { data: student, error: studentError } = await db
@@ -341,38 +349,45 @@ async function handleStudentRegister(e) {
   }
   
   try {
-    // 查找班级（按 ID 升序，确保返回最早创建的那个）
-    const { data: classData, error: classError } = await db
-      .from('classes')
-      .select('id, name')
-      .eq('name', className)
-      .order('id', { ascending: true })
-      .limit(1);
-    
-    if (classError) {
-      console.error('[Register] class query error:', classError);
-      showError('studentRegError', '网络连接失败，请检查网络后重试');
-      return;
+    // 优先使用缓存的班级列表，避免网络查询
+    var matchedClass = null;
+    if (window._availableClasses && window._availableClasses.length > 0) {
+      matchedClass = window._availableClasses.find(function(c) { return c.name === className; });
     }
     
-    if (!classData || classData.length === 0) {
-      // 班级不存在 - 提供具体帮助
-      var availMsg = '';
-      if (window._availableClasses && window._availableClasses.length > 0) {
-        var names = [];
-        var seen = {};
-        window._availableClasses.forEach(function(c) {
-          if (!seen[c.name]) { seen[c.name] = true; names.push('「' + c.name + '」'); }
-        });
-        availMsg = '\n\n当前可用班级：' + names.join('、');
-      } else {
-        availMsg = '\n\n云端暂无班级。请联系老师创建班级并确保已同步。';
+    // 如果缓存没有，再查询 Supabase
+    if (!matchedClass) {
+      const { data: classData, error: classError } = await db
+        .from('classes')
+        .select('id, name')
+        .eq('name', className)
+        .order('id', { ascending: true })
+        .limit(1);
+      
+      if (classError) {
+        console.error('[Register] class query error:', classError);
+        showError('studentRegError', '网络连接失败，请检查网络后重试');
+        return;
       }
-      showError('studentRegError', '班级「' + className + '」不存在。' + availMsg);
-      return;
+      
+      if (!classData || classData.length === 0) {
+        var availMsg = '';
+        if (window._availableClasses && window._availableClasses.length > 0) {
+          var names = [];
+          var seen = {};
+          window._availableClasses.forEach(function(c) {
+            if (!seen[c.name]) { seen[c.name] = true; names.push('「' + c.name + '」'); }
+          });
+          availMsg = '\n\n当前可用班级：' + names.join('、');
+        } else {
+          availMsg = '\n\n云端暂无班级。请联系老师创建班级并确保已同步。';
+        }
+        showError('studentRegError', '班级「' + className + '」不存在。' + availMsg);
+        return;
+      }
+      
+      matchedClass = classData[0];
     }
-    
-    var matchedClass = classData[0];
     
     // 检查学生是否已在名单中
     const { data: existingStudent } = await db

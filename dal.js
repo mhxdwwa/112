@@ -218,7 +218,60 @@ async function loadFromSupabase() {
     var newClassesData = [];
     var newIdMap = { students: {}, pets: {}, classes: {} };
 
-    // 2. 逐班级加载学生和宠物
+    // 2. 批量加载所有学生和宠物（避免 N+1 查询）
+    var classIds = supaClasses.map(function(sc) { return sc.id; });
+    classIds.forEach(function(id) { newIdMap.classes[String(id)] = id; });
+
+    // 一次性加载所有班级学生
+    // Supabase .in() 限制最多 30 个值，分批查询
+    var allStudents = [];
+    var BATCH_SIZE = 30;
+    for (var bi = 0; bi < classIds.length; bi += BATCH_SIZE) {
+      var batch = classIds.slice(bi, bi + BATCH_SIZE);
+      var stuResult = await db.from('students')
+        .select('id, class_id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
+        .in('class_id', batch)
+        .order('id', { ascending: true });
+      if (stuResult.error) {
+        console.error('[DAL] batch load students error:', stuResult.error);
+      } else {
+        allStudents = allStudents.concat(stuResult.data || []);
+      }
+    }
+
+    // 按 class_id 分组学生
+    var studentsByClass = {};
+    allStudents.forEach(function(ss) {
+      if (!studentsByClass[ss.class_id]) studentsByClass[ss.class_id] = [];
+      studentsByClass[ss.class_id].push(ss);
+    });
+
+    // 一次性加载所有学生的宠物
+    var allStudentIds = allStudents.map(function(s) { return s.id; });
+    var allPets = [];
+    if (allStudentIds.length > 0) {
+      for (var bi2 = 0; bi2 < allStudentIds.length; bi2 += BATCH_SIZE) {
+        var batch2 = allStudentIds.slice(bi2, bi2 + BATCH_SIZE);
+        var petResult = await db.from('pets')
+          .select('*')
+          .in('student_id', batch2)
+          .order('id', { ascending: true });
+        if (petResult.error) {
+          console.error('[DAL] batch load pets error:', petResult.error);
+        } else {
+          allPets = allPets.concat(petResult.data || []);
+        }
+      }
+    }
+
+    // 按 student_id 分组宠物
+    var petsByStudent = {};
+    allPets.forEach(function(sp) {
+      if (!petsByStudent[sp.student_id]) petsByStudent[sp.student_id] = [];
+      petsByStudent[sp.student_id].push(sp);
+    });
+
+    // 组装数据
     for (var i = 0; i < supaClasses.length; i++) {
       var sc = supaClasses[i];
       var classObj = {
@@ -227,22 +280,10 @@ async function loadFromSupabase() {
         students: [],
         pauseGrowth: null
       };
-      newIdMap.classes[String(sc.id)] = sc.id;
 
-      // 加载学生（包含特效、打卡、PK等字段）
-      var stuResult = await db.from('students')
-        .select('id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
-        .eq('class_id', sc.id)
-        .order('id', { ascending: true });
-
-      if (stuResult.error) {
-        console.error('[DAL] load students error for class', sc.id, stuResult.error);
-        continue;
-      }
-
-      var supaStudents = stuResult.data || [];
-      for (var j = 0; j < supaStudents.length; j++) {
-        var ss = supaStudents[j];
+      var classStudents = studentsByClass[sc.id] || [];
+      for (var j = 0; j < classStudents.length; j++) {
+        var ss = classStudents[j];
         var studentObj = {
           id: ss.id,
           name: ss.name,
@@ -258,36 +299,26 @@ async function loadFromSupabase() {
         };
         newIdMap.students[_stuKey(classObj.id, ss.id)] = ss.id;
 
-        // 加载宠物
-        var petResult = await db.from('pets')
-          .select('*')
-          .eq('student_id', ss.id)
-          .order('id', { ascending: true });
-
-        if (petResult.error) {
-          console.error('[DAL] load pets error for student', ss.id, petResult.error);
-        } else {
-          var supaPets = petResult.data || [];
-          for (var k = 0; k < supaPets.length; k++) {
-            var sp = supaPets[k];
-            var petObj = {
-              id: sp.id,
-              name: sp.name,
-              nickname: sp.nickname || sp.name,
-              level: sp.level || 1,
-              growth: sp.growth || 0,
-              coins: sp.coins || 0,
-              is_active: sp.is_active !== false,
-              isDead: sp.is_dead || false,
-              lastFeedDate: sp.last_feed_date,
-              lastPlayDate: sp.last_play_date,
-              todayFeedCount: sp.today_feed_count || 0,
-              todayPlayCount: sp.today_play_count || 0,
-              penaltyStreak: sp.penalty_streak || 0
-            };
-            studentObj.pets.push(petObj);
-            newIdMap.pets[_petKey(classObj.id, ss.id, sp.id)] = sp.id;
-          }
+        var studentPets = petsByStudent[ss.id] || [];
+        for (var k = 0; k < studentPets.length; k++) {
+          var sp = studentPets[k];
+          var petObj = {
+            id: sp.id,
+            name: sp.name,
+            nickname: sp.nickname || sp.name,
+            level: sp.level || 1,
+            growth: sp.growth || 0,
+            coins: sp.coins || 0,
+            is_active: sp.is_active !== false,
+            isDead: sp.is_dead || false,
+            lastFeedDate: sp.last_feed_date,
+            lastPlayDate: sp.last_play_date,
+            todayFeedCount: sp.today_feed_count || 0,
+            todayPlayCount: sp.today_play_count || 0,
+            penaltyStreak: sp.penalty_streak || 0
+          };
+          studentObj.pets.push(petObj);
+          newIdMap.pets[_petKey(classObj.id, ss.id, sp.id)] = sp.id;
         }
 
         // 设置 activePetId：优先 Supabase 值，然后 is_active，否则第一只
@@ -424,12 +455,12 @@ async function loadFromSupabase() {
     _saveIdMap();
     safeLSSave('classPetData', classesData);
 
-    // 5. 加载 customActions
-    await _loadCustomActionsFromSupabase();
-
-    // 6. 加载操作日志和归档
-    await _loadLogsFromSupabase();
-    await _loadArchiveFromSupabase();
+    // 5. 并行加载 customActions、操作日志和归档
+    await Promise.all([
+      _loadCustomActionsFromSupabase(),
+      _loadLogsFromSupabase(),
+      _loadArchiveFromSupabase()
+    ]);
 
     console.log('[DAL] Loaded from Supabase:', newClassesData.length, 'classes');
     return true;
@@ -446,18 +477,19 @@ async function _loadStudentFromSupabase() {
     var classId = parseInt(localStorage.getItem('classId'));
     if (!studentId || !classId) return false;
 
-    var classResult = await db.from('classes')
-      .select('id, name')
-      .eq('id', classId)
-      .single();
+    // 并行查询班级和学生信息（减少串行等待）
+    var results = await Promise.all([
+      db.from('classes').select('id, name').eq('id', classId).single(),
+      db.from('students')
+        .select('id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
+        .eq('id', studentId)
+        .single()
+    ]);
+
+    var classResult = results[0];
+    var stuResult = results[1];
 
     if (classResult.error || !classResult.data) return false;
-
-    var stuResult = await db.from('students')
-      .select('id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
-      .eq('id', studentId)
-      .single();
-
     if (stuResult.error || !stuResult.data) return false;
 
     var ss = stuResult.data;

@@ -249,8 +249,8 @@ Object.keys(PET_CONFIG_BASE).forEach(name=>{ PET_CONFIG[name] = {...PET_CONFIG_B
 function autoDiscoverPets() {
   let startId = 56; // 从 56 开始探测（1-55 已内置）
   let consecutiveFailures = 0;
-  const maxFailures = 5; // 连续 5 个找不到图片就停止探测，提高效率
-  const maxCheck = 300; // 绝对上限，防止意外无限循环
+  const maxFailures = 3; // 连续 3 个找不到图片就停止探测
+  const maxCheck = 100; // 绝对上限（实际只需到 58 左右）
 
   function checkNext(id) {
     if (id > maxCheck || consecutiveFailures >= maxFailures) {
@@ -793,8 +793,8 @@ function toggleRevertedVisibility(show){
     el.style.display = show ? '' : 'none';
   });
 }
-function getPetImage(petName, level=1) { const cfg = PET_CONFIG[petName]; if (!cfg) return '<span>🐾</span>'; return `<img src="images/${cfg.id}/${level}.png" alt="${petName}" style="max-width:100%; max-height:100%; object-fit: contain;" onerror="this.onerror=null; this.parentNode.innerHTML='<span style=\'font-size:48px;\'>${cfg.emoji}</span>';">`; }
-function getEggImage() { return `<img src="images/蛋.png" alt="宠物蛋" class="egg-img" style="max-width:100%; max-height:100%; object-fit: contain;" onerror="this.onerror=null; this.parentNode.innerHTML='<span style=\'font-size:60px;\'>🥚</span>';">`; }
+function getPetImage(petName, level=1) { const cfg = PET_CONFIG[petName]; if (!cfg) return '<span>🐾</span>'; return `<img src="images/${cfg.id}/${level}.png" alt="${petName}" loading="lazy" decoding="async" style="max-width:100%; max-height:100%; object-fit: contain;" onerror="this.onerror=null; this.parentNode.innerHTML='<span style=\'font-size:48px;\'>${cfg.emoji}</span>';">`; }
+function getEggImage() { return `<img src="images/蛋.png" alt="宠物蛋" class="egg-img" loading="lazy" decoding="async" style="max-width:100%; max-height:100%; object-fit: contain;" onerror="this.onerror=null; this.parentNode.innerHTML='<span style=\'font-size:60px;\'>🥚</span>';">`; }
 
 /* ===== ENHANCED PET MODAL SYSTEM - JS ===== */
 let _petModalTiltCleanup = null;
@@ -1931,8 +1931,8 @@ function getRightMonsterImg() {
   return null;
 }
 
-// 页面加载时预探测
-probeMonsterImages();
+// 延迟到 PK 页面打开时再探测（不在页面加载时探测，减少初始请求）
+// probeMonsterImages() 将在 switchPage('pk-page') 时按需调用
 
 // 音效系统
 function playTransformSound() {
