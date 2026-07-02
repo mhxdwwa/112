@@ -601,11 +601,71 @@ async function _loadStudentFromSupabase() {
       else if (pets.length > 0) studentObj.activePetId = pets[0].id;
     }
 
-    // 构建 classesData，学生只看到自己
+    // === 加载全班学生（学生端也能看到同学） ===
+    var allStudents = [studentObj];
+    var otherStudentsResult = await db.from('students')
+      .select('id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
+      .eq('class_id', classId)
+      .neq('id', studentId);
+
+    if (otherStudentsResult.data && otherStudentsResult.data.length > 0) {
+      // 批量加载其他同学的宠物
+      var otherStudentIds = otherStudentsResult.data.map(function(s) { return s.id; });
+      var allPetsResult = await db.from('pets')
+        .select('*')
+        .in('student_id', otherStudentIds)
+        .order('id', { ascending: true });
+
+      // 按 student_id 分组宠物
+      var petsByStudent = {};
+      if (allPetsResult.data) {
+        allPetsResult.data.forEach(function(sp) {
+          if (!petsByStudent[sp.student_id]) petsByStudent[sp.student_id] = [];
+          petsByStudent[sp.student_id].push({
+            id: sp.id, name: sp.name, nickname: sp.nickname || sp.name,
+            level: sp.level || 1, growth: sp.growth || 0, coins: sp.coins || 0,
+            is_active: sp.is_active !== false, isDead: sp.is_dead || false,
+            lastFeedDate: sp.last_feed_date, lastPlayDate: sp.last_play_date,
+            todayFeedCount: sp.today_feed_count || 0, todayPlayCount: sp.today_play_count || 0,
+            penaltyStreak: sp.penalty_streak || 0
+          });
+        });
+      }
+
+      // 构建其他同学的 student 对象
+      otherStudentsResult.data.forEach(function(os) {
+        var otherPets = petsByStudent[os.id] || [];
+        var otherObj = {
+          id: os.id, name: os.name, coins: os.coins || 0, pets: otherPets,
+          shopItems: _parseJsonb(os.shop_items, []),
+          equippedItems: _parseJsonb(os.equipped_items, {}),
+          lastCheckinDate: os.last_checkin_date || null,
+          lastJianghuDate: os.last_jianghu_date || null,
+          activePetId: os.active_pet_id || null,
+          pkCountToday: os.pk_count_today || 0,
+          lastPkDate: os.last_pk_date || null
+        };
+        // activePetId 回退逻辑
+        if (otherObj.activePetId && otherPets.some(function(p) { return Number(p.id) === Number(otherObj.activePetId); })) {
+          // keep
+        } else if (otherPets.length > 0) {
+          var ap = otherPets.find(function(p) { return p.is_active; });
+          otherObj.activePetId = ap ? ap.id : otherPets[0].id;
+        }
+        allStudents.push(otherObj);
+        // ID 映射
+        _idMap.students[_stuKey(String(classResult.data.id), os.id)] = os.id;
+        otherPets.forEach(function(p) {
+          _idMap.pets[_petKey(String(classResult.data.id), os.id, p.id)] = p.id;
+        });
+      });
+    }
+
+    // 构建 classesData，包含全班学生
     classesData = [{
       id: String(classResult.data.id),
       name: classResult.data.name,
-      students: [studentObj],
+      students: allStudents,
       pauseGrowth: null
     }];
 
@@ -618,7 +678,7 @@ async function _loadStudentFromSupabase() {
     _saveIdMap();
     safeLSSave('classPetData', classesData);
 
-    console.log('[DAL] Student loaded from Supabase');
+    console.log('[DAL] Student loaded from Supabase, class has', allStudents.length, 'students');
     return true;
   } catch (e) {
     console.error('[DAL] loadStudent error:', e);
@@ -2464,20 +2524,52 @@ function applyStudentRestrictions() {
   });
 
   // 限制学生只能操作自己的宠物（在 openStudentModal 中检查）
+  // 同时：对其他同学的卡片，隐藏互动按钮，展示更详细的信息面板，含 PK 挑战入口
   var _origOpenStudentModal = window.openStudentModal;
   window.openStudentModal = function(studentId) {
     if (currentUser.type === 'student' && studentId.toString() !== currentUser.studentId.toString()) {
-      // 学生查看其他同学 — 只展示信息，不给操作
+      // 学生查看其他同学 — 展示只读信息面板，附带 PK 挑战入口
       var cur = classesData.find(function(c){ return c.id === currentClassId; });
       if (!cur) return;
       var student = cur.students.find(function(s){ return s.id.toString() === studentId.toString(); });
       if (!student) return;
       var activePet = typeof getActivePet === 'function' ? getActivePet(student) : null;
+      var myStudent = cur.students.find(function(s){ return s.id.toString() === currentUser.studentId.toString(); });
+      var myPet = myStudent ? (typeof getActivePet === 'function' ? getActivePet(myStudent) : null) : null;
+
       var content = '<div style="text-align:center;">';
-      content += '<div style="font-size:18px;font-weight:700;margin-bottom:10px;">' + escapeHTML(student.name) + '</div>';
-      content += '<div>💰 ' + student.coins + ' 金币</div>';
+      content += '<div style="font-size:20px;font-weight:700;margin-bottom:8px;">' + escapeHTML(student.name) + '</div>';
+      content += '<div style="font-size:14px;color:#888;margin-bottom:12px;">💰 ' + student.coins + ' 金币</div>';
       if (activePet) {
-        content += '<div style="margin-top:10px;">🐾 ' + escapeHTML(activePet.nickname || activePet.name) + ' Lv.' + activePet.level + '</div>';
+        var petStatus = activePet.isDead ? '💀 已饿死' : (activePet.level >= 9 ? '👑 已满级' : '🌱 活跃中');
+        var pkToday = student.pkCountToday || 0;
+        content += '<div style="background:rgba(255,200,200,0.2);border-radius:16px;padding:14px;margin:10px 0;border:1px solid rgba(255,180,180,0.4);">';
+        content += '<div style="font-size:44px;margin-bottom:8px;">' + getPetImage(activePet.name, activePet.level) + '</div>';
+        content += '<div style="font-size:16px;font-weight:600;">' + escapeHTML(activePet.nickname || activePet.name) + '</div>';
+        content += '<div style="font-size:13px;color:#888;margin-top:4px;">Lv.' + activePet.level + ' · 成长值: ' + activePet.growth + '</div>';
+        content += '<div style="font-size:13px;color:#888;margin-top:2px;">状态: ' + petStatus + '</div>';
+        content += '<div style="font-size:13px;color:#888;margin-top:2px;">今日PK次数: ' + pkToday + ' / 3</div>';
+        content += '</div>';
+
+        // PK 挑战按钮（满足条件时显示）
+        var canPK = true;
+        var pkReason = '';
+        if (!myPet) { canPK = false; pkReason = '你还没有宠物'; }
+        else if (myPet.isDead) { canPK = false; pkReason = '你的宠物已死亡'; }
+        else if (activePet.isDead) { canPK = false; pkReason = '对方宠物已死亡'; }
+        else if (Math.abs(myPet.level - activePet.level) > 1) { canPK = false; pkReason = '等级差超过1级，无法PK'; }
+        else if (myStudent && myStudent.coins < 5) { canPK = false; pkReason = '你的金币不足（需≥5）'; }
+        else if (student.coins < 5) { canPK = false; pkReason = '对方金币不足（需≥5）'; }
+        else if (myStudent && myStudent.pkCountToday >= 3) { canPK = false; pkReason = '你今天PK次数已达上限'; }
+        else if (pkToday >= 3) { canPK = false; pkReason = '对方今天PK次数已达上限'; }
+
+        if (canPK) {
+          content += '<button onclick="_studentChallengePK(\'' + student.id + '\')" style="margin-top:10px;padding:10px 20px;background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:white;border:none;border-radius:20px;font-size:15px;font-weight:700;cursor:pointer;">⚔️ 向 TA 发起 PK</button>';
+        } else {
+          content += '<div style="margin-top:10px;padding:8px;background:rgba(200,200,200,0.2);border-radius:12px;font-size:12px;color:#999;">' + pkReason + '</div>';
+        }
+      } else {
+        content += '<div style="margin-top:10px;color:#aaa;">暂无宠物</div>';
       }
       content += '</div>';
       if (typeof showModal === 'function') {
@@ -2487,7 +2579,70 @@ function applyStudentRestrictions() {
     }
     return _origOpenStudentModal(studentId);
   };
+
+  // 覆盖 renderHomePetGrid：学生模式下隐藏其他同学卡片上的互动按钮
+  if (typeof window._origRenderHomePetGrid === 'undefined') {
+    window._origRenderHomePetGrid = window.renderHomePetGrid;
+  }
+  window.renderHomePetGrid = function() {
+    window._origRenderHomePetGrid();
+    if (currentUser.type !== 'student') return;
+    // 找到不是自己的宠物卡片，隐藏互动按钮
+    var myId = currentUser.studentId.toString();
+    var cards = document.querySelectorAll('.home-pet-card');
+    cards.forEach(function(card) {
+      var onclick = card.getAttribute('onclick') || '';
+      // 判断是否是自己的卡片（onclick 中包含自己的 studentId）
+      if (onclick.indexOf("'" + myId + "'") === -1 && onclick.indexOf('"' + myId + '"') === -1) {
+        // 隐藏卡片上的互动按钮（换宠、切换、改名等）
+        card.querySelectorAll('button').forEach(function(btn) {
+          var txt = (btn.textContent || '').trim();
+          var btnOnclick = btn.getAttribute('onclick') || '';
+          if (
+            btnOnclick.indexOf('showChangePetModal') !== -1 ||
+            btnOnclick.indexOf('showSwitchPetModal') !== -1 ||
+            btnOnclick.indexOf('renamePet') !== -1
+          ) {
+            btn.style.display = 'none';
+          }
+        });
+      }
+    });
+  };
 }
+
+// ===== 学生 PK 挑战入口 =====
+// 从同学信息面板点击「向 TA 发起 PK」后触发
+// 自动选中双方宠物，切换到 PK 页面并开始对战
+function _studentChallengePK(targetStudentId) {
+  if (typeof closeModal === 'function') closeModal();
+  var cur = classesData.find(function(c) { return c.id === currentClassId; });
+  if (!cur) return;
+  var myStudent = cur.students.find(function(s) { return s.id.toString() === currentUser.studentId.toString(); });
+  var targetStudent = cur.students.find(function(s) { return s.id.toString() === targetStudentId.toString(); });
+  if (!myStudent || !targetStudent) return;
+  var myPet = typeof getActivePet === 'function' ? getActivePet(myStudent) : null;
+  var targetPet = typeof getActivePet === 'function' ? getActivePet(targetStudent) : null;
+  if (!myPet || !targetPet) {
+    if (typeof showNotification === 'function') showNotification('PK失败', '宠物不存在', 'error');
+    return;
+  }
+  // 复用现有 PK 逻辑：设置 pkState，切换到 PK 页面并自动开始
+  if (typeof pkState !== 'undefined') {
+    pkState.players = [
+      { studentId: myStudent.id, studentName: myStudent.name, pet: Object.assign({}, myPet) },
+      { studentId: targetStudent.id, studentName: targetStudent.name, pet: Object.assign({}, targetPet) }
+    ];
+  }
+  // 切换到 PK 页面
+  if (typeof switchPage === 'function') switchPage('pk-page');
+  // 延迟一小段时间等待页面渲染，然后自动开始对战
+  setTimeout(function() {
+    if (typeof startPKBattle === 'function') startPKBattle();
+  }, 500);
+}
+// 将函数挂到全局
+window._studentChallengePK = _studentChallengePK;
 
 // ===== 移除定时同步，改为每次操作立即同步 =====
 // 不再使用30秒定时器，所有操作都会立即触发同步
