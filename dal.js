@@ -48,6 +48,16 @@ function _getSupaClassId(localClassId) {
   return _idMap.classes[String(localClassId)] || null;
 }
 
+// 解析 Supabase jsonb 字段（可能是字符串、对象、或 null）
+function _parseJsonb(val, fallback) {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') {
+    try { return JSON.parse(val); } catch (e) { return fallback; }
+  }
+  if (typeof val === 'object') return val;
+  return fallback;
+}
+
 // ===== 从 Supabase 加载数据到 classesData =====
 async function loadFromSupabase() {
   if (!db || !currentUser) return false;
@@ -89,9 +99,9 @@ async function loadFromSupabase() {
       };
       newIdMap.classes[String(sc.id)] = sc.id;
 
-      // 加载学生
+      // 加载学生（包含特效、打卡、PK等字段）
       var stuResult = await db.from('students')
-        .select('id, name, coins')
+        .select('id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
         .eq('class_id', sc.id)
         .order('id', { ascending: true });
 
@@ -108,10 +118,13 @@ async function loadFromSupabase() {
           name: ss.name,
           coins: ss.coins || 0,
           pets: [],
-          lastCheckinDate: null,
-          activePetId: null,
-          pkCountToday: 0,
-          lastPkDate: null
+          shopItems: _parseJsonb(ss.shop_items, []),
+          equippedItems: _parseJsonb(ss.equipped_items, {}),
+          lastCheckinDate: ss.last_checkin_date || null,
+          lastJianghuDate: ss.last_jianghu_date || null,
+          activePetId: ss.active_pet_id || null,
+          pkCountToday: ss.pk_count_today || 0,
+          lastPkDate: ss.last_pk_date || null
         };
         newIdMap.students[_stuKey(classObj.id, ss.id)] = ss.id;
 
@@ -147,12 +160,16 @@ async function loadFromSupabase() {
           }
         }
 
-        // 设置 activePetId：优先 is_active，否则第一只
-        var activePet = studentObj.pets.find(function(p) { return p.is_active; });
-        if (activePet) {
-          studentObj.activePetId = activePet.id;
-        } else if (studentObj.pets.length > 0) {
-          studentObj.activePetId = studentObj.pets[0].id;
+        // 设置 activePetId：优先 Supabase 值，然后 is_active，否则第一只
+        if (studentObj.activePetId && studentObj.pets.some(function(p) { return Number(p.id) === Number(studentObj.activePetId); })) {
+          // activePetId already set from Supabase
+        } else {
+          var activePet = studentObj.pets.find(function(p) { return p.is_active; });
+          if (activePet) {
+            studentObj.activePetId = activePet.id;
+          } else if (studentObj.pets.length > 0) {
+            studentObj.activePetId = studentObj.pets[0].id;
+          }
         }
 
         classObj.students.push(studentObj);
@@ -193,7 +210,7 @@ async function _loadStudentFromSupabase() {
     if (classResult.error || !classResult.data) return false;
 
     var stuResult = await db.from('students')
-      .select('id, name, coins')
+      .select('id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
       .eq('id', studentId)
       .single();
 
@@ -221,11 +238,22 @@ async function _loadStudentFromSupabase() {
 
     var studentObj = {
       id: ss.id, name: ss.name, coins: ss.coins || 0, pets: pets,
-      lastCheckinDate: null, activePetId: null, pkCountToday: 0, lastPkDate: null
+      shopItems: _parseJsonb(ss.shop_items, []),
+      equippedItems: _parseJsonb(ss.equipped_items, {}),
+      lastCheckinDate: ss.last_checkin_date || null,
+      lastJianghuDate: ss.last_jianghu_date || null,
+      activePetId: ss.active_pet_id || null,
+      pkCountToday: ss.pk_count_today || 0,
+      lastPkDate: ss.last_pk_date || null
     };
-    var activePet = pets.find(function(p) { return p.is_active; });
-    if (activePet) studentObj.activePetId = activePet.id;
-    else if (pets.length > 0) studentObj.activePetId = pets[0].id;
+    // activePetId：优先 Supabase 值
+    if (studentObj.activePetId && pets.some(function(p) { return Number(p.id) === Number(studentObj.activePetId); })) {
+      // already set
+    } else {
+      var activePet = pets.find(function(p) { return p.is_active; });
+      if (activePet) studentObj.activePetId = activePet.id;
+      else if (pets.length > 0) studentObj.activePetId = pets[0].id;
+    }
 
     // 构建 classesData，学生只看到自己
     classesData = [{
@@ -366,15 +394,30 @@ async function _upsertStudent(supaClassId, localClassId, stu) {
   var key = _stuKey(localClassId, stu.id);
   var supaStuId = _idMap.students[key];
 
+  // 构建完整学生数据（包含特效、打卡、PK等）
+  var studentData = {
+    coins: stu.coins || 0,
+    shop_items: JSON.stringify(stu.shopItems || []),
+    equipped_items: JSON.stringify(stu.equippedItems || {}),
+    last_checkin_date: stu.lastCheckinDate || null,
+    last_jianghu_date: stu.lastJianghuDate || null,
+    active_pet_id: stu.activePetId || null,
+    pk_count_today: stu.pkCountToday || 0,
+    last_pk_date: stu.lastPkDate || null
+  };
+
   if (supaStuId && typeof supaStuId === 'number' && supaStuId % 1 === 0) {
     var upd = await db.from('students')
-      .update({ coins: stu.coins || 0 })
+      .update(studentData)
       .eq('id', supaStuId);
     if (upd.error) console.warn('[DAL] update student:', upd.error);
     return supaStuId;
   } else {
+    studentData.class_id = supaClassId;
+    studentData.name = stu.name;
+    studentData.password = '';
     var ins = await db.from('students')
-      .insert([{ class_id: supaClassId, name: stu.name, password: '', coins: stu.coins || 0 }])
+      .insert([studentData])
       .select('id')
       .single();
     if (ins.error) {
@@ -387,8 +430,8 @@ async function _upsertStudent(supaClassId, localClassId, stu) {
       if (find.data) {
         supaStuId = find.data.id;
         _idMap.students[key] = supaStuId;
-        // 更新 coins
-        await db.from('students').update({ coins: stu.coins || 0 }).eq('id', supaStuId);
+        // 更新所有字段
+        await db.from('students').update(studentData).eq('id', supaStuId);
         return supaStuId;
       }
       console.error('[DAL] insert student:', ins.error);
@@ -612,11 +655,20 @@ async function _syncStudentToSupabase() {
 
   console.log('[DAL] Student syncing data for:', student.name);
 
-  // 1. 同步学生金币
+  // 1. 同步学生数据（包含特效、打卡、PK等）
   var stuUpd = await db.from('students')
-    .update({ coins: student.coins || 0 })
+    .update({
+      coins: student.coins || 0,
+      shop_items: JSON.stringify(student.shopItems || []),
+      equipped_items: JSON.stringify(student.equippedItems || {}),
+      last_checkin_date: student.lastCheckinDate || null,
+      last_jianghu_date: student.lastJianghuDate || null,
+      active_pet_id: student.activePetId || null,
+      pk_count_today: student.pkCountToday || 0,
+      last_pk_date: student.lastPkDate || null
+    })
     .eq('id', studentId);
-  if (stuUpd.error) console.warn('[DAL] Student sync: update coins error:', stuUpd.error);
+  if (stuUpd.error) console.warn('[DAL] Student sync: update error:', stuUpd.error);
 
   // 2. 同步每只宠物
   for (var k = 0; k < (student.pets || []).length; k++) {
