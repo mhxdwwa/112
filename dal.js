@@ -154,19 +154,55 @@ async function loadFromSupabase() {
       return false;
     }
 
-    // 过滤掉已标记删除的班级（防止删除后重新出现）
-    var filteredClasses = supaClasses.filter(function(sc) {
+    // 过滤掉已标记删除的班级
+    // 孤儿班级的清理交给 _syncToSupabase 的 orphan cleanup 来做（同步执行，不异步）
+    var localData = null;
+    try {
+      var saved = localStorage.getItem('classPetData');
+      if (saved) localData = JSON.parse(saved);
+    } catch (e) {}
+    var localClassNames = {};
+    if (localData && Array.isArray(localData)) {
+      localData.forEach(function(lc) { localClassNames[lc.name] = true; });
+    }
+    var hasLocalData = localData && Array.isArray(localData) && localData.length > 0;
+
+    var filteredClasses = [];
+    for (var fi = 0; fi < supaClasses.length; fi++) {
+      var sc = supaClasses[fi];
+      // 已标记删除的，跳过
       if (_deletedSupaClassIds[String(sc.id)]) {
         console.log('[DAL] Skipping deleted Supabase class:', sc.id);
-        return false;
+        continue;
       }
-      return true;
-    });
+      // 如果本地有数据，且 Supabase 班级名在本地不存在，标记为待清理（不异步删除，避免竞态）
+      if (hasLocalData && !localClassNames[sc.name]) {
+        console.log('[DAL] Detected orphan class in Supabase (will clean in sync):', sc.id, sc.name);
+        _markClassDeleted(sc.id);
+        continue;
+      }
+      filteredClasses.push(sc);
+    }
     if (filteredClasses.length === 0) {
-      console.log('[DAL] All Supabase classes are marked as deleted');
+      console.log('[DAL] All Supabase classes are marked as deleted or orphaned');
       return false;
     }
     supaClasses = filteredClasses;
+
+    // 去重：如果 Supabase 中有多个同名班级（之前 bug 导致的重复），只保留第一个，其余标记为待清理
+    var seenNames = {};
+    var dedupedClasses = [];
+    for (var di = 0; di < supaClasses.length; di++) {
+      var dsc = supaClasses[di];
+      if (!seenNames[dsc.name]) {
+        seenNames[dsc.name] = true;
+        dedupedClasses.push(dsc);
+      } else {
+        console.log('[DAL] Duplicate class name in Supabase, marking extra:', dsc.id, dsc.name);
+        _markClassDeleted(dsc.id);
+      }
+    }
+    supaClasses = dedupedClasses;
 
     var newClassesData = [];
     var newIdMap = { students: {}, pets: {}, classes: {} };
@@ -262,11 +298,7 @@ async function loadFromSupabase() {
     }
 
     // 3. 与 localStorage 数据合并（防止 Supabase 空数据覆盖本地好数据）
-    var localData = null;
-    try {
-      var saved = localStorage.getItem('classPetData');
-      if (saved) localData = JSON.parse(saved);
-    } catch (e) {}
+    // localData 已在前面加载过，直接复用
 
     if (localData && Array.isArray(localData)) {
       // 构建本地数据查找表：classId -> studentName -> student
@@ -329,6 +361,10 @@ async function loadFromSupabase() {
 
     // 5. 加载 customActions
     await _loadCustomActionsFromSupabase();
+
+    // 6. 加载操作日志和归档
+    await _loadLogsFromSupabase();
+    await _loadArchiveFromSupabase();
 
     console.log('[DAL] Loaded from Supabase:', newClassesData.length, 'classes');
     return true;
@@ -521,10 +557,24 @@ async function _pushClassToSupabase(classObj) {
       var upd = await db.from('classes').update({ name: classObj.name }).eq('id', supaClassId);
       if (upd.error) console.warn('[DAL] update class:', upd.error);
     } else {
-      // Supabase 中已不存在，清除旧映射，走插入逻辑
-      console.log('[DAL] Supabase class', supaClassId, 'no longer exists, re-inserting');
-      delete _idMap.classes[String(classObj.id)];
-      supaClassId = null;
+      // Supabase 中该 ID 已不存在，先查找是否有同名班级（防止创建重复）
+      console.log('[DAL] Supabase class', supaClassId, 'no longer exists, checking for same-name class');
+      var findResult = await db.from('classes')
+        .select('id')
+        .eq('teacher_id', teacherId)
+        .eq('name', classObj.name)
+        .maybeSingle();
+      if (findResult.data) {
+        // 找到同名班级，使用已有 ID
+        console.log('[DAL] Found existing same-name class in Supabase, id:', findResult.data.id);
+        supaClassId = findResult.data.id;
+        _idMap.classes[String(classObj.id)] = supaClassId;
+      } else {
+        // 确实没有，才插入新的
+        console.log('[DAL] No same-name class found, inserting new');
+        delete _idMap.classes[String(classObj.id)];
+        supaClassId = null;
+      }
     }
   }
   if (!supaClassId) {
@@ -808,7 +858,7 @@ async function _pushLogsToSupabase() {
 async function _pushArchiveToSupabase() {
   if (!currentUser) return;  // 学生和老师都要推送归档
   try {
-    var archive = typeof operationLogArchive !== 'undefined' ? operationLogArchive : {};
+    var archive = typeof logArchives !== 'undefined' ? logArchives : {};
     for (var month in archive) {
       var logs = archive[month];
       if (!logs || !Array.isArray(logs) || logs.length === 0) continue;
@@ -840,6 +890,116 @@ async function _pushArchiveToSupabase() {
     console.log('[DAL] Archive synced');
   } catch (e) {
     console.warn('[DAL] pushArchive error:', e);
+  }
+}
+
+// 从 Supabase 加载操作日志
+async function _loadLogsFromSupabase() {
+  if (!currentUser) return;
+  try {
+    var result;
+    if (currentUser.type === 'teacher') {
+      // 老师：加载该老师所有班级的日志
+      var classIds = [];
+      classesData.forEach(function(c) {
+        var sid = _getSupaClassId(c.id);
+        if (sid) classIds.push(sid);
+      });
+      if (classIds.length === 0) return;
+      result = await db.from('operation_logs')
+        .select('*')
+        .in('class_id', classIds)
+        .order('id', { ascending: true });
+    } else {
+      // 学生：只加载自己的日志
+      var studentId = parseInt(localStorage.getItem('studentId'));
+      if (!studentId) return;
+      result = await db.from('operation_logs')
+        .select('*')
+        .eq('student_id', studentId)
+        .order('id', { ascending: true });
+    }
+
+    if (result.error) {
+      console.warn('[DAL] loadLogs error:', result.error.message || result.error);
+      return;
+    }
+
+    if (result.data && result.data.length > 0) {
+      // 将 Supabase 日志转为本地格式
+      var loadedLogs = result.data.map(function(log) {
+        return {
+          id: log.id,
+          timestamp: log.created_at || new Date().toISOString(),
+          classId: log.class_id,
+          studentId: log.student_id,
+          studentName: log.student_name || '',
+          actionType: log.action_type || '',
+          details: log.details || '',
+          coinDelta: log.coin_delta || 0,
+          expDelta: log.exp_delta || 0,
+          extra: _parseJsonb(log.extra, null),
+          snapshot: _parseJsonb(log.snapshot, null),
+          reverted: false
+        };
+      });
+
+      // 合并：以 Supabase 为准，保留本地未同步的日志（float id）
+      var localUnsynced = operationLogs.filter(function(l) {
+        return typeof l.id === 'number' && l.id % 1 !== 0;
+      });
+      operationLogs = loadedLogs.concat(localUnsynced);
+      safeLSSave('operationLogs', operationLogs);
+      console.log('[DAL] Loaded', loadedLogs.length, 'logs from Supabase');
+    }
+  } catch (e) {
+    console.warn('[DAL] loadLogs error:', e.message || e);
+  }
+}
+
+// 从 Supabase 加载操作日志归档
+async function _loadArchiveFromSupabase() {
+  if (!currentUser) return;
+  try {
+    var result;
+    if (currentUser.type === 'teacher') {
+      result = await db.from('operation_log_archive')
+        .select('*')
+        .eq('teacher_id', currentUser.id);
+    } else {
+      return; // 学生不加载归档
+    }
+
+    if (result.error) {
+      console.warn('[DAL] loadArchive error:', result.error.message || result.error);
+      return;
+    }
+
+    if (result.data && result.data.length > 0) {
+      // 按月份合并
+      var archive = {};
+      result.data.forEach(function(row) {
+        var month = row.month;
+        var logs = _parseJsonb(row.data, []);
+        if (!archive[month]) archive[month] = [];
+        archive[month] = archive[month].concat(logs);
+      });
+
+      // 合并：以 Supabase 为准，保留本地未同步的归档
+      if (typeof logArchives !== 'undefined') {
+        Object.keys(logArchives).forEach(function(month) {
+          if (!archive[month]) {
+            archive[month] = logArchives[month];
+          }
+        });
+        Object.keys(archive).forEach(function(k) { delete logArchives[k]; });
+        Object.assign(logArchives, archive);
+        safeLSSave('logArchives', logArchives);
+      }
+      console.log('[DAL] Loaded archive from Supabase, months:', Object.keys(archive).length);
+    }
+  } catch (e) {
+    console.warn('[DAL] loadArchive error:', e.message || e);
   }
 }
 
@@ -938,7 +1098,7 @@ async function exportAllDataToUSB() {
     });
     
     // 4. 操作日志归档
-    var archiveData = typeof operationLogArchive !== 'undefined' ? operationLogArchive : {};
+    var archiveData = typeof logArchives !== 'undefined' ? logArchives : {};
     
     // 5. 已删除班级
     var deletedData = typeof deletedClasses !== 'undefined' ? deletedClasses : [];
@@ -1170,9 +1330,9 @@ async function _executeImportCombinedData(data) {
       operationLogs = data.operationLogs;
     }
     if (data.operationLogArchive) {
-      if (typeof operationLogArchive !== 'undefined') {
-        Object.keys(operationLogArchive).forEach(function(k) { delete operationLogArchive[k]; });
-        Object.assign(operationLogArchive, data.operationLogArchive);
+      if (typeof logArchives !== 'undefined') {
+        Object.keys(logArchives).forEach(function(k) { delete logArchives[k]; });
+        Object.assign(logArchives, data.operationLogArchive);
       }
     }
     if (data.deletedClasses && Array.isArray(data.deletedClasses)) {
@@ -1186,8 +1346,8 @@ async function _executeImportCombinedData(data) {
     safeLSSave('classPetData', classesData);
     safeLSSave('customActions', customActions);
     safeLSSave('operationLogs', operationLogs);
-    if (typeof operationLogArchive !== 'undefined') {
-      safeLSSave('operationLogArchive', operationLogArchive);
+    if (typeof logArchives !== 'undefined') {
+      safeLSSave('logArchives', logArchives);
     }
     if (typeof deletedClasses !== 'undefined') {
       safeLSSave('deletedClasses', deletedClasses);
@@ -1197,8 +1357,16 @@ async function _executeImportCombinedData(data) {
     _idMap = { students: {}, pets: {}, classes: {} };
     _saveIdMap();
     
-    // 同步到 Supabase
-    await _syncToSupabase();
+    // 彻底清空 Supabase 中该老师的所有旧数据（防止孤儿班级残留）
+    await _nukeSupabaseData();
+    
+    // 重新同步导入的数据到 Supabase
+    for (var i = 0; i < classesData.length; i++) {
+      await _pushClassToSupabase(classesData[i]);
+    }
+    await _pushCustomActionsToSupabase();
+    await _pushLogsToSupabase();
+    await _pushArchiveToSupabase();
     
     // 重新渲染页面
     if (typeof init === 'function') {
@@ -1207,9 +1375,11 @@ async function _executeImportCombinedData(data) {
     }
     
     showNotification('导入成功', '数据已恢复并同步到云端', 'success');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
   } catch (e) {
     console.error('[DAL] import error:', e);
     showNotification('导入失败', e.message, 'error');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
   }
 }
 
@@ -1259,10 +1429,10 @@ async function _executeImportFullBackup(data) {
       operationLogs = data.operationLogs;
     }
     if (data.operationLogArchive) {
-      if (typeof operationLogArchive !== 'undefined') {
+      if (typeof logArchives !== 'undefined') {
         // 清空后赋值
-        Object.keys(operationLogArchive).forEach(function(k) { delete operationLogArchive[k]; });
-        Object.assign(operationLogArchive, data.operationLogArchive);
+        Object.keys(logArchives).forEach(function(k) { delete logArchives[k]; });
+        Object.assign(logArchives, data.operationLogArchive);
       }
     }
     if (data.deletedClasses && Array.isArray(data.deletedClasses)) {
@@ -1276,8 +1446,8 @@ async function _executeImportFullBackup(data) {
     safeLSSave('classPetData', classesData);
     safeLSSave('customActions', customActions);
     safeLSSave('operationLogs', operationLogs);
-    if (typeof operationLogArchive !== 'undefined') {
-      safeLSSave('operationLogArchive', operationLogArchive);
+    if (typeof logArchives !== 'undefined') {
+      safeLSSave('logArchives', logArchives);
     }
     if (typeof deletedClasses !== 'undefined') {
       safeLSSave('deletedClasses', deletedClasses);
@@ -1287,8 +1457,16 @@ async function _executeImportFullBackup(data) {
     _idMap = { students: {}, pets: {}, classes: {} };
     _saveIdMap();
     
-    // 同步到 Supabase
-    await _syncToSupabase();
+    // 彻底清空 Supabase 中该老师的所有旧数据（防止孤儿班级残留）
+    await _nukeSupabaseData();
+    
+    // 重新同步导入的数据到 Supabase
+    for (var i = 0; i < classesData.length; i++) {
+      await _pushClassToSupabase(classesData[i]);
+    }
+    await _pushCustomActionsToSupabase();
+    await _pushLogsToSupabase();
+    await _pushArchiveToSupabase();
     
     // 重新渲染页面
     if (typeof init === 'function') {
@@ -1297,9 +1475,11 @@ async function _executeImportFullBackup(data) {
     }
     
     showNotification('导入成功', '数据已恢复并同步到云端', 'success');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
   } catch (e) {
     console.error('[DAL] import error:', e);
     showNotification('导入失败', e.message, 'error');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
   }
 }
 
@@ -1341,7 +1521,16 @@ async function _executeImportClassData(data) {
     _idMap = { students: {}, pets: {}, classes: {} };
     _saveIdMap();
     
-    await _syncToSupabase();
+    // 彻底清空 Supabase 中该老师的所有旧数据（防止孤儿班级残留）
+    await _nukeSupabaseData();
+    
+    // 重新同步导入的数据到 Supabase
+    for (var i = 0; i < classesData.length; i++) {
+      await _pushClassToSupabase(classesData[i]);
+    }
+    await _pushCustomActionsToSupabase();
+    await _pushLogsToSupabase();
+    await _pushArchiveToSupabase();
     
     if (typeof init === 'function') {
       currentClassId = classesData.length > 0 ? classesData[0].id : null;
@@ -1349,9 +1538,11 @@ async function _executeImportClassData(data) {
     }
     
     showNotification('导入成功', '数据已恢复并同步到云端', 'success');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
   } catch (e) {
     console.error('[DAL] import error:', e);
     showNotification('导入失败', e.message, 'error');
+    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
   }
 }
 
@@ -1366,6 +1557,75 @@ function _downloadJSON(filename, data) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ===== 导入专用：彻底清空 Supabase 中该老师的所有数据 =====
+// 用于导入场景：先删除所有旧数据，再重新插入导入的数据
+// 这样可以确保不会有孤儿班级残留
+async function _nukeSupabaseData() {
+  if (!currentUser || currentUser.type !== 'teacher') return;
+  console.log('[DAL] Nuclear cleanup: deleting ALL Supabase data for teacher', currentUser.id);
+  try {
+    // 1. 查所有班级
+    var classResult = await db.from('classes').select('id').eq('teacher_id', currentUser.id);
+    if (classResult.error) {
+      console.warn('[DAL] nuke: query classes error:', classResult.error.message || classResult.error);
+      return;
+    }
+    var supaClasses = classResult.data || [];
+    if (supaClasses.length === 0) {
+      console.log('[DAL] nuke: no classes to delete');
+      return;
+    }
+    var classIds = supaClasses.map(function(c) { return c.id; });
+
+    // 2. 分批删除宠物（通过学生关联）
+    for (var i = 0; i < classIds.length; i++) {
+      try {
+        var stuResult = await db.from('students').select('id').eq('class_id', classIds[i]);
+        if (stuResult.data && stuResult.data.length > 0) {
+          var stuIds = stuResult.data.map(function(s) { return s.id; });
+          for (var b = 0; b < stuIds.length; b += 50) {
+            var batch = stuIds.slice(b, b + 50);
+            await db.from('pets').in('student_id', batch).delete();
+          }
+        }
+      } catch (petErr) {
+        console.warn('[DAL] nuke: delete pets error for class', classIds[i], ':', petErr.message || petErr);
+      }
+    }
+
+    // 3. 删除所有学生
+    try {
+      await db.from('students').in('class_id', classIds).delete();
+    } catch (stuErr) {
+      console.warn('[DAL] nuke: delete students error:', stuErr.message || stuErr);
+      // 逐个删除作为后备
+      for (var j = 0; j < classIds.length; j++) {
+        try { await db.from('students').eq('class_id', classIds[j]).delete(); } catch (e) {}
+      }
+    }
+
+    // 4. 删除所有班级
+    try {
+      await db.from('classes').in('id', classIds).delete();
+    } catch (clsErr) {
+      console.warn('[DAL] nuke: delete classes batch error:', clsErr.message || clsErr);
+      // 逐个删除作为后备
+      for (var k = 0; k < classIds.length; k++) {
+        try { await db.from('classes').eq('id', classIds[k]).delete(); } catch (e) {}
+      }
+    }
+
+    // 5. 清理 custom_actions 和 operation_logs
+    try { await db.from('custom_actions').in('class_id', classIds).delete(); } catch (e) {}
+    try { await db.from('operation_logs').in('class_id', classIds).delete(); } catch (e) {}
+    try { await db.from('operation_log_archive').eq('teacher_id', currentUser.id).delete(); } catch (e) {}
+
+    console.log('[DAL] Nuclear cleanup complete: deleted', supaClasses.length, 'classes and associated data');
+  } catch (e) {
+    console.error('[DAL] Nuclear cleanup failed:', e.message || e);
+  }
 }
 
 // ===== 主同步函数（防抖） =====
@@ -1392,57 +1652,91 @@ async function _syncToSupabase() {
 
       // 删除 Supabase 中已不存在的班级
       // 直接查 Supabase 全部班级，与本地 classesData 对比
-      var allResult = await db.from('classes')
-        .select('id')
-        .eq('teacher_id', currentUser.id);
-      if (allResult.data) {
-        // 本地保留的 Supabase 班级 ID 集合
-        var keptSupaIds = {};
-        classesData.forEach(function(c) {
-          var sid = _getSupaClassId(c.id);
-          if (sid) keptSupaIds[sid] = true;
-        });
-        for (var j = 0; j < allResult.data.length; j++) {
-          var sid = allResult.data[j].id;
-          if (!keptSupaIds[sid]) {
-            // 这个班级在本地已删除，从 Supabase 彻底删除
-            console.log('[DAL] Deleting orphaned Supabase class:', sid);
+      try {
+        var allResult = await db.from('classes')
+          .select('id')
+          .eq('teacher_id', currentUser.id);
+        
+        if (allResult.data && allResult.data.length > 0) {
+          // 本地保留的 Supabase 班级 ID 集合
+          var keptSupaIds = {};
+          classesData.forEach(function(c) {
+            var sid = _getSupaClassId(c.id);
+            if (sid) keptSupaIds[sid] = true;
+          });
+          for (var j = 0; j < allResult.data.length; j++) {
+            var sid = allResult.data[j].id;
+            if (!keptSupaIds[sid]) {
+              // 这个班级在本地已删除，从 Supabase 彻底删除
+              console.log('[DAL] Deleting orphaned Supabase class:', sid);
 
-            // 先查出该班级下所有学生 ID（避免用子查询删除，那个会静默失败）
-            var orphanStus = await db.from('students')
-              .select('id')
-              .eq('class_id', sid);
-            if (orphanStus.data && orphanStus.data.length > 0) {
-              var orphanStuIds = orphanStus.data.map(function(s) { return s.id; });
-              // 分批删除宠物（in 查询有长度限制）
-              for (var b = 0; b < orphanStuIds.length; b += 50) {
-                var batch = orphanStuIds.slice(b, b + 50);
-                var petDel = await db.from('pets').in('student_id', batch).delete();
-                if (petDel.error) console.warn('[DAL] delete orphan pets:', petDel.error);
+              // 无论删除是否成功，都记录到已删除列表
+              // 这样下次 loadFromSupabase 不会把它拉回来
+              _markClassDeleted(sid);
+
+              try {
+                // 先查出该班级下所有学生 ID（避免用子查询删除，那个会静默失败）
+                var orphanStus = await db.from('students')
+                  .select('id')
+                  .eq('class_id', sid);
+                if (orphanStus.data && orphanStus.data.length > 0) {
+                  var orphanStuIds = orphanStus.data.map(function(s) { return s.id; });
+                  // 分批删除宠物（in 查询有长度限制）
+                  for (var b = 0; b < orphanStuIds.length; b += 50) {
+                    var batch = orphanStuIds.slice(b, b + 50);
+                    try {
+                      await db.from('pets').in('student_id', batch).delete();
+                    } catch (petErr) {
+                      console.warn('[DAL] delete orphan pets exception:', petErr.message || petErr);
+                    }
+                  }
+                }
+                try {
+                  await db.from('students').eq('class_id', sid).delete();
+                } catch (stuErr) {
+                  console.warn('[DAL] delete orphan students exception:', stuErr.message || stuErr);
+                }
+                try {
+                  await db.from('classes').eq('id', sid).delete();
+                } catch (clsErr) {
+                  console.warn('[DAL] delete orphan class exception:', clsErr.message || clsErr);
+                }
+              } catch (orphanErr) {
+                console.warn('[DAL] orphan cleanup error for class', sid, ':', orphanErr.message || orphanErr);
               }
+
+              // 清理对应的 ID 映射
+              Object.keys(_idMap.classes).forEach(function(key) {
+                if (_idMap.classes[key] === sid) delete _idMap.classes[key];
+              });
+              _saveIdMap();
             }
-            var stuDel = await db.from('students').eq('class_id', sid).delete();
-            if (stuDel.error) console.warn('[DAL] delete orphan students:', stuDel.error);
-            var clsDel = await db.from('classes').eq('id', sid).delete();
-            if (clsDel.error) console.warn('[DAL] delete orphan class:', clsDel.error);
-
-            // 无论删除是否成功，都记录到已删除列表
-            // 这样下次 loadFromSupabase 不会把它拉回来
-            _markClassDeleted(sid);
-
-            // 清理对应的 ID 映射
-            Object.keys(_idMap.classes).forEach(function(key) {
-              if (_idMap.classes[key] === sid) delete _idMap.classes[key];
-            });
-            _saveIdMap();
           }
+        } else if (allResult.error) {
+          console.warn('[DAL] orphan cleanup: query all classes failed:', allResult.error.message || allResult.error);
+          // 查询失败时，尝试通过已知的旧 ID 映射来清理
+          // 如果 _idMap 中有班级但不在 classesData 中，标记为已删除
+          var currentLocalIds = {};
+          classesData.forEach(function(c) { currentLocalIds[String(c.id)] = true; });
+          Object.keys(_idMap.classes).forEach(function(key) {
+            if (!currentLocalIds[key]) {
+              var oldSupaId = _idMap.classes[key];
+              console.log('[DAL] Marking orphan from stale idMap:', key, '->', oldSupaId);
+              _markClassDeleted(oldSupaId);
+              delete _idMap.classes[key];
+            }
+          });
+          _saveIdMap();
         }
+      } catch (orphanQueryErr) {
+        console.warn('[DAL] orphan cleanup query exception:', orphanQueryErr.message || orphanQueryErr);
       }
 
       await _pushCustomActionsToSupabase();
       await _pushLogsToSupabase();
       await _pushArchiveToSupabase();
-      await _pushDeletedClassesToSupabase();
+      // 注意：不再调用 _pushDeletedClassesToSupabase()
+      // 因为 Supabase 中没有 deleted_classes 表，调用会导致整个同步崩溃
     }
 
     console.log('[DAL] Synced to Supabase');
