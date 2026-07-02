@@ -554,28 +554,25 @@ async function _loadCustomActionsFromSupabase() {
 
 // ===== 推送数据到 Supabase =====
 
-// 推送单个班级完整数据
+// 推送单个班级完整数据（批量优化版本）
 async function _pushClassToSupabase(classObj) {
   var teacherId = currentUser.id;
   var supaClassId = _getSupaClassId(classObj.id);
-  console.log('[DAL] _pushClass: teacherId=', teacherId, 'supaClassId=', supaClassId);
+  console.log('[DAL] _pushClass: teacherId=', teacherId, 'supaClassId=', supaClassId, 'students=', classObj.students.length);
 
-  // 1. Upsert 班级
+  // 1. Upsert 班级（保持原有逻辑）
   if (supaClassId) {
-    // 先确认 Supabase 中该班级是否真的存在（可能被删除后 ID 映射还残留）
     var checkResult = await db.from('classes').select('id').eq('id', supaClassId).eq('teacher_id', teacherId).maybeSingle();
     if (checkResult.data) {
       var upd = await db.from('classes').update({ name: classObj.name }).eq('id', supaClassId);
       if (upd.error) console.warn('[DAL] update class:', upd.error);
     } else {
-      // Supabase 中已不存在，清除旧映射，走插入逻辑
       console.log('[DAL] Supabase class', supaClassId, 'no longer exists, re-inserting');
       delete _idMap.classes[String(classObj.id)];
       supaClassId = null;
     }
   }
   if (!supaClassId) {
-    // 关键修复：插入前先查 Supabase 是否已有同名班级（防止创建重复/孤儿）
     console.log('[DAL] No mapped supaClassId, checking for existing same-name class...');
     var findExisting = await db.from('classes')
       .select('id')
@@ -587,7 +584,6 @@ async function _pushClassToSupabase(classObj) {
       supaClassId = findExisting.data.id;
       _idMap.classes[String(classObj.id)] = supaClassId;
       _saveIdMap();
-      // 更新名称（以防万一）
       var upd = await db.from('classes').update({ name: classObj.name }).eq('id', supaClassId);
       if (upd.error) console.warn('[DAL] update reused class:', upd.error);
     } else {
@@ -607,47 +603,236 @@ async function _pushClassToSupabase(classObj) {
     }
   }
 
-  // 2. 同步学生
-  console.log('[DAL] Syncing', classObj.students.length, 'students for class', classObj.name);
-  var currentLocalStuIds = [];
+  // 2. 批量同步学生（替代逐个 upsert）
+  console.log('[DAL] Batch syncing', classObj.students.length, 'students for class', classObj.name);
+  
+  // 2a. 一次性获取 Supabase 中该班级的所有现有学生
+  var existingStusResult = await db.from('students')
+    .select('id, name, coins, shop_items, equipped_items, last_checkin_date, last_jianghu_date, active_pet_id, pk_count_today, last_pk_date')
+    .eq('class_id', supaClassId);
+  var existingStusByName = {};
+  if (existingStusResult.data) {
+    existingStusResult.data.forEach(function(s) { existingStusByName[s.name] = s; });
+  }
+  
+  // 2b. 分离需要插入和更新的学生
+  var toInsert = [];
+  var toUpdate = [];
+  var supaStuIdMap = {}; // localStuId -> supaStuId
+  
   for (var j = 0; j < classObj.students.length; j++) {
     var stu = classObj.students[j];
-    currentLocalStuIds.push(stu.id);
-    var supaStuId = await _upsertStudent(supaClassId, classObj.id, stu);
-    if (supaStuId) {
-      // 3. 同步宠物：先删后插（简化处理，避免复杂 diff）
-      await db.from('pets').eq('student_id', supaStuId).delete();
-      // 清除该学生宠物的旧 ID 映射
-      Object.keys(_idMap.pets).forEach(function(key) {
-        if (key.indexOf(classObj.id + '|' + stu.id + '|') === 0) {
-          delete _idMap.pets[key];
+    var existingStu = existingStusByName[stu.name];
+    
+    if (existingStu) {
+      // 已有记录，走更新
+      var key = _stuKey(classObj.id, stu.id);
+      _idMap.students[key] = existingStu.id;
+      supaStuIdMap[stu.id] = existingStu.id;
+      
+      var merged = _mergeStudentData(stu, existingStu);
+      toUpdate.push({
+        id: existingStu.id,
+        data: {
+          coins: merged.coins,
+          shop_items: JSON.stringify(merged.shopItems || []),
+          equipped_items: JSON.stringify(merged.equippedItems || {}),
+          last_checkin_date: merged.lastCheckinDate || null,
+          last_jianghu_date: merged.lastJianghuDate || null,
+          active_pet_id: merged.activePetId || null,
+          pk_count_today: merged.pkCountToday || 0,
+          last_pk_date: merged.lastPkDate || null
         }
       });
-      // 重新插入所有宠物
-      for (var k = 0; k < (stu.pets || []).length; k++) {
-        await _insertPet(supaStuId, classObj.id, stu.id, stu.pets[k]);
+    } else {
+      // 新学生，走插入
+      toInsert.push({
+        localId: stu.id,
+        data: {
+          class_id: supaClassId,
+          name: stu.name,
+          password: '',
+          coins: stu.coins || 50,
+          shop_items: JSON.stringify(stu.shopItems || []),
+          equipped_items: JSON.stringify(stu.equippedItems || {}),
+          last_checkin_date: stu.lastCheckinDate || null,
+          last_jianghu_date: stu.lastJianghuDate || null,
+          active_pet_id: stu.activePetId || null,
+          pk_count_today: stu.pkCountToday || 0,
+          last_pk_date: stu.lastPkDate || null
+        }
+      });
+    }
+  }
+  
+  // 2c. 批量插入新学生（一次 API 调用）
+  if (toInsert.length > 0) {
+    var insertData = toInsert.map(function(t) { return t.data; });
+    var insResult = await db.from('students').insert(insertData).select('id, name');
+    if (insResult.error) {
+      console.error('[DAL] batch insert students error:', insResult.error);
+      // 回退：逐个插入
+      for (var fi = 0; fi < toInsert.length; fi++) {
+        var singleIns = await db.from('students').insert([toInsert[fi].data]).select('id').single();
+        if (singleIns.data) {
+          supaStuIdMap[toInsert[fi].localId] = singleIns.data.id;
+          var fkey = _stuKey(classObj.id, toInsert[fi].localId);
+          _idMap.students[fkey] = singleIns.data.id;
+        } else {
+          // 可能同名已存在，尝试查找
+          var findStu = await db.from('students').select('id').eq('class_id', supaClassId).eq('name', toInsert[fi].data.name).single();
+          if (findStu.data) {
+            supaStuIdMap[toInsert[fi].localId] = findStu.data.id;
+            var fkey2 = _stuKey(classObj.id, toInsert[fi].localId);
+            _idMap.students[fkey2] = findStu.data.id;
+          }
+        }
+      }
+    } else if (insResult.data) {
+      insResult.data.forEach(function(inserted) {
+        var match = toInsert.find(function(t) { return t.data.name === inserted.name; });
+        if (match) {
+          supaStuIdMap[match.localId] = inserted.id;
+          var ikey = _stuKey(classObj.id, match.localId);
+          _idMap.students[ikey] = inserted.id;
+        }
+      });
+    }
+  }
+  
+  // 2d. 逐个更新已有学生（Supabase 批量 update 不支持按 id 匹配不同数据）
+  // 但可以用 upsert 批量处理
+  if (toUpdate.length > 0) {
+    // 分批更新，每批最多 20 个
+    var batchSize = 20;
+    for (var bi = 0; bi < toUpdate.length; bi += batchSize) {
+      var batch = toUpdate.slice(bi, bi + batchSize);
+      var upsertData = batch.map(function(u) {
+        return Object.assign({ id: u.id }, u.data);
+      });
+      var updResult = await db.from('students').upsert(upsertData, { onConflict: 'id' });
+      if (updResult.error) {
+        console.warn('[DAL] batch update students error:', updResult.error);
+        // 回退：逐个更新
+        for (var ui = 0; ui < batch.length; ui++) {
+          var singleUpd = await db.from('students').update(batch[ui].data).eq('id', batch[ui].id);
+          if (singleUpd.error) console.warn('[DAL] single update student error:', singleUpd.error);
+        }
       }
     }
   }
-  console.log('[DAL] Students synced for class', classObj.name);
+  
+  console.log('[DAL] Students batch synced:', toInsert.length, 'inserted,', toUpdate.length, 'updated');
 
-  // 4. 删除 Supabase 中已不存在的学生（及其宠物）
-  var allStuResult = await db.from('students').select('id').eq('class_id', supaClassId);
-  if (allStuResult.data) {
-    for (var m = 0; m < allStuResult.data.length; m++) {
-      var supaId = allStuResult.data[m].id;
-      // 检查这个 Supabase ID 是否还在映射中
-      var stillExists = false;
-      Object.keys(_idMap.students).forEach(function(key) {
-        if (key.indexOf(classObj.id + '|') === 0 && _idMap.students[key] === supaId) {
-          stillExists = true;
+  // 3. 批量同步宠物（先批量删除，再批量插入）
+  // 3a. 收集所有需要更新的 supaStuIds
+  var allSupaStuIds = Object.values(supaStuIdMap);
+  
+  // 3b. 批量删除该班级所有学生的宠物
+  if (allSupaStuIds.length > 0) {
+    for (var delBatch = 0; delBatch < allSupaStuIds.length; delBatch += 50) {
+      var delIds = allSupaStuIds.slice(delBatch, delBatch + 50);
+      await db.from('pets').in('student_id', delIds).delete();
+    }
+  }
+  
+  // 3c. 清除该班级所有宠物的 ID 映射
+  Object.keys(_idMap.pets).forEach(function(key) {
+    if (key.indexOf(classObj.id + '|') === 0) {
+      delete _idMap.pets[key];
+    }
+  });
+  
+  // 3d. 批量插入所有宠物的新记录
+  var allPetsToInsert = [];
+  for (var pi = 0; pi < classObj.students.length; pi++) {
+    var pStu = classObj.students[pi];
+    var pSupaStuId = supaStuIdMap[pStu.id];
+    if (!pSupaStuId) continue;
+    
+    for (var pk = 0; pk < (pStu.pets || []).length; pk++) {
+      var pet = pStu.pets[pk];
+      allPetsToInsert.push({
+        localClassId: classObj.id,
+        localStuId: pStu.id,
+        localPetId: pet.id,
+        data: {
+          student_id: pSupaStuId,
+          name: pet.name,
+          nickname: pet.nickname || pet.name,
+          level: pet.level || 1,
+          growth: pet.growth || 0,
+          coins: pet.coins || 0,
+          is_active: pet.is_active !== false,
+          is_dead: pet.isDead || false,
+          last_feed_date: pet.lastFeedDate || null,
+          last_play_date: pet.lastPlayDate || null,
+          today_feed_count: pet.todayFeedCount || 0,
+          today_play_count: pet.todayPlayCount || 0,
+          penalty_streak: pet.penaltyStreak || 0
         }
       });
-      if (!stillExists) {
-        await db.from('pets').eq('student_id', supaId).delete();
-        await db.from('students').eq('id', supaId).delete();
+    }
+  }
+  
+  // 分批插入宠物（每批 50 只）
+  if (allPetsToInsert.length > 0) {
+    for (var petBatch = 0; petBatch < allPetsToInsert.length; petBatch += 50) {
+      var petBatchData = allPetsToInsert.slice(petBatch, petBatch + 50).map(function(p) { return p.data; });
+      var petInsResult = await db.from('pets').insert(petBatchData).select('id, student_id, name');
+      if (petInsResult.error) {
+        console.warn('[DAL] batch insert pets error:', petInsResult.error);
+        // 回退：逐个插入
+        var petBatchItems = allPetsToInsert.slice(petBatch, petBatch + 50);
+        for (var rpi = 0; rpi < petBatchItems.length; rpi++) {
+          var singlePetIns = await db.from('pets').insert([petBatchItems[rpi].data]).select('id').single();
+          if (singlePetIns.data) {
+            var rp = petBatchItems[rpi];
+            var rpKey = _petKey(rp.localClassId, rp.localStuId, rp.localPetId);
+            _idMap.pets[rpKey] = singlePetIns.data.id;
+          }
+        }
+      } else if (petInsResult.data) {
+        var petBatchItems = allPetsToInsert.slice(petBatch, petBatch + 50);
+        petInsResult.data.forEach(function(inserted) {
+          var match = petBatchItems.find(function(p) {
+            return p.data.student_id === inserted.student_id && p.data.name === inserted.name;
+          });
+          if (match) {
+            var petKeyStr = _petKey(match.localClassId, match.localStuId, match.localPetId);
+            _idMap.pets[petKeyStr] = inserted.id;
+          }
+        });
       }
     }
+  }
+  console.log('[DAL] Pets batch synced:', allPetsToInsert.length, 'pets');
+
+  // 4. 批量删除 Supabase 中已不存在的学生（及其宠物）
+  var currentSupaStuIdSet = {};
+  Object.keys(_idMap.students).forEach(function(key) {
+    if (key.indexOf(classObj.id + '|') === 0) {
+      currentSupaStuIdSet[_idMap.students[key]] = true;
+    }
+  });
+  
+  var orphanStuIds = [];
+  if (existingStusResult.data) {
+    existingStusResult.data.forEach(function(s) {
+      if (!currentSupaStuIdSet[s.id]) {
+        orphanStuIds.push(s.id);
+      }
+    });
+  }
+  
+  if (orphanStuIds.length > 0) {
+    // 批量删除孤儿宠物的宠物
+    for (var orphanBatch = 0; orphanBatch < orphanStuIds.length; orphanBatch += 50) {
+      var orphanIds = orphanStuIds.slice(orphanBatch, orphanBatch + 50);
+      await db.from('pets').in('student_id', orphanIds).delete();
+      await db.from('students').in('id', orphanIds).delete();
+    }
+    console.log('[DAL] Deleted', orphanStuIds.length, 'orphan students');
   }
 
   _saveIdMap();
@@ -1679,14 +1864,12 @@ async function _syncToSupabase() {
       }
 
       // 删除 Supabase 中已不存在的班级
-      // 直接查 Supabase 全部班级，与本地 classesData 对比
       try {
         var allResult = await db.from('classes')
           .select('id')
           .eq('teacher_id', currentUser.id);
         
         if (allResult.data && allResult.data.length > 0) {
-          // 本地保留的 Supabase 班级 ID 集合
           var keptSupaIds = {};
           classesData.forEach(function(c) {
             var sid = _getSupaClassId(c.id);
@@ -1695,21 +1878,15 @@ async function _syncToSupabase() {
           for (var j = 0; j < allResult.data.length; j++) {
             var sid = allResult.data[j].id;
             if (!keptSupaIds[sid]) {
-              // 这个班级在本地已删除，从 Supabase 彻底删除
               console.log('[DAL] Deleting orphaned Supabase class:', sid);
-
-              // 无论删除是否成功，都记录到已删除列表
-              // 这样下次 loadFromSupabase 不会把它拉回来
               _markClassDeleted(sid);
 
               try {
-                // 先查出该班级下所有学生 ID（避免用子查询删除，那个会静默失败）
                 var orphanStus = await db.from('students')
                   .select('id')
                   .eq('class_id', sid);
                 if (orphanStus.data && orphanStus.data.length > 0) {
                   var orphanStuIds = orphanStus.data.map(function(s) { return s.id; });
-                  // 分批删除宠物（in 查询有长度限制）
                   for (var b = 0; b < orphanStuIds.length; b += 50) {
                     var batch = orphanStuIds.slice(b, b + 50);
                     try {
@@ -1733,7 +1910,6 @@ async function _syncToSupabase() {
                 console.warn('[DAL] orphan cleanup error for class', sid, ':', orphanErr.message || orphanErr);
               }
 
-              // 清理对应的 ID 映射
               Object.keys(_idMap.classes).forEach(function(key) {
                 if (_idMap.classes[key] === sid) delete _idMap.classes[key];
               });
@@ -1742,8 +1918,6 @@ async function _syncToSupabase() {
           }
         } else if (allResult.error) {
           console.warn('[DAL] orphan cleanup: query all classes failed:', allResult.error.message || allResult.error);
-          // 查询失败时，尝试通过已知的旧 ID 映射来清理
-          // 如果 _idMap 中有班级但不在 classesData 中，标记为已删除
           var currentLocalIds = {};
           classesData.forEach(function(c) { currentLocalIds[String(c.id)] = true; });
           Object.keys(_idMap.classes).forEach(function(key) {
@@ -1763,15 +1937,39 @@ async function _syncToSupabase() {
       await _pushCustomActionsToSupabase();
       await _pushLogsToSupabase();
       await _pushArchiveToSupabase();
-      // 注意：不再调用 _pushDeletedClassesToSupabase()
-      // 因为 Supabase 中没有 deleted_classes 表，调用会导致整个同步崩溃
     }
 
     console.log('[DAL] Synced to Supabase');
     if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
+    
+    // 同步成功：清除未同步标记
+    _clearDirty();
+    _lastSyncFailed = false;
+    _syncRetryCount = 0;
+    try { localStorage.removeItem('_dal_unsyncedFlag'); } catch (e) {}
+    
   } catch (e) {
     console.error('[DAL] sync error:', e);
+    _lastSyncFailed = true;
     if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
+    
+    // 自动重试（最多 3 次，间隔递增）
+    _syncRetryCount++;
+    if (_syncRetryCount <= 3) {
+      var retryDelay = _syncRetryCount * 3000;  // 3s, 6s, 9s
+      console.log('[DAL] Will retry sync in', retryDelay, 'ms (attempt', _syncRetryCount, '/3)');
+      setTimeout(function() {
+        if (_hasUnsyncedData()) {
+          console.log('[DAL] Auto-retrying sync...');
+          _syncToSupabase();
+        }
+      }, retryDelay);
+    } else {
+      // 重试耗尽，显示明确提示
+      if (typeof showNotification === 'function') {
+        showNotification('同步失败', '数据已保存到本地，但未能同步到云端。请检查网络后点击右上角「☁️ 同步失败」手动重试。', 'error');
+      }
+    }
   } finally {
     _dalSyncing = false;
     if (_dalSyncQueued) {
@@ -1820,41 +2018,63 @@ async function _syncStudentToSupabase() {
       last_pk_date: merged.lastPkDate || null
     })
     .eq('id', studentId);
-  if (stuUpd.error) console.warn('[DAL] Student sync: update error:', stuUpd.error);
+  if (stuUpd.error) {
+    console.warn('[DAL] Student sync: update error:', stuUpd.error);
+    throw new Error('学生数据同步失败: ' + stuUpd.error.message);
+  }
 
-  // 2. 同步每只宠物
+  // 3. 同步每只宠物（批量处理）
+  var petsToUpdate = [];
   for (var k = 0; k < (student.pets || []).length; k++) {
     var pet = student.pets[k];
-    var petData = {
-      name: pet.name,
-      nickname: pet.nickname || pet.name,
-      level: pet.level || 1,
-      growth: pet.growth || 0,
-      coins: pet.coins || 0,
-      is_active: pet.is_active !== false,
-      is_dead: pet.isDead || false,
-      last_feed_date: pet.lastFeedDate || null,
-      last_play_date: pet.lastPlayDate || null,
-      today_feed_count: pet.todayFeedCount || 0,
-      today_play_count: pet.todayPlayCount || 0,
-      penalty_streak: pet.penaltyStreak || 0
-    };
-
-    // 宠物 ID 映射：从 Supabase 加载时用的是真实整数 ID
     var supaPetId = pet.id;
     if (supaPetId && _safeInt(supaPetId) !== null) {
-      var petUpd = await db.from('pets').update(petData).eq('id', _safeInt(supaPetId));
-      if (petUpd.error) console.warn('[DAL] Student sync: update pet error:', petUpd.error);
-      else console.log('[DAL] Student sync: pet', pet.name, 'synced');
+      petsToUpdate.push({
+        id: _safeInt(supaPetId),
+        data: {
+          name: pet.name,
+          nickname: pet.nickname || pet.name,
+          level: pet.level || 1,
+          growth: pet.growth || 0,
+          coins: pet.coins || 0,
+          is_active: pet.is_active !== false,
+          is_dead: pet.isDead || false,
+          last_feed_date: pet.lastFeedDate || null,
+          last_play_date: pet.lastPlayDate || null,
+          today_feed_count: pet.todayFeedCount || 0,
+          today_play_count: pet.todayPlayCount || 0,
+          penalty_streak: pet.penaltyStreak || 0
+        }
+      });
     } else {
       console.warn('[DAL] Student sync: pet', pet.name, 'has no valid Supabase ID, skipping');
     }
   }
+  
+  // 批量更新宠物（upsert）
+  if (petsToUpdate.length > 0) {
+    var upsertData = petsToUpdate.map(function(p) {
+      return Object.assign({ id: p.id }, p.data);
+    });
+    var petUpdResult = await db.from('pets').upsert(upsertData, { onConflict: 'id' });
+    if (petUpdResult.error) {
+      console.warn('[DAL] Student sync: batch pet update error:', petUpdResult.error);
+      // 回退：逐个更新
+      for (var ri = 0; ri < petsToUpdate.length; ri++) {
+        var singlePetUpd = await db.from('pets').update(petsToUpdate[ri].data).eq('id', petsToUpdate[ri].id);
+        if (singlePetUpd.error) console.warn('[DAL] Student sync: single pet update error:', singlePetUpd.error);
+      }
+    }
+  }
 
-  // 推送操作日志（学生操作也要记录）
+  // 4. 推送操作日志（学生操作也要记录）
   await _pushLogsToSupabase();
   await _pushArchiveToSupabase();
 
+  // 5. 清除未同步标记
+  _clearDirty();
+  try { localStorage.removeItem('_dal_unsyncedFlag'); } catch (e) {}
+  
   console.log('[DAL] Student sync complete');
 }
 
@@ -1866,6 +2086,7 @@ function wrapSaveFunctions() {
     var _origSaveClass = saveClassData;
     saveClassData = function() {
       _origSaveClass();  // localStorage 缓存
+      _markDirty();  // 标记数据有变更
       if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
       _syncToSupabase();  // 云端同步
     };
@@ -1876,6 +2097,7 @@ function wrapSaveFunctions() {
     var _origSaveActions = saveCustomActions;
     saveCustomActions = function() {
       _origSaveActions();
+      _dirtyActions = true;
       if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
       _syncToSupabase();
     };
@@ -1886,6 +2108,7 @@ function wrapSaveFunctions() {
     var _origSaveLogs = saveLogs;
     saveLogs = function() {
       _origSaveLogs();
+      _dirtyLogs = true;
       if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
       _syncToSupabase();
     };
@@ -1927,6 +2150,12 @@ async function initDAL() {
   });
   if (cleaned) _saveDeletedClassIds();
 
+  // 检查上次关闭页面时是否有未同步的数据
+  var hadUnsynced = _checkUnsyncedOnLoad();
+  if (hadUnsynced) {
+    console.log('[DAL] Detected unsynced data from last session, will force sync');
+  }
+
   console.log('[DAL] Initializing for', currentUser.type, currentUser.id);
 
   // 从 Supabase 加载数据（云端优先）
@@ -1941,6 +2170,13 @@ async function initDAL() {
       currentClassId = classesData.length > 0 ? classesData[0].id : null;
       init();
     }
+    
+    // 如果上次有未同步的数据，加载后立即再同步一次（确保数据完整）
+    if (hadUnsynced && currentUser.type === 'teacher') {
+      console.log('[DAL] Force syncing after load to ensure data integrity...');
+      _markDirty();  // 标记所有数据需要重新同步
+      setTimeout(function() { _syncToSupabase(); }, 2000);
+    }
   } else {
     console.log('[DAL] No data in Supabase, checking localStorage for initial sync...');
     if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
@@ -1949,7 +2185,6 @@ async function initDAL() {
     if (currentUser.type === 'teacher' && classesData.length > 0) {
       console.log('[DAL] Found', classesData.length, 'classes in localStorage, pushing to Supabase...');
       try {
-        // 先测试 Supabase 连接是否正常
         var testResult = await db.from('classes').select('id').limit(1);
         if (testResult.error) {
           console.error('[DAL] Supabase connection test failed:', testResult.error);
@@ -1983,18 +2218,41 @@ async function initDAL() {
   _dalReady = true;
   console.log('[DAL] Ready — data source: Supabase cloud (即时同步模式)');
 
-  // 仅注册页面关闭/隐藏时的同步（不再使用定时同步）
+  // 注册页面关闭/隐藏时的同步
   _setupCloseSync();
+  
+  // 设置云端状态指示器的点击事件（支持学生和老师都点击重试）
+  _setupCloudStatusClick();
 }
 
-// ===== 手动同步（老师点击云端状态按钮触发） =====
-async function forceManualSync() {
-  if (!currentUser || currentUser.type !== 'teacher') {
-    if (typeof showNotification === 'function') {
-      showNotification('提示', '手动同步仅限老师模式', 'info');
-    }
-    return;
+// ===== 云端状态指示器点击事件 =====
+function _setupCloudStatusClick() {
+  var el = document.getElementById('cloudSyncStatus');
+  if (el) {
+    el.style.cursor = 'pointer';
+    el.onclick = function() {
+      if (_lastSyncFailed || _hasUnsyncedData()) {
+        // 有未同步数据或上次失败，触发手动同步
+        if (currentUser && currentUser.type === 'teacher') {
+          forceManualSync();
+        } else {
+          // 学生也触发同步
+          if (typeof _updateCloudStatus === 'function') _updateCloudStatus('syncing');
+          _syncToSupabase();
+        }
+      } else {
+        // 没有未同步数据，显示当前状态
+        if (typeof showNotification === 'function') {
+          showNotification('云端同步', '数据已同步到云端 ✓', 'success');
+        }
+      }
+    };
   }
+}
+
+// ===== 手动同步（点击云端状态按钮触发，支持老师+学生） =====
+async function forceManualSync() {
+  if (!currentUser) return;
   if (!db) {
     if (typeof showNotification === 'function') {
       showNotification('同步失败', 'Supabase 未连接，请刷新页面', 'error');
@@ -2027,33 +2285,44 @@ async function forceManualSync() {
       return;
     }
 
-    // 推送所有班级
-    for (var i = 0; i < classesData.length; i++) {
-      await _pushClassToSupabase(classesData[i]);
-    }
-
-    // 推送自定义奖惩和操作日志
-    await _pushCustomActionsToSupabase();
-    await _pushLogsToSupabase();
-    await _pushArchiveToSupabase();
-
-    // 验证同步结果
-    var verifyResult = await db.from('classes').select('id, name').eq('teacher_id', currentUser.id);
-    var supaClassCount = (verifyResult.data || []).length;
-    var localClassCount = classesData.length;
-
-    if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
-
-    var msg = '同步完成！本地 ' + localClassCount + ' 个班级，云端 ' + supaClassCount + ' 个班级。';
-    if (localClassCount === supaClassCount) {
-      msg += ' ✅ 数据一致';
+    // 推送所有班级（老师）或自己的数据（学生）
+    if (currentUser.type === 'teacher') {
+      for (var i = 0; i < classesData.length; i++) {
+        await _pushClassToSupabase(classesData[i]);
+      }
+      await _pushCustomActionsToSupabase();
+      
+      // 验证同步结果
+      var verifyResult = await db.from('classes').select('id, name').eq('teacher_id', currentUser.id);
+      var supaClassCount = (verifyResult.data || []).length;
+      var localClassCount = classesData.length;
+      
+      var msg = '同步完成！本地 ' + localClassCount + ' 个班级，云端 ' + supaClassCount + ' 个班级。';
+      if (localClassCount === supaClassCount) {
+        msg += ' ✅ 数据一致';
+      } else {
+        msg += ' ⚠️ 数量不一致，请检查';
+      }
+      
+      if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
+      if (typeof showNotification === 'function') {
+        showNotification('同步成功', msg, 'success');
+      }
     } else {
-      msg += ' ⚠️ 数量不一致，请检查';
+      // 学生同步
+      await _syncStudentToSupabase();
+      if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
+      if (typeof showNotification === 'function') {
+        showNotification('同步成功', '你的数据已同步到云端 ✓', 'success');
+      }
     }
-    if (typeof showNotification === 'function') {
-      showNotification('同步成功', msg, 'success');
-    }
-    console.log('[DAL] Manual sync complete:', msg);
+    
+    _clearDirty();
+    _lastSyncFailed = false;
+    _syncRetryCount = 0;
+    try { localStorage.removeItem('_dal_unsyncedFlag'); } catch (e) {}
+    
+    console.log('[DAL] Manual sync complete');
   } catch (e) {
     console.error('[DAL] Manual sync failed:', e);
     if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
@@ -2122,12 +2391,65 @@ function applyStudentRestrictions() {
 // 不再使用30秒定时器，所有操作都会立即触发同步
 // 保存函数已被包装（wrapSaveFunctions），每次保存都会同步到 Supabase
 
+// ===== 未同步数据追踪 =====
+// 记录哪些班级/数据有未同步的变更
+var _dirtyClasses = {};  // { classId: true }
+var _dirtyActions = false;
+var _dirtyLogs = false;
+var _lastSyncFailed = false;
+var _syncRetryCount = 0;
+
+// 标记数据有变更
+function _markDirty() {
+  if (classesData && Array.isArray(classesData)) {
+    classesData.forEach(function(c) { _dirtyClasses[c.id] = true; });
+  }
+  _dirtyActions = true;
+  _dirtyLogs = true;
+}
+
+// 清除变更标记
+function _clearDirty() {
+  _dirtyClasses = {};
+  _dirtyActions = false;
+  _dirtyLogs = false;
+}
+
+// 检查是否有未同步数据
+function _hasUnsyncedData() {
+  return Object.keys(_dirtyClasses).length > 0 || _dirtyActions || _dirtyLogs;
+}
+
 // ===== 页面关闭/隐藏时立即同步 =====
 function _setupCloseSync() {
-  // 页面关闭前同步
-  window.addEventListener('beforeunload', function() {
-    if (currentUser) {
-      console.log('[DAL] Page closing, syncing...');
+  // 页面关闭前同步 - 使用 sendBeacon 发送标记，然后尝试同步
+  window.addEventListener('beforeunload', function(e) {
+    if (currentUser && _hasUnsyncedData()) {
+      console.log('[DAL] Page closing with unsynced data, attempting sync...');
+      // 使用同步 XMLHttpRequest 作为后备（在 beforeunload 中比 async 更可靠）
+      try {
+        // 保存一个标记到 localStorage，标记有数据可能未同步
+        localStorage.setItem('_dal_unsyncedFlag', JSON.stringify({
+          time: Date.now(),
+          userType: currentUser.type,
+          userId: currentUser.id
+        }));
+      } catch (e) {}
+      
+      // 尝试发送同步请求（不等待结果）
+      // 使用 navigator.sendBeacon 不可行因为需要 POST JSON，
+      // 所以我们用同步 XHR 发送一个轻量级请求来延长页面生命周期
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', SUPABASE_URL + '/rest/v1/', false);  // false = 同步
+        xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+        xhr.timeout = 3000;  // 3秒超时
+        xhr.send();
+      } catch (e) {
+        // 超时或失败都忽略，至少延长了页面生命周期
+      }
+      
+      // 调用同步（虽然不保证完成，但配合上面的延迟可能有机会完成）
       _syncToSupabase();
     }
   });
@@ -2135,14 +2457,36 @@ function _setupCloseSync() {
   // 页面隐藏时同步（切换标签页、最小化等）
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') {
-      if (currentUser) {
-        console.log('[DAL] Page hidden, syncing...');
+      if (currentUser && _hasUnsyncedData()) {
+        console.log('[DAL] Page hidden with unsynced data, syncing...');
+        _syncToSupabase();
+      }
+    } else if (document.visibilityState === 'visible') {
+      // 页面重新可见时，检查是否有未同步数据
+      if (currentUser && _hasUnsyncedData()) {
+        console.log('[DAL] Page visible again, has unsynced data, syncing...');
         _syncToSupabase();
       }
     }
   });
 
   console.log('[DAL] Close-sync handlers registered');
+}
+
+// ===== 页面加载时检查上次未同步的数据 =====
+function _checkUnsyncedOnLoad() {
+  try {
+    var flag = localStorage.getItem('_dal_unsyncedFlag');
+    if (flag) {
+      var parsed = JSON.parse(flag);
+      // 如果上次关闭时有未同步数据（在 24 小时内）
+      if (parsed.time && Date.now() - parsed.time < 24 * 60 * 60 * 1000) {
+        console.log('[DAL] Detected unsynced flag from last session, will force sync after load');
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
 }
 
 // 启动 DAL 初始化
