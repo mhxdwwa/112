@@ -294,12 +294,14 @@ async function _loadCustomActionsFromSupabase() {
 async function _pushClassToSupabase(classObj) {
   var teacherId = currentUser.id;
   var supaClassId = _getSupaClassId(classObj.id);
+  console.log('[DAL] _pushClass: teacherId=', teacherId, 'supaClassId=', supaClassId);
 
   // 1. Upsert 班级
   if (supaClassId) {
     var upd = await db.from('classes').update({ name: classObj.name }).eq('id', supaClassId);
     if (upd.error) console.warn('[DAL] update class:', upd.error);
   } else {
+    console.log('[DAL] Inserting class:', classObj.name);
     var ins = await db.from('classes')
       .insert([{ teacher_id: teacherId, name: classObj.name }])
       .select('id')
@@ -308,11 +310,13 @@ async function _pushClassToSupabase(classObj) {
       console.error('[DAL] insert class:', ins.error);
       return;
     }
+    console.log('[DAL] Class inserted, id=', ins.data.id);
     supaClassId = ins.data.id;
     _idMap.classes[String(classObj.id)] = supaClassId;
   }
 
   // 2. 同步学生
+  console.log('[DAL] Syncing', classObj.students.length, 'students for class', classObj.name);
   var currentLocalStuIds = [];
   for (var j = 0; j < classObj.students.length; j++) {
     var stu = classObj.students[j];
@@ -333,6 +337,7 @@ async function _pushClassToSupabase(classObj) {
       }
     }
   }
+  console.log('[DAL] Students synced for class', classObj.name);
 
   // 4. 删除 Supabase 中已不存在的学生（及其宠物）
   var allStuResult = await db.from('students').select('id').eq('class_id', supaClassId);
@@ -354,6 +359,7 @@ async function _pushClassToSupabase(classObj) {
   }
 
   _saveIdMap();
+  console.log('[DAL] _pushClass complete for', classObj.name);
 }
 
 async function _upsertStudent(supaClassId, localClassId, stu) {
@@ -661,13 +667,22 @@ async function initDAL() {
     if (currentUser.type === 'teacher' && classesData.length > 0) {
       console.log('[DAL] Found', classesData.length, 'classes in localStorage, pushing to Supabase...');
       try {
-        for (var i = 0; i < classesData.length; i++) {
-          await _pushClassToSupabase(classesData[i]);
+        // 先测试 Supabase 连接是否正常
+        var testResult = await db.from('classes').select('id').limit(1);
+        if (testResult.error) {
+          console.error('[DAL] Supabase connection test failed:', testResult.error);
+          showNotification('云端同步失败', '请检查 Supabase 表是否已创建', 'error');
+          if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
+        } else {
+          for (var i = 0; i < classesData.length; i++) {
+            console.log('[DAL] Pushing class', i + 1, '/', classesData.length, ':', classesData[i].name);
+            await _pushClassToSupabase(classesData[i]);
+          }
+          await _pushCustomActionsToSupabase();
+          await _pushLogsToSupabase();
+          console.log('[DAL] Initial sync complete — localStorage data pushed to Supabase');
+          if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
         }
-        await _pushCustomActionsToSupabase();
-        await _pushLogsToSupabase();
-        console.log('[DAL] Initial sync complete — localStorage data pushed to Supabase');
-        if (typeof _updateCloudStatus === 'function') _updateCloudStatus('synced');
       } catch (e) {
         console.error('[DAL] Initial sync failed:', e);
         if (typeof _updateCloudStatus === 'function') _updateCloudStatus('error');
@@ -685,6 +700,10 @@ async function initDAL() {
 
   _dalReady = true;
   console.log('[DAL] Ready — data source: Supabase cloud');
+
+  // 启动定时自动同步和关闭同步
+  _startAutoSync();
+  _setupCloseSync();
 }
 
 // ===== 学生模式：隐藏老师专属 UI =====
@@ -740,6 +759,45 @@ function applyStudentRestrictions() {
     }
     return _origOpenStudentModal(studentId);
   };
+}
+
+// ===== 定时自动同步（每30秒） =====
+var _dalAutoSyncTimer = null;
+var _dalSyncInterval = 30000; // 30秒
+
+function _startAutoSync() {
+  if (_dalAutoSyncTimer) clearInterval(_dalAutoSyncTimer);
+  _dalAutoSyncTimer = setInterval(function() {
+    if (currentUser && currentUser.type === 'teacher' && !_dalSyncing) {
+      console.log('[DAL] Auto-sync triggered');
+      _syncToSupabase();
+    }
+  }, _dalSyncInterval);
+  console.log('[DAL] Auto-sync started (every', _dalSyncInterval / 1000, 'seconds)');
+}
+
+// ===== 页面关闭/隐藏时立即同步 =====
+function _setupCloseSync() {
+  // 页面关闭前同步
+  window.addEventListener('beforeunload', function() {
+    if (currentUser && currentUser.type === 'teacher') {
+      console.log('[DAL] Page closing, syncing...');
+      // 使用 sendBeacon 或同步请求（但 Supabase 不支持，所以只能尽力而为）
+      _syncToSupabase();
+    }
+  });
+
+  // 页面隐藏时同步（切换标签页、最小化等）
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') {
+      if (currentUser && currentUser.type === 'teacher') {
+        console.log('[DAL] Page hidden, syncing...');
+        _syncToSupabase();
+      }
+    }
+  });
+
+  console.log('[DAL] Close-sync handlers registered');
 }
 
 // 启动 DAL 初始化
