@@ -428,6 +428,7 @@ function _syncStudentToSupabase() {
 
   // Upsert own pets
   if (myStudent.pets && myStudent.pets.length > 0) {
+    console.log('[DAL] Syncing ' + myStudent.pets.length + ' pets for student ' + studentId);
     myStudent.pets.forEach(function(pet) {
       var payload = {
         student_id: studentId,
@@ -446,12 +447,20 @@ function _syncStudentToSupabase() {
       };
       if (pet.id && pet.id > 0 && pet.id === Math.floor(pet.id)) {
         payload.id = pet.id;
+        console.log('[DAL] Updating pet ' + pet.id + ' (' + pet.name + ')');
+      } else {
+        console.log('[DAL] Creating new pet (' + pet.name + ')');
       }
       promises.push(
         db.from('pets').upsert([payload]).then(function(r) {
-          if (r.error) console.error('[DAL] pet sync error:', r.error);
+          if (r.error) {
+            console.error('[DAL] pet sync error:', r.error);
+          } else {
+            console.log('[DAL] Pet sync success:', r.data);
+          }
           if (r.data && r.data[0] && !pet.id) {
             pet.id = r.data[0].id;
+            console.log('[DAL] Assigned Supabase ID ' + pet.id + ' to pet ' + pet.name);
           }
         })
       );
@@ -476,6 +485,7 @@ function _syncToSupabase() {
     _dalSyncing = false;
     _syncRetryCount = 0;
     _lastSyncFailed = false;
+    _lastRefreshTime = 0; // Allow next Realtime event to trigger refresh
     _updateCloudStatus('synced');
     console.log('[DAL] Sync complete');
 
@@ -487,6 +497,7 @@ function _syncToSupabase() {
     _dalSyncing = false;
     _lastSyncFailed = true;
     _syncRetryCount++;
+    _lastRefreshTime = 0; // Allow refresh even after error
     console.error('[DAL] Sync error:', err);
     _updateCloudStatus('error');
 
@@ -532,6 +543,12 @@ function forceManualSync() {
 
 /* ===== Realtime ===== */
 function _refreshFromSupabase() {
+  // Don't refresh while syncing - prevents overwriting local changes
+  if (_dalSyncing) {
+    console.log('[DAL] Refresh skipped - sync in progress');
+    return;
+  }
+
   var now = Date.now();
   if (now - _lastRefreshTime < 2000) return; // debounce 2s
   _lastRefreshTime = now;
@@ -571,7 +588,8 @@ function _setupRealtimeSubscriptions() {
 
     // Subscribe to pets table
     var petChannel = db.channel('dal-pets')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function() {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
+        console.log('[DAL] Realtime pets event:', payload.eventType);
         _lastRefreshTime = 0;
         _refreshFromSupabase();
       })
