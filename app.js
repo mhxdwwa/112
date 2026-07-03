@@ -308,10 +308,11 @@ try { customActions = JSON.parse(localStorage.getItem('customActions')) || []; }
 const neededPresets = [{id: 'sys_reward_1', name: '完成作业', coins: 10},{id: 'sys_reward_2', name: '课堂发言', coins: 10}];
 neededPresets.forEach(preset => { if (!customActions.some(a => a.id === preset.id)) customActions.push(preset); });
 function safeLSSave(key, data){ try{ localStorage.setItem(key, JSON.stringify(data)); }catch(e){ console.warn('localStorage写入失败('+key+'):', e.message); try{ localStorage.removeItem('logArchives'); localStorage.removeItem('operationLogs'); localStorage.setItem(key, JSON.stringify(data)); }catch(e2){ console.warn('localStorage清理后仍失败，跳过本地缓存'); } } }
-// ===== 安全整数ID生成器（替代 _genLocalId() 的浮点数） =====
-// 生成唯一整数ID，兼容 Supabase bigint 列
+// ===== 安全整数ID生成器 =====
+// 生成负整数ID，明确区分本地临时ID与Supabase自增ID（正整数）
+// 负数ID永远不会被误认为有效的Supabase ID
 var _idCounter = 0;
-function _genLocalId(){ return Date.now() * 1000 + ((_idCounter = (_idCounter + 1) % 1000)); }
+function _genLocalId(){ return -(Date.now() * 1000 + ((_idCounter = (_idCounter + 1) % 1000))); }
 function saveCustomActions(){safeLSSave('customActions', customActions); scheduleFileSave();}
 saveCustomActions();
 let operationLogs = [];
