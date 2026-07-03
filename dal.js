@@ -164,30 +164,28 @@ async function loadFromSupabase() {
       return false;
     }
 
-    // 过滤掉已标记删除的班级（防止删除后重新出现）
-    var filteredClasses = [];
-    for (var fi = 0; fi < supaClasses.length; fi++) {
-      var sc = supaClasses[fi];
-      // 已标记删除的，跳过
-      if (_deletedSupaClassIds[String(sc.id)]) {
-        console.log('[DAL] Skipping deleted Supabase class:', sc.id);
-        continue;
-      }
-      filteredClasses.push(sc);
+    // 不再使用 _deletedSupaClassIds 过滤 — 直接加载 Supabase 中所有班级
+    // 已删除的班级由教师手动操作，不应被 localStorage 缓存误删
+    // 清空历史遗留的错误标记（之前的 bug 导致有效班级被误标为已删除）
+    if (Object.keys(_deletedSupaClassIds).length > 0) {
+      console.log('[DAL] Clearing stale _deletedSupaClassIds:', Object.keys(_deletedSupaClassIds));
+      _deletedSupaClassIds = {};
+      _saveDeletedClassIds();
     }
-    if (filteredClasses.length === 0) {
-      console.log('[DAL] All Supabase classes are marked as deleted or orphaned');
+
+    if (supaClasses.length === 0) {
+      console.log('[DAL] No classes in Supabase for this teacher');
       return false;
     }
 
     // 去重：如果 Supabase 中有多个同名班级（之前 bug 创建的重复），只保留 ID 最小的
     var seenNames = {};
     var dedupedClasses = [];
-    for (var di = 0; di < filteredClasses.length; di++) {
-      var dc = filteredClasses[di];
+    for (var di = 0; di < supaClasses.length; di++) {
+      var dc = supaClasses[di];
       if (seenNames[dc.name]) {
-        console.log('[DAL] Deduplicating same-name class in Supabase:', dc.id, dc.name, '- marking as deleted');
-        _markClassDeleted(dc.id);
+        console.log('[DAL] Deduplicating same-name class in Supabase:', dc.id, dc.name, '- keeping lower ID');
+        // 保留 ID 较小的，标记较大的为重复（但不删除，只是跳过）
       } else {
         seenNames[dc.name] = true;
         dedupedClasses.push(dc);
@@ -319,11 +317,9 @@ async function loadFromSupabase() {
       newClassesData.push(classObj);
     }
 
-    // 3. 与 localStorage 数据合并（本地数据永远优先）
-    // localData 已在前面加载过，直接复用
-
+    // 3. Supabase 是数据源（source of truth），不使用 localStorage 覆盖
+    // localStorage 仅用于补充 Supabase 中尚未存在的新学生（还没同步上去的）
     if (localData && Array.isArray(localData)) {
-      // 构建本地数据查找表：classId -> studentName -> student
       var localLookup = {};
       localData.forEach(function(lc) {
         localLookup[lc.name] = {};
@@ -332,70 +328,7 @@ async function loadFromSupabase() {
         });
       });
 
-      // 合并每个学生的数据 — 本地有数据时，以本地为准
-      newClassesData.forEach(function(nc) {
-        var localClass = localLookup[nc.name];
-        if (!localClass) return;
-        
-        nc.students.forEach(function(ns) {
-          var localStudent = localClass[ns.name];
-          if (!localStudent) return;
-          
-          // 本地有数据时，所有字段以本地为准
-          ns.coins = localStudent.coins !== undefined ? localStudent.coins : (ns.coins || 0);
-          ns.pkCountToday = localStudent.pkCountToday !== undefined ? localStudent.pkCountToday : (ns.pkCountToday || 0);
-          
-          // shopItems: 本地优先，并集补充
-          var localShop = localStudent.shopItems || [];
-          var supaShop = ns.shopItems || [];
-          var shopSet = {};
-          localShop.forEach(function(item) { shopSet[item] = true; });
-          supaShop.forEach(function(item) { shopSet[item] = true; });
-          ns.shopItems = Object.keys(shopSet);
-          
-          // equippedItems: 本地优先
-          var localEq = localStudent.equippedItems || {};
-          var supaEq = ns.equippedItems || {};
-          ns.equippedItems = Object.assign({}, supaEq, localEq);
-          
-          // dates: 本地优先
-          ns.lastCheckinDate = localStudent.lastCheckinDate || ns.lastCheckinDate || null;
-          ns.lastJianghuDate = localStudent.lastJianghuDate || ns.lastJianghuDate || null;
-          ns.lastPkDate = localStudent.lastPkDate || ns.lastPkDate || null;
-          
-          // activePetId: 本地优先
-          ns.activePetId = localStudent.activePetId || ns.activePetId || null;
-          
-          // 宠物数据：本地有宠物数据时，以本地为准（修复 growth/feeding 等变化丢失的问题）
-          if (localStudent.pets && localStudent.pets.length > 0) {
-            // 构建 Supabase 宠物查找表（by name）
-            var supaPetByName = {};
-            (ns.pets || []).forEach(function(sp) { supaPetByName[sp.name] = sp; });
-            
-            // 用本地宠物数据覆盖 Supabase 数据，但保留 Supabase ID
-            ns.pets = localStudent.pets.map(function(lp) {
-              var supaPet = supaPetByName[lp.name];
-              return {
-                id: (supaPet && supaPet.id) || lp.id,  // 保留 Supabase ID
-                name: lp.name,
-                nickname: lp.nickname || lp.name,
-                level: lp.level !== undefined ? lp.level : 1,
-                growth: lp.growth !== undefined ? lp.growth : 0,
-                coins: lp.coins !== undefined ? lp.coins : 0,
-                is_active: lp.is_active !== undefined ? lp.is_active : true,
-                isDead: lp.isDead || false,
-                lastFeedDate: lp.lastFeedDate || null,
-                lastPlayDate: lp.lastPlayDate || null,
-                todayFeedCount: lp.todayFeedCount || 0,
-                todayPlayCount: lp.todayPlayCount || 0,
-                penaltyStreak: lp.penaltyStreak || 0
-              };
-            });
-          }
-        });
-      });
-      
-      // 补充本地有但 Supabase 没有的学生（添加后尚未同步的情况）
+      // 仅补充 Supabase 中没有的学生（本地有、云端没有 → 尚未同步）
       newClassesData.forEach(function(nc) {
         var localClass = localLookup[nc.name];
         if (!localClass) return;
@@ -404,10 +337,9 @@ async function loadFromSupabase() {
         nc.students.forEach(function(ns) { supaStudentNames[ns.name] = true; });
         
         Object.keys(localClass).forEach(function(stuName) {
-          if (supaStudentNames[stuName]) return;  // 已存在，跳过
+          if (supaStudentNames[stuName]) return;  // Supabase 已有，不覆盖
           
           var ls = localClass[stuName];
-          // 本地独有学生，添加到 classesData
           var newStu = {
             id: ls.id,
             name: ls.name,
@@ -422,11 +354,11 @@ async function loadFromSupabase() {
             lastPkDate: ls.lastPkDate || null
           };
           nc.students.push(newStu);
-          console.log('[DAL] Restored local-only student:', stuName, 'in class:', nc.name);
+          console.log('[DAL] Added local-only student (not yet in Supabase):', stuName, 'in class:', nc.name);
         });
       });
       
-      console.log('[DAL] Merged with localStorage data (local-first)');
+      console.log('[DAL] Using Supabase as source of truth (no localStorage override)');
     }
 
     // 4. 写入全局变量
@@ -503,74 +435,10 @@ async function _loadStudentFromSupabase() {
       lastPkDate: ss.last_pk_date || null
     };
     
-    // 与 localStorage 数据合并（本地数据永远优先）
-    try {
-      var localData = localStorage.getItem('classPetData');
-      if (localData) {
-        var parsed = JSON.parse(localData);
-        if (parsed && parsed[0] && parsed[0].students) {
-          var localStudent = parsed[0].students.find(function(s) {
-            return s.name === studentObj.name;
-          });
-          if (localStudent) {
-            // 本地有数据时，所有字段以本地为准
-            studentObj.coins = localStudent.coins !== undefined ? localStudent.coins : (studentObj.coins || 0);
-            studentObj.pkCountToday = localStudent.pkCountToday !== undefined ? localStudent.pkCountToday : (studentObj.pkCountToday || 0);
-            
-            // shopItems: 本地优先，并集补充
-            var localShop = localStudent.shopItems || [];
-            var shopSet = {};
-            localShop.forEach(function(item) { shopSet[item] = true; });
-            studentObj.shopItems.forEach(function(item) { shopSet[item] = true; });
-            studentObj.shopItems = Object.keys(shopSet);
-            
-            // equippedItems: 本地优先
-            var localEq = localStudent.equippedItems || {};
-            studentObj.equippedItems = Object.assign({}, studentObj.equippedItems, localEq);
-            
-            // dates: 本地优先
-            studentObj.lastCheckinDate = localStudent.lastCheckinDate || studentObj.lastCheckinDate || null;
-            studentObj.lastJianghuDate = localStudent.lastJianghuDate || studentObj.lastJianghuDate || null;
-            studentObj.lastPkDate = localStudent.lastPkDate || studentObj.lastPkDate || null;
-            
-            // activePetId: 本地优先
-            studentObj.activePetId = localStudent.activePetId || studentObj.activePetId || null;
-            
-            // 宠物数据：本地有数据时以本地为准，但保留 Supabase ID
-            if (localStudent.pets && localStudent.pets.length > 0) {
-              var supaPetByName = {};
-              pets.forEach(function(sp) { supaPetByName[sp.name] = sp; });
-              
-              pets = localStudent.pets.map(function(lp) {
-                var supaPet = supaPetByName[lp.name];
-                return {
-                  id: (supaPet && supaPet.id) || lp.id,
-                  name: lp.name,
-                  nickname: lp.nickname || lp.name,
-                  level: lp.level !== undefined ? lp.level : 1,
-                  growth: lp.growth !== undefined ? lp.growth : 0,
-                  coins: lp.coins !== undefined ? lp.coins : 0,
-                  is_active: lp.is_active !== undefined ? lp.is_active : true,
-                  isDead: lp.isDead || false,
-                  lastFeedDate: lp.lastFeedDate || null,
-                  lastPlayDate: lp.lastPlayDate || null,
-                  todayFeedCount: lp.todayFeedCount || 0,
-                  todayPlayCount: lp.todayPlayCount || 0,
-                  penaltyStreak: lp.penaltyStreak || 0
-                };
-              });
-              
-              // 更新 studentObj 的 pets
-              studentObj.pets = pets;
-            }
-            
-            console.log('[DAL] Merged student data with localStorage (local-first)');
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[DAL] Error merging with localStorage:', e);
-    }
+    // 学生端：不使用 localStorage 覆盖 Supabase 数据
+    // Supabase 是 source of truth，确保学生看到的数据是最新的
+    // localStorage 仅在完全离线时作为后备
+    console.log('[DAL] Student data loaded from Supabase (source of truth)');
     
     // activePetId：优先 Supabase 值
     if (studentObj.activePetId && pets.some(function(p) { return Number(p.id) === Number(studentObj.activePetId); })) {
@@ -663,6 +531,95 @@ async function _loadStudentFromSupabase() {
   } catch (e) {
     console.error('[DAL] loadStudent error:', e);
     return false;
+  }
+}
+
+// ===== Supabase Realtime 订阅 + 定时轮询 =====
+var _realtimeChannel = null;
+var _refreshTimer = null;
+var _lastRefreshTime = 0;
+var _refreshInterval = 5000;  // 每5秒轮询一次
+
+// 教师端：从 Supabase 重新加载最新数据（不覆盖 Supabase 数据）
+async function _refreshFromSupabase() {
+  if (!db || !currentUser) return;
+  var now = Date.now();
+  if (now - _lastRefreshTime < _refreshInterval) return;  // 防抖
+  _lastRefreshTime = now;
+
+  try {
+    if (currentUser.type === 'student') {
+      await _loadStudentFromSupabase();
+    } else {
+      // 教师端：直接重新查询 Supabase（复用 loadFromSupabase 逻辑）
+      await loadFromSupabase();
+    }
+    // 重新渲染
+    if (typeof init === 'function') {
+      var savedClassId = currentClassId;
+      init();
+      if (savedClassId && classesData.some(function(c) { return c.id === savedClassId; })) {
+        currentClassId = savedClassId;
+        if (typeof renderClassTabs === 'function') renderClassTabs();
+        if (typeof renderHomePetGrid === 'function') renderHomePetGrid();
+      }
+    }
+  } catch (e) {
+    console.warn('[DAL] refresh error:', e);
+  }
+}
+
+// 设置 Realtime 订阅（监听 students 和 pets 表变更）
+function _setupRealtimeSubscriptions() {
+  if (!db || !currentUser) return;
+  if (_realtimeChannel) return;  // 已设置
+
+  try {
+    // Supabase Realtime: 监听 pets 表变更（学生操作宠物会更新此表）
+    _realtimeChannel = db.channel('dal-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'pets'
+      }, function(payload) {
+        console.log('[DAL Realtime] pets changed:', payload.eventType, payload.new?.id || payload.old?.id);
+        _lastRefreshTime = 0;  // 立即允许刷新
+        _refreshFromSupabase();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'students'
+      }, function(payload) {
+        console.log('[DAL Realtime] students changed:', payload.eventType, payload.new?.id || payload.old?.id);
+        _lastRefreshTime = 0;
+        _refreshFromSupabase();
+      })
+      .subscribe(function(status) {
+        console.log('[DAL Realtime] subscription status:', status);
+      });
+  } catch (e) {
+    console.warn('[DAL Realtime] setup failed (will use polling):', e);
+  }
+
+  // 定时轮询作为 Realtime 的后备方案
+  if (_refreshTimer) clearInterval(_refreshTimer);
+  _refreshTimer = setInterval(function() {
+    _refreshFromSupabase();
+  }, _refreshInterval);
+  
+  console.log('[DAL] Realtime + polling setup complete (interval:', _refreshInterval, 'ms)');
+}
+
+// 清理 Realtime 资源
+function _cleanupRealtime() {
+  if (_realtimeChannel) {
+    try { db.removeChannel(_realtimeChannel); } catch (e) {}
+    _realtimeChannel = null;
+  }
+  if (_refreshTimer) {
+    clearInterval(_refreshTimer);
+    _refreshTimer = null;
   }
 }
 
@@ -2013,76 +1970,10 @@ async function _syncToSupabase() {
         await _pushClassToSupabase(classesData[i]);
       }
 
-      // 删除 Supabase 中已不存在的班级
-      try {
-        var allResult = await db.from('classes')
-          .select('id')
-          .eq('teacher_id', currentUser.id);
-        
-        if (allResult.data && allResult.data.length > 0) {
-          var keptSupaIds = {};
-          classesData.forEach(function(c) {
-            var sid = _getSupaClassId(c.id);
-            if (sid) keptSupaIds[sid] = true;
-          });
-          for (var j = 0; j < allResult.data.length; j++) {
-            var sid = allResult.data[j].id;
-            if (!keptSupaIds[sid]) {
-              console.log('[DAL] Deleting orphaned Supabase class:', sid);
-              _markClassDeleted(sid);
-
-              try {
-                var orphanStus = await db.from('students')
-                  .select('id')
-                  .eq('class_id', sid);
-                if (orphanStus.data && orphanStus.data.length > 0) {
-                  var orphanStuIds = orphanStus.data.map(function(s) { return s.id; });
-                  for (var b = 0; b < orphanStuIds.length; b += 50) {
-                    var batch = orphanStuIds.slice(b, b + 50);
-                    try {
-                      await db.from('pets').in('student_id', batch).delete();
-                    } catch (petErr) {
-                      console.warn('[DAL] delete orphan pets exception:', petErr.message || petErr);
-                    }
-                  }
-                }
-                try {
-                  await db.from('students').eq('class_id', sid).delete();
-                } catch (stuErr) {
-                  console.warn('[DAL] delete orphan students exception:', stuErr.message || stuErr);
-                }
-                try {
-                  await db.from('classes').eq('id', sid).delete();
-                } catch (clsErr) {
-                  console.warn('[DAL] delete orphan class exception:', clsErr.message || clsErr);
-                }
-              } catch (orphanErr) {
-                console.warn('[DAL] orphan cleanup error for class', sid, ':', orphanErr.message || orphanErr);
-              }
-
-              Object.keys(_idMap.classes).forEach(function(key) {
-                if (_idMap.classes[key] === sid) delete _idMap.classes[key];
-              });
-              _saveIdMap();
-            }
-          }
-        } else if (allResult.error) {
-          console.warn('[DAL] orphan cleanup: query all classes failed:', allResult.error.message || allResult.error);
-          var currentLocalIds = {};
-          classesData.forEach(function(c) { currentLocalIds[String(c.id)] = true; });
-          Object.keys(_idMap.classes).forEach(function(key) {
-            if (!currentLocalIds[key]) {
-              var oldSupaId = _idMap.classes[key];
-              console.log('[DAL] Marking orphan from stale idMap:', key, '->', oldSupaId);
-              _markClassDeleted(oldSupaId);
-              delete _idMap.classes[key];
-            }
-          });
-          _saveIdMap();
-        }
-      } catch (orphanQueryErr) {
-        console.warn('[DAL] orphan cleanup query exception:', orphanQueryErr.message || orphanQueryErr);
-      }
+      // 不再自动删除 Supabase 中的"孤儿"班级
+      // 原因：之前 _deletedSupaClassIds 被错误填充，导致有效班级被自动删除
+      // 班级删除只在教师主动操作时执行（通过 _deleteClassFromSupabase）
+      console.log('[DAL] Teacher sync: pushing', classesData.length, 'classes (orphan cleanup disabled for safety)');
 
       await _pushCustomActionsToSupabase();
       await _pushLogsToSupabase();
@@ -2371,8 +2262,11 @@ async function initDAL() {
   // 学生模式限制
   applyStudentRestrictions();
 
+  // 设置 Supabase Realtime 订阅 + 定时轮询（实现实时同步）
+  _setupRealtimeSubscriptions();
+
   _dalReady = true;
-  console.log('[DAL] Ready — data source: Supabase cloud (即时同步模式)');
+  console.log('[DAL] Ready — data source: Supabase cloud (即时同步模式 + Realtime)');
 
   // 注册页面关闭/隐藏时的同步
   _setupCloseSync();
