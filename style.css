@@ -1611,7 +1611,7 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
   .starburst, .galaxy-swirl,
   .screen-flash, .screen-tint,
   .skill-announce,
-  .jh-torn-piece, .jh-torn-crack, .jh-torn-flash, .jh-torn-dust,
+  .jh-torn-piece, .jh-torn-piece-stay, .jh-torn-crack, .jh-torn-flash, .jh-torn-dust, .jh-torn-dust-stay,
   .jh-fireworks-container, .jh-fw-particle, .jh-fw-trail, .jh-fw-ring,
   .jh-combo, .jh-screen-shake,
   .jh-spark, .jh-burst, .jh-slash,
@@ -1905,6 +1905,34 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
 .jh-torn-dust{
   position:absolute;border-radius:50%;pointer-events:none;opacity:0;
   animation:jhDustFloat var(--ddur,2s) ease-out var(--ddelay,0.3s) forwards;
+}
+/* 碎片停留空中版（课堂PK/宠物PK用） */
+.jh-torn-piece-stay{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:30;
+  animation:jhTornFlyStay var(--torn-dur,1.2s) cubic-bezier(.22,.68,.36,1) forwards;
+  transform-origin:center center;
+  filter:drop-shadow(2px 4px 6px rgba(0,0,0,0.7));
+}
+.jh-torn-piece-stay img{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:contain;
+  clip-path:var(--torn-clip);
+  opacity:1 !important;
+}
+@keyframes jhTornFlyStay{
+  0%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1);}
+  40%{opacity:1;transform:translate(calc(var(--tx)*0.5),calc(var(--ty)*0.5)) rotate(calc(var(--tr)*0.5)) scale(0.92);}
+  100%{opacity:1;transform:translate(var(--tx),var(--ty)) rotate(var(--tr)) scale(0.85);}
+}
+.jh-torn-dust-stay{
+  position:absolute;border-radius:50%;pointer-events:none;opacity:0;
+  animation:jhDustFloatStay var(--ddur,2s) ease-out var(--ddelay,0.3s) forwards;
+}
+@keyframes jhDustFloatStay{
+  0%{opacity:0;transform:translate(0,0) scale(0.5);}
+  15%{opacity:0.7;}
+  100%{opacity:0.6;transform:translate(var(--dx),var(--dy)) scale(0.8);}
 }
 @keyframes jhDustFloat{
   0%{opacity:0;transform:translate(0,0) scale(0.5);}

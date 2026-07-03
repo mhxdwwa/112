@@ -4567,7 +4567,7 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
   classPKState.selectedStudents = [];
 }
 
-// 课堂PK败方碎裂特效（照搬萌萌江湖行碎裂效果）
+// 课堂PK败方碎裂特效（立即碎裂，碎片停留空中不消失）
 function applyClassPKShatterEffect(el) {
   el.classList.add('jh-shatter-host');
 
@@ -4577,6 +4577,79 @@ function applyClassPKShatterEffect(el) {
   if (origImg) {
     imgSrc = origImg.src || origImg.getAttribute('src') || '';
   }
+  if (!imgSrc) return;
+
+  // 立即隐藏所有子元素
+  // 课堂PK结构: div>div>img + div.cockpit-pet>img
+  // 宠物PK结构: div>img (直接子元素结构)
+  const innerDiv = el.querySelector('div');
+  if (innerDiv) {
+    innerDiv.style.opacity = '0';
+    innerDiv.style.display = 'none';
+  }
+
+  // 同时直接隐藏所有 img 和 span 子元素（宠物PK的直接子元素结构）
+  const directImgSpans = el.querySelectorAll(':scope > img, :scope > span');
+  directImgSpans.forEach(child => {
+    child.style.opacity = '0';
+    child.style.display = 'none';
+  });
+
+  // 定义不规则碎片 clip-path + 飞散方向
+  const tornPieces = [
+    { clip:'polygon(0% 0%, 49% 0%, 48% 25%, 39% 31%, 33% 49%, 27% 54%,  0% 50%)', tx:-120, ty:-60, tr:-25 },
+    { clip:'polygon(49% 0%, 100% 0%, 100% 26%, 76% 30%, 69% 46%, 60% 44%, 48% 25%)', tx:110, ty:-80, tr:20 },
+    { clip:'polygon(100% 26%, 100% 53%, 78% 52%, 69% 46%, 76% 30%)', tx:140, ty:10, tr:30 },
+    { clip:'polygon(0% 50%, 27% 54%, 33% 49%, 44% 51%, 34% 65%, 30% 79%, 0% 80%)', tx:-130, ty:40, tr:-18 },
+    { clip:'polygon(33% 49%, 39% 31%, 48% 25%, 60% 44%, 69% 46%, 50% 65%, 44% 51%)', tx:20, ty:-50, tr:35 },
+    { clip:'polygon(69% 46%, 78% 52%, 100% 53%, 100% 82%, 73% 80%, 63% 72%, 50% 65%)', tx:130, ty:50, tr:22 },
+    { clip:'polygon(0% 80%, 30% 79%, 34% 65%, 50% 65%, 50% 83%, 40% 100%, 0% 100%)', tx:-100, ty:90, tr:-28 },
+    { clip:'polygon(50% 65%, 63% 72%, 73% 80%, 70% 100%, 40% 100%, 50% 83%)', tx:30, ty:110, tr:15 },
+    { clip:'polygon(73% 80%, 100% 82%, 100% 100%, 70% 100%)', tx:120, ty:100, tr:32 },
+  ];
+
+  // 立即生成碎片（无延迟，无闪光/裂纹前置特效）
+  tornPieces.forEach((piece, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'jh-torn-piece-stay';
+    const pieceImg = document.createElement('img');
+    pieceImg.src = imgSrc;
+    pieceImg.style.setProperty('--torn-clip', piece.clip);
+    pieceImg.draggable = false;
+    wrapper.appendChild(pieceImg);
+
+    // 飞散方向加随机扰动
+    const jx = piece.tx + (Math.random() - 0.5) * 40;
+    const jy = piece.ty + (Math.random() - 0.5) * 30;
+    const jr = piece.tr + (Math.random() - 0.5) * 20;
+    wrapper.style.setProperty('--tx', jx + 'px');
+    wrapper.style.setProperty('--ty', jy + 'px');
+    wrapper.style.setProperty('--tr', jr + 'deg');
+    wrapper.style.setProperty('--torn-dur', (1.0 + Math.random() * 0.4) + 's');
+    wrapper.style.setProperty('--torn-delay', (i * 0.03) + 's');
+
+    el.appendChild(wrapper);
+  });
+
+  // 碎屑粉尘（停留空中）
+  for (let i = 0; i < 20; i++) {
+    const dust = document.createElement('div');
+    dust.className = 'jh-torn-dust-stay';
+    const size = 2 + Math.random() * 5;
+    dust.style.width = size + 'px';
+    dust.style.height = size + 'px';
+    dust.style.left = (20 + Math.random() * 60) + '%';
+    dust.style.top = (20 + Math.random() * 60) + '%';
+    dust.style.background = `rgba(${150+Math.random()*55},${180+Math.random()*50},${220+Math.random()*35},0.7)`;
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 40 + Math.random() * 80;
+    dust.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    dust.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+    dust.style.setProperty('--ddur', (1 + Math.random() * 1.2) + 's');
+    dust.style.setProperty('--ddelay', (Math.random() * 0.3) + 's');
+    el.appendChild(dust);
+  }
+}
   if (!imgSrc) return;
 
   // 立即隐藏所有子元素
