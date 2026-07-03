@@ -4650,108 +4650,6 @@ function applyClassPKShatterEffect(el) {
     el.appendChild(dust);
   }
 }
-  if (!imgSrc) return;
-
-  // 立即隐藏所有子元素
-  // 课堂PK结构: div>div>img + div.cockpit-pet>img
-  // 宠物PK结构: div>img (直接子元素)
-  const innerDiv = el.querySelector('div');
-  if (innerDiv) {
-    innerDiv.style.transition = 'opacity 0.3s 0.25s';
-    innerDiv.style.opacity = '0';
-    setTimeout(() => { innerDiv.style.display = 'none'; }, 600);
-  }
-
-  // 同时直接隐藏所有 img 和 span 子元素（宠物PK的直接子元素结构）
-  // 不依赖 CSS 的 transition delay，立即设置 opacity
-  const directImgSpans = el.querySelectorAll(':scope > img, :scope > span');
-  directImgSpans.forEach(child => {
-    child.style.transition = 'opacity 0.15s';
-    child.style.opacity = '0';
-    setTimeout(() => { child.style.display = 'none'; }, 200);
-  });
-
-  // 闪白
-  const flash = document.createElement('div');
-  flash.className = 'jh-torn-flash';
-  el.appendChild(flash);
-  setTimeout(() => flash.remove(), 500);
-
-  // 裂纹线条
-  const crackEl = document.createElement('div');
-  crackEl.className = 'jh-torn-crack';
-  crackEl.innerHTML = `<svg viewBox="0 0 200 200" width="100%" height="100%" style="filter:drop-shadow(0 0 3px rgba(255,255,255,0.6))">
-    <g stroke="rgba(255,255,255,0.9)" stroke-width="2.5" fill="none" stroke-linecap="round">
-      <path d="M100,5 L97,50 L78,62 L65,98 L55,108"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" fill="freeze"/></path>
-      <path d="M97,50 L120,58 L138,92 L155,105"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.05s" fill="freeze"/></path>
-      <path d="M78,62 L48,72 L28,62"><animate attributeName="stroke-dashoffset" from="150" to="0" dur="0.25s" begin="0.08s" fill="freeze"/></path>
-      <path d="M65,98 L88,102 L100,130 L95,165"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.1s" fill="freeze"/></path>
-      <path d="M138,92 L160,88 L182,100"><animate attributeName="stroke-dashoffset" from="150" to="0" dur="0.25s" begin="0.12s" fill="freeze"/></path>
-      <path d="M55,108 L68,130 L60,158 L50,180"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.15s" fill="freeze"/></path>
-      <path d="M155,105 L165,135 L175,165 L185,190"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.13s" fill="freeze"/></path>
-      <path d="M100,130 L125,148 L145,160"><animate attributeName="stroke-dashoffset" from="150" to="0" dur="0.25s" begin="0.18s" fill="freeze"/></path>
-    </g>
-  </svg>`;
-  el.appendChild(crackEl);
-  setTimeout(() => crackEl.remove(), 800);
-
-  // 定义不规则碎片 clip-path + 飞散方向
-  const tornPieces = [
-    { clip:'polygon(0% 0%, 49% 0%, 48% 25%, 39% 31%, 33% 49%, 27% 54%,  0% 50%)', tx:-120, ty:-60, tr:-25 },
-    { clip:'polygon(49% 0%, 100% 0%, 100% 26%, 76% 30%, 69% 46%, 60% 44%, 48% 25%)', tx:110, ty:-80, tr:20 },
-    { clip:'polygon(100% 26%, 100% 53%, 78% 52%, 69% 46%, 76% 30%)', tx:140, ty:10, tr:30 },
-    { clip:'polygon(0% 50%, 27% 54%, 33% 49%, 44% 51%, 34% 65%, 30% 79%, 0% 80%)', tx:-130, ty:40, tr:-18 },
-    { clip:'polygon(33% 49%, 39% 31%, 48% 25%, 60% 44%, 69% 46%, 50% 65%, 44% 51%)', tx:20, ty:-50, tr:35 },
-    { clip:'polygon(69% 46%, 78% 52%, 100% 53%, 100% 82%, 73% 80%, 63% 72%, 50% 65%)', tx:130, ty:50, tr:22 },
-    { clip:'polygon(0% 80%, 30% 79%, 34% 65%, 50% 65%, 50% 83%, 40% 100%, 0% 100%)', tx:-100, ty:90, tr:-28 },
-    { clip:'polygon(50% 65%, 63% 72%, 73% 80%, 70% 100%, 40% 100%, 50% 83%)', tx:30, ty:110, tr:15 },
-    { clip:'polygon(73% 80%, 100% 82%, 100% 100%, 70% 100%)', tx:120, ty:100, tr:32 },
-  ];
-
-  // 延迟后生成碎片（让裂纹先出现）
-  setTimeout(() => {
-    tornPieces.forEach((piece, i) => {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'jh-torn-piece';
-      const pieceImg = document.createElement('img');
-      pieceImg.src = imgSrc;
-      pieceImg.style.setProperty('--torn-clip', piece.clip);
-      pieceImg.draggable = false;
-      wrapper.appendChild(pieceImg);
-
-      // 飞散方向加随机扰动
-      const jx = piece.tx + (Math.random() - 0.5) * 40;
-      const jy = piece.ty + (Math.random() - 0.5) * 30;
-      const jr = piece.tr + (Math.random() - 0.5) * 20;
-      wrapper.style.setProperty('--tx', jx + 'px');
-      wrapper.style.setProperty('--ty', jy + 'px');
-      wrapper.style.setProperty('--tr', jr + 'deg');
-      wrapper.style.setProperty('--torn-dur', (1.4 + Math.random() * 0.6) + 's');
-      wrapper.style.setProperty('--torn-delay', (i * 0.04) + 's');
-
-      el.appendChild(wrapper);
-    });
-
-    // 碎屑粉尘
-    for (let i = 0; i < 20; i++) {
-      const dust = document.createElement('div');
-      dust.className = 'jh-torn-dust';
-      const size = 2 + Math.random() * 5;
-      dust.style.width = size + 'px';
-      dust.style.height = size + 'px';
-      dust.style.left = (20 + Math.random() * 60) + '%';
-      dust.style.top = (20 + Math.random() * 60) + '%';
-      dust.style.background = `rgba(${150+Math.random()*55},${180+Math.random()*50},${220+Math.random()*35},0.7)`;
-      const ang = Math.random() * Math.PI * 2;
-      const dist = 40 + Math.random() * 80;
-      dust.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
-      dust.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
-      dust.style.setProperty('--ddur', (1 + Math.random() * 1.2) + 's');
-      dust.style.setProperty('--ddelay', (Math.random() * 0.3) + 's');
-      el.appendChild(dust);
-    }
-  }, 300);
-}
 
 function closeClassPKModal() {
   if(classPKState.isFighting) {
@@ -6297,7 +6195,7 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   jhCreatePetals(won ? 'gold' : 'red');
 }
 
-// ===== 失败方照片撕碎特效 =====
+// ===== 失败方照片撕碎特效（碎片停留空中不消失） =====
 function jhApplyShatterEffect(el) {
   el.classList.add('jh-shatter-host');
 
@@ -6317,30 +6215,6 @@ function jhApplyShatterEffect(el) {
   }
   if (!imgSrc) return;
 
-  // 闪白
-  const flash = document.createElement('div');
-  flash.className = 'jh-torn-flash';
-  el.appendChild(flash);
-  setTimeout(() => flash.remove(), 500);
-
-  // 裂纹线条（先显示裂纹，再碎开）
-  const crackEl = document.createElement('div');
-  crackEl.className = 'jh-torn-crack';
-  crackEl.innerHTML = `<svg viewBox="0 0 200 200" width="100%" height="100%" style="filter:drop-shadow(0 0 3px rgba(255,255,255,0.6))">
-    <g stroke="rgba(255,255,255,0.9)" stroke-width="2.5" fill="none" stroke-linecap="round">
-      <path d="M100,5 L97,50 L78,62 L65,98 L55,108"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" fill="freeze"/></path>
-      <path d="M97,50 L120,58 L138,92 L155,105"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.05s" fill="freeze"/></path>
-      <path d="M78,62 L48,72 L28,62"><animate attributeName="stroke-dashoffset" from="150" to="0" dur="0.25s" begin="0.08s" fill="freeze"/></path>
-      <path d="M65,98 L88,102 L100,130 L95,165"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.1s" fill="freeze"/></path>
-      <path d="M138,92 L160,88 L182,100"><animate attributeName="stroke-dashoffset" from="150" to="0" dur="0.25s" begin="0.12s" fill="freeze"/></path>
-      <path d="M55,108 L68,130 L60,158 L50,180"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.15s" fill="freeze"/></path>
-      <path d="M155,105 L165,135 L175,165 L185,190"><animate attributeName="stroke-dashoffset" from="200" to="0" dur="0.3s" begin="0.13s" fill="freeze"/></path>
-      <path d="M100,130 L125,148 L145,160"><animate attributeName="stroke-dashoffset" from="150" to="0" dur="0.25s" begin="0.18s" fill="freeze"/></path>
-    </g>
-  </svg>`;
-  el.appendChild(crackEl);
-  setTimeout(() => crackEl.remove(), 800);
-
   // 定义不规则碎片 clip-path（模拟撕碎的多边形区域）+ 飞散方向
   const tornPieces = [
     { clip:'polygon(0% 0%, 49% 0%, 48% 25%, 39% 31%, 33% 49%, 27% 54%,  0% 50%)', tx:-120, ty:-60, tr:-25 },
@@ -6358,7 +6232,7 @@ function jhApplyShatterEffect(el) {
   setTimeout(() => {
     tornPieces.forEach((piece, i) => {
       const wrapper = document.createElement('div');
-      wrapper.className = 'jh-torn-piece';
+      wrapper.className = 'jh-torn-piece-stay'; // 使用停留空中版
       const pieceImg = document.createElement('img');
       pieceImg.src = imgSrc;
       pieceImg.style.setProperty('--torn-clip', piece.clip);
@@ -6378,10 +6252,10 @@ function jhApplyShatterEffect(el) {
       el.appendChild(wrapper);
     });
 
-    // 碎屑粉尘
+    // 碎屑粉尘（停留空中版）
     for (let i = 0; i < 20; i++) {
       const dust = document.createElement('div');
-      dust.className = 'jh-torn-dust';
+      dust.className = 'jh-torn-dust-stay'; // 使用停留空中版
       const size = 2 + Math.random() * 5;
       dust.style.width = size + 'px';
       dust.style.height = size + 'px';
