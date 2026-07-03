@@ -4135,8 +4135,8 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
 
   // 阶段1：机器人立即出现（无抖动碎裂）
   // 左侧宠物朝右（不翻转），右侧宠物朝左（翻转）
-  const cockpitHtml1 = `<div style="position:absolute;top:38%;left:54%;transform:translate(-50%,-50%);width:65px;height:65px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
-  const cockpitHtml2 = `<div style="position:absolute;top:38%;left:46%;transform:translate(-50%,-50%);width:65px;height:65px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml1 = `<div style="position:absolute;top:38%;left:54%;transform:translate(-50%,-50%);width:12.5%;height:12.5%;min-width:40px;min-height:40px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml2 = `<div style="position:absolute;top:38%;left:46%;transform:translate(-50%,-50%);width:12.5%;height:12.5%;min-width:40px;min-height:40px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
   
   img1.innerHTML = `
     <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
@@ -4190,8 +4190,8 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
   // 触发飞行动画
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      // 左侧：飞向机器人胸部偏右位置（约38%高度，58%宽度）
-      const targetSize = 45; // 最终小体型
+      // 左侧：飞向机器人胸部偏右位置（约38%高度，54%宽度）
+      const targetSize = Math.max(40, Math.round(img1Rect.width * 0.125)); // 与驾驶舱同比例
       const targetX1 = img1Rect.left + img1Rect.width * 0.54 - targetSize/2;
       const targetY1 = img1Rect.top + img1Rect.height * 0.38 - targetSize/2;
       petFly1.style.width = targetSize + 'px';
@@ -4200,11 +4200,12 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
       petFly1.style.top = targetY1 + 'px';
       petFly1.style.opacity = '0.6';
       
-      // 右侧：飞向机器人胸部偏左位置（约38%高度，42%宽度）
-      const targetX2 = img2Rect.left + img2Rect.width * 0.46 - targetSize/2;
-      const targetY2 = img2Rect.top + img2Rect.height * 0.38 - targetSize/2;
-      petFly2.style.width = targetSize + 'px';
-      petFly2.style.height = targetSize + 'px';
+      // 右侧：飞向机器人胸部偏左位置（约38%高度，46%宽度）
+      const targetSize2 = Math.max(40, Math.round(img2Rect.width * 0.125));
+      const targetX2 = img2Rect.left + img2Rect.width * 0.46 - targetSize2/2;
+      const targetY2 = img2Rect.top + img2Rect.height * 0.38 - targetSize2/2;
+      petFly2.style.width = targetSize2 + 'px';
+      petFly2.style.height = targetSize2 + 'px';
       petFly2.style.left = targetX2 + 'px';
       petFly2.style.top = targetY2 + 'px';
       petFly2.style.opacity = '0.6';
@@ -5277,7 +5278,7 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
       </div>
     </div>
     <div class="jh-battle-pet" id="jhBPet">${battlePetVisual}</div>
-    <div class="jh-battle-boss" id="jhBBoss" style="width:min(600px,50vw);height:min(600px,60vh)">${jhGenBossSVG(boss)}</div>
+    <div class="jh-battle-boss" id="jhBBoss">${jhGenBossSVG(boss)}</div>
     <div class="jh-battle-buildings">${jhGenBattleBuildingsSVG()}</div>
     <div class="jh-battle-ground"></div>
   `;
