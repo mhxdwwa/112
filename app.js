@@ -595,12 +595,12 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
   const log = {
     id: _genLocalId(), timestamp: new Date().toISOString(),
     classId: currentClassId, studentId, studentName, actionType, details,
-    coinDelta, expDelta, petId, extra, snapshot, reverted: false
+    coinDelta, expDelta, petId, extra, snapshot, reverted: false, _synced: false
   };
   operationLogs.push(log);
   saveLogs();
 }
-function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false }; operationLogs.push(log); saveLogs(); }
+function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; operationLogs.push(log); saveLogs(); }
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
 function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } unequipItem(student, itemId); } }
 function revertToLog(logId){
@@ -686,16 +686,25 @@ function _historyActionColor(type){
 function showHistoryModal(){
   const curClass = classesData.find(c=>c.id===currentClassId);
   const className = curClass ? curClass.name : '未选择班级';
-  const months = getAvailableMonths();
-  if(months.length===0){
-    showModal(`📜 历史操作记录【${className}】`,
-      '<div style="text-align:center;padding:30px;color:#bba;">该班级暂无操作记录</div>',
-      [{text:'关闭',onclick:'closeModal()'}], false);
-    return;
+  // Load fresh logs from Supabase first, then show
+  var showFn = function() {
+    const months = getAvailableMonths();
+    if(months.length===0){
+      showModal(`📜 历史操作记录【${className}】`,
+        '<div style="text-align:center;padding:30px;color:#bba;">该班级暂无操作记录</div>',
+        [{text:'关闭',onclick:'closeModal()'}], false);
+      return;
+    }
+    _currentHistoryMonth = months[0];
+    let html = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+    showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
+  };
+  // Try to load fresh logs from Supabase
+  if (typeof _loadOperationLogs === 'function') {
+    _loadOperationLogs().then(function() { showFn(); }).catch(function() { showFn(); });
+  } else {
+    showFn();
   }
-  _currentHistoryMonth = months[0];
-  let html = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
-  showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
 }
 function switchHistoryMonth(month){
   _currentHistoryMonth = month;

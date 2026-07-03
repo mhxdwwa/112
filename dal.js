@@ -1,14 +1,17 @@
 /**
- * dal.js v4.0 — Clean Data Access Layer
+ * dal.js v6.0 — Clean Data Access Layer
  * 
  * Architecture: Supabase as single source of truth
  * - No localStorage for business data
  * - No complex merge logic
  * - Targeted save operations
  * - Realtime subscriptions for live sync
+ * - Operation logs synced to Supabase (both teacher and student)
+ * - Student sync pre-fetches fresh data to prevent overwriting teacher changes
  * 
  * Flow: loadFromSupabase() → classesData → UI
  *       UI action → saveClassData() → _syncToSupabase() → Supabase
+ *       UI action → recordAction() → saveLogs() → _syncOperationLogsToSupabase() → Supabase
  */
 
 /* ===== State ===== */
@@ -22,7 +25,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '5.0';
+var _DAL_VERSION = '6.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 15000; // 15s protection after sync — prevents Realtime echo from overwriting local data
 
@@ -245,16 +248,155 @@ function _loadCustomActions() {
 
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
-  return db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(classR) {
+  return db.from('classes').select('id').then(function(classR) {
     if (classR.error || !classR.data) return;
-    var classIds = classR.data.map(function(c) { return c.id; });
+    var classIds;
+    if (currentUser.type === 'teacher') {
+      classIds = classR.data.filter(function(c) { return c.teacher_id === currentUser.id; }).map(function(c) { return c.id; });
+    } else {
+      // Student: load logs for their class
+      var sid = parseInt(localStorage.getItem('classId'));
+      classIds = classR.data.filter(function(c) { return c.id === sid; }).map(function(c) { return c.id; });
+    }
     if (classIds.length === 0) return;
     return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(500);
   }).then(function(r) {
     if (r && r.data && typeof operationLogs !== 'undefined') {
-      operationLogs = r.data;
+      // Convert Supabase format → local format and merge into operationLogs
+      var supabaseLogs = r.data.map(function(l) {
+        return {
+          id: l.id,
+          timestamp: l.created_at || l.timestamp,
+          classId: l.class_id,
+          studentId: l.student_id,
+          studentName: l.student_name || '',
+          actionType: l.action_type || '',
+          details: l.details || '',
+          coinDelta: l.coin_delta || 0,
+          expDelta: l.exp_delta || 0,
+          petId: l.pet_id || null,
+          extra: (function() { try { return typeof l.extra === 'string' ? JSON.parse(l.extra) : (l.extra || null); } catch(e) { return null; } })(),
+          snapshot: (function() { try { return typeof l.snapshot === 'string' ? JSON.parse(l.snapshot) : (l.snapshot || null); } catch(e) { return null; } })(),
+          fullSnapshot: (function() { try { return typeof l.full_snapshot === 'string' ? JSON.parse(l.full_snapshot) : (l.full_snapshot || null); } catch(e) { return null; } })(),
+          reverted: !!l.reverted,
+          _synced: true,
+          _fromSupabase: true
+        };
+      });
+      // Merge: add Supabase logs that don't exist locally (by id)
+      var localIdSet = {};
+      operationLogs.forEach(function(l) { localIdSet[l.id] = true; });
+      var newLogs = supabaseLogs.filter(function(l) { return !localIdSet[l.id]; });
+      if (newLogs.length > 0) {
+        operationLogs = operationLogs.concat(newLogs);
+        // Sort by timestamp
+        operationLogs.sort(function(a, b) {
+          return (a.timestamp || '').localeCompare(b.timestamp || '');
+        });
+      }
     }
   }).catch(function(e) { console.warn('[DAL] operation_logs load error:', e); });
+}
+
+/* ===== Sync Operation Logs to Supabase ===== */
+function _syncOperationLogsToSupabase() {
+  if (typeof operationLogs === 'undefined' || !Array.isArray(operationLogs)) return Promise.resolve();
+  if (!db || !currentUser) return Promise.resolve();
+
+  // Find unsynced logs (negative ID or no _synced flag)
+  var unsyncedLogs = operationLogs.filter(function(l) { return !l._synced; });
+  // Find reverted logs that are synced but need reverted status updated in Supabase
+  var revertedLogs = operationLogs.filter(function(l) { return l._synced && l.reverted && !l._revertSynced; });
+
+  var insertPromise = Promise.resolve();
+  if (unsyncedLogs.length > 0) {
+    console.log('[DAL] Syncing ' + unsyncedLogs.length + ' new operation logs to Supabase');
+
+    // Get class_id for the current context
+    var classId = null;
+    if (currentUser.type === 'teacher') {
+      classId = currentClassId || (classesData[0] ? classesData[0].id : null);
+    } else {
+      classId = parseInt(localStorage.getItem('classId')) || (classesData[0] ? classesData[0].id : null);
+    }
+    if (!classId) {
+      console.warn('[DAL] Cannot sync logs: no class_id');
+      return Promise.resolve();
+    }
+
+  var payloads = unsyncedLogs.map(function(l) {
+    return {
+      class_id: l.classId || classId,
+      student_id: l.studentId,
+      student_name: l.studentName || '',
+      action_type: l.actionType || '',
+      details: l.details || '',
+      coin_delta: l.coinDelta || 0,
+      exp_delta: l.expDelta || 0,
+      pet_id: l.petId || null,
+      extra: l.extra ? JSON.stringify(l.extra) : null,
+      snapshot: l.snapshot ? JSON.stringify(l.snapshot) : null,
+      full_snapshot: l.fullSnapshot ? JSON.stringify(l.fullSnapshot) : null,
+      reverted: !!l.reverted
+    };
+  });
+
+    // Insert in batches of 50 to avoid Supabase payload limits
+    var batchSize = 50;
+    var promises = [];
+    for (var i = 0; i < payloads.length; i += batchSize) {
+      var batch = payloads.slice(i, i + batchSize);
+      promises.push(
+        db.from('operation_logs').insert(batch).select().then(function(r) {
+          if (r.error) {
+            console.error('[DAL] operation_logs insert error:', r.error);
+            return;
+          }
+          if (r.data) {
+            // Mark the corresponding local logs as synced
+            r.data.forEach(function(inserted) {
+              // Find matching local log by matching fields
+              for (var j = 0; j < unsyncedLogs.length; j++) {
+                var localLog = unsyncedLogs[j];
+                if (localLog._synced) continue;
+                if (localLog.actionType === inserted.action_type &&
+                    localLog.studentId === inserted.student_id &&
+                    localLog.details === inserted.details &&
+                    localLog.coinDelta === (inserted.coin_delta || 0)) {
+                  localLog._synced = true;
+                  localLog.id = inserted.id; // Update to real Supabase ID
+                  break;
+                }
+              }
+            });
+          }
+        })
+      );
+    }
+    insertPromise = Promise.all(promises);
+  }
+
+  // Update reverted status for already-synced logs
+  var revertPromise = Promise.resolve();
+  if (revertedLogs.length > 0) {
+    console.log('[DAL] Updating ' + revertedLogs.length + ' reverted logs in Supabase');
+    var revertPromises = revertedLogs.map(function(l) {
+      // Only update if log has a valid Supabase ID (positive integer)
+      if (!l.id || l.id <= 0 || l.id !== Math.floor(l.id)) return Promise.resolve();
+      return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
+        if (r.error) {
+          console.error('[DAL] operation_logs revert update error:', r.error);
+        } else {
+          l._revertSynced = true;
+        }
+      });
+    });
+    revertPromise = Promise.all(revertPromises);
+  }
+
+  return Promise.all([insertPromise, revertPromise]).then(function() {
+    console.log('[DAL] Operation logs sync complete');
+  });
 }
 
 /* ===== Main Load Entry ===== */
@@ -496,11 +638,33 @@ function _syncStudentToSupabase() {
     });
   }
 
-  // Step 2: After all pets synced, upsert student with correct active_pet_id
+  // Step 2: Fetch fresh student data to avoid overwriting teacher changes (e.g., coins)
   return Promise.all(petPromises).then(function() {
+    return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today').eq('id', studentId).single();
+  }).then(function(freshR) {
+    var freshCoins = myStudent.coins;
+    if (freshR && !freshR.error && freshR.data) {
+      // Use fresh coins from Supabase as base — preserves teacher's updates
+      // The student's local spending (feed, play, etc.) has already been applied to myStudent.coins
+      // If the student loaded fresh data (via Realtime), myStudent.coins is already correct
+      // If stale, the fresh value from Supabase takes priority
+      freshCoins = freshR.data.coins !== undefined ? freshR.data.coins : myStudent.coins;
+      // Merge other fresh fields (don't overwrite if local has been updated)
+      if (freshR.data.last_checkin_date && !myStudent.lastCheckinDate) {
+        myStudent.lastCheckinDate = freshR.data.last_checkin_date;
+      }
+      if (freshR.data.last_pk_date && !myStudent.lastPkDate) {
+        myStudent.lastPkDate = freshR.data.last_pk_date;
+      }
+      if (freshR.data.pk_count_today !== undefined) {
+        myStudent.pkCountToday = Math.max(myStudent.pkCountToday || 0, freshR.data.pk_count_today || 0);
+      }
+    }
+
+    // Step 3: Upsert student with merged data
     return db.from('students').upsert([{
       id: studentId,
-      coins: myStudent.coins,
+      coins: freshCoins,
       shop_items: JSON.stringify(myStudent.shopItems || []),
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
       last_checkin_date: myStudent.lastCheckinDate || null,
@@ -728,8 +892,8 @@ function wrapSaveFunctions() {
     var origSaveLogs = saveLogs;
     saveLogs = function() {
       origSaveLogs.apply(this, arguments);
-      // Logs are saved but we don't sync them to Supabase for now
-      // to reduce load. Can be added later if needed.
+      // Sync new operation logs to Supabase
+      _syncOperationLogsToSupabase();
     };
     saveLogs._dalWrapped = true;
   }
