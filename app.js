@@ -4135,32 +4135,92 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
 
   // 阶段1：机器人立即出现（无抖动碎裂）
   // 左侧宠物朝右（不翻转），右侧宠物朝左（翻转）
-  const cockpitHtml1 = `<div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
-  const cockpitHtml2 = `<div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  // 驾驶舱位置先不设置top/left，等图片加载后用JS计算
+  const cockpitHtml1 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.50" data-cy="0.35"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml2 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.50" data-cy="0.35"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
   
   img1.innerHTML = `
     <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-      <img src="${robot1||''}" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.9));" onerror="this.style.display='none';this.parentNode.innerHTML='<span style=\\'font-size:120px;opacity:0;animation:monsterReveal 0.8s ease-out forwards;display:inline-block;filter:drop-shadow(0 0 20px rgba(100,150,255,0.6);\\'>🤖</span>'+this.parentNode.querySelector('.cockpit-pet')?.outerHTML;">
+      <img src="${robot1||''}" class="robot-mecha-img" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.9));" onerror="this.style.display='none';this.parentNode.innerHTML='<span style=\\'font-size:120px;opacity:0;animation:monsterReveal 0.8s ease-out forwards;display:inline-block;filter:drop-shadow(0 0 20px rgba(100,150,255,0.6);\\'>🤖</span>'+this.parentNode.querySelector('.cockpit-pet')?.outerHTML;">
       ${cockpitHtml1}
     </div>
   `;
   
   img2.innerHTML = `
     <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-      <img src="${robot2||''}" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterRevealRight 0.8s ease-out forwards;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.9));" onerror="this.style.display='none';this.parentNode.innerHTML='<span style=\\'font-size:120px;opacity:0;animation:monsterRevealRight 0.8s ease-out forwards;display:inline-block;filter:drop-shadow(0 0 20px rgba(255,100,150,0.6);\\'>🤖</span>'+this.parentNode.querySelector('.cockpit-pet')?.outerHTML;">
+      <img src="${robot2||''}" class="robot-mecha-img" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterRevealRight 0.8s ease-out forwards;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.9));" onerror="this.style.display='none';this.parentNode.innerHTML='<span style=\\'font-size:120px;opacity:0;animation:monsterRevealRight 0.8s ease-out forwards;display:inline-block;filter:drop-shadow(0 0 20px rgba(255,100,150,0.6);\\'>🤖</span>'+this.parentNode.querySelector('.cockpit-pet')?.outerHTML;">
       ${cockpitHtml2}
     </div>
   `;
   
   playTransformSound();
-  await sleep(800);
+  await sleep(900);
+  
+  // 用JS精确计算驾驶舱位置：根据object-fit:contain的实际渲染位置
+  function positionCockpit(containerEl) {
+    const wrapper = containerEl.querySelector('div');
+    if (!wrapper) return;
+    const robotImg = wrapper.querySelector('img.robot-mecha-img');
+    const cockpit = wrapper.querySelector('.cockpit-pet');
+    if (!robotImg || !cockpit || !robotImg.naturalWidth) return;
+    
+    const wW = wrapper.clientWidth;
+    const wH = wrapper.clientHeight;
+    const iW = robotImg.naturalWidth;
+    const iH = robotImg.naturalHeight;
+    const scale = Math.min(wW / iW, wH / iH);
+    const rW = iW * scale;
+    const rH = iH * scale;
+    const oX = (wW - rW) / 2;
+    const oY = (wH - rH) / 2;
+    
+    const cx = parseFloat(cockpit.dataset.cx) || 0.50;
+    const cy = parseFloat(cockpit.dataset.cy) || 0.35;
+    
+    cockpit.style.left = (oX + rW * cx) + 'px';
+    cockpit.style.top = (oY + rH * cy) + 'px';
+  }
+  
+  positionCockpit(img1);
+  positionCockpit(img2);
   
   // 阶段2：宠物从大体型缩小飞入驾驶室
   // 获取宠物原始大尺寸位置（相对img容器）
   const img1Rect = img1.getBoundingClientRect();
   const img2Rect = img2.getBoundingClientRect();
   
-  // 左侧宠物：从中心大体型开始，缩小飞向右上方的驾驶室位置
+  // 计算机甲图片实际渲染区域（object-fit:contain）
+  function getMechaRenderBounds(containerEl) {
+    const wrapper = containerEl.querySelector('div');
+    if (!wrapper) return containerEl.getBoundingClientRect();
+    const robotImg = wrapper.querySelector('img.robot-mecha-img');
+    if (!robotImg || !robotImg.naturalWidth) return wrapper.getBoundingClientRect();
+    
+    const wRect = wrapper.getBoundingClientRect();
+    const wW = wrapper.clientWidth;
+    const wH = wrapper.clientHeight;
+    const iW = robotImg.naturalWidth;
+    const iH = robotImg.naturalHeight;
+    const scale = Math.min(wW / iW, wH / iH);
+    const rW = iW * scale;
+    const rH = iH * scale;
+    const oX = (wW - rW) / 2;
+    const oY = (wH - rH) / 2;
+    
+    return {
+      left: wRect.left + oX,
+      top: wRect.top + oY,
+      width: rW,
+      height: rH,
+      right: wRect.left + oX + rW,
+      bottom: wRect.top + oY + rH
+    };
+  }
+  
+  const mecha1Bounds = getMechaRenderBounds(img1);
+  const mecha2Bounds = getMechaRenderBounds(img2);
+  
+  // 左侧宠物：从中心大体型开始，缩小飞入驾驶室
   const petFly1 = document.createElement('div');
   petFly1.style.cssText = `position:fixed;z-index:1000;pointer-events:none;`;
   petFly1.innerHTML = `<img src="${pet1Img}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 15px rgba(100,150,255,0.8));" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'">`;
@@ -4187,23 +4247,23 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
   petFly2.style.top = (img2Rect.top + img2Rect.height/2 - startSize2/2) + 'px';
   petFly2.style.transition = 'all 1.4s cubic-bezier(0.4, 0, 0.2, 1)';
   
-  // 触发飞行动画
+  // 触发飞行动画 - 目标位置基于机甲图片实际渲染区域
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      // 左侧：飞向机器人胸部偏右位置（约35%高度，50%宽度）
-      const targetSize = 90; // 与驾驶舱同尺寸
-      const targetX1 = img1Rect.left + img1Rect.width * 0.50 - targetSize/2;
-      const targetY1 = img1Rect.top + img1Rect.height * 0.35 - targetSize/2;
+      const targetSize = 90;
+      // 左侧：飞向机甲胸部（cx=0.50, cy=0.35）
+      const targetX1 = mecha1Bounds.left + mecha1Bounds.width * 0.50 - targetSize/2;
+      const targetY1 = mecha1Bounds.top + mecha1Bounds.height * 0.35 - targetSize/2;
       petFly1.style.width = targetSize + 'px';
       petFly1.style.height = targetSize + 'px';
       petFly1.style.left = targetX1 + 'px';
       petFly1.style.top = targetY1 + 'px';
       petFly1.style.opacity = '0.6';
       
-      // 右侧：飞向机器人胸部偏左位置（约35%高度，50%宽度）
-      const targetSize2 = 90; // 与驾驶舱同尺寸
-      const targetX2 = img2Rect.left + img2Rect.width * 0.50 - targetSize2/2;
-      const targetY2 = img2Rect.top + img2Rect.height * 0.35 - targetSize2/2;
+      // 右侧：飞向机甲胸部（cx=0.50, cy=0.35）
+      const targetSize2 = 90;
+      const targetX2 = mecha2Bounds.left + mecha2Bounds.width * 0.50 - targetSize2/2;
+      const targetY2 = mecha2Bounds.top + mecha2Bounds.height * 0.35 - targetSize2/2;
       petFly2.style.width = targetSize2 + 'px';
       petFly2.style.height = targetSize2 + 'px';
       petFly2.style.left = targetX2 + 'px';
