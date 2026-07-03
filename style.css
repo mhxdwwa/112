@@ -186,7 +186,7 @@ body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe
               #000;}
 .modal.pk-fullscreen .pk-arena::before{content:'';position:absolute;bottom:0;left:10%;right:10%;height:8px;background:linear-gradient(90deg,transparent,rgba(255,150,50,0.6),rgba(255,200,50,0.8),rgba(255,150,50,0.6),transparent);border-radius:50%;box-shadow:0 0 40px 15px rgba(255,100,0,0.4),0 0 80px 30px rgba(255,50,0,0.2);filter:blur(2px);}
 .modal.pk-fullscreen .pk-arena::after{content:'';position:absolute;bottom:0;left:5%;right:5%;height:60px;background:linear-gradient(to top,rgba(40,15,0,0.9),transparent);border-top:2px solid rgba(255,100,0,0.2);}
-.modal.pk-fullscreen .pk-pet-img-container{width:min(700px, 50vw);height:min(802px, 57vw);background:transparent;border-radius:0;border:none;box-shadow:none;overflow:visible;}
+.modal.pk-fullscreen .pk-pet-img-container{width:min(800px, 55vw);height:min(918px, 63vw);background:transparent;border-radius:0;border:none;box-shadow:none;overflow:visible;}
 .modal.pk-fullscreen .pk-pet-img-container img,
 .modal.pk-fullscreen .pk-pet-img-container .monster-emoji{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 0 25px rgba(255,100,0,0.5)) drop-shadow(0 15px 40px rgba(0,0,0,0.9));}
 .modal.pk-fullscreen .pk-vs{z-index:2;}
@@ -1890,7 +1890,8 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
   0%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1);}
   8%{opacity:1;transform:translate(calc(var(--tx)*0.05),calc(var(--ty)*0.05)) rotate(calc(var(--tr)*0.1)) scale(1.02);}
   35%{opacity:1;transform:translate(calc(var(--tx)*0.5),calc(var(--ty)*0.4)) rotate(calc(var(--tr)*0.5)) scale(0.95);}
-  100%{opacity:1;transform:translate(var(--tx),calc(var(--ty) + 60px)) rotate(var(--tr)) scale(0.7);}
+  75%{opacity:0.5;transform:translate(calc(var(--tx)*0.85),calc((var(--ty) + 40px)*0.85)) rotate(calc(var(--tr)*0.85)) scale(0.4);}
+  100%{opacity:0;transform:translate(var(--tx),calc(var(--ty) + 60px)) rotate(var(--tr)) scale(0);}
 }
 .jh-torn-crack{
   position:absolute;top:0;left:0;width:100%;height:100%;z-index:29;pointer-events:none;

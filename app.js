@@ -3396,7 +3396,7 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     const winnerGrowthDelta = 3;
     const loserGrowthDelta = loserPet.growth - loserPrevGrowth;
     const winnerImg = document.getElementById(`pk-img-${winnerSide}`);
-    if(winnerImg) { winnerImg.style.filter = 'drop-shadow(0 0 40px rgba(255,215,0,0.9)) drop-shadow(0 0 80px rgba(255,200,0,0.6))'; winnerImg.style.transform = 'scale(1.15)'; }
+    if(winnerImg) { winnerImg.style.filter = 'drop-shadow(0 0 40px rgba(255,215,0,0.9)) drop-shadow(0 0 80px rgba(255,200,0,0.6))'; winnerImg.style.transition = 'filter 0.6s ease'; }
     // 败方碎裂特效
     const loserImgEl = document.getElementById(`pk-img-${winnerSide === 1 ? 2 : 1}`);
     if(loserImgEl) applyClassPKShatterEffect(loserImgEl);
@@ -4524,7 +4524,7 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     // 胜方光效 + 败方碎裂
     if(winnerImgEl) {
       winnerImgEl.style.filter = 'drop-shadow(0 0 40px rgba(255,215,0,0.9)) drop-shadow(0 0 80px rgba(255,200,0,0.5))';
-      winnerImgEl.style.transform = 'scale(1.15)';
+      winnerImgEl.style.transition = 'filter 0.6s ease';
     }
     if(loserImgEl) applyClassPKShatterEffect(loserImgEl);
 
