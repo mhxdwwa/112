@@ -4135,8 +4135,8 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
 
   // 阶段1：机器人立即出现（无抖动碎裂）
   // 左侧宠物朝右（不翻转），右侧宠物朝左（翻转）
-  const cockpitHtml1 = `<div style="position:absolute;top:38%;left:54%;transform:translate(-50%,-50%);width:12.5%;height:12.5%;min-width:40px;min-height:40px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
-  const cockpitHtml2 = `<div style="position:absolute;top:38%;left:46%;transform:translate(-50%,-50%);width:12.5%;height:12.5%;min-width:40px;min-height:40px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml1 = `<div style="position:absolute;top:38%;left:54%;transform:translate(-50%,-50%);width:65px;height:65px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml2 = `<div style="position:absolute;top:38%;left:46%;transform:translate(-50%,-50%);width:65px;height:65px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
   
   img1.innerHTML = `
     <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
@@ -4191,7 +4191,7 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       // 左侧：飞向机器人胸部偏右位置（约38%高度，54%宽度）
-      const targetSize = Math.max(40, Math.round(img1Rect.width * 0.125)); // 与驾驶舱同比例
+      const targetSize = 65; // 与驾驶舱同尺寸
       const targetX1 = img1Rect.left + img1Rect.width * 0.54 - targetSize/2;
       const targetY1 = img1Rect.top + img1Rect.height * 0.38 - targetSize/2;
       petFly1.style.width = targetSize + 'px';
@@ -4201,7 +4201,7 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
       petFly1.style.opacity = '0.6';
       
       // 右侧：飞向机器人胸部偏左位置（约38%高度，46%宽度）
-      const targetSize2 = Math.max(40, Math.round(img2Rect.width * 0.125));
+      const targetSize2 = 65; // 与驾驶舱同尺寸
       const targetX2 = img2Rect.left + img2Rect.width * 0.46 - targetSize2/2;
       const targetY2 = img2Rect.top + img2Rect.height * 0.38 - targetSize2/2;
       petFly2.style.width = targetSize2 + 'px';
@@ -5253,16 +5253,13 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
   
   // 随机选取战斗兽宠图片
   const monsterImg = getLeftMonsterImg() || getRightMonsterImg();
-  const battlePetVisual = monsterImg
-    ? `<img src="${monsterImg}" alt="战斗兽宠" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 15px rgba(255,80,0,0.5)) drop-shadow(0 8px 20px rgba(0,0,0,0.7));animation:monsterReveal 0.8s ease-out forwards;">`
-    : petVisual;
-
+  
   // ===== 全新战斗系统：前4回合完全公平，第5回合起微调，终结一击慢动作 =====
   const willWin = Math.random() < 0.20; // 胜率20%
   const petMaxHP = Math.floor((100 + pet.level * 100 + (pet.growth || 0) / 30) * 10);
   const bossMaxHP = petMaxHP;
 
-  // Transition to battle scene
+  // Transition to battle scene - 先显示宠物（未变身状态）
   scene.innerHTML = `
     <div class="jh-battle-hud">
       <div class="jh-fi jh-pet-info">
@@ -5277,7 +5274,7 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
         <div class="jh-hp-num jh-bhp-num" id="jhBossHpNum">${bossMaxHP} / ${bossMaxHP}</div>
       </div>
     </div>
-    <div class="jh-battle-pet" id="jhBPet">${battlePetVisual}</div>
+    <div class="jh-battle-pet" id="jhBPet">${petVisual}</div>
     <div class="jh-battle-boss" id="jhBBoss">${jhGenBossSVG(boss)}</div>
     <div class="jh-battle-buildings">${jhGenBattleBuildingsSVG()}</div>
     <div class="jh-battle-ground"></div>
@@ -5290,11 +5287,52 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
     linear-gradient(180deg, #0a0610 0%, #12081a 20%, #1a1020 40%, #150c18 60%, #0d0810 100%)
   `;
 
+  const petEl = overlay.querySelector('#jhBPet');
+  const bossEl = overlay.querySelector('#jhBBoss');
+  
+  // ===== 变身序列：先抖动，再裂纹，再爆炸变身 =====
+  await sleep(500);
+  
+  // 阶段1：宠物抖动
+  petEl.style.animation = 'petShake 0.4s ease-in-out infinite';
+  playTransformSound();
+  await sleep(1500);
+  
+  // 阶段2：裂纹出现
+  const crack = document.createElement('div');
+  crack.className = 'crack-lines';
+  petEl.appendChild(crack);
+  petEl.style.animation = 'petShake 0.2s ease-in-out infinite';
+  await sleep(1000);
+  
+  // 阶段3：爆裂变身
+  playExplosionSound();
+  const explode = document.createElement('div');
+  explode.className = 'crack-overlay';
+  petEl.appendChild(explode);
+  createHitExplosion(petEl, true);
+  // 屏幕震动
+  scene.classList.add('jh-screen-shake');
+  await sleep(600);
+  scene.classList.remove('jh-screen-shake');
+  
+  // 阶段4：替换为战斗兽宠图片
+  petEl.style.animation = '';
+  if (monsterImg) {
+    petEl.innerHTML = `<img src="${monsterImg}" alt="战斗兽宠" style="width:100%;height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 0 15px rgba(255,80,0,0.5)) drop-shadow(0 8px 20px rgba(0,0,0,0.7));">`;
+  }
+  playExplosionSound();
+  await sleep(1000);
+  
+  // 进入战斗状态
+  petEl.querySelectorAll('img').forEach(el => { 
+    el.style.opacity = '1'; 
+    el.style.filter = 'drop-shadow(0 0 15px rgba(255,80,0,0.5)) drop-shadow(0 8px 20px rgba(0,0,0,0.7))'; 
+  });
+
   let petHp = petMaxHP;
   let bossHp = bossMaxHP;
   let turn = 0;
-  const petEl = overlay.querySelector('#jhBPet');
-  const bossEl = overlay.querySelector('#jhBBoss');
   const comboTexts = ['破！', '斩！', '杀！', '连击！', '绝杀！'];
 
   // HP条更新函数
