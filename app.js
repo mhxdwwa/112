@@ -1656,6 +1656,10 @@ function renderClassTopThree(){
 function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');}else if(pageId==='jianghu-page')renderJianghuPage();});}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
+  /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
+  if(window._cloudMode){
+    return;
+  }
   init();
   /* ---- EXE 桌面模式：通过 URL #desktop 标记立即判断 ---- */
   if(window.location.hash === '#desktop'){
