@@ -165,32 +165,12 @@ async function loadFromSupabase() {
     }
 
     // 过滤掉已标记删除的班级（防止删除后重新出现）
-    // 同时检测并删除 Supabase 中的孤儿班级（本地不存在但 Supabase 中残留的）
-    var localData = null;
-    try {
-      var saved = localStorage.getItem('classPetData');
-      if (saved) localData = JSON.parse(saved);
-    } catch (e) {}
-    var localClassNames = {};
-    if (localData && Array.isArray(localData)) {
-      localData.forEach(function(lc) { localClassNames[lc.name] = true; });
-    }
-    var hasLocalData = localData && Array.isArray(localData) && localData.length > 0;
-
     var filteredClasses = [];
     for (var fi = 0; fi < supaClasses.length; fi++) {
       var sc = supaClasses[fi];
       // 已标记删除的，跳过
       if (_deletedSupaClassIds[String(sc.id)]) {
         console.log('[DAL] Skipping deleted Supabase class:', sc.id);
-        continue;
-      }
-      // 如果本地有数据，且 Supabase 班级名在本地不存在，说明是孤儿
-      if (hasLocalData && !localClassNames[sc.name]) {
-        console.log('[DAL] Detected orphan class in Supabase:', sc.id, sc.name, '- marking deleted');
-        _markClassDeleted(sc.id);
-        // 不再异步删除（会与 _syncToSupabase 产生竞态条件）
-        // 由 _syncToSupabase 的孤儿清理统一处理
         continue;
       }
       filteredClasses.push(sc);
@@ -2168,6 +2148,15 @@ async function _syncStudentToSupabase() {
   console.log('[DAL] Student syncing data for:', student.name);
 
   // 1. 直接推送本地学生数据到 Supabase（本地数据永远优先，不合并）
+  // 映射 activePetId 到 Supabase ID
+  var supaActivePetId = student.activePetId;
+  if (supaActivePetId) {
+    var mappedPetId = _idMap.pets[_petKey(String(classObj.id), studentId, supaActivePetId)];
+    if (mappedPetId) {
+      supaActivePetId = mappedPetId;
+    }
+  }
+  
   var stuUpd = await db.from('students')
     .update({
       coins: student.coins || 0,
@@ -2175,7 +2164,7 @@ async function _syncStudentToSupabase() {
       equipped_items: JSON.stringify(student.equippedItems || {}),
       last_checkin_date: student.lastCheckinDate || null,
       last_jianghu_date: student.lastJianghuDate || null,
-      active_pet_id: student.activePetId || null,
+      active_pet_id: supaActivePetId || null,
       pk_count_today: student.pkCountToday || 0,
       last_pk_date: student.lastPkDate || null
     })
@@ -2185,11 +2174,16 @@ async function _syncStudentToSupabase() {
     throw new Error('学生数据同步失败: ' + stuUpd.error.message);
   }
 
-  // 2. 同步每只宠物（批量处理）
+  // 2. 同步每只宠物（批量处理）- 使用 _idMap 映射到 Supabase ID
   var petsToUpdate = [];
   for (var k = 0; k < (student.pets || []).length; k++) {
     var pet = student.pets[k];
-    var supaPetId = pet.id;
+    // 通过 _idMap 查找 Supabase 中的宠物 ID
+    var supaPetId = _idMap.pets[_petKey(String(classObj.id), studentId, pet.id)];
+    if (!supaPetId) {
+      // 如果 _idMap 中没有，尝试直接使用 pet.id（可能是 Supabase ID）
+      supaPetId = pet.id;
+    }
     if (supaPetId && _safeInt(supaPetId) !== null) {
       petsToUpdate.push({
         id: _safeInt(supaPetId),
