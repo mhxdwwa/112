@@ -3,6 +3,10 @@
 // 负责 Supabase 与 localStorage 之间的数据同步
 // =====================================================
 
+// DAL 版本号 — 修改代码时必须更新
+// 版本变化时自动清除 localStorage 中的旧缓存，防止旧数据覆盖云端
+var _DAL_VERSION = '3.0';
+
 var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
@@ -159,10 +163,15 @@ async function loadFromSupabase() {
     }
 
     var supaClasses = classResult.data || [];
+    console.log('[DAL] Supabase returned', supaClasses.length, 'classes for teacher', currentUser.id);
     if (supaClasses.length === 0) {
       console.log('[DAL] No classes in Supabase yet');
       return false;
     }
+    // 打印所有班级名称（调试用）
+    supaClasses.forEach(function(sc) {
+      console.log('[DAL]   Class id=' + sc.id + ' name=' + sc.name);
+    });
 
     // 不再使用 _deletedSupaClassIds 过滤 — 直接加载 Supabase 中所有班级
     // 已删除的班级由教师手动操作，不应被 localStorage 缓存误删
@@ -375,6 +384,8 @@ async function loadFromSupabase() {
     ]);
 
     console.log('[DAL] Loaded from Supabase:', newClassesData.length, 'classes');
+    // 验证：打印最终 classesData 的班级信息
+    console.log('[DAL] Final classesData has', classesData.length, 'classes:', classesData.map(function(c) { return c.name + '(' + c.students.length + '人)'; }).join(', '));
     return true;
   } catch (e) {
     console.error('[DAL] loadFromSupabase error:', e);
@@ -538,7 +549,7 @@ async function _loadStudentFromSupabase() {
 var _realtimeChannel = null;
 var _refreshTimer = null;
 var _lastRefreshTime = 0;
-var _refreshInterval = 5000;  // 每5秒轮询一次
+var _refreshInterval = 3000;  // 每3秒轮询一次（兜底 Realtime）
 
 // 教师端：从 Supabase 重新加载最新数据（不覆盖 Supabase 数据）
 async function _refreshFromSupabase() {
@@ -556,34 +567,48 @@ async function _refreshFromSupabase() {
     }
     // 重新渲染
     if (typeof init === 'function') {
+      // 保持当前班级选择不变
       var savedClassId = currentClassId;
       init();
+      // 恢复之前的班级选择
       if (savedClassId && classesData.some(function(c) { return c.id === savedClassId; })) {
         currentClassId = savedClassId;
-        if (typeof renderClassTabs === 'function') renderClassTabs();
-        if (typeof renderHomePetGrid === 'function') renderHomePetGrid();
+      } else if (classesData.length > 0) {
+        currentClassId = classesData[0].id;
       }
+      // 重新渲染班级列表和宠物网格
+      if (typeof renderClassList === 'function') renderClassList();
+      if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
     }
   } catch (e) {
     console.warn('[DAL] refresh error:', e);
   }
 }
 
-// 设置 Realtime 订阅（监听 students 和 pets 表变更）
+// 设置 Realtime 订阅（监听 classes、students 和 pets 表变更）
 function _setupRealtimeSubscriptions() {
   if (!db || !currentUser) return;
   if (_realtimeChannel) return;  // 已设置
 
   try {
-    // Supabase Realtime: 监听 pets 表变更（学生操作宠物会更新此表）
+    // Supabase Realtime: 监听 classes、pets、students 表变更
     _realtimeChannel = db.channel('dal-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'classes'
+      }, function(payload) {
+        console.log('[DAL Realtime] classes changed:', payload.eventType, payload.new?.id || payload.old?.id);
+        _lastRefreshTime = 0;  // 立即允许刷新
+        _refreshFromSupabase();
+      })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'pets'
       }, function(payload) {
         console.log('[DAL Realtime] pets changed:', payload.eventType, payload.new?.id || payload.old?.id);
-        _lastRefreshTime = 0;  // 立即允许刷新
+        _lastRefreshTime = 0;
         _refreshFromSupabase();
       })
       .on('postgres_changes', {
@@ -2185,6 +2210,28 @@ async function initDAL() {
 
   _loadIdMap();
   _loadDeletedClassIds();
+
+  // ===== 版本检查：清除旧版 localStorage 缓存 =====
+  var storedVersion = localStorage.getItem('_dalVersion');
+  if (storedVersion !== _DAL_VERSION) {
+    console.log('[DAL] Version changed:', storedVersion, '→', _DAL_VERSION, '— clearing stale localStorage caches');
+    // 清除可能导致问题的旧缓存
+    try {
+      localStorage.removeItem('_dalDeletedClassIds');
+      _deletedSupaClassIds = {};
+      // 清除旧的 classPetData（防止旧数据覆盖云端）
+      localStorage.removeItem('classPetData');
+      // 重置 classesData 为空，让 Supabase 成为唯一数据源
+      if (typeof classesData !== 'undefined') {
+        classesData = [];
+      }
+      _idMap = { students: {}, pets: {}, classes: {} };
+      _saveIdMap();
+    } catch (e) {
+      console.warn('[DAL] Failed to clear caches:', e);
+    }
+    localStorage.setItem('_dalVersion', _DAL_VERSION);
+  }
 
   // 清理30天前的已删除记录（防止无限增长）
   var thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
