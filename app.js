@@ -4136,8 +4136,8 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
   // 阶段1：机器人立即出现（无抖动碎裂）
   // 左侧宠物朝右（不翻转），右侧宠物朝左（翻转）
   // 驾驶舱位置先不设置top/left，等图片加载后用JS计算
-  const cockpitHtml1 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.50" data-cy="0.56"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
-  const cockpitHtml2 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.50" data-cy="0.56"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml1 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.50" data-cy="0.38"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml2 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.50" data-cy="0.38"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
   
   img1.innerHTML = `
     <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
@@ -4251,19 +4251,19 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const targetSize = 90;
-      // 左侧：飞向机甲肚子处的透明玻璃驾驶舱（cx=0.50, cy=0.56）
+      // 左侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.50, cy=0.38）
       const targetX1 = mecha1Bounds.left + mecha1Bounds.width * 0.50 - targetSize/2;
-      const targetY1 = mecha1Bounds.top + mecha1Bounds.height * 0.56 - targetSize/2;
+      const targetY1 = mecha1Bounds.top + mecha1Bounds.height * 0.38 - targetSize/2;
       petFly1.style.width = targetSize + 'px';
       petFly1.style.height = targetSize + 'px';
       petFly1.style.left = targetX1 + 'px';
       petFly1.style.top = targetY1 + 'px';
       petFly1.style.opacity = '0.6';
       
-      // 右侧：飞向机甲肚子处的透明玻璃驾驶舱（cx=0.50, cy=0.56）
+      // 右侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.50, cy=0.38）
       const targetSize2 = 90;
       const targetX2 = mecha2Bounds.left + mecha2Bounds.width * 0.50 - targetSize2/2;
-      const targetY2 = mecha2Bounds.top + mecha2Bounds.height * 0.56 - targetSize2/2;
+      const targetY2 = mecha2Bounds.top + mecha2Bounds.height * 0.38 - targetSize2/2;
       petFly2.style.width = targetSize2 + 'px';
       petFly2.style.height = targetSize2 + 'px';
       petFly2.style.left = targetX2 + 'px';
