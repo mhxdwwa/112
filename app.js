@@ -1663,7 +1663,7 @@ function renderClassTopThree(){
     fullListEl.innerHTML=listHtml;
   }
 }
-function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probeMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeMonsterImages();}});}
+function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
@@ -1899,56 +1899,94 @@ function resetPKSelection() {
 }
 
 // ========== 战斗兽宠系统 ==========
-// 预探测战斗兽宠文件夹中实际存在的图片
-let _leftMonsterCache = []; // 存放已确认存在的左侧图片路径
-let _rightMonsterCache = []; // 存放已确认存在的右侧图片路径
-let _monsterProbed = false;
+// 两套独立的图片池，严格区分用途：
+// 1. _pkMonsterPool — 仅数字命名图片 → 用于宠物PK对战
+// 2. _jhBossPool    — 仅中文命名图片 → 用于萌萌江湖行
+let _pkMonsterPool = [];
+let _jhBossPool = [];
+let _pkMonsterProbed = false;
+let _jhBossProbed = false;
 
-function probeMonsterImages() {
+// 宠物PK对战：探测数字命名图片（1.png, 01.png, 010.png 等）
+function probePKMonsterImages() {
   return new Promise((resolve) => {
-    if(_monsterProbed) { resolve(); return; }
+    if(_pkMonsterProbed) { resolve(); return; }
     let pending = 0;
     let resolved = false;
-    const finish = () => { if(!resolved) { resolved = true; _monsterProbed = true; resolve(); } };
+    const finish = () => { if(!resolved) { resolved = true; _pkMonsterProbed = true; resolve(); } };
     const checkDone = () => { pending--; if(pending <= 0) finish(); };
-    // 探测左侧: 1.png ~ 50.png
-    for(let i = 1; i <= 50; i++) {
+    const seen = new Set();
+    function tryPath(path) {
       pending++;
       const img = new Image();
-      const path = `战斗兽宠文件夹/${i}.png`;
-      img.onload = () => { _leftMonsterCache.push(path); checkDone(); };
+      img.onload = () => { if(!seen.has(path)) { seen.add(path); _pkMonsterPool.push(path); } checkDone(); };
       img.onerror = () => { checkDone(); };
       img.src = path;
     }
-    // 探测右侧: 01.png ~ 050.png (0+数字格式)
     for(let i = 1; i <= 50; i++) {
-      pending++;
-      const img = new Image();
-      const path = `战斗兽宠文件夹/0${i}.png`;
-      img.onload = () => { _rightMonsterCache.push(path); checkDone(); };
-      img.onerror = () => { checkDone(); };
-      img.src = path;
+      tryPath(`战斗兽宠文件夹/${i}.png`);
+      tryPath(`战斗兽宠文件夹/0${i}.png`);
     }
-    // 安全超时 - 增加到5秒，给图片更多加载时间
+    for(let i = 10; i <= 50; i++) {
+      const padded3 = String(i).padStart(3, '0');
+      tryPath(`战斗兽宠文件夹/${padded3}.png`);
+    }
     setTimeout(finish, 5000);
   });
 }
 
+// 萌萌江湖行：探测中文命名图片（天山剑魔.png 等）
+function probeJhBossImages() {
+  return new Promise((resolve) => {
+    if(_jhBossProbed) { resolve(); return; }
+    let pending = 0;
+    let resolved = false;
+    const finish = () => { if(!resolved) { resolved = true; _jhBossProbed = true; resolve(); } };
+    const checkDone = () => { pending--; if(pending <= 0) finish(); };
+    const seen = new Set();
+    function tryPath(path) {
+      pending++;
+      const img = new Image();
+      img.onload = () => { if(!seen.has(path)) { seen.add(path); _jhBossPool.push(path); } checkDone(); };
+      img.onerror = () => { checkDone(); };
+      img.src = path;
+    }
+    const jhBossNames = ['天山剑魔','幽冥鬼母','毒手药王','血刀老祖','铁面判官'];
+    jhBossNames.forEach(name => tryPath(`战斗兽宠文件夹/${name}.png`));
+    setTimeout(finish, 5000);
+  });
+}
+
+// 兼容旧调用：probeMonsterImages 同时探测两套
+function probeMonsterImages() {
+  return Promise.all([probePKMonsterImages(), probeJhBossImages()]);
+}
+
+// 宠物PK对战：随机从数字命名池取图
 function getLeftMonsterImg() {
-  if(_leftMonsterCache.length > 0) {
-    return _leftMonsterCache[Math.floor(Math.random() * _leftMonsterCache.length)];
+  if(_pkMonsterPool.length > 0) {
+    return _pkMonsterPool[Math.floor(Math.random() * _pkMonsterPool.length)];
   }
   return null;
 }
 function getRightMonsterImg() {
-  if(_rightMonsterCache.length > 0) {
-    return _rightMonsterCache[Math.floor(Math.random() * _rightMonsterCache.length)];
+  if(_pkMonsterPool.length > 0) {
+    return _pkMonsterPool[Math.floor(Math.random() * _pkMonsterPool.length)];
   }
   return null;
 }
 
-// 延迟到 PK 页面打开时再探测（不在页面加载时探测，减少初始请求）
-// probeMonsterImages() 将在 switchPage('pk-page') 时按需调用
+// 萌萌江湖行：随机从中文命名池取图
+function getJhBossMonsterImg() {
+  if(_jhBossPool.length > 0) {
+    return _jhBossPool[Math.floor(Math.random() * _jhBossPool.length)];
+  }
+  return null;
+}
+
+// 延迟到对应页面打开时再探测
+// probePKMonsterImages() 将在 switchPage('pk-page') 时按需调用
+// probeJhBossImages() 将在进入江湖行时按需调用
 
 // 音效系统
 function playTransformSound() {
@@ -3029,8 +3067,8 @@ function startPKBattle() {
   pkState.isFighting = true;
   const p1 = pkState.players[0];
   const p2 = pkState.players[1];
-  // 确保图片探测完成后再开始
-  probeMonsterImages().then(() => {
+  // 确保PK数字命名图片探测完成后再开始
+  probePKMonsterImages().then(() => {
     const leftMonster = getLeftMonsterImg();
     const rightMonster = getRightMonsterImg();
     const modalContent = `
@@ -3123,19 +3161,11 @@ async function runTransformSequence(student1, student2, p1, p2, leftMonster, rig
   await sleep(600);
   if(arena) arena.classList.remove('screen-shake');
 
-  // 阶段4：替换为战斗兽宠图片
+  // 阶段4：替换为战斗兽宠图片（必须使用战斗兽宠文件夹中的数字命名图片）
   img1.style.animation = '';
   img2.style.animation = '';
-  if(leftMonster) {
-    img1.innerHTML = `<img src="${leftMonster}" alt="战斗兽宠" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 0 20px rgba(255,80,0,0.6)) drop-shadow(0 10px 30px rgba(0,0,0,0.9));">`;
-  } else {
-    img1.innerHTML = `<span style="font-size:120px;opacity:0;animation:monsterReveal 0.8s ease-out forwards;display:inline-block;filter:drop-shadow(0 0 20px rgba(255,80,0,0.6));">🐲</span>`;
-  }
-  if(rightMonster) {
-    img2.innerHTML = `<img src="${rightMonster}" alt="战斗兽宠" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 0 20px rgba(255,80,0,0.6)) drop-shadow(0 10px 30px rgba(0,0,0,0.9));">`;
-  } else {
-    img2.innerHTML = `<span style="font-size:120px;opacity:0;animation:monsterReveal 0.8s ease-out forwards;display:inline-block;filter:drop-shadow(0 0 20px rgba(255,80,0,0.6));">🦖</span>`;
-  }
+  img1.innerHTML = `<img src="${leftMonster}" alt="战斗兽宠" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 0 20px rgba(255,80,0,0.6)) drop-shadow(0 10px 30px rgba(0,0,0,0.9));">`;
+  img2.innerHTML = `<img src="${rightMonster}" alt="战斗兽宠" style="max-width:100%;max-height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 0 20px rgba(255,80,0,0.6)) drop-shadow(0 10px 30px rgba(0,0,0,0.9));">`;
   playExplosionSound();
   await sleep(1000);
 
@@ -5197,7 +5227,7 @@ function jhGenBattleBuildingsSVG() {
 
 function launchJianghuGame(student, pet, investCoins) {
   // Start probing monster images early so they're ready for battle
-  probeMonsterImages();
+  probeJhBossImages();
   const boss = jhBosses[Math.floor(Math.random() * jhBosses.length)];
   const petImgHTML = getPetImage(pet.name, pet.level);
   // Extract just the image src from getPetImage HTML
@@ -5287,11 +5317,11 @@ function runJianghuJourney(overlay, boss, student, pet, investCoins, petVisual) 
 async function startJianghuBattle(overlay, boss, student, pet, investCoins, petVisual) {
   const scene = overlay.querySelector('#jhScene');
 
-  // Wait for monster images probe to complete before selecting images
-  await probeMonsterImages();
+  // 等待江湖boss中文命名图片探测完成
+  await probeJhBossImages();
   
-  // 随机选取战斗兽宠图片
-  const monsterImg = getLeftMonsterImg() || getRightMonsterImg();
+  // 随机选取江湖boss战斗兽宠图片（中文命名）
+  const monsterImg = getJhBossMonsterImg();
   
   // ===== 全新战斗系统：前4回合完全公平，第5回合起微调，终结一击慢动作 =====
   const willWin = Math.random() < 0.20; // 胜率20%
