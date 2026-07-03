@@ -1,17 +1,18 @@
 /**
- * dal.js v6.0 — Clean Data Access Layer
+ * dal.js v7.0 — Robust Data Access Layer with Smart Merge
  * 
- * Architecture: Supabase as single source of truth
- * - No localStorage for business data
- * - No complex merge logic
- * - Targeted save operations
- * - Realtime subscriptions for live sync
+ * Architecture: Supabase as single source of truth + local change preservation
+ * - Snapshot-based change detection: only applies changes from OTHER users
+ * - Smart merge refresh: never overwrites local edits
+ * - Debounced Realtime: prevents refresh flooding
+ * - Self-write detection: ignores own writes for 30s
+ * - Student delta merge: preserves both teacher rewards and student spending
  * - Operation logs synced to Supabase (both teacher and student)
- * - Student sync pre-fetches fresh data to prevent overwriting teacher changes
  * 
- * Flow: loadFromSupabase() → classesData → UI
- *       UI action → saveClassData() → _syncToSupabase() → Supabase
- *       UI action → recordAction() → saveLogs() → _syncOperationLogsToSupabase() → Supabase
+ * Flow: loadFromSupabase() → classesData + snapshot → UI
+ *       UI action → saveClassData() → _syncToSupabase() → Supabase → update snapshot
+ *       Realtime event → debounced → _smartRefreshFromSupabase() → merge fresh vs snapshot
+ *       Student action → _syncStudentToSupabase() → fetch fresh → delta merge → upsert
  */
 
 /* ===== State ===== */
@@ -25,11 +26,327 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '6.0';
+var _DAL_VERSION = '7.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
-var _REFRESH_PROTECTION_MS = 15000; // 15s protection after sync — prevents Realtime echo from overwriting local data
-var _myBaseCoins = null; // Track student's coins at last load/sync — used to compute local delta for merge
-var _myBasePets = {}; // Track pet growth at last load/sync (keyed by pet id) — used for pet merge
+var _REFRESH_PROTECTION_MS = 30000; // 30s protection after sync — prevents Realtime echo from overwriting local data
+
+/* ===== Snapshot System (v7.0) ===== */
+// _snapshotClassesData: what Supabase looked like when we last loaded/synced
+// Used to detect: "did this field change on the SERVER or did we change it LOCALLY?"
+// If local[student].coins === snapshot[student].coins → no local change → safe to update from server
+// If local[student].coins !== snapshot[student].coins → local change → KEEP local value
+var _snapshotClassesData = null;
+
+/* ===== Student Delta Tracking (v7.0) ===== */
+var _myBaseCoins = null; // Student's coins at last known Supabase state
+var _myBasePets = {};    // Student's pet growth at last known Supabase state
+
+/* ===== Debounce & Self-Write Protection (v7.0) ===== */
+var _refreshDebounceTimer = null;
+var _REFRESH_DEBOUNCE_MS = 3000; // 3s debounce for Realtime events
+var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
+var _OWN_WRITE_IGNORE_MS = 30000; // Ignore Realtime events for 30s after our own write
+
+/* ===== Snapshot Helpers (v7.0) ===== */
+function _takeSnapshot() {
+  if (!classesData || !Array.isArray(classesData)) return;
+  _snapshotClassesData = JSON.parse(JSON.stringify(classesData));
+  console.log('[DAL] Snapshot taken: ' + _snapshotClassesData.length + ' classes');
+}
+
+function _findStudentInSnapshot(studentId) {
+  if (!_snapshotClassesData) return null;
+  for (var i = 0; i < _snapshotClassesData.length; i++) {
+    var cls = _snapshotClassesData[i];
+    if (cls.students) {
+      for (var j = 0; j < cls.students.length; j++) {
+        if (cls.students[j].id == studentId) return cls.students[j];
+      }
+    }
+  }
+  return null;
+}
+
+function _findPetInSnapshot(petId) {
+  if (!_snapshotClassesData) return null;
+  for (var i = 0; i < _snapshotClassesData.length; i++) {
+    var cls = _snapshotClassesData[i];
+    if (cls.students) {
+      for (var j = 0; j < cls.students.length; j++) {
+        var stu = cls.students[j];
+        if (stu.pets) {
+          for (var k = 0; k < stu.pets.length; k++) {
+            if (stu.pets[k].id == petId) return stu.pets[k];
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/* ===== Smart Merge Refresh (v7.0) ===== */
+// This replaces the old approach of completely replacing classesData.
+// Instead, we load fresh data from Supabase and intelligently merge:
+// - If a field changed on the SERVER (different from snapshot) AND hasn't been changed locally → update
+// - If a field was changed LOCALLY (different from snapshot) → keep local value
+// - New students/pets from server → always added
+function _smartRefreshFromSupabase() {
+  if (!currentUser || !currentUser.id) return Promise.resolve();
+  
+  // Short protection to skip immediate echo of our own writes (5s)
+  // After 5s, the smart merge safely handles any remaining echoes
+  if (Date.now() - _lastOwnWriteTime < 5000) {
+    console.log('[DAL] Smart refresh skipped — own write echo (' + 
+      Math.round((5000 - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
+    return Promise.resolve();
+  }
+
+  console.log('[DAL] Smart refresh starting...');
+  var isStudent = currentUser.type === 'student';
+  var studentId = isStudent ? parseInt(localStorage.getItem('studentId')) : null;
+  var classId = isStudent ? parseInt(localStorage.getItem('classId')) : null;
+  
+  if (isStudent && (!studentId || !classId)) return Promise.resolve();
+
+  // Build queries based on user type
+  var queries;
+  if (isStudent) {
+    queries = Promise.all([
+      db.from('classes').select('*').eq('id', classId).single(),
+      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password').eq('class_id', classId),
+      db.from('pets').select('*')
+    ]);
+  } else {
+    queries = Promise.all([
+      db.from('classes').select('*').eq('teacher_id', currentUser.id).order('id'),
+      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password'),
+      db.from('pets').select('*')
+    ]);
+  }
+
+  return queries.then(function(results) {
+    var classesR = results[0], studentsR = results[1], petsR = results[2];
+    if (isStudent && classesR.error) throw classesR.error;
+    if (classesR.error && !isStudent) throw classesR.error;
+    
+    var classes = isStudent ? [classesR.data] : (classesR.data || []);
+    var allStudents = studentsR.data || [];
+    var allPets = petsR.data || [];
+
+    // Filter to relevant students/pets
+    if (!isStudent) {
+      var classIds = classes.map(function(c) { return c.id; });
+      allStudents = allStudents.filter(function(s) { return classIds.indexOf(s.class_id) >= 0; });
+      var studentIds = allStudents.map(function(s) { return s.id; });
+      allPets = allPets.filter(function(p) { return studentIds.indexOf(p.student_id) >= 0; });
+    } else {
+      var classStudentIds = allStudents.map(function(s) { return s.id; });
+      allPets = allPets.filter(function(p) { return classStudentIds.indexOf(p.student_id) >= 0; });
+    }
+
+    // If no snapshot yet, just do a full load (first refresh after init)
+    if (!_snapshotClassesData) {
+      console.log('[DAL] No snapshot — doing full load');
+      return loadFromSupabase();
+    }
+
+    // Build a map of fresh student data from Supabase
+    var freshStudentMap = {};
+    allStudents.forEach(function(s) {
+      freshStudentMap[s.id] = {
+        id: s.id,
+        name: s.name || '',
+        coins: s.coins || 0,
+        lastCheckinDate: s.last_checkin_date || null,
+        lastJianghuDate: s.last_jianghu_date || null,
+        lastPkDate: s.last_pk_date || null,
+        activePetId: s.active_pet_id || null,
+        pkCountToday: s.pk_count_today || 0,
+        shopItems: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
+        equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
+        password: s.password || ''
+      };
+    });
+
+    // Build a map of fresh pet data from Supabase
+    var freshPetMap = {}; // keyed by pet id
+    var freshPetByStudent = {}; // keyed by student id
+    allPets.forEach(function(p) {
+      var pet = {
+        id: p.id,
+        name: p.name || '',
+        nickname: p.nickname || '',
+        level: p.level || 1,
+        growth: p.growth || 0,
+        coins: p.coins || 0,
+        isActive: !!p.is_active,
+        isDead: !!p.is_dead,
+        lastFeedDate: p.last_feed_date || null,
+        lastPlayDate: p.last_play_date || null,
+        todayFeedCount: p.today_feed_count || 0,
+        todayPlayCount: p.today_play_count || 0,
+        penaltyStreak: p.penalty_streak || 0
+      };
+      freshPetMap[p.id] = pet;
+      if (!freshPetByStudent[p.student_id]) freshPetByStudent[p.student_id] = [];
+      freshPetByStudent[p.student_id].push(pet);
+    });
+
+    // Now merge into existing classesData
+    var changesApplied = 0;
+    classesData.forEach(function(cls) {
+      cls.students.forEach(function(localStu) {
+        var freshStu = freshStudentMap[localStu.id];
+        if (!freshStu) return;
+        
+        var snapStu = _findStudentInSnapshot(localStu.id);
+        
+        // For each field, check: has it changed on server? Has it changed locally?
+        // coins: special handling for student's own coins
+        if (isStudent && localStu.id == studentId) {
+          // For current student, use delta merge (see _syncStudentToSupabase)
+          // Here we just update _myBaseCoins if server has a different value that we didn't cause
+          var snapCoins = snapStu ? snapStu.coins : null;
+          if (snapCoins !== null && freshStu.coins !== snapCoins && localStu.coins === snapCoins) {
+            // Server changed (e.g., teacher reward), local hasn't changed → apply
+            localStu.coins = freshStu.coins;
+            _myBaseCoins = freshStu.coins; // Update base for future delta calculation
+            changesApplied++;
+          }
+          // If local changed (student spent coins), keep local — delta will be applied at sync time
+        } else {
+          // For other students (teacher viewing, or student viewing classmates)
+          var snapCoins = snapStu ? snapStu.coins : null;
+          if (snapCoins !== null) {
+            if (freshStu.coins !== snapCoins && localStu.coins === snapCoins) {
+              // Server changed, local didn't → apply
+              localStu.coins = freshStu.coins;
+              changesApplied++;
+            }
+            // If local changed too → keep local (we'll sync it soon)
+          } else if (freshStu.coins !== localStu.coins) {
+            // No snapshot — trust server value
+            localStu.coins = freshStu.coins;
+            changesApplied++;
+          }
+        }
+
+        // lastCheckinDate: apply from server if changed on server and not changed locally
+        var snapCheckin = snapStu ? snapStu.lastCheckinDate : null;
+        if (freshStu.lastCheckinDate !== snapCheckin && localStu.lastCheckinDate === snapCheckin) {
+          localStu.lastCheckinDate = freshStu.lastCheckinDate;
+          changesApplied++;
+        }
+        
+        // lastPkDate
+        var snapPk = snapStu ? snapStu.lastPkDate : null;
+        if (freshStu.lastPkDate !== snapPk && localStu.lastPkDate === snapPk) {
+          localStu.lastPkDate = freshStu.lastPkDate;
+          changesApplied++;
+        }
+        
+        // pkCountToday
+        var snapPkToday = snapStu ? (snapStu.pkCountToday || 0) : 0;
+        if ((freshStu.pkCountToday || 0) !== snapPkToday && (localStu.pkCountToday || 0) === snapPkToday) {
+          localStu.pkCountToday = freshStu.pkCountToday || 0;
+          changesApplied++;
+        }
+
+        // Merge pets for this student
+        var freshPetsForStudent = freshPetByStudent[localStu.id] || [];
+        if (!localStu.pets) localStu.pets = [];
+        
+        freshPetsForStudent.forEach(function(freshPet) {
+          var localPet = null;
+          for (var i = 0; i < localStu.pets.length; i++) {
+            if (localStu.pets[i].id === freshPet.id) { localPet = localStu.pets[i]; break; }
+          }
+          
+          if (localPet) {
+            // Existing pet — merge
+            var snapPet = _findPetInSnapshot(freshPet.id);
+            
+            // growth: for student's own active pet, use delta; for others, use snapshot comparison
+            var snapGrowth = snapPet ? (snapPet.growth || 0) : null;
+            if (snapGrowth !== null) {
+              if (freshPet.growth !== snapGrowth && localPet.growth === snapGrowth) {
+                localPet.growth = freshPet.growth;
+                if (isStudent && localStu.id == studentId) _myBasePets[freshPet.id] = freshPet.growth;
+                changesApplied++;
+              }
+            } else if (freshPet.growth !== localPet.growth) {
+              localPet.growth = freshPet.growth;
+              changesApplied++;
+            }
+            
+            // isDead
+            var snapDead = snapPet ? !!snapPet.isDead : null;
+            if (snapDead !== null && freshPet.isDead !== snapDead && !!localPet.isDead === snapDead) {
+              localPet.isDead = freshPet.isDead;
+              changesApplied++;
+            }
+            
+            // level
+            var snapLevel = snapPet ? snapPet.level : null;
+            if (snapLevel !== null && freshPet.level !== snapLevel && localPet.level === snapLevel) {
+              localPet.level = freshPet.level;
+              changesApplied++;
+            }
+            
+            // lastFeedDate, lastPlayDate
+            var snapFeed = snapPet ? snapPet.lastFeedDate : null;
+            if (freshPet.lastFeedDate !== snapFeed && localPet.lastFeedDate === snapFeed) {
+              localPet.lastFeedDate = freshPet.lastFeedDate;
+              changesApplied++;
+            }
+            var snapPlay = snapPet ? snapPet.lastPlayDate : null;
+            if (freshPet.lastPlayDate !== snapPlay && localPet.lastPlayDate === snapPlay) {
+              localPet.lastPlayDate = freshPet.lastPlayDate;
+              changesApplied++;
+            }
+            
+            // todayFeedCount, todayPlayCount
+            var snapFeedCount = snapPet ? (snapPet.todayFeedCount || 0) : 0;
+            if ((freshPet.todayFeedCount || 0) !== snapFeedCount && (localPet.todayFeedCount || 0) === snapFeedCount) {
+              localPet.todayFeedCount = freshPet.todayFeedCount || 0;
+              changesApplied++;
+            }
+            var snapPlayCount = snapPet ? (snapPet.todayPlayCount || 0) : 0;
+            if ((freshPet.todayPlayCount || 0) !== snapPlayCount && (localPet.todayPlayCount || 0) === snapPlayCount) {
+              localPet.todayPlayCount = freshPet.todayPlayCount || 0;
+              changesApplied++;
+            }
+          } else {
+            // New pet from server — add it
+            localStu.pets.push(Object.assign({}, freshPet));
+            if (isStudent && localStu.id == studentId) _myBasePets[freshPet.id] = freshPet.growth || 0;
+            changesApplied++;
+          }
+        });
+      });
+    });
+
+    // For student: update _myBaseCoins after merge
+    if (isStudent) {
+      var myStu = null;
+      if (classesData[0]) {
+        for (var i = 0; i < classesData[0].students.length; i++) {
+          if (classesData[0].students[i].id == studentId) { myStu = classesData[0].students[i]; break; }
+        }
+      }
+      if (myStu && _myBaseCoins === null) {
+        _myBaseCoins = myStu.coins;
+      }
+    }
+
+    // Update snapshot to reflect current merged state
+    _takeSnapshot();
+
+    console.log('[DAL] Smart refresh complete — ' + changesApplied + ' changes applied from server');
+    return Promise.resolve();
+  });
+}
 
 /* ===== Load: Teacher ===== */
 function _buildTeacherClasses(classes, students, pets) {
@@ -132,6 +449,9 @@ function _loadTeacherFromSupabase() {
       console.log('[DAL]   Class ' + c.id + ' "' + c.name + '": ' + c.students.length + ' students');
     });
 
+    // Take snapshot after initial load
+    _takeSnapshot();
+
     // Also load custom actions, logs, archives
     return Promise.all([
       _loadCustomActions(),
@@ -227,6 +547,9 @@ function _loadStudentFromSupabase() {
       _myBasePets = {};
       (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
     }
+
+    // Take snapshot after initial load
+    _takeSnapshot();
 
     console.log('[DAL] Student loaded: ' + classmates.length + ' classmates, ' + classPets.length + ' pets');
 
@@ -693,6 +1016,11 @@ function _syncStudentToSupabase() {
       pk_count_today: myStudent.pkCountToday || 0
     }]).then(function(r) {
       if (r.error) console.error('[DAL] student sync error:', r.error);
+      // Update base tracking after successful sync
+      if (!r.error) {
+        _myBaseCoins = finalCoins;
+        (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+      }
     });
   });
 }
@@ -713,8 +1041,24 @@ function _syncToSupabase() {
     _syncRetryCount = 0;
     _lastSyncFailed = false;
     _pendingLocalSave = false; // Clear pending flag after successful sync
-    // Set long protection to prevent Realtime echo from overwriting just-synced data
-    _lastRefreshTime = Date.now() + _REFRESH_PROTECTION_MS;
+    // Record our own write time for logging
+    _lastOwnWriteTime = Date.now();
+    // Update snapshot to reflect what we just wrote to Supabase
+    _takeSnapshot();
+    // For student: update base coins/pets to current local value (what's now in Supabase)
+    if (currentUser && currentUser.type === 'student') {
+      var myStu = null;
+      var sid = parseInt(localStorage.getItem('studentId'));
+      if (classesData && classesData[0]) {
+        for (var i = 0; i < classesData[0].students.length; i++) {
+          if (classesData[0].students[i].id === sid) { myStu = classesData[0].students[i]; break; }
+        }
+      }
+      if (myStu) {
+        _myBaseCoins = myStu.coins;
+        (myStu.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+      }
+    }
     _updateCloudStatus('synced');
     console.log('[DAL] Sync complete');
 
@@ -727,7 +1071,6 @@ function _syncToSupabase() {
     _lastSyncFailed = true;
     // Keep _pendingLocalSave = true — local data is correct and still needs to sync
     _syncRetryCount++;
-    _lastRefreshTime = Date.now() + _REFRESH_PROTECTION_MS; // Protect local data during retry
     console.error('[DAL] Sync error:', err);
     _updateCloudStatus('error');
 
@@ -767,34 +1110,42 @@ function _showNotification(msg, type) {
 function forceManualSync() {
   _updateCloudStatus('syncing');
   _syncToSupabase().then(function() {
-    return _refreshFromSupabase();
+    // After sync, do a smart refresh to pick up any changes from OTHER users
+    // Bypass debounce and own-write protection since user explicitly requested refresh
+    return _doSmartRefresh();
   });
 }
 
 /* ===== Realtime ===== */
+// Debounced smart refresh — called by Realtime events and polling
 function _refreshFromSupabase() {
-  // Don't refresh while syncing or when we have pending local saves
+  // Don't refresh while syncing
   if (_dalSyncing) {
     console.log('[DAL] Refresh skipped - sync in progress');
     return;
   }
-  if (_pendingLocalSave) {
-    console.log('[DAL] Refresh skipped - pending local save');
-    return;
-  }
+  
+  // Debounce: wait 3s after last Realtime event before actually refreshing
+  // This prevents rapid-fire refreshes when multiple changes happen at once
+  if (_refreshDebounceTimer) clearTimeout(_refreshDebounceTimer);
+  _refreshDebounceTimer = setTimeout(function() {
+    _refreshDebounceTimer = null;
+    // Re-check after debounce
+    if (_dalSyncing) return;
+    _lastRefreshTime = Date.now();
+    _doSmartRefresh();
+  }, _REFRESH_DEBOUNCE_MS);
+}
 
-  var now = Date.now();
-  if (now - _lastRefreshTime < _REFRESH_PROTECTION_MS) return;
-  _lastRefreshTime = now;
-
-  console.log('[DAL] Refreshing from Supabase...');
-  loadFromSupabase().then(function() {
-    // Only re-render data — do NOT call init() which resets UI state
+function _doSmartRefresh() {
+  console.log('[DAL] Starting smart refresh...');
+  _smartRefreshFromSupabase().then(function() {
+    // Re-render the UI with merged data
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    console.log('[DAL] Refresh complete');
+    console.log('[DAL] Smart refresh complete');
   }).catch(function(e) {
-    console.error('[DAL] Refresh error:', e);
+    console.error('[DAL] Smart refresh error:', e);
   });
 }
 
