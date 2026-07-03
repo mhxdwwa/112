@@ -192,7 +192,10 @@ body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe
 /* 课堂PK机甲图片强制填满容器（原图262x300太小，需要拉伸填满） */
 .modal.pk-fullscreen .pk-pet-img-container img.robot-mecha-img{width:100%!important;height:100%!important;object-fit:contain!important;}
 .modal.pk-fullscreen .pk-vs{z-index:2;}
-.modal.pk-fullscreen .pk-pet-side{position:relative;z-index:2;padding-top:100px;}
+.modal.pk-fullscreen .pk-pet-side{position:relative;z-index:2;padding-top:62px;}
+/* 27寸显示器(1080p)定位校准：整体上移1cm(≈38px)，左宠右移0.5cm(≈19px)，右宠左移0.5cm(≈19px) */
+.modal.pk-fullscreen .pk-pet-side:first-of-type{transform:translateX(19px);}
+.modal.pk-fullscreen .pk-pet-side:last-of-type{transform:translateX(-19px);}
 .modal.pk-fullscreen .pk-pet-name{position:absolute;top:0;left:0;right:0;text-align:center;font-size:20px;color:#fff;text-shadow:0 0 15px rgba(255,150,50,0.9),2px 2px 6px #000;letter-spacing:1px;z-index:10;pointer-events:none;}
 .modal.pk-fullscreen .pk-hp-bar-container{position:absolute;top:33px;left:50%;transform:translateX(-50%);width:80%;max-width:400px;height:20px;border-radius:10px;background:rgba(30,0,0,0.9);border:2px solid rgba(255,80,80,0.4);box-shadow:0 0 10px rgba(255,0,0,0.3);z-index:10;pointer-events:none;}
 .modal.pk-fullscreen .pk-hp-bar{height:100%;border-radius:8px;}
