@@ -2918,14 +2918,11 @@ function createHitExplosion(container, isCritical) {
 
 // 显示伤害数字
 function showDamageNumber(container, damage, isCritical, isCombo) {
-  const arena = container.closest('.pk-arena');
-  const target = arena || document.body;
-  const targetRect = target.getBoundingClientRect();
   const rect = container.getBoundingClientRect();
   
   const dmgEl = document.createElement('div');
   dmgEl.style.cssText = `
-    position: absolute;
+    position: fixed;
     font-size: 32px;
     font-weight: 900;
     color: #ff5555;
@@ -2933,8 +2930,8 @@ function showDamageNumber(container, damage, isCritical, isCombo) {
     pointer-events: none;
     z-index: 9999;
     animation: floatUp 1.2s ease-out forwards;
-    left: ${rect.left - targetRect.left + rect.width/2 - 40 + Math.random()*30}px;
-    top: ${rect.top - targetRect.top + 10}px;
+    left: ${rect.left + rect.width/2 - 40 + Math.random()*30}px;
+    top: ${rect.top + 10}px;
   `;
   
   if(isCritical) {
@@ -2951,8 +2948,7 @@ function showDamageNumber(container, damage, isCritical, isCombo) {
     dmgEl.innerHTML = `受到攻击! -${damage}`;
   }
   
-  target.style.position = 'relative';
-  target.appendChild(dmgEl);
+  document.body.appendChild(dmgEl);
   setTimeout(() => dmgEl.remove(), 1200);
 }
 
