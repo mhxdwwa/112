@@ -3253,7 +3253,12 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     const dmgCap = Math.floor(defMaxHP * 0.32);
     finalDmg = Math.min(finalDmg, dmgCap);
     defHP -= finalDmg;
-    await new Promise(resolve => playSkillAttack(atkImg, defImg, isCrit, skill, resolve));
+    await new Promise(resolve => {
+      let resolved = false;
+      const safeResolve = () => { if(!resolved) { resolved = true; resolve(); } };
+      playSkillAttack(atkImg, defImg, isCrit, skill, safeResolve);
+      setTimeout(safeResolve, 3000); // 安全超时：3秒后强制继续
+    });
     defImg.classList.add('hit-flash');
     showDamageNumber(defImg, finalDmg, isCrit, isComboAttack);
     showAttackDamageText(atkImg, finalDmg, isCrit, isComboAttack);
@@ -4134,8 +4139,8 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
   // 左侧宠物朝右（不翻转），右侧宠物朝左（翻转）
   // 驾驶舱位置先不设置top/left，等图片加载后用JS计算
   // 驾驶舱缩小到60px，位置微调：整体下移0.5cm，左宠物右移0.3cm，右宠物左移0.3cm
-  const cockpitHtml1 = `<div style="position:absolute;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.513" data-cy="0.46"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
-  const cockpitHtml2 = `<div style="position:absolute;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.487" data-cy="0.46"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml1 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.513" data-cy="0.44"><img src="${pet1Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
+  const cockpitHtml2 = `<div style="position:absolute;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;z-index:5;display:none;" class="cockpit-pet" data-cx="0.487" data-cy="0.44"><img src="${pet2Img}" style="width:90%;height:90%;object-fit:contain;margin:5% auto;display:block;transform:scaleX(-1);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🐾</text></svg>'"></div>`;
   
   img1.innerHTML = `
     <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
@@ -4248,20 +4253,20 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
   // 触发飞行动画 - 目标位置基于机甲图片实际渲染区域
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      const targetSize = 60;
-      // 左侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.513, cy=0.46）
+      const targetSize = 90;
+      // 左侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.513, cy=0.44）
       const targetX1 = mecha1Bounds.left + mecha1Bounds.width * 0.513 - targetSize/2;
-      const targetY1 = mecha1Bounds.top + mecha1Bounds.height * 0.46 - targetSize/2;
+      const targetY1 = mecha1Bounds.top + mecha1Bounds.height * 0.44 - targetSize/2;
       petFly1.style.width = targetSize + 'px';
       petFly1.style.height = targetSize + 'px';
       petFly1.style.left = targetX1 + 'px';
       petFly1.style.top = targetY1 + 'px';
       petFly1.style.opacity = '0.6';
       
-      // 右侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.487, cy=0.46）
-      const targetSize2 = 60;
+      // 右侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.487, cy=0.44）
+      const targetSize2 = 90;
       const targetX2 = mecha2Bounds.left + mecha2Bounds.width * 0.487 - targetSize2/2;
-      const targetY2 = mecha2Bounds.top + mecha2Bounds.height * 0.46 - targetSize2/2;
+      const targetY2 = mecha2Bounds.top + mecha2Bounds.height * 0.44 - targetSize2/2;
       petFly2.style.width = targetSize2 + 'px';
       petFly2.style.height = targetSize2 + 'px';
       petFly2.style.left = targetX2 + 'px';
@@ -4371,7 +4376,12 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     finalDmg = Math.min(finalDmg, dmgCap);
     defHP -= finalDmg;
 
-    await new Promise(resolve => playSkillAttack(atkImg, defImg, isCrit, skill, resolve));
+    await new Promise(resolve => {
+      let resolved = false;
+      const safeResolve = () => { if(!resolved) { resolved = true; resolve(); } };
+      playSkillAttack(atkImg, defImg, isCrit, skill, safeResolve);
+      setTimeout(safeResolve, 3000); // 安全超时：3秒后强制继续
+    });
     defImg.classList.add('hit-flash');
     showDamageNumber(defImg, finalDmg, isCrit, isComboAttack);
     showAttackDamageText(atkImg, finalDmg, isCrit, isComboAttack);
