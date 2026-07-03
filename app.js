@@ -1908,15 +1908,16 @@ function probeMonsterImages() {
   return new Promise((resolve) => {
     if(_monsterProbed) { resolve(); return; }
     let pending = 0;
-    let found = 0;
-    const done = () => { pending--; found++; if(pending <= 0 || found >= 5) { _monsterProbed = true; resolve(); } };
+    let resolved = false;
+    const finish = () => { if(!resolved) { resolved = true; _monsterProbed = true; resolve(); } };
+    const checkDone = () => { pending--; if(pending <= 0) finish(); };
     // 探测左侧: 1.png ~ 50.png
     for(let i = 1; i <= 50; i++) {
       pending++;
       const img = new Image();
       const path = `战斗兽宠文件夹/${i}.png`;
-      img.onload = () => { _leftMonsterCache.push(path); done(); };
-      img.onerror = () => { done(); };
+      img.onload = () => { _leftMonsterCache.push(path); checkDone(); };
+      img.onerror = () => { checkDone(); };
       img.src = path;
     }
     // 探测右侧: 01.png ~ 050.png (0+数字格式)
@@ -1924,12 +1925,12 @@ function probeMonsterImages() {
       pending++;
       const img = new Image();
       const path = `战斗兽宠文件夹/0${i}.png`;
-      img.onload = () => { _rightMonsterCache.push(path); done(); };
-      img.onerror = () => { done(); };
+      img.onload = () => { _rightMonsterCache.push(path); checkDone(); };
+      img.onerror = () => { checkDone(); };
       img.src = path;
     }
     // 安全超时 - 增加到5秒，给图片更多加载时间
-    setTimeout(() => { _monsterProbed = true; resolve(); }, 5000);
+    setTimeout(finish, 5000);
   });
 }
 
