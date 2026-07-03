@@ -1663,7 +1663,7 @@ function renderClassTopThree(){
     fullListEl.innerHTML=listHtml;
   }
 }
-function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');}else if(pageId==='jianghu-page')renderJianghuPage();});}
+function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probeMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeMonsterImages();}});}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
@@ -1908,7 +1908,8 @@ function probeMonsterImages() {
   return new Promise((resolve) => {
     if(_monsterProbed) { resolve(); return; }
     let pending = 0;
-    const done = () => { pending--; if(pending <= 0) { _monsterProbed = true; resolve(); } };
+    let found = 0;
+    const done = () => { pending--; found++; if(pending <= 0 || found >= 5) { _monsterProbed = true; resolve(); } };
     // 探测左侧: 1.png ~ 50.png
     for(let i = 1; i <= 50; i++) {
       pending++;
@@ -1927,8 +1928,8 @@ function probeMonsterImages() {
       img.onerror = () => { done(); };
       img.src = path;
     }
-    // 安全超时
-    setTimeout(() => { _monsterProbed = true; resolve(); }, 3000);
+    // 安全超时 - 增加到5秒，给图片更多加载时间
+    setTimeout(() => { _monsterProbed = true; resolve(); }, 5000);
   });
 }
 
@@ -3080,6 +3081,14 @@ async function runTransformSequence(student1, student2, p1, p2, leftMonster, rig
   const img1 = document.getElementById('pk-img-1');
   const img2 = document.getElementById('pk-img-2');
   const vsText = document.getElementById('pk-vs-text');
+  
+  // Safety check: if elements not found, skip transform and go directly to battle
+  if (!img1 || !img2) {
+    console.warn('[PK] Transform elements not found, skipping transform sequence');
+    startPKBattleLoop(student1, student2, p1, p2);
+    return;
+  }
+  
   await sleep(500);
 
   // 阶段1：两只宠物抖动
@@ -5147,6 +5156,8 @@ function jhGenBattleBuildingsSVG() {
 }
 
 function launchJianghuGame(student, pet, investCoins) {
+  // Start probing monster images early so they're ready for battle
+  probeMonsterImages();
   const boss = jhBosses[Math.floor(Math.random() * jhBosses.length)];
   const petImgHTML = getPetImage(pet.name, pet.level);
   // Extract just the image src from getPetImage HTML
@@ -5236,6 +5247,9 @@ function runJianghuJourney(overlay, boss, student, pet, investCoins, petVisual) 
 async function startJianghuBattle(overlay, boss, student, pet, investCoins, petVisual) {
   const scene = overlay.querySelector('#jhScene');
 
+  // Wait for monster images probe to complete before selecting images
+  await probeMonsterImages();
+  
   // 随机选取战斗兽宠图片
   const monsterImg = getLeftMonsterImg() || getRightMonsterImg();
   const battlePetVisual = monsterImg
