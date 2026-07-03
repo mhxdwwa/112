@@ -28,6 +28,8 @@ var _lastSyncFailed = false;
 var _DAL_VERSION = '6.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 15000; // 15s protection after sync — prevents Realtime echo from overwriting local data
+var _myBaseCoins = null; // Track student's coins at last load/sync — used to compute local delta for merge
+var _myBasePets = {}; // Track pet growth at last load/sync (keyed by pet id) — used for pet merge
 
 /* ===== Load: Teacher ===== */
 function _buildTeacherClasses(classes, students, pets) {
@@ -218,6 +220,13 @@ function _loadStudentFromSupabase() {
       students: classmates,
       createdAt: classInfo.created_at || null
     }];
+
+    // Record base coins for this student — used in _syncStudentToSupabase to compute local delta
+    if (myStudent) {
+      _myBaseCoins = myStudent.coins;
+      _myBasePets = {};
+      (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+    }
 
     console.log('[DAL] Student loaded: ' + classmates.length + ' classmates, ' + classPets.length + ' pets');
 
@@ -642,13 +651,20 @@ function _syncStudentToSupabase() {
   return Promise.all(petPromises).then(function() {
     return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today').eq('id', studentId).single();
   }).then(function(freshR) {
-    var freshCoins = myStudent.coins;
+    // Compute local delta: how much the student changed locally since last sync
+    var localCoinDelta = 0;
+    if (_myBaseCoins !== null && typeof myStudent.coins === 'number') {
+      localCoinDelta = myStudent.coins - _myBaseCoins;
+    }
+
+    var finalCoins = myStudent.coins; // default: use local value
     if (freshR && !freshR.error && freshR.data) {
-      // Use fresh coins from Supabase as base — preserves teacher's updates
-      // The student's local spending (feed, play, etc.) has already been applied to myStudent.coins
-      // If the student loaded fresh data (via Realtime), myStudent.coins is already correct
-      // If stale, the fresh value from Supabase takes priority
-      freshCoins = freshR.data.coins !== undefined ? freshR.data.coins : myStudent.coins;
+      // Apply local delta on top of fresh Supabase value
+      // This preserves both teacher changes AND student spending
+      var freshCoins = freshR.data.coins !== undefined ? freshR.data.coins : 0;
+      finalCoins = freshCoins + localCoinDelta;
+      if (finalCoins < 0) finalCoins = 0;
+
       // Merge other fresh fields (don't overwrite if local has been updated)
       if (freshR.data.last_checkin_date && !myStudent.lastCheckinDate) {
         myStudent.lastCheckinDate = freshR.data.last_checkin_date;
@@ -661,10 +677,13 @@ function _syncStudentToSupabase() {
       }
     }
 
+    // Update base coins to current value (will be re-set after sync confirms)
+    _myBaseCoins = finalCoins;
+
     // Step 3: Upsert student with merged data
     return db.from('students').upsert([{
       id: studentId,
-      coins: freshCoins,
+      coins: finalCoins,
       shop_items: JSON.stringify(myStudent.shopItems || []),
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
       last_checkin_date: myStudent.lastCheckinDate || null,
@@ -927,6 +946,11 @@ function applyStudentRestrictions() {
     document.querySelectorAll(sel).forEach(function(el) {
       el.style.display = 'none';
     });
+  });
+
+  // But show the history button for students
+  document.querySelectorAll('.student-history-visible').forEach(function(el) {
+    el.style.display = '';
   });
 
   // Hide pet shop buttons
