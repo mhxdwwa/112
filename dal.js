@@ -16,14 +16,15 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 30000;
+var _refreshInterval = 120000; // Poll every 2 minutes for cross-user changes
 var _lastRefreshTime = 0;
 var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '4.1';
+var _DAL_VERSION = '5.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
+var _REFRESH_PROTECTION_MS = 15000; // 15s protection after sync — prevents Realtime echo from overwriting local data
 
 /* ===== Load: Teacher ===== */
 function _buildTeacherClasses(classes, students, pets) {
@@ -267,13 +268,13 @@ function loadFromSupabase() {
 
 /* ===== Save ===== */
 function _syncTeacherToSupabase() {
-  var classesPromises = [];
-  var newStudentInserts = [];   // { payload, stuRef, clsId }
-  var existingStudentUpserts = []; // { payload }
+  // === Phase 1: Upsert classes + categorize students ===
+  var classPromises = [];
+  var newStudents = [];   // { payload, stuRef }
+  var existingStudents = []; // { payload, stuRef }
 
-  // Phase 1: Sync classes + categorize students
   classesData.forEach(function(cls) {
-    classesPromises.push(
+    classPromises.push(
       db.from('classes').upsert([{
         id: cls.id,
         name: cls.name,
@@ -284,7 +285,7 @@ function _syncTeacherToSupabase() {
     );
 
     cls.students.forEach(function(stu) {
-      var studentPayload = {
+      var payload = {
         name: stu.name,
         class_id: cls.id,
         coins: stu.coins || 0,
@@ -299,40 +300,40 @@ function _syncTeacherToSupabase() {
       };
 
       if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
-        existingStudentUpserts.push({ payload: Object.assign({ id: stu.id }, studentPayload) });
+        existingStudents.push({ payload: Object.assign({ id: stu.id }, payload), stuRef: stu });
       } else {
-        // New student (negative local ID) — needs INSERT first
-        newStudentInserts.push({ payload: studentPayload, stuRef: stu, clsId: cls.id });
+        newStudents.push({ payload: payload, stuRef: stu });
       }
     });
   });
 
-  // Phase 2: Wait for classes, then INSERT new students to get real IDs
-  return Promise.all(classesPromises).then(function() {
-    var insertPromises = newStudentInserts.map(function(item) {
+  // === Phase 2: Insert new students first to get real IDs ===
+  return Promise.all(classPromises).then(function() {
+    if (newStudents.length === 0) return;
+    var promises = newStudents.map(function(item) {
       return db.from('students').insert([item.payload]).select().then(function(r) {
-        if (r.error) {
-          console.error('[DAL] student insert error:', r.error);
-          return;
-        }
+        if (r.error) { console.error('[DAL] new student insert error:', r.error); return; }
         if (r.data && r.data[0]) {
           item.stuRef.id = r.data[0].id;
-          console.log('[DAL] New student "' + item.stuRef.name + '" got Supabase ID: ' + item.stuRef.id);
+          console.log('[DAL] New student "' + item.stuRef.name + '" → ID ' + item.stuRef.id);
         }
       });
     });
-    return Promise.all(insertPromises);
+    return Promise.all(promises);
   }).then(function() {
-    // Phase 3: All students now have real IDs — sync pets + upsert existing students
-    var phase3Promises = [];
+    // === Phase 3: Sync ALL pets (now all students have real IDs) ===
+    // We build pet payloads HERE, after students have real IDs
+    var allPetPromises = [];
+    var studentsToUpsert = [];
 
     classesData.forEach(function(cls) {
       cls.students.forEach(function(stu) {
-        if (!stu.id || stu.id <= 0) return; // Skip any still-missing IDs
+        if (!stu.id || stu.id <= 0) return;
 
         // Sync pets for this student
         if (stu.pets && stu.pets.length > 0) {
           stu.pets.forEach(function(pet) {
+            // Build payload NOW with the correct (real) student_id
             var petPayload = {
               student_id: stu.id,
               name: pet.name,
@@ -350,27 +351,25 @@ function _syncTeacherToSupabase() {
             };
 
             if (pet.id && pet.id > 0 && pet.id === Math.floor(pet.id)) {
+              // Existing pet with valid Supabase ID
               petPayload.id = pet.id;
-              phase3Promises.push(
+              allPetPromises.push(
                 db.from('pets').upsert([petPayload]).then(function(r) {
                   if (r.error) console.error('[DAL] pet upsert error:', r.error);
                 })
               );
             } else {
-              // New pet (negative local ID) — INSERT
+              // New pet — INSERT (without id field)
               var oldLocalId = pet.id;
-              phase3Promises.push(
+              allPetPromises.push(
                 db.from('pets').insert([petPayload]).select().then(function(r) {
-                  if (r.error) {
-                    console.error('[DAL] pet insert error:', r.error);
-                    return;
-                  }
+                  if (r.error) { console.error('[DAL] pet insert error:', r.error); return; }
                   if (r.data && r.data[0]) {
                     pet.id = r.data[0].id;
                     if (stu.activePetId === oldLocalId) {
                       stu.activePetId = pet.id;
                     }
-                    console.log('[DAL] New pet "' + pet.name + '" got Supabase ID: ' + pet.id);
+                    console.log('[DAL] New pet "' + pet.name + '" → ID ' + pet.id);
                   }
                 })
               );
@@ -378,23 +377,36 @@ function _syncTeacherToSupabase() {
           });
         }
 
-        // Upsert existing students (new students already have correct ID from phase 2)
-        var existing = existingStudentUpserts.find(function(e) { return e.payload.id === stu.id; });
-        if (existing) {
-          // Update active_pet_id with possibly-new pet ID
-          existing.payload.active_pet_id = stu.activePetId || null;
-          phase3Promises.push(
-            db.from('students').upsert([existing.payload]).then(function(r) {
-              if (r.error) console.error('[DAL] student upsert error:', r.error);
-            })
-          );
-        }
+        // Collect all students to upsert AFTER pets are synced
+        studentsToUpsert.push(stu);
       });
     });
 
-    return Promise.all(phase3Promises);
+    // Wait for all pets, then upsert ALL students with correct active_pet_id
+    return Promise.all(allPetPromises).then(function() {
+      var studentUpsertPromises = studentsToUpsert.map(function(stu) {
+        var payload = {
+          id: stu.id,
+          name: stu.name,
+          class_id: (classesData.find(function(c) { return c.students.indexOf(stu) >= 0; }) || {}).id || null,
+          coins: stu.coins || 0,
+          last_checkin_date: stu.lastCheckinDate || null,
+          last_jianghu_date: stu.lastJianghuDate || null,
+          last_pk_date: stu.lastPkDate || null,
+          active_pet_id: stu.activePetId || null,
+          pk_count_today: stu.pkCountToday || 0,
+          shop_items: JSON.stringify(stu.shopItems || []),
+          equipped_items: JSON.stringify(stu.equippedItems || {}),
+          password: stu.password || ''
+        };
+        return db.from('students').upsert([payload]).then(function(r) {
+          if (r.error) console.error('[DAL] student upsert error:', r.error);
+        });
+      });
+      return Promise.all(studentUpsertPromises);
+    });
   }).then(function() {
-    // Phase 4: Save custom actions
+    // === Phase 4: Save custom actions ===
     if (typeof customActions !== 'undefined' && customActions.length > 0) {
       var actionPayloads = customActions.map(function(a) {
         return {
@@ -404,7 +416,7 @@ function _syncTeacherToSupabase() {
         };
       }).filter(function(a) { return a.class_id; });
       if (actionPayloads.length > 0) {
-        var classIds = [...new Set(actionPayloads.map(function(a) { return a.class_id; }))];
+        var classIds = Array.from(new Set(actionPayloads.map(function(a) { return a.class_id; })));
         return db.from('custom_actions').delete().in('class_id', classIds).then(function() {
           return db.from('custom_actions').insert(actionPayloads);
         }).then(function(r) {
@@ -518,9 +530,8 @@ function _syncToSupabase() {
     _syncRetryCount = 0;
     _lastSyncFailed = false;
     _pendingLocalSave = false; // Clear pending flag after successful sync
-    // Set debounce to prevent Realtime echo from overwriting just-synced data
-    // (the Realtime event for our own write will fire within ~1s, but we don't need to refresh)
-    _lastRefreshTime = Date.now() + 5000;
+    // Set long protection to prevent Realtime echo from overwriting just-synced data
+    _lastRefreshTime = Date.now() + _REFRESH_PROTECTION_MS;
     _updateCloudStatus('synced');
     console.log('[DAL] Sync complete');
 
@@ -533,7 +544,7 @@ function _syncToSupabase() {
     _lastSyncFailed = true;
     // Keep _pendingLocalSave = true — local data is correct and still needs to sync
     _syncRetryCount++;
-    _lastRefreshTime = Date.now() + 5000; // Protect local data during retry
+    _lastRefreshTime = Date.now() + _REFRESH_PROTECTION_MS; // Protect local data during retry
     console.error('[DAL] Sync error:', err);
     _updateCloudStatus('error');
 
@@ -590,12 +601,12 @@ function _refreshFromSupabase() {
   }
 
   var now = Date.now();
-  if (now - _lastRefreshTime < 5000) return; // debounce 5s
+  if (now - _lastRefreshTime < _REFRESH_PROTECTION_MS) return;
   _lastRefreshTime = now;
 
   console.log('[DAL] Refreshing from Supabase...');
   loadFromSupabase().then(function() {
-    if (typeof init === 'function') init();
+    // Only re-render data — do NOT call init() which resets UI state
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
     console.log('[DAL] Refresh complete');
