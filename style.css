@@ -186,7 +186,7 @@ body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe
               #000;}
 .modal.pk-fullscreen .pk-arena::before{content:'';position:absolute;bottom:0;left:10%;right:10%;height:8px;background:linear-gradient(90deg,transparent,rgba(255,150,50,0.6),rgba(255,200,50,0.8),rgba(255,150,50,0.6),transparent);border-radius:50%;box-shadow:0 0 40px 15px rgba(255,100,0,0.4),0 0 80px 30px rgba(255,50,0,0.2);filter:blur(2px);}
 .modal.pk-fullscreen .pk-arena::after{content:'';position:absolute;bottom:0;left:5%;right:5%;height:60px;background:linear-gradient(to top,rgba(40,15,0,0.9),transparent);border-top:2px solid rgba(255,100,0,0.2);}
-.modal.pk-fullscreen .pk-pet-img-container{width:min(600px, 42vw);height:min(687px, 48vw);background:transparent;border-radius:0;border:none;box-shadow:none;overflow:visible;}
+.modal.pk-fullscreen .pk-pet-img-container{width:min(700px, 50vw);height:min(802px, 57vw);background:transparent;border-radius:0;border:none;box-shadow:none;overflow:visible;}
 .modal.pk-fullscreen .pk-pet-img-container img,
 .modal.pk-fullscreen .pk-pet-img-container .monster-emoji{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 0 25px rgba(255,100,0,0.5)) drop-shadow(0 15px 40px rgba(0,0,0,0.9));}
 .modal.pk-fullscreen .pk-vs{z-index:2;}
@@ -3026,9 +3026,9 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
 .robot-arena{display:flex;justify-content:space-between;align-items:center;gap:20px;margin:20px 0;background:linear-gradient(135deg,#0a0a1a,#1a1030,#0a0a1a);padding:30px;border-radius:35px;border:4px solid #6688ff;position:relative;min-height:420px;}
 .robot-arena::before{content:'';position:absolute;bottom:0;left:10%;right:10%;height:6px;background:linear-gradient(90deg,transparent,rgba(100,150,255,0.5),rgba(150,200,255,0.7),rgba(100,150,255,0.5),transparent);border-radius:50%;box-shadow:0 0 30px 10px rgba(80,120,255,0.3);}
 .robot-fighter{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;z-index:2;}
-.robot-fighter-img{width:min(400px, 42vw);height:min(458px, 48vw);position:relative;display:flex;align-items:center;justify-content:center;}
+.robot-fighter-img{width:min(500px, 50vw);height:min(573px, 57vw);position:relative;display:flex;align-items:center;justify-content:center;}
 .robot-fighter-img img.robot-img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 0 15px rgba(100,150,255,0.5)) drop-shadow(0 8px 20px rgba(0,0,0,0.8));}
-.robot-fighter-img .pet-in-cockpit{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);width:90px;height:90px;border-radius:50%;overflow:hidden;border:2px solid rgba(150,200,255,0.5);box-shadow:0 0 12px rgba(100,150,255,0.4),inset 0 0 8px rgba(100,180,255,0.2);z-index:5;background:radial-gradient(circle,rgba(20,40,80,0.6),rgba(10,20,50,0.3));}
+.robot-fighter-img .pet-in-cockpit{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;overflow:hidden;border:2px solid rgba(150,200,255,0.5);box-shadow:0 0 12px rgba(100,150,255,0.4),inset 0 0 8px rgba(100,180,255,0.2);z-index:5;background:radial-gradient(circle,rgba(20,40,80,0.6),rgba(10,20,50,0.3));}
 .robot-fighter-img .pet-in-cockpit img{width:100%;height:100%;object-fit:contain;}
 .robot-fighter-name{font-size:18px;font-weight:800;color:#aaccff;text-shadow:0 0 10px rgba(100,150,255,0.5),1px 1px 0 #334;}
 .robot-hp-bar-outer{width:100%;max-width:260px;height:20px;background:rgba(0,0,30,0.8);border-radius:12px;overflow:hidden;border:2px solid rgba(100,150,255,0.3);box-shadow:inset 0 2px 5px rgba(0,0,0,0.5);}
