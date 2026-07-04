@@ -639,48 +639,46 @@ function _loadOperationLogs() {
       return null;
     }
     // v17: Log the query parameters for diagnostics
-    console.log('[DAL] v18 _loadOperationLogs: querying operation_logs for class_ids:', classIds, 'user:', currentUser.type, currentUser.id);
+    console.log('[DAL] v19 _loadOperationLogs: querying operation_logs for class_ids:', classIds, 'user:', currentUser.type, currentUser.id);
     // v14: Increased limit to 5000 to ensure all logs are fetched
     return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000)
       .then(function(queryResult) {
-        // v18: Store classIds for retry
+        // v19: Store classIds for retry
         queryResult._classIds = classIds;
         return queryResult;
       });
   }).then(function(r) {
-    // v18: Log query results for diagnostics
+    // v19: Log query results for diagnostics
     if (r && r.error) {
-      console.error('[DAL] v18 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
+      console.error('[DAL] v19 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
     } else if (r && r.data) {
-      console.log('[DAL] v18 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
-      // v18: If student gets 0 results, attempt auto-fix and retry
+      console.log('[DAL] v19 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
+      // v19: If student gets 0 results, attempt retry with delay
       if (currentUser.type === 'student' && r.data.length === 0 && _opLogsRetryCount < _OPLOGS_MAX_RETRIES) {
         _opLogsRetryCount++;
-        console.warn('[DAL] v18 Student got 0 operation_logs. Attempting auto-fix #' + _opLogsRetryCount + '...');
-        // Try to check RLS and retry
-        return _tryFixOperationLogsRLS().then(function() {
-          // Wait 1s before retry
-          return new Promise(function(resolve) { setTimeout(resolve, 1000); });
-        }).then(function() {
+        console.warn('[DAL] v19 Student got 0 operation_logs. Retrying #' + _opLogsRetryCount + '...');
+        // Wait 1s before retry, then retry the query
+        return new Promise(function(resolve) { setTimeout(resolve, 1000); }).then(function() {
           var classIds = r._classIds || [parseInt(localStorage.getItem('classId'))];
-          console.log('[DAL] v18 Retrying operation_logs query (attempt ' + _opLogsRetryCount + ')...');
+          console.log('[DAL] v19 Retrying operation_logs query (attempt ' + _opLogsRetryCount + ')...');
           return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
         }).then(function(retryResult) {
           if (retryResult && retryResult.data && retryResult.data.length > 0) {
-            console.log('[DAL] v18 Retry SUCCESS! Got', retryResult.data.length, 'rows on retry');
+            console.log('[DAL] v19 Retry SUCCESS! Got', retryResult.data.length, 'rows on retry');
             if (typeof showNotification === 'function') {
               showNotification('数据同步成功', '操作记录已加载', 'success');
             }
-            r = retryResult; // Use retry result
+            // Process the retry result
+            return _processOperationLogsData(retryResult);
           } else if (_opLogsRetryCount >= _OPLOGS_MAX_RETRIES) {
-            // v18: All retries failed — use fallback data from students table
-            console.warn('[DAL] v18 All retries failed. Loading fallback operation logs from students table...');
+            // v19: All retries failed — use fallback data from students table
+            console.warn('[DAL] v19 All retries failed. Loading fallback operation logs...');
             var fallbackClassId = parseInt(localStorage.getItem('classId'));
             return _loadStudentOperationLogsFallback(fallbackClassId).then(function(fallbackLogs) {
               if (fallbackLogs.length > 0) {
-                console.log('[DAL] v18 Fallback loaded', fallbackLogs.length, 'synthetic logs');
-                // Store fallback logs in r.data format for processing below
-                r = { data: fallbackLogs.map(function(fl) {
+                console.log('[DAL] v19 Fallback loaded', fallbackLogs.length, 'synthetic logs');
+                // Process fallback logs
+                var fallbackR = { data: fallbackLogs.map(function(fl) {
                   return {
                     id: fl.id, created_at: fl.timestamp, class_id: fl.classId,
                     student_id: fl.studentId, student_name: fl.studentName,
@@ -689,18 +687,38 @@ function _loadOperationLogs() {
                     reverted: false
                   };
                 })};
+                return _processOperationLogsData(fallbackR);
+              } else {
+                // No fallback data either, process empty result
+                return _processOperationLogsData(r);
               }
             });
+          } else {
+            // Retry didn't help yet, process original empty result
+            return _processOperationLogsData(r);
           }
         });
       } else if (currentUser.type === 'student' && r.data.length === 0) {
-        console.warn('[DAL] v18 DIAGNOSTIC: Student got 0 operation_logs after all retries. RLS fix needed. SQL:\n' +
+        console.warn('[DAL] v19 DIAGNOSTIC: Student got 0 operation_logs after all retries. RLS fix needed. SQL:\n' +
           'CREATE POLICY IF NOT EXISTS "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
           'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
           'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
+        // Process empty result
+        return _processOperationLogsData(r);
       }
     }
-    // v14: Completely rebuild operationLogs from Supabase + local unsynced logs
+    // Process the data
+    return _processOperationLogsData(r);
+  }).catch(function(e) {
+    console.warn('[DAL] operation_logs load error:', e);
+    if (typeof window.operationLogs === 'undefined') {
+      try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { window.operationLogs = []; }
+    }
+  });
+}
+
+// v19: Helper function to process operation logs data
+function _processOperationLogsData(r) {
     // This is more reliable than the old merge logic which could miss logs
     var localLogs = window.operationLogs || [];
     
@@ -796,12 +814,6 @@ function _loadOperationLogs() {
         console.log('[DAL]   Log:', l.actionType, 'studentId:', l.studentId, 'coinDelta:', l.coinDelta, 'synced:', l._synced);
       });
     }
-  }).catch(function(e) {
-    console.warn('[DAL] operation_logs load error:', e);
-    if (typeof window.operationLogs === 'undefined') {
-      try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { window.operationLogs = []; }
-    }
-  });
 }
 
 // v18: Attempt to fix RLS on operation_logs table
@@ -1795,59 +1807,10 @@ function applyStudentRestrictions() {
     };
   }
 
-  // Override openStudentModal for student viewing other students
-  var _origOpenStudentModal = window.openStudentModal;
-  window.openStudentModal = function(studentId) {
-    if (currentUser.type === 'student' && studentId.toString() !== currentUser.studentId.toString()) {
-      var cur = classesData.find(function(c){ return c.id === currentClassId; });
-      if (!cur) return;
-      var student = cur.students.find(function(s){ return s.id.toString() === studentId.toString(); });
-      if (!student) return;
-      var activePet = typeof getActivePet === 'function' ? getActivePet(student) : null;
-      var myStudent = cur.students.find(function(s){ return s.id.toString() === currentUser.studentId.toString(); });
-      var myPet = myStudent ? (typeof getActivePet === 'function' ? getActivePet(myStudent) : null) : null;
-
-      var content = '<div style="text-align:center;">';
-      content += '<div style="font-size:20px;font-weight:700;margin-bottom:8px;">' + (typeof escapeHTML === 'function' ? escapeHTML(student.name) : student.name) + '</div>';
-      content += '<div style="font-size:14px;color:#888;margin-bottom:12px;">💰 ' + student.coins + ' 金币</div>';
-      if (activePet) {
-        var petStatus = activePet.isDead ? '💀 已饿死' : (activePet.level >= 9 ? '👑 已满级' : '🌱 活跃中');
-        var pkToday = student.pkCountToday || 0;
-        content += '<div style="background:rgba(255,200,200,0.2);border-radius:16px;padding:14px;margin:10px 0;border:1px solid rgba(255,180,180,0.4);">';
-        content += '<div style="font-size:44px;margin-bottom:8px;">' + (typeof getPetImage === 'function' ? getPetImage(activePet.name, activePet.level) : '🐾') + '</div>';
-        content += '<div style="font-size:16px;font-weight:600;">' + (typeof escapeHTML === 'function' ? escapeHTML(activePet.nickname || activePet.name) : (activePet.nickname || activePet.name)) + '</div>';
-        content += '<div style="font-size:13px;color:#888;margin-top:4px;">Lv.' + activePet.level + ' · 成长值: ' + activePet.growth + '</div>';
-        content += '<div style="font-size:13px;color:#888;margin-top:2px;">状态: ' + petStatus + '</div>';
-        content += '<div style="font-size:13px;color:#888;margin-top:2px;">今日PK次数: ' + pkToday + ' / 3</div>';
-        content += '</div>';
-
-        // PK challenge button
-        var canPK = true, pkReason = '';
-        if (!myPet) { canPK = false; pkReason = '你还没有宠物'; }
-        else if (myPet.isDead) { canPK = false; pkReason = '你的宠物已死亡'; }
-        else if (activePet.isDead) { canPK = false; pkReason = '对方宠物已死亡'; }
-        else if (Math.abs(myPet.level - activePet.level) > 1) { canPK = false; pkReason = '等级差超过1级，无法PK'; }
-        else if (myStudent && myStudent.coins < 5) { canPK = false; pkReason = '你的金币不足（需≥5）'; }
-        else if (student.coins < 5) { canPK = false; pkReason = '对方金币不足（需≥5）'; }
-        else if (myStudent && myStudent.pkCountToday >= 3) { canPK = false; pkReason = '你今天PK次数已达上限'; }
-        else if (pkToday >= 3) { canPK = false; pkReason = '对方今天PK次数已达上限'; }
-
-        if (canPK) {
-          content += '<button onclick="_studentChallengePK(\'' + student.id + '\')" style="margin-top:10px;padding:10px 20px;background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:white;border:none;border-radius:20px;font-size:15px;font-weight:700;cursor:pointer;">⚔️ 向 TA 发起 PK</button>';
-        } else {
-          content += '<div style="margin-top:10px;padding:8px;background:rgba(200,200,200,0.2);border-radius:12px;font-size:12px;color:#999;">' + pkReason + '</div>';
-        }
-      } else {
-        content += '<div style="margin-top:10px;color:#aaa;">暂无宠物</div>';
-      }
-      content += '</div>';
-      if (typeof showModal === 'function') {
-        showModal(student.name + ' 的信息', content, [{text:'关闭', onclick:'closeModal()'}]);
-      }
-      return;
-    }
-    return _origOpenStudentModal(studentId);
-  };
+  // v19: REMOVED openStudentModal override — students viewing other students' pets
+  // now use the original openStudentModal from app.js which correctly shows
+  // buildReadOnlyStudentModalContent (read-only view, no action buttons).
+  // PK challenges can ONLY be initiated from the PK page via showStudentPKChallengeModal().
 
   // Override renderHomePetGrid to hide interaction buttons for other students' pets
   if (typeof window._origRenderHomePetGrid === 'undefined') {
@@ -1878,31 +1841,8 @@ function applyStudentRestrictions() {
   };
 }
 
-function _studentChallengePK(targetStudentId) {
-  if (typeof closeModal === 'function') closeModal();
-  var cur = classesData.find(function(c) { return c.id === currentClassId; });
-  if (!cur) return;
-  var myStudent = cur.students.find(function(s) { return s.id.toString() === currentUser.studentId.toString(); });
-  var targetStudent = cur.students.find(function(s) { return s.id.toString() === targetStudentId.toString(); });
-  if (!myStudent || !targetStudent) return;
-  var myPet = typeof getActivePet === 'function' ? getActivePet(myStudent) : null;
-  var targetPet = typeof getActivePet === 'function' ? getActivePet(targetStudent) : null;
-  if (!myPet || !targetPet) {
-    if (typeof showNotification === 'function') showNotification('PK失败', '宠物不存在', 'error');
-    return;
-  }
-  if (typeof pkState !== 'undefined') {
-    pkState.players = [
-      { studentId: myStudent.id, studentName: myStudent.name, pet: Object.assign({}, myPet) },
-      { studentId: targetStudent.id, studentName: targetStudent.name, pet: Object.assign({}, targetPet) }
-    ];
-  }
-  if (typeof switchPage === 'function') switchPage('pk-page');
-  setTimeout(function() {
-    if (typeof startPKBattle === 'function') startPKBattle();
-  }, 500);
-}
-window._studentChallengePK = _studentChallengePK;
+// v19: REMOVED _studentChallengePK — PK challenges must go through the PK page
+// via showStudentPKChallengeModal(), not from individual pet card modals.
 
 /* ===== Export/Import ===== */
 function exportAllDataToUSB() {
