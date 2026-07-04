@@ -685,12 +685,30 @@ function _loadOperationLogs() {
 }
 
 // Write unsynced logs to Supabase IMMEDIATELY.
-// Each log is inserted individually with .select() to get the real Supabase ID.
-// This guarantees that every log is persisted and gets a real ID before being marked as synced.
+// v26: Added write lock to prevent concurrent writes, comprehensive logging, and retry queue.
+var _writingLogsToSupabase = false;
+var _pendingLogWrites = 0;
+
 function _writeUnsyncedLogsToSupabase() {
-  if (!db || !currentUser) return Promise.resolve();
-  if (typeof window.operationLogs === 'undefined') return Promise.resolve();
-  if (!Array.isArray(window.operationLogs)) return Promise.resolve();
+  // Prevent concurrent writes
+  if (_writingLogsToSupabase) {
+    console.log('[DAL] v26 Write already in progress, queueing...');
+    _pendingLogWrites++;
+    return Promise.resolve();
+  }
+  
+  if (!db || !currentUser) {
+    console.warn('[DAL] v26 Cannot write logs: db or currentUser not ready');
+    return Promise.resolve();
+  }
+  if (typeof window.operationLogs === 'undefined') {
+    console.warn('[DAL] v26 Cannot write logs: window.operationLogs is undefined');
+    return Promise.resolve();
+  }
+  if (!Array.isArray(window.operationLogs)) {
+    console.warn('[DAL] v26 Cannot write logs: window.operationLogs is not an array');
+    return Promise.resolve();
+  }
 
   // Collect unsynced logs
   var unsynced = [];
@@ -705,41 +723,78 @@ function _writeUnsyncedLogsToSupabase() {
     return l._synced && l.id > 0 && l.reverted && !l._revertSynced;
   });
 
-  if (unsynced.length === 0 && revertedUnsynced.length === 0) return Promise.resolve();
-
-  // Determine class_id
-  var classId = null;
-  if (currentUser.type === 'teacher') {
-    classId = (typeof currentClassId !== 'undefined' ? currentClassId : null) || (classesData[0] ? classesData[0].id : null);
-  } else {
-    classId = parseInt(localStorage.getItem('classId')) || (classesData[0] ? classesData[0].id : null);
-  }
-  if (!classId) {
-    console.warn('[DAL] v24 Cannot write logs: no class_id');
+  if (unsynced.length === 0 && revertedUnsynced.length === 0) {
     return Promise.resolve();
   }
+
+  console.log('[DAL] v26 Starting write of ' + unsynced.length + ' unsynced logs, ' + revertedUnsynced.length + ' reverts');
+
+  // Determine class_id - be very defensive here
+  var classId = null;
+  if (currentUser.type === 'teacher') {
+    classId = (typeof currentClassId !== 'undefined' && currentClassId) ? currentClassId : 
+              (classesData && classesData[0] ? classesData[0].id : null);
+  } else {
+    classId = parseInt(localStorage.getItem('classId')) || 
+              (classesData && classesData[0] ? classesData[0].id : null);
+  }
+  
+  if (!classId) {
+    console.error('[DAL] v26 CRITICAL: Cannot write logs - classId is null!', {
+      userType: currentUser.type,
+      currentClassId: typeof currentClassId !== 'undefined' ? currentClassId : 'undefined',
+      classesDataLength: classesData ? classesData.length : 'undefined',
+      localStorageClassId: localStorage.getItem('classId')
+    });
+    return Promise.resolve();
+  }
+  
+  console.log('[DAL] v26 Using classId:', classId, 'for user type:', currentUser.type);
+
+  _writingLogsToSupabase = true;
 
   // Write each unsynced log individually to get real ID
   var writePromises = unsynced.map(function(entry) {
     var l = entry.log;
+    var logClassId = l.classId || classId;
+    
+    // Ensure classId is a number
+    if (typeof logClassId === 'string') {
+      logClassId = parseInt(logClassId);
+    }
+    
     var payload = {
-      class_id: l.classId || classId,
+      class_id: logClassId,
       student_id: l.studentId,
       student_name: l.studentName || '',
       action_type: l.actionType || '',
       details: l.details || '',
-      coin_delta: l.coinDelta || 0,
-      exp_delta: l.expDelta || 0,
+      coin_delta: parseInt(l.coinDelta) || 0,
+      exp_delta: parseInt(l.expDelta) || 0,
       pet_id: l.petId || null,
       extra: l.extra ? JSON.stringify(l.extra) : null,
       snapshot: l.snapshot ? JSON.stringify(l.snapshot) : null,
       full_snapshot: l.fullSnapshot ? JSON.stringify(l.fullSnapshot) : null,
       reverted: !!l.reverted
     };
+    
+    console.log('[DAL] v26 Writing log:', {
+      actionType: payload.action_type,
+      classId: payload.class_id,
+      studentId: payload.student_id,
+      coinDelta: payload.coin_delta
+    });
+    
     return db.from('operation_logs').insert([payload]).select().then(function(r) {
       if (r.error) {
-        console.error('[DAL] v24 Log insert error:', r.error.message);
-        return; // Leave as _synced=false, will retry next time saveLogs() is called
+        console.error('[DAL] v26 CRITICAL: Log insert FAILED:', {
+          error: r.error.message,
+          code: r.error.code,
+          details: r.error.details,
+          hint: r.error.hint,
+          payload: payload
+        });
+        return; // Leave as _synced=false, will retry next time
       }
       if (r.data && r.data[0]) {
         var idx = entry.index;
@@ -747,8 +802,15 @@ function _writeUnsyncedLogsToSupabase() {
           window.operationLogs[idx].id = r.data[0].id;
           window.operationLogs[idx]._synced = true;
           window.operationLogs[idx]._fromSupabase = true;
+          console.log('[DAL] v26 Log written successfully, new ID:', r.data[0].id);
+        } else {
+          console.warn('[DAL] v26 Log index out of bounds:', idx);
         }
+      } else {
+        console.warn('[DAL] v26 Insert succeeded but no data returned');
       }
+    }).catch(function(err) {
+      console.error('[DAL] v26 CRITICAL: Log insert exception:', err);
     });
   });
 
@@ -756,7 +818,7 @@ function _writeUnsyncedLogsToSupabase() {
   var revertPromises = revertedUnsynced.map(function(l) {
     return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
       if (r.error) {
-        console.error('[DAL] v24 Log revert update error:', r.error.message);
+        console.error('[DAL] v26 Log revert update error:', r.error.message);
       } else {
         l._revertSynced = true;
       }
@@ -764,13 +826,73 @@ function _writeUnsyncedLogsToSupabase() {
   });
 
   return Promise.all(writePromises.concat(revertPromises)).then(function() {
+    _writingLogsToSupabase = false;
+    
     // Persist updated sync status to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v24 Wrote ' + unsynced.length + ' logs, updated ' + revertedUnsynced.length + ' reverts');
+    
+    var successCount = unsynced.filter(function(entry) {
+      return window.operationLogs[entry.index] && window.operationLogs[entry.index]._synced;
+    }).length;
+    
+    console.log('[DAL] v26 Write complete: ' + successCount + '/' + unsynced.length + ' logs written successfully, ' + revertedUnsynced.length + ' reverts updated');
+    
+    // If there were queued writes, process them now
+    if (_pendingLogWrites > 0) {
+      _pendingLogWrites = 0;
+      console.log('[DAL] v26 Processing queued writes...');
+      return _writeUnsyncedLogsToSupabase();
+    }
   }).catch(function(e) {
-    console.error('[DAL] v24 writeUnsyncedLogs error:', e);
+    _writingLogsToSupabase = false;
+    console.error('[DAL] v26 CRITICAL: writeUnsyncedLogs exception:', e);
   });
 }
+
+// Diagnostic function - call from browser console to check operation logs status
+window._checkOpLogsStatus = function() {
+  console.log('=== Operation Logs Status ===');
+  console.log('Total logs in memory:', window.operationLogs ? window.operationLogs.length : 0);
+  console.log('Synced logs:', window.operationLogs ? window.operationLogs.filter(function(l) { return l._synced; }).length : 0);
+  console.log('Unsynced logs:', window.operationLogs ? window.operationLogs.filter(function(l) { return !l._synced; }).length : 0);
+  console.log('From Supabase:', window.operationLogs ? window.operationLogs.filter(function(l) { return l._fromSupabase; }).length : 0);
+  console.log('Current user:', currentUser);
+  console.log('Current class ID:', typeof currentClassId !== 'undefined' ? currentClassId : 'undefined');
+  console.log('Classes data:', classesData ? classesData.length + ' classes' : 'undefined');
+  console.log('DB initialized:', !!db);
+  console.log('Writing in progress:', _writingLogsToSupabase);
+  console.log('Pending writes:', _pendingLogWrites);
+  
+  if (db && currentUser) {
+    var classIds = [];
+    if (currentUser.type === 'teacher') {
+      db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(r) {
+        if (r.data) classIds = r.data.map(function(c) { return c.id; });
+        console.log('Teacher class IDs:', classIds);
+        return db.from('operation_logs').select('id, class_id, action_type, created_at').in('class_id', classIds).order('created_at', { ascending: false }).limit(10);
+      }).then(function(r) {
+        if (r.data) {
+          console.log('Recent logs in Supabase:', r.data.length);
+          console.table(r.data);
+        } else {
+          console.error('Query failed:', r.error);
+        }
+      });
+    } else {
+      var classId = parseInt(localStorage.getItem('classId'));
+      console.log('Student class ID from localStorage:', classId);
+      db.from('operation_logs').select('id, class_id, action_type, created_at').eq('class_id', classId).order('created_at', { ascending: false }).limit(10).then(function(r) {
+        if (r.data) {
+          console.log('Recent logs in Supabase for class', classId + ':', r.data.length);
+          console.table(r.data);
+        } else {
+          console.error('Query failed:', r.error);
+        }
+      });
+    }
+  }
+  return 'Check browser console for details';
+};
 
 /* ===== Main Load Entry ===== */
 function loadFromSupabase() {
@@ -1455,13 +1577,15 @@ function wrapSaveFunctions() {
     saveCustomActions._dalWrapped = true;
   }
 
-  // Wrap saveLogs — v10: return the sync promise so callers can await it
+  // Wrap saveLogs — v26: simplified to avoid race conditions
+  // The original saveLogs() calls triggerRealtimeSync() which debounces _syncToSupabase()
+  // _syncToSupabase() already calls _writeUnsyncedLogsToSupabase(), so we don't need to call it here
   if (typeof saveLogs === 'function' && !saveLogs._dalWrapped) {
     var origSaveLogs = saveLogs;
     saveLogs = function() {
       origSaveLogs.apply(this, arguments);
-      // Sync new operation logs to Supabase and return the promise
-      return _writeUnsyncedLogsToSupabase();
+      // Logs will be synced by _syncToSupabase() via triggerRealtimeSync()
+      // No need to call _writeUnsyncedLogsToSupabase() here - it would cause race conditions
     };
     saveLogs._dalWrapped = true;
   }
