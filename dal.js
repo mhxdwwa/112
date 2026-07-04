@@ -695,17 +695,15 @@ function _loadOperationLogs() {
       }
     });
 
-    // v15: Safety check — if Supabase returns 0 rows for a student but we have local logs,
-    // this likely means RLS is blocking reads. Keep existing local logs to avoid data loss.
+    // v16: Always trust Supabase as source of truth for operation logs.
+    // If Supabase returns 0 results, it means there are no logs (or RLS needs fixing).
+    // We still keep local unsynced logs (logs not yet pushed to Supabase).
     var isStudent = currentUser && currentUser.type === 'student';
     if (isStudent && supabaseLogs.length === 0 && localLogs.length > 0) {
-      console.warn('[DAL] v15 Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. Keeping local data (possible RLS issue).');
-      // Don't overwrite — keep existing local logs
-      // Just mark any local unsynced logs that are still unsynced
-      return;
+      console.warn('[DAL] v16 WARNING: Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. This may indicate an RLS policy issue. Proceeding with Supabase data + unsynced local logs.');
     }
 
-    // v14: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
+    // v16: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
     window.operationLogs = supabaseLogs.concat(keptUnsynced);
 
     // Sort by timestamp (newest first)

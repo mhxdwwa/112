@@ -315,17 +315,16 @@ var _idCounter = 0;
 function _genLocalId(){ return -(Date.now() * 1000 + ((_idCounter = (_idCounter + 1) % 1000))); }
 function saveCustomActions(){safeLSSave('customActions', customActions); scheduleFileSave();}
 saveCustomActions();
-// v15: SINGLE SOURCE OF TRUTH — operationLogs lives on window only.
+// v16: SINGLE SOURCE OF TRUTH — operationLogs lives on window only.
 // All reads/writes go through window.operationLogs to eliminate cross-script scope bugs.
-// app.js and dal.js share the SAME array at ALL times.
 window.operationLogs = [];
 try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { console.warn('operationLogs读取失败，已重置:', e.message); localStorage.removeItem('operationLogs'); }
-// Create a global alias so bare "operationLogs" in app.js always resolves to window.operationLogs
-var operationLogs = window.operationLogs;
-// v15: Helper to sync the alias after any reassignment
-function _syncOpLogsAlias() { operationLogs = window.operationLogs; }
-// v15: Helper to push window.operationLogs after local reassignment
-function _pushOpLogsToWindow() { window.operationLogs = operationLogs; }
+// v16: Helper to get operation logs — always reads from window.operationLogs
+function getOpLogs() { return window.operationLogs || []; }
+// v16: Helper to sync the alias after any reassignment (kept for backward compat)
+function _syncOpLogsAlias() { /* no-op: we always use window.operationLogs now */ }
+// v16: Helper to push window.operationLogs after local reassignment (kept for backward compat)
+function _pushOpLogsToWindow() { /* no-op: we always use window.operationLogs now */ }
 let logArchives = {};
 try { logArchives = JSON.parse(localStorage.getItem('logArchives')) || {}; } catch(e) { console.warn('logArchives读取失败，已重置:', e.message); localStorage.removeItem('logArchives'); }
 function _getLogMonth(log){return log.timestamp?log.timestamp.slice(0,7):'';}
@@ -335,7 +334,7 @@ function archiveOldLogs(){
   const keepLogs=[];
   let changed=false;
   // v15: Use window.operationLogs for cross-script consistency
-  var logs = window.operationLogs || operationLogs || [];
+  var logs = getOpLogs();
   logs.forEach(log=>{
     const m=_getLogMonth(log);
     if(m && m<curMonth){
@@ -347,9 +346,8 @@ function archiveOldLogs(){
     }
   });
   if(changed){
-    operationLogs=keepLogs;
-    window.operationLogs=keepLogs; // v15: explicit sync
-    safeLSSave('operationLogs', operationLogs);
+    window.operationLogs=keepLogs;
+    safeLSSave('operationLogs', window.operationLogs);
     safeLSSave('logArchives', logArchives);
   }
 }
@@ -364,16 +362,15 @@ function triggerRealtimeSync() {
     _syncToSupabase();
   }, 50); // v15: 50ms debounce — near-instant real-time sync
 }
-function saveLogs(){archiveOldLogs(); _pushOpLogsToWindow(); safeLSSave('operationLogs', operationLogs); scheduleFileSave(); triggerRealtimeSync();}
+function saveLogs(){archiveOldLogs(); safeLSSave('operationLogs', window.operationLogs); scheduleFileSave(); triggerRealtimeSync();}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
-  // v15: Always read from window.operationLogs to ensure cross-script consistency
-  var logs = window.operationLogs || operationLogs || [];
+  var logs = getOpLogs();
   return logs.filter(function(l) { return _getLogMonth(l) === month; });
 }
 function getAvailableMonths(){
   const months=new Set();
-  var logs = window.operationLogs || operationLogs || [];
+  var logs = getOpLogs();
   logs.forEach(l=>{const m=_getLogMonth(l);if(m)months.add(m);});
   Object.keys(logArchives).forEach(m=>months.add(m));
   return [...months].sort().reverse();
@@ -472,7 +469,7 @@ async function loadDataFromDir(){
   let loaded = false;
   if(savedClasses && savedClasses.length>0){ classesData=savedClasses; safeLSSave('classPetData',classesData); loaded=true; }
   if(savedActions && savedActions.length>0){ customActions=savedActions; neededPresets.forEach(p=>{if(!customActions.some(a=>a.id===p.id))customActions.push(p);}); safeLSSave('customActions',customActions); loaded=true; }
-  if(savedLogs && savedLogs.length>0){ operationLogs=savedLogs; _pushOpLogsToWindow(); safeLSSave('operationLogs',operationLogs); loaded=true; }
+  if(savedLogs && savedLogs.length>0){ window.operationLogs=savedLogs; safeLSSave('operationLogs',window.operationLogs); loaded=true; }
   if(savedArchives && typeof savedArchives==='object' && !Array.isArray(savedArchives)){ logArchives=savedArchives; safeLSSave('logArchives',logArchives); loaded=true; }
   if(savedDeleted && savedDeleted.length>0){ deletedClasses=savedDeleted; safeLSSave('deletedClasses',deletedClasses); loaded=true; }
   if(loaded){ archiveOldLogs(); currentClassId=null; init(); }
@@ -512,7 +509,7 @@ async function saveAllToFiles() {
     await Promise.all([
       writeFileToDir(_dataDirHandle, DATA_FILES.classPetData, classesData),
       writeFileToDir(_dataDirHandle, DATA_FILES.customActions, customActions),
-      writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, window.operationLogs || operationLogs),
+      writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, window.operationLogs),
       writeFileToDir(_dataDirHandle, DATA_FILES.logArchives, logArchives),
       writeFileToDir(_dataDirHandle, DATA_FILES.deletedClasses, deletedClasses)
     ]);
@@ -529,7 +526,7 @@ async function saveAllToFiles() {
             await Promise.all([
               writeFileToDir(_dataDirHandle, DATA_FILES.classPetData, classesData),
               writeFileToDir(_dataDirHandle, DATA_FILES.customActions, customActions),
-              writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, window.operationLogs || operationLogs),
+              writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, window.operationLogs),
               writeFileToDir(_dataDirHandle, DATA_FILES.deletedClasses, deletedClasses)
             ]);
             retryOk = true;
@@ -566,7 +563,7 @@ async function _desktopLoadData(){
     const r2 = await api.read_file('奖惩设置.json');
     if(r2.ok && r2.data){ const d=JSON.parse(r2.data); if(d&&d.length>0){ customActions=d; neededPresets.forEach(p=>{if(!customActions.some(a=>a.id===p.id))customActions.push(p);}); safeLSSave('customActions',customActions); loaded=true; }}
     const r3 = await api.read_file('操作日志.json');
-    if(r3.ok && r3.data){ const d=JSON.parse(r3.data); if(d&&d.length>0){ operationLogs=d; _pushOpLogsToWindow(); safeLSSave('operationLogs',operationLogs); loaded=true; }}
+    if(r3.ok && r3.data){ const d=JSON.parse(r3.data); if(d&&d.length>0){ window.operationLogs=d; safeLSSave('operationLogs',window.operationLogs); loaded=true; }}
     const r3b = await api.read_file('操作日志归档.json');
     if(r3b.ok && r3b.data){ const d=JSON.parse(r3b.data); if(d&&typeof d==='object'&&!Array.isArray(d)){ logArchives=d; safeLSSave('logArchives',logArchives); loaded=true; }}
     const r4 = await api.read_file('已删除班级.json');
@@ -582,7 +579,7 @@ async function _desktopSaveAll(){
   try {
     await api.write_file('班级宠物数据.json', JSON.stringify(classesData, null, 2));
     await api.write_file('奖惩设置.json', JSON.stringify(customActions, null, 2));
-    await api.write_file('操作日志.json', JSON.stringify(window.operationLogs || operationLogs, null, 2));
+    await api.write_file('操作日志.json', JSON.stringify(window.operationLogs, null, 2));
     await api.write_file('操作日志归档.json', JSON.stringify(logArchives, null, 2));
     await api.write_file('已删除班级.json', JSON.stringify(deletedClasses, null, 2));
   } catch(e){ console.error('桌面模式保存数据失败:', e); }
@@ -620,17 +617,15 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
     classId: currentClassId, studentId, studentName, actionType, details,
     coinDelta, expDelta, petId, extra, snapshot, reverted: false, _synced: false
   };
-  // v15: Push to window.operationLogs to ensure dal.js sees the new log
+  // v16: Push to window.operationLogs — the single source of truth
   window.operationLogs.push(log);
-  // Keep local alias in sync (should already be same array, but be explicit)
-  if (operationLogs !== window.operationLogs) operationLogs = window.operationLogs;
   saveLogs();
 }
 function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
 function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } unequipItem(student, itemId); } }
 function revertToLog(logId){
-  var _logs = window.operationLogs || operationLogs || [];
+  var _logs = getOpLogs();
   const log = _logs.find(l => l.id === logId);
   if(!log) return;
   if(log.reverted){ showNotification('无法撤销','该操作已被撤销过', 'warning'); return; }
@@ -1839,7 +1834,7 @@ function renderClassTopThree(){
     fullListEl.innerHTML=listHtml;
   }
 }
-function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}
+function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* v16: For students, force-reload operation logs before rendering PK/Jianghu pages to ensure latest data */var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed, rendering with existing data:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
@@ -2303,7 +2298,7 @@ function _getPendingPKChallengeForMe() {
   const today = new Date().toDateString();
   
   // Look for pending challenges targeting me
-  var _logs = window.operationLogs || operationLogs || [];
+  var _logs = getOpLogs();
   for (let i = _logs.length - 1; i >= 0; i--) {
     const log = _logs[i];
     if (log.actionType !== 'PK挑战') continue;
@@ -2383,7 +2378,7 @@ function acceptPKChallenge(challengeLogId) {
   if (overlay) overlay.remove();
   
   // Find the challenge log
-  var _logs = window.operationLogs || operationLogs || [];
+  var _logs = getOpLogs();
   const log = _logs.find(l => l.id === challengeLogId);
   if (!log || !log.extra) return;
   
@@ -2452,7 +2447,7 @@ function _checkAcceptedPKChallenge() {
   const today = new Date().toDateString();
   
   // Look for accepted challenges where I am the challenger
-  var _logs = window.operationLogs || operationLogs || [];
+  var _logs = getOpLogs();
   for (let i = _logs.length - 1; i >= 0; i--) {
     const log = _logs[i];
     if (log.actionType !== 'PK接受') continue;
@@ -2501,7 +2496,7 @@ function declinePKChallenge(challengeLogId) {
   if (overlay) overlay.remove();
   
   // Find the challenge log and mark as declined
-  var _logs = window.operationLogs || operationLogs || [];
+  var _logs = getOpLogs();
   const log = _logs.find(l => l.id === challengeLogId);
   if (log && log.extra) {
     log.extra.status = 'declined';
@@ -5410,7 +5405,7 @@ function getTodayCoinGain(studentId) {
   let total = 0;
   // v15: Always read from window.operationLogs for cross-script consistency
   const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡'];
-  var logs = window.operationLogs || operationLogs || [];
+  var logs = getOpLogs();
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
     if (log.reverted) continue;
@@ -5429,7 +5424,7 @@ function hasPKQualificationToday(studentId) {
   let total = 0;
   // v15: Always read from window.operationLogs for cross-script consistency
   const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡'];
-  var logs = window.operationLogs || operationLogs || [];
+  var logs = getOpLogs();
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
     if (log.reverted) continue;
@@ -5443,6 +5438,8 @@ function hasPKQualificationToday(studentId) {
 }
 
 function renderJianghuColumn(cur, validStudents) {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  const myStudentId = isStudentView ? parseInt(currentUser.studentId) : null;
   const qualifiedStudents = cur.students.filter(s => {
     const p = getActivePet(s);
     if (!p || p.isDead) return false;
@@ -5459,23 +5456,65 @@ function renderJianghuColumn(cur, validStudents) {
       const todayGain = getTodayCoinGain(s.id);
       const isSelected = jhSelectedStudentId && jhSelectedStudentId.toString() === s.id.toString();
       const alreadyDone = hasJianghuToday(s);
-      html += `<div class="jianghu-item ${isSelected ? 'jh-selected' : ''} ${alreadyDone ? 'jh-done' : ''}" onclick="${alreadyDone ? '' : "selectJianghuStudent('" + s.id + "')"}" ${alreadyDone ? 'title="今日已闯荡"' : ''}>`;
+      // v16: Get Jianghu result for today (win/lose)
+      const jhResult = getJianghuResultToday(s.id);
+      const isMe = myStudentId && s.id.toString() === myStudentId.toString();
+      // v16: For student view, only allow selecting self if qualified
+      const canSelect = isStudentView ? (isMe && !alreadyDone) : !alreadyDone;
+      html += `<div class="jianghu-item ${isSelected ? 'jh-selected' : ''} ${alreadyDone ? 'jh-done' : ''}" onclick="${canSelect ? "selectJianghuStudent('" + s.id + "')" : ''}" ${alreadyDone ? 'title="今日已闯荡"' : ''}>`;
       html += `<div class="jianghu-item-avatar">${getPetImage(p.name, p.level)}</div>`;
       html += `<div class="jianghu-item-info">`;
-      html += `<div class="jh-name">${esc(s.name)}${alreadyDone ? ' <span style="font-size:10px;color:rgba(180,140,80,0.5);font-weight:400;">（今日已闯）</span>' : ''}</div>`;
+      html += `<div class="jh-name">${esc(s.name)}${isMe ? ' <span style="font-size:10px;color:#4a90d9;font-weight:400;">（我）</span>' : ''}${alreadyDone ? ' <span style="font-size:10px;color:rgba(180,140,80,0.5);font-weight:400;">（今日已闯）</span>' : ''}</div>`;
       html += `<div class="jh-pet">${esc(p.nickname || p.name)} Lv.${p.level}</div>`;
       html += `<div class="jh-coins">💰 ${s.coins}金币 · 今日+${todayGain}</div>`;
       html += `</div>`;
-      html += `<div class="jh-coin-badge">${alreadyDone ? '✓' : '+' + todayGain}</div>`;
+      // v16: Show win/lose badge for students who have done Jianghu today
+      if (alreadyDone && jhResult) {
+        const badgeStyle = jhResult === 'win' 
+          ? 'background:linear-gradient(135deg,#ffd700,#ffaa00);color:#8b6914;' 
+          : 'background:linear-gradient(135deg,#ccc,#999);color:#555;';
+        const badgeText = jhResult === 'win' ? '胜' : '负';
+        html += `<div class="jh-coin-badge" style="${badgeStyle}font-size:11px;font-weight:700;">${badgeText}</div>`;
+      } else {
+        html += `<div class="jh-coin-badge">${alreadyDone ? '✓' : '+' + todayGain}</div>`;
+      }
       html += `</div>`;
     });
   }
   html += `</div>`;
   html += `</div>`;
-  html += `<div class="jianghu-start-area ${jhSelectedStudentId ? 'jh-btn-visible' : ''}">`;
-  html += `<button class="jianghu-start-btn" onclick="startJianghuAdventure()">⚔️ 闯荡江湖</button>`;
+  // v16: For student view, only show start button if student is qualified and hasn't done it yet
+  const myStudent = isStudentView ? cur.students.find(s => s.id === myStudentId) : null;
+  const myQualified = myStudent && getTodayCoinGain(myStudentId) >= 25 && getActivePet(myStudent) && !getActivePet(myStudent).isDead;
+  const myDone = myStudent && hasJianghuToday(myStudent);
+  const showStartBtn = isStudentView ? (myQualified && !myDone && jhSelectedStudentId) : jhSelectedStudentId;
+  html += `<div class="jianghu-start-area ${showStartBtn ? 'jh-btn-visible' : ''}">`;
+  if (isStudentView && myDone) {
+    html += `<div style="text-align:center;padding:10px;color:#a08060;font-size:13px;">今日已闯荡江湖，明日再来</div>`;
+  } else if (isStudentView && !myQualified) {
+    html += `<div style="text-align:center;padding:10px;color:#ccc;font-size:13px;">打卡+奖惩获得≥25金币方可闯荡江湖</div>`;
+  } else {
+    html += `<button class="jianghu-start-btn" onclick="startJianghuAdventure()">⚔️ 闯荡江湖</button>`;
+  }
   html += `</div>`;
   return html;
+}
+
+// v16: Get Jianghu result (win/lose) for a student today
+function getJianghuResultToday(studentId) {
+  const today = new Date().toDateString();
+  var logs = getOpLogs();
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const log = logs[i];
+    if (log.reverted) continue;
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (log.studentId && log.studentId.toString() === studentId.toString()) {
+      if (log.actionType === '江湖胜利' && log.extra && log.extra.jhType === 'win') return 'win';
+      if (log.actionType === '江湖失败' && log.extra && log.extra.jhType === 'lose') return 'lose';
+    }
+  }
+  return null;
 }
 
 function selectJianghuStudent(studentId) {
@@ -5496,6 +5535,15 @@ function startJianghuAdventure() {
   if (!jhSelectedStudentId || !currentClassId) return;
   const cur = classesData.find(c => c.id === currentClassId);
   if (!cur) return;
+  // v16: Student can only start adventure for themselves
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (isStudentView) {
+    const myId = parseInt(currentUser.studentId);
+    if (jhSelectedStudentId.toString() !== myId.toString()) {
+      showNotification('权限不足', '只能操作自己的宠物参与江湖行', 'warning');
+      return;
+    }
+  }
   const student = cur.students.find(s => s.id.toString() === jhSelectedStudentId.toString());
   if (!student) return;
   const pet = getActivePet(student);
