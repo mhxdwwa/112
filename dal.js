@@ -20,7 +20,7 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 120000; // Poll every 2 minutes for cross-user changes
+var _refreshInterval = 30000; // Poll every 30 seconds for cross-user changes (reduced from 2 minutes)
 var _lastRefreshTime = 0;
 var _realtimeChannels = [];
 var _syncRetryCount = 0;
@@ -344,6 +344,9 @@ function _smartRefreshFromSupabase() {
     _takeSnapshot();
 
     console.log('[DAL] Smart refresh complete — ' + changesApplied + ' changes applied from server');
+    if (isStudent && changesApplied > 0) {
+      console.log('[DAL] Student saw ' + changesApplied + ' updates from teacher/other students');
+    }
     return Promise.resolve();
   });
 }
@@ -1201,6 +1204,12 @@ function _doSmartRefresh() {
     // Re-render the UI with merged data
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    
+    // For students: show a subtle notification that data was refreshed
+    if (currentUser && currentUser.type === 'student') {
+      console.log('[DAL] Student data refreshed from server');
+    }
+    
     console.log('[DAL] Smart refresh complete');
   }).catch(function(e) {
     console.error('[DAL] Smart refresh error:', e);
@@ -1303,6 +1312,16 @@ function _setupPageLifecycle() {
       setTimeout(doRefresh, 3000);
     }
   });
+
+  // For students: also refresh on window focus (more aggressive than visibility change)
+  if (currentUser && currentUser.type === 'student') {
+    window.addEventListener('focus', function() {
+      console.log('[DAL] Window focused — refreshing student data');
+      if (!_dalSyncing && Date.now() - _lastOwnWriteTime > 5000) {
+        _refreshFromSupabase();
+      }
+    });
+  }
 }
 
 /* ===== Wrap Save Functions ===== */
