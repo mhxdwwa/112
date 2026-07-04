@@ -719,14 +719,19 @@ function _loadOperationLogs() {
 
 // v19: Helper function to process operation logs data
 function _processOperationLogsData(r) {
-    // This is more reliable than the old merge logic which could miss logs
+    // v23: Keep ALL local logs that aren't matched in Supabase to prevent data loss.
+    // Previously only kept unsynced logs with negative IDs, which caused logs
+    // marked _synced=true (but not actually in Supabase) to be lost.
     var localLogs = window.operationLogs || [];
     
-    // Collect local unsynced logs (logs not yet pushed to Supabase)
-    var localUnsynced = [];
+    // Collect ALL local logs that have a local origin (not from Supabase)
+    // This includes: unsynced logs, and synced logs that might not actually be in Supabase
+    var localOnly = [];
     localLogs.forEach(function(l) {
-      if (!l._synced && l.id < 0) {
-        localUnsynced.push(l);
+      // Keep any log that doesn't have a positive Supabase ID, OR
+      // any log that has _fromSupabase=false (was created locally)
+      if (!l._fromSupabase || l.id < 0 || !l.id) {
+        localOnly.push(l);
       }
     });
 
@@ -754,13 +759,9 @@ function _processOperationLogsData(r) {
       });
     }
 
-    // v14: Build a set of Supabase log IDs for fast lookup
-    var supabaseIdSet = {};
-    supabaseLogs.forEach(function(l) { supabaseIdSet[l.id] = true; });
-
-    // Keep local unsynced logs only if they aren't already in Supabase (by content match)
-    var keptUnsynced = [];
-    localUnsynced.forEach(function(localLog) {
+    // v23: Match local logs against Supabase by content, keep unmatched ones
+    var keptLocal = [];
+    localOnly.forEach(function(localLog) {
       var foundInSupabase = false;
       for (var i = 0; i < supabaseLogs.length; i++) {
         var sbLog = supabaseLogs[i];
@@ -770,16 +771,18 @@ function _processOperationLogsData(r) {
             (localLog.coinDelta || 0) === (sbLog.coinDelta || 0) &&
             localLog.timestamp === sbLog.timestamp) {
           foundInSupabase = true;
-          // Mark local log as synced with the Supabase ID
-          localLog.id = sbLog.id;
-          localLog._synced = true;
-          localLog._fromSupabase = true;
-          if (sbLog.reverted) localLog.reverted = true;
+          // Local log matches a Supabase log — skip the local copy, use Supabase version
           break;
         }
       }
       if (!foundInSupabase) {
-        keptUnsynced.push(localLog);
+        // v23: Keep the local log and mark it as unsynced so it gets re-synced
+        localLog._synced = false;
+        localLog._fromSupabase = false;
+        if (!localLog.id || localLog.id > 0) {
+          localLog.id = -(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+        }
+        keptLocal.push(localLog);
       }
     });
 
@@ -788,11 +791,11 @@ function _processOperationLogsData(r) {
     // We still keep local unsynced logs (logs not yet pushed to Supabase).
     var isStudent = currentUser && currentUser.type === 'student';
     if (isStudent && supabaseLogs.length === 0 && localLogs.length > 0) {
-      console.warn('[DAL] v16 WARNING: Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. This may indicate an RLS policy issue. Proceeding with Supabase data + unsynced local logs.');
+      console.warn('[DAL] v23 WARNING: Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. This may indicate an RLS policy issue. Proceeding with Supabase data + unsynced local logs.');
     }
 
-    // v16: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
-    window.operationLogs = supabaseLogs.concat(keptUnsynced);
+    // v23: Replace operationLogs: Supabase logs + all unmatched local logs
+    window.operationLogs = supabaseLogs.concat(keptLocal);
 
     // Sort by timestamp (newest first)
     window.operationLogs.sort(function(a, b) {
@@ -805,7 +808,10 @@ function _processOperationLogsData(r) {
     // Persist the merged logs to localStorage as backup
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
 
-    console.log('[DAL] v14 Operation logs rebuilt: ' + window.operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + keptUnsynced.length + ' local unsynced kept)');
+    console.log('[DAL] v23 Operation logs rebuilt: ' + window.operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + keptLocal.length + ' local unmatched kept)');
+    if (keptLocal.length > 0) {
+      console.log('[DAL] v23 Unmatched local logs will be re-synced to Supabase');
+    }
     if (currentUser.type === 'student') {
       var today = new Date().toDateString();
       var todayLogs = window.operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
@@ -934,23 +940,40 @@ function _syncOperationLogsToSupabase() {
             return;
           }
           if (r.data && r.data.length > 0) {
-            // Match returned rows back to local logs using _local_idx tag
+            // v23: Match returned rows back to local logs using _local_idx tag
+            var matchedCount = 0;
             r.data.forEach(function(inserted) {
               var localIdx = inserted._local_idx;
               if (localIdx !== undefined && localIdx >= 0 && localIdx < window.operationLogs.length) {
                 window.operationLogs[localIdx]._synced = true;
                 window.operationLogs[localIdx].id = inserted.id;
                 window.operationLogs[localIdx]._fromSupabase = true;
+                matchedCount++;
               }
             });
-            // Fallback: if _local_idx wasn't returned (Supabase strips unknown fields),
-            // mark all logs in this batch as synced by position
-            var allMatched = r.data.every(function(d) { return d._local_idx !== undefined; });
-            if (!allMatched) {
-              console.warn('[DAL] _local_idx stripped by Supabase, falling back to batch marking');
+            // v23: If _local_idx was stripped by Supabase, use content matching as fallback
+            // instead of blindly marking all as synced (which caused data loss)
+            if (matchedCount === 0 && r.data.length > 0) {
+              console.warn('[DAL] v23 _local_idx stripped by Supabase, using content-based matching');
               batchEntries.forEach(function(entry) {
-                window.operationLogs[entry.index]._synced = true;
-                window.operationLogs[entry.index]._fromSupabase = true;
+                var log = entry.log;
+                // Find matching inserted row by content
+                for (var j = 0; j < r.data.length; j++) {
+                  var inserted = r.data[j];
+                  if (inserted.action_type === log.actionType &&
+                      String(inserted.student_id) === String(log.studentId) &&
+                      inserted.details === log.details &&
+                      (inserted.coin_delta || 0) === (log.coinDelta || 0) &&
+                      inserted.created_at === log.timestamp) {
+                    window.operationLogs[entry.index]._synced = true;
+                    window.operationLogs[entry.index].id = inserted.id;
+                    window.operationLogs[entry.index]._fromSupabase = true;
+                    matchedCount++;
+                    break;
+                  }
+                }
+                // If still not matched, leave as _synced=false so it will be retried
+                // Do NOT blindly mark as synced — this was the cause of data loss
               });
             }
             // Persist the updated sync flags to localStorage
@@ -1135,7 +1158,44 @@ function _syncTeacherToSupabase() {
       return Promise.all(studentUpsertPromises);
     });
   }).then(function() {
-    // === Phase 4: Save custom actions ===
+    // === Phase 4: Delete students that were removed locally ===
+    // Build set of local student IDs (only positive/Supabase IDs)
+    var localStudentIds = {};
+    classesData.forEach(function(cls) {
+      cls.students.forEach(function(stu) {
+        if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
+          localStudentIds[stu.id] = true;
+        }
+      });
+    });
+    // Query Supabase for all students in teacher's classes
+    var teacherClassIds = classesData.map(function(c) { return c.id; });
+    if (teacherClassIds.length > 0) {
+      return db.from('students').select('id').in('class_id', teacherClassIds).then(function(r) {
+        if (r.error) { console.error('[DAL] student delete check error:', r.error); return; }
+        var supabaseStudents = r.data || [];
+        var toDelete = [];
+        supabaseStudents.forEach(function(s) {
+          if (!localStudentIds[s.id]) {
+            toDelete.push(s.id);
+          }
+        });
+        if (toDelete.length > 0) {
+          console.log('[DAL] Deleting', toDelete.length, 'students from Supabase that were removed locally:', toDelete);
+          // First delete their pets
+          return db.from('pets').delete().in('student_id', toDelete).then(function(pr) {
+            if (pr.error) console.error('[DAL] pet delete error:', pr.error);
+            // Then delete the students
+            return db.from('students').delete().in('id', toDelete);
+          }).then(function(sr) {
+            if (sr.error) console.error('[DAL] student delete error:', sr.error);
+            else console.log('[DAL] Deleted', toDelete.length, 'students from Supabase');
+          });
+        }
+      });
+    }
+  }).then(function() {
+    // === Phase 5: Save custom actions ===
     if (typeof customActions !== 'undefined' && customActions.length > 0) {
       var actionPayloads = customActions.map(function(a) {
         return {
