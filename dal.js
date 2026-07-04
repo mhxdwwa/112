@@ -591,9 +591,11 @@ function _loadOperationLogs() {
   // Get class IDs for this user
   var getClassIdsPromise;
   if (currentUser.type === 'teacher') {
-    getClassIdsPromise = db.from('classes').select('id').then(function(classR) {
+    // v12: Use server-side filter — previous code only selected 'id' then tried
+    // to filter by teacher_id client-side, which always returned empty.
+    getClassIdsPromise = db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(classR) {
       if (classR.error || !classR.data) return [];
-      return classR.data.filter(function(c) { return c.teacher_id === currentUser.id; }).map(function(c) { return c.id; });
+      return classR.data.map(function(c) { return c.id; });
     });
   } else {
     // Student: use classId from localStorage
@@ -1270,6 +1272,8 @@ function _doSmartRefresh() {
     // Re-render the UI with merged data
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    // v12: Refresh history modal if open — show latest logs in real-time
+    if (typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
     
     // For students: check for pending PK challenges and accepted challenges
     if (currentUser && currentUser.type === 'student') {

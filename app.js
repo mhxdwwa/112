@@ -722,6 +722,23 @@ function showHistoryModal(){
     showFn(); // Always show modal, even if Supabase fails
   });
 }
+// v12: Refresh history modal content when it's open and new logs arrive (Realtime)
+function refreshHistoryModalIfOpen(){
+  var modalOverlay = document.querySelector('#modalContainer .modal-overlay');
+  if(!modalOverlay) return;
+  var titleEl = modalOverlay.querySelector('.modal-title');
+  if(!titleEl || !titleEl.textContent.includes('历史操作记录')) return;
+  // History modal is open — refresh its content
+  var curClass = classesData.find(c=>c.id===currentClassId);
+  var className = curClass ? curClass.name : '未选择班级';
+  var months = getAvailableMonths();
+  if(months.length===0) return;
+  if(!_currentHistoryMonth || months.indexOf(_currentHistoryMonth)===-1) _currentHistoryMonth = months[0];
+  var contentEl = modalOverlay.querySelector('.modal-content');
+  if(contentEl) contentEl.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+  // Also update the title to reflect latest data
+  if(titleEl) titleEl.textContent = '\uD83D\uDCDC 历史操作记录【' + className + '】';
+}
 function switchHistoryMonth(month){
   _currentHistoryMonth = month;
   const curClass = classesData.find(c=>c.id===currentClassId);
@@ -738,7 +755,8 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
   // Only difference: students cannot revoke (handled below in button logic)
   const isStudentView = _isStudentHistoryView;
   const classLogs = allLogs.filter(log => {
-    if(log.classId) return log.classId === currentClassId;
+    // v12: Use toString() comparison to avoid type mismatch (number vs string)
+    if(log.classId) return log.classId.toString() === (currentClassId || '').toString();
     if(curClass) return curClass.students.some(s=>s.id.toString()===log.studentId.toString());
     return false;
   });
