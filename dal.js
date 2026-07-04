@@ -1415,6 +1415,24 @@ function wrapSaveFunctions() {
 }
 
 /* ===== Student Restrictions ===== */
+// Helper: check if student is operating on their own data
+function _isMyStudent(studentId) {
+  return currentUser && currentUser.type === 'student' && 
+         currentUser.studentId && studentId.toString() === currentUser.studentId.toString();
+}
+
+// Helper: block operation if student tries to modify other student's data
+function _blockIfNotMine(studentId, actionName) {
+  if (currentUser && currentUser.type === 'student' && !_isMyStudent(studentId)) {
+    if (typeof showNotification === 'function') {
+      showNotification('权限不足', '只能操作自己的宠物', 'warning');
+    }
+    console.log('[DAL] Blocked student ' + currentUser.studentName + ' from ' + actionName + ' on student ' + studentId);
+    return true;
+  }
+  return false;
+}
+
 function applyStudentRestrictions() {
   if (!currentUser || currentUser.type !== 'student') return;
   console.log('[DAL] Applying student restrictions for:', currentUser.studentName);
@@ -1446,6 +1464,106 @@ function applyStudentRestrictions() {
   document.querySelectorAll('[onclick*="showDeletedClassesModal"]').forEach(function(el) {
     el.style.display = 'none';
   });
+
+  // ===== Function-level guards =====
+  // Guard renamePet: only allow own pet
+  if (typeof window._origRenamePet === 'undefined') {
+    window._origRenamePet = window.renamePet;
+  }
+  window.renamePet = function(studentId, petId) {
+    if (_blockIfNotMine(studentId, 'renamePet')) return;
+    return window._origRenamePet(studentId, petId);
+  };
+
+  // Guard confirmRenamePet: only allow own pet
+  if (typeof window._origConfirmRenamePet === 'undefined') {
+    window._origConfirmRenamePet = window.confirmRenamePet;
+  }
+  window.confirmRenamePet = function(studentId, petId) {
+    if (_blockIfNotMine(studentId, 'confirmRenamePet')) return;
+    return window._origConfirmRenamePet(studentId, petId);
+  };
+
+  // Guard showChangePetModal: only allow own pet
+  if (typeof window._origShowChangePetModal === 'undefined') {
+    window._origShowChangePetModal = window.showChangePetModal;
+  }
+  window.showChangePetModal = function(studentId) {
+    if (_blockIfNotMine(studentId, 'showChangePetModal')) return;
+    return window._origShowChangePetModal(studentId);
+  };
+
+  // Guard showSwitchPetModal: only allow own pet
+  if (typeof window._origShowSwitchPetModal === 'undefined') {
+    window._origShowSwitchPetModal = window.showSwitchPetModal;
+  }
+  window.showSwitchPetModal = function(studentId) {
+    if (_blockIfNotMine(studentId, 'showSwitchPetModal')) return;
+    return window._origShowSwitchPetModal(studentId);
+  };
+
+  // Guard switchPet: only allow own pet
+  if (typeof window._origSwitchPet === 'undefined') {
+    window._origSwitchPet = window.switchPet;
+  }
+  window.switchPet = function(studentId, petId) {
+    if (_blockIfNotMine(studentId, 'switchPet')) return;
+    return window._origSwitchPet(studentId, petId);
+  };
+
+  // Guard feedPet: only allow own student
+  if (typeof window._origFeedPet === 'undefined') {
+    window._origFeedPet = window.feedPet;
+  }
+  window.feedPet = function(student, pet) {
+    if (_blockIfNotMine(student.id, 'feedPet')) return false;
+    return window._origFeedPet(student, pet);
+  };
+
+  // Guard playWithPet: only allow own student
+  if (typeof window._origPlayWithPet === 'undefined') {
+    window._origPlayWithPet = window.playWithPet;
+  }
+  window.playWithPet = function(student, pet) {
+    if (_blockIfNotMine(student.id, 'playWithPet')) return false;
+    return window._origPlayWithPet(student, pet);
+  };
+
+  // Guard showAdoptModal: only allow own student
+  if (typeof window._origShowAdoptModal === 'undefined') {
+    window._origShowAdoptModal = window.showAdoptModal;
+  }
+  window.showAdoptModal = function(studentId) {
+    if (_blockIfNotMine(studentId, 'showAdoptModal')) return;
+    return window._origShowAdoptModal(studentId);
+  };
+
+  // Guard revivePet: only allow own student
+  if (typeof window._origRevivePet === 'undefined') {
+    window._origRevivePet = window.revivePet;
+  }
+  window.revivePet = function(student, pet) {
+    if (_blockIfNotMine(student.id, 'revivePet')) return false;
+    return window._origRevivePet(student, pet);
+  };
+
+  // Guard walkPet (if exists)
+  if (typeof window.walkPet === 'function' && typeof window._origWalkPet === 'undefined') {
+    window._origWalkPet = window.walkPet;
+    window.walkPet = function(student, pet) {
+      if (_blockIfNotMine(student.id, 'walkPet')) return false;
+      return window._origWalkPet(student, pet);
+    };
+  }
+
+  // Guard buyShopItem (if exists)
+  if (typeof window.buyShopItem === 'function' && typeof window._origBuyShopItem === 'undefined') {
+    window._origBuyShopItem = window.buyShopItem;
+    window.buyShopItem = function(studentId, itemId) {
+      if (_blockIfNotMine(studentId, 'buyShopItem')) return;
+      return window._origBuyShopItem(studentId, itemId);
+    };
+  }
 
   // Override openStudentModal for student viewing other students
   var _origOpenStudentModal = window.openStudentModal;
@@ -1520,6 +1638,10 @@ function applyStudentRestrictions() {
               btnOnclick.indexOf('renamePet') !== -1) {
             btn.style.display = 'none';
           }
+        });
+        // Also hide rename span button
+        card.querySelectorAll('.rename-pet-btn').forEach(function(el) {
+          el.style.display = 'none';
         });
       }
     });

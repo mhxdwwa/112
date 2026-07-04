@@ -345,9 +345,9 @@ archiveOldLogs();
 function saveLogs(){archiveOldLogs(); safeLSSave('operationLogs', operationLogs); scheduleFileSave();}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
-  const curMonth=_getCurrentMonth();
-  if(month===curMonth) return operationLogs;
-  return logArchives[month]||[];
+  // Always filter by month — operationLogs may contain logs from multiple months
+  // (loaded from Supabase which doesn't separate by month)
+  return operationLogs.filter(function(l) { return _getLogMonth(l) === month; });
 }
 function getAvailableMonths(){
   const months=new Set();
@@ -1822,45 +1822,33 @@ function renderPKPage() {
   });
   // 再筛选有PK资格的学生（今日奖惩获得>=5金币）
   const validStudents = allAliveStudents.filter(s => hasPKQualificationToday(s.id));
-  if(validStudents.length < 2) {
-    let hintMsg = '⚔️ 当前有资格PK的学生不足2人<br><br><span style="font-size:14px;color:#888;">PK资格：今日通过【奖惩/批量奖惩】获得≥5金币</span>';
-    if(allAliveStudents.length >= 2 && validStudents.length < 2) {
-      hintMsg += '<br><span style="font-size:13px;color:#a06040;">请先给学生施加奖惩或批量奖惩，获得金币后才能参加PK</span>';
-    }
-    container.innerHTML = `<div style="text-align:center;padding:40px;line-height:2;">${hintMsg}</div>`;
-    return;
-  }
   
-  // Check for pending PK challenge (for student view)
-  if (isStudentView && _checkPendingPKChallenge()) {
-    return; // Already showing challenge dialog
-  }
-  
-  let html = '';
-  html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加</div>`;
-  
+  // === Student view: render BEFORE the "not enough students" check ===
   if (isStudentView) {
-    // Student view: show self as fixed, select one opponent
     const myStudent = cur.students.find(s => s.id === myStudentId);
     const myPet = myStudent ? getActivePet(myStudent) : null;
     const myValid = myStudent && hasPKQualificationToday(myStudent.id);
     
-    if (!myValid) {
-      container.innerHTML = `<div style="text-align:center;padding:40px;line-height:2;">
-        <div style="font-size:48px;margin-bottom:16px;">🔒</div>
-        <div style="font-size:18px;font-weight:700;color:#a06040;">你还没有PK资格</div>
-        <div style="font-size:14px;color:#888;margin-top:8px;">今日通过【奖惩/批量奖惩】获得≥5金币即可参加PK</div>
-      </div>`;
-      return;
-    }
-    
-    // Check if I have pending challenges
+    // Check for pending challenges targeting me first
     const pendingChallenge = _getPendingPKChallengeForMe();
     if (pendingChallenge) {
       _showPKChallengeDialog(pendingChallenge);
       return;
     }
     
+    if (!myValid) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;line-height:2;">
+        <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+        <div style="font-size:18px;font-weight:700;color:#a06040;">你还没有PK资格</div>
+        <div style="font-size:14px;color:#888;margin-top:8px;">今日通过【奖惩/批量奖惩】获得≥5金币即可参加PK</div>
+        <div style="font-size:12px;color:#aaa;margin-top:16px;">当前有资格的学生：${validStudents.length}人</div>
+      </div>`;
+      return;
+    }
+    
+    // Show student PK interface
+    let html = '';
+    html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加 · 每人每日最多3次PK</div>`;
     html += `<div style="margin-bottom:20px;"><h3>🗡️ 发起PK挑战</h3>`;
     html += `<div style="padding:12px;background:#f0f8ff;border-radius:12px;border:2px solid #4a90d9;margin-bottom:16px;">`;
     html += `<div style="font-size:13px;color:#4a90d9;margin-bottom:8px;">⚔️ 你的出战宠物（固定）</div>`;
@@ -1879,7 +1867,7 @@ function renderPKPage() {
     // Show eligible opponents
     const opponents = validStudents.filter(s => s.id !== myStudentId);
     if (opponents.length === 0) {
-      html += `<div style="text-align:center;padding:20px;color:#888;">暂无其他有资格的学生</div>`;
+      html += `<div style="text-align:center;padding:20px;color:#888;">暂无其他有资格的学生可挑战</div>`;
     } else {
       html += `<div style="font-size:13px;color:#666;margin-bottom:8px;">选择一名对手发起挑战：</div>`;
       html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">`;
@@ -1908,30 +1896,43 @@ function renderPKPage() {
       <button class="btn btn-secondary" onclick="resetPKSelection()">重置选择</button>
       <button class="btn btn-primary" onclick="sendPKChallenge()" ${!canChallenge?'disabled':''}>⚔️ 发起挑战</button>
     </div>`;
-  } else {
-    // Teacher view: original behavior
-    html += `<div style="margin-bottom:20px;"><h3>选择你的宠物</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">`;
-    validStudents.forEach(s => {
-      const p = getActivePet(s);
-      const isSelected = pkState.players.some(p => p.studentId.toString() === s.id.toString());
-      html += `<div class="pk-opponent-item ${isSelected ? 'selected' : ''}" onclick="selectPKPlayer('${s.id}')">
-        <div class="pk-opponent-avatar">${getPetImage(p.name, p.level)}</div>
-        <div>
-          <div style="font-weight:700;">${esc(s.name)}</div>
-          <div style="font-size:14px;">${esc(p.nickname||p.name)} Lv.${p.level}</div>
-          <div style="font-size:12px;color:#885555;">成长: ${p.level>=9?getExpNeeded(p):p.growth}</div>
-          <div style="font-size:12px;color:#d4a017;margin-top:2px;">💰 金币: ${s.coins}</div>
-          <div style="font-size:12px;color:#ff8844;margin-top:4px;">📊 今日PK: ${s.pkCountToday || 0}/3次</div>
-        </div>
-        ${isSelected?'<div style="font-size:24px;">✅</div>':''}
-      </div>`;
-    });
-    html += `</div></div>`;
-    html += `<div style="text-align:center;margin-top:20px;">
-      <button class="btn btn-secondary" onclick="resetPKSelection()">重置选择</button>
-      <button class="btn btn-primary" onclick="startPKBattle()" ${(pkState.players.length !== 2)?'disabled':''}>⚔️ 开始对战</button>
-    </div>`;
+    container.innerHTML = html;
+    return;
   }
+  
+  // === Teacher view ===
+  if(validStudents.length < 2) {
+    let hintMsg = '⚔️ 当前有资格PK的学生不足2人<br><br><span style="font-size:14px;color:#888;">PK资格：今日通过【奖惩/批量奖惩】获得≥5金币</span>';
+    if(allAliveStudents.length >= 2 && validStudents.length < 2) {
+      hintMsg += '<br><span style="font-size:13px;color:#a06040;">请先给学生施加奖惩或批量奖惩，获得金币后才能参加PK</span>';
+    }
+    container.innerHTML = `<div style="text-align:center;padding:40px;line-height:2;">${hintMsg}</div>`;
+    return;
+  }
+  
+  let html = '';
+  html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加</div>`;
+  html += `<div style="margin-bottom:20px;"><h3>选择你的宠物</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">`;
+  validStudents.forEach(s => {
+    const p = getActivePet(s);
+    const isSelected = pkState.players.some(p => p.studentId.toString() === s.id.toString());
+    html += `<div class="pk-opponent-item ${isSelected ? 'selected' : ''}" onclick="selectPKPlayer('${s.id}')">
+      <div class="pk-opponent-avatar">${getPetImage(p.name, p.level)}</div>
+      <div>
+        <div style="font-weight:700;">${esc(s.name)}</div>
+        <div style="font-size:14px;">${esc(p.nickname||p.name)} Lv.${p.level}</div>
+        <div style="font-size:12px;color:#885555;">成长: ${p.level>=9?getExpNeeded(p):p.growth}</div>
+        <div style="font-size:12px;color:#d4a017;margin-top:2px;">💰 金币: ${s.coins}</div>
+        <div style="font-size:12px;color:#ff8844;margin-top:4px;">📊 今日PK: ${s.pkCountToday || 0}/3次</div>
+      </div>
+      ${isSelected?'<div style="font-size:24px;">✅</div>':''}
+    </div>`;
+  });
+  html += `</div></div>`;
+  html += `<div style="text-align:center;margin-top:20px;">
+    <button class="btn btn-secondary" onclick="resetPKSelection()">重置选择</button>
+    <button class="btn btn-primary" onclick="startPKBattle()" ${(pkState.players.length !== 2)?'disabled':''}>⚔️ 开始对战</button>
+  </div>`;
   container.innerHTML = html;
 }
 
