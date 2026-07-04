@@ -317,6 +317,8 @@ function saveCustomActions(){safeLSSave('customActions', customActions); schedul
 saveCustomActions();
 var operationLogs = [];
 try { operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { console.warn('operationLogs读取失败，已重置:', e.message); localStorage.removeItem('operationLogs'); }
+// v14: Ensure window.operationLogs is set for cross-script access (dal.js reads window.operationLogs)
+window.operationLogs = operationLogs;
 let logArchives = {};
 try { logArchives = JSON.parse(localStorage.getItem('logArchives')) || {}; } catch(e) { console.warn('logArchives读取失败，已重置:', e.message); localStorage.removeItem('logArchives'); }
 function _getLogMonth(log){return log.timestamp?log.timestamp.slice(0,7):'';}
@@ -350,7 +352,7 @@ function triggerRealtimeSync() {
   _syncDebounceTimer = setTimeout(function() {
     _syncDebounceTimer = null;
     _syncToSupabase();
-  }, 500); // 500ms debounce — fast enough for real-time, prevents flooding
+  }, 200); // v14: 200ms debounce — faster real-time sync
 }
 function saveLogs(){archiveOldLogs(); safeLSSave('operationLogs', operationLogs); scheduleFileSave(); triggerRealtimeSync();}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
@@ -680,13 +682,13 @@ function revertToLog(logId){
   showNotification('撤销成功', revertDetail, 'success');
 }
 function _historyActionIcon(type){
-  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄'};
+  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄'};
   return icons[type]||'📝';
 }
 function _historyActionColor(type){
   if(type==='惩罚致死'||type==='饿死') return '#ff4444';
   if(type.includes('惩罚')||type==='PK失败') return '#e07050';
-  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡') return '#4a9e4a';
+  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡'||type==='每日打卡') return '#4a9e4a';
   if(type==='PK平局') return '#8888aa';
   if(type==='复活') return '#9b59b6';
   if(type==='商店购买') return '#8e44ad';
@@ -1295,6 +1297,7 @@ function buildStudentModalContent(student, pet){
     <button class="modal-btn" style="background:#5dade2;" onclick="modalTravel()" ${pet.level<6?'disabled':''}>✈️ 旅游 (100金币 Lv6+)<span>成长+${Math.min(85+shopBonus, 100)}${bonusTag}</span>${pet.level<6?'<span style="color:#ffcc00;">Lv6解锁</span>':feedHint}</button>
     ${pet.isDead?`<button class="modal-btn" style="background:#dc6b6b;" onclick="modalRevive()" ${reviveDisabled}>💖 复活宠物 (50金币)</button>`:''}
     ${adoptBtn}
+    ${(function(){const today=new Date().toDateString();const checkedIn=student.lastCheckinDate&&new Date(student.lastCheckinDate).toDateString()===today;return checkedIn?'<button class="modal-btn" style="background:#b0b0b0;" disabled>📋 每日打卡<span>✅ 今日已打卡</span></button>':'<button class="modal-btn" style="background:#48c774;" onclick="modalDailyCheckin()">📋 每日打卡<span>+10金币</span></button>';})()}
   </div>
   ${_buildModalShopSection(student, pet)}`;
 }
@@ -1395,6 +1398,28 @@ function modalWalk(){if(checkPauseAndNotify())return;if(!currentModalStudentId)r
 function modalShopping(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;let pet=getActivePet(student);if(!pet)return;if(pet.isDead||pet.level>=9){const growable=getGrowablePet(student);if(growable){pet=growable;}else if(pet.isDead){showNotification('无法逛街','宠物已死亡，请先复活','error');return;}else{showNotification('全部满级','所有宠物都已满级，可以领养新宠物','info');return;}}if(pet.level<3){showNotification('等级不足','逛街需要Lv3以上','warning');return;}shoppingPet(student,pet);saveClassData();refreshCurrentStudentModal();scheduleAllRenders();}
 function modalTravel(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;let pet=getActivePet(student);if(!pet)return;if(pet.isDead||pet.level>=9){const growable=getGrowablePet(student);if(growable){pet=growable;}else if(pet.isDead){showNotification('无法旅游','宠物已死亡，请先复活','error');return;}else{showNotification('全部满级','所有宠物都已满级，可以领养新宠物','info');return;}}if(pet.level<6){showNotification('等级不足','旅游需要Lv6以上','warning');return;}travelPet(student,pet);saveClassData();refreshCurrentStudentModal();scheduleAllRenders();}
 function modalRevive(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;const pet=getActivePet(student);if(!pet)return;revivePet(student,pet);saveClassData();refreshCurrentStudentModal();renderHomePetGrid();renderClassTopThree();}
+// v14: Student daily check-in — 10 coins per day, once per day
+function modalDailyCheckin(){
+  if(!currentModalStudentId)return;
+  const cur=classesData.find(c=>c.id===currentClassId);
+  const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());
+  if(!student)return;
+  const today=new Date().toDateString();
+  // Check if already checked in today
+  if(student.lastCheckinDate && new Date(student.lastCheckinDate).toDateString()===today){
+    showNotification('今日已打卡','每天只能打卡一次，明天再来吧','info');
+    return;
+  }
+  // Perform check-in: +10 coins
+  student.coins += 10;
+  student.lastCheckinDate = new Date().toISOString();
+  recordAction(student.id, student.name, '每日打卡', '+10金币', 10, 0, null);
+  saveClassData();
+  refreshCurrentStudentModal();
+  renderHomePetGrid();
+  scheduleAllRenders();
+  showNotification('打卡成功','每日打卡 +10金币！','success');
+}
 function modalApplyAction(actionId){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;const pet=getActivePet(student);if(!pet)return;const action=customActions.find(a=>a.id===actionId);if(!action)return; const result = applyAction(student, action, pet); if(result){ saveClassData(); refreshCurrentStudentModal(); scheduleAllRenders(); } }
 function modalAdoptNew(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;if(student.pets.some(p=>p.level<9)){showNotification('无法领养','还有未满级的宠物，需要全部满级后才能领养新宠物','warning');return;}closeModal();showAdoptModal(student.id, true);}
 function showAdoptModal(studentId, fromModal=false){ if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); const student=cur.students.find(s=>s.id.toString()===studentId.toString()); if(student.pets.length>0 && student.pets.some(p=>p.level<9)){showNotification('无法领养','还有未满级的宠物，需要全部满级后才能领养新宠物','warning');return;} let list=`<div class="pet-select-grid">`; Object.keys(PET_CONFIG).forEach(name=>{ list+=`<div class="pet-select-item" onclick="selectPetForAdopt('${name}','${studentId}')"><div class="pet-select-img">${getPetImage(name, 1)}</div><div>${name}</div></div>`; }); list+='</div>'; const modalOverlay = showModal('领养宠物', list, [{text:'取消',onclick: fromModal ? 'refreshCurrentStudentModal()' : 'closeModal()'}], true); if(modalOverlay){ const modalDiv = modalOverlay.querySelector('.modal'); if(modalDiv) modalDiv.classList.add('adopt-modal'); } }
@@ -1969,20 +1994,36 @@ function renderPKPage() {
     }
     
     if (!myValid) {
-      container.innerHTML = `<div style="text-align:center;padding:40px;line-height:2;">
+      let noQualHtml = `<div style="text-align:center;padding:40px;line-height:2;">
         <div style="font-size:48px;margin-bottom:16px;">🔒</div>
         <div style="font-size:18px;font-weight:700;color:#a06040;">你还没有PK资格</div>
-        <div style="font-size:14px;color:#888;margin-top:8px;">今日通过【奖惩/批量奖惩】获得≥5金币即可参加PK</div>
-        <div style="font-size:12px;color:#aaa;margin-top:16px;">当前有资格的学生：${validStudents.length}人</div>
-      </div>`;
+        <div style="font-size:14px;color:#888;margin-top:8px;">今日通过【奖惩/批量奖惩/每日打卡】获得≥5金币即可参加PK</div>
+        <div style="font-size:12px;color:#aaa;margin-top:16px;">当前有资格的学生：${validStudents.length}人</div>`;
+      // v14: Show list of qualified students even when current student doesn't qualify
+      if (validStudents.length > 0) {
+        noQualHtml += `<div style="margin-top:15px;text-align:left;max-width:400px;margin-left:auto;margin-right:auto;">`;
+        noQualHtml += `<div style="font-size:13px;font-weight:600;color:#a06040;margin-bottom:8px;">当前有资格PK的同学：</div>`;
+        validStudents.forEach(s => {
+          const p = getActivePet(s);
+          if (p) {
+            noQualHtml += `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff8f0;border-radius:10px;margin-bottom:4px;">
+              <div style="width:30px;height:30px;">${getPetImage(p.name, p.level)}</div>
+              <div style="font-size:13px;font-weight:600;color:#664;">${esc(s.name)}</div>
+              <div style="font-size:11px;color:#aa8;">Lv.${p.level} ${esc(p.nickname||p.name)}</div>
+            </div>`;
+          }
+        });
+        noQualHtml += `</div>`;
+      }
+      noQualHtml += `</div>`;
+      container.innerHTML = noQualHtml;
       return;
     }
     
-    // v12: Student view - show PK info but don't allow opponent selection
-    // PK challenges should be initiated through a separate flow, not by clicking cards
+    // v14: Student view - show PK info with list of qualified opponents
     let html = '';
-    html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加 · 每人每日最多3次PK</div>`;
-    html += `<div style="text-align:center;padding:40px;line-height:2;">
+    html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加 · 每人每日最多3次PK · 打卡也可获得资格</div>`;
+    html += `<div style="text-align:center;padding:20px;line-height:2;">
       <div style="font-size:48px;margin-bottom:16px;">⚔️</div>
       <div style="font-size:18px;font-weight:700;color:#4a90d9;">PK挑战</div>
       <div style="font-size:14px;color:#888;margin-top:8px;">你有PK资格，可以通过发起挑战与其他学生进行对战</div>
@@ -1990,13 +2031,32 @@ function renderPKPage() {
         <button class="btn btn-primary" onclick="showStudentPKChallengeModal()" style="padding:12px 30px;font-size:15px;">发起PK挑战</button>
       </div>
     </div>`;
+    // v14: Show list of qualified opponents
+    const opponents = validStudents.filter(s => s.id.toString() !== myStudentId.toString());
+    if (opponents.length > 0) {
+      html += `<div style="margin-top:10px;"><div style="font-size:13px;font-weight:600;color:#a06040;margin-bottom:8px;">可挑战的同学 (${opponents.length}人)：</div>`;
+      html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;">`;
+      opponents.forEach(s => {
+        const p = getActivePet(s);
+        if (p) {
+          html += `<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:#f0f8ff;border-radius:10px;border:1px solid #d0e8ff;">
+            <div style="width:28px;height:28px;">${getPetImage(p.name, p.level)}</div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#446;">${esc(s.name)}</div>
+              <div style="font-size:10px;color:#889;">Lv.${p.level} 💰${s.coins}</div>
+            </div>
+          </div>`;
+        }
+      });
+      html += `</div></div>`;
+    }
     container.innerHTML = html;
     return;
   }
   
   // === Teacher view ===
   if(validStudents.length < 2) {
-    let hintMsg = '⚔️ 当前有资格PK的学生不足2人<br><br><span style="font-size:14px;color:#888;">PK资格：今日通过【奖惩/批量奖惩】获得≥5金币</span>';
+    let hintMsg = '⚔️ 当前有资格PK的学生不足2人<br><br><span style="font-size:14px;color:#888;">PK资格：今日通过【奖惩/批量奖惩/打卡】获得≥5金币</span>';
     if(allAliveStudents.length >= 2 && validStudents.length < 2) {
       hintMsg += '<br><span style="font-size:13px;color:#a06040;">请先给学生施加奖惩或批量奖惩，获得金币后才能参加PK</span>';
     }
@@ -2136,7 +2196,7 @@ function showStudentPKChallengeModal() {
   
   // Check if student has PK qualification
   if (!hasPKQualificationToday(myStudentId)) {
-    showNotification('无PK资格', '今日需要通过奖惩获得至少5金币', 'warning');
+    showNotification('无PK资格', '今日需要通过奖惩/打卡获得至少5金币', 'warning');
     return;
   }
   
@@ -5325,8 +5385,8 @@ let jhSelectedStudentId = null;
 function getTodayCoinGain(studentId) {
   const today = new Date().toDateString();
   let total = 0;
-  // 只统计全班打卡和批量奖惩获得的金币，PK金币不计入江湖行资格
-  const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩'];
+  // v14: Include daily check-in (每日打卡) along with class check-in and rewards
+  const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡'];
   for (let i = operationLogs.length - 1; i >= 0; i--) {
     const log = operationLogs[i];
     if (log.reverted) continue;
@@ -5339,12 +5399,12 @@ function getTodayCoinGain(studentId) {
   return total;
 }
 
-// 判断学生今日是否有奖惩资格参加PK（今日奖惩获得>=5金币）
+// v14: 判断学生今日是否有资格参加PK（今日通过奖惩/批量奖惩/打卡获得>=5金币）
 function hasPKQualificationToday(studentId) {
   const today = new Date().toDateString();
   let total = 0;
-  // 奖惩和批量奖惩获得的金币均可获得PK资格
-  const pkValidTypes = ['奖惩', '批量奖惩'];
+  // v14: 奖惩、批量奖惩、每日打卡、全班打卡获得的金币均可获得PK资格
+  const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡'];
   for (let i = operationLogs.length - 1; i >= 0; i--) {
     const log = operationLogs[i];
     if (log.reverted) continue;

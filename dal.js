@@ -28,7 +28,7 @@ var _maxRetries = 3;
 var _lastSyncFailed = false;
 var _DAL_VERSION = '10.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
-var _REFRESH_PROTECTION_MS = 30000; // 30s protection after sync — prevents Realtime echo from overwriting local data
+var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
 /* ===== Snapshot System (v7.0) ===== */
 // _snapshotClassesData: what Supabase looked like when we last loaded/synced
@@ -43,9 +43,9 @@ var _myBasePets = {};    // Student's pet growth at last known Supabase state
 
 /* ===== Debounce & Self-Write Protection (v7.0) ===== */
 var _refreshDebounceTimer = null;
-var _REFRESH_DEBOUNCE_MS = 3000; // 3s debounce for Realtime events
+var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
-var _OWN_WRITE_IGNORE_MS = 30000; // Ignore Realtime events for 30s after our own write
+var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after our own write (was 30s)
 
 /* ===== Snapshot Helpers (v7.0) ===== */
 function _takeSnapshot() {
@@ -94,11 +94,10 @@ function _findPetInSnapshot(petId) {
 function _smartRefreshFromSupabase() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   
-  // Short protection to skip immediate echo of our own writes (5s)
-  // After 5s, the smart merge safely handles any remaining echoes
-  if (Date.now() - _lastOwnWriteTime < 5000) {
+  // v14: Short protection to skip immediate echo of our own writes (2s)
+  if (Date.now() - _lastOwnWriteTime < 2000) {
     console.log('[DAL] Smart refresh skipped — own write echo (' + 
-      Math.round((5000 - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
+      Math.round((2000 - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
     return Promise.resolve();
   }
 
@@ -588,11 +587,17 @@ function _loadOperationLogs() {
     return Promise.resolve();
   }
 
+  // v14: Use window.operationLogs explicitly to avoid cross-script scope issues
+  // app.js declares "var operationLogs" which creates window.operationLogs,
+  // but dal.js (a separate <script>) must reference it via window. to ensure
+  // both scripts share the same array.
+  if (typeof window.operationLogs === 'undefined') {
+    try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { window.operationLogs = []; }
+  }
+
   // Get class IDs for this user
   var getClassIdsPromise;
   if (currentUser.type === 'teacher') {
-    // v12: Use server-side filter — previous code only selected 'id' then tried
-    // to filter by teacher_id client-side, which always returned empty.
     getClassIdsPromise = db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(classR) {
       if (classR.error || !classR.data) return [];
       return classR.data.map(function(c) { return c.id; });
@@ -608,12 +613,12 @@ function _loadOperationLogs() {
     getClassIdsPromise = db.from('classes').select('id').eq('id', studentClassId).then(function(classR) {
       if (classR.error || !classR.data || classR.data.length === 0) {
         console.warn('[DAL] _loadOperationLogs: class not found in Supabase, using local classId');
-        return [studentClassId]; // Fall back to local classId
+        return [studentClassId];
       }
       return classR.data.map(function(c) { return c.id; });
     }).catch(function(e) {
       console.warn('[DAL] _loadOperationLogs: classes query failed, using local classId:', e);
-      return [studentClassId]; // Fall back to local classId
+      return [studentClassId];
     });
   }
 
@@ -622,15 +627,23 @@ function _loadOperationLogs() {
       console.warn('[DAL] _loadOperationLogs: no classIds found');
       return null;
     }
-    // Fetch logs from Supabase
-    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(1000);
+    // v14: Increased limit to 5000 to ensure all logs are fetched
+    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
   }).then(function(r) {
-    // Always merge, even if r is null (keep local logs)
-    if (typeof operationLogs === 'undefined') return;
+    // v14: Completely rebuild operationLogs from Supabase + local unsynced logs
+    // This is more reliable than the old merge logic which could miss logs
+    var localLogs = window.operationLogs || [];
+    
+    // Collect local unsynced logs (logs not yet pushed to Supabase)
+    var localUnsynced = [];
+    localLogs.forEach(function(l) {
+      if (!l._synced && l.id < 0) {
+        localUnsynced.push(l);
+      }
+    });
 
     var supabaseLogs = [];
     if (r && r.data) {
-      // Convert Supabase format → local format
       supabaseLogs = r.data.map(function(l) {
         return {
           id: l.id,
@@ -653,53 +666,50 @@ function _loadOperationLogs() {
       });
     }
 
-    // v11: Improved smart merge — ensure ALL logs are present (local + Supabase)
-    // Build a set of local log IDs (both synced and unsynced)
-    var localIdSet = {};
-    operationLogs.forEach(function(l) { if (l.id > 0) localIdSet[l.id] = true; });
+    // v14: Build a set of Supabase log IDs for fast lookup
+    var supabaseIdSet = {};
+    supabaseLogs.forEach(function(l) { supabaseIdSet[l.id] = true; });
 
-    // Match unsynced local logs with Supabase logs by content (deduplication)
-    var matchedSupabaseIds = {};
-    operationLogs.forEach(function(localLog) {
-      if (localLog._synced) return; // already synced
+    // Keep local unsynced logs only if they aren't already in Supabase (by content match)
+    var keptUnsynced = [];
+    localUnsynced.forEach(function(localLog) {
+      var foundInSupabase = false;
       for (var i = 0; i < supabaseLogs.length; i++) {
         var sbLog = supabaseLogs[i];
-        if (matchedSupabaseIds[sbLog.id]) continue; // already matched
         if (localLog.actionType === sbLog.actionType &&
-            localLog.studentId === sbLog.studentId &&
+            String(localLog.studentId) === String(sbLog.studentId) &&
             localLog.details === sbLog.details &&
-            localLog.coinDelta === (sbLog.coinDelta || 0) &&
+            (localLog.coinDelta || 0) === (sbLog.coinDelta || 0) &&
             localLog.timestamp === sbLog.timestamp) {
-          // Match found — update local log with Supabase ID
+          foundInSupabase = true;
+          // Mark local log as synced with the Supabase ID
           localLog.id = sbLog.id;
           localLog._synced = true;
           localLog._fromSupabase = true;
           if (sbLog.reverted) localLog.reverted = true;
-          matchedSupabaseIds[sbLog.id] = true;
-          localIdSet[sbLog.id] = true;
           break;
         }
       }
+      if (!foundInSupabase) {
+        keptUnsynced.push(localLog);
+      }
     });
 
-    // Add Supabase logs that don't exist locally (by ID)
-    var newLogs = supabaseLogs.filter(function(l) { return !localIdSet[l.id] && !matchedSupabaseIds[l.id]; });
-    if (newLogs.length > 0) {
-      operationLogs = operationLogs.concat(newLogs);
-    }
+    // v14: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
+    window.operationLogs = supabaseLogs.concat(keptUnsynced);
 
     // Sort by timestamp (newest first)
-    operationLogs.sort(function(a, b) {
+    window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
 
     // Persist the merged logs to localStorage as backup
-    try { localStorage.setItem('operationLogs', JSON.stringify(operationLogs)); } catch(e) {}
+    try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
 
-    console.log('[DAL] Operation logs merged: ' + operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + newLogs.length + ' new)');
+    console.log('[DAL] v14 Operation logs rebuilt: ' + window.operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + keptUnsynced.length + ' local unsynced kept)');
     if (currentUser.type === 'student') {
       var today = new Date().toDateString();
-      var todayLogs = operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
+      var todayLogs = window.operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
       console.log('[DAL] Student today logs:', todayLogs.length);
       todayLogs.forEach(function(l) {
         console.log('[DAL]   Log:', l.actionType, 'studentId:', l.studentId, 'coinDelta:', l.coinDelta, 'synced:', l._synced);
@@ -707,31 +717,32 @@ function _loadOperationLogs() {
     }
   }).catch(function(e) {
     console.warn('[DAL] operation_logs load error:', e);
-    // Even on error, ensure operationLogs exists
-    if (typeof operationLogs === 'undefined') {
-      try { operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { operationLogs = []; }
+    if (typeof window.operationLogs === 'undefined') {
+      try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { window.operationLogs = []; }
     }
   });
 }
 
 /* ===== Sync Operation Logs to Supabase ===== */
-// v10: Rewrote to use index-based tracking instead of fragile field-value matching.
-// Each unsynced log is tracked by its index in the operationLogs array, so we always
-// know exactly which local logs correspond to which inserted rows.
+// v14: Use window.operationLogs explicitly for cross-script scope safety
 function _syncOperationLogsToSupabase() {
-  if (typeof operationLogs === 'undefined' || !Array.isArray(operationLogs)) return Promise.resolve();
+  // v14: Ensure window.operationLogs exists
+  if (typeof window.operationLogs === 'undefined') {
+    try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { window.operationLogs = []; }
+  }
+  if (!Array.isArray(window.operationLogs)) return Promise.resolve();
   if (!db || !currentUser) return Promise.resolve();
 
   // Collect unsynced logs WITH their indices in the original array
   var unsyncedEntries = [];
-  for (var i = 0; i < operationLogs.length; i++) {
-    if (!operationLogs[i]._synced) {
-      unsyncedEntries.push({ index: i, log: operationLogs[i] });
+  for (var i = 0; i < window.operationLogs.length; i++) {
+    if (!window.operationLogs[i]._synced) {
+      unsyncedEntries.push({ index: i, log: window.operationLogs[i] });
     }
   }
 
   // Find reverted logs that are synced but need reverted status updated in Supabase
-  var revertedLogs = operationLogs.filter(function(l) { return l._synced && l.reverted && !l._revertSynced; });
+  var revertedLogs = window.operationLogs.filter(function(l) { return l._synced && l.reverted && !l._revertSynced; });
 
   var insertPromise = Promise.resolve();
   if (unsyncedEntries.length > 0) {
@@ -740,7 +751,7 @@ function _syncOperationLogsToSupabase() {
     // Get class_id for the current context
     var classId = null;
     if (currentUser.type === 'teacher') {
-      classId = currentClassId || (classesData[0] ? classesData[0].id : null);
+      classId = (typeof currentClassId !== 'undefined' ? currentClassId : null) || (classesData[0] ? classesData[0].id : null);
     } else {
       classId = parseInt(localStorage.getItem('classId')) || (classesData[0] ? classesData[0].id : null);
     }
@@ -785,10 +796,10 @@ function _syncOperationLogsToSupabase() {
             // Match returned rows back to local logs using _local_idx tag
             r.data.forEach(function(inserted) {
               var localIdx = inserted._local_idx;
-              if (localIdx !== undefined && localIdx >= 0 && localIdx < operationLogs.length) {
-                operationLogs[localIdx]._synced = true;
-                operationLogs[localIdx].id = inserted.id;
-                operationLogs[localIdx]._fromSupabase = true;
+              if (localIdx !== undefined && localIdx >= 0 && localIdx < window.operationLogs.length) {
+                window.operationLogs[localIdx]._synced = true;
+                window.operationLogs[localIdx].id = inserted.id;
+                window.operationLogs[localIdx]._fromSupabase = true;
               }
             });
             // Fallback: if _local_idx wasn't returned (Supabase strips unknown fields),
@@ -797,12 +808,12 @@ function _syncOperationLogsToSupabase() {
             if (!allMatched) {
               console.warn('[DAL] _local_idx stripped by Supabase, falling back to batch marking');
               batchEntries.forEach(function(entry) {
-                operationLogs[entry.index]._synced = true;
-                operationLogs[entry.index]._fromSupabase = true;
+                window.operationLogs[entry.index]._synced = true;
+                window.operationLogs[entry.index]._fromSupabase = true;
               });
             }
             // Persist the updated sync flags to localStorage
-            try { localStorage.setItem('operationLogs', JSON.stringify(operationLogs)); } catch(e) {}
+            try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
           }
         })
       );
@@ -1278,7 +1289,7 @@ function _doSmartRefresh() {
     // For students: check for pending PK challenges and accepted challenges
     if (currentUser && currentUser.type === 'student') {
       console.log('[DAL] Student data refreshed from server');
-      console.log('[DAL] Operation logs loaded:', operationLogs.length);
+      console.log('[DAL] Operation logs loaded:', (window.operationLogs || []).length);
       
       // Check for accepted PK challenge (for the challenger to start battle)
       if (typeof _checkAcceptedPKChallenge === 'function') {
@@ -1719,7 +1730,7 @@ function exportAllDataToUSB() {
   var data = {
     classes: classesData,
     customActions: typeof customActions !== 'undefined' ? customActions : [],
-    operationLogs: typeof operationLogs !== 'undefined' ? operationLogs : [],
+    operationLogs: typeof window.operationLogs !== 'undefined' ? window.operationLogs : [],
     exportDate: new Date().toISOString()
   };
   var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
