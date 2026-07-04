@@ -692,21 +692,21 @@ var _pendingLogWrites = 0;
 function _writeUnsyncedLogsToSupabase() {
   // Prevent concurrent writes
   if (_writingLogsToSupabase) {
-    console.log('[DAL] v26 Write already in progress, queueing...');
+    console.log('[DAL] v27 Write already in progress, queueing...');
     _pendingLogWrites++;
     return Promise.resolve();
   }
   
   if (!db || !currentUser) {
-    console.warn('[DAL] v26 Cannot write logs: db or currentUser not ready');
+    console.warn('[DAL] v27 Cannot write logs: db or currentUser not ready');
     return Promise.resolve();
   }
   if (typeof window.operationLogs === 'undefined') {
-    console.warn('[DAL] v26 Cannot write logs: window.operationLogs is undefined');
+    console.warn('[DAL] v27 Cannot write logs: window.operationLogs is undefined');
     return Promise.resolve();
   }
   if (!Array.isArray(window.operationLogs)) {
-    console.warn('[DAL] v26 Cannot write logs: window.operationLogs is not an array');
+    console.warn('[DAL] v27 Cannot write logs: window.operationLogs is not an array');
     return Promise.resolve();
   }
 
@@ -727,7 +727,7 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
-  console.log('[DAL] v26 Starting write of ' + unsynced.length + ' unsynced logs, ' + revertedUnsynced.length + ' reverts');
+  console.log('[DAL] v27 Starting write of ' + unsynced.length + ' unsynced logs, ' + revertedUnsynced.length + ' reverts');
 
   // Determine class_id - be very defensive here
   var classId = null;
@@ -740,7 +740,7 @@ function _writeUnsyncedLogsToSupabase() {
   }
   
   if (!classId) {
-    console.error('[DAL] v26 CRITICAL: Cannot write logs - classId is null!', {
+    console.error('[DAL] v27 CRITICAL: Cannot write logs - classId is null!', {
       userType: currentUser.type,
       currentClassId: typeof currentClassId !== 'undefined' ? currentClassId : 'undefined',
       classesDataLength: classesData ? classesData.length : 'undefined',
@@ -749,12 +749,16 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
   
-  console.log('[DAL] v26 Using classId:', classId, 'for user type:', currentUser.type);
+  console.log('[DAL] v27 Using classId:', classId, 'for user type:', currentUser.type);
 
   _writingLogsToSupabase = true;
 
-  // Write each unsynced log individually to get real ID
-  var writePromises = unsynced.map(function(entry) {
+  // v27: Write logs sequentially in batches of 5 to avoid overwhelming mobile connections.
+  // Previously used Promise.all for ALL logs which caused timeouts/failures on mobile.
+  var BATCH_SIZE = 5;
+  var BATCH_DELAY_MS = 200;
+
+  function writeOneLog(entry) {
     var l = entry.log;
     var logClassId = l.classId || classId;
     
@@ -778,21 +782,13 @@ function _writeUnsyncedLogsToSupabase() {
       reverted: !!l.reverted
     };
     
-    console.log('[DAL] v26 Writing log:', {
-      actionType: payload.action_type,
-      classId: payload.class_id,
-      studentId: payload.student_id,
-      coinDelta: payload.coin_delta
-    });
-    
     return db.from('operation_logs').insert([payload]).select().then(function(r) {
       if (r.error) {
-        console.error('[DAL] v26 CRITICAL: Log insert FAILED:', {
+        console.error('[DAL] v27 Log insert FAILED:', {
           error: r.error.message,
           code: r.error.code,
-          details: r.error.details,
-          hint: r.error.hint,
-          payload: payload
+          actionType: payload.action_type,
+          studentId: payload.student_id
         });
         return; // Leave as _synced=false, will retry next time
       }
@@ -802,30 +798,49 @@ function _writeUnsyncedLogsToSupabase() {
           window.operationLogs[idx].id = r.data[0].id;
           window.operationLogs[idx]._synced = true;
           window.operationLogs[idx]._fromSupabase = true;
-          console.log('[DAL] v26 Log written successfully, new ID:', r.data[0].id);
-        } else {
-          console.warn('[DAL] v26 Log index out of bounds:', idx);
         }
-      } else {
-        console.warn('[DAL] v26 Insert succeeded but no data returned');
       }
     }).catch(function(err) {
-      console.error('[DAL] v26 CRITICAL: Log insert exception:', err);
+      console.error('[DAL] v27 Log insert exception:', err.message);
     });
-  });
+  }
 
-  // Update reverted status
-  var revertPromises = revertedUnsynced.map(function(l) {
-    return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
-      if (r.error) {
-        console.error('[DAL] v26 Log revert update error:', r.error.message);
-      } else {
-        l._revertSynced = true;
+  // Process logs in sequential batches
+  function processBatches(entries, startIdx) {
+    if (startIdx >= entries.length) return Promise.resolve();
+    
+    var batch = entries.slice(startIdx, startIdx + BATCH_SIZE);
+    var batchPromises = batch.map(writeOneLog);
+    
+    return Promise.all(batchPromises).then(function() {
+      var written = startIdx + batch.length;
+      console.log('[DAL] v27 Batch done: ' + written + '/' + entries.length + ' processed');
+      
+      if (written < entries.length) {
+        // Small delay before next batch to avoid hammering the server
+        return new Promise(function(resolve) {
+          setTimeout(resolve, BATCH_DELAY_MS);
+        }).then(function() {
+          return processBatches(entries, written);
+        });
       }
     });
-  });
+  }
 
-  return Promise.all(writePromises.concat(revertPromises)).then(function() {
+  // Process unsynced inserts in batches
+  return processBatches(unsynced, 0).then(function() {
+    // Then process reverts (these are few, can be parallel)
+    var revertPromises = revertedUnsynced.map(function(l) {
+      return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
+        if (r.error) {
+          console.error('[DAL] v27 Log revert update error:', r.error.message);
+        } else {
+          l._revertSynced = true;
+        }
+      });
+    });
+    return Promise.all(revertPromises);
+  }).then(function() {
     _writingLogsToSupabase = false;
     
     // Persist updated sync status to localStorage
@@ -835,17 +850,30 @@ function _writeUnsyncedLogsToSupabase() {
       return window.operationLogs[entry.index] && window.operationLogs[entry.index]._synced;
     }).length;
     
-    console.log('[DAL] v26 Write complete: ' + successCount + '/' + unsynced.length + ' logs written successfully, ' + revertedUnsynced.length + ' reverts updated');
+    console.log('[DAL] v27 Write complete: ' + successCount + '/' + unsynced.length + ' logs written successfully');
+    
+    // v27: If some logs failed to write, schedule a retry
+    if (successCount < unsynced.length) {
+      var failedCount = unsynced.length - successCount;
+      console.warn('[DAL] v27 ' + failedCount + ' logs still unsynced, will retry in 5s');
+      setTimeout(function() {
+        _writeUnsyncedLogsToSupabase();
+      }, 5000);
+    }
     
     // If there were queued writes, process them now
     if (_pendingLogWrites > 0) {
       _pendingLogWrites = 0;
-      console.log('[DAL] v26 Processing queued writes...');
+      console.log('[DAL] v27 Processing queued writes...');
       return _writeUnsyncedLogsToSupabase();
     }
   }).catch(function(e) {
     _writingLogsToSupabase = false;
-    console.error('[DAL] v26 CRITICAL: writeUnsyncedLogs exception:', e);
+    console.error('[DAL] v27 CRITICAL: writeUnsyncedLogs exception:', e);
+    // Schedule retry on exception
+    setTimeout(function() {
+      _writeUnsyncedLogsToSupabase();
+    }, 5000);
   });
 }
 
@@ -1236,19 +1264,32 @@ function _syncToSupabase() {
     ? _syncStudentToSupabase
     : _syncTeacherToSupabase;
 
+  // v27: ALWAYS write unsynced logs, even if teacher/student sync fails.
+  // Previously, log writes were chained AFTER teacher sync, so if teacher sync
+  // failed, logs would NEVER be written — causing the "records don't sync" bug.
   return syncFn().then(function() {
-    // Also sync any unsynced operation logs
-    return _writeUnsyncedLogsToSupabase();
-  }).then(function() {
-    _dalSyncing = false;
-    _syncRetryCount = 0;
-    _lastSyncFailed = false;
-    _pendingLocalSave = false; // Clear pending flag after successful sync
-    // Record our own write time for logging
-    _lastOwnWriteTime = Date.now();
-    // Update snapshot to reflect what we just wrote to Supabase
     _takeSnapshot();
-    // For student: update base coins/pets to current local value (what's now in Supabase)
+    _updateCloudStatus('synced');
+    console.log('[DAL] Data sync complete');
+  }).catch(function(err) {
+    _lastSyncFailed = true;
+    _syncRetryCount++;
+    console.error('[DAL] Data sync error:', err);
+    _updateCloudStatus('error');
+    if (_syncRetryCount <= _maxRetries) {
+      console.log('[DAL] Retrying data sync (' + _syncRetryCount + '/' + _maxRetries + ')...');
+      setTimeout(function() { _syncToSupabase(); }, _syncRetryCount * 2000);
+    } else {
+      console.error('[DAL] Data sync failed after ' + _maxRetries + ' retries');
+      _showNotification('数据同步失败，请检查网络后点击云朵图标重试', 'error');
+    }
+  }).then(function() {
+    // v27: This runs regardless of whether data sync succeeded or failed.
+    // Write unsynced operation logs independently.
+    _dalSyncing = false;
+    _pendingLocalSave = false;
+    _lastOwnWriteTime = Date.now();
+    // For student: update base coins/pets to current local value
     if (currentUser && currentUser.type === 'student') {
       var myStu = null;
       var sid = parseInt(localStorage.getItem('studentId'));
@@ -1262,28 +1303,16 @@ function _syncToSupabase() {
         (myStu.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
       }
     }
-    _updateCloudStatus('synced');
-    console.log('[DAL] Sync complete');
-
+    return _writeUnsyncedLogsToSupabase();
+  }).then(function() {
     if (_dalSyncQueued) {
       _dalSyncQueued = false;
       return _syncToSupabase();
     }
   }).catch(function(err) {
+    // Catch any error from the log write phase
     _dalSyncing = false;
-    _lastSyncFailed = true;
-    // Keep _pendingLocalSave = true — local data is correct and still needs to sync
-    _syncRetryCount++;
-    console.error('[DAL] Sync error:', err);
-    _updateCloudStatus('error');
-
-    if (_syncRetryCount <= _maxRetries) {
-      console.log('[DAL] Retrying sync (' + _syncRetryCount + '/' + _maxRetries + ')...');
-      setTimeout(function() { _syncToSupabase(); }, _syncRetryCount * 2000);
-    } else {
-      console.error('[DAL] Sync failed after ' + _maxRetries + ' retries');
-      _showNotification('数据同步失败，请检查网络后点击云朵图标重试', 'error');
-    }
+    console.error('[DAL] Log write phase error:', err);
   });
 }
 
