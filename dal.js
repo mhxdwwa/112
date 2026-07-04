@@ -20,7 +20,7 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 120000; // Poll every 2 minutes as fallback (Realtime handles instant updates)
+var _refreshInterval = 30000; // v15: Poll every 30s as fallback (Realtime handles instant updates)
 var _lastRefreshTime = 0;
 var _realtimeChannels = [];
 var _syncRetryCount = 0;
@@ -695,6 +695,16 @@ function _loadOperationLogs() {
       }
     });
 
+    // v15: Safety check — if Supabase returns 0 rows for a student but we have local logs,
+    // this likely means RLS is blocking reads. Keep existing local logs to avoid data loss.
+    var isStudent = currentUser && currentUser.type === 'student';
+    if (isStudent && supabaseLogs.length === 0 && localLogs.length > 0) {
+      console.warn('[DAL] v15 Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. Keeping local data (possible RLS issue).');
+      // Don't overwrite — keep existing local logs
+      // Just mark any local unsynced logs that are still unsynced
+      return;
+    }
+
     // v14: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
     window.operationLogs = supabaseLogs.concat(keptUnsynced);
 
@@ -702,6 +712,9 @@ function _loadOperationLogs() {
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
+
+    // v15: Sync back to app.js's local alias so bare "operationLogs" in app.js sees the new data
+    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
 
     // Persist the merged logs to localStorage as backup
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
@@ -839,6 +852,8 @@ function _syncOperationLogsToSupabase() {
   }
 
   return Promise.all([insertPromise, revertPromise]).then(function() {
+    // v15: Sync alias after sync completes
+    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
     console.log('[DAL] Operation logs sync complete');
   });
 }
@@ -1280,9 +1295,16 @@ function _doSmartRefresh() {
     // Also reload operation logs from Supabase to keep history up to date
     return _loadOperationLogs();
   }).then(function() {
+    // v15: Ensure app.js alias is synced after loading logs
+    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+    
     // Re-render the UI with merged data
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    // v15: Also re-render PK page to update qualification status
+    if (typeof renderPKPage === 'function') { try { renderPKPage(); } catch(e) {} }
+    // v15: Also re-render jianghu page to update qualification status
+    if (typeof renderJianghuPage === 'function') { try { renderJianghuPage(); } catch(e) {} }
     // v12: Refresh history modal if open — show latest logs in real-time
     if (typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
     

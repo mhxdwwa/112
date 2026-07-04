@@ -315,10 +315,17 @@ var _idCounter = 0;
 function _genLocalId(){ return -(Date.now() * 1000 + ((_idCounter = (_idCounter + 1) % 1000))); }
 function saveCustomActions(){safeLSSave('customActions', customActions); scheduleFileSave();}
 saveCustomActions();
-var operationLogs = [];
-try { operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { console.warn('operationLogs读取失败，已重置:', e.message); localStorage.removeItem('operationLogs'); }
-// v14: Ensure window.operationLogs is set for cross-script access (dal.js reads window.operationLogs)
-window.operationLogs = operationLogs;
+// v15: SINGLE SOURCE OF TRUTH — operationLogs lives on window only.
+// All reads/writes go through window.operationLogs to eliminate cross-script scope bugs.
+// app.js and dal.js share the SAME array at ALL times.
+window.operationLogs = [];
+try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { console.warn('operationLogs读取失败，已重置:', e.message); localStorage.removeItem('operationLogs'); }
+// Create a global alias so bare "operationLogs" in app.js always resolves to window.operationLogs
+var operationLogs = window.operationLogs;
+// v15: Helper to sync the alias after any reassignment
+function _syncOpLogsAlias() { operationLogs = window.operationLogs; }
+// v15: Helper to push window.operationLogs after local reassignment
+function _pushOpLogsToWindow() { window.operationLogs = operationLogs; }
 let logArchives = {};
 try { logArchives = JSON.parse(localStorage.getItem('logArchives')) || {}; } catch(e) { console.warn('logArchives读取失败，已重置:', e.message); localStorage.removeItem('logArchives'); }
 function _getLogMonth(log){return log.timestamp?log.timestamp.slice(0,7):'';}
@@ -327,7 +334,9 @@ function archiveOldLogs(){
   const curMonth=_getCurrentMonth();
   const keepLogs=[];
   let changed=false;
-  operationLogs.forEach(log=>{
+  // v15: Use window.operationLogs for cross-script consistency
+  var logs = window.operationLogs || operationLogs || [];
+  logs.forEach(log=>{
     const m=_getLogMonth(log);
     if(m && m<curMonth){
       if(!logArchives[m]) logArchives[m]=[];
@@ -339,6 +348,7 @@ function archiveOldLogs(){
   });
   if(changed){
     operationLogs=keepLogs;
+    window.operationLogs=keepLogs; // v15: explicit sync
     safeLSSave('operationLogs', operationLogs);
     safeLSSave('logArchives', logArchives);
   }
@@ -352,18 +362,19 @@ function triggerRealtimeSync() {
   _syncDebounceTimer = setTimeout(function() {
     _syncDebounceTimer = null;
     _syncToSupabase();
-  }, 200); // v14: 200ms debounce — faster real-time sync
+  }, 50); // v15: 50ms debounce — near-instant real-time sync
 }
-function saveLogs(){archiveOldLogs(); safeLSSave('operationLogs', operationLogs); scheduleFileSave(); triggerRealtimeSync();}
+function saveLogs(){archiveOldLogs(); _pushOpLogsToWindow(); safeLSSave('operationLogs', operationLogs); scheduleFileSave(); triggerRealtimeSync();}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
-  // Always filter by month — operationLogs may contain logs from multiple months
-  // (loaded from Supabase which doesn't separate by month)
-  return operationLogs.filter(function(l) { return _getLogMonth(l) === month; });
+  // v15: Always read from window.operationLogs to ensure cross-script consistency
+  var logs = window.operationLogs || operationLogs || [];
+  return logs.filter(function(l) { return _getLogMonth(l) === month; });
 }
 function getAvailableMonths(){
   const months=new Set();
-  operationLogs.forEach(l=>{const m=_getLogMonth(l);if(m)months.add(m);});
+  var logs = window.operationLogs || operationLogs || [];
+  logs.forEach(l=>{const m=_getLogMonth(l);if(m)months.add(m);});
   Object.keys(logArchives).forEach(m=>months.add(m));
   return [...months].sort().reverse();
 }
@@ -461,7 +472,7 @@ async function loadDataFromDir(){
   let loaded = false;
   if(savedClasses && savedClasses.length>0){ classesData=savedClasses; safeLSSave('classPetData',classesData); loaded=true; }
   if(savedActions && savedActions.length>0){ customActions=savedActions; neededPresets.forEach(p=>{if(!customActions.some(a=>a.id===p.id))customActions.push(p);}); safeLSSave('customActions',customActions); loaded=true; }
-  if(savedLogs && savedLogs.length>0){ operationLogs=savedLogs; safeLSSave('operationLogs',operationLogs); loaded=true; }
+  if(savedLogs && savedLogs.length>0){ operationLogs=savedLogs; _pushOpLogsToWindow(); safeLSSave('operationLogs',operationLogs); loaded=true; }
   if(savedArchives && typeof savedArchives==='object' && !Array.isArray(savedArchives)){ logArchives=savedArchives; safeLSSave('logArchives',logArchives); loaded=true; }
   if(savedDeleted && savedDeleted.length>0){ deletedClasses=savedDeleted; safeLSSave('deletedClasses',deletedClasses); loaded=true; }
   if(loaded){ archiveOldLogs(); currentClassId=null; init(); }
@@ -501,7 +512,7 @@ async function saveAllToFiles() {
     await Promise.all([
       writeFileToDir(_dataDirHandle, DATA_FILES.classPetData, classesData),
       writeFileToDir(_dataDirHandle, DATA_FILES.customActions, customActions),
-      writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, operationLogs),
+      writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, window.operationLogs || operationLogs),
       writeFileToDir(_dataDirHandle, DATA_FILES.logArchives, logArchives),
       writeFileToDir(_dataDirHandle, DATA_FILES.deletedClasses, deletedClasses)
     ]);
@@ -518,7 +529,7 @@ async function saveAllToFiles() {
             await Promise.all([
               writeFileToDir(_dataDirHandle, DATA_FILES.classPetData, classesData),
               writeFileToDir(_dataDirHandle, DATA_FILES.customActions, customActions),
-              writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, operationLogs),
+              writeFileToDir(_dataDirHandle, DATA_FILES.operationLogs, window.operationLogs || operationLogs),
               writeFileToDir(_dataDirHandle, DATA_FILES.deletedClasses, deletedClasses)
             ]);
             retryOk = true;
@@ -555,7 +566,7 @@ async function _desktopLoadData(){
     const r2 = await api.read_file('奖惩设置.json');
     if(r2.ok && r2.data){ const d=JSON.parse(r2.data); if(d&&d.length>0){ customActions=d; neededPresets.forEach(p=>{if(!customActions.some(a=>a.id===p.id))customActions.push(p);}); safeLSSave('customActions',customActions); loaded=true; }}
     const r3 = await api.read_file('操作日志.json');
-    if(r3.ok && r3.data){ const d=JSON.parse(r3.data); if(d&&d.length>0){ operationLogs=d; safeLSSave('operationLogs',operationLogs); loaded=true; }}
+    if(r3.ok && r3.data){ const d=JSON.parse(r3.data); if(d&&d.length>0){ operationLogs=d; _pushOpLogsToWindow(); safeLSSave('operationLogs',operationLogs); loaded=true; }}
     const r3b = await api.read_file('操作日志归档.json');
     if(r3b.ok && r3b.data){ const d=JSON.parse(r3b.data); if(d&&typeof d==='object'&&!Array.isArray(d)){ logArchives=d; safeLSSave('logArchives',logArchives); loaded=true; }}
     const r4 = await api.read_file('已删除班级.json');
@@ -571,7 +582,7 @@ async function _desktopSaveAll(){
   try {
     await api.write_file('班级宠物数据.json', JSON.stringify(classesData, null, 2));
     await api.write_file('奖惩设置.json', JSON.stringify(customActions, null, 2));
-    await api.write_file('操作日志.json', JSON.stringify(operationLogs, null, 2));
+    await api.write_file('操作日志.json', JSON.stringify(window.operationLogs || operationLogs, null, 2));
     await api.write_file('操作日志归档.json', JSON.stringify(logArchives, null, 2));
     await api.write_file('已删除班级.json', JSON.stringify(deletedClasses, null, 2));
   } catch(e){ console.error('桌面模式保存数据失败:', e); }
@@ -609,14 +620,18 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
     classId: currentClassId, studentId, studentName, actionType, details,
     coinDelta, expDelta, petId, extra, snapshot, reverted: false, _synced: false
   };
-  operationLogs.push(log);
+  // v15: Push to window.operationLogs to ensure dal.js sees the new log
+  window.operationLogs.push(log);
+  // Keep local alias in sync (should already be same array, but be explicit)
+  if (operationLogs !== window.operationLogs) operationLogs = window.operationLogs;
   saveLogs();
 }
-function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; operationLogs.push(log); saveLogs(); }
+function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
 function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } unequipItem(student, itemId); } }
 function revertToLog(logId){
-  const log = operationLogs.find(l => l.id === logId);
+  var _logs = window.operationLogs || operationLogs || [];
+  const log = _logs.find(l => l.id === logId);
   if(!log) return;
   if(log.reverted){ showNotification('无法撤销','该操作已被撤销过', 'warning'); return; }
   const curClass = classesData.find(c=>c.id===currentClassId);
@@ -650,7 +665,7 @@ function revertToLog(logId){
       }
     }
     log.reverted = true;
-    const pairLog = operationLogs.find(l => l.id !== logId && l.extra && l.extra.pkType && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
+    const pairLog = _logs.find(l => l.id !== logId && l.extra && l.extra.pkType && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
     if(pairLog) pairLog.reverted = true;
     saveLogs(); saveClassData();
     scheduleAllRenders();
@@ -661,7 +676,7 @@ function revertToLog(logId){
   // PK平局回溯：标记双方为已撤销
   if(log.extra && log.extra.pkType === 'draw'){
     log.reverted = true;
-    const pairLog = operationLogs.find(l => l.id !== logId && l.extra && l.extra.pkType === 'draw' && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
+    const pairLog = _logs.find(l => l.id !== logId && l.extra && l.extra.pkType === 'draw' && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
     if(pairLog) pairLog.reverted = true;
     saveLogs();
     showNotification('撤销成功', `已撤销 ${log.studentName} 的PK平局记录`, 'success');
@@ -728,8 +743,12 @@ function showHistoryModal(){
       return _loadOperationLogs();
     }
   }).then(function() {
+    // v15: Ensure alias is synced after loading
+    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
     showFn();
   }).catch(function(e) {
+    // v15: Sync alias even on error
+    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e2) {} }
     console.warn('[History] Load error, showing with local data:', e);
     showFn(); // Always show modal, even if Supabase fails
   });
@@ -2161,7 +2180,7 @@ function sendPKChallenge() {
     _synced: false
   };
   
-  operationLogs.push(log);
+  window.operationLogs.push(log);
   saveLogs();
   
   // Show waiting message
@@ -2284,8 +2303,9 @@ function _getPendingPKChallengeForMe() {
   const today = new Date().toDateString();
   
   // Look for pending challenges targeting me
-  for (let i = operationLogs.length - 1; i >= 0; i--) {
-    const log = operationLogs[i];
+  var _logs = window.operationLogs || operationLogs || [];
+  for (let i = _logs.length - 1; i >= 0; i--) {
+    const log = _logs[i];
     if (log.actionType !== 'PK挑战') continue;
     if (log.reverted) continue;
     const logDate = new Date(log.timestamp).toDateString();
@@ -2363,7 +2383,8 @@ function acceptPKChallenge(challengeLogId) {
   if (overlay) overlay.remove();
   
   // Find the challenge log
-  const log = operationLogs.find(l => l.id === challengeLogId);
+  var _logs = window.operationLogs || operationLogs || [];
+  const log = _logs.find(l => l.id === challengeLogId);
   if (!log || !log.extra) return;
   
   // Mark as accepted locally
@@ -2406,7 +2427,7 @@ function acceptPKChallenge(challengeLogId) {
     _synced: false
   };
   
-  operationLogs.push(acceptLog);
+  window.operationLogs.push(acceptLog);
   saveLogs();
   
   // Set up PK state
@@ -2431,8 +2452,9 @@ function _checkAcceptedPKChallenge() {
   const today = new Date().toDateString();
   
   // Look for accepted challenges where I am the challenger
-  for (let i = operationLogs.length - 1; i >= 0; i--) {
-    const log = operationLogs[i];
+  var _logs = window.operationLogs || operationLogs || [];
+  for (let i = _logs.length - 1; i >= 0; i--) {
+    const log = _logs[i];
     if (log.actionType !== 'PK接受') continue;
     if (log.reverted) continue;
     const logDate = new Date(log.timestamp).toDateString();
@@ -2479,7 +2501,8 @@ function declinePKChallenge(challengeLogId) {
   if (overlay) overlay.remove();
   
   // Find the challenge log and mark as declined
-  const log = operationLogs.find(l => l.id === challengeLogId);
+  var _logs = window.operationLogs || operationLogs || [];
+  const log = _logs.find(l => l.id === challengeLogId);
   if (log && log.extra) {
     log.extra.status = 'declined';
     saveLogs();
@@ -5385,10 +5408,11 @@ let jhSelectedStudentId = null;
 function getTodayCoinGain(studentId) {
   const today = new Date().toDateString();
   let total = 0;
-  // v14: Include daily check-in (每日打卡) along with class check-in and rewards
+  // v15: Always read from window.operationLogs for cross-script consistency
   const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡'];
-  for (let i = operationLogs.length - 1; i >= 0; i--) {
-    const log = operationLogs[i];
+  var logs = window.operationLogs || operationLogs || [];
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const log = logs[i];
     if (log.reverted) continue;
     const logDate = new Date(log.timestamp).toDateString();
     if (logDate !== today) continue;
@@ -5403,10 +5427,11 @@ function getTodayCoinGain(studentId) {
 function hasPKQualificationToday(studentId) {
   const today = new Date().toDateString();
   let total = 0;
-  // v14: 奖惩、批量奖惩、每日打卡、全班打卡获得的金币均可获得PK资格
+  // v15: Always read from window.operationLogs for cross-script consistency
   const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡'];
-  for (let i = operationLogs.length - 1; i >= 0; i--) {
-    const log = operationLogs[i];
+  var logs = window.operationLogs || operationLogs || [];
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const log = logs[i];
     if (log.reverted) continue;
     const logDate = new Date(log.timestamp).toDateString();
     if (logDate !== today) continue;
