@@ -1933,18 +1933,13 @@ function probePKMonsterImages() {
       img.onerror = () => { checkDone(); };
       img.src = path;
     }
-    // 左侧池：无补零格式 1.png ~ 50.png
+    // 左侧池：无补零格式 1.png ~ 24.png
     for(let i = 1; i <= 50; i++) {
       tryLeft(`战斗兽宠文件夹/${i}.png`);
     }
-    // 右侧池：补零格式 01.png ~ 050.png
-    for(let i = 1; i <= 50; i++) {
+    // 右侧池：仅 0+个位数 格式 01.png ~ 09.png（文件名必须以0开头）
+    for(let i = 1; i <= 9; i++) {
       tryRight(`战斗兽宠文件夹/0${i}.png`);
-    }
-    // 右侧池：三位补零格式 010.png ~ 050.png
-    for(let i = 10; i <= 50; i++) {
-      const padded3 = String(i).padStart(3, '0');
-      tryRight(`战斗兽宠文件夹/${padded3}.png`);
     }
     setTimeout(finish, 5000);
   });
