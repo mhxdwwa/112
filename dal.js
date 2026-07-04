@@ -582,7 +582,7 @@ function _loadCustomActions() {
 
 // v18: Track retry count for operation logs loading
 var _opLogsRetryCount = 0;
-var _OPLOGS_MAX_RETRIES = 5;
+var _OPLOGS_MAX_RETRIES = 2;
 
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
@@ -658,7 +658,7 @@ function _loadOperationLogs() {
         _opLogsRetryCount++;
         console.warn('[DAL] v19 Student got 0 operation_logs. Retrying #' + _opLogsRetryCount + '...');
         // Wait 1s before retry, then retry the query
-        return new Promise(function(resolve) { setTimeout(resolve, 2000); }).then(function() {
+        return new Promise(function(resolve) { setTimeout(resolve, 1000); }).then(function() {
           var classIds = r._classIds || [parseInt(localStorage.getItem('classId'))];
           console.log('[DAL] v19 Retrying operation_logs query (attempt ' + _opLogsRetryCount + ')...');
           return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
@@ -719,9 +719,17 @@ function _loadOperationLogs() {
 
 // v19: Helper function to process operation logs data
 function _processOperationLogsData(r) {
-    // v22: Smart merge — NEVER discard local data, only deduplicate against Supabase
+    // This is more reliable than the old merge logic which could miss logs
     var localLogs = window.operationLogs || [];
     
+    // Collect local unsynced logs (logs not yet pushed to Supabase)
+    var localUnsynced = [];
+    localLogs.forEach(function(l) {
+      if (!l._synced && l.id < 0) {
+        localUnsynced.push(l);
+      }
+    });
+
     var supabaseLogs = [];
     if (r && r.data) {
       supabaseLogs = r.data.map(function(l) {
@@ -746,9 +754,14 @@ function _processOperationLogsData(r) {
       });
     }
 
-    // v22: Build lookup of Supabase logs by content for deduplication
-    var matchedLocal = {};
-    localLogs.forEach(function(localLog, idx) {
+    // v14: Build a set of Supabase log IDs for fast lookup
+    var supabaseIdSet = {};
+    supabaseLogs.forEach(function(l) { supabaseIdSet[l.id] = true; });
+
+    // Keep local unsynced logs only if they aren't already in Supabase (by content match)
+    var keptUnsynced = [];
+    localUnsynced.forEach(function(localLog) {
+      var foundInSupabase = false;
       for (var i = 0; i < supabaseLogs.length; i++) {
         var sbLog = supabaseLogs[i];
         if (localLog.actionType === sbLog.actionType &&
@@ -756,36 +769,30 @@ function _processOperationLogsData(r) {
             localLog.details === sbLog.details &&
             (localLog.coinDelta || 0) === (sbLog.coinDelta || 0) &&
             localLog.timestamp === sbLog.timestamp) {
-          // Match found — update local log with Supabase data
+          foundInSupabase = true;
+          // Mark local log as synced with the Supabase ID
           localLog.id = sbLog.id;
           localLog._synced = true;
           localLog._fromSupabase = true;
           if (sbLog.reverted) localLog.reverted = true;
-          matchedLocal[idx] = true;
           break;
         }
       }
-    });
-
-    // v22: Collect ALL local logs that are NOT in Supabase (whether synced or not)
-    // This prevents data loss when Supabase has fewer records than localStorage
-    var localNotInSupabase = [];
-    localLogs.forEach(function(localLog, idx) {
-      if (!matchedLocal[idx]) {
-        // v22: Mark as unsynced so they can be re-pushed to Supabase
-        localLog._synced = false;
-        localNotInSupabase.push(localLog);
+      if (!foundInSupabase) {
+        keptUnsynced.push(localLog);
       }
     });
 
-    // v22: Merge = Supabase logs + all local logs not found in Supabase
-    // NEVER discard local data — localStorage may be the only copy
-    window.operationLogs = supabaseLogs.concat(localNotInSupabase);
-    
+    // v16: Always trust Supabase as source of truth for operation logs.
+    // If Supabase returns 0 results, it means there are no logs (or RLS needs fixing).
+    // We still keep local unsynced logs (logs not yet pushed to Supabase).
     var isStudent = currentUser && currentUser.type === 'student';
-    if (supabaseLogs.length === 0 && localLogs.length > 0) {
-      console.warn('[DAL] v22 WARNING: Supabase returned 0 operation_logs, keeping ' + localLogs.length + ' local logs');
+    if (isStudent && supabaseLogs.length === 0 && localLogs.length > 0) {
+      console.warn('[DAL] v16 WARNING: Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. This may indicate an RLS policy issue. Proceeding with Supabase data + unsynced local logs.');
     }
+
+    // v16: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
+    window.operationLogs = supabaseLogs.concat(keptUnsynced);
 
     // Sort by timestamp (newest first)
     window.operationLogs.sort(function(a, b) {
@@ -1979,67 +1986,3 @@ function initDAL() {
 
 /* ===== Auto-init ===== */
 setTimeout(function() { initDAL(); }, 200);
-
-// v21: Diagnostic function to check data status (call from browser console)
-function checkDataStatus() {
-  var localCount = 0;
-  try {
-    var localLogs = JSON.parse(localStorage.getItem('operationLogs')) || [];
-    localCount = localLogs.length;
-  } catch(e) {}
-  
-  var windowCount = (window.operationLogs || []).length;
-  
-  console.log('=== v21 Data Status ===');
-  console.log('localStorage operationLogs:', localCount, '条');
-  console.log('window.operationLogs:', windowCount, '条');
-  console.log('User type:', currentUser ? currentUser.type : 'unknown');
-  console.log('User ID:', currentUser ? currentUser.id : 'unknown');
-  
-  if (localCount > 0 && windowCount < localCount * 0.5) {
-    console.warn('⚠️  警告：Supabase数据(' + windowCount + ')远少于localStorage(' + localCount + ')');
-    console.warn('可能原因：');
-    console.warn('1. Supabase RLS策略阻止了读取');
-    console.warn('2. 网络问题导致查询失败');
-    console.warn('3. 班级ID不匹配');
-    console.warn('');
-    console.warn('解决方案：');
-    console.warn('1. 点击页面顶部"☁️ 云端同步"按钮强制同步');
-    console.warn('2. 或在控制台执行：forceClearAndReload()');
-  } else if (windowCount >= localCount) {
-    console.log('✓ 数据状态正常');
-  }
-  
-  return { local: localCount, window: windowCount };
-}
-
-// v21: Force clear localStorage and reload from Supabase
-function forceClearAndReload() {
-  console.log('[v21] 清除localStorage并重新加载...');
-  try {
-    localStorage.removeItem('operationLogs');
-    window.operationLogs = [];
-    console.log('[v21] localStorage已清除');
-  } catch(e) {
-    console.error('[v21] 清除失败:', e);
-  }
-  
-  // Force reload operation logs from Supabase
-  if (typeof _loadOperationLogs === 'function') {
-    _loadOperationLogs().then(function() {
-      var count = (window.operationLogs || []).length;
-      console.log('[v21] 从Supabase重新加载完成:', count, '条');
-      if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-      if (typeof renderClassList === 'function') renderClassList();
-      if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-      if (typeof showNotification === 'function') {
-        showNotification('数据已刷新', '已加载 ' + count + ' 条操作记录', 'success');
-      }
-    }).catch(function(e) {
-      console.error('[v21] 重新加载失败:', e);
-      if (typeof showNotification === 'function') {
-        showNotification('加载失败', '请检查网络连接', 'error');
-      }
-    });
-  }
-}

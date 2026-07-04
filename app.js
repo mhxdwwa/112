@@ -748,48 +748,6 @@ function showHistoryModal(){
     showFn(); // Always show modal, even if Supabase fails
   });
 }
-// v21: Force sync all data from Supabase (for mobile devices)
-function forceSyncData() {
-  if (typeof showNotification === 'function') {
-    showNotification('同步中', '正在从服务器加载最新数据...', 'info');
-  }
-  
-  // Clear localStorage operation logs to force fresh load from Supabase
-  try {
-    localStorage.removeItem('operationLogs');
-    window.operationLogs = [];
-    console.log('[v21] Cleared localStorage operationLogs for fresh sync');
-  } catch(e) {}
-  
-  // Reload from Supabase
-  var syncPromise = (typeof _syncOperationLogsToSupabase === 'function')
-    ? _syncOperationLogsToSupabase()
-    : Promise.resolve();
-  
-  syncPromise.then(function() {
-    if (typeof _loadOperationLogs === 'function') {
-      return _loadOperationLogs();
-    }
-  }).then(function() {
-    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    var count = (window.operationLogs || []).length;
-    if (typeof showNotification === 'function') {
-      showNotification('同步成功', '已加载 ' + count + ' 条操作记录', 'success');
-    }
-    // Re-render UI
-    if (typeof renderClassList === 'function') renderClassList();
-    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    if (typeof renderPKPage === 'function') { try { renderPKPage(); } catch(e) {} }
-    if (typeof renderJianghuPage === 'function') { try { renderJianghuPage(); } catch(e) {} }
-    // Refresh history modal if open
-    if (typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
-  }).catch(function(e) {
-    console.warn('[v21] Sync error:', e);
-    if (typeof showNotification === 'function') {
-      showNotification('同步失败', '请检查网络连接后重试', 'error');
-    }
-  });
-}
 // v12: Refresh history modal content when it's open and new logs arrive (Realtime)
 function refreshHistoryModalIfOpen(){
   var modalOverlay = document.querySelector('#modalContainer .modal-overlay');
