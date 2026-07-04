@@ -779,7 +779,8 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     <label style="cursor:pointer;"><input type="checkbox" id="historyShowReverted" onchange="toggleRevertedVisibility(this.checked)" checked> 显示已撤销</label>
   </div>`;
   html += '<div id="historyLogList" style="max-height:400px;overflow:auto;">';
-  [...classLogs].reverse().forEach(log=>{
+  // v12: Show newest logs first (remove .reverse())
+  classLogs.forEach(log=>{
     const time = new Date(log.timestamp);
     const timeStr = time.toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}) + ' ' + time.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     const icon = _historyActionIcon(log.actionType);
@@ -1154,7 +1155,19 @@ function getStudentShopEffects(student){
     else if(css.startsWith('pet-scene-'))sceneClass=css;
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
-function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid'); if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;} const cur=classesData.find(c=>c.id===currentClassId); if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;} let html=''; cur.students.forEach(s=>{updatePetDeathStatus(s);const activePet = getActivePet(s); if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=96?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
+function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid'); if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;} const cur=classesData.find(c=>c.id===currentClassId); if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;} 
+  // v12: Sort students by effects count (descending), then by pet level (descending)
+  const sortedStudents = [...cur.students].sort((a, b) => {
+    const aEffects = (a.shopItems || []).length;
+    const bEffects = (b.shopItems || []).length;
+    if (aEffects !== bEffects) return bEffects - aEffects; // More effects first
+    const aPet = getActivePet(a);
+    const bPet = getActivePet(b);
+    const aLevel = aPet ? (aPet.level || 1) : 0;
+    const bLevel = bPet ? (bPet.level || 1) : 0;
+    return bLevel - aLevel; // Higher level first
+  });
+  let html=''; sortedStudents.forEach(s=>{updatePetDeathStatus(s);const activePet = getActivePet(s); if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=96?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
 const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
 let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
 const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
@@ -1884,55 +1897,17 @@ function renderPKPage() {
       return;
     }
     
-    // Show student PK interface
+    // v12: Student view - show PK info but don't allow opponent selection
+    // PK challenges should be initiated through a separate flow, not by clicking cards
     let html = '';
     html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加 · 每人每日最多3次PK</div>`;
-    html += `<div style="margin-bottom:20px;"><h3>🗡️ 发起PK挑战</h3>`;
-    html += `<div style="padding:12px;background:#f0f8ff;border-radius:12px;border:2px solid #4a90d9;margin-bottom:16px;">`;
-    html += `<div style="font-size:13px;color:#4a90d9;margin-bottom:8px;">⚔️ 你的出战宠物（固定）</div>`;
-    if (myPet) {
-      html += `<div style="display:flex;align-items:center;gap:12px;">
-        <div style="font-size:36px;">${getPetImage(myPet.name, myPet.level)}</div>
-        <div>
-          <div style="font-weight:700;font-size:16px;">${esc(myStudent.name)}</div>
-          <div style="font-size:14px;">${esc(myPet.nickname||myPet.name)} Lv.${myPet.level}</div>
-          <div style="font-size:12px;color:#ff8844;">📊 今日PK: ${myStudent.pkCountToday || 0}/3次</div>
-        </div>
-      </div>`;
-    }
-    html += `</div>`;
-    
-    // Show eligible opponents
-    const opponents = validStudents.filter(s => s.id !== myStudentId);
-    if (opponents.length === 0) {
-      html += `<div style="text-align:center;padding:20px;color:#888;">暂无其他有资格的学生可挑战</div>`;
-    } else {
-      html += `<div style="font-size:13px;color:#666;margin-bottom:8px;">选择一名对手发起挑战：</div>`;
-      html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">`;
-      opponents.forEach(s => {
-        const p = getActivePet(s);
-        const isSelected = pkState.players.length === 2 && pkState.players[1].studentId.toString() === s.id.toString();
-        html += `<div class="pk-opponent-item ${isSelected ? 'selected' : ''}" onclick="selectPKOpponent('${s.id}')">
-          <div class="pk-opponent-avatar">${getPetImage(p.name, p.level)}</div>
-          <div>
-            <div style="font-weight:700;">${esc(s.name)}</div>
-            <div style="font-size:14px;">${esc(p.nickname||p.name)} Lv.${p.level}</div>
-            <div style="font-size:12px;color:#885555;">成长: ${p.level>=9?getExpNeeded(p):p.growth}</div>
-            <div style="font-size:12px;color:#d4a017;margin-top:2px;">💰 金币: ${s.coins}</div>
-            <div style="font-size:12px;color:#ff8844;margin-top:4px;">📊 今日PK: ${s.pkCountToday || 0}/3次</div>
-          </div>
-          ${isSelected?'<div style="font-size:24px;">✅</div>':''}
-        </div>`;
-      });
-      html += `</div>`;
-    }
-    html += `</div>`;
-    
-    // Challenge button
-    const canChallenge = pkState.players.length === 2 && pkState.players[0].studentId === myStudentId;
-    html += `<div style="text-align:center;margin-top:20px;">
-      <button class="btn btn-secondary" onclick="resetPKSelection()">重置选择</button>
-      <button class="btn btn-primary" onclick="sendPKChallenge()" ${!canChallenge?'disabled':''}>⚔️ 发起挑战</button>
+    html += `<div style="text-align:center;padding:40px;line-height:2;">
+      <div style="font-size:48px;margin-bottom:16px;">⚔️</div>
+      <div style="font-size:18px;font-weight:700;color:#4a90d9;">PK挑战</div>
+      <div style="font-size:14px;color:#888;margin-top:8px;">你有PK资格，可以通过发起挑战与其他学生进行对战</div>
+      <div style="margin-top:20px;">
+        <button class="btn btn-primary" onclick="showStudentPKChallengeModal()" style="padding:12px 30px;font-size:15px;">发起PK挑战</button>
+      </div>
     </div>`;
     container.innerHTML = html;
     return;
@@ -2061,6 +2036,103 @@ function sendPKChallenge() {
   // Reset selection
   pkState.players = [];
   renderPKPage();
+}
+
+// v12: Show modal for student to select opponent and send challenge
+function showStudentPKChallengeModal() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return;
+  
+  const myStudentId = parseInt(currentUser.studentId);
+  const cur = classesData.find(c=>c.id===currentClassId);
+  const myStudent = cur.students.find(s => s.id === myStudentId);
+  const myPet = myStudent ? getActivePet(myStudent) : null;
+  
+  if (!myStudent || !myPet) {
+    showNotification('无法发起挑战', '你的宠物未存活', 'warning');
+    return;
+  }
+  
+  // Check if student has PK qualification
+  if (!hasPKQualificationToday(myStudentId)) {
+    showNotification('无PK资格', '今日需要通过奖惩获得至少5金币', 'warning');
+    return;
+  }
+  
+  // Check daily PK limit
+  if ((myStudent.pkCountToday || 0) >= 3) {
+    showNotification('已达上限', '今日PK次数已用完（最多3次）', 'warning');
+    return;
+  }
+  
+  // Get eligible opponents
+  const opponents = cur.students.filter(s => {
+    if (s.id === myStudentId) return false;
+    const p = getActivePet(s);
+    return p && !p.isDead && hasPKQualificationToday(s.id);
+  });
+  
+  if (opponents.length === 0) {
+    showNotification('无可挑战对象', '当前没有其他有资格的学生可挑战', 'info');
+    return;
+  }
+  
+  // Build opponent selection modal
+  let html = `<div style="padding:12px;background:#f0f8ff;border-radius:12px;border:2px solid #4a90d9;margin-bottom:16px;">`;
+  html += `<div style="font-size:13px;color:#4a90d9;margin-bottom:8px;">⚔️ 你的出战宠物</div>`;
+  html += `<div style="display:flex;align-items:center;gap:12px;">
+    <div style="font-size:36px;">${getPetImage(myPet.name, myPet.level)}</div>
+    <div>
+      <div style="font-weight:700;font-size:16px;">${esc(myStudent.name)}</div>
+      <div style="font-size:14px;">${esc(myPet.nickname||myPet.name)} Lv.${myPet.level}</div>
+      <div style="font-size:12px;color:#ff8844;">📊 今日PK: ${myStudent.pkCountToday || 0}/3次</div>
+    </div>
+  </div>`;
+  html += `</div>`;
+  
+  html += `<div style="font-size:13px;color:#666;margin-bottom:8px;">选择一名对手发起挑战：</div>`;
+  html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;max-height:400px;overflow:auto;">`;
+  opponents.forEach(s => {
+    const p = getActivePet(s);
+    html += `<div class="pk-opponent-item" onclick="selectStudentPKOpponentAndSend('${s.id}')" style="cursor:pointer;">
+      <div class="pk-opponent-avatar">${getPetImage(p.name, p.level)}</div>
+      <div>
+        <div style="font-weight:700;">${esc(s.name)}</div>
+        <div style="font-size:14px;">${esc(p.nickname||p.name)} Lv.${p.level}</div>
+        <div style="font-size:12px;color:#885555;">成长: ${p.level>=9?getExpNeeded(p):p.growth}</div>
+        <div style="font-size:12px;color:#d4a017;margin-top:2px;">💰 金币: ${s.coins}</div>
+        <div style="font-size:12px;color:#ff8844;margin-top:4px;">📊 今日PK: ${s.pkCountToday || 0}/3次</div>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  
+  showModal('⚔️ 发起PK挑战', html, [{text:'取消', class:'btn-secondary', onclick:'closeModal()'}], true);
+}
+
+// v12: Select opponent and immediately send challenge
+function selectStudentPKOpponentAndSend(opponentId) {
+  const myStudentId = parseInt(currentUser.studentId);
+  const cur = classesData.find(c=>c.id===currentClassId);
+  const myStudent = cur.students.find(s => s.id === myStudentId);
+  const opponent = cur.students.find(s=>s.id.toString()===opponentId.toString());
+  if (!myStudent || !opponent) return;
+  
+  const myPet = getActivePet(myStudent);
+  const opponentPet = getActivePet(opponent);
+  if (!myPet || !opponentPet) {
+    showNotification('无法选择', '宠物未存活', 'warning');
+    return;
+  }
+  
+  // Set up pkState for challenge
+  pkState.players = [
+    { studentId: myStudentId, studentName: myStudent.name, pet: {...myPet} },
+    { studentId: opponent.id, studentName: opponent.name, pet: {...opponentPet} }
+  ];
+  
+  closeModal();
+  sendPKChallenge();
 }
 
 function _getPendingPKChallengeForMe() {
@@ -6970,14 +7042,18 @@ function closeJianghuGame() {
 
 
 /* ===== 简化拖拽：始终可直接拖拽交换卡片位置 ===== */
+// v12: Swap two students' positions instead of reorder
 function reorderStudent(fromIdx, toIdx){
   if(!currentClassId) return;
   const cur = classesData.find(c=>c.id===currentClassId);
   if(!cur || !cur.students) return;
   if(fromIdx < 0 || fromIdx >= cur.students.length) return;
   if(toIdx < 0 || toIdx >= cur.students.length) return;
-  const [moved] = cur.students.splice(fromIdx, 1);
-  cur.students.splice(toIdx, 0, moved);
+  if(fromIdx === toIdx) return;
+  // v12: Swap positions instead of reorder
+  const temp = cur.students[fromIdx];
+  cur.students[fromIdx] = cur.students[toIdx];
+  cur.students[toIdx] = temp;
   saveClassData();
   renderHomePetGrid();
 }
