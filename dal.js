@@ -664,6 +664,14 @@ function _loadOperationLogs() {
       try { localStorage.setItem('operationLogs', JSON.stringify(operationLogs)); } catch(e) {}
 
       console.log('[DAL] Operation logs loaded: ' + operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + newLogs.length + ' new)');
+      if (currentUser.type === 'student') {
+        var today = new Date().toDateString();
+        var todayLogs = operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
+        console.log('[DAL] Student today logs:', todayLogs.length);
+        todayLogs.forEach(function(l) {
+          console.log('[DAL]   Log:', l.actionType, 'studentId:', l.studentId, 'coinDelta:', l.coinDelta);
+        });
+      }
     }
   }).catch(function(e) { console.warn('[DAL] operation_logs load error:', e); });
 }
@@ -1227,9 +1235,20 @@ function _doSmartRefresh() {
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
     
-    // For students: show a subtle notification that data was refreshed
+    // For students: check for pending PK challenges and accepted challenges
     if (currentUser && currentUser.type === 'student') {
       console.log('[DAL] Student data refreshed from server');
+      console.log('[DAL] Operation logs loaded:', operationLogs.length);
+      
+      // Check for accepted PK challenge (for the challenger to start battle)
+      if (typeof _checkAcceptedPKChallenge === 'function') {
+        if (!_checkAcceptedPKChallenge()) {
+          // Check for pending challenges targeting me
+          if (typeof _checkPendingPKChallenge === 'function') {
+            _checkPendingPKChallenge();
+          }
+        }
+      }
     }
     
     console.log('[DAL] Smart refresh complete');
