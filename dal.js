@@ -603,16 +603,23 @@ function _loadOperationLogs() {
       return classR.data.map(function(c) { return c.id; });
     });
   } else {
-    // Student: use classId from localStorage
-    var studentClassId = parseInt(localStorage.getItem('classId'));
+    // Student: use classId from localStorage or currentUser
+    var studentClassId = parseInt(localStorage.getItem('classId')) || (currentUser.classId ? parseInt(currentUser.classId) : 0);
     if (!studentClassId) {
-      console.warn('[DAL] _loadOperationLogs: student has no classId in localStorage');
+      console.warn('[DAL] _loadOperationLogs: student has no classId in localStorage or currentUser');
       return Promise.resolve();
     }
-    // Query Supabase to verify this class exists and get its ID
+    // v17: Try to find class by querying Supabase; fall back to direct classId
     getClassIdsPromise = db.from('classes').select('id').eq('id', studentClassId).then(function(classR) {
-      if (classR.error || !classR.data || classR.data.length === 0) {
-        console.warn('[DAL] _loadOperationLogs: class not found in Supabase, using local classId');
+      if (classR.error) {
+        // v17: If query fails (possibly RLS), use classId directly
+        console.warn('[DAL] _loadOperationLogs: classes query error for student, using classId directly:', classR.error.message || classR.error);
+        return [studentClassId];
+      }
+      if (!classR.data || classR.data.length === 0) {
+        // v17: Class not found in query result — still try with the classId
+        // (might be RLS blocking read, but operation_logs might still be readable)
+        console.warn('[DAL] _loadOperationLogs: class ' + studentClassId + ' not found via classes query, trying direct classId');
         return [studentClassId];
       }
       return classR.data.map(function(c) { return c.id; });
@@ -627,9 +634,24 @@ function _loadOperationLogs() {
       console.warn('[DAL] _loadOperationLogs: no classIds found');
       return null;
     }
+    // v17: Log the query parameters for diagnostics
+    console.log('[DAL] v17 _loadOperationLogs: querying operation_logs for class_ids:', classIds, 'user:', currentUser.type, currentUser.id);
     // v14: Increased limit to 5000 to ensure all logs are fetched
     return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
   }).then(function(r) {
+    // v17: Log query results for diagnostics
+    if (r && r.error) {
+      console.error('[DAL] v17 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
+    } else if (r && r.data) {
+      console.log('[DAL] v17 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
+      if (currentUser.type === 'student' && r.data.length === 0) {
+        console.warn('[DAL] v17 DIAGNOSTIC: Student got 0 operation_logs from Supabase. This usually means: (1) RLS is blocking student reads on operation_logs, or (2) no logs exist for this class yet. To fix RLS, run this SQL in Supabase SQL Editor:\n' +
+          'ALTER TABLE operation_logs ENABLE ROW LEVEL SECURITY;\n' +
+          'CREATE POLICY "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
+          'CREATE POLICY "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
+          'CREATE POLICY "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
+      }
+    }
     // v14: Completely rebuild operationLogs from Supabase + local unsynced logs
     // This is more reliable than the old merge logic which could miss logs
     var localLogs = window.operationLogs || [];

@@ -1364,14 +1364,13 @@ function buildReadOnlyStudentModalContent(student, pet){
     <div style="font-size:48px;margin-bottom:12px;">👀</div>
     <div style="font-size:16px;font-weight:700;color:#4a90d9;">正在查看 ${esc(student.name)} 的宠物</div>
     <div style="font-size:14px;color:#666;margin-top:8px;">你只能查看，不能操作其他同学的宠物</div>
-    <div style="font-size:13px;color:#888;margin-top:12px;">想要发起PK挑战？请前往【宠物PK】页面</div>
   </div>`;
 }
 function openStudentModal(studentId){ if(!currentClassId)return; const cur=classesData.find(c=>c.id===currentClassId); const student=cur.students.find(s=>s.id.toString()===studentId.toString()); if(!student)return; currentModalStudentId=studentId;
-  // v13: Check if current user is a student viewing another student's pet
+  // v17: Check if current user is a student viewing another student's pet
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   const myStudentId = isStudentView ? parseInt(currentUser.studentId) : null;
-  const isViewingOtherStudent = isStudentView && myStudentId !== null && student.id !== myStudentId;
+  const isViewingOtherStudent = isStudentView && myStudentId !== null && student.id.toString() !== myStudentId.toString();
   
   if(!student.pets||student.pets.length===0){ 
     let content = '<div style="text-align:center;"><div style="font-size:60px;">🥚</div><p>尚未领养宠物</p><p>💰 '+student.coins+' 金币</p></div>';
@@ -1392,7 +1391,26 @@ function openStudentModal(studentId){ if(!currentClassId)return; const cur=class
     if(petImgEl) initPetModalEnhancements(petImgEl, activePet.name, activePet.level||1, activePet.growth||0, getExpNeeded(activePet));
   }, 50);
 }
-function refreshCurrentStudentModal(){ if(!currentModalStudentId) return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur) return; const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString()); if(!student) return; const modalOverlay = document.querySelector('#modalContainer .modal-overlay'); if(!modalOverlay) return; const modalDiv = modalOverlay.querySelector('.modal'); if(!modalDiv) return; const activePet = getActivePet(student); if(!activePet){ closeModal(); return; } ensurePetPlayFields(activePet); cleanupPetModalEffects(); modalDiv.querySelector('.modal-content').innerHTML = buildStudentModalContent(student, activePet); 
+function refreshCurrentStudentModal(){
+  if(!currentModalStudentId) return;
+  const cur=classesData.find(c=>c.id===currentClassId);
+  if(!cur) return;
+  const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());
+  if(!student) return;
+  const modalOverlay = document.querySelector('#modalContainer .modal-overlay');
+  if(!modalOverlay) return;
+  const modalDiv = modalOverlay.querySelector('.modal');
+  if(!modalDiv) return;
+  const activePet = getActivePet(student);
+  if(!activePet){ closeModal(); return; }
+  ensurePetPlayFields(activePet);
+  cleanupPetModalEffects();
+  // v17: Check if current user is a student viewing another student's pet
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  const myStudentId = isStudentView ? parseInt(currentUser.studentId) : null;
+  const isViewingOtherStudent = isStudentView && myStudentId !== null && student.id.toString() !== myStudentId.toString();
+  const contentBuilder = isViewingOtherStudent ? buildReadOnlyStudentModalContent : buildStudentModalContent;
+  modalDiv.querySelector('.modal-content').innerHTML = contentBuilder(student, activePet); 
   setTimeout(()=>{ startHeartForCurrentPet(currentModalStudentId);
     const petImgEl = document.querySelector('.modal-pet-img[data-pet-img-container]');
     if(petImgEl) initPetModalEnhancements(petImgEl, activePet.name, activePet.level||1, activePet.growth||0, getExpNeeded(activePet));
@@ -1996,7 +2014,7 @@ function renderPKPage() {
   
   // === Student view: render BEFORE the "not enough students" check ===
   if (isStudentView) {
-    const myStudent = cur.students.find(s => s.id === myStudentId);
+    const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
     const myPet = myStudent ? getActivePet(myStudent) : null;
     const myValid = myStudent && hasPKQualificationToday(myStudent.id);
     
@@ -2114,7 +2132,7 @@ function selectPKOpponent(studentId) {
   
   const myStudentId = parseInt(currentUser.studentId);
   const cur = classesData.find(c=>c.id===currentClassId);
-  const myStudent = cur.students.find(s => s.id === myStudentId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
   const opponent = cur.students.find(s=>s.id.toString()===studentId.toString());
   if (!myStudent || !opponent) return;
   
@@ -2200,7 +2218,7 @@ function showStudentPKChallengeModal() {
   
   const myStudentId = parseInt(currentUser.studentId);
   const cur = classesData.find(c=>c.id===currentClassId);
-  const myStudent = cur.students.find(s => s.id === myStudentId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
   const myPet = myStudent ? getActivePet(myStudent) : null;
   
   if (!myStudent || !myPet) {
@@ -2222,7 +2240,7 @@ function showStudentPKChallengeModal() {
   
   // Get eligible opponents
   const opponents = cur.students.filter(s => {
-    if (s.id === myStudentId) return false;
+    if (s.id.toString() === myStudentId.toString()) return false;
     const p = getActivePet(s);
     return p && !p.isDead && hasPKQualificationToday(s.id);
   });
@@ -2269,7 +2287,7 @@ function showStudentPKChallengeModal() {
 function selectStudentPKOpponentAndSend(opponentId) {
   const myStudentId = parseInt(currentUser.studentId);
   const cur = classesData.find(c=>c.id===currentClassId);
-  const myStudent = cur.students.find(s => s.id === myStudentId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
   const opponent = cur.students.find(s=>s.id.toString()===opponentId.toString());
   if (!myStudent || !opponent) return;
   
@@ -2332,7 +2350,7 @@ function _showPKChallengeDialog(challenge) {
   if (!cur) return;
   
   const myStudentId = parseInt(currentUser.studentId);
-  const myStudent = cur.students.find(s => s.id === myStudentId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
   const myPet = myStudent ? getActivePet(myStudent) : null;
   
   const challengerName = challenge.extra.challengerName;
@@ -2388,7 +2406,7 @@ function acceptPKChallenge(challengeLogId) {
   // Create a "PK接受" log entry to notify the challenger
   const myStudentId = parseInt(currentUser.studentId);
   const cur = classesData.find(c => c.id === currentClassId);
-  const myStudent = cur.students.find(s => s.id === myStudentId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
   const myPet = myStudent ? getActivePet(myStudent) : null;
   const challengerPet = log.extra.challengerPet;
   
@@ -5484,7 +5502,8 @@ function renderJianghuColumn(cur, validStudents) {
   html += `</div>`;
   html += `</div>`;
   // v16: For student view, only show start button if student is qualified and hasn't done it yet
-  const myStudent = isStudentView ? cur.students.find(s => s.id === myStudentId) : null;
+  // v17: Use toString() comparison to avoid type mismatch (number vs string)
+  const myStudent = isStudentView ? cur.students.find(s => s.id.toString() === myStudentId.toString()) : null;
   const myQualified = myStudent && getTodayCoinGain(myStudentId) >= 25 && getActivePet(myStudent) && !getActivePet(myStudent).isDead;
   const myDone = myStudent && hasJianghuToday(myStudent);
   const showStartBtn = isStudentView ? (myQualified && !myDone && jhSelectedStudentId) : jhSelectedStudentId;
