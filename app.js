@@ -1937,9 +1937,13 @@ function probePKMonsterImages() {
     for(let i = 1; i <= 50; i++) {
       tryLeft(`战斗兽宠文件夹/${i}.png`);
     }
-    // 右侧池：仅 0+个位数 格式 01.png ~ 09.png（文件名必须以0开头）
+    // 右侧池：所有以0开头的数字图片（01~09, 010~019, 020~024等）
     for(let i = 1; i <= 9; i++) {
       tryRight(`战斗兽宠文件夹/0${i}.png`);
+    }
+    for(let i = 10; i <= 50; i++) {
+      const padded3 = String(i).padStart(3, '0');
+      tryRight(`战斗兽宠文件夹/${padded3}.png`);
     }
     setTimeout(finish, 5000);
   });
