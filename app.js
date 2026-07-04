@@ -683,32 +683,44 @@ function _historyActionColor(type){
   if(type==='重置班级宠物') return '#cc6633';
   return '#886655';
 }
-var _isStudentHistoryView = false; // true when a student is viewing their own history
+var _isStudentHistoryView = false; // true when a student is viewing history
 function showHistoryModal(){
   const curClass = classesData.find(c=>c.id===currentClassId);
   const className = curClass ? curClass.name : '未选择班级';
   // Detect if current user is a student
   _isStudentHistoryView = !!(typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student');
-  const studentLabel = _isStudentHistoryView ? '（我的记录）' : '';
-  // Load fresh logs from Supabase first, then show
+
+  // v11: First sync local logs to Supabase, then load, then show
+  // This ensures all recent operations (from any account) are visible
   var showFn = function() {
     const months = getAvailableMonths();
     if(months.length===0){
-      showModal(`📜 历史操作记录【${className}】${studentLabel}`,
+      showModal(`📜 历史操作记录【${className}】`,
         '<div style="text-align:center;padding:30px;color:#bba;">该班级暂无操作记录</div>',
         [{text:'关闭',onclick:'closeModal()'}], false);
       return;
     }
     _currentHistoryMonth = months[0];
     let html = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
-    showModal(`📜 历史操作记录【${className}】${studentLabel}`, html, [{text:'关闭',onclick:'closeModal()'}], true);
+    showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
   };
-  // Try to load fresh logs from Supabase
-  if (typeof _loadOperationLogs === 'function') {
-    _loadOperationLogs().then(function() { showFn(); }).catch(function() { showFn(); });
-  } else {
+
+  // Step 1: Sync local unsynced logs to Supabase first
+  var syncPromise = (typeof _syncOperationLogsToSupabase === 'function')
+    ? _syncOperationLogsToSupabase()
+    : Promise.resolve();
+
+  // Step 2: Then load fresh logs from Supabase (merges with local)
+  syncPromise.then(function() {
+    if (typeof _loadOperationLogs === 'function') {
+      return _loadOperationLogs();
+    }
+  }).then(function() {
     showFn();
-  }
+  }).catch(function(e) {
+    console.warn('[History] Load error, showing with local data:', e);
+    showFn(); // Always show modal, even if Supabase fails
+  });
 }
 function switchHistoryMonth(month){
   _currentHistoryMonth = month;
@@ -722,14 +734,10 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
   const curMonth = _getCurrentMonth();
   const isCurrentMonth = (activeMonth === curMonth);
   const allLogs = getAllLogsForMonth(activeMonth);
-  // For student view: only show logs belonging to the current student
-  // For teacher view: show all logs for the current class
+  // v11: All accounts (teacher + student) see ALL merged logs for the class
+  // Only difference: students cannot revoke (handled below in button logic)
   const isStudentView = _isStudentHistoryView;
-  const myStudentId = isStudentView && typeof currentUser !== 'undefined' && currentUser ? parseInt(currentUser.studentId) : null;
   const classLogs = allLogs.filter(log => {
-    if (isStudentView && myStudentId != null) {
-      return log.studentId && log.studentId.toString() === myStudentId.toString();
-    }
     if(log.classId) return log.classId === currentClassId;
     if(curClass) return curClass.students.some(s=>s.id.toString()===log.studentId.toString());
     return false;

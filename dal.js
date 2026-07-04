@@ -583,22 +583,53 @@ function _loadCustomActions() {
 
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
-  return db.from('classes').select('id').then(function(classR) {
-    if (classR.error || !classR.data) return;
-    var classIds;
-    if (currentUser.type === 'teacher') {
-      classIds = classR.data.filter(function(c) { return c.teacher_id === currentUser.id; }).map(function(c) { return c.id; });
-    } else {
-      // Student: load logs for their class
-      var sid = parseInt(localStorage.getItem('classId'));
-      classIds = classR.data.filter(function(c) { return c.id === sid; }).map(function(c) { return c.id; });
+  if (!db) {
+    console.warn('[DAL] _loadOperationLogs: db not initialized');
+    return Promise.resolve();
+  }
+
+  // Get class IDs for this user
+  var getClassIdsPromise;
+  if (currentUser.type === 'teacher') {
+    getClassIdsPromise = db.from('classes').select('id').then(function(classR) {
+      if (classR.error || !classR.data) return [];
+      return classR.data.filter(function(c) { return c.teacher_id === currentUser.id; }).map(function(c) { return c.id; });
+    });
+  } else {
+    // Student: use classId from localStorage
+    var studentClassId = parseInt(localStorage.getItem('classId'));
+    if (!studentClassId) {
+      console.warn('[DAL] _loadOperationLogs: student has no classId in localStorage');
+      return Promise.resolve();
     }
-    if (classIds.length === 0) return;
-    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(500);
+    // Query Supabase to verify this class exists and get its ID
+    getClassIdsPromise = db.from('classes').select('id').eq('id', studentClassId).then(function(classR) {
+      if (classR.error || !classR.data || classR.data.length === 0) {
+        console.warn('[DAL] _loadOperationLogs: class not found in Supabase, using local classId');
+        return [studentClassId]; // Fall back to local classId
+      }
+      return classR.data.map(function(c) { return c.id; });
+    }).catch(function(e) {
+      console.warn('[DAL] _loadOperationLogs: classes query failed, using local classId:', e);
+      return [studentClassId]; // Fall back to local classId
+    });
+  }
+
+  return getClassIdsPromise.then(function(classIds) {
+    if (!classIds || classIds.length === 0) {
+      console.warn('[DAL] _loadOperationLogs: no classIds found');
+      return null;
+    }
+    // Fetch logs from Supabase
+    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(1000);
   }).then(function(r) {
-    if (r && r.data && typeof operationLogs !== 'undefined') {
+    // Always merge, even if r is null (keep local logs)
+    if (typeof operationLogs === 'undefined') return;
+
+    var supabaseLogs = [];
+    if (r && r.data) {
       // Convert Supabase format → local format
-      var supabaseLogs = r.data.map(function(l) {
+      supabaseLogs = r.data.map(function(l) {
         return {
           id: l.id,
           timestamp: l.created_at || l.timestamp,
@@ -618,62 +649,67 @@ function _loadOperationLogs() {
           _fromSupabase: true
         };
       });
-
-      // v10: Smart merge — for each local unsynced log, check if Supabase already has it.
-      // If yes, update the local log's ID and mark as synced (avoids duplicates).
-      // If no, keep the local log (it still needs to be synced).
-      var localIdSet = {};
-      operationLogs.forEach(function(l) { if (l.id > 0) localIdSet[l.id] = true; });
-
-      // First, try to match unsynced local logs with Supabase logs by content
-      var matchedSupabaseIds = {};
-      operationLogs.forEach(function(localLog) {
-        if (localLog._synced) return; // already synced
-        for (var i = 0; i < supabaseLogs.length; i++) {
-          var sbLog = supabaseLogs[i];
-          if (matchedSupabaseIds[sbLog.id]) continue; // already matched
-          if (localLog.actionType === sbLog.actionType &&
-              localLog.studentId === sbLog.studentId &&
-              localLog.details === sbLog.details &&
-              localLog.coinDelta === (sbLog.coinDelta || 0) &&
-              localLog.timestamp === sbLog.timestamp) {
-            // Match found — update local log with Supabase ID
-            localLog.id = sbLog.id;
-            localLog._synced = true;
-            localLog._fromSupabase = true;
-            if (sbLog.reverted) localLog.reverted = true;
-            matchedSupabaseIds[sbLog.id] = true;
-            localIdSet[sbLog.id] = true;
-            break;
-          }
-        }
-      });
-
-      // Then, add Supabase logs that don't exist locally (by ID)
-      var newLogs = supabaseLogs.filter(function(l) { return !localIdSet[l.id] && !matchedSupabaseIds[l.id]; });
-      if (newLogs.length > 0) {
-        operationLogs = operationLogs.concat(newLogs);
-      }
-
-      // Sort by timestamp (newest first, since we queried descending)
-      operationLogs.sort(function(a, b) {
-        return (b.timestamp || '').localeCompare(a.timestamp || '');
-      });
-
-      // Persist the merged logs to localStorage as backup
-      try { localStorage.setItem('operationLogs', JSON.stringify(operationLogs)); } catch(e) {}
-
-      console.log('[DAL] Operation logs loaded: ' + operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + newLogs.length + ' new)');
-      if (currentUser.type === 'student') {
-        var today = new Date().toDateString();
-        var todayLogs = operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
-        console.log('[DAL] Student today logs:', todayLogs.length);
-        todayLogs.forEach(function(l) {
-          console.log('[DAL]   Log:', l.actionType, 'studentId:', l.studentId, 'coinDelta:', l.coinDelta);
-        });
-      }
     }
-  }).catch(function(e) { console.warn('[DAL] operation_logs load error:', e); });
+
+    // v11: Improved smart merge — ensure ALL logs are present (local + Supabase)
+    // Build a set of local log IDs (both synced and unsynced)
+    var localIdSet = {};
+    operationLogs.forEach(function(l) { if (l.id > 0) localIdSet[l.id] = true; });
+
+    // Match unsynced local logs with Supabase logs by content (deduplication)
+    var matchedSupabaseIds = {};
+    operationLogs.forEach(function(localLog) {
+      if (localLog._synced) return; // already synced
+      for (var i = 0; i < supabaseLogs.length; i++) {
+        var sbLog = supabaseLogs[i];
+        if (matchedSupabaseIds[sbLog.id]) continue; // already matched
+        if (localLog.actionType === sbLog.actionType &&
+            localLog.studentId === sbLog.studentId &&
+            localLog.details === sbLog.details &&
+            localLog.coinDelta === (sbLog.coinDelta || 0) &&
+            localLog.timestamp === sbLog.timestamp) {
+          // Match found — update local log with Supabase ID
+          localLog.id = sbLog.id;
+          localLog._synced = true;
+          localLog._fromSupabase = true;
+          if (sbLog.reverted) localLog.reverted = true;
+          matchedSupabaseIds[sbLog.id] = true;
+          localIdSet[sbLog.id] = true;
+          break;
+        }
+      }
+    });
+
+    // Add Supabase logs that don't exist locally (by ID)
+    var newLogs = supabaseLogs.filter(function(l) { return !localIdSet[l.id] && !matchedSupabaseIds[l.id]; });
+    if (newLogs.length > 0) {
+      operationLogs = operationLogs.concat(newLogs);
+    }
+
+    // Sort by timestamp (newest first)
+    operationLogs.sort(function(a, b) {
+      return (b.timestamp || '').localeCompare(a.timestamp || '');
+    });
+
+    // Persist the merged logs to localStorage as backup
+    try { localStorage.setItem('operationLogs', JSON.stringify(operationLogs)); } catch(e) {}
+
+    console.log('[DAL] Operation logs merged: ' + operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + newLogs.length + ' new)');
+    if (currentUser.type === 'student') {
+      var today = new Date().toDateString();
+      var todayLogs = operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
+      console.log('[DAL] Student today logs:', todayLogs.length);
+      todayLogs.forEach(function(l) {
+        console.log('[DAL]   Log:', l.actionType, 'studentId:', l.studentId, 'coinDelta:', l.coinDelta, 'synced:', l._synced);
+      });
+    }
+  }).catch(function(e) {
+    console.warn('[DAL] operation_logs load error:', e);
+    // Even on error, ensure operationLogs exists
+    if (typeof operationLogs === 'undefined') {
+      try { operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { operationLogs = []; }
+    }
+  });
 }
 
 /* ===== Sync Operation Logs to Supabase ===== */
