@@ -20,7 +20,7 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 30000; // Poll every 30 seconds for cross-user changes (reduced from 2 minutes)
+var _refreshInterval = 120000; // Poll every 2 minutes as fallback (Realtime handles instant updates)
 var _lastRefreshTime = 0;
 var _realtimeChannels = [];
 var _syncRetryCount = 0;
@@ -1175,7 +1175,7 @@ function forceManualSync() {
 }
 
 /* ===== Realtime ===== */
-// Debounced smart refresh — called by Realtime events and polling
+// Debounced smart refresh — called by polling fallback
 function _refreshFromSupabase() {
   // Don't refresh while syncing
   if (_dalSyncing) {
@@ -1183,7 +1183,7 @@ function _refreshFromSupabase() {
     return;
   }
   
-  // Debounce: wait 3s after last Realtime event before actually refreshing
+  // Debounce: wait 3s after last event before actually refreshing
   // This prevents rapid-fire refreshes when multiple changes happen at once
   if (_refreshDebounceTimer) clearTimeout(_refreshDebounceTimer);
   _refreshDebounceTimer = setTimeout(function() {
@@ -1193,6 +1193,28 @@ function _refreshFromSupabase() {
     _lastRefreshTime = Date.now();
     _doSmartRefresh();
   }, _REFRESH_DEBOUNCE_MS);
+}
+
+// Immediate refresh — called by Realtime events (no debounce, instant push)
+function _immediateRefreshFromSupabase() {
+  // Don't refresh while syncing
+  if (_dalSyncing) {
+    console.log('[DAL] Immediate refresh skipped - sync in progress, will retry');
+    // Queue a refresh after current sync completes
+    setTimeout(_immediateRefreshFromSupabase, 500);
+    return;
+  }
+  
+  // Skip own writes (ignore our own changes for 30s)
+  if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
+    console.log('[DAL] Immediate refresh skipped — own write echo (' + 
+      Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
+    return;
+  }
+  
+  console.log('[DAL] ⚡ Realtime event → immediate refresh');
+  _lastRefreshTime = Date.now();
+  _doSmartRefresh();
 }
 
 function _doSmartRefresh() {
@@ -1220,39 +1242,48 @@ function _setupRealtimeSubscriptions() {
   if (!db || !db.channel) return;
 
   try {
-    // Subscribe to classes table
+    // Subscribe to classes table — immediate refresh on change
     var classChannel = db.channel('dal-classes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function() {
-        console.log('[DAL] Realtime classes event');
-        _refreshFromSupabase();
+        console.log('[DAL] 🔔 Realtime classes event');
+        _immediateRefreshFromSupabase();
       })
       .subscribe();
     _realtimeChannels.push(classChannel);
 
-    // Subscribe to students table
+    // Subscribe to students table — immediate refresh on change
     var studentChannel = db.channel('dal-students')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function() {
-        console.log('[DAL] Realtime students event');
-        _refreshFromSupabase();
+        console.log('[DAL] 🔔 Realtime students event');
+        _immediateRefreshFromSupabase();
       })
       .subscribe();
     _realtimeChannels.push(studentChannel);
 
-    // Subscribe to pets table
+    // Subscribe to pets table — immediate refresh on change
     var petChannel = db.channel('dal-pets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
-        console.log('[DAL] Realtime pets event:', payload.eventType);
-        _refreshFromSupabase();
+        console.log('[DAL] 🔔 Realtime pets event:', payload.eventType);
+        _immediateRefreshFromSupabase();
       })
       .subscribe();
     _realtimeChannels.push(petChannel);
 
-    console.log('[DAL] Realtime subscriptions active');
+    // Subscribe to operation_logs table — immediate refresh on change
+    var logChannel = db.channel('dal-operation-logs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function() {
+        console.log('[DAL] 🔔 Realtime operation_logs event');
+        _immediateRefreshFromSupabase();
+      })
+      .subscribe();
+    _realtimeChannels.push(logChannel);
+
+    console.log('[DAL] ⚡ Realtime subscriptions active — instant push enabled');
   } catch (e) {
     console.warn('[DAL] Realtime setup failed, using polling fallback:', e);
   }
 
-  // Fallback polling (30s interval)
+  // Fallback polling (2 minutes) — only used if Realtime fails
   _refreshTimer = setInterval(function() {
     _refreshFromSupabase();
   }, _refreshInterval);
@@ -1312,16 +1343,6 @@ function _setupPageLifecycle() {
       setTimeout(doRefresh, 3000);
     }
   });
-
-  // For students: also refresh on window focus (more aggressive than visibility change)
-  if (currentUser && currentUser.type === 'student') {
-    window.addEventListener('focus', function() {
-      console.log('[DAL] Window focused — refreshing student data');
-      if (!_dalSyncing && Date.now() - _lastOwnWriteTime > 5000) {
-        _refreshFromSupabase();
-      }
-    });
-  }
 }
 
 /* ===== Wrap Save Functions ===== */
