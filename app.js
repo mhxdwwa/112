@@ -683,21 +683,25 @@ function _historyActionColor(type){
   if(type==='重置班级宠物') return '#cc6633';
   return '#886655';
 }
+var _isStudentHistoryView = false; // true when a student is viewing their own history
 function showHistoryModal(){
   const curClass = classesData.find(c=>c.id===currentClassId);
   const className = curClass ? curClass.name : '未选择班级';
+  // Detect if current user is a student
+  _isStudentHistoryView = !!(typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student');
+  const studentLabel = _isStudentHistoryView ? '（我的记录）' : '';
   // Load fresh logs from Supabase first, then show
   var showFn = function() {
     const months = getAvailableMonths();
     if(months.length===0){
-      showModal(`📜 历史操作记录【${className}】`,
+      showModal(`📜 历史操作记录【${className}】${studentLabel}`,
         '<div style="text-align:center;padding:30px;color:#bba;">该班级暂无操作记录</div>',
         [{text:'关闭',onclick:'closeModal()'}], false);
       return;
     }
     _currentHistoryMonth = months[0];
     let html = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
-    showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
+    showModal(`📜 历史操作记录【${className}】${studentLabel}`, html, [{text:'关闭',onclick:'closeModal()'}], true);
   };
   // Try to load fresh logs from Supabase
   if (typeof _loadOperationLogs === 'function') {
@@ -718,7 +722,14 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
   const curMonth = _getCurrentMonth();
   const isCurrentMonth = (activeMonth === curMonth);
   const allLogs = getAllLogsForMonth(activeMonth);
+  // For student view: only show logs belonging to the current student
+  // For teacher view: show all logs for the current class
+  const isStudentView = _isStudentHistoryView;
+  const myStudentId = isStudentView && typeof currentUser !== 'undefined' && currentUser ? parseInt(currentUser.studentId) : null;
   const classLogs = allLogs.filter(log => {
+    if (isStudentView && myStudentId != null) {
+      return log.studentId && log.studentId.toString() === myStudentId.toString();
+    }
     if(log.classId) return log.classId === currentClassId;
     if(curClass) return curClass.students.some(s=>s.id.toString()===log.studentId.toString());
     return false;
@@ -777,7 +788,8 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     const opacity = isReverted ? 'opacity:0.45;' : '';
     const revertedBadge = isReverted ? '<span style="background:#ffcc00;color:#665500;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">已撤销</span>' : '';
     let btnHtml = '';
-    if(!isReverted && isCurrentMonth){
+    // Only teachers can revoke operations; students cannot
+    if(!isReverted && isCurrentMonth && !isStudentView){
       btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog(${log.id});closeModal();}">撤销</button>`;
     }
     html += `<div class="history-log-item ${isReverted?'history-reverted':''}" style="${opacity}border-left:3px solid ${color};padding-left:14px;">
