@@ -1899,15 +1899,17 @@ function resetPKSelection() {
 }
 
 // ========== 战斗兽宠系统 ==========
-// 两套独立的图片池，严格区分用途：
-// 1. _pkMonsterPool — 仅数字命名图片 → 用于宠物PK对战
-// 2. _jhBossPool    — 仅中文命名图片 → 用于萌萌江湖行
-let _pkMonsterPool = [];
+// 三套独立的图片池，严格区分用途：
+// 1. _leftMonsterPool  — 无补零数字命名（1.png~24.png）→ 宠物PK左侧 + 江湖行宠物变身
+// 2. _rightMonsterPool — 补零数字命名（01.png~024.png, 010.png~019.png）→ 宠物PK右侧
+// 3. _jhBossPool       — 中文命名图片 → 萌萌江湖行Boss
+let _leftMonsterPool = [];
+let _rightMonsterPool = [];
 let _jhBossPool = [];
 let _pkMonsterProbed = false;
 let _jhBossProbed = false;
 
-// 宠物PK对战：探测数字命名图片（1.png, 01.png, 010.png 等）
+// 宠物PK对战：探测数字命名图片，分左右两个池
 function probePKMonsterImages() {
   return new Promise((resolve) => {
     if(_pkMonsterProbed) { resolve(); return; }
@@ -1915,21 +1917,34 @@ function probePKMonsterImages() {
     let resolved = false;
     const finish = () => { if(!resolved) { resolved = true; _pkMonsterProbed = true; resolve(); } };
     const checkDone = () => { pending--; if(pending <= 0) finish(); };
-    const seen = new Set();
-    function tryPath(path) {
+    const seenL = new Set();
+    const seenR = new Set();
+    function tryLeft(path) {
       pending++;
       const img = new Image();
-      img.onload = () => { if(!seen.has(path)) { seen.add(path); _pkMonsterPool.push(path); } checkDone(); };
+      img.onload = () => { if(!seenL.has(path)) { seenL.add(path); _leftMonsterPool.push(path); } checkDone(); };
       img.onerror = () => { checkDone(); };
       img.src = path;
     }
-    for(let i = 1; i <= 50; i++) {
-      tryPath(`战斗兽宠文件夹/${i}.png`);
-      tryPath(`战斗兽宠文件夹/0${i}.png`);
+    function tryRight(path) {
+      pending++;
+      const img = new Image();
+      img.onload = () => { if(!seenR.has(path)) { seenR.add(path); _rightMonsterPool.push(path); } checkDone(); };
+      img.onerror = () => { checkDone(); };
+      img.src = path;
     }
+    // 左侧池：无补零格式 1.png ~ 50.png
+    for(let i = 1; i <= 50; i++) {
+      tryLeft(`战斗兽宠文件夹/${i}.png`);
+    }
+    // 右侧池：补零格式 01.png ~ 050.png
+    for(let i = 1; i <= 50; i++) {
+      tryRight(`战斗兽宠文件夹/0${i}.png`);
+    }
+    // 右侧池：三位补零格式 010.png ~ 050.png
     for(let i = 10; i <= 50; i++) {
       const padded3 = String(i).padStart(3, '0');
-      tryPath(`战斗兽宠文件夹/${padded3}.png`);
+      tryRight(`战斗兽宠文件夹/${padded3}.png`);
     }
     setTimeout(finish, 5000);
   });
@@ -1962,16 +1977,24 @@ function probeMonsterImages() {
   return Promise.all([probePKMonsterImages(), probeJhBossImages()]);
 }
 
-// 宠物PK对战：随机从数字命名池取图
+// 宠物PK对战：左侧从 _leftMonsterPool 取图（数字.png）
 function getLeftMonsterImg() {
-  if(_pkMonsterPool.length > 0) {
-    return _pkMonsterPool[Math.floor(Math.random() * _pkMonsterPool.length)];
+  if(_leftMonsterPool.length > 0) {
+    return _leftMonsterPool[Math.floor(Math.random() * _leftMonsterPool.length)];
   }
   return null;
 }
+// 宠物PK对战：右侧从 _rightMonsterPool 取图（0数字.png）
 function getRightMonsterImg() {
-  if(_pkMonsterPool.length > 0) {
-    return _pkMonsterPool[Math.floor(Math.random() * _pkMonsterPool.length)];
+  if(_rightMonsterPool.length > 0) {
+    return _rightMonsterPool[Math.floor(Math.random() * _rightMonsterPool.length)];
+  }
+  return null;
+}
+// 萌萌江湖行：宠物变身从 _leftMonsterPool 取图（数字.png）
+function getJhPetMonsterImg() {
+  if(_leftMonsterPool.length > 0) {
+    return _leftMonsterPool[Math.floor(Math.random() * _leftMonsterPool.length)];
   }
   return null;
 }
@@ -3031,6 +3054,10 @@ let currentBattleModalOverlay = null;
 
 function startPKBattle() {
   if(pkState.players.length !== 2) return;
+  if(pkState.isFighting) {
+    showNotification('战斗中', '上一场战斗尚未结束，请稍后再试', 'warning');
+    return;
+  }
   const cur = classesData.find(c=>c.id===currentClassId);
   const student1 = cur.students.find(s=>s.id.toString()===pkState.players[0].studentId.toString());
   const student2 = cur.students.find(s=>s.id.toString()===pkState.players[1].studentId.toString());
@@ -3068,9 +3095,21 @@ function startPKBattle() {
   const p1 = pkState.players[0];
   const p2 = pkState.players[1];
   // 确保PK数字命名图片探测完成后再开始
-  probePKMonsterImages().then(() => {
-    const leftMonster = getLeftMonsterImg();
-    const rightMonster = getRightMonsterImg();
+  probePKMonsterImages().then(async () => {
+    let leftMonster = getLeftMonsterImg();
+    let rightMonster = getRightMonsterImg();
+    // 重试机制：如果图片池为空，重新探测一次
+    if(!leftMonster || !rightMonster) {
+      _pkMonsterProbed = false;
+      _leftMonsterPool = [];
+      _rightMonsterPool = [];
+      await probePKMonsterImages();
+      leftMonster = getLeftMonsterImg();
+      rightMonster = getRightMonsterImg();
+    }
+    // 最终回退：如果仍然为空，使用空字符串避免 "null" 字符串
+    if(!leftMonster) leftMonster = '';
+    if(!rightMonster) rightMonster = '';
     const modalContent = `
       <div class="pk-arena" id="pk-arena">
         <div class="pk-arena-particles" id="pk-arena-particles"></div>
@@ -5319,9 +5358,13 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
 
   // 等待江湖boss中文命名图片探测完成
   await probeJhBossImages();
+  // 同时确保PK数字命名图片已探测（江湖行宠物变身用数字命名图片）
+  await probePKMonsterImages();
   
   // 随机选取江湖boss战斗兽宠图片（中文命名）
   const monsterImg = getJhBossMonsterImg();
+  // 江湖行宠物变身图片（数字命名：1.png, 2.png 等）
+  const jhPetImg = getJhPetMonsterImg();
   
   // ===== 全新战斗系统：前4回合完全公平，第5回合起微调，终结一击慢动作 =====
   const willWin = Math.random() < 0.20; // 胜率20%
@@ -5385,10 +5428,10 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
   await sleep(600);
   scene.classList.remove('jh-screen-shake');
   
-  // 阶段4：替换为战斗兽宠图片
+  // 阶段4：替换为战斗兽宠图片（宠物用数字命名图片）
   petEl.style.animation = '';
-  if (monsterImg) {
-    petEl.innerHTML = `<img src="${monsterImg}" alt="战斗兽宠" style="width:100%;height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 0 15px rgba(255,80,0,0.5)) drop-shadow(0 8px 20px rgba(0,0,0,0.7));">`;
+  if (jhPetImg) {
+    petEl.innerHTML = `<img src="${jhPetImg}" alt="战斗兽宠" style="width:100%;height:100%;object-fit:contain;opacity:0;animation:monsterReveal 0.8s ease-out forwards;filter:drop-shadow(0 0 15px rgba(255,80,0,0.5)) drop-shadow(0 8px 20px rgba(0,0,0,0.7));">`;
   }
   playExplosionSound();
   await sleep(1000);
