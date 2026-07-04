@@ -719,17 +719,9 @@ function _loadOperationLogs() {
 
 // v19: Helper function to process operation logs data
 function _processOperationLogsData(r) {
-    // This is more reliable than the old merge logic which could miss logs
+    // v22: Smart merge — NEVER discard local data, only deduplicate against Supabase
     var localLogs = window.operationLogs || [];
     
-    // Collect local unsynced logs (logs not yet pushed to Supabase)
-    var localUnsynced = [];
-    localLogs.forEach(function(l) {
-      if (!l._synced && l.id < 0) {
-        localUnsynced.push(l);
-      }
-    });
-
     var supabaseLogs = [];
     if (r && r.data) {
       supabaseLogs = r.data.map(function(l) {
@@ -754,14 +746,9 @@ function _processOperationLogsData(r) {
       });
     }
 
-    // v14: Build a set of Supabase log IDs for fast lookup
-    var supabaseIdSet = {};
-    supabaseLogs.forEach(function(l) { supabaseIdSet[l.id] = true; });
-
-    // Keep local unsynced logs only if they aren't already in Supabase (by content match)
-    var keptUnsynced = [];
-    localUnsynced.forEach(function(localLog) {
-      var foundInSupabase = false;
+    // v22: Build lookup of Supabase logs by content for deduplication
+    var matchedLocal = {};
+    localLogs.forEach(function(localLog, idx) {
       for (var i = 0; i < supabaseLogs.length; i++) {
         var sbLog = supabaseLogs[i];
         if (localLog.actionType === sbLog.actionType &&
@@ -769,30 +756,36 @@ function _processOperationLogsData(r) {
             localLog.details === sbLog.details &&
             (localLog.coinDelta || 0) === (sbLog.coinDelta || 0) &&
             localLog.timestamp === sbLog.timestamp) {
-          foundInSupabase = true;
-          // Mark local log as synced with the Supabase ID
+          // Match found — update local log with Supabase data
           localLog.id = sbLog.id;
           localLog._synced = true;
           localLog._fromSupabase = true;
           if (sbLog.reverted) localLog.reverted = true;
+          matchedLocal[idx] = true;
           break;
         }
       }
-      if (!foundInSupabase) {
-        keptUnsynced.push(localLog);
+    });
+
+    // v22: Collect ALL local logs that are NOT in Supabase (whether synced or not)
+    // This prevents data loss when Supabase has fewer records than localStorage
+    var localNotInSupabase = [];
+    localLogs.forEach(function(localLog, idx) {
+      if (!matchedLocal[idx]) {
+        // v22: Mark as unsynced so they can be re-pushed to Supabase
+        localLog._synced = false;
+        localNotInSupabase.push(localLog);
       }
     });
 
-    // v16: Always trust Supabase as source of truth for operation logs.
-    // If Supabase returns 0 results, it means there are no logs (or RLS needs fixing).
-    // We still keep local unsynced logs (logs not yet pushed to Supabase).
+    // v22: Merge = Supabase logs + all local logs not found in Supabase
+    // NEVER discard local data — localStorage may be the only copy
+    window.operationLogs = supabaseLogs.concat(localNotInSupabase);
+    
     var isStudent = currentUser && currentUser.type === 'student';
-    if (isStudent && supabaseLogs.length === 0 && localLogs.length > 0) {
-      console.warn('[DAL] v16 WARNING: Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. This may indicate an RLS policy issue. Proceeding with Supabase data + unsynced local logs.');
+    if (supabaseLogs.length === 0 && localLogs.length > 0) {
+      console.warn('[DAL] v22 WARNING: Supabase returned 0 operation_logs, keeping ' + localLogs.length + ' local logs');
     }
-
-    // v16: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
-    window.operationLogs = supabaseLogs.concat(keptUnsynced);
 
     // Sort by timestamp (newest first)
     window.operationLogs.sort(function(a, b) {
