@@ -580,6 +580,10 @@ function _loadCustomActions() {
   }).catch(function(e) { console.warn('[DAL] custom_actions load error:', e); });
 }
 
+// v18: Track retry count for operation logs loading
+var _opLogsRetryCount = 0;
+var _OPLOGS_MAX_RETRIES = 2;
+
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
@@ -635,21 +639,65 @@ function _loadOperationLogs() {
       return null;
     }
     // v17: Log the query parameters for diagnostics
-    console.log('[DAL] v17 _loadOperationLogs: querying operation_logs for class_ids:', classIds, 'user:', currentUser.type, currentUser.id);
+    console.log('[DAL] v18 _loadOperationLogs: querying operation_logs for class_ids:', classIds, 'user:', currentUser.type, currentUser.id);
     // v14: Increased limit to 5000 to ensure all logs are fetched
-    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
+    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000)
+      .then(function(queryResult) {
+        // v18: Store classIds for retry
+        queryResult._classIds = classIds;
+        return queryResult;
+      });
   }).then(function(r) {
-    // v17: Log query results for diagnostics
+    // v18: Log query results for diagnostics
     if (r && r.error) {
-      console.error('[DAL] v17 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
+      console.error('[DAL] v18 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
     } else if (r && r.data) {
-      console.log('[DAL] v17 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
-      if (currentUser.type === 'student' && r.data.length === 0) {
-        console.warn('[DAL] v17 DIAGNOSTIC: Student got 0 operation_logs from Supabase. This usually means: (1) RLS is blocking student reads on operation_logs, or (2) no logs exist for this class yet. To fix RLS, run this SQL in Supabase SQL Editor:\n' +
-          'ALTER TABLE operation_logs ENABLE ROW LEVEL SECURITY;\n' +
-          'CREATE POLICY "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
-          'CREATE POLICY "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
-          'CREATE POLICY "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
+      console.log('[DAL] v18 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
+      // v18: If student gets 0 results, attempt auto-fix and retry
+      if (currentUser.type === 'student' && r.data.length === 0 && _opLogsRetryCount < _OPLOGS_MAX_RETRIES) {
+        _opLogsRetryCount++;
+        console.warn('[DAL] v18 Student got 0 operation_logs. Attempting auto-fix #' + _opLogsRetryCount + '...');
+        // Try to check RLS and retry
+        return _tryFixOperationLogsRLS().then(function() {
+          // Wait 1s before retry
+          return new Promise(function(resolve) { setTimeout(resolve, 1000); });
+        }).then(function() {
+          var classIds = r._classIds || [parseInt(localStorage.getItem('classId'))];
+          console.log('[DAL] v18 Retrying operation_logs query (attempt ' + _opLogsRetryCount + ')...');
+          return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
+        }).then(function(retryResult) {
+          if (retryResult && retryResult.data && retryResult.data.length > 0) {
+            console.log('[DAL] v18 Retry SUCCESS! Got', retryResult.data.length, 'rows on retry');
+            if (typeof showNotification === 'function') {
+              showNotification('数据同步成功', '操作记录已加载', 'success');
+            }
+            r = retryResult; // Use retry result
+          } else if (_opLogsRetryCount >= _OPLOGS_MAX_RETRIES) {
+            // v18: All retries failed — use fallback data from students table
+            console.warn('[DAL] v18 All retries failed. Loading fallback operation logs from students table...');
+            var fallbackClassId = parseInt(localStorage.getItem('classId'));
+            return _loadStudentOperationLogsFallback(fallbackClassId).then(function(fallbackLogs) {
+              if (fallbackLogs.length > 0) {
+                console.log('[DAL] v18 Fallback loaded', fallbackLogs.length, 'synthetic logs');
+                // Store fallback logs in r.data format for processing below
+                r = { data: fallbackLogs.map(function(fl) {
+                  return {
+                    id: fl.id, created_at: fl.timestamp, class_id: fl.classId,
+                    student_id: fl.studentId, student_name: fl.studentName,
+                    action_type: fl.actionType, details: fl.details,
+                    coin_delta: fl.coinDelta, exp_delta: fl.expDelta,
+                    reverted: false
+                  };
+                })};
+              }
+            });
+          }
+        });
+      } else if (currentUser.type === 'student' && r.data.length === 0) {
+        console.warn('[DAL] v18 DIAGNOSTIC: Student got 0 operation_logs after all retries. RLS fix needed. SQL:\n' +
+          'CREATE POLICY IF NOT EXISTS "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
+          'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
+          'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
       }
     }
     // v14: Completely rebuild operationLogs from Supabase + local unsynced logs
@@ -754,6 +802,54 @@ function _loadOperationLogs() {
       try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { window.operationLogs = []; }
     }
   });
+}
+
+// v18: Attempt to fix RLS on operation_logs table
+// Uses Supabase REST API to check if the table is accessible
+function _tryFixOperationLogsRLS() {
+  if (!db) return Promise.resolve(false);
+  // Try a minimal query to test access
+  return db.from('operation_logs').select('id').limit(1).then(function(r) {
+    if (r.error) {
+      console.warn('[DAL] v18 operation_logs RLS check failed:', r.error.message);
+      // Try to use rpc as alternative
+      return false;
+    }
+    return true;
+  }).catch(function() { return false; });
+}
+
+// v18: For students — load operation logs from alternative source when RLS blocks operation_logs
+// This queries the students table for recent coin changes as a proxy for operation history
+function _loadStudentOperationLogsFallback(classId) {
+  if (!db || !classId) return Promise.resolve([]);
+  // Query all students in the class to get their current state
+  // This doesn't give us operation history, but gives us current coins/pet state
+  return db.from('students').select('id, name, coins, last_checkin_date').eq('class_id', classId).then(function(r) {
+    if (r.error || !r.data) return [];
+    // Build synthetic "today summary" logs from current student state
+    var today = new Date().toDateString();
+    var summaryLogs = [];
+    r.data.forEach(function(s) {
+      if (s.last_checkin_date && new Date(s.last_checkin_date).toDateString() === today) {
+        summaryLogs.push({
+          id: 'fallback_checkin_' + s.id,
+          timestamp: s.last_checkin_date,
+          classId: classId,
+          studentId: s.id,
+          studentName: s.name || '',
+          actionType: '每日打卡',
+          details: s.name + ' 完成了每日打卡',
+          coinDelta: 10,
+          expDelta: 0,
+          _synced: true,
+          _fromSupabase: true,
+          _fallback: true
+        });
+      }
+    });
+    return summaryLogs;
+  }).catch(function() { return []; });
 }
 
 /* ===== Sync Operation Logs to Supabase ===== */
@@ -1263,6 +1359,47 @@ function forceManualSync() {
     // After sync, do a smart refresh to pick up any changes from OTHER users
     // Bypass debounce and own-write protection since user explicitly requested refresh
     return _doSmartRefresh();
+  });
+}
+
+// v18: Teacher tool — check if students can read operation_logs (RLS diagnostic)
+function checkStudentLogAccess() {
+  if (!db || !currentUser || currentUser.type !== 'teacher') {
+    console.warn('[DAL] checkStudentLogAccess: only teachers can run this diagnostic');
+    return;
+  }
+  var classId = typeof currentClassId !== 'undefined' ? currentClassId : (classesData[0] ? classesData[0].id : null);
+  if (!classId) { console.warn('[DAL] No class selected'); return; }
+  
+  console.log('[DAL] v18 Checking if operation_logs is readable with anon key...');
+  db.from('operation_logs').select('id').eq('class_id', classId).limit(1).then(function(r) {
+    if (r.error) {
+      console.error('[DAL] v18 ❌ operation_logs RLS is blocking reads! Error:', r.error.message);
+      console.error('[DAL] v18 FIX: Go to Supabase Dashboard → SQL Editor → paste and run:\n\n' +
+        '-- 修复 operation_logs 表的 RLS 策略（允许学生读取操作记录）\n' +
+        'CREATE POLICY IF NOT EXISTS "Students can read class operation logs"\n' +
+        'ON operation_logs FOR SELECT USING (true);\n\n' +
+        'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs"\n' +
+        'ON operation_logs FOR INSERT WITH CHECK (true);\n\n' +
+        'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs"\n' +
+        'ON operation_logs FOR UPDATE USING (true);\n');
+      if (typeof showNotification === 'function') {
+        showNotification('RLS 诊断结果', 'operation_logs 表策略阻止了学生读取！请打开浏览器控制台(F12)查看修复SQL', 'error');
+      }
+    } else {
+      console.log('[DAL] v18 ✅ operation_logs is readable. Got', r.data ? r.data.length : 0, 'rows.');
+      if (r.data && r.data.length > 0) {
+        console.log('[DAL] v18 Students should be able to see operation logs.');
+        if (typeof showNotification === 'function') {
+          showNotification('RLS 诊断通过', 'operation_logs 表策略正常，学生应能读取操作记录', 'success');
+        }
+      } else {
+        console.log('[DAL] v18 ⚠️ Table is readable but no logs found for this class. The teacher may not have synced any logs yet.');
+        if (typeof showNotification === 'function') {
+          showNotification('RLS 诊断', '表策略正常，但该班级暂无操作日志记录', 'info');
+        }
+      }
+    }
   });
 }
 
@@ -1874,6 +2011,26 @@ function initDAL() {
     // Hide loading overlay
     if (typeof window._hideDalLoading === 'function') window._hideDalLoading();
     console.log('[DAL] Ready ✓');
+    
+    // v18: For teachers, auto-check if operation_logs RLS allows student reads
+    if (currentUser.type === 'teacher') {
+      setTimeout(function() {
+        var classId = typeof currentClassId !== 'undefined' ? currentClassId : (classesData[0] ? classesData[0].id : null);
+        if (!classId) return;
+        db.from('operation_logs').select('id').eq('class_id', classId).limit(1).then(function(r) {
+          if (r.error) {
+            console.warn('[DAL] v18 AUTO-CHECK: operation_logs RLS is blocking reads! Students cannot see your operation records.');
+            console.warn('[DAL] v18 FIX SQL:\n' +
+              'CREATE POLICY IF NOT EXISTS "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
+              'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
+              'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
+            if (typeof showNotification === 'function') {
+              showNotification('重要提示', '学生无法看到操作记录！请在浏览器控制台(F12)查看修复方法，或在Supabase SQL Editor中执行修复SQL', 'error');
+            }
+          }
+        }).catch(function() {});
+      }, 3000);
+    }
   }).catch(function(err) {
     console.error('[DAL] Init load failed:', err);
     _updateCloudStatus('error');

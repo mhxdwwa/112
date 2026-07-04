@@ -1216,6 +1216,15 @@ function checkPauseAndNotify(){if(isPauseActive()){showNotification('操作暂�
 function isPauseActive(){if(!currentClassId)return false;const cur=classesData.find(c=>c.id===currentClassId);if(!cur||!cur.pauseGrowth)return false;const today=new Date().toISOString().slice(0,10);return (today>=cur.pauseGrowth.start && today<=cur.pauseGrowth.end);}
 function showNotification(title,message,type="info"){const c=document.getElementById('notificationContainer');/* 限制最多同时显示3个通知，防止DOM堆积 */while(c.children.length>=3)c.firstChild.remove();const icons={"info":"ℹ️","success":"✅","warning":"⚠️","error":"❌"},n=document.createElement('div');n.className='notification';n.innerHTML=`<div>${icons[type]}</div><div><strong>${esc(title)}</strong><br>${esc(message)}</div>`;c.appendChild(n);setTimeout(()=>{if(n.parentNode)n.remove();},3000);}
 function buildStudentModalContent(student, pet){
+  // v18: SAFETY NET — If a student is viewing another student's pet, ALWAYS show read-only
+  // This prevents action buttons from appearing even if isViewingOtherStudent was wrong
+  var _isStudent = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (_isStudent) {
+    var _myId = currentUser.studentId || localStorage.getItem('studentId') || '';
+    if (_myId && String(student.id) !== String(_myId)) {
+      return buildReadOnlyStudentModalContent(student, pet);
+    }
+  }
   const stageName = getCurrentStageName(pet.name, pet.level||1);
   const lastDate = pet.lastFeedDate?new Date(pet.lastFeedDate):null;
   let hungerMsg='';
@@ -1367,10 +1376,11 @@ function buildReadOnlyStudentModalContent(student, pet){
   </div>`;
 }
 function openStudentModal(studentId){ if(!currentClassId)return; const cur=classesData.find(c=>c.id===currentClassId); const student=cur.students.find(s=>s.id.toString()===studentId.toString()); if(!student)return; currentModalStudentId=studentId;
-  // v17: Check if current user is a student viewing another student's pet
+  // v18: Robust check — is current user a student viewing ANOTHER student's pet?
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
-  const myStudentId = isStudentView ? parseInt(currentUser.studentId) : null;
-  const isViewingOtherStudent = isStudentView && myStudentId !== null && student.id.toString() !== myStudentId.toString();
+  const _mySid = isStudentView ? (currentUser.studentId || localStorage.getItem('studentId') || '') : '';
+  const myStudentId = _mySid ? (isNaN(parseInt(_mySid)) ? _mySid : parseInt(_mySid)) : null;
+  const isViewingOtherStudent = isStudentView && myStudentId !== null && String(student.id) !== String(myStudentId);
   
   if(!student.pets||student.pets.length===0){ 
     let content = '<div style="text-align:center;"><div style="font-size:60px;">🥚</div><p>尚未领养宠物</p><p>💰 '+student.coins+' 金币</p></div>';
@@ -1405,10 +1415,11 @@ function refreshCurrentStudentModal(){
   if(!activePet){ closeModal(); return; }
   ensurePetPlayFields(activePet);
   cleanupPetModalEffects();
-  // v17: Check if current user is a student viewing another student's pet
+  // v18: Robust check — is current user a student viewing ANOTHER student's pet?
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
-  const myStudentId = isStudentView ? parseInt(currentUser.studentId) : null;
-  const isViewingOtherStudent = isStudentView && myStudentId !== null && student.id.toString() !== myStudentId.toString();
+  const _mySid = isStudentView ? (currentUser.studentId || localStorage.getItem('studentId') || '') : '';
+  const myStudentId = _mySid ? (isNaN(parseInt(_mySid)) ? _mySid : parseInt(_mySid)) : null;
+  const isViewingOtherStudent = isStudentView && myStudentId !== null && String(student.id) !== String(myStudentId);
   const contentBuilder = isViewingOtherStudent ? buildReadOnlyStudentModalContent : buildStudentModalContent;
   modalDiv.querySelector('.modal-content').innerHTML = contentBuilder(student, activePet); 
   setTimeout(()=>{ startHeartForCurrentPet(currentModalStudentId);
