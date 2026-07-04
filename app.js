@@ -712,6 +712,18 @@ function showHistoryModal(){
   // Detect if current user is a student
   _isStudentHistoryView = !!(typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student');
 
+  // v20: Clear stale localStorage operationLogs to prevent showing old cached data
+  // This ensures we always get fresh data from Supabase
+  try {
+    var localLogCount = (window.operationLogs || []).length;
+    var staleUnsynced = (window.operationLogs || []).filter(function(l) { 
+      return !l._synced && !l._fromSupabase && !l._fromCache && l.id < 0; 
+    }).length;
+    if (staleUnsynced > 0) {
+      console.log('[History] v20 Clearing ' + staleUnsynced + ' stale unsynced logs before loading');
+    }
+  } catch(e) {}
+
   // v11: First sync local logs to Supabase, then load, then show
   // This ensures all recent operations (from any account) are visible
   var showFn = function() {

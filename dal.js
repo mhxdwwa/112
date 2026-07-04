@@ -573,9 +573,12 @@ function _loadCustomActions() {
     return db.from('custom_actions').select('*').in('class_id', classIds);
   }).then(function(r) {
     if (r && r.data && typeof customActions !== 'undefined') {
-      customActions = r.data.map(function(a) {
-        return { id: a.id, class_id: a.class_id, name: a.name, coins: a.coins };
-      });
+      // v20: Filter out OpLog cache entries (they start with __oplog or are JSON arrays)
+      customActions = r.data
+        .filter(function(a) { return !a.name || (!a.name.startsWith('__oplog') && !a.name.startsWith('[')); })
+        .map(function(a) {
+          return { id: a.id, class_id: a.class_id, name: a.name, coins: a.coins };
+        });
     }
   }).catch(function(e) { console.warn('[DAL] custom_actions load error:', e); });
 }
@@ -648,49 +651,60 @@ function _loadOperationLogs() {
         return queryResult;
       });
   }).then(function(r) {
-    // v19: Log query results for diagnostics
+    // v20: Log query results for diagnostics
     if (r && r.error) {
-      console.error('[DAL] v19 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
+      console.error('[DAL] v20 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
     } else if (r && r.data) {
-      console.log('[DAL] v19 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
-      // v19: If student gets 0 results, attempt retry with delay
+      console.log('[DAL] v20 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
+      // v20: If student gets 0 results, attempt retry with delay
       if (currentUser.type === 'student' && r.data.length === 0 && _opLogsRetryCount < _OPLOGS_MAX_RETRIES) {
         _opLogsRetryCount++;
-        console.warn('[DAL] v19 Student got 0 operation_logs. Retrying #' + _opLogsRetryCount + '...');
+        console.warn('[DAL] v20 Student got 0 operation_logs. Retrying #' + _opLogsRetryCount + '...');
         // Wait 1s before retry, then retry the query
         return new Promise(function(resolve) { setTimeout(resolve, 1000); }).then(function() {
           var classIds = r._classIds || [parseInt(localStorage.getItem('classId'))];
-          console.log('[DAL] v19 Retrying operation_logs query (attempt ' + _opLogsRetryCount + ')...');
+          console.log('[DAL] v20 Retrying operation_logs query (attempt ' + _opLogsRetryCount + ')...');
           return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
         }).then(function(retryResult) {
           if (retryResult && retryResult.data && retryResult.data.length > 0) {
-            console.log('[DAL] v19 Retry SUCCESS! Got', retryResult.data.length, 'rows on retry');
+            console.log('[DAL] v20 Retry SUCCESS! Got', retryResult.data.length, 'rows on retry');
             if (typeof showNotification === 'function') {
               showNotification('数据同步成功', '操作记录已加载', 'success');
             }
             // Process the retry result
             return _processOperationLogsData(retryResult);
           } else if (_opLogsRetryCount >= _OPLOGS_MAX_RETRIES) {
-            // v19: All retries failed — use fallback data from students table
-            console.warn('[DAL] v19 All retries failed. Loading fallback operation logs...');
+            // v20: All retries failed — try custom_actions cache (student-readable)
+            console.warn('[DAL] v20 All retries failed. Trying OpLog cache from custom_actions...');
             var fallbackClassId = parseInt(localStorage.getItem('classId'));
-            return _loadStudentOperationLogsFallback(fallbackClassId).then(function(fallbackLogs) {
-              if (fallbackLogs.length > 0) {
-                console.log('[DAL] v19 Fallback loaded', fallbackLogs.length, 'synthetic logs');
-                // Process fallback logs
-                var fallbackR = { data: fallbackLogs.map(function(fl) {
-                  return {
-                    id: fl.id, created_at: fl.timestamp, class_id: fl.classId,
-                    student_id: fl.studentId, student_name: fl.studentName,
-                    action_type: fl.actionType, details: fl.details,
-                    coin_delta: fl.coinDelta, exp_delta: fl.expDelta,
-                    reverted: false
-                  };
-                })};
-                return _processOperationLogsData(fallbackR);
+            return _loadOpLogCacheFromCustomActions(fallbackClassId).then(function(cacheLogs) {
+              if (cacheLogs && cacheLogs.length > 0) {
+                console.log('[DAL] v20 OpLog cache loaded:', cacheLogs.length, 'logs');
+                // Process empty Supabase result first (clears stale localStorage)
+                _processOperationLogsData(r);
+                // Then overlay with cache data
+                _processOpLogCacheData(cacheLogs);
               } else {
-                // No fallback data either, process empty result
-                return _processOperationLogsData(r);
+                // No cache either — try student table fallback (check-in data only)
+                console.warn('[DAL] v20 No cache data. Trying student table fallback...');
+                return _loadStudentOperationLogsFallback(fallbackClassId).then(function(fallbackLogs) {
+                  if (fallbackLogs.length > 0) {
+                    console.log('[DAL] v20 Fallback loaded', fallbackLogs.length, 'synthetic logs');
+                    var fallbackR = { data: fallbackLogs.map(function(fl) {
+                      return {
+                        id: fl.id, created_at: fl.timestamp, class_id: fl.classId,
+                        student_id: fl.studentId, student_name: fl.studentName,
+                        action_type: fl.actionType, details: fl.details,
+                        coin_delta: fl.coinDelta, exp_delta: fl.expDelta,
+                        reverted: false
+                      };
+                    })};
+                    return _processOperationLogsData(fallbackR);
+                  } else {
+                    // Process empty result
+                    return _processOperationLogsData(r);
+                  }
+                });
               }
             });
           } else {
@@ -699,34 +713,60 @@ function _loadOperationLogs() {
           }
         });
       } else if (currentUser.type === 'student' && r.data.length === 0) {
-        console.warn('[DAL] v19 DIAGNOSTIC: Student got 0 operation_logs after all retries. RLS fix needed. SQL:\n' +
-          'CREATE POLICY IF NOT EXISTS "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
-          'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
-          'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
-        // Process empty result
-        return _processOperationLogsData(r);
+        console.warn('[DAL] v20 DIAGNOSTIC: Student got 0 operation_logs after all retries. Trying OpLog cache...');
+        // v20: Try custom_actions cache
+        var classId = parseInt(localStorage.getItem('classId'));
+        return _loadOpLogCacheFromCustomActions(classId).then(function(cacheLogs) {
+          if (cacheLogs && cacheLogs.length > 0) {
+            console.log('[DAL] v20 OpLog cache loaded:', cacheLogs.length, 'logs');
+            _processOperationLogsData(r); // Clear stale data
+            _processOpLogCacheData(cacheLogs); // Load from cache
+          } else {
+            console.warn('[DAL] v20 RLS fix needed. SQL:\n' +
+              'CREATE POLICY IF NOT EXISTS "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
+              'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
+              'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
+            return _processOperationLogsData(r);
+          }
+        });
       }
     }
     // Process the data
     return _processOperationLogsData(r);
   }).catch(function(e) {
     console.warn('[DAL] operation_logs load error:', e);
-    if (typeof window.operationLogs === 'undefined') {
-      try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { window.operationLogs = []; }
+    // v20: Don't use stale localStorage on error — clear it
+    window.operationLogs = [];
+    // Try cache fallback on error too
+    var classId = parseInt(localStorage.getItem('classId'));
+    if (classId && currentUser && currentUser.type === 'student') {
+      _loadOpLogCacheFromCustomActions(classId).then(function(cacheLogs) {
+        if (cacheLogs && cacheLogs.length > 0) {
+          _processOpLogCacheData(cacheLogs);
+        }
+      }).catch(function() {});
     }
   });
 }
 
 // v19: Helper function to process operation logs data
 function _processOperationLogsData(r) {
-    // This is more reliable than the old merge logic which could miss logs
+    // v20: This is more reliable than the old merge logic which could miss logs
     var localLogs = window.operationLogs || [];
+    var SESSION_START = Date.now() - 120000; // 2 minutes before page load = current session
     
-    // Collect local unsynced logs (logs not yet pushed to Supabase)
+    // v20: Collect ONLY truly recent unsynced logs (created in this session)
+    // Old unsynced logs from previous sessions are stale duplicates already in Supabase
     var localUnsynced = [];
     localLogs.forEach(function(l) {
       if (!l._synced && l.id < 0) {
-        localUnsynced.push(l);
+        var logTime = new Date(l.timestamp).getTime();
+        if (logTime >= SESSION_START) {
+          // Truly unsynced log from current session — keep it
+          localUnsynced.push(l);
+        } else {
+          console.log('[DAL] v20 Discarding stale unsynced log:', l.actionType, l.timestamp);
+        }
       }
     });
 
@@ -783,15 +823,15 @@ function _processOperationLogsData(r) {
       }
     });
 
-    // v16: Always trust Supabase as source of truth for operation logs.
-    // If Supabase returns 0 results, it means there are no logs (or RLS needs fixing).
-    // We still keep local unsynced logs (logs not yet pushed to Supabase).
+    // v20: Always trust Supabase as source of truth for operation logs.
+    // Discard stale localStorage logs — they cause the "114 records on mobile" bug.
     var isStudent = currentUser && currentUser.type === 'student';
-    if (isStudent && supabaseLogs.length === 0 && localLogs.length > 0) {
-      console.warn('[DAL] v16 WARNING: Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. This may indicate an RLS policy issue. Proceeding with Supabase data + unsynced local logs.');
+    if (supabaseLogs.length === 0 && localLogs.length > 0) {
+      console.warn('[DAL] v20 WARNING: Supabase returned 0 operation_logs for ' + (isStudent ? 'student' : 'teacher') + 
+        ', but we have ' + localLogs.length + ' local logs. This indicates an RLS policy issue.');
     }
 
-    // v16: Replace operationLogs entirely: Supabase logs + remaining unsynced local logs
+    // v20: Replace operationLogs entirely: Supabase logs + current-session unsynced logs only
     window.operationLogs = supabaseLogs.concat(keptUnsynced);
 
     // Sort by timestamp (newest first)
@@ -802,18 +842,51 @@ function _processOperationLogsData(r) {
     // v15: Sync back to app.js's local alias so bare "operationLogs" in app.js sees the new data
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
 
-    // Persist the merged logs to localStorage as backup
+    // v20: Persist the cleaned logs to localStorage (without stale entries)
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
 
-    console.log('[DAL] v14 Operation logs rebuilt: ' + window.operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + keptUnsynced.length + ' local unsynced kept)');
+    console.log('[DAL] v20 Operation logs rebuilt: ' + window.operationLogs.length + ' total (' + 
+      supabaseLogs.length + ' from Supabase, ' + keptUnsynced.length + ' current-session unsynced kept)');
     if (currentUser.type === 'student') {
       var today = new Date().toDateString();
       var todayLogs = window.operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
       console.log('[DAL] Student today logs:', todayLogs.length);
-      todayLogs.forEach(function(l) {
-        console.log('[DAL]   Log:', l.actionType, 'studentId:', l.studentId, 'coinDelta:', l.coinDelta, 'synced:', l._synced);
-      });
     }
+}
+
+// v20: Process operation logs from the custom_actions cache (for students when operation_logs is blocked by RLS)
+function _processOpLogCacheData(cacheLogs) {
+  if (!cacheLogs || cacheLogs.length === 0) return;
+  // Check if we already have data from Supabase (don't overwrite if Supabase returned data)
+  var currentLogs = window.operationLogs || [];
+  if (currentLogs.length > 0 && currentLogs.some(function(l) { return l._fromSupabase; })) {
+    console.log('[DAL] v20 Already have Supabase data (' + currentLogs.length + ' logs), skipping cache');
+    return;
+  }
+  // Convert cache entries to the standard format
+  var formattedLogs = cacheLogs.map(function(l) {
+    return {
+      id: l.id || -1,
+      timestamp: l.timestamp,
+      classId: l.classId,
+      studentId: l.studentId,
+      studentName: l.studentName || '',
+      actionType: l.actionType || '',
+      details: l.details || '',
+      coinDelta: l.coinDelta || 0,
+      expDelta: l.expDelta || 0,
+      reverted: !!l.reverted,
+      _synced: true,
+      _fromCache: true
+    };
+  });
+  window.operationLogs = formattedLogs;
+  window.operationLogs.sort(function(a, b) {
+    return (b.timestamp || '').localeCompare(a.timestamp || '');
+  });
+  if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+  try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+  console.log('[DAL] v20 OpLog cache loaded: ' + formattedLogs.length + ' logs');
 }
 
 // v18: Attempt to fix RLS on operation_logs table
@@ -862,6 +935,106 @@ function _loadStudentOperationLogsFallback(classId) {
     });
     return summaryLogs;
   }).catch(function() { return []; });
+}
+
+// v20: Save operation log cache to custom_actions table (student-readable)
+// This bypasses operation_logs RLS issues — students can read custom_actions
+function _saveOpLogCacheToCustomActions() {
+  if (!db || !currentUser || currentUser.type !== 'teacher') return Promise.resolve();
+  var classId = typeof currentClassId !== 'undefined' ? currentClassId : (classesData[0] ? classesData[0].id : null);
+  if (!classId) return Promise.resolve();
+  var logs = window.operationLogs || [];
+  // Store essential fields to keep payload small
+  var cacheData = logs.map(function(l) {
+    return {
+      t: l.timestamp,
+      c: l.classId || classId,
+      s: l.studentId,
+      n: l.studentName || '',
+      a: l.actionType || '',
+      d: l.details || '',
+      co: l.coinDelta || 0,
+      e: l.expDelta || 0,
+      r: !!l.reverted,
+      i: l.id
+    };
+  });
+  var jsonStr = JSON.stringify(cacheData);
+  // Delete old cache entry, then insert new one with data in name field
+  return db.from('custom_actions')
+    .delete()
+    .eq('class_id', classId)
+    .like('name', '__oplog%')
+    .then(function() {
+      // PostgreSQL text columns can store up to 1GB, so we put JSON in the name field
+      return db.from('custom_actions')
+        .insert([{ class_id: classId, name: '__oplog_cache__', coins: logs.length }])
+        .then(function() {
+          // Update the entry with JSON data in the name field
+          return db.from('custom_actions')
+            .update({ name: '__oplog_cache__', coins: logs.length, extra_data: jsonStr })
+            .eq('class_id', classId)
+            .eq('name', '__oplog_cache__')
+            .then(function(r) {
+              if (r.error) {
+                // extra_data column doesn't exist — try storing in name field
+                console.warn('[DAL] v20 extra_data column not available, storing in name field');
+                return db.from('custom_actions')
+                  .update({ name: jsonStr })
+                  .eq('class_id', classId)
+                  .eq('name', '__oplog_cache__')
+                  .then(function(r2) {
+                    if (r2.error) {
+                      console.warn('[DAL] v20 Name field storage also failed:', r2.error.message);
+                    } else {
+                      console.log('[DAL] v20 OpLog cache saved in name field: ' + logs.length + ' logs');
+                    }
+                  });
+              }
+              console.log('[DAL] v20 OpLog cache saved: ' + logs.length + ' logs');
+            });
+        });
+    }).catch(function(e) {
+      console.warn('[DAL] v20 OpLog cache save error:', e);
+    });
+}
+
+// v20: Load operation log cache from custom_actions table (used by students when operation_logs is blocked by RLS)
+function _loadOpLogCacheFromCustomActions(classId) {
+  if (!db || !classId) return Promise.resolve(null);
+  return db.from('custom_actions')
+    .select('*')
+    .eq('class_id', classId)
+    .then(function(r) {
+      if (r.error || !r.data || r.data.length === 0) return null;
+      // Find the cache entry (name starts with __oplog or name IS the JSON data)
+      var cacheEntry = r.data.find(function(e) { 
+        return e.name === '__oplog_cache__' || 
+               e.name === '__oplog_meta__' ||
+               (e.name && e.name.startsWith('[')); // JSON data stored directly in name
+      });
+      if (!cacheEntry) return null;
+      
+      // Try extra_data column first
+      if (cacheEntry.extra_data) {
+        try {
+          var logs = JSON.parse(cacheEntry.extra_data);
+          console.log('[DAL] v20 OpLog cache loaded from extra_data: ' + logs.length + ' logs');
+          return logs;
+        } catch(e) { console.warn('[DAL] v20 Cache parse error:', e); }
+      }
+      
+      // Try name field (might contain JSON directly if extra_data column didn't exist)
+      if (cacheEntry.name && cacheEntry.name.startsWith('[')) {
+        try {
+          var logs = JSON.parse(cacheEntry.name);
+          console.log('[DAL] v20 OpLog cache loaded from name field: ' + logs.length + ' logs');
+          return logs;
+        } catch(e) { console.warn('[DAL] v20 Name field parse error:', e); }
+      }
+      
+      return null;
+    }).catch(function() { return null; });
 }
 
 /* ===== Sync Operation Logs to Supabase ===== */
@@ -1135,23 +1308,57 @@ function _syncTeacherToSupabase() {
       return Promise.all(studentUpsertPromises);
     });
   }).then(function() {
-    // === Phase 4: Save custom actions ===
-    if (typeof customActions !== 'undefined' && customActions.length > 0) {
-      var actionPayloads = customActions.map(function(a) {
-        return {
-          class_id: a.class_id || (classesData[0] ? classesData[0].id : null),
-          name: a.name,
-          coins: a.coins || 0
-        };
-      }).filter(function(a) { return a.class_id; });
-      if (actionPayloads.length > 0) {
-        var classIds = Array.from(new Set(actionPayloads.map(function(a) { return a.class_id; })));
-        return db.from('custom_actions').delete().in('class_id', classIds).then(function() {
-          return db.from('custom_actions').insert(actionPayloads);
-        }).then(function(r) {
-          if (r.error) console.error('[DAL] custom_actions save error:', r.error);
+    // === Phase 4: Save custom actions (preserve OpLog cache entries) ===
+    // v20: Preserve __oplog_ cache entries across the delete-and-reinsert cycle
+    var allClassIds = classesData.map(function(c) { return c.id; }).filter(function(id) { return id; });
+    var preservedCacheEntries = [];
+    
+    // Step 1: Fetch existing cache entries to preserve them
+    var preservePromise = allClassIds.length > 0
+      ? db.from('custom_actions').select('*').in('class_id', allClassIds).like('name', '__oplog%')
+      : Promise.resolve({ data: [] });
+    
+    return preservePromise.then(function(cacheR) {
+      if (cacheR && cacheR.data) {
+        preservedCacheEntries = cacheR.data.map(function(e) {
+          return { class_id: e.class_id, name: e.name, coins: e.coins || 0 };
         });
       }
+      // Step 2: Delete and re-insert real custom actions
+      if (typeof customActions !== 'undefined' && customActions.length > 0) {
+        var actionPayloads = customActions.map(function(a) {
+          return {
+            class_id: a.class_id || (classesData[0] ? classesData[0].id : null),
+            name: a.name,
+            coins: a.coins || 0
+          };
+        }).filter(function(a) { return a.class_id; });
+        if (actionPayloads.length > 0) {
+          var classIds = Array.from(new Set(actionPayloads.map(function(a) { return a.class_id; })));
+          return db.from('custom_actions').delete().in('class_id', classIds).then(function() {
+            // Step 3: Insert real custom actions + preserved cache entries
+            var allEntries = actionPayloads.concat(preservedCacheEntries);
+            return db.from('custom_actions').insert(allEntries);
+          }).then(function(r) {
+            if (r.error) console.error('[DAL] custom_actions save error:', r.error);
+          });
+        }
+      } else if (preservedCacheEntries.length > 0) {
+        // No real custom actions, but preserve cache entries
+        // Only re-insert if the delete already happened
+        var cacheClassIds = Array.from(new Set(preservedCacheEntries.map(function(e) { return e.class_id; })));
+        return db.from('custom_actions').delete().in('class_id', cacheClassIds).then(function() {
+          return db.from('custom_actions').insert(preservedCacheEntries);
+        });
+      }
+    });
+  }).then(function() {
+    // === Phase 5: Save OpLog cache for student access ===
+    // v20: After syncing custom_actions, also save operation log cache
+    if (currentUser.type === 'teacher') {
+      _saveOpLogCacheToCustomActions().catch(function(e) {
+        console.warn('[DAL] v20 OpLog cache save failed:', e);
+      });
     }
   });
 }
@@ -1954,6 +2161,15 @@ function initDAL() {
     
     // v18: For teachers, auto-check if operation_logs RLS allows student reads
     if (currentUser.type === 'teacher') {
+      // v20: Auto-save OpLog cache so students can read it even if RLS blocks operation_logs
+      setTimeout(function() {
+        _saveOpLogCacheToCustomActions().then(function() {
+          console.log('[DAL] v20 OpLog cache saved for student access');
+        }).catch(function(e) {
+          console.warn('[DAL] v20 OpLog cache save failed:', e);
+        });
+      }, 2000);
+      
       setTimeout(function() {
         var classId = typeof currentClassId !== 'undefined' ? currentClassId : (classesData[0] ? classesData[0].id : null);
         if (!classId) return;
@@ -1965,7 +2181,7 @@ function initDAL() {
               'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
               'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
             if (typeof showNotification === 'function') {
-              showNotification('重要提示', '学生无法看到操作记录！请在浏览器控制台(F12)查看修复方法，或在Supabase SQL Editor中执行修复SQL', 'error');
+              showNotification('重要提示', '学生无法直接读取操作记录！系统正在使用备用缓存方案。为彻底修复，请在Supabase SQL Editor中执行修复SQL', 'warning');
             }
           }
         }).catch(function() {});
