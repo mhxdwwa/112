@@ -26,7 +26,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '10.0';
+var _DAL_VERSION = '24.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -580,432 +580,181 @@ function _loadCustomActions() {
   }).catch(function(e) { console.warn('[DAL] custom_actions load error:', e); });
 }
 
-// v18: Track retry count for operation logs loading
-var _opLogsRetryCount = 0;
-var _OPLOGS_MAX_RETRIES = 2;
+/* ===== Operation Logs: Supabase-first architecture (v24) =====
+ *
+ * WRITE:  UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → Supabase INSERT → mark _synced=true
+ * READ:   init/refresh → _loadOperationLogs() → Supabase SELECT → window.operationLogs = Supabase data
+ *
+ * Supabase is the SINGLE SOURCE OF TRUTH. localStorage is a backup for offline only.
+ * No merge logic. No batch fallback. Every log is written individually with .select()
+ * to get the real ID immediately.
+ */
 
+// Get class IDs for operation logs query
+function _getOpLogClassIds() {
+  if (currentUser.type === 'teacher') {
+    return db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(r) {
+      if (r.error || !r.data) return [];
+      return r.data.map(function(c) { return c.id; });
+    });
+  } else {
+    var classId = parseInt(localStorage.getItem('classId')) || (currentUser.classId ? parseInt(currentUser.classId) : 0);
+    if (!classId) return Promise.resolve([]);
+    return Promise.resolve([classId]);
+  }
+}
+
+// Load operation logs from Supabase. Supabase is the single source of truth.
+// localStorage is only used as offline fallback (never overwrites Supabase data).
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
     console.warn('[DAL] _loadOperationLogs: db not initialized');
     return Promise.resolve();
   }
-
-  // v14: Use window.operationLogs explicitly to avoid cross-script scope issues
-  // app.js declares "var operationLogs" which creates window.operationLogs,
-  // but dal.js (a separate <script>) must reference it via window. to ensure
-  // both scripts share the same array.
   if (typeof window.operationLogs === 'undefined') {
     try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { window.operationLogs = []; }
   }
 
-  // Get class IDs for this user
-  var getClassIdsPromise;
-  if (currentUser.type === 'teacher') {
-    getClassIdsPromise = db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(classR) {
-      if (classR.error || !classR.data) return [];
-      return classR.data.map(function(c) { return c.id; });
-    });
-  } else {
-    // Student: use classId from localStorage or currentUser
-    var studentClassId = parseInt(localStorage.getItem('classId')) || (currentUser.classId ? parseInt(currentUser.classId) : 0);
-    if (!studentClassId) {
-      console.warn('[DAL] _loadOperationLogs: student has no classId in localStorage or currentUser');
-      return Promise.resolve();
-    }
-    // v17: Try to find class by querying Supabase; fall back to direct classId
-    getClassIdsPromise = db.from('classes').select('id').eq('id', studentClassId).then(function(classR) {
-      if (classR.error) {
-        // v17: If query fails (possibly RLS), use classId directly
-        console.warn('[DAL] _loadOperationLogs: classes query error for student, using classId directly:', classR.error.message || classR.error);
-        return [studentClassId];
-      }
-      if (!classR.data || classR.data.length === 0) {
-        // v17: Class not found in query result — still try with the classId
-        // (might be RLS blocking read, but operation_logs might still be readable)
-        console.warn('[DAL] _loadOperationLogs: class ' + studentClassId + ' not found via classes query, trying direct classId');
-        return [studentClassId];
-      }
-      return classR.data.map(function(c) { return c.id; });
-    }).catch(function(e) {
-      console.warn('[DAL] _loadOperationLogs: classes query failed, using local classId:', e);
-      return [studentClassId];
-    });
-  }
-
-  return getClassIdsPromise.then(function(classIds) {
+  return _getOpLogClassIds().then(function(classIds) {
     if (!classIds || classIds.length === 0) {
-      console.warn('[DAL] _loadOperationLogs: no classIds found');
-      return null;
+      console.warn('[DAL] _loadOperationLogs: no classIds');
+      return;
     }
-    // v17: Log the query parameters for diagnostics
-    console.log('[DAL] v19 _loadOperationLogs: querying operation_logs for class_ids:', classIds, 'user:', currentUser.type, currentUser.id);
-    // v14: Increased limit to 5000 to ensure all logs are fetched
-    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000)
-      .then(function(queryResult) {
-        // v19: Store classIds for retry
-        queryResult._classIds = classIds;
-        return queryResult;
-      });
+    console.log('[DAL] v24 Loading operation logs from Supabase for class_ids:', classIds);
+    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
   }).then(function(r) {
-    // v19: Log query results for diagnostics
-    if (r && r.error) {
-      console.error('[DAL] v19 operation_logs query ERROR:', r.error.message || r.error, '| hint: check RLS policies on operation_logs table');
-    } else if (r && r.data) {
-      console.log('[DAL] v19 operation_logs query returned', r.data.length, 'rows for user:', currentUser.type);
-      // v19: If student gets 0 results, attempt retry with delay
-      if (currentUser.type === 'student' && r.data.length === 0 && _opLogsRetryCount < _OPLOGS_MAX_RETRIES) {
-        _opLogsRetryCount++;
-        console.warn('[DAL] v19 Student got 0 operation_logs. Retrying #' + _opLogsRetryCount + '...');
-        // Wait 1s before retry, then retry the query
-        return new Promise(function(resolve) { setTimeout(resolve, 1000); }).then(function() {
-          var classIds = r._classIds || [parseInt(localStorage.getItem('classId'))];
-          console.log('[DAL] v19 Retrying operation_logs query (attempt ' + _opLogsRetryCount + ')...');
-          return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
-        }).then(function(retryResult) {
-          if (retryResult && retryResult.data && retryResult.data.length > 0) {
-            console.log('[DAL] v19 Retry SUCCESS! Got', retryResult.data.length, 'rows on retry');
-            if (typeof showNotification === 'function') {
-              showNotification('数据同步成功', '操作记录已加载', 'success');
-            }
-            // Process the retry result
-            return _processOperationLogsData(retryResult);
-          } else if (_opLogsRetryCount >= _OPLOGS_MAX_RETRIES) {
-            // v19: All retries failed — use fallback data from students table
-            console.warn('[DAL] v19 All retries failed. Loading fallback operation logs...');
-            var fallbackClassId = parseInt(localStorage.getItem('classId'));
-            return _loadStudentOperationLogsFallback(fallbackClassId).then(function(fallbackLogs) {
-              if (fallbackLogs.length > 0) {
-                console.log('[DAL] v19 Fallback loaded', fallbackLogs.length, 'synthetic logs');
-                // Process fallback logs
-                var fallbackR = { data: fallbackLogs.map(function(fl) {
-                  return {
-                    id: fl.id, created_at: fl.timestamp, class_id: fl.classId,
-                    student_id: fl.studentId, student_name: fl.studentName,
-                    action_type: fl.actionType, details: fl.details,
-                    coin_delta: fl.coinDelta, exp_delta: fl.expDelta,
-                    reverted: false
-                  };
-                })};
-                return _processOperationLogsData(fallbackR);
-              } else {
-                // No fallback data either, process empty result
-                return _processOperationLogsData(r);
-              }
-            });
-          } else {
-            // Retry didn't help yet, process original empty result
-            return _processOperationLogsData(r);
-          }
-        });
-      } else if (currentUser.type === 'student' && r.data.length === 0) {
-        console.warn('[DAL] v19 DIAGNOSTIC: Student got 0 operation_logs after all retries. RLS fix needed. SQL:\n' +
-          'CREATE POLICY IF NOT EXISTS "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
-          'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
-          'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
-        // Process empty result
-        return _processOperationLogsData(r);
-      }
+    if (!r) return;
+    if (r.error) {
+      // Supabase query failed — keep existing localStorage data, don't overwrite
+      console.error('[DAL] v24 operation_logs query FAILED:', r.error.message);
+      console.warn('[DAL] v24 Keeping localStorage data (' + window.operationLogs.length + ' logs) as offline fallback');
+      return;
     }
-    // Process the data
-    return _processOperationLogsData(r);
-  }).catch(function(e) {
-    console.warn('[DAL] operation_logs load error:', e);
-    if (typeof window.operationLogs === 'undefined') {
-      try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e2) { window.operationLogs = []; }
-    }
-  });
-}
-
-// v19: Helper function to process operation logs data
-function _processOperationLogsData(r) {
-    // v23: Keep ALL local logs that aren't matched in Supabase to prevent data loss.
-    // Previously only kept unsynced logs with negative IDs, which caused logs
-    // marked _synced=true (but not actually in Supabase) to be lost.
-    var localLogs = window.operationLogs || [];
-    
-    // Collect ALL local logs that have a local origin (not from Supabase)
-    // This includes: unsynced logs, and synced logs that might not actually be in Supabase
-    var localOnly = [];
-    localLogs.forEach(function(l) {
-      // Keep any log that doesn't have a positive Supabase ID, OR
-      // any log that has _fromSupabase=false (was created locally)
-      if (!l._fromSupabase || l.id < 0 || !l.id) {
-        localOnly.push(l);
-      }
+    // Supabase query succeeded — this is the authoritative data
+    var supabaseLogs = (r.data || []).map(function(l) {
+      return {
+        id: l.id,
+        timestamp: l.created_at || l.timestamp,
+        classId: l.class_id,
+        studentId: l.student_id,
+        studentName: l.student_name || '',
+        actionType: l.action_type || '',
+        details: l.details || '',
+        coinDelta: l.coin_delta || 0,
+        expDelta: l.exp_delta || 0,
+        petId: l.pet_id || null,
+        extra: (function() { try { return typeof l.extra === 'string' ? JSON.parse(l.extra) : (l.extra || null); } catch(e) { return null; } })(),
+        snapshot: (function() { try { return typeof l.snapshot === 'string' ? JSON.parse(l.snapshot) : (l.snapshot || null); } catch(e) { return null; } })(),
+        fullSnapshot: (function() { try { return typeof l.full_snapshot === 'string' ? JSON.parse(l.full_snapshot) : (l.full_snapshot || null); } catch(e) { return null; } })(),
+        reverted: !!l.reverted,
+        _synced: true,
+        _fromSupabase: true
+      };
     });
-
-    var supabaseLogs = [];
-    if (r && r.data) {
-      supabaseLogs = r.data.map(function(l) {
-        return {
-          id: l.id,
-          timestamp: l.created_at || l.timestamp,
-          classId: l.class_id,
-          studentId: l.student_id,
-          studentName: l.student_name || '',
-          actionType: l.action_type || '',
-          details: l.details || '',
-          coinDelta: l.coin_delta || 0,
-          expDelta: l.exp_delta || 0,
-          petId: l.pet_id || null,
-          extra: (function() { try { return typeof l.extra === 'string' ? JSON.parse(l.extra) : (l.extra || null); } catch(e) { return null; } })(),
-          snapshot: (function() { try { return typeof l.snapshot === 'string' ? JSON.parse(l.snapshot) : (l.snapshot || null); } catch(e) { return null; } })(),
-          fullSnapshot: (function() { try { return typeof l.full_snapshot === 'string' ? JSON.parse(l.full_snapshot) : (l.full_snapshot || null); } catch(e) { return null; } })(),
-          reverted: !!l.reverted,
-          _synced: true,
-          _fromSupabase: true
-        };
-      });
-    }
-
-    // v23: Match local logs against Supabase by content, keep unmatched ones
-    var keptLocal = [];
-    localOnly.forEach(function(localLog) {
-      var foundInSupabase = false;
-      for (var i = 0; i < supabaseLogs.length; i++) {
-        var sbLog = supabaseLogs[i];
-        if (localLog.actionType === sbLog.actionType &&
-            String(localLog.studentId) === String(sbLog.studentId) &&
-            localLog.details === sbLog.details &&
-            (localLog.coinDelta || 0) === (sbLog.coinDelta || 0) &&
-            localLog.timestamp === sbLog.timestamp) {
-          foundInSupabase = true;
-          // Local log matches a Supabase log — skip the local copy, use Supabase version
-          break;
-        }
-      }
-      if (!foundInSupabase) {
-        // v23: Keep the local log and mark it as unsynced so it gets re-synced
-        localLog._synced = false;
-        localLog._fromSupabase = false;
-        if (!localLog.id || localLog.id > 0) {
-          localLog.id = -(Date.now() * 1000 + Math.floor(Math.random() * 1000));
-        }
-        keptLocal.push(localLog);
-      }
+    // Preserve any local unsynced logs that haven't been written yet (edge case: offline)
+    var localUnsynced = [];
+    window.operationLogs.forEach(function(l) {
+      if (!l._synced && l.id < 0) localUnsynced.push(l);
     });
-
-    // v16: Always trust Supabase as source of truth for operation logs.
-    // If Supabase returns 0 results, it means there are no logs (or RLS needs fixing).
-    // We still keep local unsynced logs (logs not yet pushed to Supabase).
-    var isStudent = currentUser && currentUser.type === 'student';
-    if (isStudent && supabaseLogs.length === 0 && localLogs.length > 0) {
-      console.warn('[DAL] v23 WARNING: Supabase returned 0 operation_logs for student, but we have ' + localLogs.length + ' local logs. This may indicate an RLS policy issue. Proceeding with Supabase data + unsynced local logs.');
-    }
-
-    // v23: Replace operationLogs: Supabase logs + all unmatched local logs
-    window.operationLogs = supabaseLogs.concat(keptLocal);
-
-    // Sort by timestamp (newest first)
+    window.operationLogs = supabaseLogs.concat(localUnsynced);
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
-
-    // v15: Sync back to app.js's local alias so bare "operationLogs" in app.js sees the new data
-    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-
-    // Persist the merged logs to localStorage as backup
+    // Backup to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-
-    console.log('[DAL] v23 Operation logs rebuilt: ' + window.operationLogs.length + ' total (' + supabaseLogs.length + ' from Supabase, ' + keptLocal.length + ' local unmatched kept)');
-    if (keptLocal.length > 0) {
-      console.log('[DAL] v23 Unmatched local logs will be re-synced to Supabase');
-    }
-    if (currentUser.type === 'student') {
-      var today = new Date().toDateString();
-      var todayLogs = window.operationLogs.filter(function(l) { return new Date(l.timestamp).toDateString() === today; });
-      console.log('[DAL] Student today logs:', todayLogs.length);
-      todayLogs.forEach(function(l) {
-        console.log('[DAL]   Log:', l.actionType, 'studentId:', l.studentId, 'coinDelta:', l.coinDelta, 'synced:', l._synced);
-      });
-    }
+    console.log('[DAL] v24 Loaded ' + supabaseLogs.length + ' logs from Supabase, ' + localUnsynced.length + ' local unsynced kept');
+  }).catch(function(e) {
+    console.warn('[DAL] v24 _loadOperationLogs error:', e);
+    // On error, keep existing data — don't clear it
+  });
 }
 
-// v18: Attempt to fix RLS on operation_logs table
-// Uses Supabase REST API to check if the table is accessible
-function _tryFixOperationLogsRLS() {
-  if (!db) return Promise.resolve(false);
-  // Try a minimal query to test access
-  return db.from('operation_logs').select('id').limit(1).then(function(r) {
-    if (r.error) {
-      console.warn('[DAL] v18 operation_logs RLS check failed:', r.error.message);
-      // Try to use rpc as alternative
-      return false;
-    }
-    return true;
-  }).catch(function() { return false; });
-}
+// Write unsynced logs to Supabase IMMEDIATELY.
+// Each log is inserted individually with .select() to get the real Supabase ID.
+// This guarantees that every log is persisted and gets a real ID before being marked as synced.
+function _writeUnsyncedLogsToSupabase() {
+  if (!db || !currentUser) return Promise.resolve();
+  if (typeof window.operationLogs === 'undefined') return Promise.resolve();
+  if (!Array.isArray(window.operationLogs)) return Promise.resolve();
 
-// v18: For students — load operation logs from alternative source when RLS blocks operation_logs
-// This queries the students table for recent coin changes as a proxy for operation history
-function _loadStudentOperationLogsFallback(classId) {
-  if (!db || !classId) return Promise.resolve([]);
-  // Query all students in the class to get their current state
-  // This doesn't give us operation history, but gives us current coins/pet state
-  return db.from('students').select('id, name, coins, last_checkin_date').eq('class_id', classId).then(function(r) {
-    if (r.error || !r.data) return [];
-    // Build synthetic "today summary" logs from current student state
-    var today = new Date().toDateString();
-    var summaryLogs = [];
-    r.data.forEach(function(s) {
-      if (s.last_checkin_date && new Date(s.last_checkin_date).toDateString() === today) {
-        summaryLogs.push({
-          id: 'fallback_checkin_' + s.id,
-          timestamp: s.last_checkin_date,
-          classId: classId,
-          studentId: s.id,
-          studentName: s.name || '',
-          actionType: '每日打卡',
-          details: s.name + ' 完成了每日打卡',
-          coinDelta: 10,
-          expDelta: 0,
-          _synced: true,
-          _fromSupabase: true,
-          _fallback: true
-        });
+  // Collect unsynced logs
+  var unsynced = [];
+  for (var i = 0; i < window.operationLogs.length; i++) {
+    if (!window.operationLogs[i]._synced && window.operationLogs[i].id < 0) {
+      unsynced.push({ index: i, log: window.operationLogs[i] });
+    }
+  }
+
+  // Also handle reverted logs that need their status synced
+  var revertedUnsynced = window.operationLogs.filter(function(l) {
+    return l._synced && l.id > 0 && l.reverted && !l._revertSynced;
+  });
+
+  if (unsynced.length === 0 && revertedUnsynced.length === 0) return Promise.resolve();
+
+  // Determine class_id
+  var classId = null;
+  if (currentUser.type === 'teacher') {
+    classId = (typeof currentClassId !== 'undefined' ? currentClassId : null) || (classesData[0] ? classesData[0].id : null);
+  } else {
+    classId = parseInt(localStorage.getItem('classId')) || (classesData[0] ? classesData[0].id : null);
+  }
+  if (!classId) {
+    console.warn('[DAL] v24 Cannot write logs: no class_id');
+    return Promise.resolve();
+  }
+
+  // Write each unsynced log individually to get real ID
+  var writePromises = unsynced.map(function(entry) {
+    var l = entry.log;
+    var payload = {
+      class_id: l.classId || classId,
+      student_id: l.studentId,
+      student_name: l.studentName || '',
+      action_type: l.actionType || '',
+      details: l.details || '',
+      coin_delta: l.coinDelta || 0,
+      exp_delta: l.expDelta || 0,
+      pet_id: l.petId || null,
+      extra: l.extra ? JSON.stringify(l.extra) : null,
+      snapshot: l.snapshot ? JSON.stringify(l.snapshot) : null,
+      full_snapshot: l.fullSnapshot ? JSON.stringify(l.fullSnapshot) : null,
+      reverted: !!l.reverted
+    };
+    return db.from('operation_logs').insert([payload]).select().then(function(r) {
+      if (r.error) {
+        console.error('[DAL] v24 Log insert error:', r.error.message);
+        return; // Leave as _synced=false, will retry next time saveLogs() is called
+      }
+      if (r.data && r.data[0]) {
+        var idx = entry.index;
+        if (idx >= 0 && idx < window.operationLogs.length) {
+          window.operationLogs[idx].id = r.data[0].id;
+          window.operationLogs[idx]._synced = true;
+          window.operationLogs[idx]._fromSupabase = true;
+        }
       }
     });
-    return summaryLogs;
-  }).catch(function() { return []; });
-}
+  });
 
-/* ===== Sync Operation Logs to Supabase ===== */
-// v14: Use window.operationLogs explicitly for cross-script scope safety
-function _syncOperationLogsToSupabase() {
-  // v14: Ensure window.operationLogs exists
-  if (typeof window.operationLogs === 'undefined') {
-    try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { window.operationLogs = []; }
-  }
-  if (!Array.isArray(window.operationLogs)) return Promise.resolve();
-  if (!db || !currentUser) return Promise.resolve();
-
-  // Collect unsynced logs WITH their indices in the original array
-  var unsyncedEntries = [];
-  for (var i = 0; i < window.operationLogs.length; i++) {
-    if (!window.operationLogs[i]._synced) {
-      unsyncedEntries.push({ index: i, log: window.operationLogs[i] });
-    }
-  }
-
-  // Find reverted logs that are synced but need reverted status updated in Supabase
-  var revertedLogs = window.operationLogs.filter(function(l) { return l._synced && l.reverted && !l._revertSynced; });
-
-  var insertPromise = Promise.resolve();
-  if (unsyncedEntries.length > 0) {
-    console.log('[DAL] Syncing ' + unsyncedEntries.length + ' new operation logs to Supabase');
-
-    // Get class_id for the current context
-    var classId = null;
-    if (currentUser.type === 'teacher') {
-      classId = (typeof currentClassId !== 'undefined' ? currentClassId : null) || (classesData[0] ? classesData[0].id : null);
-    } else {
-      classId = parseInt(localStorage.getItem('classId')) || (classesData[0] ? classesData[0].id : null);
-    }
-    if (!classId) {
-      console.warn('[DAL] Cannot sync logs: no class_id');
-      return Promise.resolve();
-    }
-
-    // Build payloads and tag each with its source index for reliable matching
-    var payloads = unsyncedEntries.map(function(entry) {
-      var l = entry.log;
-      return {
-        class_id: l.classId || classId,
-        student_id: l.studentId,
-        student_name: l.studentName || '',
-        action_type: l.actionType || '',
-        details: l.details || '',
-        coin_delta: l.coinDelta || 0,
-        exp_delta: l.expDelta || 0,
-        pet_id: l.petId || null,
-        extra: l.extra ? JSON.stringify(l.extra) : null,
-        snapshot: l.snapshot ? JSON.stringify(l.snapshot) : null,
-        full_snapshot: l.fullSnapshot ? JSON.stringify(l.fullSnapshot) : null,
-        reverted: !!l.reverted,
-        _local_idx: entry.index  // client-side tag, ignored by Supabase
-      };
+  // Update reverted status
+  var revertPromises = revertedUnsynced.map(function(l) {
+    return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
+      if (r.error) {
+        console.error('[DAL] v24 Log revert update error:', r.error.message);
+      } else {
+        l._revertSynced = true;
+      }
     });
+  });
 
-    // Insert in batches of 50 to avoid Supabase payload limits
-    var batchSize = 50;
-    var promises = [];
-    for (var b = 0; b < payloads.length; b += batchSize) {
-      var batch = payloads.slice(b, b + batchSize);
-      var batchEntries = unsyncedEntries.slice(b, b + batchSize);
-      promises.push(
-        db.from('operation_logs').insert(batch).select().then(function(r) {
-          if (r.error) {
-            console.error('[DAL] operation_logs insert error:', r.error);
-            return;
-          }
-          if (r.data && r.data.length > 0) {
-            // v23: Match returned rows back to local logs using _local_idx tag
-            var matchedCount = 0;
-            r.data.forEach(function(inserted) {
-              var localIdx = inserted._local_idx;
-              if (localIdx !== undefined && localIdx >= 0 && localIdx < window.operationLogs.length) {
-                window.operationLogs[localIdx]._synced = true;
-                window.operationLogs[localIdx].id = inserted.id;
-                window.operationLogs[localIdx]._fromSupabase = true;
-                matchedCount++;
-              }
-            });
-            // v23: If _local_idx was stripped by Supabase, use content matching as fallback
-            // instead of blindly marking all as synced (which caused data loss)
-            if (matchedCount === 0 && r.data.length > 0) {
-              console.warn('[DAL] v23 _local_idx stripped by Supabase, using content-based matching');
-              batchEntries.forEach(function(entry) {
-                var log = entry.log;
-                // Find matching inserted row by content
-                for (var j = 0; j < r.data.length; j++) {
-                  var inserted = r.data[j];
-                  if (inserted.action_type === log.actionType &&
-                      String(inserted.student_id) === String(log.studentId) &&
-                      inserted.details === log.details &&
-                      (inserted.coin_delta || 0) === (log.coinDelta || 0) &&
-                      inserted.created_at === log.timestamp) {
-                    window.operationLogs[entry.index]._synced = true;
-                    window.operationLogs[entry.index].id = inserted.id;
-                    window.operationLogs[entry.index]._fromSupabase = true;
-                    matchedCount++;
-                    break;
-                  }
-                }
-                // If still not matched, leave as _synced=false so it will be retried
-                // Do NOT blindly mark as synced — this was the cause of data loss
-              });
-            }
-            // Persist the updated sync flags to localStorage
-            try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-          }
-        })
-      );
-    }
-    insertPromise = Promise.all(promises);
-  }
-
-  // Update reverted status for already-synced logs
-  var revertPromise = Promise.resolve();
-  if (revertedLogs.length > 0) {
-    console.log('[DAL] Updating ' + revertedLogs.length + ' reverted logs in Supabase');
-    var revertPromises = revertedLogs.map(function(l) {
-      if (!l.id || l.id <= 0 || l.id !== Math.floor(l.id)) return Promise.resolve();
-      return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
-        if (r.error) {
-          console.error('[DAL] operation_logs revert update error:', r.error);
-        } else {
-          l._revertSynced = true;
-        }
-      });
-    });
-    revertPromise = Promise.all(revertPromises);
-  }
-
-  return Promise.all([insertPromise, revertPromise]).then(function() {
-    // v15: Sync alias after sync completes
-    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    console.log('[DAL] Operation logs sync complete');
+  return Promise.all(writePromises.concat(revertPromises)).then(function() {
+    // Persist updated sync status to localStorage
+    try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+    console.log('[DAL] v24 Wrote ' + unsynced.length + ' logs, updated ' + revertedUnsynced.length + ' reverts');
+  }).catch(function(e) {
+    console.error('[DAL] v24 writeUnsyncedLogs error:', e);
   });
 }
 
@@ -1353,7 +1102,7 @@ function _syncToSupabase() {
 
   return syncFn().then(function() {
     // Also sync any unsynced operation logs
-    return _syncOperationLogsToSupabase();
+    return _writeUnsyncedLogsToSupabase();
   }).then(function() {
     _dalSyncing = false;
     _syncRetryCount = 0;
@@ -1698,7 +1447,7 @@ function wrapSaveFunctions() {
     saveLogs = function() {
       origSaveLogs.apply(this, arguments);
       // Sync new operation logs to Supabase and return the promise
-      return _syncOperationLogsToSupabase();
+      return _writeUnsyncedLogsToSupabase();
     };
     saveLogs._dalWrapped = true;
   }
