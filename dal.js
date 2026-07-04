@@ -606,6 +606,7 @@ function _getOpLogClassIds() {
 
 // Load operation logs from Supabase. Supabase is the single source of truth.
 // localStorage is only used as offline fallback (never overwrites Supabase data).
+// v25: Added retry logic (3 attempts) for mobile network resilience.
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
@@ -621,14 +622,27 @@ function _loadOperationLogs() {
       console.warn('[DAL] _loadOperationLogs: no classIds');
       return;
     }
-    console.log('[DAL] v24 Loading operation logs from Supabase for class_ids:', classIds);
-    return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000);
+    console.log('[DAL] v25 Loading operation logs from Supabase for class_ids:', classIds);
+    
+    // v25: Retry wrapper — mobile browsers may have intermittent network issues
+    function queryWithRetry(attempt) {
+      return db.from('operation_logs').select('*').in('class_id', classIds).order('created_at', { ascending: false }).limit(5000)
+        .then(function(r) {
+          if (r && r.error && attempt < 3) {
+            console.warn('[DAL] v25 operation_logs query failed (attempt ' + attempt + '/3):', r.error.message);
+            return new Promise(function(resolve) { setTimeout(resolve, attempt * 1000); })
+              .then(function() { return queryWithRetry(attempt + 1); });
+          }
+          return r;
+        });
+    }
+    return queryWithRetry(1);
   }).then(function(r) {
     if (!r) return;
     if (r.error) {
-      // Supabase query failed — keep existing localStorage data, don't overwrite
-      console.error('[DAL] v24 operation_logs query FAILED:', r.error.message);
-      console.warn('[DAL] v24 Keeping localStorage data (' + window.operationLogs.length + ' logs) as offline fallback');
+      // Supabase query failed after 3 retries — keep existing localStorage data, don't overwrite
+      console.error('[DAL] v25 operation_logs query FAILED after 3 retries:', r.error.message);
+      console.warn('[DAL] v25 Keeping localStorage data (' + window.operationLogs.length + ' logs) as offline fallback');
       return;
     }
     // Supabase query succeeded — this is the authoritative data
@@ -663,9 +677,9 @@ function _loadOperationLogs() {
     });
     // Backup to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v24 Loaded ' + supabaseLogs.length + ' logs from Supabase, ' + localUnsynced.length + ' local unsynced kept');
+    console.log('[DAL] v25 Loaded ' + supabaseLogs.length + ' logs from Supabase, ' + localUnsynced.length + ' local unsynced kept');
   }).catch(function(e) {
-    console.warn('[DAL] v24 _loadOperationLogs error:', e);
+    console.warn('[DAL] v25 _loadOperationLogs error:', e);
     // On error, keep existing data — don't clear it
   });
 }

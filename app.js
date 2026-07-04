@@ -351,7 +351,9 @@ function archiveOldLogs(){
     safeLSSave('logArchives', logArchives);
   }
 }
-archiveOldLogs();
+// v25: Removed archiveOldLogs() from init — it was archiving logs before Supabase
+// data was loaded, causing data loss on page refresh. The function is kept for
+// backward compatibility but should not be called automatically.
 // v13: Debounced real-time sync — trigger immediate sync after any data change
 let _syncDebounceTimer = null;
 function triggerRealtimeSync() {
@@ -362,11 +364,22 @@ function triggerRealtimeSync() {
     _syncToSupabase();
   }, 50); // v15: 50ms debounce — near-instant real-time sync
 }
-function saveLogs(){archiveOldLogs(); safeLSSave('operationLogs', window.operationLogs); scheduleFileSave(); triggerRealtimeSync();}
+// v25: Removed archiveOldLogs() from save flow — it was silently moving logs
+// out of window.operationLogs into logArchives on every save, causing the visible
+// log count to decrease. Archiving is no longer needed since _loadOperationLogs()
+// loads ALL logs from Supabase and getAllLogsForMonth() includes archived logs.
+function saveLogs(){safeLSSave('operationLogs', window.operationLogs); scheduleFileSave(); triggerRealtimeSync();}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
   var logs = getOpLogs();
-  return logs.filter(function(l) { return _getLogMonth(l) === month; });
+  var matched = logs.filter(function(l) { return _getLogMonth(l) === month; });
+  // v25: Also include archived logs — archiveOldLogs() moves old logs to logArchives
+  // but the history modal must still show them when the user selects that month
+  if (logArchives && logArchives[month]) {
+    matched = matched.concat(logArchives[month]);
+    matched.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+  }
+  return matched;
 }
 function getAvailableMonths(){
   const months=new Set();
@@ -727,9 +740,10 @@ function showHistoryModal(){
     showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
   };
 
-  // Step 1: Sync local unsynced logs to Supabase first
-  var syncPromise = (typeof _syncOperationLogsToSupabase === 'function')
-    ? _syncOperationLogsToSupabase()
+  // v25: Step 1: Sync local unsynced logs to Supabase first
+  // Use _writeUnsyncedLogsToSupabase (v24 function) instead of deleted _syncOperationLogsToSupabase
+  var syncPromise = (typeof _writeUnsyncedLogsToSupabase === 'function')
+    ? _writeUnsyncedLogsToSupabase()
     : Promise.resolve();
 
   // Step 2: Then load fresh logs from Supabase (merges with local)
