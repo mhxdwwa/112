@@ -315,7 +315,7 @@ var _idCounter = 0;
 function _genLocalId(){ return -(Date.now() * 1000 + ((_idCounter = (_idCounter + 1) % 1000))); }
 function saveCustomActions(){safeLSSave('customActions', customActions); scheduleFileSave();}
 saveCustomActions();
-let operationLogs = [];
+var operationLogs = [];
 try { operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { console.warn('operationLogs读取失败，已重置:', e.message); localStorage.removeItem('operationLogs'); }
 let logArchives = {};
 try { logArchives = JSON.parse(localStorage.getItem('logArchives')) || {}; } catch(e) { console.warn('logArchives读取失败，已重置:', e.message); localStorage.removeItem('logArchives'); }
