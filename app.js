@@ -342,7 +342,17 @@ function archiveOldLogs(){
   }
 }
 archiveOldLogs();
-function saveLogs(){archiveOldLogs(); safeLSSave('operationLogs', operationLogs); scheduleFileSave();}
+// v13: Debounced real-time sync — trigger immediate sync after any data change
+let _syncDebounceTimer = null;
+function triggerRealtimeSync() {
+  if (typeof _syncToSupabase !== 'function') return;
+  if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
+  _syncDebounceTimer = setTimeout(function() {
+    _syncDebounceTimer = null;
+    _syncToSupabase();
+  }, 500); // 500ms debounce — fast enough for real-time, prevents flooding
+}
+function saveLogs(){archiveOldLogs(); safeLSSave('operationLogs', operationLogs); scheduleFileSave(); triggerRealtimeSync();}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
   // Always filter by month — operationLogs may contain logs from multiple months
@@ -1093,7 +1103,7 @@ function cleanupPetModalEffects() {
 
 function showModal(title,content,actions=[],large=false,extraClass=''){const c=document.getElementById('modalContainer'),m=document.createElement('div');m.className='modal-overlay';const modalClass=extraClass?extraClass:(large?'large':'');m.innerHTML=`<div class="modal ${modalClass}"><div class="modal-title">${esc(title)}</div><div class="modal-content">${content}</div><div class="modal-actions">${actions.map(a=>`<button class="btn ${a.class||'btn-primary'}" onclick="playClickSound(); ${a.onclick}">${esc(a.text)}</button>`).join('')}</div></div>`;c.appendChild(m);m.addEventListener('click',(e)=>{if(e.target===m)closeModal();});return m;}
 function closeModal(){const c=document.getElementById('modalContainer');while(c.firstChild)c.removeChild(c.firstChild);currentModalStudentId=null; stopAllHeartEmitters(); cleanupPetModalEffects(); }
-function saveClassData(){safeLSSave('classPetData', classesData); scheduleFileSave();}
+function saveClassData(){safeLSSave('classPetData', classesData); scheduleFileSave(); triggerRealtimeSync();}
 function saveDeletedClasses(){safeLSSave('deletedClasses', deletedClasses); scheduleFileSave();}
 function showDeletedClassesModal(){if(deletedClasses.length===0){showModal('🗑️ 已删除班级','<div style="text-align:center;padding:20px;">暂无已删除的班级</div>',[{text:'关闭',onclick:'closeModal()'}],false);return;}let html='<div style="max-height:400px;overflow:auto;">';[...deletedClasses].reverse().forEach((cls,i)=>{const time=new Date(cls.deletedAt).toLocaleString();const stuCount=cls.students?cls.students.length:0;const petCount=cls.students?cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0):0;html+=`<div class="history-log-item"><div><div class="history-log-time">${time} 删除</div><div><strong>${esc(cls.name)}</strong></div><div style="font-size:12px;">👨‍🎓 ${stuCount}名学生 · 🐕 ${petCount}只宠物</div></div><div style="display:flex;gap:6px;"><button class="btn btn-primary" style="padding:6px 12px;" onclick="restoreClass('${cls.id}');closeModal();">恢复</button><button class="btn btn-danger" style="padding:6px 12px;" onclick="permanentDeleteClass('${cls.id}');closeModal();">彻底删除</button></div></div>`;});html+='</div>';showModal('🗑️ 已删除班级',html,[{text:'关闭',onclick:'closeModal()'}],true);}
 function restoreClass(id){const idx=deletedClasses.findIndex(c=>c.id===id);if(idx===-1){showNotification('恢复失败','未找到该班级数据','error');return;}const cls=deletedClasses[idx];const restored={id:cls.id,name:cls.name,students:JSON.parse(JSON.stringify(cls.students))};if(classesData.find(c=>c.id===restored.id)){restored.id=Date.now().toString();}classesData.push(restored);deletedClasses.splice(idx,1);saveClassData();saveDeletedClasses();currentClassId=restored.id;renderClassList();scheduleAllRenders();showNotification('恢复成功',`班级【${cls.name}】已恢复`,'success');}
@@ -1288,7 +1298,78 @@ function buildStudentModalContent(student, pet){
   </div>
   ${_buildModalShopSection(student, pet)}`;
 }
-function openStudentModal(studentId){ if(!currentClassId)return; const cur=classesData.find(c=>c.id===currentClassId); const student=cur.students.find(s=>s.id.toString()===studentId.toString()); if(!student)return; currentModalStudentId=studentId; if(!student.pets||student.pets.length===0){ showModal(`${student.name} 的操作`,'<div style="text-align:center;"><div style="font-size:60px;">🥚</div><p>尚未领养宠物</p><p>💰 '+student.coins+' 金币</p></div>',[{text:'关闭',onclick:'closeModal()'},{text:'去领养',onclick:`closeModal();showAdoptModal('${studentId}')`}]); return; } const activePet=getActivePet(student); if(!activePet){showNotification('错误','无可用宠物','error');return;} ensurePetPlayFields(activePet); const modalContent = buildStudentModalContent(student, activePet); showModal('', modalContent, [{text:'关闭',class:'btn-secondary',onclick:'closeModal()'}], true); 
+// v13: Read-only view for students viewing other students' pets
+function buildReadOnlyStudentModalContent(student, pet){
+  const stageName = getCurrentStageName(pet.name, pet.level||1);
+  const lastDate = pet.lastFeedDate?new Date(pet.lastFeedDate):null;
+  let hungerMsg='';
+  if(pet.level>=9){hungerMsg='👑 传说神兽，无需喂食';}
+  else if(!pet.isDead&&lastDate){const hours=getEffectiveUnfedHours(pet); if(hours>=96)hungerMsg='🔴 超过4天未喂'; else if(hours>=72)hungerMsg='🟠 超过3天未喂'; else if(hours>=24)hungerMsg='🟡 超过1天未喂'; else hungerMsg=`🕒 ${Math.floor(hours)}小时前喂食`;} else if(pet.isDead)hungerMsg='💀 已饿死'; else hungerMsg='🐣 存活';
+  
+  let petGallery='';
+  if(student.pets.length>1){
+    petGallery='<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0 5px;">';
+    student.pets.forEach(pp=>{
+      const isActive=pp.id===pet.id;
+      const isMax=pp.level>=9;
+      const border=isActive?'3px solid #ff8888':isMax?'2px solid #ffd700':'2px solid #e8d8d0';
+      const bg=isMax?'linear-gradient(135deg,#fff8e8,#fff0d0)':'#fff5f0';
+      const opacity=pp.isDead?'0.5':'1';
+      petGallery+=`<div style="text-align:center;padding:6px 10px;border-radius:16px;border:${border};background:${bg};opacity:${opacity};min-width:70px;">
+        <div style="width:45px;height:45px;margin:0 auto;">${getPetImage(pp.name,pp.level||1)}</div>
+        <div style="font-size:11px;font-weight:700;color:#886;margin-top:2px;">${esc(pp.nickname||pp.name)}</div>
+        <div style="font-size:10px;color:#aa8888;">${isMax?'👑满级':'Lv.'+pp.level}${pp.isDead?' 💀':''}${isActive?' ⭐':''}</div>
+      </div>`;
+    });
+    petGallery+='</div>';
+  }
+  
+  return `<div class="modal-student-title">${esc(student.name)} 的宠物</div>
+  ${petGallery}
+  <div class="pet-stats-row">
+    <div class="pet-stats-col left">
+      <div class="stat-item"><span class="stat-label">🐾 宠物</span><span class="stat-value">${esc(pet.nickname||pet.name)}</span></div>
+      <div class="stat-item"><span class="stat-label">✨ 等级</span><span class="stat-value modal-level-num">${stageName} Lv.${pet.level}${pet.level>=9?' <span class="modal-crown-icon">👑</span>':''}</span></div>
+      <div class="stat-item"><span class="stat-label">📈 成长值</span><span class="stat-value">${pet.level>=9?getExpNeeded(pet):(pet.growth||0)} / ${getExpNeeded(pet)}</span></div>
+      <div class="modal-growth-progress"><div class="stat-progress-bar"><div class="stat-progress-fill${pet.level>=9?' fill-gold':''}"></div></div></div>
+      <div class="stat-item"><span class="stat-label">🍽️ 今日喂食</span><span class="stat-value">${pet.todayFeedCount||0} 次</span></div>
+      <div class="stat-item"><span class="stat-label">🎮 今日玩耍</span><span class="stat-value">${pet.todayPlayCount||0} 次</span></div>
+    </div>
+    <div class="pet-stats-col right">
+      <div class="stat-item"><span class="stat-label"><span class="coin-shake">💰</span> 金币</span><span class="stat-value modal-coin-val">${student.coins}</span></div>
+      <div class="stat-item"><span class="stat-label">⏱️ 上次喂食</span><span class="stat-value">${pet.lastFeedDate?new Date(pet.lastFeedDate).toLocaleString():'无'}</span></div>
+      <div class="stat-item"><span class="stat-label">💀 状态</span><span class="stat-value">${pet.isDead?'已饿死':'🐣 存活'}</span></div>
+      <div class="stat-item"><span class="stat-label">⚠️ 状态</span><span class="stat-value modal-hunger-warn">${hungerMsg}</span></div>
+      ${student.pets.length>1?`<div class="stat-item"><span class="stat-label">📦 宠物数</span><span class="stat-value">${student.pets.length}只</span></div>`:''}
+    </div>
+  </div>
+  <div style="text-align:center;padding:20px;background:#f0f8ff;border-radius:12px;margin-top:16px;border:2px solid #4a90d9;">
+    <div style="font-size:48px;margin-bottom:12px;">👀</div>
+    <div style="font-size:16px;font-weight:700;color:#4a90d9;">正在查看 ${esc(student.name)} 的宠物</div>
+    <div style="font-size:14px;color:#666;margin-top:8px;">你只能查看，不能操作其他同学的宠物</div>
+    <div style="font-size:13px;color:#888;margin-top:12px;">想要发起PK挑战？请前往【宠物PK】页面</div>
+  </div>`;
+}
+function openStudentModal(studentId){ if(!currentClassId)return; const cur=classesData.find(c=>c.id===currentClassId); const student=cur.students.find(s=>s.id.toString()===studentId.toString()); if(!student)return; currentModalStudentId=studentId;
+  // v13: Check if current user is a student viewing another student's pet
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  const myStudentId = isStudentView ? parseInt(currentUser.studentId) : null;
+  const isViewingOtherStudent = isStudentView && myStudentId !== null && student.id !== myStudentId;
+  
+  if(!student.pets||student.pets.length===0){ 
+    let content = '<div style="text-align:center;"><div style="font-size:60px;">🥚</div><p>尚未领养宠物</p><p>💰 '+student.coins+' 金币</p></div>';
+    let actions = [{text:'关闭',onclick:'closeModal()'}];
+    if(!isViewingOtherStudent) {
+      actions.push({text:'去领养',onclick:`closeModal();showAdoptModal('${studentId}')`});
+    }
+    showModal(`${student.name} 的操作`, content, actions); 
+    return; 
+  } 
+  const activePet=getActivePet(student);
+  if(!activePet){showNotification('错误','无可用宠物','error');return;}
+  ensurePetPlayFields(activePet); 
+  const modalContent = isViewingOtherStudent ? buildReadOnlyStudentModalContent(student, activePet) : buildStudentModalContent(student, activePet);
+  showModal('', modalContent, [{text:'关闭',class:'btn-secondary',onclick:'closeModal()'}], true); 
   setTimeout(()=>{ startHeartForCurrentPet(studentId);
     const petImgEl = document.querySelector('.modal-pet-img[data-pet-img-container]');
     if(petImgEl) initPetModalEnhancements(petImgEl, activePet.name, activePet.level||1, activePet.growth||0, getExpNeeded(activePet));
