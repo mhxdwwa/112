@@ -26,7 +26,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '26.0';
+var _DAL_VERSION = '28.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -821,12 +821,13 @@ function _writeUnsyncedLogsToSupabase() {
         }
       }
 
-      return db.from('classes').upsert([{
-        id: cid,
-        name: cls ? cls.name : '',
-        teacher_id: currentUser.id,
+      // v28: Use update (not upsert) to only modify operation_logs_json.
+      // Previously used upsert with teacher_id: currentUser.id, but for students
+      // currentUser.id is the student row ID, not a valid teacher UUID.
+      // This caused FK/RLS violation and all student logs were silently lost.
+      return db.from('classes').update({
         operation_logs_json: JSON.stringify(existing)
-      }]).then(function(ur) {
+      }).eq('id', cid).then(function(ur) {
         if (ur.error) {
           console.error('[DAL] v29 Upsert FAILED for class', cid + ':', ur.error.message);
           // Mark logs as unsynced again so they retry
@@ -1224,13 +1225,19 @@ function _syncStudentToSupabase() {
       }
     }
 
-    // Update base coins to current value (will be re-set after sync confirms)
-    _myBaseCoins = finalCoins;
-
     // Step 3: Upsert student with merged data
+    // v28: Look up teacher_id from class data for RLS compatibility
+    var _teacherId = null;
+    if (classesData) {
+      for (var ci = 0; ci < classesData.length; ci++) {
+        if (classesData[ci].teacher_id) { _teacherId = classesData[ci].teacher_id; break; }
+      }
+    }
+    var _studentUpsertOk = false;
     return db.from('students').upsert([{
       id: studentId,
       coins: finalCoins,
+      teacher_id: _teacherId,
       shop_items: JSON.stringify(myStudent.shopItems || []),
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
       last_checkin_date: myStudent.lastCheckinDate || null,
@@ -1240,12 +1247,17 @@ function _syncStudentToSupabase() {
       pk_count_today: myStudent.pkCountToday || 0,
       quiz_state: myStudent.quizState ? JSON.stringify(myStudent.quizState) : null
     }]).then(function(r) {
-      if (r.error) console.error('[DAL] student sync error:', r.error);
-      // Update base tracking after successful sync
-      if (!r.error) {
+      if (r.error) {
+        console.error('[DAL] student sync error:', r.error);
+      } else {
+        _studentUpsertOk = true;
+      }
+      // Update base tracking ONLY after successful sync
+      if (_studentUpsertOk) {
         _myBaseCoins = finalCoins;
         (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
       }
+      return _studentUpsertOk;
     });
   });
 }
@@ -1264,7 +1276,9 @@ function _syncToSupabase() {
   // v27: ALWAYS write unsynced logs, even if teacher/student sync fails.
   // Previously, log writes were chained AFTER teacher sync, so if teacher sync
   // failed, logs would NEVER be written — causing the "records don't sync" bug.
-  return syncFn().then(function() {
+  var _lastStudentSyncOk = null;
+  return syncFn().then(function(result) {
+    _lastStudentSyncOk = result;
     _takeSnapshot();
     _updateCloudStatus('synced');
     console.log('[DAL] Data sync complete');
@@ -1286,18 +1300,27 @@ function _syncToSupabase() {
     _dalSyncing = false;
     _pendingLocalSave = false;
     _lastOwnWriteTime = Date.now();
-    // For student: update base coins/pets to current local value
+    // For student: update base coins/pets ONLY if sync was confirmed successful
+    // v28: Previously updated unconditionally, which caused coins to revert
+    // if the student upsert had failed (delta was zeroed out).
     if (currentUser && currentUser.type === 'student') {
-      var myStu = null;
-      var sid = parseInt(localStorage.getItem('studentId'));
-      if (classesData && classesData[0]) {
-        for (var i = 0; i < classesData[0].students.length; i++) {
-          if (classesData[0].students[i].id === sid) { myStu = classesData[0].students[i]; break; }
+      // For students: _lastStudentSyncOk indicates if student upsert succeeded
+      // For teachers: always update (teacher sync is reliable)
+      var shouldUpdateBase = (_lastStudentSyncOk === true) || (currentUser.type !== 'student');
+      if (shouldUpdateBase) {
+        var myStu = null;
+        var sid = parseInt(localStorage.getItem('studentId'));
+        if (classesData && classesData[0]) {
+          for (var i = 0; i < classesData[0].students.length; i++) {
+            if (classesData[0].students[i].id === sid) { myStu = classesData[0].students[i]; break; }
+          }
         }
-      }
-      if (myStu) {
-        _myBaseCoins = myStu.coins;
-        (myStu.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+        if (myStu) {
+          _myBaseCoins = myStu.coins;
+          (myStu.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+        }
+      } else {
+        console.warn('[DAL] Student sync did not confirm success — _myBaseCoins NOT updated (will retry)');
       }
     }
     return _writeUnsyncedLogsToSupabase();
