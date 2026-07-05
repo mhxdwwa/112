@@ -689,28 +689,28 @@ function _loadOperationLogs() {
 var _writingLogsToSupabase = false;
 var _pendingLogWrites = 0;
 
+// v28: Batch INSERT — one network request writes ALL unsynced logs.
+// Previously each log was an individual INSERT request (36+ requests).
+// On mobile, simultaneous requests failed silently → logs never reached Supabase.
+// Now matches the same pattern as student data sync (single request).
 function _writeUnsyncedLogsToSupabase() {
   // Prevent concurrent writes
   if (_writingLogsToSupabase) {
-    console.log('[DAL] v27 Write already in progress, queueing...');
+    console.log('[DAL] v28 Write already in progress, queueing...');
     _pendingLogWrites++;
     return Promise.resolve();
   }
   
   if (!db || !currentUser) {
-    console.warn('[DAL] v27 Cannot write logs: db or currentUser not ready');
+    console.warn('[DAL] v28 Cannot write logs: db or currentUser not ready');
     return Promise.resolve();
   }
-  if (typeof window.operationLogs === 'undefined') {
-    console.warn('[DAL] v27 Cannot write logs: window.operationLogs is undefined');
-    return Promise.resolve();
-  }
-  if (!Array.isArray(window.operationLogs)) {
-    console.warn('[DAL] v27 Cannot write logs: window.operationLogs is not an array');
+  if (typeof window.operationLogs === 'undefined' || !Array.isArray(window.operationLogs)) {
+    console.warn('[DAL] v28 Cannot write logs: window.operationLogs invalid');
     return Promise.resolve();
   }
 
-  // Collect unsynced logs
+  // Collect unsynced logs (negative ID = local-only, not yet in Supabase)
   var unsynced = [];
   for (var i = 0; i < window.operationLogs.length; i++) {
     if (!window.operationLogs[i]._synced && window.operationLogs[i].id < 0) {
@@ -727,47 +727,38 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
-  console.log('[DAL] v27 Starting write of ' + unsynced.length + ' unsynced logs, ' + revertedUnsynced.length + ' reverts');
+  console.log('[DAL] v28 Starting batch write of ' + unsynced.length + ' unsynced logs, ' + revertedUnsynced.length + ' reverts');
 
-  // Determine class_id - be very defensive here
-  var classId = null;
+  // Determine fallback class_id
+  var defaultClassId = null;
   if (currentUser.type === 'teacher') {
-    classId = (typeof currentClassId !== 'undefined' && currentClassId) ? currentClassId : 
-              (classesData && classesData[0] ? classesData[0].id : null);
+    defaultClassId = (typeof currentClassId !== 'undefined' && currentClassId) ? currentClassId : 
+                     (classesData && classesData[0] ? classesData[0].id : null);
   } else {
-    classId = parseInt(localStorage.getItem('classId')) || 
-              (classesData && classesData[0] ? classesData[0].id : null);
+    defaultClassId = parseInt(localStorage.getItem('classId')) || 
+                     (classesData && classesData[0] ? classesData[0].id : null);
   }
   
-  if (!classId) {
-    console.error('[DAL] v27 CRITICAL: Cannot write logs - classId is null!', {
-      userType: currentUser.type,
-      currentClassId: typeof currentClassId !== 'undefined' ? currentClassId : 'undefined',
-      classesDataLength: classesData ? classesData.length : 'undefined',
-      localStorageClassId: localStorage.getItem('classId')
-    });
+  if (!defaultClassId) {
+    console.error('[DAL] v28 CRITICAL: Cannot write logs - classId is null!');
     return Promise.resolve();
   }
-  
-  console.log('[DAL] v27 Using classId:', classId, 'for user type:', currentUser.type);
 
   _writingLogsToSupabase = true;
 
-  // v27: Write logs sequentially in batches of 5 to avoid overwhelming mobile connections.
-  // Previously used Promise.all for ALL logs which caused timeouts/failures on mobile.
-  var BATCH_SIZE = 5;
-  var BATCH_DELAY_MS = 200;
-
-  function writeOneLog(entry) {
+  // === BATCH INSERT: Build all payloads ===
+  var allPayloads = [];
+  unsynced.forEach(function(entry) {
     var l = entry.log;
-    var logClassId = l.classId || classId;
+    var logClassId = l.classId || defaultClassId;
+    if (typeof logClassId === 'string') logClassId = parseInt(logClassId);
     
-    // Ensure classId is a number
-    if (typeof logClassId === 'string') {
-      logClassId = parseInt(logClassId);
-    }
+    // Embed _localIdx in extra for reliable matching after batch insert
+    var extraData = l.extra ? JSON.parse(JSON.stringify(l.extra)) : {};
+    if (typeof extraData !== 'object' || extraData === null) extraData = {};
+    extraData._localIdx = entry.index;
     
-    var payload = {
+    allPayloads.push({
       class_id: logClassId,
       student_id: l.studentId,
       student_name: l.studentName || '',
@@ -776,104 +767,124 @@ function _writeUnsyncedLogsToSupabase() {
       coin_delta: parseInt(l.coinDelta) || 0,
       exp_delta: parseInt(l.expDelta) || 0,
       pet_id: l.petId || null,
-      extra: l.extra ? JSON.stringify(l.extra) : null,
+      extra: JSON.stringify(extraData),
       snapshot: l.snapshot ? JSON.stringify(l.snapshot) : null,
       full_snapshot: l.fullSnapshot ? JSON.stringify(l.fullSnapshot) : null,
       reverted: !!l.reverted
-    };
-    
-    return db.from('operation_logs').insert([payload]).select().then(function(r) {
-      if (r.error) {
-        console.error('[DAL] v27 Log insert FAILED:', {
-          error: r.error.message,
-          code: r.error.code,
-          actionType: payload.action_type,
-          studentId: payload.student_id
-        });
-        return; // Leave as _synced=false, will retry next time
-      }
-      if (r.data && r.data[0]) {
-        var idx = entry.index;
-        if (idx >= 0 && idx < window.operationLogs.length) {
-          window.operationLogs[idx].id = r.data[0].id;
-          window.operationLogs[idx]._synced = true;
-          window.operationLogs[idx]._fromSupabase = true;
-        }
-      }
-    }).catch(function(err) {
-      console.error('[DAL] v27 Log insert exception:', err.message);
     });
-  }
+  });
 
-  // Process logs in sequential batches
-  function processBatches(entries, startIdx) {
-    if (startIdx >= entries.length) return Promise.resolve();
+  // === SINGLE batch INSERT (same pattern as student data sync) ===
+  // One network request instead of N individual requests
+  return db.from('operation_logs').insert(allPayloads).select('id, extra').then(function(r) {
+    if (r.error) {
+      console.error('[DAL] v28 Batch INSERT FAILED:', r.error.message, r.error.code);
+      _writingLogsToSupabase = false;
+      // Retry after delay
+      setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+      return;
+    }
     
-    var batch = entries.slice(startIdx, startIdx + BATCH_SIZE);
-    var batchPromises = batch.map(writeOneLog);
+    if (!r.data || r.data.length === 0) {
+      console.error('[DAL] v28 Batch INSERT returned no data');
+      _writingLogsToSupabase = false;
+      return;
+    }
     
-    return Promise.all(batchPromises).then(function() {
-      var written = startIdx + batch.length;
-      console.log('[DAL] v27 Batch done: ' + written + '/' + entries.length + ' processed');
-      
-      if (written < entries.length) {
-        // Small delay before next batch to avoid hammering the server
-        return new Promise(function(resolve) {
-          setTimeout(resolve, BATCH_DELAY_MS);
-        }).then(function() {
-          return processBatches(entries, written);
-        });
+    console.log('[DAL] v28 Batch INSERT succeeded: ' + r.data.length + ' rows returned');
+    
+    // === Match returned rows back to local logs using _localIdx ===
+    var matchedCount = 0;
+    r.data.forEach(function(row) {
+      try {
+        var extra = JSON.parse(row.extra || '{}');
+        var localIdx = extra._localIdx;
+        
+        // Remove _localIdx from the stored extra (clean up)
+        delete extra._localIdx;
+        var cleanExtra = Object.keys(extra).length > 0 ? JSON.stringify(extra) : null;
+        
+        if (localIdx !== undefined && localIdx >= 0 && localIdx < window.operationLogs.length) {
+          window.operationLogs[localIdx].id = row.id;
+          window.operationLogs[localIdx]._synced = true;
+          window.operationLogs[localIdx]._fromSupabase = true;
+          matchedCount++;
+          
+          // Update the extra field to remove _localIdx marker
+          if (cleanExtra !== null && window.operationLogs[localIdx].extra) {
+            window.operationLogs[localIdx].extra = extra;
+          }
+        }
+      } catch(e) {
+        console.warn('[DAL] v28 Failed to parse extra for matching:', e);
       }
     });
-  }
-
-  // Process unsynced inserts in batches
-  return processBatches(unsynced, 0).then(function() {
-    // Then process reverts (these are few, can be parallel)
-    var revertPromises = revertedUnsynced.map(function(l) {
-      return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
-        if (r.error) {
-          console.error('[DAL] v27 Log revert update error:', r.error.message);
-        } else {
-          l._revertSynced = true;
-        }
+    
+    console.log('[DAL] v28 Matched ' + matchedCount + '/' + unsynced.length + ' logs to local records');
+    
+    // Clean up the extra field in Supabase (remove _localIdx markers)
+    // Do this asynchronously, don't block
+    if (r.data.length > 0) {
+      var ids = r.data.map(function(row) { return row.id; });
+      // Update extra to remove _localIdx markers
+      ids.forEach(function(id) {
+        db.from('operation_logs').select('id, extra').eq('id', id).single().then(function(sel) {
+          if (sel.data && sel.data.extra) {
+            try {
+              var ext = JSON.parse(sel.data.extra);
+              if (ext._localIdx !== undefined) {
+                delete ext._localIdx;
+                var newExtra = Object.keys(ext).length > 0 ? JSON.stringify(ext) : null;
+                db.from('operation_logs').update({ extra: newExtra }).eq('id', id);
+              }
+            } catch(e) {}
+          }
+        });
       });
-    });
-    return Promise.all(revertPromises);
-  }).then(function() {
+    }
+    
     _writingLogsToSupabase = false;
     
     // Persist updated sync status to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
     
-    var successCount = unsynced.filter(function(entry) {
-      return window.operationLogs[entry.index] && window.operationLogs[entry.index]._synced;
-    }).length;
+    console.log('[DAL] v28 Write complete: ' + matchedCount + '/' + unsynced.length + ' logs synced');
     
-    console.log('[DAL] v27 Write complete: ' + successCount + '/' + unsynced.length + ' logs written successfully');
-    
-    // v27: If some logs failed to write, schedule a retry
-    if (successCount < unsynced.length) {
-      var failedCount = unsynced.length - successCount;
-      console.warn('[DAL] v27 ' + failedCount + ' logs still unsynced, will retry in 5s');
+    // If some logs failed to match, schedule retry
+    if (matchedCount < unsynced.length) {
+      var failedCount = unsynced.length - matchedCount;
+      console.warn('[DAL] v28 ' + failedCount + ' logs still unsynced, will retry in 5s');
       setTimeout(function() {
         _writeUnsyncedLogsToSupabase();
       }, 5000);
     }
     
+    // Process revert updates
+    if (revertedUnsynced.length > 0) {
+      var revertPromises = revertedUnsynced.map(function(l) {
+        return db.from('operation_logs').update({ reverted: true }).eq('id', l.id).then(function(r) {
+          if (r.error) {
+            console.error('[DAL] v28 Log revert update error:', r.error.message);
+          } else {
+            l._revertSynced = true;
+          }
+        });
+      });
+      return Promise.all(revertPromises);
+    }
+  }).catch(function(err) {
+    _writingLogsToSupabase = false;
+    console.error('[DAL] v28 CRITICAL: Batch INSERT exception:', err.message);
+    // Retry after delay
+    setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+  }).then(function() {
+    _writingLogsToSupabase = false;
     // If there were queued writes, process them now
     if (_pendingLogWrites > 0) {
       _pendingLogWrites = 0;
-      console.log('[DAL] v27 Processing queued writes...');
+      console.log('[DAL] v28 Processing queued writes...');
       return _writeUnsyncedLogsToSupabase();
     }
-  }).catch(function(e) {
-    _writingLogsToSupabase = false;
-    console.error('[DAL] v27 CRITICAL: writeUnsyncedLogs exception:', e);
-    // Schedule retry on exception
-    setTimeout(function() {
-      _writeUnsyncedLogsToSupabase();
-    }, 5000);
   });
 }
 
