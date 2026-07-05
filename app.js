@@ -1196,7 +1196,7 @@ function getStudentShopEffects(student){
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
 function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid'); if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;} const cur=classesData.find(c=>c.id===currentClassId); if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;} 
-  let html=''; cur.students.forEach(s=>{updatePetDeathStatus(s);const activePet = getActivePet(s); if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=96?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
+  let html=''; cur.students.forEach(s=>{updatePetDeathStatus(s);const activePet = getActivePet(s); if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=1440?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
 const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
 let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
 const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
@@ -1211,8 +1211,8 @@ renderHomePetGrid=function(){_origRenderHomePetGrid();startMaxedSparkles();};
 startMaxedSparkles();
 
 function getExpNeeded(pet){const cfg=PET_CONFIG[pet.name];if(!cfg)return 0;const nextStage=cfg.stages.find(s=>s.stage===pet.level+1);return nextStage?nextStage.growthRequired:cfg.stages[cfg.stages.length-1].growthRequired;}
-function updatePetDeathStatus(student){if(!student.pets||student.pets.length===0)return; if(isPauseActive())return; student.pets.forEach(pet=>{if(pet.isDead)return; if(pet.level>=9)return; if(isPetStarved(pet)){const prevGrowth=pet.growth;const prevLevel=pet.level;pet.isDead=true; pet.deathGrowth=pet.growth; pet.deathDate=new Date().toISOString();recordAction(student.id, student.name, '饿死', `${pet.nickname||pet.name} 因超过5天未喂食而饿死（Lv.${prevLevel}，成长值${prevGrowth}）`, 0, 0, pet.id, {causedDeath:true, prevGrowth:prevGrowth, prevLevel:prevLevel, starvation:true, petSnapshot:{name:pet.name,nickname:pet.nickname,level:prevLevel,growth:prevGrowth,lastFeedDate:pet.lastFeedDate,todayFeedCount:pet.todayFeedCount||0,todayPlayCount:pet.todayPlayCount||0,lastPlayDate:pet.lastPlayDate,penaltyStreak:pet.penaltyStreak||0}});}});}
-function isPetStarved(pet){if(!pet.lastFeedDate) return false; const last=new Date(pet.lastFeedDate); const now=new Date(); let pauseMs=calcPauseOverlap(last,now); const realMs=(now-last)-pauseMs; const diffHours=realMs/(1000*3600); return diffHours>=120;}
+function updatePetDeathStatus(student){if(!student.pets||student.pets.length===0)return; if(isPauseActive())return; student.pets.forEach(pet=>{if(pet.isDead)return; if(pet.level>=9)return; if(isPetStarved(pet)){const prevGrowth=pet.growth;const prevLevel=pet.level;pet.isDead=true; pet.deathGrowth=pet.growth; pet.deathDate=new Date().toISOString();recordAction(student.id, student.name, '饿死', `${pet.nickname||pet.name} 因超过70天未喂食而饿死（Lv.${prevLevel}，成长值${prevGrowth}）`, 0, 0, pet.id, {causedDeath:true, prevGrowth:prevGrowth, prevLevel:prevLevel, starvation:true, petSnapshot:{name:pet.name,nickname:pet.nickname,level:prevLevel,growth:prevGrowth,lastFeedDate:pet.lastFeedDate,todayFeedCount:pet.todayFeedCount||0,todayPlayCount:pet.todayPlayCount||0,lastPlayDate:pet.lastPlayDate,penaltyStreak:pet.penaltyStreak||0}});}});}
+function isPetStarved(pet){if(!pet.lastFeedDate) return false; const last=new Date(pet.lastFeedDate); const now=new Date(); let pauseMs=calcPauseOverlap(last,now); const realMs=(now-last)-pauseMs; const diffHours=realMs/(1000*3600); return diffHours>=1680;}
 function calcPauseOverlap(feedDate,nowDate){if(!currentClassId)return 0;const cur=classesData.find(c=>c.id===currentClassId);if(!cur||!cur.pauseGrowth||!cur.pauseGrowth.start||!cur.pauseGrowth.end)return 0;const ps=new Date(cur.pauseGrowth.start+'T00:00:00');const pe=new Date(cur.pauseGrowth.end+'T23:59:59');const overlapStart=feedDate>ps?feedDate:ps;const overlapEnd=nowDate<pe?nowDate:pe;if(overlapStart>=overlapEnd)return 0;return overlapEnd-overlapStart;}
 function getEffectiveUnfedHours(pet){if(!pet.lastFeedDate)return 0;const last=new Date(pet.lastFeedDate);const now=new Date();let pauseMs=calcPauseOverlap(last,now);const realMs=(now-last)-pauseMs;return Math.max(0,realMs/(1000*3600));}
 function checkPauseAndNotify(){if(isPauseActive()){showNotification('操作暂停','假期暂停期间无法操作','warning');return true;}return false;}
@@ -1233,7 +1233,7 @@ function buildStudentModalContent(student, pet){
   let hungerMsg='';
   if(pet.level>=9){hungerMsg='👑 传说神兽，无需喂食';}
   else if(isPauseActive()){hungerMsg='🛡️ 假期保护中，暂停饥饿计时';}
-  else if(!pet.isDead&&lastDate){const hours=getEffectiveUnfedHours(pet); if(hours>=96)hungerMsg='🔴 超过4天未喂，即将饿死！'; else if(hours>=72)hungerMsg='🟠 超过3天未喂，请尽快喂食'; else if(hours>=24)hungerMsg='🟡 超过1天未喂'; else hungerMsg=`🕒 ${Math.floor(hours)}小时前喂食`;} else if(pet.isDead)hungerMsg='💀 已饿死，请复活';
+  else if(!pet.isDead&&lastDate){const hours=getEffectiveUnfedHours(pet); if(hours>=1440)hungerMsg='🔴 超过60天未喂，即将饿死！'; else if(hours>=720)hungerMsg='🟠 超过30天未喂，请尽快喂食'; else if(hours>=24)hungerMsg='🟡 超过1天未喂'; else hungerMsg=`🕒 ${Math.floor(hours)}小时前喂食`;} else if(pet.isDead)hungerMsg='💀 已饿死，请复活';
   const growable=getGrowablePet(student);
   const hasGrowable=growable && growable.id!==pet.id;
   const allMaxed=student.pets.every(p=>p.level>=9);
@@ -1333,7 +1333,7 @@ function buildReadOnlyStudentModalContent(student, pet){
   const lastDate = pet.lastFeedDate?new Date(pet.lastFeedDate):null;
   let hungerMsg='';
   if(pet.level>=9){hungerMsg='👑 传说神兽，无需喂食';}
-  else if(!pet.isDead&&lastDate){const hours=getEffectiveUnfedHours(pet); if(hours>=96)hungerMsg='🔴 超过4天未喂'; else if(hours>=72)hungerMsg='🟠 超过3天未喂'; else if(hours>=24)hungerMsg='🟡 超过1天未喂'; else hungerMsg=`🕒 ${Math.floor(hours)}小时前喂食`;} else if(pet.isDead)hungerMsg='💀 已饿死'; else hungerMsg='🐣 存活';
+  else if(!pet.isDead&&lastDate){const hours=getEffectiveUnfedHours(pet); if(hours>=1440)hungerMsg='🔴 超过60天未喂'; else if(hours>=720)hungerMsg='🟠 超过30天未喂'; else if(hours>=24)hungerMsg='🟡 超过1天未喂'; else hungerMsg=`🕒 ${Math.floor(hours)}小时前喂食`;} else if(pet.isDead)hungerMsg='💀 已饿死'; else hungerMsg='🐣 存活';
   
   let petGallery='';
   if(student.pets.length>1){
@@ -2035,8 +2035,12 @@ function renderPKPage() {
     // Check for pending challenges targeting me first
     const pendingChallenge = _getPendingPKChallengeForMe();
     if (pendingChallenge) {
-      _showPKChallengeDialog(pendingChallenge);
-      return;
+      // Only show dialog if PK page is currently visible (not during background sync)
+      const pkPageEl = document.getElementById('pk-page');
+      if (pkPageEl && pkPageEl.classList.contains('active')) {
+        _showPKChallengeDialog(pendingChallenge);
+        return;
+      }
     }
     
     if (!myValid) {

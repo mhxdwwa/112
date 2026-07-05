@@ -359,11 +359,6 @@ function _smartRefreshFromSupabase() {
       console.log('[DAL] Student saw ' + changesApplied + ' updates from teacher/other students');
     }
     
-    // Update PK invite badge after refresh
-    if (typeof _updatePKInviteBadge === 'function') {
-      setTimeout(_updatePKInviteBadge, 100);
-    }
-    
     return Promise.resolve();
   });
 }
@@ -1453,19 +1448,19 @@ function _doSmartRefresh() {
     // v12: Refresh history modal if open — show latest logs in real-time
     if (typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
     
-    // For students: check for pending PK challenges and accepted challenges
+    // For students: check for accepted PK challenges and update invite badge
     if (currentUser && currentUser.type === 'student') {
       console.log('[DAL] Student data refreshed from server');
       console.log('[DAL] Operation logs loaded:', (window.operationLogs || []).length);
       
       // Check for accepted PK challenge (for the challenger to start battle)
       if (typeof _checkAcceptedPKChallenge === 'function') {
-        if (!_checkAcceptedPKChallenge()) {
-          // Check for pending challenges targeting me
-          if (typeof _checkPendingPKChallenge === 'function') {
-            _checkPendingPKChallenge();
-          }
-        }
+        _checkAcceptedPKChallenge();
+      }
+      
+      // Update the red exclamation badge on PK tab immediately
+      if (typeof _updatePKInviteBadge === 'function') {
+        _updatePKInviteBadge();
       }
     }
     
