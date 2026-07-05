@@ -41,7 +41,7 @@ setTimeout(function() { window._hideDalLoading(); }, 15000);
 <div class="deco-bubble" style="left:80%;width:45px;height:45px;background:radial-gradient(circle,#d0ffd0,#a0e8a0);--float-dur:20s;--float-delay:2s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:40%;width:55px;height:55px;background:radial-gradient(circle,#ffe0ff,#e0b0e0);--float-dur:15s;--float-delay:8s;--bubble-opacity:0.06;"></div>
 <div class="deco-bubble" style="left:70%;width:70px;height:70px;background:radial-gradient(circle,#ffd0c0,#ffb0a0);--float-dur:17s;--float-delay:5s;--bubble-opacity:0.07;"></div>
-<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><span id="cloudSyncStatus" onclick="forceManualSync()" style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:13px;color:#6a9955;font-weight:600;background:linear-gradient(135deg,#e8ffe8,#d0f0d0);border-radius:20px;padding:6px 14px;box-shadow:0 2px 8px rgba(100,180,100,0.15);transition:all 0.2s;" title="点击手动同步到云端">☁️ 云端同步</span><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
+<div class="nav-bar"><div class="nav-logo">🍡宠物世界🍡</div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('quiz-page')">🏛️ 取金阁</div><div class="nav-item" onclick="playClickSound();switchPage('pk-page')">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><span id="cloudSyncStatus" onclick="forceManualSync()" style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:13px;color:#6a9955;font-weight:600;background:linear-gradient(135deg,#e8ffe8,#d0f0d0);border-radius:20px;padding:6px 14px;box-shadow:0 2px 8px rgba(100,180,100,0.15);transition:all 0.2s;" title="点击手动同步到云端">☁️ 云端同步</span><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:25px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
 <!-- 背景音乐控制面板 -->
 <div class="music-panel" id="musicPanel">
   <button class="music-toggle" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button>
@@ -79,6 +79,11 @@ setTimeout(function() { window._hideDalLoading(); }, 15000);
   </div>
   <div id="fullRankList"></div>
 </div>
+<div class="page" id="quiz-page">
+  <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;right:80px;--paw-rot:-30deg;font-size:28px;">🐾</div>
+  <div id="quizContent"></div>
+</div>
 <div class="page" id="pk-page">
   <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
   <div class="paw-deco" style="bottom:40px;right:80px;--paw-rot:-30deg;font-size:28px;">🐾</div>
@@ -105,7 +110,9 @@ setTimeout(function() { window._hideDalLoading(); }, 15000);
 <div id="modalContainer"></div>
 <div id="notificationContainer"></div>
 <div id="upgradeEffectContainer"></div>
-<script src="app.js?v=32"></script>
+<script src="quiz-bank.js?v=1"></script>
+<script src="quiz.js?v=1"></script>
+<script src="app.js?v=33"></script>
 <script>
 // ===== 云端模式：禁用本地文件保存机制 =====
 // 数据完全走 Supabase 云端，不再需要文件授权
@@ -153,7 +160,7 @@ window._cloudMode = true; // 告诉 app.js 不要渲染，等 dal.js 加载数�
   };
 })();
 </script>
-<script src="dal.js?v=32"></script>
+<script src="dal.js?v=33"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用

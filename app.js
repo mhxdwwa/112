@@ -1877,7 +1877,7 @@ function renderClassTopThree(){
     fullListEl.innerHTML=listHtml;
   }
 }
-function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* v16: For students, force-reload operation logs before rendering PK/Jianghu pages to ensure latest data */var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed, rendering with existing data:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
+function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* v16: For students, force-reload operation logs before rendering PK/Jianghu pages to ensure latest data */var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed, rendering with existing data:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
@@ -2054,7 +2054,7 @@ function renderPKPage() {
       let noQualHtml = `<div style="text-align:center;padding:40px;line-height:2;">
         <div style="font-size:48px;margin-bottom:16px;">🔒</div>
         <div style="font-size:18px;font-weight:700;color:#a06040;">你还没有PK资格</div>
-        <div style="font-size:14px;color:#888;margin-top:8px;">今日通过【奖惩/批量奖惩/每日打卡】获得≥5金币即可参加PK</div>
+        <div style="font-size:14px;color:#888;margin-top:8px;">今日通过【奖惩/批量奖惩/每日打卡/取金阁】获得≥5金币即可参加PK</div>
         <div style="font-size:12px;color:#aaa;margin-top:16px;">当前有资格的学生：${validStudents.length}人</div>`;
       // v14: Show list of qualified students even when current student doesn't qualify
       if (validStudents.length > 0) {
@@ -2079,7 +2079,7 @@ function renderPKPage() {
     
     // v14: Student view - show PK info with list of qualified opponents
     let html = '';
-    html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加 · 每人每日最多3次PK · 打卡也可获得资格</div>`;
+    html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩/每日打卡/取金阁】获得≥5金币方可参加 · 每人每日最多3次PK · 打卡也可获得资格</div>`;
     html += `<div style="text-align:center;padding:20px;line-height:2;">
       <div style="font-size:48px;margin-bottom:16px;">⚔️</div>
       <div style="font-size:18px;font-weight:700;color:#4a90d9;">PK挑战</div>
@@ -2113,7 +2113,7 @@ function renderPKPage() {
   
   // === Teacher view ===
   if(validStudents.length < 2) {
-    let hintMsg = '⚔️ 当前有资格PK的学生不足2人<br><br><span style="font-size:14px;color:#888;">PK资格：今日通过【奖惩/批量奖惩/打卡】获得≥5金币</span>';
+    let hintMsg = '⚔️ 当前有资格PK的学生不足2人<br><br><span style="font-size:14px;color:#888;">PK资格：今日通过【奖惩/批量奖惩/打卡/取金阁】获得≥5金币</span>';
     if(allAliveStudents.length >= 2 && validStudents.length < 2) {
       hintMsg += '<br><span style="font-size:13px;color:#a06040;">请先给学生施加奖惩或批量奖惩，获得金币后才能参加PK</span>';
     }
@@ -2122,7 +2122,7 @@ function renderPKPage() {
   }
   
   let html = '';
-  html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩】获得≥5金币方可参加</div>`;
+  html += `<div style="margin-bottom:10px;padding:8px 16px;background:#fff8f0;border-radius:12px;border:1px solid #ffe0c0;font-size:13px;color:#a06040;">⚔️ PK资格：今日通过【奖惩/批量奖惩/打卡/取金阁】获得≥5金币方可参加</div>`;
   html += `<div style="margin-bottom:20px;"><h3>选择你的宠物</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;">`;
   validStudents.forEach(s => {
     const p = getActivePet(s);
@@ -2253,7 +2253,7 @@ function showStudentPKChallengeModal() {
   
   // Check if student has PK qualification
   if (!hasPKQualificationToday(myStudentId)) {
-    showNotification('无PK资格', '今日需要通过奖惩/打卡获得至少5金币', 'warning');
+    showNotification('无PK资格', '今日需要通过奖惩/打卡/取金阁获得至少5金币', 'warning');
     return;
   }
   
@@ -5466,7 +5466,7 @@ function hasPKQualificationToday(studentId) {
   const today = new Date().toDateString();
   let total = 0;
   // v15: Always read from window.operationLogs for cross-script consistency
-  const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡'];
+  const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡', '取金阁'];
   var logs = getOpLogs();
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
