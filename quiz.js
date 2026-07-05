@@ -1,5 +1,5 @@
 // 取金阁 - 答题核心逻辑
-// v2
+// v3 - quizState synced via Supabase for cross-device consistency
 
 (function() {
   'use strict';
@@ -498,5 +498,5 @@
   window.getQuizState = getQuizState;
   window.resetQuizIfNeeded = resetQuizIfNeeded;
 
-  console.log('[取金阁] v2 loaded');
+  console.log('[取金阁] v3 loaded (cross-device sync)');
 })();

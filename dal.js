@@ -26,7 +26,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '24.0';
+var _DAL_VERSION = '25.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -113,13 +113,13 @@ function _smartRefreshFromSupabase() {
   if (isStudent) {
     queries = Promise.all([
       db.from('classes').select('*').eq('id', classId).single(),
-      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password').eq('class_id', classId),
+      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state').eq('class_id', classId),
       db.from('pets').select('*')
     ]);
   } else {
     queries = Promise.all([
       db.from('classes').select('*').eq('teacher_id', currentUser.id).order('id'),
-      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password'),
+      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state'),
       db.from('pets').select('*')
     ]);
   }
@@ -164,7 +164,8 @@ function _smartRefreshFromSupabase() {
         pkCountToday: s.pk_count_today || 0,
         shopItems: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
         equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
-        password: s.password || ''
+        password: s.password || '',
+        quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })()
       };
     });
 
@@ -250,6 +251,17 @@ function _smartRefreshFromSupabase() {
         if ((freshStu.pkCountToday || 0) !== snapPkToday && (localStu.pkCountToday || 0) === snapPkToday) {
           localStu.pkCountToday = freshStu.pkCountToday || 0;
           changesApplied++;
+        }
+
+        // quizState: sync from server if changed on server and not changed locally
+        if (freshStu.quizState) {
+          var snapQuizState = snapStu ? JSON.stringify(snapStu.quizState || null) : null;
+          var freshQuizState = JSON.stringify(freshStu.quizState);
+          var localQuizState = JSON.stringify(localStu.quizState || null);
+          if (freshQuizState !== snapQuizState && localQuizState === snapQuizState) {
+            localStu.quizState = freshStu.quizState;
+            changesApplied++;
+          }
         }
 
         // Merge pets for this student
@@ -366,7 +378,8 @@ function _buildTeacherClasses(classes, students, pets) {
       pkCountToday: s.pk_count_today || 0,
       shopItems: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
       equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
-      password: s.password || ''
+      password: s.password || '',
+      quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })()
     };
   });
 
@@ -417,7 +430,7 @@ function _buildTeacherClasses(classes, students, pets) {
 function _loadTeacherFromSupabase() {
   return Promise.all([
     db.from('classes').select('*').eq('teacher_id', currentUser.id).order('id'),
-    db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password'),
+    db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state'),
     db.from('pets').select('*')
   ]).then(function(results) {
     var classesR = results[0], studentsR = results[1], petsR = results[2];
@@ -472,7 +485,7 @@ function _loadStudentFromSupabase() {
 
   return Promise.all([
     db.from('classes').select('*').eq('id', classId).single(),
-    db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password').eq('class_id', classId),
+    db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state').eq('class_id', classId),
     db.from('pets').select('*')
   ]).then(function(results) {
     var classR = results[0], studentsR = results[1], petsR = results[2];
@@ -501,7 +514,8 @@ function _loadStudentFromSupabase() {
         pkCountToday: s.pk_count_today || 0,
         shopItems: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
         equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
-        password: s.password || ''
+        password: s.password || '',
+        quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })()
       };
     });
 
@@ -940,7 +954,8 @@ function _syncTeacherToSupabase() {
         pk_count_today: stu.pkCountToday || 0,
         shop_items: JSON.stringify(stu.shopItems || []),
         equipped_items: JSON.stringify(stu.equippedItems || {}),
-        password: stu.password || ''
+        password: stu.password || '',
+        quiz_state: stu.quizState || null
       };
 
       if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
@@ -1041,7 +1056,8 @@ function _syncTeacherToSupabase() {
           pk_count_today: stu.pkCountToday || 0,
           shop_items: JSON.stringify(stu.shopItems || []),
           equipped_items: JSON.stringify(stu.equippedItems || {}),
-          password: stu.password || ''
+          password: stu.password || '',
+          quiz_state: stu.quizState || null
         };
         return db.from('students').upsert([payload]).then(function(r) {
           if (r.error) console.error('[DAL] student upsert error:', r.error);
@@ -1179,7 +1195,7 @@ function _syncStudentToSupabase() {
 
   // Step 2: Fetch fresh student data to avoid overwriting teacher changes (e.g., coins)
   return Promise.all(petPromises).then(function() {
-    return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today').eq('id', studentId).single();
+    return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today, quiz_state').eq('id', studentId).single();
   }).then(function(freshR) {
     // Compute local delta: how much the student changed locally since last sync
     var localCoinDelta = 0;
@@ -1220,7 +1236,8 @@ function _syncStudentToSupabase() {
       last_jianghu_date: myStudent.lastJianghuDate || null,
       last_pk_date: myStudent.lastPkDate || null,
       active_pet_id: myStudent.activePetId || null,
-      pk_count_today: myStudent.pkCountToday || 0
+      pk_count_today: myStudent.pkCountToday || 0,
+      quiz_state: myStudent.quizState || null
     }]).then(function(r) {
       if (r.error) console.error('[DAL] student sync error:', r.error);
       // Update base tracking after successful sync
