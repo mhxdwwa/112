@@ -2035,12 +2035,18 @@ function renderPKPage() {
     // Check for pending challenges targeting me first
     const pendingChallenge = _getPendingPKChallengeForMe();
     if (pendingChallenge) {
-      // Only show dialog if PK page is currently visible (not during background sync)
+      // Only show dialog if PK page is currently visible and we haven't shown it for this challenge
       const pkPageEl = document.getElementById('pk-page');
       if (pkPageEl && pkPageEl.classList.contains('active')) {
-        _showPKChallengeDialog(pendingChallenge);
+        if (_pkChallengeState._lastShownChallengeId !== pendingChallenge.id) {
+          _pkChallengeState._lastShownChallengeId = pendingChallenge.id;
+          _showPKChallengeDialog(pendingChallenge);
+        }
         return;
       }
+    } else {
+      // Reset when no pending challenge
+      _pkChallengeState._lastShownChallengeId = null;
     }
     
     if (!myValid) {
@@ -2141,7 +2147,59 @@ function renderPKPage() {
 }
 
 // PK Challenge system for students
-let _pkChallengeState = { pending: null };
+let _pkChallengeState = { pending: null, _lastShownChallengeId: null };
+
+// Helper: count pending challenges I sent today (not yet accepted/declined)
+function _countMyPendingPKChallenges() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return { total: 0, targets: {} };
+  const myStudentId = parseInt(currentUser.studentId);
+  const today = new Date().toDateString();
+  var _logs = getOpLogs();
+  let total = 0;
+  const targets = {}; // targetId -> count
+  for (let i = 0; i < _logs.length; i++) {
+    const log = _logs[i];
+    if (log.actionType !== 'PK挑战') continue;
+    if (log.reverted) continue;
+    if (!log.extra || !log.extra.pkChallenge) continue;
+    if (log.extra.challengerId !== myStudentId) continue;
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (log.extra.status !== 'pending') continue;
+    // Check not expired (within 5 minutes)
+    const challengeTime = new Date(log.timestamp).getTime();
+    if (Date.now() - challengeTime > 5 * 60 * 1000) continue;
+    total++;
+    const tid = log.extra.targetId;
+    targets[tid] = (targets[tid] || 0) + 1;
+  }
+  return { total, targets };
+}
+
+// Helper: check if I already have a pending/in-progress PK battle (accepted or fighting)
+function _hasActivePKBattle() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return false;
+  if (pkState.isFighting) return true;
+  const myStudentId = parseInt(currentUser.studentId);
+  const today = new Date().toDateString();
+  var _logs = getOpLogs();
+  for (let i = _logs.length - 1; i >= 0; i--) {
+    const log = _logs[i];
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (log.reverted) continue;
+    // Check if I accepted a challenge recently (within 10 min)
+    if (log.actionType === 'PK接受' && log.extra && log.extra.pkAccept) {
+      if (log.extra.challengerId === myStudentId || log.extra.targetId === myStudentId) {
+        const t = new Date(log.timestamp).getTime();
+        if (Date.now() - t < 10 * 60 * 1000) return true;
+      }
+    }
+  }
+  return false;
+}
 
 function selectPKOpponent(studentId) {
   if(pkState.isFighting) return;
@@ -2184,6 +2242,32 @@ function sendPKChallenge() {
   const target = pkState.players.find(p => p.studentId !== myStudentId);
   
   if (!challenger || !target) return;
+  
+  // === 邀请限制检查 ===
+  // 1. 检查是否已经有活跃的战斗
+  if (_hasActivePKBattle()) {
+    showNotification('无法发起', '你已有一场进行中的PK，请等待结束', 'warning');
+    pkState.players = [];
+    renderPKPage();
+    return;
+  }
+  
+  // 2. 检查待处理邀请总数（最多3个）
+  const pendingInfo = _countMyPendingPKChallenges();
+  if (pendingInfo.total >= 3) {
+    showNotification('邀请已满', '你最多同时向3位同学发出邀请，请等待对方回应', 'warning');
+    pkState.players = [];
+    renderPKPage();
+    return;
+  }
+  
+  // 3. 检查是否已经向同一学生发出过邀请（同一学生只能邀请一次）
+  if (pendingInfo.targets[target.studentId] > 0) {
+    showNotification('重复邀请', `你已经向 ${target.studentName} 发出过邀请，请等待对方回应`, 'warning');
+    pkState.players = [];
+    renderPKPage();
+    return;
+  }
   
   // Create challenge log entry
   const log = {
@@ -2256,11 +2340,27 @@ function showStudentPKChallengeModal() {
     return;
   }
   
-  // Get eligible opponents
+  // Check pending invitations limit
+  const pendingInfo = _countMyPendingPKChallenges();
+  if (pendingInfo.total >= 3) {
+    showNotification('邀请已满', '你最多同时向3位同学发出邀请，请等待对方回应', 'warning');
+    return;
+  }
+  
+  // Check for active battle
+  if (_hasActivePKBattle()) {
+    showNotification('无法发起', '你已有一场进行中的PK', 'warning');
+    return;
+  }
+  
+  // Get eligible opponents (exclude already-invited students)
   const opponents = cur.students.filter(s => {
     if (s.id.toString() === myStudentId.toString()) return false;
     const p = getActivePet(s);
-    return p && !p.isDead && hasPKQualificationToday(s.id);
+    if (!p || p.isDead || !hasPKQualificationToday(s.id)) return false;
+    // Exclude students I already have a pending invitation to
+    if (pendingInfo.targets[s.id] > 0) return false;
+    return true;
   });
   
   if (opponents.length === 0) {
@@ -2313,6 +2413,21 @@ function selectStudentPKOpponentAndSend(opponentId) {
   const opponentPet = getActivePet(opponent);
   if (!myPet || !opponentPet) {
     showNotification('无法选择', '宠物未存活', 'warning');
+    return;
+  }
+  
+  // Check invitation limits before sending
+  if (_hasActivePKBattle()) {
+    showNotification('无法发起', '你已有一场进行中的PK', 'warning');
+    return;
+  }
+  const pendingInfo = _countMyPendingPKChallenges();
+  if (pendingInfo.total >= 3) {
+    showNotification('邀请已满', '最多同时向3位同学发出邀请', 'warning');
+    return;
+  }
+  if (pendingInfo.targets[opponent.id] > 0) {
+    showNotification('重复邀请', `已向 ${opponent.name} 发出过邀请`, 'warning');
     return;
   }
   
@@ -2400,7 +2515,10 @@ function handlePKTabClick() {
   if (isStudentView) {
     const challenge = _getPendingPKChallengeForMe();
     if (challenge) {
-      _showPKChallengeDialog(challenge);
+      if (_pkChallengeState._lastShownChallengeId !== challenge.id) {
+        _pkChallengeState._lastShownChallengeId = challenge.id;
+        _showPKChallengeDialog(challenge);
+      }
       return;
     }
   }
@@ -2459,13 +2577,26 @@ function acceptPKChallenge(challengeLogId) {
   const overlay = document.querySelector('.pk-challenge-overlay');
   if (overlay) overlay.remove();
   
+  // Prevent duplicate acceptance if already in a battle
+  if (pkState.isFighting) {
+    showNotification('战斗中', '你正在一场PK战斗中，无法接受新挑战', 'warning');
+    return;
+  }
+  
   // Find the challenge log
   var _logs = getOpLogs();
   const log = _logs.find(l => l.id === challengeLogId);
   if (!log || !log.extra) return;
   
+  // Check if already accepted or declined
+  if (log.extra.status !== 'pending') {
+    showNotification('已处理', '该挑战已被处理', 'info');
+    return;
+  }
+  
   // Mark as accepted locally
   log.extra.status = 'accepted';
+  saveLogs();
   
   // Create a "PK接受" log entry to notify the challenger
   const myStudentId = parseInt(currentUser.studentId);
@@ -2507,6 +2638,9 @@ function acceptPKChallenge(challengeLogId) {
   window.operationLogs.push(acceptLog);
   saveLogs();
   
+  // Reset shown challenge tracking
+  _pkChallengeState._lastShownChallengeId = null;
+  
   // Set up PK state
   pkState.players = [
     { studentId: log.extra.challengerId, studentName: log.extra.challengerName, pet: {...challengerPet} },
@@ -2525,6 +2659,9 @@ function _checkAcceptedPKChallenge() {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   if (!isStudentView) return false;
   
+  // Don't start a new battle if one is already in progress
+  if (pkState.isFighting) return false;
+  
   const myStudentId = parseInt(currentUser.studentId);
   const today = new Date().toDateString();
   
@@ -2539,15 +2676,17 @@ function _checkAcceptedPKChallenge() {
     if (!log.extra || !log.extra.pkAccept) continue;
     if (log.extra.challengerId !== myStudentId) continue;
     
-    // Check if challenge is recent (within 5 minutes)
+    // Check if challenge is recent (within 10 minutes)
     const acceptTime = new Date(log.timestamp).getTime();
-    if (Date.now() - acceptTime > 5 * 60 * 1000) continue;
+    if (Date.now() - acceptTime > 10 * 60 * 1000) continue;
     
     // Check if we haven't already started this battle
     if (log.extra._battleStarted) continue;
     
     // Mark as started to avoid duplicate starts
     log.extra._battleStarted = true;
+    // Persist the flag by saving logs
+    saveLogs();
     
     // Start the battle
     const challengerPet = log.extra.challengerPet;
@@ -2584,6 +2723,9 @@ function declinePKChallenge(challengeLogId) {
     log.extra.status = 'declined';
     saveLogs();
   }
+  
+  // Reset shown challenge tracking
+  _pkChallengeState._lastShownChallengeId = null;
   
   showNotification('已拒绝挑战', '你拒绝了PK挑战', 'info');
   renderPKPage();
@@ -3792,8 +3934,7 @@ let currentBattleModalOverlay = null;
 function startPKBattle() {
   if(pkState.players.length !== 2) return;
   if(pkState.isFighting) {
-    showNotification('战斗中', '上一场战斗尚未结束，请稍后再试', 'warning');
-    return;
+    return; // silently return - already fighting, no notification needed
   }
   const cur = classesData.find(c=>c.id===currentClassId);
   const student1 = cur.students.find(s=>s.id.toString()===pkState.players[0].studentId.toString());

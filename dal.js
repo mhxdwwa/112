@@ -1,5 +1,5 @@
 /**
- * dal.js v30.0 — Robust Data Access Layer with Smart Merge
+ * dal.js v31.0 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
