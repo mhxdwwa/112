@@ -451,6 +451,14 @@ function _buildTeacherClasses(classes, students, pets) {
     }
   });
 
+  // 应用保存的学生排序顺序（教师拖拽排序）
+  Object.keys(classMap).forEach(function(cid) {
+    var cls = classMap[cid];
+    if (cls.students.length > 0 && typeof applyStudentOrder === 'function') {
+      cls.students = applyStudentOrder(parseInt(cid), cls.students);
+    }
+  });
+
   return classes.map(function(c) { return classMap[c.id]; }).filter(Boolean);
 }
 
@@ -575,6 +583,19 @@ function _loadStudentFromSupabase() {
       sid = parseInt(sid);
       if (sid !== studentId) classmates.push(studentMap[sid]);
     });
+
+    // 应用保存的学生排序顺序（教师设置的排序）
+    if (typeof applyStudentOrder === 'function') {
+      classmates = applyStudentOrder(classId, classmates);
+      // 确保当前学生仍然在第一位（学生视角）
+      if (myStudent) {
+        var myIdx = classmates.findIndex(function(s) { return s.id == studentId; });
+        if (myIdx > 0) {
+          classmates.splice(myIdx, 1);
+          classmates.unshift(myStudent);
+        }
+      }
+    }
 
     classesData = [{
       id: classInfo.id,

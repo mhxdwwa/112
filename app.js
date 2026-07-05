@@ -7342,6 +7342,8 @@ function closeJianghuGame() {
 // v12: Swap two students' positions instead of reorder
 function reorderStudent(fromIdx, toIdx){
   if(!currentClassId) return;
+  // 只有教师才能拖拽排序
+  if(!currentUser || currentUser.type !== 'teacher') return;
   const cur = classesData.find(c=>c.id===currentClassId);
   if(!cur || !cur.students) return;
   if(fromIdx < 0 || fromIdx >= cur.students.length) return;
@@ -7351,8 +7353,54 @@ function reorderStudent(fromIdx, toIdx){
   const temp = cur.students[fromIdx];
   cur.students[fromIdx] = cur.students[toIdx];
   cur.students[toIdx] = temp;
+  // 保存排序到 localStorage（按班级）
+  saveStudentOrder(currentClassId, cur.students);
   saveClassData();
   renderHomePetGrid();
+}
+
+// 保存学生排序顺序到 localStorage
+function saveStudentOrder(classId, students){
+  if(!classId || !students) return;
+  const order = students.map(s => s.id);
+  try {
+    localStorage.setItem('studentOrder_' + classId, JSON.stringify(order));
+  } catch(e) {
+    console.warn('[DAL] Failed to save student order:', e);
+  }
+}
+
+// 从 localStorage 加载学生排序
+function loadStudentOrder(classId){
+  if(!classId) return null;
+  try {
+    const orderStr = localStorage.getItem('studentOrder_' + classId);
+    if(orderStr) return JSON.parse(orderStr);
+  } catch(e) {
+    console.warn('[DAL] Failed to load student order:', e);
+  }
+  return null;
+}
+
+// 应用排序到学生数组
+function applyStudentOrder(classId, students){
+  if(!classId || !students || students.length === 0) return students;
+  const order = loadStudentOrder(classId);
+  if(!order || order.length === 0) return students;
+  // 创建 ID 到学生的映射
+  const studentMap = {};
+  students.forEach(s => { studentMap[s.id] = s; });
+  // 按排序顺序重建数组
+  const ordered = [];
+  order.forEach(id => {
+    if(studentMap[id]) {
+      ordered.push(studentMap[id]);
+      delete studentMap[id];
+    }
+  });
+  // 添加新增的学生（不在排序中的）
+  Object.values(studentMap).forEach(s => ordered.push(s));
+  return ordered;
 }
 
 /* renderHomePetGrid后自动重绑拖拽 */
@@ -7364,11 +7412,13 @@ function reorderStudent(fromIdx, toIdx){
   };
 }
 
-/* ===== 宠物卡片直接拖拽排序（类似班级卡片） ===== */
+/* ===== 宠物卡片直接拖拽排序（仅教师可用） ===== */
 let petDragIdx = null;
 function bindPetCardDrag(){
   const grid = document.getElementById('homePetGrid');
   if(!grid) return;
+  // 只有教师账户才能拖拽排序
+  if(!currentUser || currentUser.type !== 'teacher') return;
   const cards = grid.querySelectorAll('.home-pet-card');
   cards.forEach((card, idx) => {
     card.draggable = true;
