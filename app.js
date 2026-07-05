@@ -1997,6 +1997,7 @@ function resetDailyPkCountIfNeeded(student) {
     student.lastPkDate = today;
     // Clear handled challenge tracking on new day
     _handledPKChallengeIds.clear();
+    _saveHandledPKChallengeIds();
   }
 }
 
@@ -2154,6 +2155,21 @@ let _pkChallengeState = { pending: null, _lastShownChallengeId: null };
 // Persistent set of handled challenge IDs (survives log reloads from Supabase)
 // This prevents infinite battle loops when logs are re-synced
 let _handledPKChallengeIds = new Set();
+// v34: Load persisted handled challenge IDs from localStorage
+try {
+  const saved = localStorage.getItem('_handledPKChallengeIds');
+  if (saved) {
+    const arr = JSON.parse(saved);
+    if (Array.isArray(arr)) arr.forEach(id => _handledPKChallengeIds.add(id));
+  }
+} catch(e) {}
+
+// v34: Helper to persist handled challenge IDs to localStorage
+function _saveHandledPKChallengeIds() {
+  try {
+    localStorage.setItem('_handledPKChallengeIds', JSON.stringify(Array.from(_handledPKChallengeIds)));
+  } catch(e) {}
+}
 
 // ========== Seeded PRNG for synchronized PK battles ==========
 // Mulberry32: deterministic random from a seed
@@ -2609,10 +2625,13 @@ function acceptPKChallenge(challengeLogId) {
   
   // Mark as accepted locally
   log.extra.status = 'accepted';
+  // v34: Mark as unsynced so the status change is written back to Supabase
+  log._synced = false;
   saveLogs();
   
   // Track this challenge as handled (prevents infinite loops on log reload)
   _handledPKChallengeIds.add(challengeLogId);
+  _saveHandledPKChallengeIds();
   
   // Create a "PK接受" log entry to notify the challenger
   const myStudentId = parseInt(currentUser.studentId);
@@ -2709,11 +2728,14 @@ function _checkAcceptedPKChallenge() {
     
     // Mark as started to avoid duplicate starts
     log.extra._battleStarted = true;
+    // v34: Mark as unsynced so the flag is written back to Supabase
+    log._synced = false;
     // Persist the flag by saving logs
     saveLogs();
     
     // Track this challenge as handled (prevents infinite loops on log reload)
     _handledPKChallengeIds.add(log.id);
+    _saveHandledPKChallengeIds();
     
     // Start the battle
     const challengerPet = log.extra.challengerPet;
@@ -2750,9 +2772,12 @@ function declinePKChallenge(challengeLogId) {
   const log = _logs.find(l => l.id === challengeLogId);
   if (log && log.extra) {
     log.extra.status = 'declined';
+    // v34: Mark as unsynced so the status change is written back to Supabase
+    log._synced = false;
     saveLogs();
     // Track this challenge as handled (prevents infinite loops on log reload)
     _handledPKChallengeIds.add(challengeLogId);
+    _saveHandledPKChallengeIds();
   }
   
   // Reset shown challenge tracking
@@ -5815,7 +5840,20 @@ function selectJianghuStudent(studentId) {
 
 function hasJianghuToday(student) {
   const today = new Date().toDateString();
-  return student.lastJianghuDate === today;
+  // Primary check: student field
+  if (student.lastJianghuDate === today) return true;
+  // v34: Fallback — check operation logs in case lastJianghuDate was not synced
+  var logs = getOpLogs();
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const log = logs[i];
+    if (log.reverted) continue;
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (log.studentId && log.studentId.toString() === student.id.toString()) {
+      if (log.actionType === '江湖胜利' || log.actionType === '江湖失败') return true;
+    }
+  }
+  return false;
 }
 
 function startJianghuAdventure() {

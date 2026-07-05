@@ -260,6 +260,13 @@ function _smartRefreshFromSupabase() {
           changesApplied++;
         }
         
+        // v34: lastJianghuDate — sync from server if changed on server and not changed locally
+        var snapJianghu = snapStu ? snapStu.lastJianghuDate : null;
+        if (freshStu.lastJianghuDate !== snapJianghu && localStu.lastJianghuDate === snapJianghu) {
+          localStu.lastJianghuDate = freshStu.lastJianghuDate;
+          changesApplied++;
+        }
+        
         // pkCountToday
         var snapPkToday = snapStu ? (snapStu.pkCountToday || 0) : 0;
         if ((freshStu.pkCountToday || 0) !== snapPkToday && (localStu.pkCountToday || 0) === snapPkToday) {
@@ -715,12 +722,23 @@ function _loadOperationLogs() {
       }
     });
 
-    // Preserve any local unsynced logs
+    // Preserve any local unsynced logs (new logs with negative ID, OR modified logs with positive ID)
     var localUnsynced = window.operationLogs.filter(function(l) {
-      return !l._synced && l.id < 0;
+      return !l._synced;
     });
 
-    window.operationLogs = allLogs.concat(localUnsynced);
+    // v34: Deduplicate — if local unsynced log has same ID as a server log, local wins (it's newer)
+    var serverLogIds = {};
+    allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+    var dedupedServer = allLogs.filter(function(l) {
+      // Remove server log if local has a newer unsynced version
+      for (var i = 0; i < localUnsynced.length; i++) {
+        if (localUnsynced[i].id === l.id) return false;
+      }
+      return true;
+    });
+
+    window.operationLogs = dedupedServer.concat(localUnsynced);
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
@@ -756,10 +774,10 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
-  // Collect unsynced logs (negative ID = local-only)
+  // Collect unsynced logs: new logs (negative ID) OR modified logs (marked _synced=false after being true)
   var unsynced = [];
   for (var i = 0; i < window.operationLogs.length; i++) {
-    if (!window.operationLogs[i]._synced && window.operationLogs[i].id < 0) {
+    if (!window.operationLogs[i]._synced) {
       unsynced.push({ index: i, log: window.operationLogs[i] });
     }
   }
@@ -818,12 +836,15 @@ function _writeUnsyncedLogsToSupabase() {
       }
     });
 
-    // Step 2: Merge — add new logs to existing, mark as synced
+    // Step 2: Merge — add new logs to existing, UPDATE modified logs, mark as synced
     var upsertPromises = classIds.map(function(cid) {
       var existing = existingByClass[cid] || [];
       var newLogs = logsByClass[cid] || [];
 
-      // Assign real IDs (use timestamp-based to avoid collisions)
+      // Build index of existing logs by ID for deduplication
+      var existingById = {};
+      existing.forEach(function(l, idx) { existingById[l.id] = idx; });
+
       newLogs.forEach(function(entry) {
         var l = entry.log;
         var merged = {
@@ -842,7 +863,14 @@ function _writeUnsyncedLogsToSupabase() {
           fullSnapshot: l.fullSnapshot || null,
           reverted: !!l.reverted
         };
-        existing.push(merged);
+
+        // v34: If log with same ID already exists (modified log), REPLACE it instead of duplicating
+        if (existingById[l.id] !== undefined) {
+          existing[existingById[l.id]] = merged;
+        } else {
+          existing.push(merged);
+          existingById[l.id] = existing.length - 1;
+        }
 
         // Mark local log as synced
         if (entry.index >= 0 && entry.index < window.operationLogs.length) {
@@ -1278,6 +1306,10 @@ function _syncStudentToSupabase() {
       }
       if (freshR.data.last_pk_date && !myStudent.lastPkDate) {
         myStudent.lastPkDate = freshR.data.last_pk_date;
+      }
+      // v34: Merge lastJianghuDate from server if local doesn't have it
+      if (freshR.data.last_jianghu_date && !myStudent.lastJianghuDate) {
+        myStudent.lastJianghuDate = freshR.data.last_jianghu_date;
       }
       if (freshR.data.pk_count_today !== undefined) {
         myStudent.pkCountToday = Math.max(myStudent.pkCountToday || 0, freshR.data.pk_count_today || 0);
