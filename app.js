@@ -1196,33 +1196,7 @@ function getStudentShopEffects(student){
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
 function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid'); if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;} const cur=classesData.find(c=>c.id===currentClassId); if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;} 
-  // v13: Sort respects manual drag order (from localStorage) first, then by effects/level
-  let manualOrder = null;
-  try {
-    const orderKey = 'manualPetOrder_' + currentClassId;
-    const stored = localStorage.getItem(orderKey);
-    if (stored) manualOrder = JSON.parse(stored);
-  } catch(e) {}
-  const sortedStudents = [...cur.students].sort((a, b) => {
-    // If manual order exists and both students are in it, use that
-    if (manualOrder) {
-      const aPos = manualOrder.indexOf(a.id);
-      const bPos = manualOrder.indexOf(b.id);
-      if (aPos !== -1 && bPos !== -1) return aPos - bPos;
-      if (aPos !== -1) return -1;
-      if (bPos !== -1) return 1;
-    }
-    // Otherwise, use default sort: effects count, then pet level
-    const aEffects = (a.shopItems || []).length;
-    const bEffects = (b.shopItems || []).length;
-    if (aEffects !== bEffects) return bEffects - aEffects;
-    const aPet = getActivePet(a);
-    const bPet = getActivePet(b);
-    const aLevel = aPet ? (aPet.level || 1) : 0;
-    const bLevel = bPet ? (bPet.level || 1) : 0;
-    return bLevel - aLevel;
-  });
-  let html=''; sortedStudents.forEach(s=>{updatePetDeathStatus(s);const activePet = getActivePet(s); if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=96?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
+  let html=''; cur.students.forEach(s=>{updatePetDeathStatus(s);const activePet = getActivePet(s); if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=96?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
 const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
 let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
 const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
@@ -7323,16 +7297,10 @@ function reorderStudent(fromIdx, toIdx){
   if(fromIdx < 0 || fromIdx >= cur.students.length) return;
   if(toIdx < 0 || toIdx >= cur.students.length) return;
   if(fromIdx === toIdx) return;
-  // v12: Swap positions instead of reorder
+  // 交换两个学生卡片的位置
   const temp = cur.students[fromIdx];
   cur.students[fromIdx] = cur.students[toIdx];
   cur.students[toIdx] = temp;
-  // v13: Save manual order to localStorage to persist after re-render
-  try {
-    const orderKey = 'manualPetOrder_' + currentClassId;
-    const orderedIds = cur.students.map(s => s.id);
-    localStorage.setItem(orderKey, JSON.stringify(orderedIds));
-  } catch(e) {}
   saveClassData();
   renderHomePetGrid();
 }
