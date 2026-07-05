@@ -26,7 +26,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '30.0';
+var _DAL_VERSION = '30.1';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -982,8 +982,7 @@ function _syncTeacherToSupabase() {
         pk_count_today: stu.pkCountToday || 0,
         shop_items: JSON.stringify(stu.shopItems || []),
         equipped_items: JSON.stringify(stu.equippedItems || {}),
-        password: stu.password || '',
-        quiz_state: stu.quizState ? JSON.stringify(stu.quizState) : null
+        password: stu.password || ''
       };
 
       if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
@@ -1084,11 +1083,24 @@ function _syncTeacherToSupabase() {
           pk_count_today: stu.pkCountToday || 0,
           shop_items: JSON.stringify(stu.shopItems || []),
           equipped_items: JSON.stringify(stu.equippedItems || {}),
-          password: stu.password || '',
-          quiz_state: stu.quizState ? JSON.stringify(stu.quizState) : null
+          password: stu.password || ''
         };
         return db.from('students').upsert([payload]).then(function(r) {
-          if (r.error) console.error('[DAL] student upsert error:', r.error);
+          if (r.error) {
+            console.error('[DAL] student upsert error:', r.error);
+            // v30: Fallback — save coins only if upsert fails
+            return db.from('students').update({ coins: stu.coins || 0 }).eq('id', stu.id).then(function(fr) {
+              if (fr.error) console.error('[DAL] teacher coins fallback error:', fr.error.message);
+            });
+          }
+        }).then(function() {
+          // v30: Save quiz_state separately after upsert
+          if (stu.quizState) {
+            var qs = typeof stu.quizState === 'string' ? stu.quizState : JSON.stringify(stu.quizState);
+            return db.from('students').update({ quiz_state: qs }).eq('id', stu.id).then(function(qr) {
+              if (qr.error) console.warn('[DAL] teacher quiz_state save failed:', qr.error.message);
+            });
+          }
         });
       });
       return Promise.all(studentUpsertPromises);
@@ -1252,6 +1264,12 @@ function _syncStudentToSupabase() {
     }
 
     // Step 3: Upsert student with merged data
+    // v30: REMOVED quiz_state from upsert payload.
+    // The quiz_state field was added in v28 and may not exist in the Supabase schema,
+    // or may have a type mismatch (JSONB vs TEXT). If the column doesn't exist or
+    // the type is wrong, the ENTIRE upsert fails silently — coins are never saved.
+    // This is why coins revert on refresh but pet data (upserted separately) persists.
+    // quiz_state is now saved separately via .update() after the upsert succeeds.
     var _studentUpsertOk = false;
     return db.from('students').upsert([{
       id: studentId,
@@ -1262,21 +1280,52 @@ function _syncStudentToSupabase() {
       last_jianghu_date: myStudent.lastJianghuDate || null,
       last_pk_date: myStudent.lastPkDate || null,
       active_pet_id: myStudent.activePetId || null,
-      pk_count_today: myStudent.pkCountToday || 0,
-      quiz_state: myStudent.quizState ? JSON.stringify(myStudent.quizState) : null
+      pk_count_today: myStudent.pkCountToday || 0
     }]).then(function(r) {
       if (r.error) {
         console.error('[DAL] student sync error:', r.error);
+        // v30: FALLBACK — if full upsert fails, try saving JUST coins with .update()
+        // This ensures coins are NEVER lost even if some field causes upsert to fail
+        console.warn('[DAL] Attempting coins-only fallback save...');
+        return db.from('students').update({
+          coins: finalCoins
+        }).eq('id', studentId).then(function(fallbackR) {
+          if (fallbackR.error) {
+            console.error('[DAL] FALLBACK coins save also failed:', fallbackR.error.message);
+            return false;
+          }
+          console.log('[DAL] FALLBACK: coins saved via .update() — ' + finalCoins);
+          _myBaseCoins = finalCoins;
+          _lastOwnWriteTime = Date.now();
+          (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+          return true;
+        });
       } else {
         _studentUpsertOk = true;
       }
       // Update base tracking ONLY after successful sync
       if (_studentUpsertOk) {
         _myBaseCoins = finalCoins;
-        _lastOwnWriteTime = Date.now(); // v30: Set IMMEDIATELY so Realtime echo protection starts now
+        _lastOwnWriteTime = Date.now();
         (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
       }
       return _studentUpsertOk;
+    }).then(function(ok) {
+      // v30: Save quiz_state separately — if it fails, coins are still saved
+      if (ok && myStudent.quizState) {
+        var quizStateJson = typeof myStudent.quizState === 'string'
+          ? myStudent.quizState
+          : JSON.stringify(myStudent.quizState);
+        return db.from('students').update({
+          quiz_state: quizStateJson
+        }).eq('id', studentId).then(function(qr) {
+          if (qr.error) {
+            console.warn('[DAL] quiz_state separate save failed:', qr.error.message);
+          }
+          return ok;
+        });
+      }
+      return ok;
     });
   });
 }
