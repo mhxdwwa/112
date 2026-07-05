@@ -1,5 +1,5 @@
 // 取金阁 - 答题核心逻辑
-// v1
+// v2
 
 (function() {
   'use strict';
@@ -10,7 +10,7 @@
   var COINS_FIRST_TRY = 10;
   var COINS_SECOND_TRY = 5;
   var COINS_THIRD_PLUS = 0;
-  var SEMESTER_START = new Date('2026-02-17'); // 学期开始日期
+  var SEMESTER_START = new Date('2026-02-17');
   var CHAPTER_COUNT = 6;
 
   // === 获取当前周次和章节 ===
@@ -38,7 +38,8 @@
         lastQuizDate: '',
         todayCoins: 0,
         questionsToday: [],
-        totalQuestions: 0
+        totalQuestions: 0,
+        started: false
       };
     }
     return student.quizState;
@@ -52,17 +53,17 @@
       state.todayCoins = 0;
       state.questionsToday = [];
       state.totalQuestions = 0;
+      state.started = false;
     }
   }
 
   // === 获取今日5道题 ===
-  function getTodayQuestions(student) {
+  function initTodayQuestions(student) {
     var chapter = getCurrentChapter();
     if (!chapter) return [];
     var state = getQuizState(student);
     var allQ = chapter.questions;
 
-    // 如果今天还没选题，按学生ID+日期随机选5道
     if (state.questionsToday.length === 0) {
       var today = new Date().toDateString();
       var seed = hashCode(student.id + '_' + today);
@@ -76,6 +77,7 @@
         };
       });
     }
+    state.started = true;
     return state.questionsToday;
   }
 
@@ -84,7 +86,7 @@
     for (var i = 0; i < str.length; i++) {
       var c = str.charCodeAt(i);
       hash = ((hash << 5) - hash) + c;
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash;
     }
     return Math.abs(hash);
   }
@@ -119,7 +121,7 @@
     for (var i = 0; i < state.questionsToday.length; i++) {
       if (!state.questionsToday[i].correct) return i;
     }
-    return -1; // 全部完成
+    return -1;
   }
 
   // === 计算金币 ===
@@ -147,11 +149,8 @@
       var coins = calculateCoins(qState.attempts);
       qState.coins = coins;
       state.todayCoins += coins;
-
-      // 加金币
       student.coins += coins;
 
-      // 记录操作日志
       if (typeof recordAction === 'function') {
         var msg = '取金阁答题：' + question.id + ' 第' + qState.attempts + '次答对 +' + coins + '金币';
         recordAction(student.id, student.name, '取金阁', msg, coins, 0, null);
@@ -167,7 +166,6 @@
         allDone: isAllDone(state)
       };
     } else {
-      // 答错 - 给解析
       if (typeof saveClassData === 'function') saveClassData();
       return {
         correct: false,
@@ -197,8 +195,25 @@
       total: QUESTIONS_PER_DAY,
       todayCoins: state.todayCoins,
       allDone: done >= QUESTIONS_PER_DAY,
-      chapter: getCurrentChapter()
+      chapter: getCurrentChapter(),
+      started: state.started
     };
+  }
+
+  // === 获取学生对象 ===
+  function getCurrentStudent() {
+    var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+    if (!isStudentView) return null;
+    
+    var myStudentId = parseInt(currentUser.studentId);
+    var myClassId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
+    
+    if (!myStudentId || !myClassId) return null;
+    
+    var cur = classesData.find(function(c) { return c.id === myClassId; });
+    if (!cur) return null;
+    
+    return cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
   }
 
   // === 渲染取金阁页面 ===
@@ -206,16 +221,10 @@
     var container = document.getElementById('quizContent');
     if (!container) return;
 
-    if (typeof currentClassId === 'undefined' || !currentClassId) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;">请先在【宠物管理】页面选择一个班级</div>';
-      return;
-    }
-
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
-    var myStudentId = isStudentView ? parseInt(currentUser.studentId) : null;
-
+    
     if (!isStudentView) {
-      // 教师视图 - 显示说明
+      // 教师视图
       container.innerHTML = '<div style="text-align:center;padding:40px;line-height:2;">' +
         '<div style="font-size:48px;margin-bottom:16px;">🏛️</div>' +
         '<div style="font-size:18px;font-weight:700;">取金阁 - 学生答题模块</div>' +
@@ -225,13 +234,7 @@
       return;
     }
 
-    var cur = classesData.find(function(c) { return c.id === currentClassId; });
-    if (!cur) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;">未找到班级数据</div>';
-      return;
-    }
-
-    var student = cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
+    var student = getCurrentStudent();
     if (!student) {
       container.innerHTML = '<div style="text-align:center;padding:40px;">未找到你的学生信息</div>';
       return;
@@ -239,99 +242,195 @@
 
     resetQuizIfNeeded(student);
     var state = getQuizState(student);
-    var summary = getQuizSummary(student);
-    var chapter = summary.chapter;
+    var chapter = getCurrentChapter();
 
+    // 未开始状态 - 显示开始按钮
+    if (!state.started || state.questionsToday.length === 0) {
+      renderQuizStart(container, chapter);
+      return;
+    }
+
+    // 全部完成 - 显示完成画面
+    if (isAllDone(state)) {
+      renderQuizComplete(container, state, student, chapter);
+      return;
+    }
+
+    // 答题中 - 显示当前题目
+    var qIdx = getCurrentQuestionIndex(state);
+    var qState = state.questionsToday[qIdx];
+    var question = findQuestion(qState.questionId);
+
+    if (question) {
+      renderQuizQuestion(container, question, qState, qIdx, state, chapter);
+    }
+  }
+
+  // === 开始界面 ===
+  function renderQuizStart(container, chapter) {
+    var html = '<div style="max-width:500px;margin:0 auto;padding:20px;text-align:center;">';
+    html += '<div style="font-size:64px;margin-bottom:20px;">🏛️</div>';
+    html += '<div style="font-size:24px;font-weight:700;margin-bottom:12px;">取金阁</div>';
+    
+    if (chapter) {
+      html += '<div style="font-size:16px;color:#666;margin-bottom:24px;">本周章节：' + chapter.title + '</div>';
+    }
+    
+    html += '<div style="background:#fff5e6;border-radius:16px;padding:20px;margin-bottom:24px;border:1px solid #ffd080;">';
+    html += '<div style="font-size:14px;color:#b08040;line-height:1.8;">';
+    html += '📅 每日5道数学题<br>';
+    html += '💰 第1次答对 +10金币<br>';
+    html += '💰 第2次答对 +5金币<br>';
+    html += '🎯 每日最高可获得 50 金币<br>';
+    html += '⚔️ 金币可用于宠物PK和萌萌江湖行';
+    html += '</div></div>';
+    
+    html += '<button onclick="startQuiz()" style="background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:25px;padding:14px 40px;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(255,200,0,0.4);transition:all 0.3s;">';
+    html += '🏆 开始取金</button>';
+    html += '</div>';
+    
+    container.innerHTML = html;
+  }
+
+  // === 答题界面 ===
+  function renderQuizQuestion(container, question, qState, qIdx, state, chapter) {
     var html = '<div style="max-width:500px;margin:0 auto;padding:16px;">';
 
     // 标题和进度
-    html += '<div style="text-align:center;margin-bottom:20px;">';
-    html += '<div style="font-size:32px;">🏛️</div>';
-    html += '<div style="font-size:20px;font-weight:700;margin-top:8px;">取金阁</div>';
+    html += '<div style="text-align:center;margin-bottom:16px;">';
+    html += '<div style="font-size:28px;">🏛️</div>';
+    html += '<div style="font-size:18px;font-weight:700;margin-top:4px;">取金阁</div>';
     if (chapter) {
-      html += '<div style="font-size:14px;color:#888;margin-top:4px;">每日答题 · ' + chapter.title + '</div>';
+      html += '<div style="font-size:13px;color:#888;margin-top:2px;">' + chapter.title + '</div>';
     }
     html += '</div>';
 
     // 进度条
-    html += '<div style="background:#fff5e6;border-radius:16px;padding:16px;margin-bottom:20px;border:1px solid #ffd080;">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-    html += '<span style="font-size:14px;font-weight:600;color:#b08040;">📅 今日进度: ' + summary.done + '/' + summary.total + ' 题</span>';
-    html += '<span style="font-size:14px;font-weight:600;color:#d4a017;">💰 今日已获: ' + summary.todayCoins + ' 金币</span>';
-    html += '</div>';
-    var pct = Math.round((summary.done / summary.total) * 100);
-    html += '<div style="height:8px;background:#ffe8c0;border-radius:4px;overflow:hidden;">';
-    html += '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#ffd700,#ffaa00);border-radius:4px;transition:width 0.3s;"></div>';
-    html += '</div>';
-    html += '</div>';
-
-    if (summary.allDone) {
-      // 全部完成
-      html += renderQuizDone(state, student);
-    } else {
-      // 显示当前题目
-      var qIdx = getCurrentQuestionIndex(state);
-      var qState = state.questionsToday[qIdx];
-      var question = findQuestion(qState.questionId);
-
-      if (question) {
-        html += renderQuizQuestion(question, qState, qIdx, student);
-      }
+    var done = 0;
+    for (var i = 0; i < state.questionsToday.length; i++) {
+      if (state.questionsToday[i].correct) done++;
     }
-
+    
+    html += '<div style="background:#fff5e6;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #ffd080;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    html += '<span style="font-size:13px;font-weight:600;color:#b08040;">📅 进度: ' + done + '/' + QUESTIONS_PER_DAY + '</span>';
+    html += '<span style="font-size:13px;font-weight:600;color:#d4a017;">💰 今日: ' + state.todayCoins + ' 金币</span>';
     html += '</div>';
-    container.innerHTML = html;
-  }
+    var pct = Math.round((done / QUESTIONS_PER_DAY) * 100);
+    html += '<div style="height:6px;background:#ffe8c0;border-radius:3px;overflow:hidden;">';
+    html += '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#ffd700,#ffaa00);border-radius:3px;transition:width 0.3s;"></div>';
+    html += '</div></div>';
 
-  function renderQuizQuestion(question, qState, qIdx, student) {
-    var html = '';
+    // 题目卡片
     var attemptText = qState.attempts > 0 ? ' (第' + (qState.attempts + 1) + '次尝试)' : '';
-
+    
     html += '<div style="background:#fff;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,0.08);border:1px solid #f0e8d8;">';
-
-    // 题目编号
-    html += '<div style="font-size:12px;color:#b08040;margin-bottom:12px;">第' + (qIdx + 1) + '题' + attemptText + '</div>';
-
-    // 题目内容
+    html += '<div style="font-size:12px;color:#b08040;margin-bottom:10px;">第' + (qIdx + 1) + '题' + attemptText + '</div>';
     html += '<div style="font-size:16px;font-weight:600;color:#333;line-height:1.6;margin-bottom:16px;">' + escHtml(question.q) + '</div>';
 
     // 选项
     for (var i = 0; i < question.opts.length; i++) {
-      var optLabel = String.fromCharCode(65 + i); // A, B, C, D
+      var optLabel = String.fromCharCode(65 + i);
       html += '<div class="quiz-option" onclick="handleQuizAnswer(' + qIdx + ',' + i + ')" style="padding:12px 16px;margin-bottom:8px;border:2px solid #e8e0d0;border-radius:12px;cursor:pointer;transition:all 0.2s;font-size:15px;display:flex;align-items:center;gap:10px;" onmouseenter="this.style.borderColor=\'#ffd700\';this.style.background=\'#fffde8\'" onmouseleave="this.style.borderColor=\'#e8e0d0\';this.style.background=\'#fff\'">';
       html += '<span style="width:28px;height:28px;border-radius:50%;background:#f0e8d8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#b08040;flex-shrink:0;">' + optLabel + '</span>';
-      html += '<span>' + escHtml(question.opts[i].substring(3)) + '</span>'; // 去掉 A. B. C. D. 前缀
+      html += '<span>' + escHtml(question.opts[i].substring(3)) + '</span>';
       html += '</div>';
     }
 
-    // 提示
     if (qState.attempts > 0) {
-      html += '<div style="font-size:13px;color:#e67e22;margin-top:12px;text-align:center;">💡 答错要继续答对这道题才能进入下一题哦！</div>';
+      html += '<div style="font-size:13px;color:#e67e22;margin-top:10px;text-align:center;">💡 答错要继续答对这道题才能进入下一题哦！</div>';
     }
 
     html += '</div>';
-    return html;
+    html += '</div>';
+    
+    container.innerHTML = html;
   }
 
-  function renderQuizDone(state, student) {
-    var html = '<div style="background:#fff;border-radius:16px;padding:24px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.08);border:1px solid #e0f0e0;">';
-    html += '<div style="font-size:48px;margin-bottom:12px;">✅</div>';
-    html += '<div style="font-size:18px;font-weight:700;color:#27ae60;margin-bottom:16px;">今日答题完成！</div>';
+  // === 答题后结果界面 ===
+  function renderQuizAnswerResult(container, question, qState, qIdx, result, state, chapter) {
+    var html = '<div style="max-width:500px;margin:0 auto;padding:16px;">';
 
-    html += '<div style="background:#f8fff8;border-radius:12px;padding:16px;text-align:left;">';
-    html += '<div style="font-size:14px;font-weight:600;margin-bottom:8px;">金币明细：</div>';
+    // 进度条
+    var done = 0;
+    for (var i = 0; i < state.questionsToday.length; i++) {
+      if (state.questionsToday[i].correct) done++;
+    }
+    
+    html += '<div style="background:#fff5e6;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #ffd080;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    html += '<span style="font-size:13px;font-weight:600;color:#b08040;">📅 进度: ' + done + '/' + QUESTIONS_PER_DAY + '</span>';
+    html += '<span style="font-size:13px;font-weight:600;color:#d4a017;">💰 今日: ' + state.todayCoins + ' 金币</span>';
+    html += '</div>';
+    var pct = Math.round((done / QUESTIONS_PER_DAY) * 100);
+    html += '<div style="height:6px;background:#ffe8c0;border-radius:3px;overflow:hidden;">';
+    html += '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#ffd700,#ffaa00);border-radius:3px;transition:width 0.3s;"></div>';
+    html += '</div></div>';
+
+    // 结果卡片
+    if (result.correct) {
+      html += '<div style="background:#f0fff0;border-radius:16px;padding:20px;text-align:center;border:2px solid #90ee90;margin-bottom:16px;">';
+      html += '<div style="font-size:48px;margin-bottom:10px;">✅</div>';
+      html += '<div style="font-size:20px;font-weight:700;color:#27ae60;margin-bottom:8px;">答对了！</div>';
+      if (result.coins > 0) {
+        html += '<div style="font-size:18px;font-weight:700;color:#d4a017;">+' + result.coins + ' 金币 💰</div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div style="background:#fff5f5;border-radius:16px;padding:20px;text-align:center;border:2px solid #ffb0b0;margin-bottom:16px;">';
+      html += '<div style="font-size:48px;margin-bottom:10px;">❌</div>';
+      html += '<div style="font-size:20px;font-weight:700;color:#e74c3c;margin-bottom:8px;">答错了</div>';
+      html += '<div style="font-size:14px;color:#666;">再试一次吧！</div>';
+      html += '</div>';
+    }
+
+    // 解析
+    if (result.explanation) {
+      html += '<div style="background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid #e0e0e0;">';
+      html += '<div style="font-size:14px;font-weight:600;color:#666;margin-bottom:8px;">📖 解析</div>';
+      html += '<div style="font-size:14px;color:#333;line-height:1.6;">' + escHtml(result.explanation) + '</div>';
+      html += '</div>';
+    }
+
+    // 按钮区域
+    html += '<div style="display:flex;gap:12px;justify-content:center;">';
+    html += '<button onclick="continueQuiz()" style="background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:20px;padding:12px 28px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(255,200,0,0.3);">';
+    html += '✨ 继续取金</button>';
+    html += '<button onclick="stopQuiz()" style="background:#f0f0f0;color:#666;border:none;border-radius:20px;padding:12px 28px;font-size:16px;font-weight:700;cursor:pointer;">';
+    html += '🏠 暂且作罢</button>';
+    html += '</div>';
+    
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  // === 全部完成界面 ===
+  function renderQuizComplete(container, state, student, chapter) {
+    var html = '<div style="max-width:500px;margin:0 auto;padding:20px;text-align:center;">';
+    
+    html += '<div style="font-size:64px;margin-bottom:16px;">🎉</div>';
+    html += '<div style="font-size:22px;font-weight:700;color:#d4a017;margin-bottom:8px;">恭喜你获得今日全部宝藏！</div>';
+    html += '<div style="font-size:14px;color:#888;margin-bottom:20px;">今日答题全部完成</div>';
+
+    html += '<div style="background:#fff5e6;border-radius:16px;padding:20px;margin-bottom:20px;border:1px solid #ffd080;">';
+    html += '<div style="font-size:16px;font-weight:600;color:#b08040;margin-bottom:12px;">📊 今日战绩</div>';
+    
     var totalAttempts = 0;
     for (var i = 0; i < state.questionsToday.length; i++) {
       var qs = state.questionsToday[i];
       totalAttempts += qs.attempts;
-      html += '<div style="font-size:13px;color:#555;padding:2px 0;">第' + (i + 1) + '题: 第' + qs.attempts + '次答对 → +' + qs.coins + ' 金币</div>';
+      html += '<div style="font-size:13px;color:#555;padding:4px 0;text-align:left;">第' + (i + 1) + '题: 第' + qs.attempts + '次答对 → +' + qs.coins + ' 金币</div>';
     }
-    html += '<div style="border-top:1px solid #e0e0e0;margin-top:8px;padding-top:8px;font-size:15px;font-weight:700;color:#d4a017;">今日获得: ' + state.todayCoins + ' 金币</div>';
+    
+    html += '<div style="border-top:1px solid #ffd080;margin-top:12px;padding-top:12px;font-size:18px;font-weight:700;color:#d4a017;">';
+    html += '💰 今日获得: ' + state.todayCoins + ' 金币</div>';
     html += '</div>';
 
-    html += '<div style="font-size:13px;color:#888;margin-top:12px;">明天继续来答题吧！</div>';
+    html += '<button onclick="stopQuiz()" style="background:#f0f0f0;color:#666;border:none;border-radius:20px;padding:12px 28px;font-size:16px;font-weight:700;cursor:pointer;">';
+    html += '🏠 返回宠物界面</button>';
+    
     html += '</div>';
-    return html;
+    container.innerHTML = html;
   }
 
   function escHtml(s) {
@@ -339,21 +438,40 @@
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // === 全局暴露 ===
-  window.renderQuizPage = renderQuizPage;
-  window.getQuizSummary = getQuizSummary;
-  window.getQuizState = getQuizState;
-  window.resetQuizIfNeeded = resetQuizIfNeeded;
+  // === 全局函数 ===
+  
+  // 开始答题
+  window.startQuiz = function() {
+    var student = getCurrentStudent();
+    if (!student) {
+      if (typeof showNotification === 'function') showNotification('错误', '未找到学生信息', 'error');
+      return;
+    }
+    resetQuizIfNeeded(student);
+    initTodayQuestions(student);
+    if (typeof saveClassData === 'function') saveClassData();
+    renderQuizPage();
+  };
 
-  // 答题处理（全局）
+  // 继续答题（进入下一题）
+  window.continueQuiz = function() {
+    renderQuizPage();
+  };
+
+  // 暂且作罢（返回宠物管理）
+  window.stopQuiz = function() {
+    if (typeof switchPage === 'function') {
+      switchPage('class-pet-page');
+    }
+  };
+
+  // 答题处理
   window.handleQuizAnswer = function(qIdx, selectedOption) {
-    var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
-    if (!isStudentView) return;
-    var myStudentId = parseInt(currentUser.studentId);
-    var cur = classesData.find(function(c) { return c.id === currentClassId; });
-    if (!cur) return;
-    var student = cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
-    if (!student) return;
+    var student = getCurrentStudent();
+    if (!student) {
+      if (typeof showNotification === 'function') showNotification('错误', '未找到学生信息', 'error');
+      return;
+    }
 
     var result = submitAnswer(student, qIdx, selectedOption);
 
@@ -362,34 +480,23 @@
       return;
     }
 
-    if (result.correct) {
-      // 正确 - 显示解析，延迟进入下一题
-      if (typeof showNotification === 'function') {
-        showNotification('答对了！', '+' + result.coins + '金币', 'success');
-      }
-      // 短暂显示解析后刷新
-      setTimeout(function() { renderQuizPage(); }, 1200);
-    } else {
-      // 答错 - 显示解析
-      if (typeof showNotification === 'function') {
-        showNotification('答错了', '再试一次！' + (result.explanation ? ' ' + result.explanation : ''), 'warning');
-      }
-      renderQuizPage();
-    }
+    var container = document.getElementById('quizContent');
+    if (!container) return;
+
+    var state = getQuizState(student);
+    var chapter = getCurrentChapter();
+    var qState = state.questionsToday[qIdx];
+    var question = findQuestion(qState.questionId);
+
+    // 显示结果画面
+    renderQuizAnswerResult(container, question, qState, qIdx, result, state, chapter);
   };
 
-  // === 取金阁金币计入PK资格 ===
-  // 在 hasPKQualificationToday 中加入取金阁金币
-  var _origHasPK = typeof hasPKQualificationToday === 'function' ? hasPKQualificationToday : null;
-  window._quizPKBonus = function(studentId) {
-    var cur = classesData.find(function(c) { return c.id === currentClassId; });
-    if (!cur) return 0;
-    var student = cur.students.find(function(s) { return s.id.toString() === studentId.toString(); });
-    if (!student || !student.quizState) return 0;
-    var today = new Date().toDateString();
-    if (student.quizState.lastQuizDate !== today) return 0;
-    return student.quizState.todayCoins || 0;
-  };
+  // === 暴露给外部 ===
+  window.renderQuizPage = renderQuizPage;
+  window.getQuizSummary = getQuizSummary;
+  window.getQuizState = getQuizState;
+  window.resetQuizIfNeeded = resetQuizIfNeeded;
 
-  console.log('[取金阁] v1 loaded');
+  console.log('[取金阁] v2 loaded');
 })();
