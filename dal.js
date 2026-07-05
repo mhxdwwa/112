@@ -1226,18 +1226,10 @@ function _syncStudentToSupabase() {
     }
 
     // Step 3: Upsert student with merged data
-    // v28: Look up teacher_id from class data for RLS compatibility
-    var _teacherId = null;
-    if (classesData) {
-      for (var ci = 0; ci < classesData.length; ci++) {
-        if (classesData[ci].teacher_id) { _teacherId = classesData[ci].teacher_id; break; }
-      }
-    }
     var _studentUpsertOk = false;
     return db.from('students').upsert([{
       id: studentId,
       coins: finalCoins,
-      teacher_id: _teacherId,
       shop_items: JSON.stringify(myStudent.shopItems || []),
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
       last_checkin_date: myStudent.lastCheckinDate || null,
