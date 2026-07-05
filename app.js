@@ -1995,6 +1995,8 @@ function resetDailyPkCountIfNeeded(student) {
   if (student.lastPkDate !== today) {
     student.pkCountToday = 0;
     student.lastPkDate = today;
+    // Clear handled challenge tracking on new day
+    _handledPKChallengeIds.clear();
   }
 }
 
@@ -2148,6 +2150,10 @@ function renderPKPage() {
 
 // PK Challenge system for students
 let _pkChallengeState = { pending: null, _lastShownChallengeId: null };
+
+// Persistent set of handled challenge IDs (survives log reloads from Supabase)
+// This prevents infinite battle loops when logs are re-synced
+let _handledPKChallengeIds = new Set();
 
 // ========== Seeded PRNG for synchronized PK battles ==========
 // Mulberry32: deterministic random from a seed
@@ -2464,6 +2470,9 @@ function _getPendingPKChallengeForMe() {
     if (log.extra.targetId !== myStudentId) continue;
     if (log.extra.status !== 'pending') continue;
     
+    // Check if this challenge was already handled (accepted/declined)
+    if (_handledPKChallengeIds.has(log.id)) continue;
+    
     // Check if challenge is not too old (within 5 minutes)
     const challengeTime = new Date(log.timestamp).getTime();
     if (Date.now() - challengeTime > 5 * 60 * 1000) continue;
@@ -2602,6 +2611,9 @@ function acceptPKChallenge(challengeLogId) {
   log.extra.status = 'accepted';
   saveLogs();
   
+  // Track this challenge as handled (prevents infinite loops on log reload)
+  _handledPKChallengeIds.add(challengeLogId);
+  
   // Create a "PK接受" log entry to notify the challenger
   const myStudentId = parseInt(currentUser.studentId);
   const cur = classesData.find(c => c.id === currentClassId);
@@ -2685,6 +2697,9 @@ function _checkAcceptedPKChallenge() {
     if (!log.extra || !log.extra.pkAccept) continue;
     if (log.extra.challengerId !== myStudentId) continue;
     
+    // Check if this challenge was already handled (battle started)
+    if (_handledPKChallengeIds.has(log.id)) continue;
+    
     // Check if challenge is recent (within 10 minutes)
     const acceptTime = new Date(log.timestamp).getTime();
     if (Date.now() - acceptTime > 10 * 60 * 1000) continue;
@@ -2696,6 +2711,9 @@ function _checkAcceptedPKChallenge() {
     log.extra._battleStarted = true;
     // Persist the flag by saving logs
     saveLogs();
+    
+    // Track this challenge as handled (prevents infinite loops on log reload)
+    _handledPKChallengeIds.add(log.id);
     
     // Start the battle
     const challengerPet = log.extra.challengerPet;
@@ -2733,6 +2751,8 @@ function declinePKChallenge(challengeLogId) {
   if (log && log.extra) {
     log.extra.status = 'declined';
     saveLogs();
+    // Track this challenge as handled (prevents infinite loops on log reload)
+    _handledPKChallengeIds.add(challengeLogId);
   }
   
   // Reset shown challenge tracking
@@ -2785,7 +2805,7 @@ function selectPKPlayer(studentId) {
 }
 
 function resetPKSelection() {
-  pkState = { players: [], isFighting: false };
+  pkState = { players: [], isFighting: false, _battleCompleted: false };
   renderPKPage();
 }
 
@@ -3949,6 +3969,10 @@ function startPKBattle() {
   if(pkState.isFighting) {
     return; // silently return - already fighting, no notification needed
   }
+  // Prevent re-starting the same battle (infinite loop protection)
+  if (pkState._battleCompleted) {
+    return;
+  }
   const cur = classesData.find(c=>c.id===currentClassId);
   const student1 = cur.students.find(s=>s.id.toString()===pkState.players[0].studentId.toString());
   const student2 = cur.students.find(s=>s.id.toString()===pkState.players[1].studentId.toString());
@@ -3983,6 +4007,7 @@ function startPKBattle() {
     return;
   }
   pkState.isFighting = true;
+  pkState._battleCompleted = false; // Reset for this battle
   const p1 = pkState.players[0];
   const p2 = pkState.players[1];
   
@@ -4410,6 +4435,7 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     if(exitBtn) exitBtn.disabled = false;
   }
   pkState.isFighting = false;
+  pkState._battleCompleted = true; // Mark this battle as completed to prevent re-start
   // Clean up seeded RNG
   _pkBattleRng = null;
   _pkBattleLeftMonsterIdx = -1;
