@@ -358,6 +358,12 @@ function _smartRefreshFromSupabase() {
     if (isStudent && changesApplied > 0) {
       console.log('[DAL] Student saw ' + changesApplied + ' updates from teacher/other students');
     }
+    
+    // Update PK invite badge after refresh
+    if (typeof _updatePKInviteBadge === 'function') {
+      setTimeout(_updatePKInviteBadge, 100);
+    }
+    
     return Promise.resolve();
   });
 }
@@ -1898,6 +1904,11 @@ function initDAL() {
     if (typeof init === 'function') init();
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    
+    // Update PK invite badge for students
+    if (typeof _updatePKInviteBadge === 'function') {
+      setTimeout(_updatePKInviteBadge, 500);
+    }
 
     // Wrap save functions to auto-sync
     wrapSaveFunctions();
@@ -1923,6 +1934,11 @@ function initDAL() {
     // Hide loading overlay
     if (typeof window._hideDalLoading === 'function') window._hideDalLoading();
     console.log('[DAL] Ready ✓');
+    
+    // Periodic PK badge check for students (every 10 seconds)
+    if (currentUser.type === 'student' && typeof _updatePKInviteBadge === 'function') {
+      setInterval(_updatePKInviteBadge, 10000);
+    }
     
     // v18: For teachers, auto-check if operation_logs RLS allows student reads
     if (currentUser.type === 'teacher') {

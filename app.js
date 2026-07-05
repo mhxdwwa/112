@@ -2359,6 +2359,52 @@ function _checkPendingPKChallenge() {
   return false;
 }
 
+// Check for pending PK challenges and update the badge on the PK tab
+function _updatePKInviteBadge() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  const pkNavItem = document.getElementById('pk-nav-item');
+  if (!pkNavItem) return;
+  
+  if (!isStudentView) {
+    // Remove badge for teacher view
+    const existingBadge = pkNavItem.querySelector('.pk-invite-badge');
+    if (existingBadge) existingBadge.remove();
+    return;
+  }
+  
+  const challenge = _getPendingPKChallengeForMe();
+  const existingBadge = pkNavItem.querySelector('.pk-invite-badge');
+  
+  if (challenge) {
+    // Show badge if not already shown
+    if (!existingBadge) {
+      const badge = document.createElement('div');
+      badge.className = 'pk-invite-badge';
+      badge.innerHTML = '!';
+      pkNavItem.appendChild(badge);
+    }
+  } else {
+    // Remove badge if shown
+    if (existingBadge) existingBadge.remove();
+  }
+}
+
+// Handle PK tab click - show pending challenge if exists
+function handlePKTabClick() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  
+  if (isStudentView) {
+    const challenge = _getPendingPKChallengeForMe();
+    if (challenge) {
+      _showPKChallengeDialog(challenge);
+      return;
+    }
+  }
+  
+  // No pending challenge, switch to PK page normally
+  switchPage('pk-page');
+}
+
 function _showPKChallengeDialog(challenge) {
   const cur = classesData.find(c => c.id === currentClassId);
   if (!cur) return;
