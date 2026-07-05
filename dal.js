@@ -41,6 +41,16 @@ var _snapshotClassesData = null;
 var _myBaseCoins = null; // Student's coins at last known Supabase state
 var _myBasePets = {};    // Student's pet growth at last known Supabase state
 
+/* ===== v36: Growth cap enforcement ===== */
+// Max growth for any pet is 2600 (万物之神 stage requirement)
+var _PET_MAX_GROWTH = 2600;
+function _capPetGrowth(pet) {
+  if (pet && typeof pet.growth === 'number' && pet.growth > _PET_MAX_GROWTH) {
+    pet.growth = _PET_MAX_GROWTH;
+  }
+  return pet;
+}
+
 /* ===== Debounce & Self-Write Protection (v7.0) ===== */
 var _refreshDebounceTimer = null;
 var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
@@ -190,6 +200,7 @@ function _smartRefreshFromSupabase() {
         todayPlayCount: p.today_play_count || 0,
         penaltyStreak: p.penalty_streak || 0
       };
+      _capPetGrowth(pet);
       freshPetMap[p.id] = pet;
       if (!freshPetByStudent[p.student_id]) freshPetByStudent[p.student_id] = [];
       freshPetByStudent[p.student_id].push(pet);
@@ -403,7 +414,7 @@ function _buildTeacherClasses(classes, students, pets) {
     studentMap[s.id] = {
       id: s.id,
       name: s.name || '',
-      coins: s.coins || 50,
+      coins: (s.coins != null ? s.coins : 50),
       pets: [],
       lastCheckinDate: s.last_checkin_date || null,
       lastJianghuDate: s.last_jianghu_date || null,
@@ -421,7 +432,7 @@ function _buildTeacherClasses(classes, students, pets) {
   pets.forEach(function(p) {
     var sid = p.student_id;
     if (!petByStudent[sid]) petByStudent[sid] = [];
-    petByStudent[sid].push({
+    var _pet = {
       id: p.id,
       name: p.name || '',
       nickname: p.nickname || '',
@@ -435,7 +446,9 @@ function _buildTeacherClasses(classes, students, pets) {
       todayFeedCount: p.today_feed_count || 0,
       todayPlayCount: p.today_play_count || 0,
       penaltyStreak: p.penalty_streak || 0
-    });
+    };
+    _capPetGrowth(_pet);
+    petByStudent[sid].push(_pet);
   });
 
   var classMap = {};
@@ -547,7 +560,7 @@ function _loadStudentFromSupabase() {
       studentMap[s.id] = {
         id: s.id,
         name: s.name || '',
-        coins: s.coins || 50,
+        coins: (s.coins != null ? s.coins : 50),
         pets: [],
         lastCheckinDate: s.last_checkin_date || null,
         lastJianghuDate: s.last_jianghu_date || null,
@@ -564,7 +577,7 @@ function _loadStudentFromSupabase() {
     classPets.forEach(function(p) {
       var sid = p.student_id;
       if (studentMap[sid]) {
-        studentMap[sid].pets.push({
+        var _pet3 = {
           id: p.id,
           name: p.name || '',
           nickname: p.nickname || '',
@@ -578,7 +591,9 @@ function _loadStudentFromSupabase() {
           todayFeedCount: p.today_feed_count || 0,
           todayPlayCount: p.today_play_count || 0,
           penaltyStreak: p.penalty_streak || 0
-        });
+        };
+        _capPetGrowth(_pet3);
+        studentMap[sid].pets.push(_pet3);
       }
     });
 
