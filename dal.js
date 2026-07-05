@@ -1,5 +1,5 @@
 /**
- * dal.js v10.0 — Robust Data Access Layer with Smart Merge
+ * dal.js v30.0 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -26,7 +26,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '28.0';
+var _DAL_VERSION = '30.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -94,10 +94,12 @@ function _findPetInSnapshot(petId) {
 function _smartRefreshFromSupabase() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   
-  // v14: Short protection to skip immediate echo of our own writes (2s)
-  if (Date.now() - _lastOwnWriteTime < 2000) {
+  // v30: Use full _OWN_WRITE_IGNORE_MS protection (was 2s, too short for mobile).
+  // On mobile, Realtime echo of our own write can arrive 3-5s after the upsert.
+  // The old 2s protection expired before the echo arrived, causing stale data overwrite.
+  if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
     console.log('[DAL] Smart refresh skipped — own write echo (' + 
-      Math.round((2000 - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
+      Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
     return Promise.resolve();
   }
 
@@ -205,16 +207,28 @@ function _smartRefreshFromSupabase() {
         // For each field, check: has it changed on server? Has it changed locally?
         // coins: special handling for student's own coins
         if (isStudent && localStu.id == studentId) {
-          // For current student, use delta merge (see _syncStudentToSupabase)
-          // Here we just update _myBaseCoins if server has a different value that we didn't cause
-          var snapCoins = snapStu ? snapStu.coins : null;
-          if (snapCoins !== null && freshStu.coins !== snapCoins && localStu.coins === snapCoins) {
-            // Server changed (e.g., teacher reward), local hasn't changed → apply
-            localStu.coins = freshStu.coins;
-            _myBaseCoins = freshStu.coins; // Update base for future delta calculation
-            changesApplied++;
+          // v30: Use _myBaseCoins (only updated after confirmed server write) instead of
+          // snapshot (which is taken right after local write, before server confirms).
+          // The old snapshot comparison was broken: after sync, snapshot=local=95,
+          // but if Realtime reads stale Supabase data (100), the condition
+          // freshStu(100) !== snap(95) && local(95) === snap(95) was TRUE,
+          // causing the stale server value to overwrite the student's spent coins.
+          if (_myBaseCoins !== null) {
+            if (freshStu.coins !== _myBaseCoins && localStu.coins === _myBaseCoins) {
+              // Server changed (e.g., teacher reward) and local matches base → apply
+              localStu.coins = freshStu.coins;
+              _myBaseCoins = freshStu.coins;
+              changesApplied++;
+            }
+            // If local changed (student spent coins), localStu.coins !== _myBaseCoins → keep local
+          } else if (snapStu) {
+            // Fallback: _myBaseCoins not yet set (first load), use snapshot
+            var snapCoins = snapStu.coins;
+            if (freshStu.coins !== snapCoins && localStu.coins === snapCoins) {
+              localStu.coins = freshStu.coins;
+              changesApplied++;
+            }
           }
-          // If local changed (student spent coins), keep local — delta will be applied at sync time
         } else {
           // For other students (teacher viewing, or student viewing classmates)
           var snapCoins = snapStu ? snapStu.coins : null;
@@ -278,17 +292,29 @@ function _smartRefreshFromSupabase() {
             // Existing pet — merge
             var snapPet = _findPetInSnapshot(freshPet.id);
             
-            // growth: for student's own active pet, use delta; for others, use snapshot comparison
-            var snapGrowth = snapPet ? (snapPet.growth || 0) : null;
-            if (snapGrowth !== null) {
-              if (freshPet.growth !== snapGrowth && localPet.growth === snapGrowth) {
+            // growth: v30 — for current student's own pets, use _myBasePets (confirmed server value)
+            // instead of snapshot (which may reflect local-unconfirmed writes)
+            if (isStudent && localStu.id == studentId && _myBasePets[freshPet.id] !== undefined) {
+              var baseGrowth = _myBasePets[freshPet.id];
+              if (freshPet.growth !== baseGrowth && localPet.growth === baseGrowth) {
+                // Server changed and local matches base → apply
                 localPet.growth = freshPet.growth;
-                if (isStudent && localStu.id == studentId) _myBasePets[freshPet.id] = freshPet.growth;
+                _myBasePets[freshPet.id] = freshPet.growth;
                 changesApplied++;
               }
-            } else if (freshPet.growth !== localPet.growth) {
-              localPet.growth = freshPet.growth;
-              changesApplied++;
+              // If local changed (student interaction), keep local
+            } else {
+              // For other students' pets or when _myBasePets not set, use snapshot
+              var snapGrowth = snapPet ? (snapPet.growth || 0) : null;
+              if (snapGrowth !== null) {
+                if (freshPet.growth !== snapGrowth && localPet.growth === snapGrowth) {
+                  localPet.growth = freshPet.growth;
+                  changesApplied++;
+                }
+              } else if (freshPet.growth !== localPet.growth) {
+                localPet.growth = freshPet.growth;
+                changesApplied++;
+              }
             }
             
             // isDead
@@ -1247,6 +1273,7 @@ function _syncStudentToSupabase() {
       // Update base tracking ONLY after successful sync
       if (_studentUpsertOk) {
         _myBaseCoins = finalCoins;
+        _lastOwnWriteTime = Date.now(); // v30: Set IMMEDIATELY so Realtime echo protection starts now
         (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
       }
       return _studentUpsertOk;

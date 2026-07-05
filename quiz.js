@@ -33,23 +33,30 @@
 
   // === 直接保存金币+答题状态到 Supabase（核心修复）===
   // 之前只保存 quiz_state 不保存 coins，导致刷新后金币丢失
+  // v30: Only update _myBaseCoins AFTER confirmed write, and set _lastOwnWriteTime
+  // to prevent Realtime echo from overwriting with stale data
   function saveCoinsAndQuizState(student) {
     if (typeof db === 'undefined' || !db || !student || !student.id) return;
     var quizStateJson = student.quizState ? JSON.stringify(student.quizState) : null;
+    var coinsToSave = student.coins;
     db.from('students').update({
-      coins: student.coins,
+      coins: coinsToSave,
       quiz_state: quizStateJson
     }).eq('id', student.id).then(function(r) {
       if (r.error) {
         console.error('[取金阁] 金币/状态保存失败:', r.error.message);
       } else {
-        console.log('[取金阁] 金币(' + student.coins + ')+状态 已直接保存');
+        console.log('[取金阁] 金币(' + coinsToSave + ')+状态 已直接保存');
+        // v30: Only update _myBaseCoins after CONFIRMED write
+        if (typeof _myBaseCoins !== 'undefined') {
+          window._myBaseCoins = coinsToSave;
+        }
+        // v30: Set _lastOwnWriteTime to protect against Realtime echo
+        if (typeof _lastOwnWriteTime !== 'undefined') {
+          window._lastOwnWriteTime = Date.now();
+        }
       }
     });
-    // 更新 _myBaseCoins，防止 DAL 同步重复计算增量
-    if (typeof _myBaseCoins !== 'undefined') {
-      window._myBaseCoins = student.coins;
-    }
   }
 
   // === 直接保存操作日志到 Supabase ===
