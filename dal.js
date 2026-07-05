@@ -1323,6 +1323,20 @@ function _syncStudentToSupabase() {
     // the type is wrong, the ENTIRE upsert fails silently — coins are never saved.
     // This is why coins revert on refresh but pet data (upserted separately) persists.
     // quiz_state is now saved separately via .update() after the upsert succeeds.
+    // v35: Use fresh server values for pk_count_today and last_pk_date to prevent
+    // overwriting opponent's battle count with stale local data after PK battles.
+    var finalLastPkDate = myStudent.lastPkDate || null;
+    var finalPkCountToday = myStudent.pkCountToday || 0;
+    if (freshR && !freshR.error && freshR.data) {
+      // Use the max of local and server values — the server may have a newer count
+      // from the opponent's device syncing after a PK battle
+      if (freshR.data.last_pk_date) {
+        finalLastPkDate = freshR.data.last_pk_date;
+      }
+      if (freshR.data.pk_count_today !== undefined) {
+        finalPkCountToday = Math.max(myStudent.pkCountToday || 0, freshR.data.pk_count_today || 0);
+      }
+    }
     var _studentUpsertOk = false;
     return db.from('students').upsert([{
       id: studentId,
@@ -1331,9 +1345,9 @@ function _syncStudentToSupabase() {
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
       last_checkin_date: myStudent.lastCheckinDate || null,
       last_jianghu_date: myStudent.lastJianghuDate || null,
-      last_pk_date: myStudent.lastPkDate || null,
+      last_pk_date: finalLastPkDate,
       active_pet_id: myStudent.activePetId || null,
-      pk_count_today: myStudent.pkCountToday || 0
+      pk_count_today: finalPkCountToday
     }]).then(function(r) {
       if (r.error) {
         console.error('[DAL] student sync error:', r.error);
@@ -1361,6 +1375,10 @@ function _syncStudentToSupabase() {
         _myBaseCoins = finalCoins;
         _lastOwnWriteTime = Date.now();
         (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+        // v35: Update local pkCountToday/lastPkDate to match what was written
+        // This ensures local data is consistent with server after merge
+        myStudent.pkCountToday = finalPkCountToday;
+        myStudent.lastPkDate = finalLastPkDate;
       }
       return _studentUpsertOk;
     }).then(function(ok) {

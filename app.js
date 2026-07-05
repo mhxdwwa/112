@@ -2152,6 +2152,35 @@ function renderPKPage() {
 // PK Challenge system for students
 let _pkChallengeState = { pending: null, _lastShownChallengeId: null };
 
+// v35: Fast poll timer for PK challenge acceptance (reduces delay from 30s to 2s)
+let _pkChallengePollTimer = null;
+
+function _startPKChallengePolling() {
+  _stopPKChallengePolling();
+  var pollStart = Date.now();
+  _pkChallengePollTimer = setInterval(function() {
+    // Stop after 5 minutes (timeout)
+    if (Date.now() - pollStart > 5 * 60 * 1000 || pkState.isFighting) {
+      _stopPKChallengePolling();
+      return;
+    }
+    // Reload logs from Supabase and check for acceptance
+    if (typeof _loadOperationLogs === 'function') {
+      _loadOperationLogs().then(function() {
+        if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+        _checkAcceptedPKChallenge();
+      }).catch(function() {});
+    }
+  }, 2000);
+}
+
+function _stopPKChallengePolling() {
+  if (_pkChallengePollTimer) {
+    clearInterval(_pkChallengePollTimer);
+    _pkChallengePollTimer = null;
+  }
+}
+
 // Persistent set of handled challenge IDs (survives log reloads from Supabase)
 // This prevents infinite battle loops when logs are re-synced
 let _handledPKChallengeIds = new Set();
@@ -2333,6 +2362,9 @@ function sendPKChallenge() {
     targetId: target.studentId,
     timestamp: Date.now()
   };
+  
+  // v35: Start fast polling to detect acceptance quickly (replaces 30s wait)
+  _startPKChallengePolling();
   
   // Reset selection
   pkState.players = [];
@@ -2752,6 +2784,8 @@ function _checkAcceptedPKChallenge() {
     
     // Show notification and start battle
     showNotification('挑战被接受！', `${log.extra.targetName} 接受了你的挑战！`, 'success');
+    // v35: Stop fast polling since we found the acceptance
+    _stopPKChallengePolling();
     switchPage('pk-page');
     setTimeout(() => {
       startPKBattle();
