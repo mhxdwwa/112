@@ -1,5 +1,5 @@
 // 取金阁 - 答题核心逻辑
-// v3 - quizState synced via Supabase for cross-device consistency
+// v4 - Fixed: direct Supabase save, correct classId for students, state persistence
 
 (function() {
   'use strict';
@@ -31,9 +31,22 @@
     return QUIZ_BANK.getChapterByIndex(getCurrentChapterIndex());
   }
 
+  // === 直接保存 quizState 到 Supabase（不依赖 DAL 异步同步）===
+  function saveQuizStateToSupabase(student) {
+    if (typeof db === 'undefined' || !db || !student || !student.id) return;
+    var quizStateJson = student.quizState ? JSON.stringify(student.quizState) : null;
+    db.from('students').update({ quiz_state: quizStateJson }).eq('id', student.id).then(function(r) {
+      if (r.error) {
+        console.error('[取金阁] quiz_state 保存失败:', r.error.message);
+      } else {
+        console.log('[取金阁] quiz_state 已直接保存到 Supabase');
+      }
+    });
+  }
+
   // === 学生答题状态管理 ===
   function getQuizState(student) {
-    if (!student.quizState) {
+    if (!student.quizState || typeof student.quizState !== 'object') {
       student.quizState = {
         lastQuizDate: '',
         todayCoins: 0,
@@ -131,6 +144,22 @@
     return COINS_THIRD_PLUS;
   }
 
+  // === 获取学生所在的 classId（修复：学生端 currentClassId 可能为 null）===
+  function getStudentClassId() {
+    // 优先从 localStorage 获取
+    var classId = parseInt(localStorage.getItem('classId'));
+    if (classId) return classId;
+    // 其次从 currentUser 获取
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.classId) {
+      return parseInt(currentUser.classId);
+    }
+    // 最后从 classesData 获取（学生只有一个班级）
+    if (typeof classesData !== 'undefined' && classesData && classesData.length > 0) {
+      return classesData[0].id;
+    }
+    return null;
+  }
+
   // === 提交答案 ===
   function submitAnswer(student, questionIdx, selectedOption) {
     resetQuizIfNeeded(student);
@@ -151,12 +180,24 @@
       state.todayCoins += coins;
       student.coins += coins;
 
+      // 记录操作（使用正确的 classId）
       if (typeof recordAction === 'function') {
+        var savedClassId = getStudentClassId();
         var msg = '取金阁答题：' + question.id + ' 第' + qState.attempts + '次答对 +' + coins + '金币';
+        // 临时设置 currentClassId 以确保 recordAction 正确记录
+        var origClassId = (typeof currentClassId !== 'undefined') ? currentClassId : null;
+        if (savedClassId && typeof currentClassId !== 'undefined') {
+          currentClassId = savedClassId;
+        }
         recordAction(student.id, student.name, '取金阁', msg, coins, 0, null);
+        if (typeof currentClassId !== 'undefined' && origClassId !== null) {
+          currentClassId = origClassId;
+        }
       }
 
+      // 保存数据（DAL 异步同步 + 直接 Supabase 保存双保险）
       if (typeof saveClassData === 'function') saveClassData();
+      saveQuizStateToSupabase(student);
 
       return {
         correct: true,
@@ -166,7 +207,9 @@
         allDone: isAllDone(state)
       };
     } else {
+      // 答错也要保存状态
       if (typeof saveClassData === 'function') saveClassData();
+      saveQuizStateToSupabase(student);
       return {
         correct: false,
         explanation: question.exp,
@@ -449,7 +492,9 @@
     }
     resetQuizIfNeeded(student);
     initTodayQuestions(student);
+    // 立即保存（双保险：DAL + 直接 Supabase）
     if (typeof saveClassData === 'function') saveClassData();
+    saveQuizStateToSupabase(student);
     renderQuizPage();
   };
 
@@ -498,5 +543,5 @@
   window.getQuizState = getQuizState;
   window.resetQuizIfNeeded = resetQuizIfNeeded;
 
-  console.log('[取金阁] v3 loaded (cross-device sync)');
+  console.log('[取金阁] v4 loaded (direct Supabase save + fixed classId)');
 })();

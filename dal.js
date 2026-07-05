@@ -26,7 +26,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '25.0';
+var _DAL_VERSION = '26.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -955,7 +955,7 @@ function _syncTeacherToSupabase() {
         shop_items: JSON.stringify(stu.shopItems || []),
         equipped_items: JSON.stringify(stu.equippedItems || {}),
         password: stu.password || '',
-        quiz_state: stu.quizState || null
+        quiz_state: stu.quizState ? JSON.stringify(stu.quizState) : null
       };
 
       if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
@@ -1057,7 +1057,7 @@ function _syncTeacherToSupabase() {
           shop_items: JSON.stringify(stu.shopItems || []),
           equipped_items: JSON.stringify(stu.equippedItems || {}),
           password: stu.password || '',
-          quiz_state: stu.quizState || null
+          quiz_state: stu.quizState ? JSON.stringify(stu.quizState) : null
         };
         return db.from('students').upsert([payload]).then(function(r) {
           if (r.error) console.error('[DAL] student upsert error:', r.error);
@@ -1237,7 +1237,7 @@ function _syncStudentToSupabase() {
       last_pk_date: myStudent.lastPkDate || null,
       active_pet_id: myStudent.activePetId || null,
       pk_count_today: myStudent.pkCountToday || 0,
-      quiz_state: myStudent.quizState || null
+      quiz_state: myStudent.quizState ? JSON.stringify(myStudent.quizState) : null
     }]).then(function(r) {
       if (r.error) console.error('[DAL] student sync error:', r.error);
       // Update base tracking after successful sync
