@@ -296,6 +296,24 @@ function _smartRefreshFromSupabase() {
           }
         }
 
+        // v38: shopItems - sync from server if changed on server and not changed locally
+        var snapShopItems = snapStu ? JSON.stringify(snapStu.shopItems || []) : null;
+        var freshShopItemsStr = JSON.stringify(freshStu.shopItems || []);
+        var localShopItemsStr = JSON.stringify(localStu.shopItems || []);
+        if (freshShopItemsStr !== snapShopItems && localShopItemsStr === snapShopItems) {
+          localStu.shopItems = freshStu.shopItems || [];
+          changesApplied++;
+        }
+
+        // v38: equippedItems - sync from server if changed on server and not changed locally
+        var snapEquippedItems = snapStu ? JSON.stringify(snapStu.equippedItems || {}) : null;
+        var freshEquippedItemsStr = JSON.stringify(freshStu.equippedItems || {});
+        var localEquippedItemsStr = JSON.stringify(localStu.equippedItems || {});
+        if (freshEquippedItemsStr !== snapEquippedItems && localEquippedItemsStr === snapEquippedItems) {
+          localStu.equippedItems = freshStu.equippedItems || {};
+          changesApplied++;
+        }
+
         // Merge pets for this student
         var freshPetsForStudent = freshPetByStudent[localStu.id] || [];
         if (!localStu.pets) localStu.pets = [];
