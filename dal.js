@@ -1404,8 +1404,12 @@ function _syncStudentToSupabase() {
       }
     }
     var _studentUpsertOk = false;
-    return db.from('students').upsert([{
-      id: studentId,
+    // v43: Use .update() instead of .upsert().
+    // .upsert() failed because the payload didn't include class_id (NOT NULL column),
+    // causing the ENTIRE upsert to fail. The fallback only saved coins, losing shop_items.
+    // .update() only touches specified fields — no NOT NULL constraint issues.
+    // The student record ALWAYS exists (created by teacher), so .update() is safe.
+    return db.from('students').update({
       coins: finalCoins,
       shop_items: JSON.stringify(myStudent.shopItems || []),
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
@@ -1414,11 +1418,10 @@ function _syncStudentToSupabase() {
       last_pk_date: finalLastPkDate,
       active_pet_id: myStudent.activePetId || null,
       pk_count_today: finalPkCountToday
-    }]).then(function(r) {
+    }).eq('id', studentId).then(function(r) {
       if (r.error) {
-        console.error('[DAL] student sync error:', r.error);
-        // v30: FALLBACK — if full upsert fails, try saving JUST coins with .update()
-        // This ensures coins are NEVER lost even if some field causes upsert to fail
+        console.error('[DAL] student update error:', r.error.message);
+        // FALLBACK — try saving JUST coins
         console.warn('[DAL] Attempting coins-only fallback save...');
         return db.from('students').update({
           coins: finalCoins
@@ -1435,14 +1438,9 @@ function _syncStudentToSupabase() {
         });
       } else {
         _studentUpsertOk = true;
-      }
-      // Update base tracking ONLY after successful sync
-      if (_studentUpsertOk) {
         _myBaseCoins = finalCoins;
         _lastOwnWriteTime = Date.now();
         (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
-        // v35: Update local pkCountToday/lastPkDate to match what was written
-        // This ensures local data is consistent with server after merge
         myStudent.pkCountToday = finalPkCountToday;
         myStudent.lastPkDate = finalLastPkDate;
       }
