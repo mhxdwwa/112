@@ -1432,21 +1432,38 @@ function _syncStudentToSupabase() {
       }
       return _studentUpsertOk;
     }).then(function(ok) {
-      // v30: Save quiz_state separately — if it fails, coins are still saved
-      if (ok && myStudent.quizState) {
-        var quizStateJson = typeof myStudent.quizState === 'string'
-          ? myStudent.quizState
-          : JSON.stringify(myStudent.quizState);
-        return db.from('students').update({
-          quiz_state: quizStateJson
-        }).eq('id', studentId).then(function(qr) {
-          if (qr.error) {
-            console.warn('[DAL] quiz_state separate save failed:', qr.error.message);
-          }
-          return ok;
-        });
-      }
-      return ok;
+      // v40: ALWAYS save shop_items and equipped_items separately via .update()
+      // This ensures purchases are NEVER lost even if the main upsert fails
+      // or if there's a race condition with teacher sync
+      var shopItemsJson = JSON.stringify(myStudent.shopItems || []);
+      var equippedItemsJson = JSON.stringify(myStudent.equippedItems || {});
+      
+      return db.from('students').update({
+        shop_items: shopItemsJson,
+        equipped_items: equippedItemsJson
+      }).eq('id', studentId).then(function(shopR) {
+        if (shopR.error) {
+          console.error('[DAL] shop_items/equipped_items separate save failed:', shopR.error.message);
+        } else {
+          console.log('[DAL] shop_items saved separately:', shopItemsJson);
+        }
+        
+        // v30: Save quiz_state separately — if it fails, coins are still saved
+        if (ok && myStudent.quizState) {
+          var quizStateJson = typeof myStudent.quizState === 'string'
+            ? myStudent.quizState
+            : JSON.stringify(myStudent.quizState);
+          return db.from('students').update({
+            quiz_state: quizStateJson
+          }).eq('id', studentId).then(function(qr) {
+            if (qr.error) {
+              console.warn('[DAL] quiz_state separate save failed:', qr.error.message);
+            }
+            return ok;
+          });
+        }
+        return ok;
+      });
     });
   });
 }
