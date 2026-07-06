@@ -1,5 +1,5 @@
 /**
- * dal.js v31.0 — Robust Data Access Layer with Smart Merge
+ * dal.js v44.0 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -26,7 +26,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '30.1';
+var _DAL_VERSION = '44.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -1219,6 +1219,64 @@ function _syncTeacherToSupabase() {
           });
         });
         return Promise.all(studentUpsertPromises);
+    }).then(function() {
+        // === Phase 3b (v44): Save shop_items and equipped_items for ALL students ===
+        // v43 removed these from the teacher update payload to prevent race conditions
+        // with student purchases. But this also prevented TEACHER-INITIATED purchases
+        // from being saved. Fix: fetch current DB values first, then merge (union) with
+        // local values. This preserves BOTH teacher-initiated AND student-initiated purchases.
+        var teacherClassIds = classesData.map(function(c) { return c.id; });
+        if (teacherClassIds.length === 0) return;
+        return db.from('students').select('id, shop_items, equipped_items').in('class_id', teacherClassIds).then(function(fetchR) {
+          if (fetchR.error) {
+            console.warn('[DAL] v44: failed to fetch student shop_items for merge:', fetchR.error.message);
+            return;
+          }
+          var dbShopMap = {};
+          (fetchR.data || []).forEach(function(s) {
+            dbShopMap[s.id] = {
+              shop_items: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
+              equipped_items: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })()
+            };
+          });
+          var shopSavePromises = [];
+          classesData.forEach(function(cls) {
+            cls.students.forEach(function(stu) {
+              if (!stu.id || stu.id <= 0) return;
+              var dbItems = dbShopMap[stu.id] || { shop_items: [], equipped_items: {} };
+              var localItems = stu.shopItems || [];
+              var localEquipped = stu.equippedItems || {};
+              // Merge: union of DB items and local items (preserves both teacher and student purchases)
+              var mergedItems = dbItems.shop_items.slice();
+              localItems.forEach(function(itemId) {
+                if (mergedItems.indexOf(itemId) === -1) mergedItems.push(itemId);
+              });
+              // Merge equipped: DB values + local values (local takes precedence for same category)
+              var mergedEquipped = {};
+              Object.keys(dbItems.equipped_items).forEach(function(k) { mergedEquipped[k] = dbItems.equipped_items[k]; });
+              Object.keys(localEquipped).forEach(function(k) { mergedEquipped[k] = localEquipped[k]; });
+              // Only save if something changed from DB
+              var shopChanged = mergedItems.length !== dbItems.shop_items.length ||
+                mergedItems.some(function(item) { return dbItems.shop_items.indexOf(item) === -1; });
+              var equippedChanged = JSON.stringify(mergedEquipped) !== JSON.stringify(dbItems.equipped_items);
+              if (shopChanged || equippedChanged) {
+                var updatePayload = {};
+                if (shopChanged) updatePayload.shop_items = JSON.stringify(mergedItems);
+                if (equippedChanged) updatePayload.equipped_items = JSON.stringify(mergedEquipped);
+                shopSavePromises.push(
+                  db.from('students').update(updatePayload).eq('id', stu.id).then(function(r) {
+                    if (r.error) {
+                      console.warn('[DAL] v44: shop_items merge save failed for student ' + stu.id + ':', r.error.message);
+                    } else {
+                      console.log('[DAL] v44: shop_items merged for student ' + stu.id + ': ' + JSON.stringify(mergedItems));
+                    }
+                  })
+                );
+              }
+            });
+          });
+          return Promise.all(shopSavePromises);
+        });
     });
   }).then(function() {
     // === Phase 4: Delete students that were removed locally ===
