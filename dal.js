@@ -1169,40 +1169,63 @@ function _syncTeacherToSupabase() {
 
     // Wait for all pets, then upsert ALL students with correct active_pet_id
     return Promise.all(allPetPromises).then(function() {
-      var studentUpsertPromises = studentsToUpsert.map(function(stu) {
-        var payload = {
-          id: stu.id,
-          name: stu.name,
-          class_id: (classesData.find(function(c) { return c.students.indexOf(stu) >= 0; }) || {}).id || null,
-          coins: stu.coins || 0,
-          last_checkin_date: stu.lastCheckinDate || null,
-          last_jianghu_date: stu.lastJianghuDate || null,
-          last_pk_date: stu.lastPkDate || null,
-          active_pet_id: stu.activePetId || null,
-          pk_count_today: stu.pkCountToday || 0,
-          // v39: REMOVED shop_items and equipped_items from teacher sync.
-          // Only the student should write these fields to prevent race conditions.
-          password: stu.password || ''
-        };
-        return db.from('students').upsert([payload]).then(function(r) {
-          if (r.error) {
-            console.error('[DAL] student upsert error:', r.error);
-            // v30: Fallback — save coins only if upsert fails
-            return db.from('students').update({ coins: stu.coins || 0 }).eq('id', stu.id).then(function(fr) {
-              if (fr.error) console.error('[DAL] teacher coins fallback error:', fr.error.message);
-            });
-          }
-        }).then(function() {
-          // v30: Save quiz_state separately after upsert
-          if (stu.quizState) {
-            var qs = typeof stu.quizState === 'string' ? stu.quizState : JSON.stringify(stu.quizState);
-            return db.from('students').update({ quiz_state: qs }).eq('id', stu.id).then(function(qr) {
-              if (qr.error) console.warn('[DAL] teacher quiz_state save failed:', qr.error.message);
-            });
-          }
+      // v42: First, fetch current shop_items and equipped_items from DB for all students.
+      // Supabase .upsert() replaces the ENTIRE row, so if we don't include these fields,
+      // they get set to NULL — wiping out student purchases.
+      var studentIds = studentsToUpsert.map(function(s) { return s.id; });
+      var fetchPromise = studentIds.length > 0
+        ? db.from('students').select('id, shop_items, equipped_items').in('id', studentIds)
+        : Promise.resolve({ data: [], error: null });
+      
+      return fetchPromise.then(function(shopR) {
+        var shopMap = {};
+        if (shopR.data) {
+          shopR.data.forEach(function(row) {
+            shopMap[row.id] = {
+              shop_items: row.shop_items,
+              equipped_items: row.equipped_items
+            };
+          });
+        }
+        
+        var studentUpsertPromises = studentsToUpsert.map(function(stu) {
+          var currentShop = shopMap[stu.id] || {};
+          var payload = {
+            id: stu.id,
+            name: stu.name,
+            class_id: (classesData.find(function(c) { return c.students.indexOf(stu) >= 0; }) || {}).id || null,
+            coins: stu.coins || 0,
+            last_checkin_date: stu.lastCheckinDate || null,
+            last_jianghu_date: stu.lastJianghuDate || null,
+            last_pk_date: stu.lastPkDate || null,
+            active_pet_id: stu.activePetId || null,
+            pk_count_today: stu.pkCountToday || 0,
+            // v42: Preserve student's shop_items and equipped_items from DB.
+            // Read current values from Supabase before upsert to avoid wiping purchases.
+            shop_items: currentShop.shop_items || '[]',
+            equipped_items: currentShop.equipped_items || '{}',
+            password: stu.password || ''
+          };
+          return db.from('students').upsert([payload]).then(function(r) {
+            if (r.error) {
+              console.error('[DAL] student upsert error:', r.error);
+              // v30: Fallback — save coins only if upsert fails
+              return db.from('students').update({ coins: stu.coins || 0 }).eq('id', stu.id).then(function(fr) {
+                if (fr.error) console.error('[DAL] teacher coins fallback error:', fr.error.message);
+              });
+            }
+          }).then(function() {
+            // v30: Save quiz_state separately after upsert
+            if (stu.quizState) {
+              var qs = typeof stu.quizState === 'string' ? stu.quizState : JSON.stringify(stu.quizState);
+              return db.from('students').update({ quiz_state: qs }).eq('id', stu.id).then(function(qr) {
+                if (qr.error) console.warn('[DAL] teacher quiz_state save failed:', qr.error.message);
+              });
+            }
+          });
         });
+        return Promise.all(studentUpsertPromises);
       });
-      return Promise.all(studentUpsertPromises);
     });
   }).then(function() {
     // === Phase 4: Delete students that were removed locally ===
