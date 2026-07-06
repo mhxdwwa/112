@@ -1388,8 +1388,10 @@ function buildReadOnlyStudentModalContent(student, pet){
       <div class="stat-item"><span class="stat-label">💀 状态</span><span class="stat-value">${pet.isDead?'已饿死':'🐣 存活'}</span></div>
       <div class="stat-item"><span class="stat-label">⚠️ 状态</span><span class="stat-value modal-hunger-warn">${hungerMsg}</span></div>
       ${student.pets.length>1?`<div class="stat-item"><span class="stat-label">📦 宠物数</span><span class="stat-value">${student.pets.length}只</span></div>`:''}
+      ${(function(){const bonus=getStudentGrowthBonus(student);return bonus>0?`<div class="stat-item"><span class="stat-label">🏪 商店加成</span><span class="stat-value" style="color:#27ae60;">+${bonus}/次</span></div>`:'';})()}
     </div>
   </div>
+  ${_buildReadOnlyShopSection(student, pet)}
   <div style="text-align:center;padding:20px;background:#f0f8ff;border-radius:12px;margin-top:16px;border:2px solid #4a90d9;">
     <div style="font-size:48px;margin-bottom:12px;">👀</div>
     <div style="font-size:16px;font-weight:700;color:#4a90d9;">正在查看 ${esc(student.name)} 的宠物</div>
@@ -1708,6 +1710,28 @@ function _buildModalShopSection(student, pet){
   if(owned.length>0){
     html+=`<div style="margin-top:8px;padding:6px 10px;background:#f8f5ff;border-radius:10px;font-size:11px;color:#886;">已购 ${owned.length} 件 · 总成长加成: <strong style="color:#27ae60;">+${totalBonus}</strong>/次（每次互动额外获得）</div>`;
   }
+  html+='</div>';
+  return html;
+}
+// v39: Read-only shop section for viewing other students' items
+function _buildReadOnlyShopSection(student, pet){
+  const owned=getStudentOwnedItems(student);
+  if(owned.length===0) return '';
+  const totalBonus=getStudentGrowthBonus(student);
+  let html=`<div style="margin-top:14px;"><h4>🏪 已购特效${totalBonus>0?` <span style="font-size:12px;font-weight:400;color:#27ae60;background:#e8faf0;padding:2px 10px;border-radius:10px;">加成: +${totalBonus}/次</span>`:''}</h4>`;
+  html+='<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  owned.forEach(itemId=>{
+    const item=getShopItemById(itemId);
+    if(!item) return;
+    const equipped=isItemEquipped(student, itemId);
+    html+=`<div style="background:${equipped?'linear-gradient(135deg,#e0ffe8,#c8f8d4)':'linear-gradient(135deg,#f5f0ff,#ece4f8)'};border:2px solid ${equipped?'#27ae60':'#d0c0e0'};border-radius:14px;padding:10px;text-align:center;min-width:120px;${equipped?'box-shadow:0 2px 12px rgba(39,174,96,0.25);':''}">
+      <div style="font-weight:700;font-size:13px;color:${equipped?'#27ae60':'#7b2d8e'};">${equipped?'🌟':'📦'} ${item.name}</div>
+      <div style="font-size:10px;color:#888;margin-top:3px;">+${item.growthBonus}/次</div>
+      <div style="font-size:11px;color:${equipped?'#27ae60':'#999'};margin-top:4px;font-weight:${equipped?'700':'400'};">${equipped?'✅ 佩戴中':'未佩戴'}</div>
+    </div>`;
+  });
+  html+='</div>';
+  html+=`<div style="margin-top:8px;padding:6px 10px;background:#f8f5ff;border-radius:10px;font-size:11px;color:#886;">共 ${owned.length} 件特效 · 总成长加成: <strong style="color:#27ae60;">+${totalBonus}</strong>/次</div>`;
   html+='</div>';
   return html;
 }
