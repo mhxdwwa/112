@@ -1167,29 +1167,11 @@ function _syncTeacherToSupabase() {
       });
     });
 
-    // Wait for all pets, then upsert ALL students with correct active_pet_id
+    // Wait for all pets, then update ALL students with correct active_pet_id
     return Promise.all(allPetPromises).then(function() {
-      // v42: First, fetch current shop_items and equipped_items from DB for all students.
-      // Supabase .upsert() replaces the ENTIRE row, so if we don't include these fields,
-      // they get set to NULL — wiping out student purchases.
-      var studentIds = studentsToUpsert.map(function(s) { return s.id; });
-      var fetchPromise = studentIds.length > 0
-        ? db.from('students').select('id, shop_items, equipped_items').in('id', studentIds)
-        : Promise.resolve({ data: [], error: null });
-      
-      return fetchPromise.then(function(shopR) {
-        var shopMap = {};
-        if (shopR.data) {
-          shopR.data.forEach(function(row) {
-            shopMap[row.id] = {
-              shop_items: row.shop_items,
-              equipped_items: row.equipped_items
-            };
-          });
-        }
-        
+        // v43: No need to fetch shop_items from DB — using .update() instead of .upsert()
+        // means student-owned fields (shop_items, equipped_items) are never touched.
         var studentUpsertPromises = studentsToUpsert.map(function(stu) {
-          var currentShop = shopMap[stu.id] || {};
           var payload = {
             id: stu.id,
             name: stu.name,
@@ -1200,22 +1182,34 @@ function _syncTeacherToSupabase() {
             last_pk_date: stu.lastPkDate || null,
             active_pet_id: stu.activePetId || null,
             pk_count_today: stu.pkCountToday || 0,
-            // v42: Preserve student's shop_items and equipped_items from DB.
-            // Read current values from Supabase before upsert to avoid wiping purchases.
-            shop_items: currentShop.shop_items || '[]',
-            equipped_items: currentShop.equipped_items || '{}',
+            // v43: REMOVED shop_items and equipped_items — teacher NEVER writes these.
+            // Using .update() (not .upsert()) so only specified fields are modified.
+            // This eliminates ALL race conditions with student shop purchases.
             password: stu.password || ''
           };
-          return db.from('students').upsert([payload]).then(function(r) {
+          // v43: Use .update() instead of .upsert() to avoid overwriting student-owned
+          // fields (shop_items, equipped_items). .update() only touches listed fields.
+          return db.from('students').update(payload).eq('id', stu.id).then(function(r) {
             if (r.error) {
-              console.error('[DAL] student upsert error:', r.error);
-              // v30: Fallback — save coins only if upsert fails
-              return db.from('students').update({ coins: stu.coins || 0 }).eq('id', stu.id).then(function(fr) {
-                if (fr.error) console.error('[DAL] teacher coins fallback error:', fr.error.message);
+              console.error('[DAL] student update error:', r.error);
+              // v43 fallback: if update fails (e.g., student doesn't exist), try insert
+              var insertPayload = Object.assign({}, payload);
+              delete insertPayload.id;
+              insertPayload.shop_items = '[]';
+              insertPayload.equipped_items = '{}';
+              return db.from('students').insert([Object.assign({ id: stu.id }, insertPayload)]).then(function(insR) {
+                if (insR.error) {
+                  console.error('[DAL] student insert fallback error:', insR.error.message);
+                  // Ultimate fallback: save coins only
+                  return db.from('students').update({ coins: stu.coins || 0 }).eq('id', stu.id).then(function(fr) {
+                    if (fr.error) console.error('[DAL] teacher coins fallback error:', fr.error.message);
+                  });
+                }
+                console.log('[DAL] Student "' + stu.name + '" inserted via fallback (ID: ' + stu.id + ')');
               });
             }
           }).then(function() {
-            // v30: Save quiz_state separately after upsert
+            // v30: Save quiz_state separately after update
             if (stu.quizState) {
               var qs = typeof stu.quizState === 'string' ? stu.quizState : JSON.stringify(stu.quizState);
               return db.from('students').update({ quiz_state: qs }).eq('id', stu.id).then(function(qr) {
@@ -1225,7 +1219,6 @@ function _syncTeacherToSupabase() {
           });
         });
         return Promise.all(studentUpsertPromises);
-      });
     });
   }).then(function() {
     // === Phase 4: Delete students that were removed locally ===
