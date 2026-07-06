@@ -285,6 +285,40 @@ function _smartRefreshFromSupabase() {
           changesApplied++;
         }
 
+        // v39: shopItems — sync from server if changed on server and not changed locally
+        var snapShopItems = snapStu ? JSON.stringify(snapStu.shopItems || []) : null;
+        var freshShopItems = JSON.stringify(freshStu.shopItems || []);
+        var localShopItems = JSON.stringify(localStu.shopItems || []);
+        if (snapShopItems !== null) {
+          if (freshShopItems !== snapShopItems && localShopItems === snapShopItems) {
+            // Server changed, local didn't → apply
+            localStu.shopItems = freshStu.shopItems || [];
+            changesApplied++;
+          }
+          // If local changed too (student purchased), keep local
+        } else if (freshShopItems !== localShopItems) {
+          // No snapshot — trust server value
+          localStu.shopItems = freshStu.shopItems || [];
+          changesApplied++;
+        }
+
+        // v39: equippedItems — sync from server if changed on server and not changed locally
+        var snapEquipped = snapStu ? JSON.stringify(snapStu.equippedItems || {}) : null;
+        var freshEquipped = JSON.stringify(freshStu.equippedItems || {});
+        var localEquipped = JSON.stringify(localStu.equippedItems || {});
+        if (snapEquipped !== null) {
+          if (freshEquipped !== snapEquipped && localEquipped === snapEquipped) {
+            // Server changed, local didn't → apply
+            localStu.equippedItems = freshStu.equippedItems || {};
+            changesApplied++;
+          }
+          // If local changed too (student equipped/unequipped), keep local
+        } else if (freshEquipped !== localEquipped) {
+          // No snapshot — trust server value
+          localStu.equippedItems = freshStu.equippedItems || {};
+          changesApplied++;
+        }
+
         // quizState: sync from server if changed on server and not changed locally
         if (freshStu.quizState) {
           var snapQuizState = snapStu ? JSON.stringify(snapStu.quizState || null) : null;
@@ -294,24 +328,6 @@ function _smartRefreshFromSupabase() {
             localStu.quizState = freshStu.quizState;
             changesApplied++;
           }
-        }
-
-        // v38: shopItems - sync from server if changed on server and not changed locally
-        var snapShopItems = snapStu ? JSON.stringify(snapStu.shopItems || []) : null;
-        var freshShopItemsStr = JSON.stringify(freshStu.shopItems || []);
-        var localShopItemsStr = JSON.stringify(localStu.shopItems || []);
-        if (freshShopItemsStr !== snapShopItems && localShopItemsStr === snapShopItems) {
-          localStu.shopItems = freshStu.shopItems || [];
-          changesApplied++;
-        }
-
-        // v38: equippedItems - sync from server if changed on server and not changed locally
-        var snapEquippedItems = snapStu ? JSON.stringify(snapStu.equippedItems || {}) : null;
-        var freshEquippedItemsStr = JSON.stringify(freshStu.equippedItems || {});
-        var localEquippedItemsStr = JSON.stringify(localStu.equippedItems || {});
-        if (freshEquippedItemsStr !== snapEquippedItems && localEquippedItemsStr === snapEquippedItems) {
-          localStu.equippedItems = freshStu.equippedItems || {};
-          changesApplied++;
         }
 
         // Merge pets for this student
@@ -1062,8 +1078,9 @@ function _syncTeacherToSupabase() {
         last_pk_date: stu.lastPkDate || null,
         active_pet_id: stu.activePetId || null,
         pk_count_today: stu.pkCountToday || 0,
-        shop_items: JSON.stringify(stu.shopItems || []),
-        equipped_items: JSON.stringify(stu.equippedItems || {}),
+        // v39: REMOVED shop_items and equipped_items from teacher sync.
+        // Only the student should write these fields to prevent race conditions
+        // where teacher's stale local data overwrites student's purchases.
         password: stu.password || ''
       };
 
@@ -1163,8 +1180,8 @@ function _syncTeacherToSupabase() {
           last_pk_date: stu.lastPkDate || null,
           active_pet_id: stu.activePetId || null,
           pk_count_today: stu.pkCountToday || 0,
-          shop_items: JSON.stringify(stu.shopItems || []),
-          equipped_items: JSON.stringify(stu.equippedItems || {}),
+          // v39: REMOVED shop_items and equipped_items from teacher sync.
+          // Only the student should write these fields to prevent race conditions.
           password: stu.password || ''
         };
         return db.from('students').upsert([payload]).then(function(r) {
