@@ -5793,7 +5793,7 @@ function getTodayCoinGain(studentId) {
   const today = new Date().toDateString();
   let total = 0;
   // v15: Always read from window.operationLogs for cross-script consistency
-  const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡'];
+  const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡', '取金阁'];
   var logs = getOpLogs();
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
@@ -5835,10 +5835,10 @@ function renderJianghuColumn(cur, validStudents) {
     return getTodayCoinGain(s.id) >= 25;
   });
   let html = `<div class="jianghu-column">`;
-  html += `<div class="jianghu-header"><h3>🗡️ 萌萌江湖行</h3><p>打卡+奖惩获得≥25金币可参加（PK金币不算）</p></div>`;
+  html += `<div class="jianghu-header"><h3>🗡️ 萌萌江湖行</h3><p>打卡+奖惩+取金阁获得≥25金币可参加（PK金币不算）</p></div>`;
   html += `<div class="jianghu-list">`;
   if (qualifiedStudents.length === 0) {
-    html += `<div class="jianghu-empty" style="grid-column:1/-1;">🌙<br>今日尚无侠客<br>打卡+奖惩达25金币即可闯荡江湖<br><span style="font-size:11px;color:#a08060;">（PK金币不计入资格）</span></div>`;
+    html += `<div class="jianghu-empty" style="grid-column:1/-1;">🌙<br>今日尚无侠客<br>打卡+奖惩+取金阁达25金币即可闯荡江湖<br><span style="font-size:11px;color:#a08060;">（PK金币不计入资格）</span></div>`;
   } else {
     qualifiedStudents.forEach(s => {
       const p = getActivePet(s);
@@ -5882,7 +5882,7 @@ function renderJianghuColumn(cur, validStudents) {
   if (isStudentView && myDone) {
     html += `<div style="text-align:center;padding:10px;color:#a08060;font-size:13px;">今日已闯荡江湖，明日再来</div>`;
   } else if (isStudentView && !myQualified) {
-    html += `<div style="text-align:center;padding:10px;color:#ccc;font-size:13px;">打卡+奖惩获得≥25金币方可闯荡江湖</div>`;
+    html += `<div style="text-align:center;padding:10px;color:#ccc;font-size:13px;">打卡+奖惩+取金阁获得≥25金币方可闯荡江湖</div>`;
   } else {
     html += `<button class="jianghu-start-btn" onclick="startJianghuAdventure()">⚔️ 闯荡江湖</button>`;
   }
