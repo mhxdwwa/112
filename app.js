@@ -1216,7 +1216,7 @@ function getStudentShopEffects(student){
 /* ===== 无限滚动：分批渲染宠物卡片 ===== */
 let _gridStudents=[], _gridRenderedCount=0;
 const _GRID_BATCH_SIZE=12;
-let _gridObserver=null;
+let _gridObserver=null, _gridBatchBusy=false;
 
 function _generateStudentCardHTML(s){
   updatePetDeathStatus(s);const activePet = getActivePet(s);
@@ -1228,13 +1228,15 @@ function _generateStudentCardHTML(s){
   }else{return `<div class="home-pet-card" onclick="showAdoptModal('${s.id}')"><div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}
 
 function _renderGridBatch(grid){
+  if(_gridBatchBusy) return;
+  _gridBatchBusy=true;
   const end=Math.min(_gridRenderedCount+_GRID_BATCH_SIZE, _gridStudents.length);
   let html='';
   for(let i=_gridRenderedCount;i<end;i++){html+=_generateStudentCardHTML(_gridStudents[i]);}
   _gridRenderedCount=end;
-  const sentinel=document.getElementById('grid-scroll-sentinel');
-  if(sentinel){sentinel.insertAdjacentHTML('beforebegin',html);}else{grid.insertAdjacentHTML('beforeend',html);}
+  grid.insertAdjacentHTML('beforeend',html);
   _applyGridBatchPostProcess();
+  _gridBatchBusy=false;
 }
 
 function _applyGridBatchPostProcess(){
@@ -1261,6 +1263,7 @@ function _applyGridBatchPostProcess(){
 
 function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if(_gridObserver){_gridObserver.disconnect();_gridObserver=null;}
+  const oldSentinel=document.getElementById('grid-scroll-sentinel');if(oldSentinel)oldSentinel.remove();
   if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
   const cur=classesData.find(c=>c.id===currentClassId);
   if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;}
@@ -1268,14 +1271,24 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   _renderGridBatch(grid);
   if(_gridRenderedCount<_gridStudents.length){
     const sentinel=document.createElement('div');sentinel.id='grid-scroll-sentinel';sentinel.style.cssText='height:1px;width:100%;';
-    grid.appendChild(sentinel);
+    grid.parentNode.insertBefore(sentinel,grid.nextSibling);
     _gridObserver=new IntersectionObserver((entries)=>{
       if(entries[0].isIntersecting && _gridRenderedCount<_gridStudents.length){
         _renderGridBatch(grid);
-        if(_gridRenderedCount>=_gridStudents.length){_gridObserver.disconnect();const s=document.getElementById('grid-scroll-sentinel');if(s)s.remove();}
+        if(_gridRenderedCount>=_gridStudents.length){_gridObserver.disconnect();sentinel.remove();}
       }
-    },{rootMargin:'200px'});
+    },{rootMargin:'300px'});
     _gridObserver.observe(sentinel);
+    requestAnimationFrame(()=>_gridCheckSentinel(grid,sentinel));
+  }
+}
+function _gridCheckSentinel(grid,sentinel){
+  if(!sentinel.parentNode||_gridRenderedCount>=_gridStudents.length) return;
+  const r=sentinel.getBoundingClientRect();
+  if(r.top<window.innerHeight+100){
+    _renderGridBatch(grid);
+    if(_gridRenderedCount>=_gridStudents.length){if(_gridObserver)_gridObserver.disconnect();sentinel.remove();return;}
+    requestAnimationFrame(()=>_gridCheckSentinel(grid,sentinel));
   }
 }
 /* 满级卡片粒子特效 - 已禁用(防止抖动) */
