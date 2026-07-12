@@ -1,13 +1,9 @@
-# Cache static assets for 1 year
+# Cloudflare Pages cache configuration
 /images/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=31536000
 
 /*.js
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=31536000
 
 /*.css
-  Cache-Control: public, max-age=31536000, immutable
-
-# HTML should not be cached (always fresh)
-/*
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: public, max-age=31536000
