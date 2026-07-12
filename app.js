@@ -1213,12 +1213,71 @@ function getStudentShopEffects(student){
     else if(css.startsWith('pet-scene-'))sceneClass=css;
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
-function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid'); if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;} const cur=classesData.find(c=>c.id===currentClassId); if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;} 
-  let html=''; cur.students.forEach(s=>{updatePetDeathStatus(s);const activePet = getActivePet(s); if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=1440?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
-const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
-let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
-const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
-html+=`<div class="${cardClass}" onclick="openStudentModal('${s.id}')">${fx.topHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}${fx.titleHtml}<div class="home-pet-middle">${esc(s.name)}·${esc(p.nickname||p.name)}<span class="rename-pet-btn" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" title="修改宠物名字">✏️</span></div><div class="home-pet-bottom"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;}else{html+=`<div class="home-pet-card" onclick="showAdoptModal('${s.id}')"><div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}); grid.innerHTML=html; }
+/* ===== 无限滚动：分批渲染宠物卡片 ===== */
+let _gridStudents=[], _gridRenderedCount=0;
+const _GRID_BATCH_SIZE=12;
+let _gridObserver=null;
+
+function _generateStudentCardHTML(s){
+  updatePetDeathStatus(s);const activePet = getActivePet(s);
+  if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=1440?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
+  const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
+  let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
+  const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
+  return `<div class="${cardClass}" onclick="openStudentModal('${s.id}')">${fx.topHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}${fx.titleHtml}<div class="home-pet-middle">${esc(s.name)}·${esc(p.nickname||p.name)}<span class="rename-pet-btn" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" title="修改宠物名字">✏️</span></div><div class="home-pet-bottom"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;
+  }else{return `<div class="home-pet-card" onclick="showAdoptModal('${s.id}')"><div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}
+
+function _renderGridBatch(grid){
+  const end=Math.min(_gridRenderedCount+_GRID_BATCH_SIZE, _gridStudents.length);
+  let html='';
+  for(let i=_gridRenderedCount;i<end;i++){html+=_generateStudentCardHTML(_gridStudents[i]);}
+  _gridRenderedCount=end;
+  const sentinel=document.getElementById('grid-scroll-sentinel');
+  if(sentinel){sentinel.insertAdjacentHTML('beforebegin',html);}else{grid.insertAdjacentHTML('beforeend',html);}
+  _applyGridBatchPostProcess();
+}
+
+function _applyGridBatchPostProcess(){
+  document.querySelectorAll('.home-pet-card').forEach(function(card,i){
+    card.style.animationDelay=(i%6)*0.5+'s';
+    card.style.animationDuration=(2.5+Math.random()*1.5)+'s';
+  });
+  if(window.__initBreathingDelays) window.__initBreathingDelays();
+  if(typeof attachCardHeartListeners==='function') attachCardHeartListeners();
+  if(typeof bindPetCardDrag==='function') bindPetCardDrag();
+  if(typeof currentUser!=='undefined' && currentUser && currentUser.type==='student'){
+    var myId=currentUser.studentId.toString();
+    document.querySelectorAll('.home-pet-card').forEach(function(card){
+      var onclick=card.getAttribute('onclick')||'';
+      if(onclick.indexOf("'"+myId+"'")===-1 && onclick.indexOf('"'+myId+'"')===-1){
+        card.querySelectorAll('button').forEach(function(btn){
+          var btnOnclick=btn.getAttribute('onclick')||'';
+          if(btnOnclick.indexOf('showChangePetModal')!==-1||btnOnclick.indexOf('showSwitchPetModal')!==-1||btnOnclick.indexOf('renamePet')!==-1){btn.style.display='none';}
+        });
+      }
+    });
+  }
+}
+
+function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
+  if(_gridObserver){_gridObserver.disconnect();_gridObserver=null;}
+  if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
+  const cur=classesData.find(c=>c.id===currentClassId);
+  if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;}
+  _gridStudents=cur.students; _gridRenderedCount=0; grid.innerHTML='';
+  _renderGridBatch(grid);
+  if(_gridRenderedCount<_gridStudents.length){
+    const sentinel=document.createElement('div');sentinel.id='grid-scroll-sentinel';sentinel.style.cssText='height:1px;width:100%;';
+    grid.appendChild(sentinel);
+    _gridObserver=new IntersectionObserver((entries)=>{
+      if(entries[0].isIntersecting && _gridRenderedCount<_gridStudents.length){
+        _renderGridBatch(grid);
+        if(_gridRenderedCount>=_gridStudents.length){_gridObserver.disconnect();const s=document.getElementById('grid-scroll-sentinel');if(s)s.remove();}
+      }
+    },{rootMargin:'200px'});
+    _gridObserver.observe(sentinel);
+  }
+}
 /* 满级卡片粒子特效 - 已禁用(防止抖动) */
 let _maxedSparkleTimer=null;
 function startMaxedSparkles(){
