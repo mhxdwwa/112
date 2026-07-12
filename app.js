@@ -2914,8 +2914,8 @@ function resetPKSelection() {
 
 // ========== 战斗兽宠系统 ==========
 // 三套独立的图片池，严格区分用途：
-// 1. _leftMonsterPool  — 无补零数字命名（1.png~24.png）→ 宠物PK左侧 + 江湖行宠物变身
-// 2. _rightMonsterPool — 补零数字命名（01.png~024.png, 010.png~019.png）→ 宠物PK右侧
+// 1. _leftMonsterPool  — 无补零数字命名（1.webp~24.webp）→ 宠物PK左侧 + 江湖行宠物变身
+// 2. _rightMonsterPool — 补零数字命名（01.webp~024.webp, 010.webp~019.webp）→ 宠物PK右侧
 // 3. _jhBossPool       — 中文命名图片 → 萌萌江湖行Boss
 let _leftMonsterPool = [];
 let _rightMonsterPool = [];
@@ -2947,17 +2947,17 @@ function probePKMonsterImages() {
       img.onerror = () => { checkDone(); };
       img.src = path;
     }
-    // 左侧池：无补零格式 1.png ~ 24.png
+    // 左侧池：无补零格式 1.webp ~ 24.webp
     for(let i = 1; i <= 50; i++) {
-      tryLeft(`战斗兽宠文件夹/${i}.png`);
+      tryLeft(`战斗兽宠文件夹/${i}.webp`);
     }
     // 右侧池：所有以0开头的数字图片（01~09, 010~019, 020~024等）
     for(let i = 1; i <= 9; i++) {
-      tryRight(`战斗兽宠文件夹/0${i}.png`);
+      tryRight(`战斗兽宠文件夹/0${i}.webp`);
     }
     for(let i = 10; i <= 50; i++) {
       const padded3 = String(i).padStart(3, '0');
-      tryRight(`战斗兽宠文件夹/${padded3}.png`);
+      tryRight(`战斗兽宠文件夹/${padded3}.webp`);
     }
     setTimeout(finish, 5000);
   });
@@ -2980,7 +2980,7 @@ function probeJhBossImages() {
       img.src = path;
     }
     const jhBossNames = ['天山剑魔','幽冥鬼母','毒手药王','血刀老祖','铁面判官'];
-    jhBossNames.forEach(name => tryPath(`战斗兽宠文件夹/${name}.png`));
+    jhBossNames.forEach(name => tryPath(`战斗兽宠文件夹/${name}.webp`));
     setTimeout(finish, 5000);
   });
 }
@@ -4569,7 +4569,7 @@ function probeClassPKRobotImages() {
     for(let i = 1; i <= 50; i++) {
       pending++;
       const img = new Image();
-      const path = `战斗机器人/${i}.png`;
+      const path = `战斗机器人/${i}.webp`;
       img.onload = () => { _classPKRobotCache.push(path); done(); };
       img.onerror = () => { done(); };
       img.src = path;
@@ -6200,7 +6200,7 @@ function jhGenMtnSVG(type) {
 }
 
 function jhGenBossSVG(boss) {
-  return `<img src="战斗兽宠文件夹/${esc(boss.name)}.png" alt="${esc(boss.name)}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 20px ${boss.accent});"/>`;
+  return `<img src="战斗兽宠文件夹/${esc(boss.name)}.webp" alt="${esc(boss.name)}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 20px ${boss.accent});"/>`;
 }
 
 /* Generate wuxia-style ancient building silhouettes SVG */
