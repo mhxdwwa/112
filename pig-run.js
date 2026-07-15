@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v7 - 配合quiz.js v8 选取名单两步流程
+// v8 - 配合quiz.js v9 每次进入自动弹出选取名单
 
 (function() {
   'use strict';
@@ -14,6 +14,10 @@
     var contentId = tabName === 'daily' ? 'quizDailyContent' : 'quizPigRunContent';
     var content = document.getElementById(contentId);
     if (content) content.classList.add('active');
+    // Reset selection state so modal shows again each tab switch
+    window._teacherPlayingAsStudent = null;
+    window._pigRunModalShown = false;
+    if (typeof window._resetQuizModalFlag === 'function') window._resetQuizModalFlag();
     if (tabName === 'pigrun') {
       setTimeout(function() { renderPigRunPage(); }, 100);
     } else if (tabName === 'daily') {
@@ -323,21 +327,30 @@
     if (!container) return;
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
     if (!isStudentView) {
-      // Teacher view - use the teacher select view from quiz.js
-      if (typeof renderTeacherSelectView === 'function') {
-        container.innerHTML = renderTeacherSelectView('pigrun');
-        // If teacher already selected a student, show the game
+      // Teacher view
+      if (window._teacherPlayingAsStudent && typeof window._pigRunModalShown !== 'undefined' && window._pigRunModalShown) {
+        // Student already selected and modal shown this visit, show game
         var student = getCurrentStudent();
         if (student) {
           var qs = ensurePigRunState(student);
           renderLevelSelect(container, student, qs);
+        } else {
+          // Student not found, reset
+          window._teacherPlayingAsStudent = null;
+          window._pigRunModalShown = false;
+          container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
+            ? renderTeacherPlaceholder('pigrun')
+            : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🐷</div><div style="font-size:18px;font-weight:700;margin-top:12px;">小猪快跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
+          setTimeout(function() { showSelectStudentModal('pigrun'); }, 100);
         }
       } else {
-        container.innerHTML = '<div style="text-align:center;padding:40px;">' +
-          '<div style="font-size:64px;margin-bottom:16px;">🐷</div>' +
-          '<div style="font-size:20px;font-weight:700;margin-bottom:12px;">小猪快跑</div>' +
-          '<div style="font-size:14px;color:#888;margin-bottom:20px;">学生通过点击小猪帮助它们逃脱，获得积分</div>' +
-          '<div style="font-size:13px;color:#aaa;">学生登录后即可开始游戏</div></div>';
+        // No student selected or modal not yet shown, auto-show modal
+        window._pigRunModalShown = true;
+        window._teacherPlayingAsStudent = null;
+        container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
+          ? renderTeacherPlaceholder('pigrun')
+          : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🐷</div><div style="font-size:18px;font-weight:700;margin-top:12px;">小猪快跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
+        setTimeout(function() { showSelectStudentModal('pigrun'); }, 100);
       }
       return;
     }
