@@ -16,6 +16,8 @@
     if (content) content.classList.add('active');
     if (tabName === 'pigrun') {
       setTimeout(function() { renderPigRunPage(); }, 100);
+    } else if (tabName === 'daily') {
+      setTimeout(function() { renderQuizPage(); }, 100);
     }
   }
   window.switchQuizTab = switchQuizTab;
@@ -310,18 +312,66 @@
   function renderPigRunPage() {
     var container = document.getElementById('pigRunContent');
     if (!container) return;
+    // Load participants if not yet loaded
+    if (typeof loadParticipants === 'function' && typeof _participantsLoaded !== 'undefined' && !_participantsLoaded) {
+      loadParticipants();
+    }
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
     if (!isStudentView) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;">' +
-        '<div style="font-size:64px;margin-bottom:16px;">🐷</div>' +
-        '<div style="font-size:20px;font-weight:700;margin-bottom:12px;">小猪快跑</div>' +
-        '<div style="font-size:14px;color:#888;margin-bottom:20px;">学生通过点击小猪帮助它们逃脱，获得积分</div>' +
-        '<div style="font-size:13px;color:#aaa;">学生登录后即可开始游戏</div></div>';
+      // Teacher view - show participant management
+      if (typeof getParticipants !== 'function') {
+        container.innerHTML = '<div style="text-align:center;padding:40px;">' +
+          '<div style="font-size:64px;margin-bottom:16px;">🐷</div>' +
+          '<div style="font-size:20px;font-weight:700;margin-bottom:12px;">小猪快跑</div>' +
+          '<div style="font-size:14px;color:#888;margin-bottom:20px;">学生通过点击小猪帮助它们逃脱，获得积分</div>' +
+          '<div style="font-size:13px;color:#aaa;">学生登录后即可开始游戏</div></div>';
+        return;
+      }
+      var pList = getParticipants('pigrun');
+      var students = [];
+      var classId = parseInt(localStorage.getItem('classId'));
+      if (classId && typeof classesData !== 'undefined') {
+        var cls = classesData.find(function(c) { return c.id === classId; });
+        if (cls) students = cls.students;
+      }
+      var html = '<div style="max-width:500px;margin:0 auto;padding:20px;">';
+      html += '<div style="text-align:center;margin-bottom:20px;">';
+      html += '<div style="font-size:48px;">🐷</div>';
+      html += '<div style="font-size:18px;font-weight:700;margin-top:8px;">小猪快跑</div>';
+      html += '</div>';
+      html += '<div style="background:#f0fff0;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #90ee90;">';
+      if (pList.length === 0) {
+        html += '<div style="font-size:14px;color:#389e0d;text-align:center;">✅ 所有学生都可参加（未设置限制）</div>';
+      } else {
+        html += '<div style="font-size:14px;color:#389e0d;font-weight:600;margin-bottom:6px;">已选 ' + pList.length + ' 名参赛学生：</div>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+        pList.forEach(function(sid) {
+          var stu = students.find(function(s) { return s.id === sid; });
+          html += '<span style="background:#fff;border:1px solid #90ee90;border-radius:8px;padding:2px 8px;font-size:12px;">' + (stu ? stu.name : 'ID:'+sid) + '</span>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '<button onclick="showParticipantModal(\'pigrun\')" style="width:100%;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;border:none;border-radius:12px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(82,196,26,0.3);margin-bottom:12px;">📋 选择参赛名单</button>';
+      html += '<div style="font-size:12px;color:#aaa;text-align:center;line-height:1.8;">';
+      html += '点击按钮选择哪些学生可以参加小猪快跑<br>';
+      html += '不选任何人 = 所有学生都可参加<br>';
+      html += '🐷 帮助小猪逃脱，越到后面难度越大</div>';
+      html += '</div>';
+      container.innerHTML = html;
       return;
     }
     var student = getCurrentStudent();
     if (!student) {
       container.innerHTML = '<div style="text-align:center;padding:40px;">未找到你的学生信息</div>';
+      return;
+    }
+    // Check participation eligibility
+    if (typeof isStudentParticipant === 'function' && !isStudentParticipant(student.id, 'pigrun')) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;">' +
+        '<div style="font-size:48px;margin-bottom:12px;">🔒</div>' +
+        '<div style="font-size:16px;font-weight:700;color:#888;">暂未开放</div>' +
+        '<div style="font-size:13px;color:#aaa;margin-top:8px;">老师尚未将你加入小猪快跑参赛名单<br>请联系老师添加参赛资格</div></div>';
       return;
     }
     var qs = ensurePigRunState(student);

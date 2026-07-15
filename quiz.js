@@ -336,22 +336,57 @@
   function renderQuizPage() {
     var container = document.getElementById('quizContent');
     if (!container) return;
+    // Load participants if not yet loaded
+    if (!_participantsLoaded && typeof loadParticipants === 'function') {
+      loadParticipants();
+    }
 
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
     
     if (!isStudentView) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;line-height:2;">' +
-        '<div style="font-size:48px;margin-bottom:16px;">🏛️</div>' +
-        '<div style="font-size:18px;font-weight:700;">取金阁 - 学生答题模块</div>' +
-        '<div style="font-size:14px;color:#888;margin-top:8px;">学生端每日可答5道数学题获取金币</div>' +
-        '<div style="font-size:13px;color:#aaa;margin-top:16px;">第1次答对 +10金币 · 第2次答对 +5金币 · 每日最高50金币</div>' +
-        '</div>';
+      // Teacher view - show participant management
+      var pList = getParticipants('dailyQuiz');
+      var html = '<div style="max-width:500px;margin:0 auto;padding:20px;">';
+      html += '<div style="text-align:center;margin-bottom:20px;">';
+      html += '<div style="font-size:48px;">🏛️</div>';
+      html += '<div style="font-size:18px;font-weight:700;margin-top:8px;">取金阁 - 每日一练</div>';
+      html += '</div>';
+      // Participation status
+      html += '<div style="background:#fff5e6;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #ffd080;">';
+      if (pList.length === 0) {
+        html += '<div style="font-size:14px;color:#b08040;text-align:center;">✅ 所有学生都可参加（未设置限制）</div>';
+      } else {
+        var students = getCurrentClassStudents();
+        html += '<div style="font-size:14px;color:#b08040;font-weight:600;margin-bottom:6px;">已选 ' + pList.length + ' 名参赛学生：</div>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+        pList.forEach(function(sid) {
+          var stu = students.find(function(s) { return s.id === sid; });
+          html += '<span style="background:#fff;border:1px solid #ffd080;border-radius:8px;padding:2px 8px;font-size:12px;">' + (stu ? stu.name : 'ID:'+sid) + '</span>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '<button onclick="showParticipantModal(\'dailyQuiz\')" style="width:100%;background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:12px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(255,200,0,0.3);margin-bottom:12px;">📋 选择参赛名单</button>';
+      html += '<div style="font-size:12px;color:#aaa;text-align:center;line-height:1.8;">';
+      html += '点击按钮选择哪些学生可以参加每日一练<br>';
+      html += '不选任何人 = 所有学生都可参加<br>';
+      html += '📅 每日5道题 · 第1次答对+10金币 · 第2次答对+5金币</div>';
+      html += '</div>';
+      container.innerHTML = html;
       return;
     }
 
     var student = getCurrentStudent();
     if (!student) {
       container.innerHTML = '<div style="text-align:center;padding:40px;">未找到你的学生信息</div>';
+      return;
+    }
+    // Check participation eligibility
+    if (!isStudentParticipant(student.id, 'dailyQuiz')) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;">' +
+        '<div style="font-size:48px;margin-bottom:12px;">🔒</div>' +
+        '<div style="font-size:16px;font-weight:700;color:#888;">暂未开放</div>' +
+        '<div style="font-size:13px;color:#aaa;margin-top:8px;">老师尚未将你加入每日一练参赛名单<br>请联系老师添加参赛资格</div></div>';
       return;
     }
 
@@ -571,11 +606,206 @@
     renderQuizAnswerResult(container, question, qState, qIdx, result, state, chapter);
   };
 
+  // === 参赛名单管理 ===
+  var _participantsCache = null;
+  var _participantsLoaded = false;
+  var _participantsColumnExists = true; // Assume true; set false if column missing
+
+  function loadParticipants() {
+    if (typeof db === 'undefined' || !db) return Promise.resolve();
+    var classId = parseInt(localStorage.getItem('classId'));
+    if (!classId) return Promise.resolve();
+    return db.from('classes').select('id, participants_json').eq('id', classId).single().then(function(r) {
+      if (r.error) {
+        if (r.error.message && r.error.message.indexOf('participants_json') >= 0) {
+          _participantsColumnExists = false;
+          console.warn('[参赛名单] participants_json 列不存在，请先在 Supabase 中添加该列');
+          console.warn('[参赛名单] SQL: ALTER TABLE classes ADD COLUMN participants_json TEXT;');
+          return;
+        }
+        console.error('[参赛名单] 加载失败:', r.error.message);
+        return;
+      }
+      var data = r.data;
+      if (data && data.participants_json) {
+        try {
+          _participantsCache = JSON.parse(data.participants_json);
+        } catch(e) {
+          _participantsCache = {};
+        }
+      } else {
+        _participantsCache = {};
+      }
+      _participantsLoaded = true;
+    });
+  }
+
+  function ensureParticipantsObj() {
+    if (!_participantsCache) _participantsCache = {};
+    if (!_participantsCache.dailyQuiz) _participantsCache.dailyQuiz = [];
+    if (!_participantsCache.pigRun) _participantsCache.pigRun = [];
+    return _participantsCache;
+  }
+
+  function saveParticipants() {
+    if (typeof db === 'undefined' || !db) return Promise.resolve();
+    var classId = parseInt(localStorage.getItem('classId'));
+    if (!classId) return Promise.resolve();
+    if (!_participantsColumnExists) {
+      console.warn('[参赛名单] 列不存在，无法保存');
+      showParticipantColumnSQL();
+      return Promise.resolve();
+    }
+    var payload = ensureParticipantsObj();
+    return db.from('classes').update({
+      participants_json: JSON.stringify(payload)
+    }).eq('id', classId).then(function(r) {
+      if (r.error) {
+        if (r.error.message && r.error.message.indexOf('participants_json') >= 0) {
+          _participantsColumnExists = false;
+          showParticipantColumnSQL();
+        } else {
+          console.error('[参赛名单] 保存失败:', r.error.message);
+        }
+      } else {
+        console.log('[参赛名单] 已保存');
+      }
+    });
+  }
+
+  function showParticipantColumnSQL() {
+    if (typeof showNotification === 'function') {
+      showNotification('需要数据库配置', '请在 Supabase SQL Editor 中执行：ALTER TABLE classes ADD COLUMN IF NOT EXISTS participants_json TEXT;', 'info');
+    }
+  }
+
+  function getParticipants(activityType) {
+    var p = ensureParticipantsObj();
+    return p[activityType] || [];
+  }
+
+  function isStudentParticipant(studentId, activityType) {
+    var list = getParticipants(activityType);
+    if (!list || list.length === 0) return true; // 未设置名单时所有人可参加
+    return list.indexOf(parseInt(studentId)) >= 0;
+  }
+
+  function getCurrentClassStudents() {
+    var classId = parseInt(localStorage.getItem('classId'));
+    if (!classId || !classesData) return [];
+    var cls = classesData.find(function(c) { return c.id === classId; });
+    return cls ? cls.students : [];
+  }
+
+  function showParticipantModal(activityType) {
+    var students = getCurrentClassStudents();
+    var list = getParticipants(activityType);
+    var activityName = activityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
+
+    var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" id="participantModal">';
+    html += '<div style="background:#fff;border-radius:20px;padding:24px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<div style="font-size:18px;font-weight:700;">📋 选择参赛名单 - ' + activityName + '</div>';
+    html += '<button onclick="closeParticipantModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;">×</button>';
+    html += '</div>';
+    html += '<div style="font-size:13px;color:#888;margin-bottom:12px;">选择参加' + activityName + '的学生。未选中的学生无法参加该活动。<br><b>留空（不选任何人）= 所有学生都可参加</b></div>';
+    // Quick actions
+    html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+    html += '<button onclick="participantSelectAll()" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;cursor:pointer;font-size:13px;">全选</button>';
+    html += '<button onclick="participantSelectNone()" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;cursor:pointer;font-size:13px;">全不选(所有人可参加)</button>';
+    html += '</div>';
+    // Student list
+    html += '<div id="participantStudentList" style="display:flex;flex-direction:column;gap:6px;">';
+    students.forEach(function(stu) {
+      var checked = list.indexOf(parseInt(stu.id)) >= 0 ? 'checked' : '';
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #eee;border-radius:10px;cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background=\'#f8f8ff\'" onmouseleave="this.style.background=\'#fff\'">';
+      html += '<input type="checkbox" class="participant-cb" data-sid="' + stu.id + '" ' + checked + ' style="width:18px;height:18px;cursor:pointer;">';
+      html += '<span style="font-size:14px;font-weight:500;">' + (stu.name || '未命名') + '</span>';
+      html += '<span style="font-size:12px;color:#999;margin-left:auto;">💰' + (stu.coins || 0) + '</span>';
+      html += '</label>';
+    });
+    html += '</div>';
+    // Save button
+    html += '<div style="display:flex;gap:10px;margin-top:16px;">';
+    html += '<button onclick="saveParticipantSelection(\'' + activityType + '\')" style="flex:1;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;border:none;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;">✅ 保存</button>';
+    html += '<button onclick="closeParticipantModal()" style="flex:1;background:#f0f0f0;color:#666;border:none;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;">取消</button>';
+    html += '</div>';
+    html += '</div></div>';
+
+    var container = document.getElementById('modalContainer');
+    if (container) container.innerHTML = html;
+  }
+
+  window.participantSelectAll = function() {
+    document.querySelectorAll('.participant-cb').forEach(function(cb) { cb.checked = true; });
+  };
+  window.participantSelectNone = function() {
+    document.querySelectorAll('.participant-cb').forEach(function(cb) { cb.checked = false; });
+  };
+  window.closeParticipantModal = function() {
+    var container = document.getElementById('modalContainer');
+    if (container) container.innerHTML = '';
+  };
+  window.saveParticipantSelection = function(activityType) {
+    var ids = [];
+    document.querySelectorAll('.participant-cb:checked').forEach(function(cb) {
+      ids.push(parseInt(cb.dataset.sid));
+    });
+    var p = ensureParticipantsObj();
+    p[activityType] = ids;
+    _participantsCache = p;
+    saveParticipants().then(function() {
+      var activityName = activityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
+      if (typeof showNotification === 'function') {
+        var msg = ids.length === 0 ? '已设置为所有学生都可参加' : '已选择 ' + ids.length + ' 名学生参加' + activityName;
+        showNotification('参赛名单已保存', msg, 'success');
+      }
+      closeParticipantModal();
+      // Refresh current view
+      if (activityType === 'dailyQuiz') renderQuizPage();
+      else if (activityType === 'pigrun' && typeof renderPigRunPage === 'function') renderPigRunPage();
+    });
+  };
+
+  window.showParticipantModal = showParticipantModal;
+  window.getParticipants = getParticipants;
+  window.isStudentParticipant = isStudentParticipant;
+  window.loadParticipants = loadParticipants;
+
+  function renderParticipantStatus(activityType) {
+    var list = getParticipants(activityType);
+    var students = getCurrentClassStudents();
+    var activityName = activityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
+    var html = '<div style="max-width:500px;margin:0 auto;padding:16px;">';
+    html += '<div style="text-align:center;margin-bottom:16px;">';
+    html += '<div style="font-size:48px;margin-bottom:8px;">📋</div>';
+    html += '<div style="font-size:18px;font-weight:700;">' + activityName + ' - 参赛名单</div>';
+    html += '</div>';
+    html += '<div style="background:#f0fff0;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #90ee90;">';
+    if (list.length === 0) {
+      html += '<div style="font-size:14px;color:#389e0d;text-align:center;">✅ 所有学生都可参加（未设置限制）</div>';
+    } else {
+      html += '<div style="font-size:14px;color:#389e0d;font-weight:600;margin-bottom:8px;">已选择 ' + list.length + ' 名学生：</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+      list.forEach(function(sid) {
+        var stu = students.find(function(s) { return s.id === sid; });
+        var name = stu ? stu.name : 'ID:' + sid;
+        html += '<span style="background:#fff;border:1px solid #90ee90;border-radius:8px;padding:3px 10px;font-size:13px;">' + name + '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<button onclick="showParticipantModal(\'' + activityType + '\')" style="width:100%;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;border:none;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">📋 修改参赛名单</button>';
+    html += '<div style="font-size:12px;color:#aaa;text-align:center;">点击按钮选择哪些学生可以参加' + activityName + '</div>';
+    html += '</div>';
+    return html;
+  }
+
   // === 暴露给外部 ===
   window.renderQuizPage = renderQuizPage;
   window.getQuizSummary = getQuizSummary;
   window.getQuizState = getQuizState;
   window.resetQuizIfNeeded = resetQuizIfNeeded;
 
-  console.log('[取金阁] v5 loaded (coins+state+logs 全部直接保存)');
+  console.log('[取金阁] v6 loaded (参赛名单功能)');
 })();
