@@ -70,6 +70,11 @@
     }
     if (!student.quizState.pigRunTotalScore) student.quizState.pigRunTotalScore = 0;
     
+    // 道具持久化存储：只在第一关首次赠送，后续需要通过答题获得
+    if (!student.quizState.pigRunTools) {
+      student.quizState.pigRunTools = { remove: 1, shuffle: 1, rotate: 1 };
+    }
+    
     // 修复：重新计算总分，确保是各关卡最高分之和（防止旧数据累积错误）
     var calculatedTotal = 0;
     Object.keys(student.quizState.pigRunLevels).forEach(function(k) {
@@ -138,6 +143,11 @@
       qs.pigRunTotalScore += qs.pigRunLevels[k].bestScore || 0;
     });
     student.quizState = qs;
+
+    // 保存到本地存储（确保道具数量等变更被持久化）
+    if (typeof saveClassData === 'function') {
+      saveClassData();
+    }
 
     // 保存到 Supabase
     if (typeof saveCoinsAndQuizState === 'function') {
@@ -593,7 +603,7 @@
       level: currentLevel,
       coins: 0,
       pigs: [],
-      tools: {remove:1, shuffle:1, rotate:1},
+      tools: qs.pigRunTools || {remove:1, shuffle:1, rotate:1},
       activeTool: null,
       animating: false,
       soundEnabled: true,
@@ -786,6 +796,9 @@
       var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
       gState.tools.remove--;
+      // 同步到持久化存储并保存
+      if (qs.pigRunTools) qs.pigRunTools.remove = gState.tools.remove;
+      if (typeof saveClassData === 'function') saveClassData();
       pig.el.style.transition='transform 0.25s ease, opacity 0.25s ease';
       pig.el.style.transform='scale(0)'; pig.el.style.opacity='0';
       setTimeout(function(){
@@ -799,6 +812,9 @@
       var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
       gState.tools.rotate--;
+      // 同步到持久化存储并保存
+      if (qs.pigRunTools) qs.pigRunTools.rotate = gState.tools.rotate;
+      if (typeof saveClassData === 'function') saveClassData();
       var order=['up','right','down','left'];
       var idx=order.indexOf(pig.dir);
       pig.dir = order[(idx+1)%4];
@@ -809,6 +825,9 @@
     function doShuffle() {
       if (gState.tools.shuffle<=0||gState.animating||gState.paused) return;
       gState.tools.shuffle--;
+      // 同步到持久化存储并保存
+      if (qs.pigRunTools) qs.pigRunTools.shuffle = gState.tools.shuffle;
+      if (typeof saveClassData === 'function') saveClassData();
       var allPos=[];
       for (var y=0;y<ROWS;y++) for (var x=0;x<COLS;x++) allPos.push({x:x,y:y});
       for (var i=allPos.length-1;i>0;i--) { var j=Math.floor(Math.random()*(i+1)); var t=allPos[i];allPos[i]=allPos[j];allPos[j]=t; }
@@ -866,6 +885,9 @@
         else if (gState.answerAttempts === 2) { reward=1; quizTip.textContent='回答正确！获得 '+reward+' 次道具'; }
         else { reward=0; quizTip.textContent='回答正确，但超过2次作答，无法获得道具'; }
         gState.tools[gState.currentQuizTool] += reward;
+        // 同步到持久化存储并保存
+        if (qs.pigRunTools) qs.pigRunTools[gState.currentQuizTool] = gState.tools[gState.currentQuizTool];
+        if (typeof saveClassData === 'function') saveClassData();
         quizCloseBtn.style.display = 'block';
         updateToolUI();
       } else {
@@ -951,7 +973,7 @@
     function nextLevel() {
       gState.level++;
       winModal.classList.remove('show');
-      gState.tools = {remove:1, shuffle:1, rotate:1};
+      // 道具不重置，保持当前数量（持久化存储）
       gState.timeSeconds = 0;
       timeDisplay.textContent = '00:00';
       startTimer();
