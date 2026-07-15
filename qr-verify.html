@@ -191,9 +191,25 @@ async function checkToken() {
       return;
     }
 
+    // 获取教师账号信息
+    var teacherResult = await db
+      .from('teachers')
+      .select('email')
+      .limit(1)
+      .single();
+
+    var teacherEmail = '';
+    if (!teacherResult.error && teacherResult.data) {
+      teacherEmail = teacherResult.data.email || '';
+    }
+
     // Token有效，显示确认按钮
-    msgEl.innerHTML = '您正在登录教师账号<br><strong style="color:#c04058;">' + 
-      escapeHtml(result.data.email || '') + '</strong><br><br>请确认是本人操作';
+    if (teacherEmail) {
+      msgEl.innerHTML = '您正在登录教师账号<br><strong style="color:#c04058;">' + 
+        escapeHtml(teacherEmail) + '</strong><br><br>点击确认即可登录';
+    } else {
+      msgEl.innerHTML = '点击确认登录教师账户';
+    }
     btnEl.style.display = 'block';
   } catch(e) {
     console.error('检查token失败:', e);
@@ -212,11 +228,24 @@ async function confirmLogin() {
   statusEl.textContent = '正在确认登录...';
 
   try {
-    // 更新token状态为verified
+    // 先获取教师邮箱
+    var teacherResult = await db
+      .from('teachers')
+      .select('email')
+      .limit(1)
+      .single();
+
+    var teacherEmail = '';
+    if (!teacherResult.error && teacherResult.data) {
+      teacherEmail = teacherResult.data.email || '';
+    }
+
+    // 更新token状态为verified，并存储教师邮箱
     var result = await db
       .from('qr_login_tokens')
       .update({ 
         status: 'verified',
+        email: teacherEmail,
         verified_at: new Date().toISOString()
       })
       .eq('token', token)
@@ -229,9 +258,9 @@ async function confirmLogin() {
     // 成功
     btnEl.textContent = '✅ 已确认';
     statusEl.className = 'verify-status success';
-    statusEl.innerHTML = '登录成功！<br>您可以关闭此页面，电脑端将自动登录';
+    statusEl.innerHTML = '登录成功！<br>电脑端将自动进入教师账户<br><br><span style="font-size:13px;color:#888;">您可以关闭此页面</span>';
     
-    // 3秒后显示关闭提示
+    // 2秒后隐藏按钮
     setTimeout(function() {
       msgEl.innerHTML = '✅ 验证成功<br><span style="font-size:13px;color:#888;">您可以关闭此页面</span>';
       btnEl.style.display = 'none';

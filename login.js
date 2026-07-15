@@ -492,16 +492,6 @@ async function generateQRCode() {
   var qrStatus = document.getElementById('qrStatus');
   if (!qrWrap || !qrStatus) return;
 
-  // 获取教师邮箱
-  var emailInput = document.getElementById('teacherEmail');
-  var email = emailInput ? emailInput.value.trim() : '';
-  if (!email) {
-    qrWrap.innerHTML = '';
-    qrStatus.innerHTML = '❌ 请先输入邮箱地址';
-    qrStatus.style.color = '#e74c3c';
-    return;
-  }
-
   qrWrap.innerHTML = '';
   qrStatus.textContent = '正在生成二维码...';
   qrStatus.style.color = '#d4a017';
@@ -513,16 +503,16 @@ async function generateQRCode() {
   }
 
   try {
-    // 生成随机token
+    // 生成随机token（不需要输入邮箱）
     _qrToken = 'qr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
     var expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5分钟后过期
 
-    // 存储token到Supabase
+    // 存储token到Supabase（不存储email，扫码后由手机端确认）
     var insertResult = await db
       .from('qr_login_tokens')
       .insert([{
         token: _qrToken,
-        email: email,
+        email: '', // 先不存储email
         status: 'pending',
         expires_at: expiresAt
       }]);
@@ -573,7 +563,7 @@ function startQRPolling() {
   if (!_qrToken) return;
   
   stopQRPolling();
-  _qrPollTimer = setInterval(checkQRStatus, 2000);
+  _qrPollTimer = setInterval(checkQRStatus, 1500); // 加快轮询速度
 }
 
 async function checkQRStatus() {
@@ -614,7 +604,7 @@ async function checkQRStatus() {
       stopQRPolling();
       var qrStatus = document.getElementById('qrStatus');
       if (qrStatus) {
-        qrStatus.textContent = '✅ 验证成功，正在登录...';
+        qrStatus.innerHTML = '✅ 验证成功，正在登录...<br><span style="font-size:12px;color:#888;">即将跳转到教师账户</span>';
         qrStatus.style.color = '#389e0d';
       }
 
@@ -622,17 +612,44 @@ async function checkQRStatus() {
       if (tokenData.email) {
         await autoLoginWithToken(tokenData.email);
       } else {
-        // token中没有email，需要查询teachers表
-        var qrStatus = document.getElementById('qrStatus');
-        if (qrStatus) {
-          qrStatus.textContent = '❌ 登录信息缺失';
-          qrStatus.style.color = '#e74c3c';
-        }
+        // token中没有email，尝试获取第一个教师账号
+        await autoLoginFirstTeacher();
       }
     }
 
   } catch(e) {
     console.warn('检查二维码状态失败:', e);
+  }
+}
+
+async function autoLoginFirstTeacher() {
+  try {
+    // 获取第一个教师账号
+    var teacherResult = await db
+      .from('teachers')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (teacherResult.error || !teacherResult.data) {
+      var qrStatus = document.getElementById('qrStatus');
+      if (qrStatus) {
+        qrStatus.textContent = '❌ 未找到教师账号';
+        qrStatus.style.color = '#e74c3c';
+      }
+      return;
+    }
+
+    var email = teacherResult.data.email;
+    await autoLoginWithToken(email);
+
+  } catch(e) {
+    console.error('获取教师账号失败:', e);
+    var qrStatus = document.getElementById('qrStatus');
+    if (qrStatus) {
+      qrStatus.textContent = '❌ 登录失败: ' + e.message;
+      qrStatus.style.color = '#e74c3c';
+    }
   }
 }
 
@@ -661,14 +678,14 @@ async function autoLoginWithToken(email) {
 
     var qrStatus = document.getElementById('qrStatus');
     if (qrStatus) {
-      qrStatus.textContent = '✅ 登录成功！正在跳转...';
+      qrStatus.innerHTML = '✅ 登录成功！<br><span style="font-size:12px;color:#888;">正在跳转到教师账户...</span>';
       qrStatus.style.color = '#389e0d';
     }
 
-    // 延迟跳转
+    // 立即跳转（不需要延迟）
     setTimeout(function() {
       window.location.href = 'index.html';
-    }, 1000);
+    }, 500);
 
   } catch(e) {
     console.error('自动登录失败:', e);
