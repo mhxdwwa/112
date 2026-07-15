@@ -434,11 +434,38 @@ async function confirmScanLogin(token, encodedEmail) {
   }
   
   try {
-    // 获取Supabase实例
+    // 检查Supabase SDK是否加载
+    if (!window.supabase || !window.supabase.createClient) {
+      throw new Error('扫码组件未加载，请刷新页面重试');
+    }
+    
     var supabaseUrl = 'https://xbygooadskfqllnhwmet.supabase.co';
     var supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
     
     var scanDb = window.supabase.createClient(supabaseUrl, supabaseKey);
+    
+    // 先查询token是否存在（诊断用）
+    var checkResult = await scanDb
+      .from('qr_login_tokens')
+      .select('*')
+      .eq('token', token)
+      .single();
+    
+    if (checkResult.error) {
+      // 表不存在或查询失败
+      if (checkResult.error.message && checkResult.error.message.indexOf('does not exist') !== -1) {
+        throw new Error('扫码登录表未创建，请联系管理员在Supabase中创建qr_login_tokens表');
+      }
+      throw checkResult.error;
+    }
+    
+    if (!checkResult.data) {
+      throw new Error('二维码已失效或不存在，请在电脑端刷新二维码');
+    }
+    
+    if (checkResult.data.status !== 'pending') {
+      throw new Error('该二维码已被使用或已过期，请在电脑端刷新二维码');
+    }
     
     // 更新token状态
     var result = await scanDb
@@ -455,7 +482,18 @@ async function confirmScanLogin(token, encodedEmail) {
       throw result.error;
     }
     
-    // 成功
+    // 验证更新是否成功（再次查询确认）
+    var verifyResult = await scanDb
+      .from('qr_login_tokens')
+      .select('status, email')
+      .eq('token', token)
+      .single();
+    
+    if (verifyResult.error || !verifyResult.data || verifyResult.data.status !== 'verified') {
+      throw new Error('状态更新失败，请重试');
+    }
+    
+    // 确认成功
     if (modal) {
       modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
         '<div style="background:#fff;border-radius:20px;padding:32px;text-align:center;">' +
@@ -473,12 +511,13 @@ async function confirmScanLogin(token, encodedEmail) {
     
   } catch(e) {
     console.error('确认登录失败:', e);
+    var errMsg = e.message || '未知错误';
     if (modal) {
       modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.parentElement.innerHTML=\'\'">' +
         '<div style="background:#fff;border-radius:20px;padding:28px;max-width:360px;width:100%;text-align:center;">' +
         '<div style="font-size:48px;">❌</div>' +
         '<div style="font-size:16px;color:#e74c3c;font-weight:600;margin-top:12px;">确认失败</div>' +
-        '<div style="font-size:13px;color:#888;margin-top:8px;">' + e.message + '</div>' +
+        '<div style="font-size:13px;color:#888;margin-top:8px;word-break:break-all;">' + errMsg + '</div>' +
         '<div style="font-size:12px;color:#aaa;margin-top:12px;">点击任意处关闭</div>' +
         '</div>' +
         '</div>';
