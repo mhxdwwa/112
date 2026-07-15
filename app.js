@@ -1152,7 +1152,32 @@ function classDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';if
 function classDragLeave(e){this.classList.remove('drag-over');}
 function classDrop(e){e.preventDefault();this.classList.remove('drag-over');const toIdx=+this.dataset.classIdx;if(classDragIdx===null||classDragIdx===toIdx)return;const moved=classesData.splice(classDragIdx,1)[0];classesData.splice(toIdx,0,moved);saveClassData();renderClassList();}
 function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');}
-function createClass(){const n=prompt('班级名称');if(!n)return;classesData.push({id:Date.now().toString(),name:n,students:[]});saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);}
+function createClass(){const n=prompt('班级名称');if(!n)return;
+  // 检查数据库是否已存在同名班级（跨所有教师）
+  if(typeof db!=='undefined'&&db){
+    db.from('classes').select('id,name,teacher_id').eq('name',n.trim()).limit(1).then(function(r){
+      if(r.error){console.error('[创建班级] 查询失败:',r.error.message);showNotification('创建失败','数据库查询错误，请重试','error');return;}
+      if(r.data&&r.data.length>0){
+        // 找到同名班级，检查是否是当前教师自己的
+        const existingClass=r.data[0];
+        if(existingClass.teacher_id===currentUser.id){
+          showNotification('创建失败','你已经有同名班级「'+n.trim()+'」，请使用不同的名称','error');
+        }else{
+          showNotification('创建失败','系统中已存在班级「'+n.trim()+'」，为避免数据混乱，请使用不同的班级名称','error');
+        }
+        return;
+      }
+      // 没有同名班级，可以创建
+      classesData.push({id:Date.now().toString(),name:n.trim(),students:[]});
+      saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
+    });
+  }else{
+    // 离线模式：只检查本地
+    if(classesData.some(c=>c.name===n.trim())){showNotification('创建失败','本地已有同名班级','error');return;}
+    classesData.push({id:Date.now().toString(),name:n.trim(),students:[]});
+    saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
+  }
+}
 function deleteClass(id){if(confirm('确定删除该班级？删除后可在"已删除班级"中恢复')){const cls=classesData.find(c=>c.id===id);if(cls){const snapshot={id:cls.id,name:cls.name,students:JSON.parse(JSON.stringify(cls.students)),deletedAt:new Date().toISOString()};deletedClasses.push(snapshot);if(deletedClasses.length>20)deletedClasses.shift();saveDeletedClasses();}classesData=classesData.filter(c=>c.id!==id);if(currentClassId===id)currentClassId=classesData[0]?.id||null;saveClassData();renderClassList();scheduleAllRenders();showNotification('班级已删除','可在"已删除班级"中恢复','info');}}
 function importFromTxt(){document.getElementById('txtImport').click();}
 document.getElementById('txtImport').addEventListener('change',function(e){if(!currentClassId){showNotification('请先选择班级','','error');return;}const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=function(ev){const text=ev.target.result;const names=text.split(/\r?\n/).filter(n=>n.trim());const cur=classesData.find(c=>c.id===currentClassId);names.forEach(name=>{if(!cur.students.find(s=>s.name===name.trim()))cur.students.push({id:_genLocalId(),name:name.trim(),coins:50,pets:[],lastCheckinDate:null,activePetId:null,pkCountToday:0,lastPkDate:null});});saveClassData();scheduleAllRenders();showNotification('导入成功',`添加${names.length}人`,'success');};reader.readAsText(file);this.value='';});
