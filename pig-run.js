@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v1 - 小猪快跑游戏模块
+// v3 - 100% 忠实于原始小猪快跑.html，补充 Supabase 分数存储
 
 (function() {
   'use strict';
@@ -14,7 +14,6 @@
     var contentId = tabName === 'daily' ? 'quizDailyContent' : 'quizPigRunContent';
     var content = document.getElementById(contentId);
     if (content) content.classList.add('active');
-    // Initialize pig run content when switching to it
     if (tabName === 'pigrun') {
       setTimeout(function() { renderPigRunPage(); }, 100);
     }
@@ -34,289 +33,310 @@
   }
 
   // === 保存小猪快跑分数到 Supabase ===
-  // pigRunScore 存储在 quiz_state JSON 中（复用已有字段，无需修改数据库结构）
   function savePigRunScore(student, newScore) {
     if (!student || !student.id) return;
-    // Initialize quiz_state if needed
     if (!student.quizState || typeof student.quizState !== 'object') {
-      student.quizState = {
-        lastQuizDate: '',
-        todayCoins: 0,
-        questionsToday: [],
-        totalQuestions: 0,
-        started: false,
-        pigRunScore: 0,
-        totalQuizCoins: 0
-      };
+      student.quizState = { lastQuizDate: '', todayCoins: 0, questionsToday: [], totalQuestions: 0, started: false, pigRunScore: 0, totalQuizCoins: 0 };
     }
-    // Add to total pig run score stored in quiz_state
     student.quizState.pigRunScore = (student.quizState.pigRunScore || 0) + newScore;
-    student.pigRunScore = student.quizState.pigRunScore; // cache on student object
-    // Save to Supabase via existing quiz state save mechanism
+    student.pigRunScore = student.quizState.pigRunScore;
     if (typeof saveCoinsAndQuizState === 'function') {
       saveCoinsAndQuizState(student);
     } else if (typeof db !== 'undefined' && db) {
-      var quizStateJson = JSON.stringify(student.quizState);
-      db.from('students').update({
-        quiz_state: quizStateJson
-      }).eq('id', student.id).then(function(r) {
-        if (r.error) {
-          console.error('[小猪快跑] 分数保存失败:', r.error.message);
-        } else {
-          console.log('[小猪快跑] 分数已保存: ' + student.quizState.pigRunScore);
-        }
+      db.from('students').update({ quiz_state: JSON.stringify(student.quizState) }).eq('id', student.id).then(function(r) {
+        if (r.error) console.error('[小猪快跑] 分数保存失败:', r.error.message);
       });
     }
-    // Record action log
     if (typeof recordAction === 'function') {
       var msg = '小猪快跑 +' + newScore + '分 (总分:' + student.quizState.pigRunScore + ')';
       recordAction(student.id, student.name, '小猪快跑', msg, 0, 0, null);
     }
-    // Save log to Supabase
     if (typeof saveQuizLogDirect === 'function' && window.operationLogs) {
       for (var i = window.operationLogs.length - 1; i >= 0; i--) {
-        if (window.operationLogs[i].studentId == student.id &&
-            window.operationLogs[i].actionType === '小猪快跑' &&
-            !window.operationLogs[i]._synced) {
+        if (window.operationLogs[i].studentId == student.id && window.operationLogs[i].actionType === '小猪快跑' && !window.operationLogs[i]._synced) {
           saveQuizLogDirect(window.operationLogs[i]);
           break;
         }
       }
     }
-    // Trigger sync
     if (typeof triggerRealtimeSync === 'function') triggerRealtimeSync();
   }
 
-  // === 渲染小猪快跑页面 ===
+  // === 注入 CSS 样式（忠实于原始小猪快跑.html）===
+  function injectStyles() {
+    if (document.getElementById('pigRunStyles')) return;
+    var style = document.createElement('style');
+    style.id = 'pigRunStyles';
+    style.textContent = [
+      '.pig-run-wrap{position:relative;width:100%;max-width:430px;margin:0 auto;}',
+      '.pig-run-wrap *{margin:0;padding:0;box-sizing:border-box;user-select:none;}',
+      '.pig-game-container{position:relative;width:100%;aspect-ratio:9/16;background:radial-gradient(circle at 10% 10%,rgba(255,255,255,0.45) 0%,transparent 50%),radial-gradient(circle at 90% 18%,rgba(255,255,255,0.35) 0%,transparent 45%),radial-gradient(circle at 15% 85%,rgba(255,255,255,0.35) 0%,transparent 45%),linear-gradient(180deg,#d9ff8a 0%,#9be26b 30%,#76c543 70%,#4d8a28 100%);border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.15);}',
+      '.pig-game-container::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,0.18) 0%,transparent 35%),radial-gradient(circle at 80% 20%,rgba(255,255,255,0.15) 0%,transparent 30%),radial-gradient(circle at 50% 90%,rgba(255,255,255,0.12) 0%,transparent 40%),repeating-linear-gradient(90deg,transparent,transparent 2px,rgba(255,255,255,0.06) 2px,rgba(255,255,255,0.06) 4px),repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,0.08) 3px,rgba(255,255,255,0.08) 6px);pointer-events:none;z-index:1;}',
+      '.pig-game-container::after{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 12% 18%,rgba(255,255,255,0.22) 0%,transparent 25%),radial-gradient(circle at 85% 12%,rgba(255,255,255,0.18) 0%,transparent 22%),radial-gradient(circle at 8% 78%,rgba(255,255,255,0.16) 0%,transparent 28%),radial-gradient(circle at 92% 82%,rgba(255,255,255,0.14) 0%,transparent 24%);pointer-events:none;z-index:2;}',
+      '.pig-top-bar{position:absolute;top:0;left:0;width:100%;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:100;gap:8px;}',
+      '.pig-top-left-group{display:flex;align-items:center;gap:8px;}',
+      '.pig-time-display{background:#fff;padding:6px 12px;border-radius:12px;font-weight:bold;color:#333;font-size:16px;border:2px solid #e8e8e8;box-shadow:0 3px 0 #d0d0d0;min-width:70px;text-align:center;}',
+      '.pig-btn-icon{width:40px;height:40px;border-radius:12px;background:#fff;border:2px solid #e8e8e8;font-size:18px;cursor:pointer;box-shadow:0 3px 0 #d0d0d0;display:flex;align-items:center;justify-content:center;flex-shrink:0;}',
+      '.pig-btn-icon:active{transform:translateY(2px);box-shadow:0 1px 0 #d0d0d0;}',
+      '.pig-coin-display{display:flex;align-items:center;gap:6px;background:#fff;padding:6px 16px;border-radius:20px;font-weight:bold;color:#f5a623;font-size:18px;box-shadow:0 3px 0 #e0c080;}',
+      '.pig-level-title{font-size:24px;font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,0.2);letter-spacing:2px;}',
+      '.pig-game-board{position:absolute;top:65px;bottom:105px;left:10px;right:10px;width:calc(100% - 20px);height:calc(100% - 170px);z-index:10;}',
+      '.pig{position:absolute;cursor:pointer;z-index:10;transition:left 0.085s linear,top 0.085s linear;will-change:left,top;}',
+      '.pig:active{transform:scale(0.96);}',
+      '.pig-hit{position:absolute;inset:-12px;border-radius:50%;z-index:20;}',
+      '.pig-inner{position:absolute;inset:0;width:100%;height:100%;background-image:url("'+PIG_IMG_URL+'");background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;}',
+      '.pig[data-dir="down"] .pig-inner{transform:rotate(0deg) scale(1.7);}',
+      '.pig[data-dir="up"] .pig-inner{transform:rotate(180deg) scale(1.7);}',
+      '.pig[data-dir="left"] .pig-inner{transform:rotate(90deg) scale(1.7);}',
+      '.pig[data-dir="right"] .pig-inner{transform:rotate(-90deg) scale(1.7);}',
+      '.pig.running[data-dir="down"] .pig-inner{animation:pigBounce 0.1s ease-in-out infinite alternate;}',
+      '.pig.running[data-dir="up"] .pig-inner{animation:pigBounceUp 0.1s ease-in-out infinite alternate;}',
+      '.pig.running[data-dir="left"] .pig-inner{animation:pigBounceLeft 0.1s ease-in-out infinite alternate;}',
+      '.pig.running[data-dir="right"] .pig-inner{animation:pigBounceRight 0.1s ease-in-out infinite alternate;}',
+      '@keyframes pigBounce{0%{transform:rotate(0deg) translateY(-2px) scale(1.72);}100%{transform:rotate(0deg) translateY(2px) scale(1.68);}}',
+      '@keyframes pigBounceUp{0%{transform:rotate(180deg) translateY(-2px) scale(1.72);}100%{transform:rotate(180deg) translateY(2px) scale(1.68);}}',
+      '@keyframes pigBounceLeft{0%{transform:rotate(90deg) translateY(-2px) scale(1.72);}100%{transform:rotate(90deg) translateY(2px) scale(1.68);}}',
+      '@keyframes pigBounceRight{0%{transform:rotate(-90deg) translateY(-2px) scale(1.72);}100%{transform:rotate(-90deg) translateY(2px) scale(1.68);}}',
+      '.pig.escaping{z-index:100;pointer-events:none;transition:left 0.35s ease-in,top 0.35s ease-in,opacity 0.35s ease-in;}',
+      '.pig-bottom-bar{position:absolute;bottom:0;left:0;width:100%;padding:12px 20px 20px;display:flex;justify-content:space-around;align-items:center;background:linear-gradient(0deg,rgba(90,184,58,0.6) 0%,transparent 100%);z-index:100;}',
+      '.pig-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;transition:transform 0.1s;min-width:80px;box-shadow:0 4px 0 #e0a000;}',
+      '.pig-tool-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #e0a000;}',
+      '.pig-tool-btn .icon{font-size:28px;line-height:1;}',
+      '.pig-tool-btn .text{font-size:15px;font-weight:900;color:#8b5a2b;}',
+      '.pig-tool-btn .count{position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;}',
+      '.pig-tool-btn.disabled{opacity:0.6;background:#d0d0d0;border-color:#999;box-shadow:0 4px 0 #777;cursor:pointer;}',
+      '.pig-tool-btn.active{border-color:#ff4757;box-shadow:0 0 0 3px rgba(255,71,87,0.3),0 4px 0 #e0a000;}',
+      '.pig-pause-mask{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:150;opacity:0;pointer-events:none;transition:opacity 0.3s ease;}',
+      '.pig-pause-mask.show{opacity:1;pointer-events:all;}',
+      '.pig-pause-title{font-size:36px;font-weight:900;color:#fff;margin-bottom:30px;letter-spacing:4px;}',
+      '.pig-pause-btn{background:#52c41a;color:white;border:none;padding:14px 40px;border-radius:30px;font-size:20px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #389e0d;margin-bottom:16px;transition:transform 0.1s;}',
+      '.pig-pause-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #389e0d;}',
+      '.pig-pause-btn.secondary{background:#fff;color:#333;box-shadow:0 4px 0 #ccc;}',
+      '.pig-quiz-modal{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;padding:20px;}',
+      '.pig-quiz-modal.show{opacity:1;pointer-events:all;}',
+      '.pig-quiz-content{background:#fff;padding:24px;border-radius:20px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,0.3);animation:pigPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1);}',
+      '@keyframes pigPopIn{0%{transform:scale(0.5);opacity:0;}100%{transform:scale(1);opacity:1;}}',
+      '.pig-quiz-chapter{font-size:13px;color:#888;margin-bottom:8px;}',
+      '.pig-quiz-question{font-size:17px;font-weight:bold;color:#333;line-height:1.6;margin-bottom:16px;}',
+      '.pig-quiz-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}',
+      '.pig-quiz-option{padding:12px 16px;border:2px solid #e8e8e8;border-radius:12px;cursor:pointer;font-size:15px;color:#333;transition:all 0.2s;}',
+      '.pig-quiz-option:hover{border-color:#52c41a;background:#f6ffed;}',
+      '.pig-quiz-option.correct{border-color:#52c41a;background:#f6ffed;color:#389e0d;}',
+      '.pig-quiz-option.wrong{border-color:#ff4757;background:#fff1f0;color:#cf1322;}',
+      '.pig-quiz-option.disabled{pointer-events:none;}',
+      '.pig-quiz-tip{text-align:center;font-size:14px;color:#666;margin-bottom:12px;min-height:20px;}',
+      '.pig-quiz-close-btn{width:100%;background:#52c41a;color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #389e0d;}',
+      '.pig-modal{position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;}',
+      '.pig-modal.show{opacity:1;pointer-events:all;}',
+      '.pig-modal-content{background:#fff;padding:32px 40px;border-radius:20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);animation:pigPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1);}',
+      '.pig-modal-title{font-size:28px;font-weight:900;color:#333;margin-bottom:20px;}',
+      '.pig-modal-btn{background:#52c41a;color:white;border:none;padding:12px 32px;border-radius:26px;font-size:18px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #389e0d;transition:transform 0.1s;}',
+      '.pig-modal-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #389e0d;}',
+      '.pig-grass-dot{position:absolute;border-radius:50%;background:#5ab83a;opacity:0.35;pointer-events:none;z-index:3;}',
+      '.pig-run-score-bar{background:#f0fff0;border-radius:12px;padding:12px;margin-bottom:12px;border:1px solid #90ee90;display:flex;justify-content:space-between;align-items:center;}'
+    ].join('\n');
+    document.head.appendChild(style);
+  }
+
+  // === 小猪图片 CDN 地址（webp 压缩版）===
+  var PIG_IMG_URL = 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA.webp';
+
+  // === 数学题库（完整60道，忠实于原始代码）===
+  var questionBank = [
+    {chapter:"第七章 相交线与平行线",question:"下列命题中是假命题的是（ ）",options:["对顶角相等","两条直线被第三条直线所截，同旁内角互补","在同一平面内，过一点有且只有一条直线与已知直线垂直","直线外一点到这条直线的垂线段的长度叫做点到直线的距离"],answer:1},
+    {chapter:"第七章 相交线与平行线",question:"下列说法正确的是（ ）",options:["不相交的两条直线叫做平行线","在同一平面内，不相交的两条线段互相平行","在同一平面内，不重合的两条直线的位置关系只有相交和平行两种","以上说法都不对"],answer:2},
+    {chapter:"第七章 相交线与平行线",question:"如图，下列条件中，不能判定AB∥CD的是（ ）",options:["∠3=∠4","∠1=∠2","∠B=∠DCE","∠D+∠BAD=180°"],answer:1},
+    {chapter:"第七章 相交线与平行线",question:"两直线被第三条直线所截，下列说法正确的是（ ）",options:["同位角相等","内错角相等","同旁内角互补","以上都不对"],answer:3},
+    {chapter:"第七章 相交线与平行线",question:"过一点画已知直线的垂线，可画（ ）",options:["0条","1条","无数条","1条或无数条"],answer:1},
+    {chapter:"第七章 相交线与平行线",question:"下列图形中，由AB∥CD能得到∠1=∠2的是（ ）",options:["内错角位置图形","同位角位置图形","同旁内角位置图形","对顶角位置图形"],answer:0},
+    {chapter:"第七章 相交线与平行线",question:"一个图形经过平移后，发生变化的是（ ）",options:["形状","大小","位置","角度"],answer:2},
+    {chapter:"第七章 相交线与平行线",question:"若∠1与∠2是同旁内角，且∠1=50°，则∠2的度数是（ ）",options:["50°","130°","50°或130°","不能确定"],answer:3},
+    {chapter:"第七章 相交线与平行线",question:"下列说法正确的是（ ）",options:["平移后对应点连线互相平行且相等","平移后图形的形状改变","平移后图形的大小改变","平移改变图形的方向"],answer:0},
+    {chapter:"第七章 相交线与平行线",question:"两条直线相交形成的四个角中，下列条件能判定两条直线垂直的是（ ）",options:["有两个角相等","有两对角相等","有三个角相等","有四对邻补角"],answer:2},
+    {chapter:"第八章 实数",question:"4的平方根是（ ）",options:["2","±2","-2","√2"],answer:1},
+    {chapter:"第八章 实数",question:"下列各数中，是无理数的是（ ）",options:["3.14","22/7","√2","0.333…"],answer:2},
+    {chapter:"第八章 实数",question:"-8的立方根是（ ）",options:["2","-2","±2","-4"],answer:1},
+    {chapter:"第八章 实数",question:"√16的算术平方根是（ ）",options:["4","±4","2","±2"],answer:2},
+    {chapter:"第八章 实数",question:"下列说法正确的是（ ）",options:["无限小数都是无理数","带根号的数都是无理数","无理数是无限不循环小数","实数包括正实数和负实数"],answer:2},
+    {chapter:"第八章 实数",question:"估计√11的值在（ ）",options:["2和3之间","3和4之间","4和5之间","5和6之间"],answer:1},
+    {chapter:"第八章 实数",question:"下列计算正确的是（ ）",options:["√9=±3","√(-3)²=-3","³√8=2","√2+√3=√5"],answer:2},
+    {chapter:"第八章 实数",question:"和数轴上的点一一对应的是（ ）",options:["有理数","无理数","整数","实数"],answer:3},
+    {chapter:"第八章 实数",question:"若√(a-2) + |b+3| = 0，则(a+b)²⁰²⁴的值是（ ）",options:["0","1","-1","2024"],answer:1},
+    {chapter:"第八章 实数",question:"下列各组数中，互为相反数的是（ ）",options:["-2与√(-2)²","-2与³√-8","-2与-1/2","|2|与2"],answer:0},
+    {chapter:"第九章 平面直角坐标系",question:"在平面直角坐标系中，点(-3, 4)所在的象限是（ ）",options:["第一象限","第二象限","第三象限","第四象限"],answer:1},
+    {chapter:"第九章 平面直角坐标系",question:"在平面直角坐标系中，点P(2, -3)关于x轴对称的点的坐标是（ ）",options:["(2, 3)","(-2, 3)","(-2, -3)","(2, -3)"],answer:0},
+    {chapter:"第九章 平面直角坐标系",question:"点A(m-4, 1-2m)在第四象限，则m的取值范围是（ ）",options:["m>1/2","m<4","m>4","1/2<m<4"],answer:2},
+    {chapter:"第九章 平面直角坐标系",question:"将点P(-2, 1)向右平移3个单位长度，再向上平移2个单位长度，得到的点的坐标是（ ）",options:["(-5, 3)","(1, 3)","(1, -1)","(-5, -1)"],answer:1},
+    {chapter:"第九章 平面直角坐标系",question:"在平面直角坐标系中，y轴上的点的坐标特点是（ ）",options:["横坐标为0","纵坐标为0","横纵坐标都为0","横纵坐标相等"],answer:0},
+    {chapter:"第九章 平面直角坐标系",question:"点P到x轴的距离是2，到y轴的距离是3，则点P的坐标不可能是（ ）",options:["(3, 2)","(-3, 2)","(-3, -2)","(2, 3)"],answer:3},
+    {chapter:"第九章 平面直角坐标系",question:"若点A(a, b)在第二象限，则点B(-a, b+1)在（ ）",options:["第一象限","第二象限","第三象限","第四象限"],answer:0},
+    {chapter:"第九章 平面直角坐标系",question:"在平面直角坐标系中，已知点A(1, 2)，B(3, 4)，则线段AB的中点坐标是（ ）",options:["(2, 3)","(1, 2)","(3, 4)","(4, 6)"],answer:0},
+    {chapter:"第九章 平面直角坐标系",question:"如果点M(a, b)在第三象限，那么点N(-a, -b)在（ ）",options:["第一象限","第二象限","第三象限","第四象限"],answer:0},
+    {chapter:"第九章 平面直角坐标系",question:"平面直角坐标系中，将三角形各点的纵坐标都减去3，横坐标保持不变，图形发生的变化是（ ）",options:["向上平移3个单位","向下平移3个单位","向左平移3个单位","向右平移3个单位"],answer:1},
+    {chapter:"第十章 二元一次方程组",question:"下列方程中，是二元一次方程的是（ ）",options:["x+y=1","x²+y=2","x+y+z=3","x+1/y=4"],answer:0},
+    {chapter:"第十章 二元一次方程组",question:"方程组 { x+y=3, x-y=1 } 的解是（ ）",options:["{x=1, y=2}","{x=2, y=1}","{x=3, y=0}","{x=0, y=3}"],answer:1},
+    {chapter:"第十章 二元一次方程组",question:"用代入法解方程组 { 2x-y=1, 3x+2y=5 } 时，最简便的变形是（ ）",options:["由①得x=(y+1)/2","由①得y=2x-1","由②得x=(5-2y)/3","由②得y=(5-3x)/2"],answer:1},
+    {chapter:"第十章 二元一次方程组",question:"方程组 { 3x+2y=7, 4x-y=13 } 的解是（ ）",options:["{x=-1, y=5}","{x=3, y=-1}","{x=-3, y=-1}","{x=2, y=1/2}"],answer:1},
+    {chapter:"第十章 二元一次方程组",question:"已知 { x=2, y=1 } 是方程2x+ay=5的解，则a的值为（ ）",options:["1","2","3","4"],answer:0},
+    {chapter:"第十章 二元一次方程组",question:"某班共有学生49人，一天，该班某男生因事请假，当天的男生人数恰为女生人数的一半。若设该班男生人数为x，女生人数为y，则下列方程组正确的是（ ）",options:["{x-y=49, y=2(x+1)}","{x+y=49, y=2(x-1)}","{x+y=49, y=2x-1}","{x-y=49, y=2x-1}"],answer:1},
+    {chapter:"第十章 二元一次方程组",question:"二元一次方程2x+y=7的正整数解有（ ）",options:["1组","2组","3组","4组"],answer:2},
+    {chapter:"第十章 二元一次方程组",question:"若方程组 { x+y=3, x-y=1 } 与方程组 { mx+ny=8, mx-ny=4 } 的解相同，则m、n的值分别是（ ）",options:["3, 2","2, 3","2, 2","3, 3"],answer:0},
+    {chapter:"第十章 二元一次方程组",question:"用加减法解方程组 { 2x+3y=3, 3x-2y=11 } 时，下列变形正确的是（ ）",options:["①×2+②×3消去y","①×2-②×3消去y","①×3+②×2消去x","①×3-②×2消去y"],answer:0},
+    {chapter:"第十章 二元一次方程组",question:"今有鸡兔同笼，上有三十五头，下有九十四足，问鸡兔各几何。设鸡有x只，兔有y只，则可列方程组为（ ）",options:["{x+y=35, 2x+4y=94}","{x+y=35, 4x+2y=94}","{x+y=94, 2x+4y=35}","{x+y=94, 4x+2y=35}"],answer:0},
+    {chapter:"第十一章 不等式与不等式组",question:"下列式子中，是一元一次不等式的是（ ）",options:["x+1>0","x²>0","x+y>0","1/x>0"],answer:0},
+    {chapter:"第十一章 不等式与不等式组",question:"不等式2x-1>3的解集是（ ）",options:["x>1","x>2","x<1","x<2"],answer:1},
+    {chapter:"第十一章 不等式与不等式组",question:"若a>b，则下列不等式一定成立的是（ ）",options:["a-3 < b-3","-2a > -2b","a/2 > b/2","a² > b²"],answer:2},
+    {chapter:"第十一章 不等式与不等式组",question:"不等式组 { x>1, x>2 } 的解集是（ ）",options:["x>1","x>2","1<x<2","无解"],answer:1},
+    {chapter:"第十一章 不等式与不等式组",question:"不等式3x-1 ≥ x+3的解集在数轴上表示正确的是（ ）",options:["x≥2向右实心","x>2向右空心","x≤2向左实心","x<2向左空心"],answer:0},
+    {chapter:"第十一章 不等式与不等式组",question:"不等式组 { x+1>0, x-2≤0 } 的整数解有（ ）",options:["1个","2个","3个","4个"],answer:2},
+    {chapter:"第十一章 不等式与不等式组",question:"若关于x的一元一次不等式组 { x-m>0, 2x+1>3 } 无解，则m的取值范围是（ ）",options:["m≥1","m>1","m≤1","m<1"],answer:0},
+    {chapter:"第十一章 不等式与不等式组",question:"某商品的进价为800元，出售时标价为1200元，后来由于该商品积压，商店准备打折销售，但要保证利润率不低于5%，则至多可打（ ）",options:["6折","7折","8折","9折"],answer:1},
+    {chapter:"第十一章 不等式与不等式组",question:"已知点P(a, 1-a)在第一象限，则a的取值范围是（ ）",options:["a<0","0<a<1","a>1","a<1"],answer:1},
+    {chapter:"第十一章 不等式与不等式组",question:"若不等式(a-1)x > a-1的解集是x < 1，则a的取值范围是（ ）",options:["a>1","a<1","a≥1","a≤1"],answer:1},
+    {chapter:"第十二章 数据的收集整理",question:"下列调查中，适合用全面调查方式的是（ ）",options:["了解一批灯泡的使用寿命","了解全国中学生的视力情况","了解某班学生的身高情况","了解长江中鱼的种类"],answer:2},
+    {chapter:"第十二章 数据的收集整理",question:"为了解某校八年级1200名学生的体重情况，从中抽取了200名学生的体重进行统计，下列说法正确的是（ ）",options:["总体是1200名学生","样本是200名学生","个体是每个学生","样本容量是200"],answer:3},
+    {chapter:"第十二章 数据的收集整理",question:"下列统计图中，能清楚地反映事物变化趋势的是（ ）",options:["条形统计图","折线统计图","扇形统计图","频数分布直方图"],answer:1},
+    {chapter:"第十二章 数据的收集整理",question:"要反映某市一天内气温的变化情况，最好选用（ ）",options:["条形统计图","折线统计图","扇形统计图","频数分布表"],answer:1},
+    {chapter:"第十二章 数据的收集整理",question:"扇形统计图中，某部分占总体的百分比为25%，则该部分对应的扇形圆心角是（ ）",options:["25°","90°","120°","180°"],answer:1},
+    {chapter:"第十二章 数据的收集整理",question:"一组数据共50个，分成5组，若前4组的频数分别为8、12、15、10，则第5组的频率是（ ）",options:["0.1","0.2","0.3","0.4"],answer:0},
+    {chapter:"第十二章 数据的收集整理",question:"下列调查中，调查方式选择正确的是（ ）",options:["为了了解100个灯泡的使用寿命，选择全面调查","为了了解某公园全年的游客流量，选择抽样调查","为了了解生产的一批炮弹的杀伤半径，选择全面调查","为了了解一批袋装食品是否含有防腐剂，选择全面调查"],answer:1},
+    {chapter:"第十二章 数据的收集整理",question:"在频数分布直方图中，各小长方形的面积等于相应各组的（ ）",options:["组距","频数","频率","组数"],answer:1},
+    {chapter:"第十二章 数据的收集整理",question:"某校有学生2000人，随机抽取了200名学生进行视力调查，发现有80名学生近视，则估计该校近视的学生人数约为（ ）",options:["600人","800人","1000人","1200人"],answer:1},
+    {chapter:"第十二章 数据的收集整理",question:"绘制频数分布直方图时，若一组数据的最大值与最小值的差为21，组距为4，则组数为（ ）",options:["4组","5组","6组","7组"],answer:2}
+  ];
+
+  // === 音效 ===
+  var audioFiles = {};
+  function initAudio() {
+    audioFiles = {
+      click: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'),
+      escape: new Audio('https://assets.mixkit.co/active_storage/sfx/1661/1661-preview.mp3'),
+      blocked: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
+      win: new Audio('https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3')
+    };
+  }
+  function playSound(name, soundEnabled) {
+    if (!soundEnabled) return;
+    var audio = audioFiles[name];
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.volume = 0.35;
+    audio.play().catch(function() {});
+  }
+
+  // === 渲染小猪快跑页面（教师/学生入口）===
   function renderPigRunPage() {
     var container = document.getElementById('pigRunContent');
     if (!container) return;
-
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
-
     if (!isStudentView) {
-      // Teacher view
-      container.innerHTML = '<div class="pig-run-teacher-view">' +
+      container.innerHTML = '<div style="text-align:center;padding:40px;">' +
         '<div style="font-size:64px;margin-bottom:16px;">🐷</div>' +
         '<div style="font-size:20px;font-weight:700;margin-bottom:12px;">小猪快跑</div>' +
         '<div style="font-size:14px;color:#888;margin-bottom:20px;">学生通过点击小猪帮助它们逃脱，获得积分</div>' +
-        '<div style="background:#f0fff0;border-radius:16px;padding:20px;margin-bottom:20px;border:1px solid #90ee90;">' +
-        '<div style="font-size:14px;color:#555;line-height:2;">' +
-        '🐷 点击小猪让它们按方向跑<br>' +
-        '🏆 成功逃脱每只 +5分<br>' +
-        '🎯 通关额外 +30分<br>' +
-        '📝 答对题目可获取道具<br>' +
-        '⚔️ 积分可用于小猪快跑排行榜' +
-        '</div></div>' +
-        '<div style="font-size:13px;color:#aaa;">学生登录后即可开始游戏</div>' +
-        '</div>';
+        '<div style="font-size:13px;color:#aaa;">学生登录后即可开始游戏</div></div>';
       return;
     }
-
     var student = getCurrentStudent();
     if (!student) {
       container.innerHTML = '<div style="text-align:center;padding:40px;">未找到你的学生信息</div>';
       return;
     }
-
-    // Initialize pig run state
     if (!student.quizState || typeof student.quizState !== 'object') {
-      student.quizState = {
-        lastQuizDate: '',
-        todayCoins: 0,
-        questionsToday: [],
-        totalQuestions: 0,
-        started: false,
-        pigRunScore: 0,
-        totalQuizCoins: 0
-      };
+      student.quizState = { lastQuizDate: '', todayCoins: 0, questionsToday: [], totalQuestions: 0, started: false, pigRunScore: 0, totalQuizCoins: 0 };
     }
     if (!student.quizState.pigRunScore) student.quizState.pigRunScore = 0;
     student.pigRunScore = student.quizState.pigRunScore;
-
-    if (!student.pigRunState) {
-      student.pigRunState = {
-        lastPlayDate: '',
-        todayScore: 0
-      };
-    }
+    if (!student.pigRunState) student.pigRunState = { lastPlayDate: '', todayScore: 0 };
     var today = new Date().toDateString();
     if (student.pigRunState.lastPlayDate !== today) {
       student.pigRunState.lastPlayDate = today;
       student.pigRunState.todayScore = 0;
     }
-
-    // Render the game
     renderPigRunGame(container, student);
   }
   window.renderPigRunPage = renderPigRunPage;
 
-  // === 小猪图片 CDN 地址（webp 压缩版，加速加载）===
-  var PIG_IMG_URL = 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA.webp';
-
-  // === 方向对应旋转角度（小猪.png 默认头朝下=down）===
-  // down:0deg  up:180deg  left:90deg  right:-90deg
-  function dirToRotation(dir) {
-    if (dir === 'up') return 180;
-    if (dir === 'left') return 90;
-    if (dir === 'right') return -90;
-    return 0; // down
-  }
-
-  // === PLACEHOLDER: renderPigRunGame - 实际游戏渲染 ===
+  // === 渲染游戏主体 ===
   function renderPigRunGame(container, student) {
-    // 移动端检测：减小棋盘高度，避免渲染过多 DOM 导致崩溃
-    var isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
-    var boardH = isMobile ? '65vh' : '680px';
-    var html = '<div style="max-width:500px;margin:0 auto;padding:16px;text-align:center;">';
-    // Score display
-    html += '<div style="background:#f0fff0;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #90ee90;">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+    injectStyles();
+    initAudio();
+    var html = '<div class="pig-run-wrap">';
+    // Score bar
+    html += '<div class="pig-run-score-bar">';
     html += '<span style="font-size:13px;font-weight:600;color:#389e0d;">🐷 今日得分: ' + student.pigRunState.todayScore + '</span>';
     html += '<span style="font-size:13px;font-weight:600;color:#d4a017;">🏆 总分: ' + (student.quizState.pigRunScore || 0) + '</span>';
+    html += '</div>';
+    // Game container
+    html += '<div class="pig-game-container" id="pigGameContainer">';
+    // Top bar
+    html += '<div class="pig-top-bar">';
+    html += '<div class="pig-top-left-group">';
+    html += '<button class="pig-btn-icon" id="pigPauseBtn">⏸</button>';
+    html += '<div class="pig-time-display" id="pigTimeDisplay">00:00</div>';
+    html += '</div>';
+    html += '<div class="pig-coin-display"><span>🪙</span><span id="pigCoinCount">0</span></div>';
+    html += '<div class="pig-level-title">第<span id="pigLevelNum">1</span>关</div>';
+    html += '<button class="pig-btn-icon" id="pigSoundBtn">🔊</button>';
+    html += '</div>';
+    // Game board
+    html += '<div class="pig-game-board" id="pigGameBoard"></div>';
+    // Bottom bar
+    html += '<div class="pig-bottom-bar">';
+    html += '<div class="pig-tool-btn" id="pigRemoveTool"><span class="icon" id="pigRemoveIcon">🗑</span><span class="text">移除</span><span class="count" id="pigRemoveCount">1</span></div>';
+    html += '<div class="pig-tool-btn" id="pigShuffleTool"><span class="icon" id="pigShuffleIcon">🔀</span><span class="text">洗牌</span><span class="count" id="pigShuffleCount">1</span></div>';
+    html += '<div class="pig-tool-btn" id="pigRotateTool"><span class="icon" id="pigRotateIcon">🔄</span><span class="text">转向</span><span class="count" id="pigRotateCount">1</span></div>';
+    html += '</div>';
+    // Pause mask
+    html += '<div class="pig-pause-mask" id="pigPauseMask">';
+    html += '<div class="pig-pause-title">游戏暂停</div>';
+    html += '<button class="pig-pause-btn" id="pigResumeBtn">▶ 继续游戏</button>';
+    html += '</div>';
+    // Quiz modal
+    html += '<div class="pig-quiz-modal" id="pigQuizModal">';
+    html += '<div class="pig-quiz-content">';
+    html += '<div class="pig-quiz-chapter" id="pigQuizChapter"></div>';
+    html += '<div class="pig-quiz-question" id="pigQuizQuestion"></div>';
+    html += '<div class="pig-quiz-options" id="pigQuizOptions"></div>';
+    html += '<div class="pig-quiz-tip" id="pigQuizTip"></div>';
+    html += '<button class="pig-quiz-close-btn" id="pigQuizCloseBtn" style="display:none;">关闭</button>';
     html += '</div></div>';
-    // Game area — 使用固定高度，避免移动端 aspect-ratio + 大量 DOM 导致崩溃
-    html += '<div id="pigRunGameArea" style="position:relative;width:100%;max-width:430px;height:' + boardH + ';margin:0 auto;background:linear-gradient(180deg,#d9ff8a 0%,#9be26b 30%,#76c543 70%,#4d8a28 100%);border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.15);">';
-    html += '<div id="pigRunStartWrap" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;">';
-    html += '<div style="font-size:80px;margin-bottom:20px;">🐷</div>';
-    html += '<div style="font-size:20px;font-weight:700;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.3);margin-bottom:16px;">小猪快跑</div>';
-    html += '<button id="pigRunStartBtn" style="background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:25px;padding:14px 40px;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(255,200,0,0.4);transition:all 0.3s;">';
-    html += '🏁 开始游戏</button>';
-    html += '</div>';
-    html += '</div>';
-    // Instructions
-    html += '<div style="margin-top:16px;padding:12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;text-align:left;">';
+    // Win modal
+    html += '<div class="pig-modal" id="pigWinModal">';
+    html += '<div class="pig-modal-content">';
+    html += '<div class="pig-modal-title">🎉 全部逃脱成功！</div>';
+    html += '<button class="pig-modal-btn" id="pigNextLevelBtn">下一关</button>';
+    html += '</div></div>';
+    html += '</div>'; // close pig-game-container
+    // Rules
+    html += '<div style="margin-top:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;text-align:left;">';
     html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
     html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
-    html += '1. 点击"开始游戏"后，棋盘上会出现许多小猪<br>';
-    html += '2. 每只小猪面朝一个方向，点击它会沿该方向跑<br>';
-    html += '3. 跑到棋盘边缘即可逃脱，每只 +5分<br>';
-    html += '4. 如果被其他小猪挡住则无法逃脱<br>';
-    html += '5. 全部逃脱后通关，额外 +30分<br>';
-    html += '6. 道具用完后答对数学题可获得更多道具';
-    html += '</div></div>';
-    html += '</div>';
+    html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 全部逃脱通关，额外 +30分<br>5. 道具耗尽后点击图标可答题补充</div></div>';
+    html += '</div>'; // close pig-run-wrap
     container.innerHTML = html;
-
-    // Bind start button
-    var startBtn = document.getElementById('pigRunStartBtn');
-    if (startBtn) {
-      startBtn.addEventListener('click', function() {
-        startPigRunGame(student);
-      });
-    }
+    // Start game
+    setTimeout(function() { startPigRunGame(container, student); }, 100);
   }
 
-  // === PLACEHOLDER: startPigRunGame - 开始实际游戏 ===
-  function startPigRunGame(student) {
-    var gameArea = document.getElementById('pigRunGameArea');
-    if (!gameArea) return;
-
-    // Clear and build game board
-    gameArea.innerHTML = '';
-    gameArea.style.background = '';
-
-    // Build game UI
-    var gameHtml = '';
-    // Top bar
-    gameHtml += '<div style="position:absolute;top:0;left:0;width:100%;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:100;gap:8px;">';
-    gameHtml += '<div style="display:flex;align-items:center;gap:8px;">';
-    gameHtml += '<button id="pigPauseBtn" style="width:40px;height:40px;border-radius:12px;background:#fff;border:2px solid #e8e8e8;font-size:18px;cursor:pointer;box-shadow:0 3px 0 #d0d0d0;display:flex;align-items:center;justify-content:center;">⏸</button>';
-    gameHtml += '<div id="pigTimeDisplay" style="background:#fff;padding:6px 12px;border-radius:12px;font-weight:bold;color:#333;font-size:16px;border:2px solid #e8e8e8;box-shadow:0 3px 0 #d0d0d0;min-width:70px;text-align:center;">00:00</div>';
-    gameHtml += '</div>';
-    gameHtml += '<div style="display:flex;align-items:center;gap:6px;background:#fff;padding:6px 16px;border-radius:20px;font-weight:bold;color:#f5a623;font-size:18px;box-shadow:0 3px 0 #e0c080;">';
-    gameHtml += '<span>🪙</span><span id="pigCoinCount">0</span>';
-    gameHtml += '</div>';
-    gameHtml += '<div style="font-size:24px;font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,0.2);letter-spacing:2px;">第<span id="pigLevelNum">1</span>关</div>';
-    gameHtml += '<button id="pigSoundBtn" style="width:40px;height:40px;border-radius:12px;background:#fff;border:2px solid #e8e8e8;font-size:18px;cursor:pointer;box-shadow:0 3px 0 #d0d0d0;display:flex;align-items:center;justify-content:center;">🔊</button>';
-    gameHtml += '</div>';
-
-    // Game board — 预留更多底部空间（移动端工具栏较高，130px 防止遮挡小猪）
-    gameHtml += '<div id="pigGameBoard" style="position:absolute;top:65px;bottom:130px;left:10px;right:10px;z-index:10;"></div>';
-
-    // Bottom bar with tools — 移动端用更紧凑的内边距，防止超出棋盘区域
-    gameHtml += '<div style="position:absolute;bottom:0;left:0;width:100%;padding:8px 12px 10px;display:flex;justify-content:space-around;align-items:flex-end;background:linear-gradient(0deg,rgba(90,184,58,0.7) 0%,transparent 100%);z-index:100;">';
-    gameHtml += '<div class="pig-tool-btn" id="pigRemoveTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;background:#ffe066;border:3px solid #ffb800;border-radius:12px;padding:4px 10px;cursor:pointer;min-width:72px;box-shadow:0 3px 0 #e0a000;">';
-    gameHtml += '<span style="font-size:24px;" id="pigRemoveIcon">🗑</span>';
-    gameHtml += '<span style="font-size:13px;font-weight:900;color:#8b5a2b;">移除</span>';
-    gameHtml += '<span id="pigRemoveCount" style="position:absolute;top:-7px;right:-7px;background:#ff4757;color:white;font-size:12px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
-    gameHtml += '</div>';
-    gameHtml += '<div class="pig-tool-btn" id="pigShuffleTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;background:#ffe066;border:3px solid #ffb800;border-radius:12px;padding:4px 10px;cursor:pointer;min-width:72px;box-shadow:0 3px 0 #e0a000;">';
-    gameHtml += '<span style="font-size:24px;" id="pigShuffleIcon">🔀</span>';
-    gameHtml += '<span style="font-size:13px;font-weight:900;color:#8b5a2b;">洗牌</span>';
-    gameHtml += '<span id="pigShuffleCount" style="position:absolute;top:-7px;right:-7px;background:#ff4757;color:white;font-size:12px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
-    gameHtml += '</div>';
-    gameHtml += '<div class="pig-tool-btn" id="pigRotateTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;background:#ffe066;border:3px solid #ffb800;border-radius:12px;padding:4px 10px;cursor:pointer;min-width:72px;box-shadow:0 3px 0 #e0a000;">';
-    gameHtml += '<span style="font-size:24px;" id="pigRotateIcon">🔄</span>';
-    gameHtml += '<span style="font-size:13px;font-weight:900;color:#8b5a2b;">转向</span>';
-    gameHtml += '<span id="pigRotateCount" style="position:absolute;top:-7px;right:-7px;background:#ff4757;color:white;font-size:12px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
-    gameHtml += '</div>';
-    gameHtml += '</div>';
-
-    // Pause mask
-    gameHtml += '<div id="pigPauseMask" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:150;opacity:0;pointer-events:none;transition:opacity 0.3s ease;">';
-    gameHtml += '<div style="font-size:36px;font-weight:900;color:#fff;margin-bottom:30px;letter-spacing:4px;">游戏暂停</div>';
-    gameHtml += '<button id="pigResumeBtn" style="background:#52c41a;color:white;border:none;padding:14px 40px;border-radius:30px;font-size:20px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #389e0d;margin-bottom:16px;">▶ 继续游戏</button>';
-    gameHtml += '</div>';
-
-    // Win modal
-    gameHtml += '<div id="pigWinModal" style="position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;">';
-    gameHtml += '<div style="background:#fff;padding:32px 40px;border-radius:20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
-    gameHtml += '<div style="font-size:28px;font-weight:900;color:#333;margin-bottom:20px;">🎉 全部逃脱成功！</div>';
-    gameHtml += '<div id="pigWinScore" style="font-size:18px;color:#52c41a;font-weight:700;margin-bottom:16px;"></div>';
-    gameHtml += '<button id="pigNextLevelBtn" style="background:#52c41a;color:white;border:none;padding:12px 32px;border-radius:26px;font-size:18px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #389e0d;">下一关</button>';
-    gameHtml += '</div></div>';
-
-    // Tool quiz modal — 道具耗尽时弹出答题，答对获得道具
-    gameHtml += '<div id="pigToolQuizModal" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:250;opacity:0;pointer-events:none;transition:opacity 0.3s ease;">';
-    gameHtml += '<div id="pigToolQuizBox" style="background:#fff;padding:24px 20px;border-radius:20px;text-align:center;width:85%;max-width:320px;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
-    gameHtml += '<div id="pigToolQuizTitle" style="font-size:16px;font-weight:700;color:#333;margin-bottom:8px;">📝 答对题目获得道具</div>';
-    gameHtml += '<div id="pigToolQuizDesc" style="font-size:13px;color:#888;margin-bottom:16px;"></div>';
-    gameHtml += '<div id="pigToolQuizQuestion" style="font-size:26px;font-weight:900;color:#d4a017;margin-bottom:20px;"></div>';
-    gameHtml += '<div id="pigToolQuizOptions" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>';
-    gameHtml += '<div id="pigToolQuizResult" style="margin-top:14px;font-size:15px;font-weight:700;min-height:22px;"></div>';
-    gameHtml += '</div></div>';
-
-    gameArea.innerHTML = gameHtml;
-
-    // Start the actual game
-    initPigRunEngine(student);
-  }
-
-  // === PLACEHOLDER: initPigRunEngine - 游戏引擎 ===
-  function initPigRunEngine(student) {
-    var COLS = 7, ROWS = 10;
-    var PIG_SCALE = 0.96;
-    var CELL_W = 100 / COLS;
-    var CELL_H = 100 / ROWS;
-    var MOVE_SPEED = 85;
-
-    var DIRS = {
-      up:    { dx: 0, dy: -1 },
-      down:  { dx: 0, dy: 1 },
-      left:  { dx: -1, dy: 0 },
-      right: { dx: 1, dy: 0 }
-    };
+  // === 游戏引擎 ===
+  function startPigRunGame(container, student) {
+    var COLS = 7, ROWS = 10, PIG_SCALE = 0.96;
+    var CELL_W = 100 / COLS, CELL_H = 100 / ROWS, MOVE_SPEED = 85;
+    var DIRS = { up:{dx:0,dy:-1}, down:{dx:0,dy:1}, left:{dx:-1,dy:0}, right:{dx:1,dy:0} };
 
     var gState = {
-      level: 1,
-      coins: 0,
-      pigs: [],
-      tools: { remove: 1, shuffle: 1, rotate: 1 },
-      activeTool: null,
-      animating: false,
-      soundEnabled: true,
-      paused: false,
-      timeSeconds: 0,
-      timer: null
+      level:1, coins:0, pigs:[], tools:{remove:1,shuffle:1,rotate:1},
+      activeTool:null, animating:false, soundEnabled:true, paused:false,
+      timeSeconds:0, timer:null, currentQuizTool:null, currentQuiz:null, answerAttempts:0
     };
 
     var board = document.getElementById('pigGameBoard');
-    var levelNumEl = document.getElementById('pigLevelNum');
+    var gameContainer = document.getElementById('pigGameContainer');
+    var levelNum = document.getElementById('pigLevelNum');
     var coinCountEl = document.getElementById('pigCoinCount');
-    var timeDisplayEl = document.getElementById('pigTimeDisplay');
+    var timeDisplay = document.getElementById('pigTimeDisplay');
     var winModal = document.getElementById('pigWinModal');
-    var winScoreEl = document.getElementById('pigWinScore');
     var nextBtn = document.getElementById('pigNextLevelBtn');
     var removeBtn = document.getElementById('pigRemoveTool');
     var shuffleBtn = document.getElementById('pigShuffleTool');
@@ -327,63 +347,48 @@
     var removeIcon = document.getElementById('pigRemoveIcon');
     var shuffleIcon = document.getElementById('pigShuffleIcon');
     var rotateIcon = document.getElementById('pigRotateIcon');
+    var soundBtn = document.getElementById('pigSoundBtn');
     var pauseBtn = document.getElementById('pigPauseBtn');
     var pauseMask = document.getElementById('pigPauseMask');
     var resumeBtn = document.getElementById('pigResumeBtn');
-    var soundBtn = document.getElementById('pigSoundBtn');
+    var quizModal = document.getElementById('pigQuizModal');
+    var quizChapter = document.getElementById('pigQuizChapter');
+    var quizQuestion = document.getElementById('pigQuizQuestion');
+    var quizOptions = document.getElementById('pigQuizOptions');
+    var quizTip = document.getElementById('pigQuizTip');
+    var quizCloseBtn = document.getElementById('pigQuizCloseBtn');
 
-    if (!board) return;
+    if (!board || !gameContainer) return;
 
     // Timer
-    function formatTime(seconds) {
-      var m = Math.floor(seconds / 60).toString().padStart(2, '0');
-      var s = (seconds % 60).toString().padStart(2, '0');
-      return m + ':' + s;
+    function formatTime(s) {
+      var m = Math.floor(s/60).toString().padStart(2,'0');
+      var sec = (s%60).toString().padStart(2,'0');
+      return m+':'+sec;
     }
-
     function startTimer() {
       if (gState.timer) clearInterval(gState.timer);
-      gState.timer = setInterval(function() {
-        if (!gState.paused) {
-          gState.timeSeconds++;
-          timeDisplayEl.textContent = formatTime(gState.timeSeconds);
-        }
+      gState.timer = setInterval(function(){
+        if (!gState.paused) { gState.timeSeconds++; timeDisplay.textContent = formatTime(gState.timeSeconds); }
       }, 1000);
     }
-
-    function stopTimer() {
-      if (gState.timer) { clearInterval(gState.timer); gState.timer = null; }
-    }
-
+    function stopTimer() { if (gState.timer) { clearInterval(gState.timer); gState.timer = null; } }
     function togglePause() {
       gState.paused = !gState.paused;
-      if (gState.paused) {
-        pauseBtn.textContent = '▶';
-        pauseMask.style.opacity = '1';
-        pauseMask.style.pointerEvents = 'all';
-      } else {
-        pauseBtn.textContent = '⏸';
-        pauseMask.style.opacity = '0';
-        pauseMask.style.pointerEvents = 'none';
-      }
+      if (gState.paused) { pauseBtn.textContent='▶'; pauseMask.classList.add('show'); }
+      else { pauseBtn.textContent='⏸'; pauseMask.classList.remove('show'); }
     }
 
-    // 移动端检测：减少小猪数量，降低渲染压力
-    var _isMobilePig = window.innerWidth <= 768 || ('ontouchstart' in window);
-
-    // Level generation — 移动端降低填充率，减少 DOM 元素数量
+    // Level generation
     function generateLevel(level) {
       var pigs = [];
-      var baseFill = Math.min(0.92, 0.75 + level * 0.035);
-      var fillRate = _isMobilePig ? Math.min(baseFill, 0.72) : baseFill;
-      for (var y = 0; y < ROWS; y++) {
-        for (var x = 0; x < COLS; x++) {
+      var fillRate = Math.min(0.92, 0.75 + level * 0.035);
+      for (var y=0; y<ROWS; y++) {
+        for (var x=0; x<COLS; x++) {
           if (Math.random() > fillRate) continue;
-          var isHorizontal = Math.random() > 0.5;
-          var dir = isHorizontal
-            ? (y % 2 === 0 ? 'right' : 'left')
-            : (x % 2 === 0 ? 'down' : 'up');
-          pigs.push({ x: x, y: y, dir: dir });
+          var isH = Math.random() > 0.5;
+          var dir = isH ? (y%2===0?'right':'left') : (x%2===0?'down':'up');
+          pigs.push({x:x, y:y, dir:dir});
         }
       }
       return pigs;
@@ -394,29 +399,21 @@
       gState.pigs = [];
       gState.activeTool = null;
       gState.animating = false;
-
       var data = generateLevel(level);
       data.forEach(function(d, i) {
         var el = createPig(d.x, d.y, d.dir, i);
-        gState.pigs.push({ id: i, x: d.x, y: d.y, dir: d.dir, el: el });
+        gState.pigs.push({id:i, x:d.x, y:d.y, dir:d.dir, el:el});
         placePig(el, d.x, d.y);
       });
-
-      levelNumEl.textContent = level;
+      levelNum.textContent = level;
     }
 
     function createPig(x, y, dir, id) {
       var pig = document.createElement('div');
-      pig.style.cssText = 'position:absolute;cursor:pointer;z-index:10;transition:left 0.085s linear,top 0.085s linear;will-change:left,top;';
+      pig.className = 'pig';
       pig.dataset.id = id;
       pig.dataset.dir = dir;
-
-      var rot = dirToRotation(dir);
-      var inner = document.createElement('div');
-      // 使用 CDN webp 压缩图片（61KB vs 原始 PNG 1.3MB），大幅减少内存占用
-      inner.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background-image:url("' + PIG_IMG_URL + '");background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;transform:rotate(' + rot + 'deg) scale(1.7);';
-      pig.appendChild(inner);
-
+      pig.innerHTML = '<div class="pig-hit"></div><div class="pig-inner"></div>';
       pig.addEventListener('click', function(e) {
         e.stopPropagation();
         if (gState.paused || gState.animating) return;
@@ -426,91 +423,56 @@
     }
 
     function placePig(el, x, y) {
-      var gapX = ((1 - PIG_SCALE) / 2) * CELL_W;
-      var gapY = ((1 - PIG_SCALE) / 2) * CELL_H;
-      el.style.left = 'calc(' + (x * CELL_W) + '% + ' + gapX + '%)';
-      el.style.top = 'calc(' + (y * CELL_H) + '% + ' + gapY + '%)';
-      el.style.width = 'calc(' + (CELL_W * PIG_SCALE) + '%)';
-      el.style.height = 'calc(' + (CELL_H * PIG_SCALE) + '%)';
+      var gapX = ((1-PIG_SCALE)/2)*CELL_W, gapY = ((1-PIG_SCALE)/2)*CELL_H;
+      el.style.left = 'calc('+x*CELL_W+'% + '+gapX+'%)';
+      el.style.top = 'calc('+y*CELL_H+'% + '+gapY+'%)';
+      el.style.width = 'calc('+CELL_W*PIG_SCALE+'%)';
+      el.style.height = 'calc('+CELL_H*PIG_SCALE+'%)';
       board.appendChild(el);
     }
 
+    // Pig interaction
     function onPigClick(id) {
-      if (gState.animating) return;
-      var pig = gState.pigs.find(function(p) { return p.id === id; });
+      if (gState.animating || gState.paused) return;
+      var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
-
-      if (gState.activeTool === 'remove') {
-        doRemove(id);
-        gState.activeTool = null;
-        updateToolUI();
-        return;
-      }
-
-      if (gState.activeTool === 'rotate') {
-        doRotate(id);
-        gState.activeTool = null;
-        updateToolUI();
-        return;
-      }
-
+      playSound('click', gState.soundEnabled);
+      if (gState.activeTool === 'remove') { doRemove(id); gState.activeTool=null; updateToolUI(); return; }
+      if (gState.activeTool === 'rotate') { doRotate(id); gState.activeTool=null; updateToolUI(); return; }
       runPig(pig);
     }
 
     function runPig(pig) {
       gState.animating = true;
-      var dx = DIRS[pig.dir].dx;
-      var dy = DIRS[pig.dir].dy;
-      var gapX = ((1 - PIG_SCALE) / 2) * CELL_W;
-      var gapY = ((1 - PIG_SCALE) / 2) * CELL_H;
-
+      pig.el.classList.add('running');
+      var dx=DIRS[pig.dir].dx, dy=DIRS[pig.dir].dy;
+      var gapX=((1-PIG_SCALE)/2)*CELL_W, gapY=((1-PIG_SCALE)/2)*CELL_H;
       function step() {
-        if (gState.pigs.indexOf(pig) === -1) { gState.animating = false; return; }
-        var nx = pig.x + dx;
-        var ny = pig.y + dy;
-
-        if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) {
-          escapeOut(pig);
-          return;
-        }
-
-        var hit = gState.pigs.some(function(p) { return p.id !== pig.id && p.x === nx && p.y === ny; });
-        if (hit) {
-          gState.animating = false;
-          return;
-        }
-
-        pig.x = nx;
-        pig.y = ny;
-        pig.el.style.left = 'calc(' + (nx * CELL_W) + '% + ' + gapX + '%)';
-        pig.el.style.top = 'calc(' + (ny * CELL_H) + '% + ' + gapY + '%)';
-
+        if (gState.pigs.indexOf(pig)===-1) { gState.animating=false; return; }
+        var nx=pig.x+dx, ny=pig.y+dy;
+        if (nx<0||nx>=COLS||ny<0||ny>=ROWS) { escapeOut(pig); return; }
+        var hit = gState.pigs.some(function(p){return p.id!==pig.id && p.x===nx && p.y===ny;});
+        if (hit) { pig.el.classList.remove('running'); gState.animating=false; playSound('blocked',gState.soundEnabled); return; }
+        pig.x=nx; pig.y=ny;
+        pig.el.style.left='calc('+nx*CELL_W+'% + '+gapX+'%)';
+        pig.el.style.top='calc('+ny*CELL_H+'% + '+gapY+'%)';
         setTimeout(step, MOVE_SPEED);
       }
       setTimeout(step, 40);
     }
 
     function escapeOut(pig) {
-      pig.el.style.transition = 'left 0.35s ease-in, top 0.35s ease-in, opacity 0.35s ease-in';
-      var dx = DIRS[pig.dir].dx;
-      var dy = DIRS[pig.dir].dy;
-      var boardW = board.offsetWidth;
-      var boardH = board.offsetHeight;
-
-      var finalLeft = parseFloat(pig.el.style.left);
-      var finalTop = parseFloat(pig.el.style.top);
-
-      if (dx > 0) finalLeft = boardW + 50;
-      if (dx < 0) finalLeft = -100;
-      if (dy > 0) finalTop = boardH + 50;
-      if (dy < 0) finalTop = -100;
-
-      pig.el.style.left = finalLeft + 'px';
-      pig.el.style.top = finalTop + 'px';
-      pig.el.style.opacity = '0';
-
-      setTimeout(function() {
-        gState.pigs = gState.pigs.filter(function(p) { return p.id !== pig.id; });
+      pig.el.classList.remove('running');
+      pig.el.classList.add('escaping');
+      var dx=DIRS[pig.dir].dx, dy=DIRS[pig.dir].dy;
+      var bW=board.offsetWidth, bH=board.offsetHeight;
+      var fL=parseFloat(pig.el.style.left), fT=parseFloat(pig.el.style.top);
+      if (dx>0) fL=bW+50; if (dx<0) fL=-100;
+      if (dy>0) fT=bH+50; if (dy<0) fT=-100;
+      pig.el.style.left=fL+'px'; pig.el.style.top=fT+'px'; pig.el.style.opacity='0';
+      playSound('escape', gState.soundEnabled);
+      setTimeout(function(){
+        gState.pigs = gState.pigs.filter(function(p){return p.id!==pig.id;});
         pig.el.remove();
         gState.coins += 5;
         updateUI();
@@ -519,68 +481,122 @@
       }, 350);
     }
 
+    // Tool system
     function doRemove(id) {
-      var pig = gState.pigs.find(function(p) { return p.id === id; });
+      var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
       gState.tools.remove--;
-      pig.el.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
-      pig.el.style.transform = 'scale(0)';
-      pig.el.style.opacity = '0';
-      setTimeout(function() {
-        gState.pigs = gState.pigs.filter(function(p) { return p.id !== id; });
+      pig.el.style.transition='transform 0.25s ease, opacity 0.25s ease';
+      pig.el.style.transform='scale(0)'; pig.el.style.opacity='0';
+      setTimeout(function(){
+        gState.pigs = gState.pigs.filter(function(p){return p.id!==id;});
         pig.el.remove();
         checkWin();
       }, 250);
     }
 
     function doRotate(id) {
-      var pig = gState.pigs.find(function(p) { return p.id === id; });
+      var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
       gState.tools.rotate--;
-      var order = ['up', 'right', 'down', 'left'];
-      var idx = order.indexOf(pig.dir);
-      pig.dir = order[(idx + 1) % 4];
-      var inner = pig.el.querySelector('div');
-      if (inner) {
-        var rot = dirToRotation(pig.dir);
-        inner.style.transform = 'rotate(' + rot + 'deg) scale(1.7)';
-      }
+      var order=['up','right','down','left'];
+      var idx=order.indexOf(pig.dir);
+      pig.dir = order[(idx+1)%4];
+      pig.el.dataset.dir = pig.dir;
       updateUI();
     }
 
     function doShuffle() {
-      if (gState.tools.shuffle <= 0 || gState.animating) return;
+      if (gState.tools.shuffle<=0||gState.animating||gState.paused) return;
       gState.tools.shuffle--;
-      var allPositions = [];
-      for (var y = 0; y < ROWS; y++) {
-        for (var x = 0; x < COLS; x++) {
-          allPositions.push({ x: x, y: y });
-        }
-      }
-      for (var i = allPositions.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var tmp = allPositions[i]; allPositions[i] = allPositions[j]; allPositions[j] = tmp;
-      }
-      var gapX = ((1 - PIG_SCALE) / 2) * CELL_W;
-      var gapY = ((1 - PIG_SCALE) / 2) * CELL_H;
-      gState.pigs.forEach(function(pig, index) {
-        var pos = allPositions[index];
-        pig.x = pos.x; pig.y = pos.y;
-        pig.el.style.left = 'calc(' + (pos.x * CELL_W) + '% + ' + gapX + '%)';
-        pig.el.style.top = 'calc(' + (pos.y * CELL_H) + '% + ' + gapY + '%)';
+      var allPos=[];
+      for (var y=0;y<ROWS;y++) for (var x=0;x<COLS;x++) allPos.push({x:x,y:y});
+      for (var i=allPos.length-1;i>0;i--) { var j=Math.floor(Math.random()*(i+1)); var t=allPos[i];allPos[i]=allPos[j];allPos[j]=t; }
+      var gapX=((1-PIG_SCALE)/2)*CELL_W, gapY=((1-PIG_SCALE)/2)*CELL_H;
+      gState.pigs.forEach(function(pig,index){
+        var pos=allPos[index]; pig.x=pos.x; pig.y=pos.y;
+        pig.el.style.left='calc('+pos.x*CELL_W+'% + '+gapX+'%)';
+        pig.el.style.top='calc('+pos.y*CELL_H+'% + '+gapY+'%)';
       });
       updateUI();
     }
 
+    function onToolClick(toolName) {
+      if (gState.paused) return;
+      if (gState.tools[toolName] > 0) {
+        if (toolName==='shuffle') { doShuffle(); updateUI(); return; }
+        gState.activeTool = gState.activeTool===toolName ? null : toolName;
+        updateToolUI();
+      } else {
+        openQuiz(toolName);
+      }
+    }
+
+    // Quiz system — 忠实于原始题库和答题逻辑
+    function openQuiz(toolName) {
+      gState.currentQuizTool = toolName;
+      gState.answerAttempts = 0;
+      var ri = Math.floor(Math.random() * questionBank.length);
+      gState.currentQuiz = questionBank[ri];
+      quizChapter.textContent = gState.currentQuiz.chapter;
+      quizQuestion.textContent = gState.currentQuiz.question;
+      quizOptions.innerHTML = '';
+      quizTip.textContent = '';
+      quizCloseBtn.style.display = 'none';
+      gState.currentQuiz.options.forEach(function(opt, idx) {
+        var div = document.createElement('div');
+        div.className = 'pig-quiz-option';
+        div.textContent = String.fromCharCode(65+idx) + '. ' + opt;
+        div.addEventListener('click', function(){ selectAnswer(idx); });
+        quizOptions.appendChild(div);
+      });
+      quizModal.classList.add('show');
+    }
+
+    function selectAnswer(index) {
+      gState.answerAttempts++;
+      var opts = quizOptions.querySelectorAll('.pig-quiz-option');
+      var correct = gState.currentQuiz.answer;
+      opts.forEach(function(o){ o.classList.add('disabled'); });
+      if (index === correct) {
+        opts[index].classList.add('correct');
+        var reward = 0;
+        if (gState.answerAttempts === 1) { reward=2; quizTip.textContent='回答正确！获得 '+reward+' 次道具'; }
+        else if (gState.answerAttempts === 2) { reward=1; quizTip.textContent='回答正确！获得 '+reward+' 次道具'; }
+        else { reward=0; quizTip.textContent='回答正确，但超过2次作答，无法获得道具'; }
+        gState.tools[gState.currentQuizTool] += reward;
+        quizCloseBtn.style.display = 'block';
+        updateToolUI();
+      } else {
+        opts[index].classList.add('wrong');
+        if (gState.answerAttempts >= 4) {
+          opts[correct].classList.add('correct');
+          quizTip.textContent = '4次作答均错误，无法获得道具';
+          quizCloseBtn.style.display = 'block';
+        } else {
+          quizTip.textContent = '回答错误，还剩 '+(4-gState.answerAttempts)+' 次机会';
+          setTimeout(function(){
+            opts.forEach(function(o){ o.classList.remove('disabled','wrong'); });
+          }, 800);
+        }
+      }
+    }
+
+    function closeQuiz() {
+      quizModal.classList.remove('show');
+      gState.currentQuizTool = null;
+      gState.currentQuiz = null;
+    }
+
+    // Win / Next Level
     function checkWin() {
       if (gState.pigs.length === 0) {
         var levelScore = gState.coins + 30;
         gState.coins += 30;
-        setTimeout(function() {
-          winModal.style.opacity = '1';
-          winModal.style.pointerEvents = 'all';
-          winScoreEl.textContent = '本关得分: +' + levelScore + '分';
+        setTimeout(function(){
+          winModal.classList.add('show');
           stopTimer();
+          playSound('win', gState.soundEnabled);
           // Save score to student
           savePigRunScore(student, levelScore);
           student.pigRunState.todayScore += levelScore;
@@ -591,13 +607,12 @@
 
     function nextLevel() {
       gState.level++;
-      winModal.style.opacity = '0';
-      winModal.style.pointerEvents = 'none';
-      gState.tools.remove = Math.min(gState.tools.remove + 1, 5);
-      gState.tools.shuffle = Math.min(gState.tools.shuffle + 1, 3);
-      gState.tools.rotate = Math.min(gState.tools.rotate + 1, 3);
+      winModal.classList.remove('show');
+      gState.tools.remove = Math.min(gState.tools.remove+1, 5);
+      gState.tools.shuffle = Math.min(gState.tools.shuffle+1, 3);
+      gState.tools.rotate = Math.min(gState.tools.rotate+1, 3);
       gState.timeSeconds = 0;
-      timeDisplayEl.textContent = '00:00';
+      timeDisplay.textContent = '00:00';
       startTimer();
       loadLevel(gState.level);
       updateUI();
@@ -612,171 +627,47 @@
       removeCnt.textContent = gState.tools.remove;
       shuffleCnt.textContent = gState.tools.shuffle;
       rotateCnt.textContent = gState.tools.rotate;
-      removeIcon.textContent = gState.tools.remove > 0 ? '🗑' : '📝';
-      shuffleIcon.textContent = gState.tools.shuffle > 0 ? '🔀' : '📝';
-      rotateIcon.textContent = gState.tools.rotate > 0 ? '🔄' : '📝';
-      // 耗尽的道具按钮加视觉提示（灰色闪烁边框）
-      removeBtn.style.opacity = gState.tools.remove > 0 ? '1' : '0.65';
-      shuffleBtn.style.opacity = gState.tools.shuffle > 0 ? '1' : '0.65';
-      rotateBtn.style.opacity = gState.tools.rotate > 0 ? '1' : '0.65';
+      removeIcon.textContent = gState.tools.remove>0 ? '🗑' : '📝';
+      shuffleIcon.textContent = gState.tools.shuffle>0 ? '🔀' : '📝';
+      rotateIcon.textContent = gState.tools.rotate>0 ? '🔄' : '📝';
+      removeBtn.classList.toggle('disabled', gState.tools.remove<=0);
+      shuffleBtn.classList.toggle('disabled', gState.tools.shuffle<=0);
+      rotateBtn.classList.toggle('disabled', gState.tools.rotate<=0);
+      removeBtn.classList.toggle('active', gState.activeTool==='remove');
+      rotateBtn.classList.toggle('active', gState.activeTool==='rotate');
     }
 
-    // === 生成数学题目（适合小学生）===
-    function generateMathQuestion() {
-      var types = ['add', 'sub', 'mul'];
-      var type = types[Math.floor(Math.random() * types.length)];
-      var a, b, answer, text;
-      if (type === 'add') {
-        a = Math.floor(Math.random() * 50) + 10;
-        b = Math.floor(Math.random() * 50) + 10;
-        answer = a + b;
-        text = a + ' + ' + b + ' = ?';
-      } else if (type === 'sub') {
-        a = Math.floor(Math.random() * 50) + 30;
-        b = Math.floor(Math.random() * 25) + 5;
-        answer = a - b;
-        text = a + ' - ' + b + ' = ?';
-      } else {
-        a = Math.floor(Math.random() * 9) + 2;
-        b = Math.floor(Math.random() * 9) + 2;
-        answer = a * b;
-        text = a + ' × ' + b + ' = ?';
+    // Grass decoration
+    function addGrassDeco() {
+      for (var i=0; i<20; i++) {
+        var dot = document.createElement('div');
+        dot.className = 'pig-grass-dot';
+        var size = Math.random()*15+5;
+        dot.style.width = size+'px'; dot.style.height = size+'px';
+        dot.style.left = Math.random()*100+'%'; dot.style.top = Math.random()*100+'%';
+        gameContainer.appendChild(dot);
       }
-      // 生成 4 个选项（含正确答案）
-      var options = [answer];
-      while (options.length < 4) {
-        var offset = Math.floor(Math.random() * 10) - 5;
-        if (offset === 0) offset = (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 5) + 1);
-        var wrong = answer + offset;
-        if (wrong > 0 && options.indexOf(wrong) === -1) options.push(wrong);
-      }
-      // 打乱选项
-      for (var i = options.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var tmp = options[i]; options[i] = options[j]; options[j] = tmp;
-      }
-      return { text: text, answer: answer, options: options };
-    }
-
-    // === 道具答题弹窗 ===
-    var _quizToolName = '';  // 当前答题申请的道具名
-    var _quizAnswered = false;  // 防止重复点击
-
-    function showToolQuiz(toolName) {
-      _quizToolName = toolName;
-      _quizAnswered = false;
-      var modal = document.getElementById('pigToolQuizModal');
-      var titleEl = document.getElementById('pigToolQuizTitle');
-      var descEl = document.getElementById('pigToolQuizDesc');
-      var questionEl = document.getElementById('pigToolQuizQuestion');
-      var optionsEl = document.getElementById('pigToolQuizOptions');
-      var resultEl = document.getElementById('pigToolQuizResult');
-
-      var toolLabels = { remove: '移除', shuffle: '洗牌', rotate: '转向' };
-      var toolEmojis = { remove: '🗑', shuffle: '🔀', rotate: '🔄' };
-      titleEl.textContent = '📝 答对题目获得' + toolLabels[toolName] + '道具';
-      descEl.textContent = '道具已用完，答对这道数学题即可补充 1 个' + toolLabels[toolName] + '道具！';
-      resultEl.textContent = '';
-      resultEl.style.color = '#333';
-
-      var q = generateMathQuestion();
-      questionEl.textContent = q.text;
-
-      var optHtml = '';
-      q.options.forEach(function(opt) {
-        optHtml += '<button class="pig-quiz-opt" data-val="' + opt + '" style="flex:1;min-width:calc(50% - 4px);padding:12px 8px;font-size:20px;font-weight:700;border:2px solid #e8e0d0;border-radius:12px;background:#fff;cursor:pointer;color:#333;transition:all 0.2s;">' + opt + '</button>';
-      });
-      optionsEl.innerHTML = optHtml;
-
-      // 绑定选项点击
-      var btns = optionsEl.querySelectorAll('.pig-quiz-opt');
-      btns.forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          if (_quizAnswered) return;
-          _quizAnswered = true;
-          var val = parseInt(btn.dataset.val);
-          if (val === q.answer) {
-            // 答对：奖励道具
-            gState.tools[toolName] = (gState.tools[toolName] || 0) + 1;
-            btn.style.background = '#d4edda';
-            btn.style.borderColor = '#52c41a';
-            resultEl.textContent = '✅ 答对了！获得 1 个' + toolEmojis[toolName] + toolLabels[toolName] + '道具';
-            resultEl.style.color = '#52c41a';
-            updateUI();
-            setTimeout(function() {
-              modal.style.opacity = '0';
-              modal.style.pointerEvents = 'none';
-            }, 1100);
-          } else {
-            // 答错：高亮正确答案，关闭弹窗
-            btn.style.background = '#ffe0e0';
-            btn.style.borderColor = '#ff4757';
-            btns.forEach(function(b) {
-              if (parseInt(b.dataset.val) === q.answer) {
-                b.style.background = '#d4edda';
-                b.style.borderColor = '#52c41a';
-              }
-            });
-            resultEl.textContent = '❌ 答错了，正确答案是 ' + q.answer;
-            resultEl.style.color = '#ff4757';
-            setTimeout(function() {
-              modal.style.opacity = '0';
-              modal.style.pointerEvents = 'none';
-            }, 1500);
-          }
-        });
-      });
-
-      modal.style.opacity = '1';
-      modal.style.pointerEvents = 'all';
     }
 
     // Bind events
     nextBtn.addEventListener('click', nextLevel);
-    pauseBtn.addEventListener('click', togglePause);
-    resumeBtn.addEventListener('click', togglePause);
-    soundBtn.addEventListener('click', function() {
+    removeBtn.addEventListener('click', function(){ onToolClick('remove'); });
+    shuffleBtn.addEventListener('click', function(){ onToolClick('shuffle'); });
+    rotateBtn.addEventListener('click', function(){ onToolClick('rotate'); });
+    soundBtn.addEventListener('click', function(){
       gState.soundEnabled = !gState.soundEnabled;
       soundBtn.textContent = gState.soundEnabled ? '🔊' : '🔇';
     });
+    pauseBtn.addEventListener('click', togglePause);
+    resumeBtn.addEventListener('click', togglePause);
+    quizCloseBtn.addEventListener('click', closeQuiz);
 
-    removeBtn.addEventListener('click', function() {
-      if (gState.paused) return;
-      if (gState.tools.remove > 0) {
-        gState.activeTool = gState.activeTool === 'remove' ? null : 'remove';
-        removeBtn.style.borderColor = gState.activeTool === 'remove' ? '#ff4757' : '#ffb800';
-        shuffleBtn.style.borderColor = '#ffb800';
-        rotateBtn.style.borderColor = '#ffb800';
-      } else {
-        // 道具耗尽：弹出答题，答对奖励道具
-        showToolQuiz('remove');
-      }
-    });
-    shuffleBtn.addEventListener('click', function() {
-      if (gState.paused) return;
-      if (gState.tools.shuffle > 0) {
-        doShuffle();
-      } else {
-        showToolQuiz('shuffle');
-      }
-    });
-    rotateBtn.addEventListener('click', function() {
-      if (gState.paused) return;
-      if (gState.tools.rotate > 0) {
-        gState.activeTool = gState.activeTool === 'rotate' ? null : 'rotate';
-        rotateBtn.style.borderColor = gState.activeTool === 'rotate' ? '#ff4757' : '#ffb800';
-        removeBtn.style.borderColor = '#ffb800';
-        shuffleBtn.style.borderColor = '#ffb800';
-      } else {
-        showToolQuiz('rotate');
-      }
-    });
-
-    // Init first level
+    // Init
+    addGrassDeco();
     loadLevel(gState.level);
     updateUI();
     startTimer();
   }
 
-  console.log('[小猪快跑] v1 loaded');
+  console.log('[小猪快跑] v3 loaded');
 })();
