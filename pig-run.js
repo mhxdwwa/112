@@ -345,6 +345,65 @@
     {chapter:"第十二章 数据的收集整理",question:"绘制频数分布直方图时，若一组数据的最大值与最小值的差为21，组距为4，则组数为（ ）",options:["4组","5组","6组","7组"],answer:2}
   ];
 
+  // === 自定义题库（从 Supabase 加载）===
+  var customQuestionBank = null; // null = 未加载, [] = 已加载但为空, [...] = 有题目
+  var customQuestionsLoading = false;
+
+  // 从 Supabase 加载教师自定义题目
+  function loadCustomQuestions(teacherId) {
+    if (!teacherId || customQuestionsLoading) return Promise.resolve();
+    if (customQuestionBank !== null) return Promise.resolve(); // 已加载
+    customQuestionsLoading = true;
+    
+    if (typeof db === 'undefined' || !db) {
+      customQuestionsLoading = false;
+      return Promise.resolve();
+    }
+    
+    return db.from('pig_run_questions').select('*').eq('teacher_id', teacherId).order('created_at', { ascending: false }).then(function(r) {
+      customQuestionsLoading = false;
+      if (r.error) {
+        console.warn('[小猪快跑] 加载自定义题库失败:', r.error.message);
+        customQuestionBank = null;
+        return;
+      }
+      if (r.data && r.data.length > 0) {
+        customQuestionBank = r.data.map(function(q) {
+          var opts = [];
+          try { opts = typeof q.options === 'string' ? JSON.parse(q.options) : (q.options || []); } catch(e) { opts = []; }
+          return {
+            chapter: q.chapter || '默认',
+            question: q.question || '',
+            options: opts,
+            answer: typeof q.answer === 'number' ? q.answer : 0,
+            id: q.id
+          };
+        });
+        console.log('[小猪快跑] 加载了 ' + customQuestionBank.length + ' 道自定义题目');
+      } else {
+        customQuestionBank = [];
+        console.log('[小猪快跑] 教师无自定义题目，使用默认题库');
+      }
+    }).catch(function(e) {
+      customQuestionsLoading = false;
+      console.warn('[小猪快跑] 加载自定义题库异常:', e);
+    });
+  }
+
+  // 获取当前可用题库（优先自定义，降级默认）
+  function getActiveQuestionBank() {
+    if (customQuestionBank && customQuestionBank.length > 0) return customQuestionBank;
+    return questionBank;
+  }
+
+  // 获取当前教师ID
+  function getCurrentTeacherId() {
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
+      return currentUser.id;
+    }
+    return null;
+  }
+
   // === 音效 ===
   var audioFiles = {};
   function initAudio() {
@@ -371,6 +430,15 @@
     var container = document.getElementById('pigRunContent');
     if (!container) return;
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+    
+    // 教师进入时自动加载自定义题库
+    if (!isStudentView) {
+      var teacherId = getCurrentTeacherId();
+      if (teacherId && customQuestionBank === null) {
+        loadCustomQuestions(teacherId);
+      }
+    }
+    
     if (!isStudentView) {
       // Teacher view
       if (window._teacherPlayingAsStudent && window._pigRunModalShown) {
@@ -459,6 +527,18 @@
     html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
     html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
     html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 通关时间越短，时间分越高<br>5. 首次通关获得3-9金币奖励<br>6. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
+    
+    // 教师题库管理按钮
+    var isTeacherView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher';
+    if (isTeacherView) {
+      var qCount = (customQuestionBank && customQuestionBank.length > 0) ? customQuestionBank.length : questionBank.length;
+      var qSource = (customQuestionBank && customQuestionBank.length > 0) ? '自定义题库' : '默认题库';
+      html += '<div style="margin-top:10px;padding:10px 12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">';
+      html += '<div style="font-size:13px;color:#666;">📚 题库：<strong>' + qSource + '</strong>（' + qCount + ' 题）</div>';
+      html += '<button onclick="openPigRunQuestionManager()" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(102,126,234,0.3);">📝 题库管理</button>';
+      html += '</div>';
+    }
+    
     html += '</div>';
     container.innerHTML = html;
   }
@@ -776,8 +856,9 @@
     function openQuiz(toolName) {
       gState.currentQuizTool = toolName;
       gState.answerAttempts = 0;
-      var ri = Math.floor(Math.random() * questionBank.length);
-      gState.currentQuiz = questionBank[ri];
+      var bank = getActiveQuestionBank();
+      var ri = Math.floor(Math.random() * bank.length);
+      gState.currentQuiz = bank[ri];
       quizChapter.textContent = gState.currentQuiz.chapter;
       quizQuestion.textContent = gState.currentQuiz.question;
       quizOptions.innerHTML = '';
@@ -957,5 +1038,391 @@
     startTimer();
   }
 
-  console.log('[小猪快跑] v10 loaded (手机UI紧凑布局)');
+  // === 题库管理界面 ===
+  function openPigRunQuestionManager() {
+    var teacherId = getCurrentTeacherId();
+    if (!teacherId) return;
+    
+    var container = document.getElementById('pigRunContent');
+    if (!container) return;
+    
+    renderQuestionManager(container, teacherId);
+  }
+  window.openPigRunQuestionManager = openPigRunQuestionManager;
+
+  function renderQuestionManager(container, teacherId) {
+    injectStyles();
+    var questions = (customQuestionBank && customQuestionBank.length > 0) ? customQuestionBank : [];
+    
+    // 统计章节分布
+    var chapterStats = {};
+    questions.forEach(function(q) {
+      var ch = q.chapter || '默认';
+      chapterStats[ch] = (chapterStats[ch] || 0) + 1;
+    });
+    
+    var html = '<div style="max-width:600px;margin:0 auto;padding:12px;">';
+    // Header
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<h2 style="font-size:20px;font-weight:800;color:#389e0d;margin:0;">📚 小猪快跑题库管理</h2>';
+    html += '<button onclick="backToPigRunLevels()" style="background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">← 返回</button>';
+    html += '</div>';
+    
+    // Stats
+    html += '<div style="background:#f0fff0;border-radius:12px;padding:12px;border:1px solid #90ee90;margin-bottom:16px;">';
+    html += '<div style="font-size:14px;font-weight:700;color:#389e0d;margin-bottom:8px;">题库概况</div>';
+    html += '<div style="font-size:13px;color:#555;">总题数：<strong>' + questions.length + '</strong></div>';
+    if (Object.keys(chapterStats).length > 0) {
+      html += '<div style="font-size:12px;color:#888;margin-top:4px;">章节分布：';
+      var chKeys = Object.keys(chapterStats);
+      chKeys.forEach(function(ch, i) {
+        html += ch + '(' + chapterStats[ch] + '题)';
+        if (i < chKeys.length - 1) html += '、';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    
+    // Action buttons
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">';
+    html += '<button onclick="showAddQuestionForm()" style="flex:1;min-width:120px;background:#52c41a;color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(82,196,26,0.3);">➕ 手动添加</button>';
+    html += '<button onclick="showExcelImportForm()" style="flex:1;min-width:120px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(102,126,234,0.3);">📊 Excel导入</button>';
+    html += '<button onclick="downloadQuestionTemplate()" style="flex:1;min-width:120px;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">📥 下载模板</button>';
+    html += '</div>';
+    
+    // Add question form (hidden by default)
+    html += '<div id="addQuestionForm" style="display:none;background:#fff;border-radius:12px;padding:16px;border:1px solid #e0e0e0;margin-bottom:16px;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#333;margin-bottom:12px;">添加新题目</div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">章节</label><input id="newQChapter" type="text" placeholder="例：第七章 相交线与平行线" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">题目</label><textarea id="newQQuestion" rows="2" placeholder="输入题目内容" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项A</label><input id="newQOptA" type="text" placeholder="选项A" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项B</label><input id="newQOptB" type="text" placeholder="选项B" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项C</label><input id="newQOptC" type="text" placeholder="选项C" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项D</label><input id="newQOptD" type="text" placeholder="选项D" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:12px;"><label style="font-size:12px;color:#888;">正确答案</label><select id="newQAnswer" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="submitNewQuestion()" style="flex:1;background:#52c41a;color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">确认添加</button>';
+    html += '<button onclick="hideAddQuestionForm()" style="flex:1;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
+    html += '</div></div>';
+    
+    // Excel import form (hidden by default)
+    html += '<div id="excelImportForm" style="display:none;background:#fff;border-radius:12px;padding:16px;border:1px solid #e0e0e0;margin-bottom:16px;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#333;margin-bottom:8px;">📊 Excel批量导入</div>';
+    html += '<div style="font-size:12px;color:#888;margin-bottom:12px;line-height:1.6;">';
+    html += 'Excel格式要求：第一行为表头，列顺序为：<br>';
+    html += '<strong>章节 | 题目 | 选项A | 选项B | 选项C | 选项D | 正确答案</strong><br>';
+    html += '正确答案填字母 A/B/C/D，支持 .xlsx 和 .xls 格式';
+    html += '</div>';
+    html += '<input type="file" id="excelFileInput" accept=".xlsx,.xls" style="margin-bottom:12px;">';
+    html += '<div id="excelImportStatus" style="font-size:13px;color:#666;margin-bottom:8px;min-height:20px;"></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="processExcelImport()" style="flex:1;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">开始导入</button>';
+    html += '<button onclick="hideExcelImportForm()" style="flex:1;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
+    html += '</div></div>';
+    
+    // Question list
+    html += '<div style="font-size:14px;font-weight:700;color:#555;margin-bottom:8px;">题目列表（' + questions.length + ' 题）</div>';
+    if (questions.length === 0) {
+      html += '<div style="text-align:center;padding:30px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;">';
+      html += '<div style="font-size:40px;margin-bottom:8px;">📭</div>';
+      html += '<div style="font-size:14px;color:#888;">暂无自定义题目</div>';
+      html += '<div style="font-size:12px;color:#aaa;margin-top:4px;">学生将使用默认题库（' + questionBank.length + ' 题）</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="max-height:400px;overflow-y:auto;">';
+      questions.forEach(function(q, idx) {
+        html += '<div style="background:#fff;border-radius:10px;padding:12px;border:1px solid #e8e8e8;margin-bottom:8px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+        html += '<div style="flex:1;">';
+        html += '<div style="font-size:11px;color:#999;margin-bottom:4px;">' + (q.chapter || '默认') + '</div>';
+        html += '<div style="font-size:13px;color:#333;font-weight:600;margin-bottom:6px;">' + (idx + 1) + '. ' + escapeHtml(q.question) + '</div>';
+        var opts = q.options || [];
+        var labels = ['A', 'B', 'C', 'D'];
+        opts.forEach(function(opt, oi) {
+          var isCorrect = oi === q.answer;
+          html += '<div style="font-size:12px;color:' + (isCorrect ? '#389e0d' : '#666') + ';margin-left:8px;">' + labels[oi] + '. ' + escapeHtml(opt) + (isCorrect ? ' ✓' : '') + '</div>';
+        });
+        html += '</div>';
+        html += '<button onclick="deletePigRunQuestion(\'' + q.id + '\')" style="background:#ff4757;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:8px;">删除</button>';
+        html += '</div></div>';
+      });
+      html += '</div>';
+      
+      // Clear all button
+      html += '<div style="margin-top:12px;text-align:center;">';
+      html += '<button onclick="clearAllPigRunQuestions()" style="background:#fff;color:#ff4757;border:2px solid #ff4757;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;">🗑️ 清空所有题目</button>';
+      html += '</div>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // 返回关卡选择
+  window.backToPigRunLevels = function() {
+    var container = document.getElementById('pigRunContent');
+    if (!container) return;
+    var student = getCurrentStudent();
+    if (!student) { renderPigRunPage(); return; }
+    var qs = ensurePigRunState(student);
+    renderLevelSelect(container, student, qs);
+  };
+
+  // 显示/隐藏添加表单
+  window.showAddQuestionForm = function() {
+    var form = document.getElementById('addQuestionForm');
+    if (form) form.style.display = 'block';
+  };
+  window.hideAddQuestionForm = function() {
+    var form = document.getElementById('addQuestionForm');
+    if (form) form.style.display = 'none';
+  };
+  window.showExcelImportForm = function() {
+    var form = document.getElementById('excelImportForm');
+    if (form) form.style.display = 'block';
+  };
+  window.hideExcelImportForm = function() {
+    var form = document.getElementById('excelImportForm');
+    if (form) form.style.display = 'none';
+  };
+
+  // 提交新题目
+  window.submitNewQuestion = function() {
+    var teacherId = getCurrentTeacherId();
+    if (!teacherId) return;
+    
+    var chapter = document.getElementById('newQChapter').value.trim();
+    var question = document.getElementById('newQQuestion').value.trim();
+    var optA = document.getElementById('newQOptA').value.trim();
+    var optB = document.getElementById('newQOptB').value.trim();
+    var optC = document.getElementById('newQOptC').value.trim();
+    var optD = document.getElementById('newQOptD').value.trim();
+    var answer = parseInt(document.getElementById('newQAnswer').value);
+    
+    if (!question) { alert('请输入题目内容'); return; }
+    if (!optA || !optB) { alert('至少需要选项A和B'); return; }
+    
+    var options = [optA, optB, optC, optD].filter(Boolean);
+    
+    if (typeof db === 'undefined' || !db) { alert('数据库未连接'); return; }
+    
+    db.from('pig_run_questions').insert([{
+      teacher_id: teacherId,
+      chapter: chapter || '默认',
+      question: question,
+      options: JSON.stringify(options),
+      answer: answer
+    }]).then(function(r) {
+      if (r.error) { alert('添加失败: ' + r.error.message); return; }
+      // 刷新题库
+      customQuestionBank = null;
+      loadCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('pigRunContent');
+        if (container) renderQuestionManager(container, teacherId);
+        if (typeof showNotification === 'function') showNotification('成功', '题目已添加', 'success');
+      });
+    });
+  };
+
+  // 删除题目
+  window.deletePigRunQuestion = function(qId) {
+    if (!confirm('确定删除这道题目？')) return;
+    var teacherId = getCurrentTeacherId();
+    if (!teacherId || typeof db === 'undefined' || !db) return;
+    
+    db.from('pig_run_questions').delete().eq('id', qId).eq('teacher_id', teacherId).then(function(r) {
+      if (r.error) { alert('删除失败: ' + r.error.message); return; }
+      customQuestionBank = null;
+      loadCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('pigRunContent');
+        if (container) renderQuestionManager(container, teacherId);
+      });
+    });
+  };
+
+  // 清空所有题目
+  window.clearAllPigRunQuestions = function() {
+    if (!confirm('确定清空所有自定义题目？此操作不可恢复！')) return;
+    if (!confirm('再次确认：清空后学生将使用默认题库，确定继续？')) return;
+    var teacherId = getCurrentTeacherId();
+    if (!teacherId || typeof db === 'undefined' || !db) return;
+    
+    db.from('pig_run_questions').delete().eq('teacher_id', teacherId).then(function(r) {
+      if (r.error) { alert('清空失败: ' + r.error.message); return; }
+      customQuestionBank = null;
+      loadCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('pigRunContent');
+        if (container) renderQuestionManager(container, teacherId);
+        if (typeof showNotification === 'function') showNotification('成功', '题库已清空', 'success');
+      });
+    });
+  };
+
+  // 下载Excel模板
+  window.downloadQuestionTemplate = function() {
+    // 动态加载 SheetJS
+    if (typeof XLSX === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+      script.onload = function() { generateTemplateExcel(); };
+      script.onerror = function() { alert('Excel库加载失败，请检查网络'); };
+      document.head.appendChild(script);
+    } else {
+      generateTemplateExcel();
+    }
+  };
+
+  function generateTemplateExcel() {
+    var headers = ['章节', '题目', '选项A', '选项B', '选项C', '选项D', '正确答案'];
+    var example = ['第七章 相交线与平行线', '下列命题中是假命题的是（ ）', '对顶角相等', '两条直线被第三条直线所截，同旁内角互补', '在同一平面内，过一点有且只有一条直线与已知直线垂直', '直线外一点到这条直线的垂线段的长度叫做点到直线的距离', 'B'];
+    
+    var ws = XLSX.utils.aoa_to_sheet([headers, example]);
+    // 设置列宽
+    ws['!cols'] = [{wch:20},{wch:40},{wch:25},{wch:25},{wch:25},{wch:25},{wch:10}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '题目模板');
+    XLSX.writeFile(wb, '小猪快跑题目模板.xlsx');
+  }
+
+  // Excel导入
+  window.processExcelImport = function() {
+    var teacherId = getCurrentTeacherId();
+    if (!teacherId) { alert('请先登录教师账号'); return; }
+    
+    var fileInput = document.getElementById('excelFileInput');
+    var statusEl = document.getElementById('excelImportStatus');
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">请先选择Excel文件</span>';
+      return;
+    }
+    
+    if (typeof XLSX === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+      script.onload = function() { doExcelImport(teacherId, fileInput.files[0], statusEl); };
+      script.onerror = function() { if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">Excel库加载失败</span>'; };
+      document.head.appendChild(script);
+    } else {
+      doExcelImport(teacherId, fileInput.files[0], statusEl);
+    }
+  };
+
+  function doExcelImport(teacherId, file, statusEl) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#666;">正在解析文件...</span>';
+    
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = new Uint8Array(e.target.result);
+        var workbook = XLSX.read(data, { type: 'array' });
+        var sheetName = workbook.SheetNames[0];
+        var sheet = workbook.Sheets[sheetName];
+        var jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        
+        if (jsonData.length < 2) {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">文件中没有数据</span>';
+          return;
+        }
+        
+        // 跳过表头，解析数据行
+        var questions = [];
+        var answerMap = { 'A': 0, 'a': 0, 'B': 1, 'b': 1, 'C': 2, 'c': 2, 'D': 3, 'd': 3 };
+        var errors = [];
+        
+        for (var i = 1; i < jsonData.length; i++) {
+          var row = jsonData[i];
+          if (!row || row.length < 3) continue;
+          
+          var chapter = (row[0] || '默认').toString().trim();
+          var question = (row[1] || '').toString().trim();
+          var optA = (row[2] || '').toString().trim();
+          var optB = (row[3] || '').toString().trim();
+          var optC = (row[4] || '').toString().trim();
+          var optD = (row[5] || '').toString().trim();
+          var answerRaw = (row[6] || 'A').toString().trim();
+          
+          if (!question) { errors.push('第' + (i + 1) + '行：题目为空'); continue; }
+          if (!optA || !optB) { errors.push('第' + (i + 1) + '行：至少需要选项A和B'); continue; }
+          
+          var answer = answerMap[answerRaw];
+          if (answer === undefined) {
+            // 尝试数字
+            answer = parseInt(answerRaw);
+            if (isNaN(answer) || answer < 0 || answer > 3) {
+              errors.push('第' + (i + 1) + '行：正确答案格式错误（应为A/B/C/D）');
+              continue;
+            }
+          }
+          
+          var options = [optA, optB, optC, optD].filter(Boolean);
+          questions.push({
+            teacher_id: teacherId,
+            chapter: chapter,
+            question: question,
+            options: JSON.stringify(options),
+            answer: answer
+          });
+        }
+        
+        if (errors.length > 0) {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">发现 ' + errors.length + ' 个错误：<br>' + errors.slice(0, 5).join('<br>') + (errors.length > 5 ? '<br>...' : '') + '</span>';
+          if (questions.length === 0) return;
+        }
+        
+        if (questions.length === 0) {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">没有有效的题目可导入</span>';
+          return;
+        }
+        
+        if (statusEl) statusEl.innerHTML = '<span style="color:#666;">正在导入 ' + questions.length + ' 道题目...</span>';
+        
+        // 批量插入（去重：同一教师、同一题目内容不重复插入）
+        // 先获取已有题目
+        db.from('pig_run_questions').select('question').eq('teacher_id', teacherId).then(function(existingR) {
+          var existingQuestions = {};
+          if (existingR.data) {
+            existingR.data.forEach(function(q) { existingQuestions[q.question] = true; });
+          }
+          
+          // 过滤掉重复题目
+          var newQuestions = questions.filter(function(q) { return !existingQuestions[q.question]; });
+          var dupCount = questions.length - newQuestions.length;
+          
+          if (newQuestions.length === 0) {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#ff8800;">所有题目已存在（' + dupCount + ' 道重复），无需导入</span>';
+            return;
+          }
+          
+          db.from('pig_run_questions').insert(newQuestions).then(function(r) {
+            if (r.error) {
+              if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">导入失败: ' + r.error.message + '</span>';
+              return;
+            }
+            // 刷新题库
+            customQuestionBank = null;
+            loadCustomQuestions(teacherId).then(function() {
+              var msg = '成功导入 ' + newQuestions.length + ' 道题目';
+              if (dupCount > 0) msg += '（跳过 ' + dupCount + ' 道重复）';
+              if (statusEl) statusEl.innerHTML = '<span style="color:#389e0d;">' + msg + '</span>';
+              setTimeout(function() {
+                var container = document.getElementById('pigRunContent');
+                if (container) renderQuestionManager(container, teacherId);
+              }, 1000);
+            });
+          });
+        });
+        
+      } catch(err) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">文件解析失败: ' + err.message + '</span>';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  console.log('[小猪快跑] v11 loaded (自定义题库+Excel导入)');
 })();
