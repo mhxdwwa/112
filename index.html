@@ -2,6 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com" crossorigin>
@@ -434,15 +437,20 @@ async function confirmScanLogin(token, encodedEmail) {
   }
   
   try {
-    // ★ 关键修复：始终使用匿名客户端，和电脑端 login.js 保持一致
-    // 之前用已认证 db 客户端，RLS 根据 auth.uid() 区分权限，导致看不到匿名客户端插入的记录
+    // ★ 关键修复：使用不同的 storageKey 创建客户端，避免拾取已有的教师登录 session
+    // 如果使用相同的 storageKey，客户端会自动使用 localStorage 中的 session，变成"已认证"身份
+    // RLS 策略对"已认证"和"匿名"身份权限不同，导致看不到匿名客户端插入的记录
     if (!window.supabase || !window.supabase.createClient) {
       throw new Error('扫码组件未加载，请刷新页面重试');
     }
     var supabaseUrl = 'https://xbygooadskfqllnhwmet.supabase.co';
     var supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
-    var scanDb = window.supabase.createClient(supabaseUrl, supabaseKey);
-    console.log('[扫码] 使用匿名客户端（和电脑端一致）');
+    var scanDb = window.supabase.createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        storageKey: 'qr-scan-login-auth'  // 使用不同的 key，确保是真正的匿名客户端
+      }
+    });
+    console.log('[扫码] 使用独立匿名客户端（storageKey=qr-scan-login-auth）');
     
     // 先查询token是否存在（用 .limit(1) 代替 .single()，避免多行时报错）
     console.log('[扫码] 查询token, 值="' + token + '", 长度=' + token.length);
