@@ -1336,6 +1336,47 @@ function getStudentShopEffects(student){
     else if(css.startsWith('pet-scene-'))sceneClass=css;
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
+/* ===== 一键排序功能 ===== */
+// 排序模式: 0=默认(不排序), 1=按特效数量, 2=按成长值, 3=按金币
+let _petSortMode = 0;
+const _SORT_LABELS = ['🔀 一键排序', '🔀 按特效数↓', '🔀 按成长值↓', '🔀 按金币↓'];
+
+function _countEquippedEffects(student) {
+  const eq = student.equippedItems || {};
+  const owned = student.shopItems || [];
+  return Object.values(eq).filter(id => owned.includes(id)).length;
+}
+
+function _getPetGrowth(student) {
+  const pet = getActivePet(student);
+  return pet ? (pet.growth || 0) : 0;
+}
+
+function cycleSortPets() {
+  _petSortMode = (_petSortMode % 3) + 1; // cycle: 1→2→3→1
+  const btn = document.getElementById('sortPetsBtn');
+  if (btn) btn.innerHTML = '<span>' + _SORT_LABELS[_petSortMode].split(' ')[0] + '</span> ' + _SORT_LABELS[_petSortMode].split(' ').slice(1).join(' ');
+  renderHomePetGrid();
+  const modeNames = ['', '特效数量', '成长值', '金币'];
+  showNotification('排序已切换', '当前按' + modeNames[_petSortMode] + '从多到少排序', 'info');
+}
+window.cycleSortPets = cycleSortPets;
+
+function _getSortedStudents(students, mode) {
+  var arr = students.slice(); // shallow copy, don't mutate original
+  if (mode === 1) {
+    // 按特效数量从多到少
+    arr.sort(function(a, b) { return _countEquippedEffects(b) - _countEquippedEffects(a); });
+  } else if (mode === 2) {
+    // 按成长值从多到少
+    arr.sort(function(a, b) { return _getPetGrowth(b) - _getPetGrowth(a); });
+  } else if (mode === 3) {
+    // 按金币持有量从多到少
+    arr.sort(function(a, b) { return (b.coins || 0) - (a.coins || 0); });
+  }
+  return arr;
+}
+
 /* ===== 无限滚动：分批渲染宠物卡片 ===== */
 let _gridStudents=[], _gridRenderedCount=0;
 const _GRID_BATCH_SIZE=12;
@@ -1390,7 +1431,7 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
   const cur=classesData.find(c=>c.id===currentClassId);
   if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;}
-  _gridStudents=cur.students; _gridRenderedCount=0; grid.innerHTML='';
+  _gridStudents = _petSortMode > 0 ? _getSortedStudents(cur.students, _petSortMode) : cur.students; _gridRenderedCount=0; grid.innerHTML='';
   _renderGridBatch(grid);
   if(_gridRenderedCount<_gridStudents.length){
     const sentinel=document.createElement('div');sentinel.id='grid-scroll-sentinel';sentinel.style.cssText='height:1px;width:100%;';
