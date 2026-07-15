@@ -7890,7 +7890,7 @@ function closeJianghuGame() {
   let curPage='class-pet-page';
   let customAudioEl=null;
   const names={'class-pet-page':'宠物乐园','honor-board-page':'荣耀殿堂','pk-page':'欢乐竞技','jianghu-page':'萌萌江湖行'};
-  const customMusicFiles={'class-pet-page':'music/宠物管理.mp3','honor-board-page':'music/排行榜.mp3','pk-page':'music/宠物PK.mp3','jianghu-page':'music/萌萌江湖行.mp3'};
+  const customMusicFiles={'class-pet-page':'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/宠物管理.mp3','honor-board-page':'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/排行榜.mp3','pk-page':'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/宠物PK.mp3','jianghu-page':'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/萌萌江湖行.mp3'};
 
   function stopAudio(){
     if(customAudioEl){
