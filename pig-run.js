@@ -26,22 +26,12 @@
     if (tabName === 'pigrun') {
       setTimeout(function() { 
         renderPigRunPage(); 
-        // Show modal for teacher view
-        if (!isStudentView) {
-          window._pigRunModalShown = true;
-          setTimeout(function() { showSelectStudentModal('pigrun'); }, 100);
-        }
       }, 100);
     } else if (tabName === 'daily') {
       setTimeout(function() { 
         renderQuizPage(); 
         // 教师进入每日一练时自动加载自定义题库
         if (!isStudentView && typeof _dailyQuizAutoLoad === 'function') _dailyQuizAutoLoad();
-        // Show modal for teacher view
-        if (!isStudentView) {
-          if (typeof window._setQuizModalShown === 'function') window._setQuizModalShown(true);
-          setTimeout(function() { showSelectStudentModal('dailyQuiz'); }, 100);
-        }
       }, 100);
     }
   }

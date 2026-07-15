@@ -790,6 +790,8 @@
     _quizModalShown = !!val;
   };
 
+  window.renderTeacherPlaceholder = renderTeacherPlaceholder;
+
   function renderTeacherSelectView(activityType) {
     var students = getCurrentClassStudents();
     var activityName = activityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
