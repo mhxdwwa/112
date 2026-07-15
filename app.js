@@ -1487,10 +1487,15 @@ function _applyGridBatchPostProcess(){
 function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if(_gridObserver){_gridObserver.disconnect();_gridObserver=null;}
   const oldSentinel=document.getElementById('grid-scroll-sentinel');if(oldSentinel)oldSentinel.remove();
-  // 控制排序按钮可见性（仅教师可见）
+  // 控制排序按钮可见性（仅教师可见，包括移动端）
   var _sortBtn = document.getElementById('sortPetsBtn');
   if (_sortBtn) {
     _sortBtn.style.display = _isTeacher() ? '' : 'none';
+  }
+  // 控制重置密码按钮可见性（仅教师可见，包括移动端）
+  var _resetPwdBtn = document.querySelector('.teacher-only');
+  if (_resetPwdBtn) {
+    _resetPwdBtn.style.display = _isTeacher() ? '' : 'none';
   }
   if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
   const cur=classesData.find(c=>c.id===currentClassId);
