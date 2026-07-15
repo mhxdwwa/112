@@ -128,15 +128,6 @@ function _smartRefreshFromSupabase() {
       db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state').eq('class_id', classId),
       db.from('pets').select('*')
     ]);
-    // Load participants separately (graceful - column may not exist)
-    var participantsQuery = db.from('classes').select('id, participants_json').eq('id', classId).single().then(function(pr) {
-      if (!pr.error && pr.data && pr.data.participants_json) {
-        try {
-          window._participantsCache = JSON.parse(pr.data.participants_json);
-          window._participantsLoaded = true;
-        } catch(e) {}
-      }
-    }).catch(function() {});
   } else {
     queries = Promise.all([
       db.from('classes').select('*').eq('teacher_id', currentUser.id).order('id'),
@@ -565,27 +556,9 @@ function _loadTeacherFromSupabase() {
     // Take snapshot after initial load
     _takeSnapshot();
 
-    // Load participants + custom actions + logs
-    var classIds = classes.map(function(c) { return c.id; });
-    var participantsLoad = (classIds.length > 0)
-      ? db.from('classes').select('id, participants_json').in('id', classIds).then(function(pr) {
-          if (!pr.error && pr.data) {
-            pr.data.forEach(function(row) {
-              if (row.participants_json) {
-                try {
-                  window._participantsCache = JSON.parse(row.participants_json);
-                  window._participantsLoaded = true;
-                } catch(e) {}
-              }
-            });
-          }
-        }).catch(function() {})
-      : Promise.resolve();
-
     return Promise.all([
       _loadCustomActions(),
-      _loadOperationLogs(),
-      participantsLoad
+      _loadOperationLogs()
     ]);
   });
 }
@@ -701,16 +674,7 @@ function _loadStudentFromSupabase() {
 
     return Promise.all([
       _loadCustomActions(),
-      _loadOperationLogs(),
-      // Load participants for student view (graceful - column may not exist)
-      db.from('classes').select('id, participants_json').eq('id', classId).single().then(function(pr) {
-        if (!pr.error && pr.data && pr.data.participants_json) {
-          try {
-            window._participantsCache = JSON.parse(pr.data.participants_json);
-            window._participantsLoaded = true;
-          } catch(e) {}
-        }
-      }).catch(function() {})
+      _loadOperationLogs()
     ]);
   });
 }
