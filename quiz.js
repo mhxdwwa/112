@@ -353,15 +353,10 @@
           window._teacherPlayingAsStudent = null;
           _quizModalShown = false;
           container.innerHTML = renderTeacherPlaceholder('dailyQuiz');
-          setTimeout(function() { showSelectStudentModal('dailyQuiz'); }, 100);
         }
       } else {
-        // No student selected or modal not yet shown this visit
-        _quizModalShown = true;
-        _teacherPlayingAsStudent = null;
-        window._teacherPlayingAsStudent = null;
+        // Just show placeholder, wait for tab click to trigger modal
         container.innerHTML = renderTeacherPlaceholder('dailyQuiz');
-        setTimeout(function() { showSelectStudentModal('dailyQuiz'); }, 100);
       }
       return;
     }
@@ -754,6 +749,10 @@
     _quizModalShown = false;
     _teacherPlayingAsStudent = null;
     window._teacherPlayingAsStudent = null;
+  };
+
+  window._setQuizModalShown = function(val) {
+    _quizModalShown = !!val;
   };
 
   function renderTeacherSelectView(activityType) {

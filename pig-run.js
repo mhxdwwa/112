@@ -14,14 +14,33 @@
     var contentId = tabName === 'daily' ? 'quizDailyContent' : 'quizPigRunContent';
     var content = document.getElementById(contentId);
     if (content) content.classList.add('active');
+    
+    // Check if teacher view
+    var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+    
     // Reset selection state so modal shows again each tab switch
     window._teacherPlayingAsStudent = null;
     window._pigRunModalShown = false;
     if (typeof window._resetQuizModalFlag === 'function') window._resetQuizModalFlag();
+    
     if (tabName === 'pigrun') {
-      setTimeout(function() { renderPigRunPage(); }, 100);
+      setTimeout(function() { 
+        renderPigRunPage(); 
+        // Show modal for teacher view
+        if (!isStudentView) {
+          window._pigRunModalShown = true;
+          setTimeout(function() { showSelectStudentModal('pigrun'); }, 100);
+        }
+      }, 100);
     } else if (tabName === 'daily') {
-      setTimeout(function() { renderQuizPage(); }, 100);
+      setTimeout(function() { 
+        renderQuizPage(); 
+        // Show modal for teacher view
+        if (!isStudentView) {
+          if (typeof window._setQuizModalShown === 'function') window._setQuizModalShown(true);
+          setTimeout(function() { showSelectStudentModal('dailyQuiz'); }, 100);
+        }
+      }, 100);
     }
   }
   window.switchQuizTab = switchQuizTab;
@@ -328,7 +347,7 @@
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
     if (!isStudentView) {
       // Teacher view
-      if (window._teacherPlayingAsStudent && typeof window._pigRunModalShown !== 'undefined' && window._pigRunModalShown) {
+      if (window._teacherPlayingAsStudent && window._pigRunModalShown) {
         // Student already selected and modal shown this visit, show game
         var student = getCurrentStudent();
         if (student) {
@@ -341,16 +360,12 @@
           container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
             ? renderTeacherPlaceholder('pigrun')
             : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🐷</div><div style="font-size:18px;font-weight:700;margin-top:12px;">小猪快跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
-          setTimeout(function() { showSelectStudentModal('pigrun'); }, 100);
         }
       } else {
-        // No student selected or modal not yet shown, auto-show modal
-        window._pigRunModalShown = true;
-        window._teacherPlayingAsStudent = null;
+        // Just show placeholder, wait for tab click to trigger modal
         container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
           ? renderTeacherPlaceholder('pigrun')
           : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🐷</div><div style="font-size:18px;font-weight:700;margin-top:12px;">小猪快跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
-        setTimeout(function() { showSelectStudentModal('pigrun'); }, 100);
       }
       return;
     }
