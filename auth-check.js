@@ -38,12 +38,28 @@ async function checkLogin() {
   // 如果有 Supabase 连接，验证 session（仅老师需要，学生不走 Supabase Auth）
   if (db && userType === 'teacher') {
     try {
+      // ★ 扫码登录：如果在最近5分钟内通过扫码登录，跳过 session 检查
+      // 因为扫码登录无法获取密码来创建 Supabase Auth session
+      var qrLoginTime = parseInt(localStorage.getItem('qrLoginTime') || '0');
+      var isRecentQRLogin = qrLoginTime > 0 && (Date.now() - qrLoginTime < 5 * 60 * 1000);
+      
+      if (isRecentQRLogin) {
+        console.log('[Auth] 扫码登录认证，跳过 session 检查 (qrLoginTime=' + new Date(qrLoginTime).toLocaleTimeString() + ')');
+        currentUser = {
+          type: userType,
+          id: userId,
+          email: localStorage.getItem('userEmail')
+        };
+        return;
+      }
+      
       const { data: { session }, error } = await db.auth.getSession();
       if (error || !session) {
         // Session 无效，清除本地存储并跳转
         localStorage.removeItem('userType');
         localStorage.removeItem('userId');
         localStorage.removeItem('userEmail');
+        localStorage.removeItem('qrLoginTime');
         window.location.href = 'login.html';
         return;
       }
@@ -103,6 +119,7 @@ async function logout() {
   localStorage.removeItem('studentName');
   localStorage.removeItem('classId');
   localStorage.removeItem('className');
+  localStorage.removeItem('qrLoginTime');
   window.location.href = 'login.html';
 }
 

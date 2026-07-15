@@ -604,7 +604,8 @@ function startQRDetection() {
   
   updateQRWaitingStatus();
   
-  // 通道1：Supabase Realtime 实时推送
+  // 通道1：Supabase Realtime 实时推送（监听 UPDATE + INSERT 两种事件）
+  // INSERT 事件用于处理手机端 DELETE+INSERT 降级策略
   try {
     _qrRealtimeChannel = db
       .channel('qr_' + _qrToken)
@@ -614,7 +615,18 @@ function startQRDetection() {
         table: 'qr_login_tokens',
         filter: 'token=eq.' + _qrToken
       }, function(payload) {
-        console.log('[扫码登录] Realtime收到更新:', payload.new);
+        console.log('[扫码登录] Realtime收到UPDATE:', payload.new);
+        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
+          onQRVerified(payload.new.email);
+        }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'qr_login_tokens',
+        filter: 'token=eq.' + _qrToken
+      }, function(payload) {
+        console.log('[扫码登录] Realtime收到INSERT:', payload.new);
         if (payload.new && payload.new.status === 'verified' && payload.new.email) {
           onQRVerified(payload.new.email);
         }
@@ -626,12 +638,12 @@ function startQRDetection() {
     console.warn('[扫码登录] Realtime初始化失败:', e.message);
   }
   
-  // 通道2：轮询备份（每1秒一次）
-  _qrPollTimer = setInterval(pollQRStatus, 1000);
+  // 通道2：轮询备份（每1.5秒一次）
+  _qrPollTimer = setInterval(pollQRStatus, 1500);
   // 立即执行一次
   pollQRStatus();
   
-  console.log('[扫码登录] 开始检测（Realtime+轮询），token:', _qrToken.substring(0, 20) + '...');
+  console.log('[扫码登录] 开始检测（Realtime UPDATE+INSERT + 轮询），token:', _qrToken.substring(0, 20) + '...');
 }
 
 function updateQRWaitingStatus() {
@@ -661,34 +673,36 @@ async function pollQRStatus() {
   _qrPollCount++;
   
   try {
+    // 使用 .limit(1) 代替 .single()，更健壮（single在无结果时报错）
     var result = await db
       .from('qr_login_tokens')
       .select('status, email, expires_at')
       .eq('token', _qrToken)
-      .single();
+      .limit(1);
 
     if (result.error) {
       console.warn('[扫码登录] 轮询#' + _qrPollCount + ' 查询失败:', result.error.message);
-      updatePollInfo('查询失败');
+      updatePollInfo('查询失败: ' + result.error.message.substring(0, 30));
       return;
     }
 
-    if (!result.data) {
-      updatePollInfo('未找到数据');
+    if (!result.data || result.data.length === 0) {
+      // token行不存在（可能被DELETE了但INSERT还没到）
+      updatePollInfo('等待数据写入...');
       return;
     }
 
-    var data = result.data;
+    var data = result.data[0];
     
     // 每5次轮询打印一次状态（避免日志太多）
     if (_qrPollCount % 5 === 1) {
       console.log('[扫码登录] 轮询#' + _qrPollCount + ' status=' + data.status + ' email=' + (data.email || '无'));
     }
     
-    updatePollInfo('status=' + data.status + (data.email ? ' email=' + data.email.substring(0, 8) + '...' : ''));
+    updatePollInfo('轮询#' + _qrPollCount + ' | status=' + data.status + (data.email ? ' | ' + data.email.substring(0, 10) + '...' : ''));
 
     // 检查过期
-    if (new Date(data.expires_at) < new Date()) {
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
       stopQRDetection();
       var qrStatus = document.getElementById('qrStatus');
       if (qrStatus) {
@@ -739,7 +753,7 @@ async function doAutoLogin(email) {
       .from('teachers')
       .select('*')
       .eq('email', email)
-      .single();
+      .maybeSingle();
 
     if (teacherResult.error) {
       console.error('[扫码登录] 查询教师失败:', teacherResult.error.message);
@@ -761,6 +775,8 @@ async function doAutoLogin(email) {
     localStorage.setItem('userId', teacherResult.data.id);
     localStorage.setItem('userEmail', email);
     localStorage.setItem('userName', teacherResult.data.name || email);
+    // ★ 标记为扫码登录，auth-check.js 会识别此标记跳过 session 检查
+    localStorage.setItem('qrLoginTime', Date.now().toString());
 
     var qrStatus = document.getElementById('qrStatus');
     if (qrStatus) {
@@ -815,33 +831,39 @@ async function manualCheckQR() {
       .from('qr_login_tokens')
       .select('*')
       .eq('token', _qrToken)
-      .single();
+      .limit(1);
     
     if (result.error) {
-      qrStatus.innerHTML = '❌ 查询失败: ' + escapeHtml(result.error.message);
+      qrStatus.innerHTML = '❌ 查询失败: ' + escapeHtml(result.error.message) + '<br><span style="font-size:11px;color:#888;">Token: ' + escapeHtml(_qrToken.substring(0, 30)) + '</span>';
       qrStatus.style.color = '#e74c3c';
       return;
     }
     
-    if (!result.data) {
-      qrStatus.innerHTML = '❌ 未找到token数据';
+    if (!result.data || result.data.length === 0) {
+      qrStatus.innerHTML = '❌ 未找到token数据<br><span style="font-size:11px;color:#888;">Token: ' + escapeHtml(_qrToken.substring(0, 30)) + '<br>可能已被DELETE或从未成功INSERT</span>';
       qrStatus.style.color = '#e74c3c';
       return;
     }
     
-    var data = result.data;
-    var info = 'Token状态: ' + data.status + '<br>';
-    info += 'Email: ' + (data.email || '无') + '<br>';
-    info += '过期时间: ' + new Date(data.expires_at).toLocaleString() + '<br>';
-    info += '当前时间: ' + new Date().toLocaleString();
+    var data = result.data[0];
+    var info = '<div style="text-align:left;font-size:13px;line-height:1.8;">';
+    info += '<b>Token状态:</b> <span style="color:' + (data.status === 'verified' ? '#389e0d' : '#d4a017') + '">' + data.status + '</span><br>';
+    info += '<b>Email:</b> ' + (data.email || '无') + '<br>';
+    info += '<b>DB Row ID:</b> ' + (data.id || '无') + '<br>';
+    info += '<b>过期时间:</b> ' + new Date(data.expires_at).toLocaleString() + '<br>';
+    info += '<b>验证时间:</b> ' + (data.verified_at ? new Date(data.verified_at).toLocaleString() : '未验证') + '<br>';
+    info += '<b>当前时间:</b> ' + new Date().toLocaleString() + '<br>';
+    info += '<b>轮询次数:</b> ' + _qrPollCount;
+    info += '</div>';
     
     if (data.status === 'verified' && data.email) {
-      info += '<br><strong style="color:#389e0d;">✅ 已验证！正在登录...</strong>';
+      info += '<strong style="color:#389e0d;">✅ 已验证！正在登录...</strong>';
       qrStatus.innerHTML = info;
       qrStatus.style.color = '#389e0d';
       await onQRVerified(data.email);
     } else {
-      qrStatus.innerHTML = info + '<br><span style="color:#888;">等待手机扫码确认...</span>';
+      info += '<br><span style="color:#888;">等待手机扫码确认...</span>';
+      qrStatus.innerHTML = info;
       qrStatus.style.color = '#d4a017';
     }
     

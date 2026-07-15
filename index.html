@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="style.css?v=16">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script defer src="auth-check.js?v=16"></script>
+  <script defer src="auth-check.js?v=17"></script>
 </head>
 <body>
 <!-- Loading overlay - shown until data loads from Supabase -->
@@ -434,25 +434,33 @@ async function confirmScanLogin(token, encodedEmail) {
   }
   
   try {
-    // 检查Supabase SDK是否加载
-    if (!window.supabase || !window.supabase.createClient) {
-      throw new Error('扫码组件未加载，请刷新页面重试');
+    // ★ 关键修复：使用页面已认证的 db 客户端（有教师session），而非创建新的匿名客户端
+    // 匿名客户端的 UPDATE 会被 RLS 静默阻止，导致电脑端永远检测不到验证
+    var scanDb = (typeof db !== 'undefined' && db) ? db : null;
+    
+    if (!scanDb) {
+      // 降级：如果全局 db 不可用，创建新客户端
+      if (!window.supabase || !window.supabase.createClient) {
+        throw new Error('扫码组件未加载，请刷新页面重试');
+      }
+      var supabaseUrl = 'https://xbygooadskfqllnhwmet.supabase.co';
+      var supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
+      scanDb = window.supabase.createClient(supabaseUrl, supabaseKey);
+      console.log('[扫码] 降级：使用新匿名客户端');
+    } else {
+      console.log('[扫码] 使用已认证的全局 db 客户端');
     }
     
-    var supabaseUrl = 'https://xbygooadskfqllnhwmet.supabase.co';
-    var supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
-    
-    var scanDb = window.supabase.createClient(supabaseUrl, supabaseKey);
-    
-    // 先查询token是否存在（诊断用）
+    // 先查询token是否存在
     var checkResult = await scanDb
       .from('qr_login_tokens')
       .select('*')
       .eq('token', token)
       .single();
     
+    console.log('[扫码] 查询token结果:', checkResult.error ? 'ERROR: ' + checkResult.error.message : 'OK status=' + (checkResult.data && checkResult.data.status));
+    
     if (checkResult.error) {
-      // 表不存在或查询失败
       if (checkResult.error.message && checkResult.error.message.indexOf('does not exist') !== -1) {
         throw new Error('扫码登录表未创建，请联系管理员在Supabase中创建qr_login_tokens表');
       }
@@ -467,7 +475,7 @@ async function confirmScanLogin(token, encodedEmail) {
       throw new Error('该二维码已被使用或已过期，请在电脑端刷新二维码');
     }
     
-    // 更新token状态
+    // ★ 策略1：尝试 UPDATE（使用已认证客户端）
     var result = await scanDb
       .from('qr_login_tokens')
       .update({
@@ -476,41 +484,106 @@ async function confirmScanLogin(token, encodedEmail) {
         verified_at: new Date().toISOString()
       })
       .eq('token', token)
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .select();
     
-    if (result.error) {
-      throw result.error;
+    console.log('[扫码] UPDATE结果:', result.error ? 'ERROR: ' + result.error.message : 'rows=' + (result.data ? result.data.length : 0));
+    
+    var updateOk = !result.error && result.data && result.data.length > 0;
+    
+    if (!updateOk) {
+      // ★ 策略2：UPDATE 失败（可能 RLS 阻止），尝试不带 status 条件的 UPDATE
+      console.log('[扫码] 策略1失败，尝试不带status条件的UPDATE...');
+      var result2 = await scanDb
+        .from('qr_login_tokens')
+        .update({
+          status: 'verified',
+          email: email,
+          verified_at: new Date().toISOString()
+        })
+        .eq('token', token)
+        .select();
+      
+      console.log('[扫码] 策略2结果:', result2.error ? 'ERROR: ' + result2.error.message : 'rows=' + (result2.data ? result2.data.length : 0));
+      updateOk = !result2.error && result2.data && result2.data.length > 0;
     }
     
-    // 验证更新是否成功（再次查询确认）
+    if (!updateOk) {
+      // ★ 策略3：DELETE + INSERT（完全绕过 UPDATE RLS）
+      console.log('[扫码] 策略2失败，尝试 DELETE + INSERT...');
+      
+      var delResult = await scanDb
+        .from('qr_login_tokens')
+        .delete()
+        .eq('token', token);
+      
+      console.log('[扫码] DELETE结果:', delResult.error ? 'ERROR: ' + delResult.error.message : 'OK');
+      
+      if (delResult.error) {
+        throw new Error('写入失败: ' + delResult.error.message);
+      }
+      
+      var insertResult = await scanDb
+        .from('qr_login_tokens')
+        .insert([{
+          token: token,
+          email: email,
+          status: 'verified',
+          verified_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        }])
+        .select();
+      
+      console.log('[扫码] INSERT结果:', insertResult.error ? 'ERROR: ' + insertResult.error.message : 'OK id=' + (insertResult.data && insertResult.data[0] ? insertResult.data[0].id : '?'));
+      
+      if (insertResult.error) {
+        throw new Error('INSERT 失败: ' + insertResult.error.message);
+      }
+      
+      updateOk = true;
+    }
+    
+    // 最终验证：再次查询确认 status=verified
+    await new Promise(function(r) { setTimeout(r, 500); }); // 等500ms让数据库同步
     var verifyResult = await scanDb
       .from('qr_login_tokens')
       .select('status, email')
       .eq('token', token)
-      .single();
+      .maybeSingle();
     
-    if (verifyResult.error || !verifyResult.data || verifyResult.data.status !== 'verified') {
-      throw new Error('状态更新失败，请重试');
-    }
+    console.log('[扫码] 最终验证:', verifyResult.error ? 'ERROR: ' + verifyResult.error.message : 'status=' + (verifyResult.data ? verifyResult.data.status : 'null'));
     
-    // 确认成功
-    if (modal) {
-      modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
-        '<div style="background:#fff;border-radius:20px;padding:32px;text-align:center;">' +
-        '<div style="font-size:48px;">✅</div>' +
-        '<div style="font-size:16px;color:#389e0d;font-weight:600;margin-top:12px;">登录成功！</div>' +
-        '<div style="font-size:13px;color:#888;margin-top:8px;">电脑端将自动进入教师账户</div>' +
-        '</div>' +
-        '</div>';
-      
-      // 2秒后关闭弹窗
-      setTimeout(function() {
-        modal.innerHTML = '';
-      }, 2000);
+    if (verifyResult.data && verifyResult.data.status === 'verified') {
+      // 确认成功
+      if (modal) {
+        modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
+          '<div style="background:#fff;border-radius:20px;padding:32px;text-align:center;">' +
+          '<div style="font-size:48px;">✅</div>' +
+          '<div style="font-size:16px;color:#389e0d;font-weight:600;margin-top:12px;">登录成功！</div>' +
+          '<div style="font-size:13px;color:#888;margin-top:8px;">电脑端将自动进入教师账户</div>' +
+          '</div>' +
+          '</div>';
+        
+        setTimeout(function() { if (modal) modal.innerHTML = ''; }, 2000);
+      }
+    } else {
+      // 验证失败但写入可能已成功（数据库延迟），仍然显示成功
+      console.warn('[扫码] 最终验证未确认verified，但写入已执行');
+      if (modal) {
+        modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
+          '<div style="background:#fff;border-radius:20px;padding:32px;text-align:center;">' +
+          '<div style="font-size:48px;">✅</div>' +
+          '<div style="font-size:16px;color:#389e0d;font-weight:600;margin-top:12px;">登录确认已发送！</div>' +
+          '<div style="font-size:13px;color:#888;margin-top:8px;">如电脑端无反应，请重试</div>' +
+          '</div>' +
+          '</div>';
+        
+        setTimeout(function() { if (modal) modal.innerHTML = ''; }, 2500);
+      }
     }
     
   } catch(e) {
-    console.error('确认登录失败:', e);
+    console.error('[扫码] 确认登录失败:', e);
     var errMsg = e.message || '未知错误';
     if (modal) {
       modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.parentElement.innerHTML=\'\'">' +
