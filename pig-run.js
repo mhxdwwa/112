@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v8 - 配合quiz.js v9 每次进入自动弹出选取名单
+// v15 - 修复关卡数据丢失：配合quiz.js v14的竞态条件修复
 
 (function() {
   'use strict';
@@ -1404,5 +1404,5 @@
     reader.readAsArrayBuffer(file);
   }
 
-  console.log('[小猪快跑] v11 loaded (自定义题库+Excel导入)');
+  console.log('[小猪快跑] v15 loaded (关卡数据丢失修复)');
 })();

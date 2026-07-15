@@ -35,16 +35,24 @@
   // 之前只保存 quiz_state 不保存 coins，导致刷新后金币丢失
   // v30: Only update _myBaseCoins AFTER confirmed write, and set _lastOwnWriteTime
   // to prevent Realtime echo from overwriting with stale data
+  // v31: Set _quizStateLocallyModified flag to prevent _syncStudentToSupabase
+  // and _smartRefreshFromSupabase from overwriting fresh local quiz_state with
+  // stale Supabase data (race condition caused pig-run level data loss)
   function saveCoinsAndQuizState(student) {
     if (typeof db === 'undefined' || !db || !student || !student.id) return;
     var quizStateJson = student.quizState ? JSON.stringify(student.quizState) : null;
     var coinsToSave = student.coins;
+    // v31: Mark quiz_state as locally modified BEFORE the async save.
+    // This prevents _syncStudentToSupabase from fetching stale Supabase data
+    // and overwriting the fresh local quiz_state while the save is in flight.
+    window._quizStateLocallyModified = true;
     db.from('students').update({
       coins: coinsToSave,
       quiz_state: quizStateJson
     }).eq('id', student.id).then(function(r) {
       if (r.error) {
         console.error('[取金阁] 金币/状态保存失败:', r.error.message);
+        // Don't clear the flag on error — let the next sync retry
       } else {
         console.log('[取金阁] 金币(' + coinsToSave + ')+状态 已直接保存');
         // v30: Only update _myBaseCoins after CONFIRMED write
@@ -54,6 +62,11 @@
         // v30: Set _lastOwnWriteTime to protect against Realtime echo
         if (typeof _lastOwnWriteTime !== 'undefined') {
           window._lastOwnWriteTime = Date.now();
+        }
+        // v31: Update snapshot to reflect the new quiz_state, so smart refresh
+        // comparison (freshQuizState !== snapQuizState) works correctly
+        if (typeof _takeSnapshot === 'function') {
+          _takeSnapshot();
         }
       }
     });
@@ -1182,5 +1195,5 @@
     reader.readAsArrayBuffer(file);
   }
 
-  console.log('[取金阁] v11 loaded (教师双按钮+题库管理)');
+  console.log('[取金阁] v14 loaded (关卡数据丢失修复)');
 })();

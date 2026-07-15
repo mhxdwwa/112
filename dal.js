@@ -1,5 +1,5 @@
 /**
- * dal.js v44.0 — Robust Data Access Layer with Smart Merge
+ * dal.js v44.1 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -8,6 +8,8 @@
  * - Self-write detection: ignores own writes for 30s
  * - Student delta merge: preserves both teacher rewards and student spending
  * - Operation logs synced to Supabase (both teacher and student)
+ * - v44.1: Quiz state race condition fix — _quizStateLocallyModified flag prevents
+ *   smart refresh from overwriting fresh pig-run level data with stale Supabase data
  * 
  * Flow: loadFromSupabase() → classesData + snapshot → UI
  *       UI action → saveClassData() → _syncToSupabase() → Supabase → update snapshot
@@ -26,7 +28,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '44.0';
+var _DAL_VERSION = '44.1';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -320,7 +322,10 @@ function _smartRefreshFromSupabase() {
         }
 
         // quizState: sync from server if changed on server and not changed locally
-        if (freshStu.quizState) {
+        // v31: Skip if quiz_state was recently saved directly (e.g., by pig-run saveLevelResult).
+        // Without this check, a Realtime event can overwrite fresh local quiz_state with stale
+        // Supabase data, causing pig-run level scores/coins to be lost.
+        if (freshStu.quizState && !window._quizStateLocallyModified) {
           var snapQuizState = snapStu ? JSON.stringify(snapStu.quizState || null) : null;
           var freshQuizState = JSON.stringify(freshStu.quizState);
           var localQuizState = JSON.stringify(localStu.quizState || null);
@@ -1557,6 +1562,10 @@ function _syncToSupabase() {
   return syncFn().then(function(result) {
     _lastStudentSyncOk = result;
     _takeSnapshot();
+    // v31: Clear quiz_state local modification flag after successful sync.
+    // The sync has persisted the local quiz_state to Supabase, so smart refresh
+    // can safely merge quiz_state changes from the server again.
+    window._quizStateLocallyModified = false;
     _updateCloudStatus('synced');
     console.log('[DAL] Data sync complete');
   }).catch(function(err) {
