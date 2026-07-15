@@ -114,18 +114,15 @@
     
     var coinReward = 0;
     if (isFirstClear && !alreadyEarnedCoins) {
-      // 提高金币奖励范围：5-15，使用加权随机让高值更常见
-      // 权重：5(10%), 6(12%), 7(15%), 8(18%), 9(15%), 10(12%), 11(10%), 12(8%), 13(5%), 14(3%), 15(2%)
+      // 金币奖励：80%概率得3-5金币，20%概率得6-9金币
       var rand = Math.random();
-      if (rand < 0.10) coinReward = 5;
-      else if (rand < 0.22) coinReward = 6;
-      else if (rand < 0.37) coinReward = 7;
-      else if (rand < 0.55) coinReward = 8;
-      else if (rand < 0.70) coinReward = 9;
-      else if (rand < 0.82) coinReward = 10;
-      else if (rand < 0.92) coinReward = 11;
-      else if (rand < 1.00) coinReward = 12;
-      else coinReward = 13;
+      if (rand < 0.2667) coinReward = 3;
+      else if (rand < 0.5333) coinReward = 4;
+      else if (rand < 0.80) coinReward = 5;
+      else if (rand < 0.85) coinReward = 6;
+      else if (rand < 0.90) coinReward = 7;
+      else if (rand < 0.95) coinReward = 8;
+      else coinReward = 9;
       
       student.coins += coinReward;
     }
@@ -460,7 +457,7 @@
     html += '<div style="margin-top:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;text-align:left;">';
     html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
     html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
-    html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 通关时间越短，时间分越高<br>5. 首次通关获得5-15金币奖励<br>6. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
+    html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 通关时间越短，时间分越高<br>5. 首次通关获得3-9金币奖励<br>6. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
     html += '</div>';
     container.innerHTML = html;
   }
