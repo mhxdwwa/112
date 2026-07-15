@@ -109,6 +109,11 @@ body {
 .hidden {
   display: none !important;
 }
+/* 扫码登录按钮：桌面端显示，移动端隐藏 */
+.qr-login-btn-desktop { display: block; }
+@media (max-width: 768px) {
+  .qr-login-btn-desktop { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -132,6 +137,7 @@ body {
     </div>
     <div class="error-msg" id="teacherError"></div>
     <button type="submit" class="btn btn-primary">登录</button>
+    <button type="button" class="btn qr-login-btn-desktop" onclick="showQRLogin()" style="background:linear-gradient(135deg,#52c41a,#389e0d);color:white;margin-top:10px;">📱 扫码登录</button>
     <div style="text-align: center; margin-top: 15px; font-size: 14px; color: #886;">
       还没有账号？<a href="javascript:void(0)" onclick="showRegister('teacher')" style="color: #c04058;">立即注册</a>
     </div>
