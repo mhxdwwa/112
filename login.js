@@ -552,14 +552,14 @@ async function generateQRCode() {
       return;
     }
 
-    // 验证插入成功
+    // 验证插入成功（用 .limit(1) 代替 .single()，避免多行时报错）
     var verifyInsert = await db
       .from('qr_login_tokens')
       .select('token, status')
       .eq('token', _qrToken)
-      .single();
+      .limit(1);
     
-    if (verifyInsert.error || !verifyInsert.data) {
+    if (verifyInsert.error || !verifyInsert.data || verifyInsert.data.length === 0) {
       console.error('[扫码登录] 插入验证失败:', verifyInsert.error ? verifyInsert.error.message : 'no data');
       qrStatus.innerHTML = '❌ 二维码写入失败，请刷新重试';
       qrStatus.style.color = '#e74c3c';
@@ -753,7 +753,7 @@ async function doAutoLogin(email) {
       .from('teachers')
       .select('*')
       .eq('email', email)
-      .maybeSingle();
+      .limit(1);
 
     if (teacherResult.error) {
       console.error('[扫码登录] 查询教师失败:', teacherResult.error.message);
@@ -763,24 +763,25 @@ async function doAutoLogin(email) {
       throw teacherResult.error;
     }
 
-    if (!teacherResult.data) {
+    if (!teacherResult.data || teacherResult.data.length === 0) {
       console.error('[扫码登录] 未找到教师账号:', email);
       throw new Error('教师账号不存在: ' + email);
     }
 
-    console.log('[扫码登录] 找到教师账号:', teacherResult.data.id, teacherResult.data.name || email);
+    var teacherData = teacherResult.data[0];
+    console.log('[扫码登录] 找到教师账号:', teacherData.id, teacherData.name || email);
 
     // 保存登录信息
     localStorage.setItem('userType', 'teacher');
-    localStorage.setItem('userId', teacherResult.data.id);
+    localStorage.setItem('userId', teacherData.id);
     localStorage.setItem('userEmail', email);
-    localStorage.setItem('userName', teacherResult.data.name || email);
+    localStorage.setItem('userName', teacherData.name || email);
     // ★ 标记为扫码登录，auth-check.js 会识别此标记跳过 session 检查
     localStorage.setItem('qrLoginTime', Date.now().toString());
 
     var qrStatus = document.getElementById('qrStatus');
     if (qrStatus) {
-      qrStatus.innerHTML = '✅ 登录成功！正在跳转到 ' + escapeHtml(teacherResult.data.name || email) + ' ...';
+      qrStatus.innerHTML = '✅ 登录成功！正在跳转到 ' + escapeHtml(teacherData.name || email) + ' ...';
       qrStatus.style.color = '#389e0d';
     }
 

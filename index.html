@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="style.css?v=16">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script defer src="auth-check.js?v=17"></script>
+  <script defer src="auth-check.js?v=18"></script>
 </head>
 <body>
 <!-- Loading overlay - shown until data loads from Supabase -->
@@ -451,14 +451,14 @@ async function confirmScanLogin(token, encodedEmail) {
       console.log('[扫码] 使用已认证的全局 db 客户端');
     }
     
-    // 先查询token是否存在
+    // 先查询token是否存在（用 .limit(1) 代替 .single()，避免多行时报错）
     var checkResult = await scanDb
       .from('qr_login_tokens')
       .select('*')
       .eq('token', token)
-      .single();
+      .limit(1);
     
-    console.log('[扫码] 查询token结果:', checkResult.error ? 'ERROR: ' + checkResult.error.message : 'OK status=' + (checkResult.data && checkResult.data.status));
+    console.log('[扫码] 查询token结果:', checkResult.error ? 'ERROR: ' + checkResult.error.message : 'OK rows=' + (checkResult.data ? checkResult.data.length : 0));
     
     if (checkResult.error) {
       if (checkResult.error.message && checkResult.error.message.indexOf('does not exist') !== -1) {
@@ -467,11 +467,12 @@ async function confirmScanLogin(token, encodedEmail) {
       throw checkResult.error;
     }
     
-    if (!checkResult.data) {
+    if (!checkResult.data || checkResult.data.length === 0) {
       throw new Error('二维码已失效或不存在，请在电脑端刷新二维码');
     }
     
-    if (checkResult.data.status !== 'pending') {
+    var tokenRow = checkResult.data[0];
+    if (tokenRow.status !== 'pending') {
       throw new Error('该二维码已被使用或已过期，请在电脑端刷新二维码');
     }
     
@@ -543,17 +544,18 @@ async function confirmScanLogin(token, encodedEmail) {
       updateOk = true;
     }
     
-    // 最终验证：再次查询确认 status=verified
+    // 最终验证：再次查询确认 status=verified（用 .limit(1) 代替 .maybeSingle()，避免多行时报错）
     await new Promise(function(r) { setTimeout(r, 500); }); // 等500ms让数据库同步
     var verifyResult = await scanDb
       .from('qr_login_tokens')
       .select('status, email')
       .eq('token', token)
-      .maybeSingle();
+      .limit(1);
     
-    console.log('[扫码] 最终验证:', verifyResult.error ? 'ERROR: ' + verifyResult.error.message : 'status=' + (verifyResult.data ? verifyResult.data.status : 'null'));
+    var verifyRow = (verifyResult.data && verifyResult.data.length > 0) ? verifyResult.data[0] : null;
+    console.log('[扫码] 最终验证:', verifyResult.error ? 'ERROR: ' + verifyResult.error.message : 'status=' + (verifyRow ? verifyRow.status : 'null'));
     
-    if (verifyResult.data && verifyResult.data.status === 'verified') {
+    if (verifyRow && verifyRow.status === 'verified') {
       // 确认成功
       if (modal) {
         modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
@@ -603,7 +605,7 @@ function escapeHtmlSimple(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
-<script defer src="dal.js?v=45"></script>
+<script defer src="dal.js?v=46"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
