@@ -534,11 +534,11 @@ async function generateQRCode() {
     if (typeof QRCode !== 'undefined') {
       new QRCode(qrWrap, {
         text: scanUrl,
-        width: 200,
-        height: 200,
-        colorDark: '#333333',
+        width: 250,
+        height: 250,
+        colorDark: '#000000',
         colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M
+        correctLevel: QRCode.CorrectLevel.H
       });
     } else {
       qrWrap.innerHTML = '<div style="font-size:12px;color:#666;word-break:break-all;padding:10px;">' + scanUrl + '</div>';

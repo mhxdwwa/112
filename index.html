@@ -247,19 +247,38 @@ function openQRScan() {
 
 // 从图片解析二维码
 function scanQRFromImage(file) {
+  // 显示加载中
+  showNotification('扫码中', '正在识别二维码...', 'info');
+  
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = new Image();
     img.onload = function() {
-      // 创建canvas绘制图片
+      // 关键：缩放图片到合理尺寸，jsQR处理大图极慢
+      var MAX_SIZE = 800;
+      var w = img.width;
+      var h = img.height;
+      
+      // 按比例缩放
+      if (w > MAX_SIZE || h > MAX_SIZE) {
+        if (w > h) {
+          h = Math.round(h * MAX_SIZE / w);
+          w = MAX_SIZE;
+        } else {
+          w = Math.round(w * MAX_SIZE / h);
+          h = MAX_SIZE;
+        }
+      }
+      
+      // 创建缩放后的canvas
       var canvas = document.createElement('canvas');
       var ctx = canvas.getContext('2d');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
       
-      // 获取图片数据
-      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      // 获取缩放后的图片数据
+      var imageData = ctx.getImageData(0, 0, w, h);
       
       // 使用jsQR解析
       if (typeof jsQR !== 'undefined') {
@@ -267,14 +286,20 @@ function scanQRFromImage(file) {
         if (code) {
           handleScannedURL(code.data);
         } else {
-          showNotification('扫码失败', '未识别到二维码，请重试', 'error');
+          showNotification('扫码失败', '未识别到二维码，请对准二维码重新拍照', 'error');
         }
       } else {
         // jsQR未加载，提示
         showNotification('加载中', '扫码组件正在加载，请稍后再试', 'info');
       }
     };
+    img.onerror = function() {
+      showNotification('扫码失败', '图片加载失败，请重试', 'error');
+    };
     img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    showNotification('扫码失败', '文件读取失败，请重试', 'error');
   };
   reader.readAsDataURL(file);
 }
