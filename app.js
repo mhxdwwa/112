@@ -1362,8 +1362,8 @@ function getStudentShopEffects(student){
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
 /* ===== 一键排序功能 ===== */
-// 每个班级独立的排序模式: { classId: mode } mode: 0=默认(不排序), 1=按特效数量, 2=按成长值, 3=按金币, 4=按体型(等级)
-const _SORT_LABELS = ['🔀 一键排序', '🔀 按特效数↓', '🔀 按成长值↓', '🔀 按金币↓', '🔀 按体型↓'];
+// 每个班级独立的排序模式: { classId: mode } mode: 0=默认(不排序), 1=按特效数量, 2=按成长值, 3=按金币
+const _SORT_LABELS = ['🔀 一键排序', '🔀 按特效数↓', '🔀 按成长值↓', '🔀 按金币↓'];
 const _SORT_STORAGE_KEY = 'petSortModes';
 
 function _loadSortModes() {
@@ -1390,11 +1390,6 @@ function _getPetGrowth(student) {
   return pet ? (pet.growth || 0) : 0;
 }
 
-function _getPetLevel(student) {
-  const pet = getActivePet(student);
-  return pet ? (pet.level || 0) : 0;
-}
-
 function _hasPet(student) {
   return student.pets && student.pets.length > 0;
 }
@@ -1406,13 +1401,13 @@ function _isTeacher() {
 function cycleSortPets() {
   if (!currentClassId || !_isTeacher()) return;
   var currentMode = _petSortModes[currentClassId] || 0;
-  var newMode = (currentMode % 4) + 1; // cycle: 1→2→3→4→1
+  var newMode = (currentMode % 3) + 1; // cycle: 1→2→3→1
   _petSortModes[currentClassId] = newMode;
   _saveSortModes();
   var btn = document.getElementById('sortPetsBtn');
   if (btn) btn.innerHTML = '<span>' + _SORT_LABELS[newMode].split(' ')[0] + '</span> ' + _SORT_LABELS[newMode].split(' ').slice(1).join(' ');
   renderHomePetGrid();
-  const modeNames = ['', '特效数量', '成长值', '金币', '体型(等级)'];
+  const modeNames = ['', '特效数量', '成长值', '金币'];
   showNotification('排序已切换', '当前按' + modeNames[newMode] + '从多到少排序', 'info');
 }
 window.cycleSortPets = cycleSortPets;
@@ -1436,12 +1431,6 @@ function _getSortedStudents(students, mode) {
     var withPets = arr.filter(_hasPet);
     var noPets = arr.filter(function(s) { return !_hasPet(s); });
     withPets.sort(function(a, b) { return (b.coins || 0) - (a.coins || 0); });
-    arr = withPets.concat(noPets);
-  } else if (mode === 4) {
-    // 按体型(等级)从多到少，未领养宠物的学生排最后
-    var withPets = arr.filter(_hasPet);
-    var noPets = arr.filter(function(s) { return !_hasPet(s); });
-    withPets.sort(function(a, b) { return _getPetLevel(b) - _getPetLevel(a); });
     arr = withPets.concat(noPets);
   }
   return arr;
