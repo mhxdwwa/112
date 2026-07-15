@@ -452,6 +452,7 @@ async function confirmScanLogin(token, encodedEmail) {
     }
     
     // 先查询token是否存在（用 .limit(1) 代替 .single()，避免多行时报错）
+    console.log('[扫码] 查询token, 值="' + token + '", 长度=' + token.length);
     var checkResult = await scanDb
       .from('qr_login_tokens')
       .select('*')
@@ -459,6 +460,9 @@ async function confirmScanLogin(token, encodedEmail) {
       .limit(1);
     
     console.log('[扫码] 查询token结果:', checkResult.error ? 'ERROR: ' + checkResult.error.message : 'OK rows=' + (checkResult.data ? checkResult.data.length : 0));
+    if (checkResult.data && checkResult.data.length > 0) {
+      console.log('[扫码] 找到的行:', JSON.stringify(checkResult.data[0]));
+    }
     
     if (checkResult.error) {
       if (checkResult.error.message && checkResult.error.message.indexOf('does not exist') !== -1) {
@@ -468,7 +472,14 @@ async function confirmScanLogin(token, encodedEmail) {
     }
     
     if (!checkResult.data || checkResult.data.length === 0) {
-      throw new Error('二维码已失效或不存在，请在电脑端刷新二维码');
+      // ★ 调试：列出表中所有记录，帮助诊断
+      console.log('[扫码] token未找到! 尝试查询表中所有记录...');
+      var allRows = await scanDb
+        .from('qr_login_tokens')
+        .select('token, status, created_at')
+        .limit(10);
+      console.log('[扫码] 表中记录:', allRows.error ? 'ERROR: ' + allRows.error.message : JSON.stringify(allRows.data));
+      throw new Error('二维码已失效或不存在，请在电脑端刷新二维码\n\n[调试] 查询token: ' + token.substring(0, 30) + '...\n[调试] 表中记录数: ' + (allRows.data ? allRows.data.length : '查询失败'));
     }
     
     var tokenRow = checkResult.data[0];

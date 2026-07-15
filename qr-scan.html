@@ -167,26 +167,19 @@ var userEmail = '';
     return;
   }
 
-  // 4. 验证 Supabase session
+  // 4. 检查token是否有效（跳过session检查——匿名客户端没有session，但anon key有RLS读取权限）
   try {
-    var sessionResult = await db.auth.getSession();
-    if (sessionResult.error || !sessionResult.data.session) {
-      showError('登录已过期，请重新登录后再扫码');
-      return;
-    }
-    console.log('[扫码] Session valid, email:', userEmail);
-  } catch (e) {
-    console.warn('[扫码] Session check error:', e);
-    // 降级：允许继续（和 auth-check.js 保持一致）
-  }
-
-  // 5. 检查token是否有效
-  try {
+    console.log('[扫码] 查询token, 值="' + qrToken + '", 长度=' + qrToken.length);
     var tokenResult = await db
       .from('qr_login_tokens')
       .select('*')
       .eq('token', qrToken)
       .limit(1);
+
+    console.log('[扫码] 查询结果:', tokenResult.error ? 'ERROR: ' + tokenResult.error.message : 'rows=' + (tokenResult.data ? tokenResult.data.length : 0));
+    if (tokenResult.data && tokenResult.data.length > 0) {
+      console.log('[扫码] 找到的行:', JSON.stringify(tokenResult.data[0]));
+    }
 
     if (tokenResult.error) {
       if (tokenResult.error.message && tokenResult.error.message.indexOf('does not exist') !== -1) {
@@ -198,7 +191,13 @@ var userEmail = '';
     }
 
     if (!tokenResult.data || tokenResult.data.length === 0) {
-      showError('二维码已失效或不存在，请在电脑端刷新二维码');
+      // 调试：列出表中所有记录
+      var allRows = await db
+        .from('qr_login_tokens')
+        .select('token, status, created_at')
+        .limit(10);
+      console.log('[扫码] 表中所有记录:', allRows.error ? 'ERROR: ' + allRows.error.message : JSON.stringify(allRows.data));
+      showError('二维码已失效或不存在，请在电脑端刷新二维码<br><br><span style="font-size:11px;color:#999;">token: ' + escapeHtml(qrToken.substring(0, 30)) + '...<br>表中记录数: ' + (allRows.data ? allRows.data.length : '查询失败') + '</span>');
       return;
     }
 
@@ -208,7 +207,7 @@ var userEmail = '';
       return;
     }
 
-    // 6. 显示确认界面
+    // 5. 显示确认界面
     document.getElementById('statusMsg').innerHTML =
       '电脑端请求登录教师账号<br><strong>' + escapeHtml(userEmail) + '</strong><br><br>确认是本人操作？';
     document.getElementById('btnRow').style.display = 'flex';
