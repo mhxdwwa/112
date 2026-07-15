@@ -381,7 +381,7 @@
       pig.dataset.dir = dir;
 
       var inner = document.createElement('div');
-      inner.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background-image:url("images/小猪.png");background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;transform:scale(1.7);';
+      inner.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background-image:url("小猪.png");background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;transform:scale(1.7);';
       pig.appendChild(inner);
 
       pig.addEventListener('click', function(e) {
