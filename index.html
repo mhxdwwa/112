@@ -65,22 +65,68 @@ setTimeout(function() { window._hideDalLoading(); }, 15000);
   <div class="paw-deco" style="top:120px;right:100px;--paw-rot:-15deg;font-size:25px;">🐾</div>
   <div class="paw-deco" style="bottom:60px;left:30px;--paw-rot:40deg;font-size:35px;">🐾</div>
   <div class="page-title">🏆 荣耀殿堂</div>
-  <div id="rankStatsBar"></div>
-  <div class="honor-board-small">
-    <h3>🏅 宠物成长榜</h3>
-    <div id="classTopThree"></div>
-    <div id="honorEmptyHint" style="display:none;" class="rank-empty-state">
-      <div class="empty-icon">🏆</div>
-      <div class="empty-text">还没有成长数据哦</div>
-      <div class="empty-sub">快去喂养宠物，争夺排行榜吧~</div>
-    </div>
+  <!-- 排行榜三分类标签 -->
+  <div class="rank-tabs">
+    <div class="rank-tab active" onclick="playClickSound();switchRankTab('growth')">🐾 宠物成长榜</div>
+    <div class="rank-tab" onclick="playClickSound();switchRankTab('quiz')">📝 每日一练榜</div>
+    <div class="rank-tab" onclick="playClickSound();switchRankTab('pigrun')">🐷 小猪快跑榜</div>
   </div>
-  <div id="fullRankList"></div>
+  <div class="rank-tab-content active" id="rankGrowthContent">
+    <div id="rankStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>🏅 宠物成长榜</h3>
+      <div id="classTopThree"></div>
+      <div id="honorEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">🏆</div>
+        <div class="empty-text">还没有成长数据哦</div>
+        <div class="empty-sub">快去喂养宠物，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullRankList"></div>
+  </div>
+  <div class="rank-tab-content" id="rankQuizContent">
+    <div id="rankQuizStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>📝 每日一练排行榜</h3>
+      <p style="text-align:center;font-size:13px;color:#999;margin:8px 0;">按全班每日一练答题获得总金币排行</p>
+      <div id="quizTopThree"></div>
+      <div id="quizRankEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">📝</div>
+        <div class="empty-text">还没有答题数据哦</div>
+        <div class="empty-sub">快去取金阁答题，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullQuizRankList"></div>
+  </div>
+  <div class="rank-tab-content" id="rankPigRunContent">
+    <div id="rankPigRunStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>🐷 小猪快跑排行榜</h3>
+      <p style="text-align:center;font-size:13px;color:#999;margin:8px 0;">按全班每日小猪快跑获总得分排行</p>
+      <div id="pigRunTopThree"></div>
+      <div id="pigRunRankEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">🐷</div>
+        <div class="empty-text">还没有小猪快跑数据哦</div>
+        <div class="empty-sub">快去玩小猪快跑，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullPigRunRankList"></div>
+  </div>
 </div>
 <div class="page" id="quiz-page">
   <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
   <div class="paw-deco" style="bottom:40px;right:80px;--paw-rot:-30deg;font-size:28px;">🐾</div>
-  <div id="quizContent"></div>
+  <!-- 取金阁两栏标签 -->
+  <div class="quiz-tabs">
+    <div class="quiz-tab active" onclick="playClickSound();switchQuizTab('daily')">📝 每日一练</div>
+    <div class="quiz-tab" onclick="playClickSound();switchQuizTab('pigrun')">🐷 小猪快跑</div>
+  </div>
+  <div class="quiz-tab-content active" id="quizDailyContent">
+    <div id="quizContent"></div>
+  </div>
+  <div class="quiz-tab-content" id="quizPigRunContent">
+    <div id="pigRunContent"></div>
+  </div>
 </div>
 <div class="page" id="pk-page">
   <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
@@ -110,6 +156,7 @@ setTimeout(function() { window._hideDalLoading(); }, 15000);
 <div id="upgradeEffectContainer"></div>
 <script defer src="quiz-bank.js?v=1"></script>
 <script defer src="quiz.js?v=5"></script>
+<script defer src="pig-run.js?v=1"></script>
 <script defer src="app.js?v=38"></script>
 <script>
 // ===== 云端模式：禁用本地文件保存机制 =====
