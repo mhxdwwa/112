@@ -434,22 +434,15 @@ async function confirmScanLogin(token, encodedEmail) {
   }
   
   try {
-    // ★ 关键修复：使用页面已认证的 db 客户端（有教师session），而非创建新的匿名客户端
-    // 匿名客户端的 UPDATE 会被 RLS 静默阻止，导致电脑端永远检测不到验证
-    var scanDb = (typeof db !== 'undefined' && db) ? db : null;
-    
-    if (!scanDb) {
-      // 降级：如果全局 db 不可用，创建新客户端
-      if (!window.supabase || !window.supabase.createClient) {
-        throw new Error('扫码组件未加载，请刷新页面重试');
-      }
-      var supabaseUrl = 'https://xbygooadskfqllnhwmet.supabase.co';
-      var supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
-      scanDb = window.supabase.createClient(supabaseUrl, supabaseKey);
-      console.log('[扫码] 降级：使用新匿名客户端');
-    } else {
-      console.log('[扫码] 使用已认证的全局 db 客户端');
+    // ★ 关键修复：始终使用匿名客户端，和电脑端 login.js 保持一致
+    // 之前用已认证 db 客户端，RLS 根据 auth.uid() 区分权限，导致看不到匿名客户端插入的记录
+    if (!window.supabase || !window.supabase.createClient) {
+      throw new Error('扫码组件未加载，请刷新页面重试');
     }
+    var supabaseUrl = 'https://xbygooadskfqllnhwmet.supabase.co';
+    var supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
+    var scanDb = window.supabase.createClient(supabaseUrl, supabaseKey);
+    console.log('[扫码] 使用匿名客户端（和电脑端一致）');
     
     // 先查询token是否存在（用 .limit(1) 代替 .single()，避免多行时报错）
     console.log('[扫码] 查询token, 值="' + token + '", 长度=' + token.length);
