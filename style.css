@@ -3160,3 +3160,118 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
 .classpk-dual-result-tag.correct{color:#2ecc71;}
 .classpk-dual-result-tag.wrong{color:#e74c3c;}
 @keyframes judgeResultPop{0%{opacity:0;transform:translate(-50%,-50%) scale(3);}30%{opacity:1;transform:translate(-50%,-50%) scale(1);}80%{opacity:1;}100%{opacity:0;transform:translate(-50%,-50%) scale(0.8);}}
+
+/* ========== 排行榜三分类标签 ========== */
+.rank-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.rank-tab {
+  padding: 10px 22px;
+  border-radius: 25px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: linear-gradient(135deg, #fff0f5, #f8f0ff);
+  color: #888;
+  border: 2px solid #f0e0e8;
+  box-shadow: 0 3px 8px rgba(200, 180, 200, 0.15);
+  user-select: none;
+}
+.rank-tab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(200, 180, 200, 0.25);
+}
+.rank-tab.active {
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  color: #fff;
+  border-color: #ffaa00;
+  box-shadow: 0 4px 15px rgba(255, 200, 0, 0.4);
+}
+.rank-tab-content {
+  display: none;
+  animation: rankTabFadeIn 0.3s ease;
+}
+.rank-tab-content.active {
+  display: block;
+}
+@keyframes rankTabFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========== 取金阁两栏标签 ========== */
+.quiz-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.quiz-tab {
+  padding: 12px 28px;
+  border-radius: 30px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: linear-gradient(135deg, #fff5e6, #f5f0ff);
+  color: #999;
+  border: 2px solid #f0e0d0;
+  box-shadow: 0 3px 10px rgba(200, 180, 200, 0.15);
+  user-select: none;
+}
+.quiz-tab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 18px rgba(200, 180, 200, 0.25);
+}
+.quiz-tab.active {
+  background: linear-gradient(135deg, #52c41a, #389e0d);
+  color: #fff;
+  border-color: #389e0d;
+  box-shadow: 0 4px 15px rgba(82, 196, 26, 0.4);
+}
+.quiz-tab-content {
+  display: none;
+  animation: rankTabFadeIn 0.3s ease;
+}
+.quiz-tab-content.active {
+  display: block;
+}
+
+/* ========== 小猪快跑游戏容器 ========== */
+.pig-run-game-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0 10px;
+}
+.pig-run-game-wrap .game-container {
+  max-width: 430px;
+  width: 100%;
+}
+
+/* ========== 小猪快跑老师视图 ========== */
+.pig-run-teacher-view {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+  text-align: center;
+  line-height: 2;
+}
+
+/* ========== 排行榜通用增强 ========== */
+.rank-podium-pillar .rank-coins-val {
+  font-size: 14px;
+  color: #d4a017;
+  font-weight: 700;
+}
+.rank-podium-pillar .rank-pigrun-val {
+  font-size: 14px;
+  color: #52c41a;
+  font-weight: 700;
+}
