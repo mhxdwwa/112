@@ -608,26 +608,39 @@
     return cls ? cls.students : [];
   }
 
+  var _pendingStudentId = null; // 临时记录教师在弹窗中选中的学生ID（未确认开始）
+  var _pendingActivityType = null; // 临时记录活动类型
+
   function showSelectStudentModal(activityType) {
     var students = getCurrentClassStudents();
     var activityName = activityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
-    var currentId = _teacherPlayingAsStudent;
+    _pendingStudentId = null;
+    _pendingActivityType = activityType;
+    _renderStudentListModal(students, activityName, null);
+  }
 
+  // 渲染学生列表弹窗（支持两步：先选人，再确认开始）
+  function _renderStudentListModal(students, activityName, selectedId) {
     var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" id="selectStudentModal">';
     html += '<div style="background:#fff;border-radius:20px;padding:24px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
+
+    // Header
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
-    html += '<div style="font-size:18px;font-weight:700;">📋 选择参赛学生 - ' + activityName + '</div>';
+    html += '<div style="font-size:18px;font-weight:700;">📋 选取名单 - ' + activityName + '</div>';
     html += '<button onclick="closeSelectStudentModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;">×</button>';
     html += '</div>';
-    html += '<div style="font-size:13px;color:#888;margin-bottom:14px;">从班级中选择一名学生参加' + activityName + '，该学生的原有进度和数据将用于游戏，成绩和奖励记录在该学生名下。</div>';
+
+    // Description
+    html += '<div style="font-size:13px;color:#888;margin-bottom:14px;">点击学生姓名选中，然后点击「开始参加比赛」进入游戏。成绩和奖励记录在该学生名下。</div>';
+
     // Student list (单选)
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;" id="studentListWrap">';
     students.forEach(function(stu) {
-      var isActive = currentId && currentId.toString() === stu.id.toString();
-      var borderColor = isActive ? '#52c41a' : '#eee';
-      var bgColor = isActive ? '#f0fff0' : '#fff';
-      html += '<div onclick="selectStudentForPlay(' + stu.id + ',\'' + activityType + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:2px solid ' + borderColor + ';border-radius:12px;cursor:pointer;transition:all 0.15s;background:' + bgColor + ';" onmouseenter="this.style.borderColor=\'#52c41a\';this.style.background=\'#f8fff8\'" onmouseleave="this.style.borderColor=\'' + borderColor + '\';this.style.background=\'' + bgColor + '\'">';
-      if (isActive) {
+      var isSelected = selectedId && selectedId.toString() === stu.id.toString();
+      var borderColor = isSelected ? '#52c41a' : '#eee';
+      var bgColor = isSelected ? '#f0fff0' : '#fff';
+      html += '<div onclick="onStudentClickInModal(' + stu.id + ')" id="stuRow_' + stu.id + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:2px solid ' + borderColor + ';border-radius:12px;cursor:pointer;transition:all 0.15s;background:' + bgColor + ';" onmouseenter="this.style.borderColor=\'#52c41a\'" onmouseleave="if(!this.classList.contains(\'selected\'))this.style.borderColor=\'#eee\'">';
+      if (isSelected) {
         html += '<span style="width:22px;height:22px;border-radius:50%;background:#52c41a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;flex-shrink:0;">✓</span>';
       } else {
         html += '<span style="width:22px;height:22px;border-radius:50%;border:2px solid #ddd;flex-shrink:0;"></span>';
@@ -637,7 +650,18 @@
       html += '</div>';
     });
     html += '</div>';
-    html += '<div style="margin-top:16px;text-align:center;">';
+
+    // 底部操作区：显示「开始参加比赛」按钮（仅当选中了学生后）
+    html += '<div id="startCompetitionWrap" style="margin-top:16px;text-align:center;' + (selectedId ? '' : 'display:none;') + '">';
+    var selStudent = selectedId ? students.find(function(s) { return s.id.toString() === selectedId.toString(); }) : null;
+    if (selStudent) {
+      html += '<div style="font-size:13px;color:#555;margin-bottom:8px;">已选中：<strong style="color:#389e0d;">' + selStudent.name + '</strong>（💰' + (selStudent.coins || 0) + '金币）</div>';
+    }
+    html += '<button onclick="startCompetition()" style="background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(82,196,26,0.4);transition:all 0.2s;width:100%;" onmouseenter="this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.transform=\'scale(1)\'">🏁 开始参加比赛</button>';
+    html += '</div>';
+
+    // 关闭按钮
+    html += '<div style="margin-top:10px;text-align:center;">';
     html += '<button onclick="closeSelectStudentModal()" style="background:#f0f0f0;color:#666;border:none;border-radius:12px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
     html += '</div>';
     html += '</div></div>';
@@ -646,28 +670,50 @@
     if (container) container.innerHTML = html;
   }
 
-  window.selectStudentForPlay = function(studentId, activityType) {
-    _teacherPlayingAsStudent = parseInt(studentId);
+  // 点击学生行：更新选中状态，显示「开始参加比赛」按钮
+  window.onStudentClickInModal = function(studentId) {
+    var students = getCurrentClassStudents();
+    _pendingStudentId = parseInt(studentId);
+    var activityName = _pendingActivityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
+    // 重新渲染弹窗，高亮选中学生并显示开始按钮
+    _renderStudentListModal(students, activityName, studentId);
+  };
+
+  // 点击「开始参加比赛」：确认选择，进入游戏
+  window.startCompetition = function() {
+    if (!_pendingStudentId) return;
+    _teacherPlayingAsStudent = _pendingStudentId;
+    window._teacherPlayingAsStudent = _teacherPlayingAsStudent;
+    var activityType = _pendingActivityType;
     // 关闭弹窗
-    var container = document.getElementById('modalContainer');
-    if (container) container.innerHTML = '';
+    closeSelectStudentModal();
+    // 显示提示
+    var students = getCurrentClassStudents();
+    var stu = students.find(function(s) { return s.id === _pendingStudentId; });
+    if (stu && typeof showNotification === 'function') {
+      showNotification('已选择 ' + stu.name, '正在以该学生身份进入游戏...', 'success');
+    }
     // 刷新游戏界面
     if (activityType === 'dailyQuiz') {
       renderQuizPage();
     } else if (activityType === 'pigrun' && typeof renderPigRunPage === 'function') {
       renderPigRunPage();
     }
-    // 提示
-    var students = getCurrentClassStudents();
-    var stu = students.find(function(s) { return s.id === studentId; });
-    if (stu && typeof showNotification === 'function') {
-      showNotification('已选择 ' + stu.name, '将以该学生身份进行游戏，成绩记录在其名下', 'success');
-    }
+    _pendingStudentId = null;
+    _pendingActivityType = null;
+  };
+
+  window.selectStudentForPlay = function(studentId, activityType) {
+    // 兼容旧调用：改为走两步流程
+    _pendingActivityType = activityType;
+    window.onStudentClickInModal(studentId);
   };
 
   window.closeSelectStudentModal = function() {
     var container = document.getElementById('modalContainer');
     if (container) container.innerHTML = '';
+    _pendingStudentId = null;
+    _pendingActivityType = null;
   };
 
   window.showSelectStudentModal = showSelectStudentModal;
@@ -687,7 +733,7 @@
     var html = '<div style="max-width:500px;margin:0 auto;padding:20px;">';
     html += '<div style="text-align:center;margin-bottom:20px;">';
     html += '<div style="font-size:48px;">' + icon + '</div>';
-    html += '<div style="font-size:18px;font-weight:700;margin-top:8px;">' + activityName + ' - 教师操作</div>';
+    html += '<div style="font-size:18px;font-weight:700;margin-top:8px;">' + activityName + '</div>';
     html += '</div>';
 
     // 当前选中学生
@@ -706,13 +752,13 @@
       html += '</div>';
     }
 
-    // 按钮
-    html += '<button onclick="showSelectStudentModal(\'' + activityType + '\')" style="width:100%;background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:12px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(255,200,0,0.3);margin-bottom:10px;">📋 ' + (currentStudent ? '更换参赛学生' : '选择参赛学生') + '</button>';
+    // 选取名单按钮
+    html += '<button onclick="showSelectStudentModal(\'' + activityType + '\')" style="width:100%;background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:12px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(255,200,0,0.3);margin-bottom:10px;">📋 选取名单</button>';
 
     // 说明
     html += '<div style="font-size:12px;color:#aaa;text-align:center;line-height:1.8;">';
-    html += '从班级中选择一名学生参加' + activityName + '<br>';
-    html += '该学生的原有进度和数据将用于游戏<br>';
+    html += '点击「选取名单」从班级中选择一名学生参加' + activityName + '<br>';
+    html += '选中学生后点击「开始参加比赛」进入游戏<br>';
     html += '成绩和奖励将正确记录在该学生名下</div>';
     html += '</div>';
     return html;
@@ -724,5 +770,5 @@
   window.getQuizState = getQuizState;
   window.resetQuizIfNeeded = resetQuizIfNeeded;
 
-  console.log('[取金阁] v6 loaded (参赛名单功能)');
+  console.log('[取金阁] v8 loaded (选取名单两步流程)');
 })();
