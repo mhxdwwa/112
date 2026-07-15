@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v3 - 100% 忠实于原始小猪快跑.html，补充 Supabase 分数存储
+// v5 - 关卡系统：无限制关卡、得分=基础分+时间分、金币奖励3-9、关卡选择、排行榜
 
 (function() {
   'use strict';
@@ -32,24 +32,83 @@
     return cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
   }
 
-  // === 保存小猪快跑分数到 Supabase ===
-  function savePigRunScore(student, newScore) {
-    if (!student || !student.id) return;
+  // === 初始化学生的小猪快跑状态 ===
+  function ensurePigRunState(student) {
     if (!student.quizState || typeof student.quizState !== 'object') {
-      student.quizState = { lastQuizDate: '', todayCoins: 0, questionsToday: [], totalQuestions: 0, started: false, pigRunScore: 0, totalQuizCoins: 0 };
+      student.quizState = { lastQuizDate: '', todayCoins: 0, questionsToday: [], totalQuestions: 0, started: false, totalQuizCoins: 0 };
     }
-    student.quizState.pigRunScore = (student.quizState.pigRunScore || 0) + newScore;
-    student.pigRunScore = student.quizState.pigRunScore;
+    if (!student.quizState.pigRunLevels) student.quizState.pigRunLevels = {};
+    // 兼容旧数据：迁移旧 pigRunScore
+    if (!student.quizState.pigRunTotalScore && student.quizState.pigRunScore) {
+      student.quizState.pigRunTotalScore = student.quizState.pigRunScore;
+    }
+    if (!student.quizState.pigRunTotalScore) student.quizState.pigRunTotalScore = 0;
+    return student.quizState;
+  }
+
+  // === 计算关卡得分 ===
+  // 基础分 = 小猪数量 * 5
+  // 时间分 = max(10, 320 - floor((timeSeconds - pigCount) * 2))
+  // 关卡总分 = 基础分 + 时间分
+  function calcLevelScore(pigCount, timeSeconds) {
+    var baseScore = pigCount * 5;
+    var timeBonus = Math.max(10, 320 - Math.floor(Math.max(0, timeSeconds - pigCount) * 2));
+    return baseScore + timeBonus;
+  }
+
+  // === 保存关卡成绩到 Supabase ===
+  function saveLevelResult(student, level, pigCount, timeSeconds, isFirstClear) {
+    var qs = ensurePigRunState(student);
+    var levelScore = calcLevelScore(pigCount, timeSeconds);
+    var levelKey = String(level);
+
+    // 金币奖励（仅首次通关）
+    var coinReward = 0;
+    if (isFirstClear) {
+      coinReward = Math.floor(Math.random() * 7) + 3; // 3-9
+      student.coins += coinReward;
+    }
+
+    // 记录或更新该关卡最佳成绩
+    var prevBest = qs.pigRunLevels[levelKey] || null;
+    var prevScore = prevBest ? prevBest.bestScore : 0;
+    var scoreDiff = levelScore - prevScore;
+
+    if (!prevBest || levelScore > prevBest.bestScore) {
+      qs.pigRunLevels[levelKey] = {
+        bestTime: (!prevBest || timeSeconds < prevBest.bestTime) ? timeSeconds : prevBest.bestTime,
+        bestScore: Math.max(levelScore, prevScore),
+        coinsEarned: isFirstClear ? coinReward : (prevBest ? prevBest.coinsEarned : 0),
+        cleared: true
+      };
+    }
+
+    // 更新总分
+    qs.pigRunTotalScore = 0;
+    Object.keys(qs.pigRunLevels).forEach(function(k) {
+      qs.pigRunTotalScore += qs.pigRunLevels[k].bestScore || 0;
+    });
+    student.quizState = qs;
+
+    // 保存到 Supabase
     if (typeof saveCoinsAndQuizState === 'function') {
       saveCoinsAndQuizState(student);
     } else if (typeof db !== 'undefined' && db) {
-      db.from('students').update({ quiz_state: JSON.stringify(student.quizState) }).eq('id', student.id).then(function(r) {
-        if (r.error) console.error('[小猪快跑] 分数保存失败:', r.error.message);
+      db.from('students').update({
+        coins: student.coins,
+        quiz_state: JSON.stringify(qs)
+      }).eq('id', student.id).then(function(r) {
+        if (r.error) console.error('[小猪快跑] 保存失败:', r.error.message);
       });
     }
+
+    // 记录操作日志
     if (typeof recordAction === 'function') {
-      var msg = '小猪快跑 +' + newScore + '分 (总分:' + student.quizState.pigRunScore + ')';
-      recordAction(student.id, student.name, '小猪快跑', msg, 0, 0, null);
+      var msg = '小猪快跑第' + level + '关：' + levelScore + '分(基础' + (pigCount * 5) + '+时间' + (levelScore - pigCount * 5) + ')';
+      if (isFirstClear) msg += '，获' + coinReward + '金币';
+      else if (scoreDiff > 0) msg += '，提高' + scoreDiff + '分';
+      msg += '，总分:' + qs.pigRunTotalScore;
+      recordAction(student.id, student.name, '小猪快跑', msg, coinReward, 0, null);
     }
     if (typeof saveQuizLogDirect === 'function' && window.operationLogs) {
       for (var i = window.operationLogs.length - 1; i >= 0; i--) {
@@ -60,6 +119,8 @@
       }
     }
     if (typeof triggerRealtimeSync === 'function') triggerRealtimeSync();
+
+    return { levelScore: levelScore, coinReward: coinReward, isFirstClear: isFirstClear, totalScore: qs.pigRunTotalScore, prevScore: prevScore, scoreDiff: scoreDiff };
   }
 
   // === 注入 CSS 样式（忠实于原始小猪快跑.html）===
@@ -80,7 +141,7 @@
       '.pig-btn-icon:active{transform:translateY(2px);box-shadow:0 1px 0 #d0d0d0;}',
       '.pig-coin-display{display:flex;align-items:center;gap:6px;background:#fff;padding:6px 16px;border-radius:20px;font-weight:bold;color:#f5a623;font-size:18px;box-shadow:0 3px 0 #e0c080;}',
       '.pig-level-title{font-size:24px;font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,0.2);letter-spacing:2px;}',
-      '.pig-game-board{position:absolute;top:65px;bottom:105px;left:10px;right:10px;width:calc(100% - 20px);height:calc(100% - 170px);z-index:10;}',
+      '.pig-game-board{position:absolute;top:65px;bottom:130px;left:10px;right:10px;width:calc(100% - 20px);height:calc(100% - 195px);z-index:10;}',
       '.pig{position:absolute;cursor:pointer;z-index:10;transition:left 0.085s linear,top 0.085s linear;will-change:left,top;}',
       '.pig:active{transform:scale(0.96);}',
       '.pig-hit{position:absolute;inset:-12px;border-radius:50%;z-index:20;}',
@@ -98,11 +159,11 @@
       '@keyframes pigBounceLeft{0%{transform:rotate(90deg) translateY(-2px) scale(1.72);}100%{transform:rotate(90deg) translateY(2px) scale(1.68);}}',
       '@keyframes pigBounceRight{0%{transform:rotate(-90deg) translateY(-2px) scale(1.72);}100%{transform:rotate(-90deg) translateY(2px) scale(1.68);}}',
       '.pig.escaping{z-index:100;pointer-events:none;transition:left 0.35s ease-in,top 0.35s ease-in,opacity 0.35s ease-in;}',
-      '.pig-bottom-bar{position:absolute;bottom:0;left:0;width:100%;padding:12px 20px 20px;display:flex;justify-content:space-around;align-items:center;background:linear-gradient(0deg,rgba(90,184,58,0.6) 0%,transparent 100%);z-index:100;}',
-      '.pig-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;transition:transform 0.1s;min-width:80px;box-shadow:0 4px 0 #e0a000;}',
+      '.pig-bottom-bar{position:absolute;bottom:0;left:0;width:100%;padding:8px 12px 10px;display:flex;justify-content:space-around;align-items:flex-end;background:linear-gradient(0deg,rgba(90,184,58,0.6) 0%,transparent 100%);z-index:100;}',
+      '.pig-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;transition:transform 0.1s;min-width:72px;box-shadow:0 4px 0 #e0a000;}',
       '.pig-tool-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #e0a000;}',
-      '.pig-tool-btn .icon{font-size:28px;line-height:1;}',
-      '.pig-tool-btn .text{font-size:15px;font-weight:900;color:#8b5a2b;}',
+      '.pig-tool-btn .icon{font-size:24px;line-height:1;}',
+      '.pig-tool-btn .text{font-size:13px;font-weight:900;color:#8b5a2b;}',
       '.pig-tool-btn .count{position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;}',
       '.pig-tool-btn.disabled{opacity:0.6;background:#d0d0d0;border-color:#999;box-shadow:0 4px 0 #777;cursor:pointer;}',
       '.pig-tool-btn.active{border-color:#ff4757;box-shadow:0 0 0 3px rgba(255,71,87,0.3),0 4px 0 #e0a000;}',
@@ -128,12 +189,33 @@
       '.pig-quiz-close-btn{width:100%;background:#52c41a;color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #389e0d;}',
       '.pig-modal{position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;}',
       '.pig-modal.show{opacity:1;pointer-events:all;}',
-      '.pig-modal-content{background:#fff;padding:32px 40px;border-radius:20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);animation:pigPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1);}',
-      '.pig-modal-title{font-size:28px;font-weight:900;color:#333;margin-bottom:20px;}',
-      '.pig-modal-btn{background:#52c41a;color:white;border:none;padding:12px 32px;border-radius:26px;font-size:18px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #389e0d;transition:transform 0.1s;}',
+      '.pig-modal-content{background:#fff;padding:32px 40px;border-radius:20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);animation:pigPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1);max-width:340px;width:90%;}',
+      '.pig-modal-title{font-size:24px;font-weight:900;color:#333;margin-bottom:12px;}',
+      '.pig-modal-sub{font-size:15px;color:#666;margin-bottom:8px;line-height:1.6;}',
+      '.pig-modal-score{font-size:20px;font-weight:800;color:#d4a017;margin-bottom:6px;}',
+      '.pig-modal-coins{font-size:18px;font-weight:700;color:#f5a623;margin-bottom:16px;}',
+      '.pig-modal-btn{background:#52c41a;color:white;border:none;padding:12px 32px;border-radius:26px;font-size:18px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #389e0d;transition:transform 0.1s;margin:4px;}',
       '.pig-modal-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #389e0d;}',
+      '.pig-modal-btn.secondary{background:#fff;color:#333;box-shadow:0 4px 0 #ccc;}',
       '.pig-grass-dot{position:absolute;border-radius:50%;background:#5ab83a;opacity:0.35;pointer-events:none;z-index:3;}',
-      '.pig-run-score-bar{background:#f0fff0;border-radius:12px;padding:12px;margin-bottom:12px;border:1px solid #90ee90;display:flex;justify-content:space-between;align-items:center;}'
+      '.pig-level-select{max-width:430px;margin:0 auto;padding:12px;}',
+      '.pig-level-header{text-align:center;margin-bottom:16px;}',
+      '.pig-level-header h2{font-size:22px;font-weight:800;color:#389e0d;margin-bottom:4px;}',
+      '.pig-level-header p{font-size:13px;color:#888;}',
+      '.pig-level-stats{display:flex;justify-content:space-around;margin-bottom:16px;background:#f0fff0;border-radius:12px;padding:10px;border:1px solid #90ee90;}',
+      '.pig-level-stat{text-align:center;}',
+      '.pig-level-stat .num{font-size:20px;font-weight:800;color:#389e0d;}',
+      '.pig-level-stat .label{font-size:11px;color:#888;}',
+      '.pig-level-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;max-height:400px;overflow-y:auto;padding:4px;}',
+      '.pig-level-card{position:relative;background:#fff;border:2px solid #e0e0e0;border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer;transition:all 0.2s;}',
+      '.pig-level-card:hover{border-color:#52c41a;transform:translateY(-2px);box-shadow:0 4px 12px rgba(82,196,26,0.2);}',
+      '.pig-level-card.cleared{background:#f0fff0;border-color:#90ee90;}',
+      '.pig-level-card.current{border-color:#52c41a;box-shadow:0 0 0 3px rgba(82,196,26,0.3);}',
+      '.pig-level-card.locked{opacity:0.4;cursor:not-allowed;background:#f5f5f5;}',
+      '.pig-level-card .lv-num{font-size:18px;font-weight:800;color:#333;}',
+      '.pig-level-card .lv-score{font-size:11px;color:#d4a017;font-weight:600;}',
+      '.pig-level-card .lv-coins{font-size:10px;color:#f5a623;}',
+      '.pig-level-card .lv-check{position:absolute;top:-4px;right:-4px;background:#52c41a;color:#fff;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;}'
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -224,7 +306,7 @@
     audio.play().catch(function() {});
   }
 
-  // === 渲染小猪快跑页面（教师/学生入口）===
+  // === 渲染小猪快跑页面（关卡选择）===
   function renderPigRunPage() {
     var container = document.getElementById('pigRunContent');
     if (!container) return;
@@ -242,30 +324,86 @@
       container.innerHTML = '<div style="text-align:center;padding:40px;">未找到你的学生信息</div>';
       return;
     }
-    if (!student.quizState || typeof student.quizState !== 'object') {
-      student.quizState = { lastQuizDate: '', todayCoins: 0, questionsToday: [], totalQuestions: 0, started: false, pigRunScore: 0, totalQuizCoins: 0 };
-    }
-    if (!student.quizState.pigRunScore) student.quizState.pigRunScore = 0;
-    student.pigRunScore = student.quizState.pigRunScore;
-    if (!student.pigRunState) student.pigRunState = { lastPlayDate: '', todayScore: 0 };
-    var today = new Date().toDateString();
-    if (student.pigRunState.lastPlayDate !== today) {
-      student.pigRunState.lastPlayDate = today;
-      student.pigRunState.todayScore = 0;
-    }
-    renderPigRunGame(container, student);
+    var qs = ensurePigRunState(student);
+    renderLevelSelect(container, student, qs);
   }
   window.renderPigRunPage = renderPigRunPage;
 
-  // === 渲染游戏主体 ===
-  function renderPigRunGame(container, student) {
+  // === 关卡选择界面 ===
+  function renderLevelSelect(container, student, qs) {
     injectStyles();
     initAudio();
+    var levels = qs.pigRunLevels || {};
+    var clearedLevels = Object.keys(levels).filter(function(k) { return levels[k] && levels[k].cleared; }).map(Number).sort(function(a,b){return a-b;});
+    var maxCleared = clearedLevels.length > 0 ? Math.max.apply(null, clearedLevels) : 0;
+    var totalScore = qs.pigRunTotalScore || 0;
+    var totalCoins = 0;
+    Object.keys(levels).forEach(function(k) { totalCoins += levels[k].coinsEarned || 0; });
+
+    var html = '<div class="pig-level-select">';
+    // Header
+    html += '<div class="pig-level-header">';
+    html += '<h2>🐷 小猪快跑</h2>';
+    html += '<p>帮助小猪逃脱，越到后面难度越大！</p>';
+    html += '</div>';
+    // Stats
+    html += '<div class="pig-level-stats">';
+    html += '<div class="pig-level-stat"><div class="num">' + clearedLevels.length + '</div><div class="label">已通关</div></div>';
+    html += '<div class="pig-level-stat"><div class="num" style="color:#d4a017;">' + totalScore + '</div><div class="label">总分</div></div>';
+    html += '<div class="pig-level-stat"><div class="num" style="color:#f5a623;">' + totalCoins + '</div><div class="label">累计金币</div></div>';
+    html += '</div>';
+    // Level grid (show up to max(maxCleared+5, 20))
+    var showCount = Math.max(20, maxCleared + 5);
+    html += '<div style="font-size:14px;font-weight:700;color:#555;margin-bottom:8px;">选择关卡</div>';
+    html += '<div class="pig-level-grid">';
+    for (var i = 1; i <= showCount; i++) {
+      var lvData = levels[String(i)];
+      var isCleared = lvData && lvData.cleared;
+      var isUnlocked = i === 1 || (levels[String(i-1)] && levels[String(i-1)].cleared) || isCleared;
+      var isCurrent = i === maxCleared + 1 && !isCleared;
+      var cardClass = 'pig-level-card';
+      if (isCleared) cardClass += ' cleared';
+      if (isCurrent) cardClass += ' current';
+      if (!isUnlocked) cardClass += ' locked';
+      var onclick = isUnlocked ? ' onclick="startLevelGame(' + i + ')"' : '';
+      html += '<div class="' + cardClass + '"' + onclick + '>';
+      html += '<div class="lv-num">' + i + '</div>';
+      if (isCleared && lvData) {
+        html += '<div class="lv-score">' + lvData.bestScore + '分</div>';
+        html += '<div class="lv-coins">💰' + (lvData.coinsEarned || 0) + '</div>';
+        html += '<div class="lv-check">✓</div>';
+      } else if (isCurrent) {
+        html += '<div style="font-size:10px;color:#52c41a;font-weight:600;">新关卡</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    // Rules
+    html += '<div style="margin-top:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;text-align:left;">';
+    html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
+    html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
+    html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 通关时间越短，时间分越高<br>5. 首次通关获得3-9金币奖励<br>6. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  // 全局函数：从关卡选择开始游戏
+  window.startLevelGame = function(level) {
+    var student = getCurrentStudent();
+    if (!student) return;
+    var container = document.getElementById('pigRunContent');
+    if (!container) return;
+    var qs = ensurePigRunState(student);
+    renderPigRunGame(container, student, qs, level);
+  };
+
+  // === 渲染游戏主体 ===
+  function renderPigRunGame(container, student, qs, level) {
     var html = '<div class="pig-run-wrap">';
     // Score bar
-    html += '<div class="pig-run-score-bar">';
-    html += '<span style="font-size:13px;font-weight:600;color:#389e0d;">🐷 今日得分: ' + student.pigRunState.todayScore + '</span>';
-    html += '<span style="font-size:13px;font-weight:600;color:#d4a017;">🏆 总分: ' + (student.quizState.pigRunScore || 0) + '</span>';
+    html += '<div class="pig-run-score-bar" style="background:#f0fff0;border-radius:12px;padding:10px;margin-bottom:8px;border:1px solid #90ee90;display:flex;justify-content:space-between;align-items:center;">';
+    html += '<span style="font-size:13px;font-weight:600;color:#389e0d;">🐷 第' + level + '关</span>';
+    html += '<span style="font-size:13px;font-weight:600;color:#d4a017;">🏆 总分: ' + (qs.pigRunTotalScore || 0) + '</span>';
     html += '</div>';
     // Game container
     html += '<div class="pig-game-container" id="pigGameContainer">';
@@ -276,7 +414,7 @@
     html += '<div class="pig-time-display" id="pigTimeDisplay">00:00</div>';
     html += '</div>';
     html += '<div class="pig-coin-display"><span>🪙</span><span id="pigCoinCount">0</span></div>';
-    html += '<div class="pig-level-title">第<span id="pigLevelNum">1</span>关</div>';
+    html += '<div class="pig-level-title">第<span id="pigLevelNum">' + level + '</span>关</div>';
     html += '<button class="pig-btn-icon" id="pigSoundBtn">🔊</button>';
     html += '</div>';
     // Game board
@@ -291,6 +429,7 @@
     html += '<div class="pig-pause-mask" id="pigPauseMask">';
     html += '<div class="pig-pause-title">游戏暂停</div>';
     html += '<button class="pig-pause-btn" id="pigResumeBtn">▶ 继续游戏</button>';
+    html += '<button class="pig-pause-btn secondary" id="pigQuitBtn">🏠 返回关卡选择</button>';
     html += '</div>';
     // Quiz modal
     html += '<div class="pig-quiz-modal" id="pigQuizModal">';
@@ -303,32 +442,36 @@
     html += '</div></div>';
     // Win modal
     html += '<div class="pig-modal" id="pigWinModal">';
-    html += '<div class="pig-modal-content">';
-    html += '<div class="pig-modal-title">🎉 全部逃脱成功！</div>';
-    html += '<button class="pig-modal-btn" id="pigNextLevelBtn">下一关</button>';
-    html += '</div></div>';
+    html += '<div class="pig-modal-content" id="pigWinContent"></div>';
+    html += '</div>';
     html += '</div>'; // close pig-game-container
-    // Rules
-    html += '<div style="margin-top:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;text-align:left;">';
-    html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
-    html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
-    html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 全部逃脱通关，额外 +30分<br>5. 道具耗尽后点击图标可答题补充</div></div>';
     html += '</div>'; // close pig-run-wrap
     container.innerHTML = html;
     // Start game
-    setTimeout(function() { startPigRunGame(container, student); }, 100);
+    setTimeout(function() { startPigRunGame(container, student, qs, level); }, 100);
   }
 
   // === 游戏引擎 ===
-  function startPigRunGame(container, student) {
+  function startPigRunGame(container, student, qs, currentLevel) {
     var COLS = 7, ROWS = 10, PIG_SCALE = 0.96;
     var CELL_W = 100 / COLS, CELL_H = 100 / ROWS, MOVE_SPEED = 85;
     var DIRS = { up:{dx:0,dy:-1}, down:{dx:0,dy:1}, left:{dx:-1,dy:0}, right:{dx:1,dy:0} };
 
     var gState = {
-      level:1, coins:0, pigs:[], tools:{remove:1,shuffle:1,rotate:1},
-      activeTool:null, animating:false, soundEnabled:true, paused:false,
-      timeSeconds:0, timer:null, currentQuizTool:null, currentQuiz:null, answerAttempts:0
+      level: currentLevel,
+      coins: 0,
+      pigs: [],
+      tools: {remove:1, shuffle:1, rotate:1},
+      activeTool: null,
+      animating: false,
+      soundEnabled: true,
+      paused: false,
+      timeSeconds: 0,
+      timer: null,
+      currentQuizTool: null,
+      currentQuiz: null,
+      answerAttempts: 0,
+      totalPigCount: 0
     };
 
     var board = document.getElementById('pigGameBoard');
@@ -337,7 +480,7 @@
     var coinCountEl = document.getElementById('pigCoinCount');
     var timeDisplay = document.getElementById('pigTimeDisplay');
     var winModal = document.getElementById('pigWinModal');
-    var nextBtn = document.getElementById('pigNextLevelBtn');
+    var winContent = document.getElementById('pigWinContent');
     var removeBtn = document.getElementById('pigRemoveTool');
     var shuffleBtn = document.getElementById('pigShuffleTool');
     var rotateBtn = document.getElementById('pigRotateTool');
@@ -351,6 +494,7 @@
     var pauseBtn = document.getElementById('pigPauseBtn');
     var pauseMask = document.getElementById('pigPauseMask');
     var resumeBtn = document.getElementById('pigResumeBtn');
+    var quitBtn = document.getElementById('pigQuitBtn');
     var quizModal = document.getElementById('pigQuizModal');
     var quizChapter = document.getElementById('pigQuizChapter');
     var quizQuestion = document.getElementById('pigQuizQuestion');
@@ -379,16 +523,30 @@
       else { pauseBtn.textContent='⏸'; pauseMask.classList.remove('show'); }
     }
 
-    // Level generation
+    // 关卡难度：根据关卡等级决定填充率和方向分布
+    // 低关卡：填充率低，方向规律
+    // 高关卡：填充率高，方向随机性强，更多堵死情况
     function generateLevel(level) {
       var pigs = [];
-      var fillRate = Math.min(0.92, 0.75 + level * 0.035);
-      for (var y=0; y<ROWS; y++) {
-        for (var x=0; x<COLS; x++) {
+      // 填充率随关卡递增：Level 1=0.70, Level 10=0.85, Level 50=0.95, 最高0.97
+      var fillRate = Math.min(0.97, 0.68 + level * 0.012);
+      // 方向随机性随关卡递增：低关卡方向规律，高关卡更混乱
+      var randomDirChance = Math.min(0.8, 0.1 + level * 0.02);
+
+      for (var y = 0; y < ROWS; y++) {
+        for (var x = 0; x < COLS; x++) {
           if (Math.random() > fillRate) continue;
-          var isH = Math.random() > 0.5;
-          var dir = isH ? (y%2===0?'right':'left') : (x%2===0?'down':'up');
-          pigs.push({x:x, y:y, dir:dir});
+          var dir;
+          if (Math.random() < randomDirChance) {
+            // 随机方向（高关卡主要用这个）
+            var allDirs = ['up', 'down', 'left', 'right'];
+            dir = allDirs[Math.floor(Math.random() * allDirs.length)];
+          } else {
+            // 规律方向（低关卡主要用这个）
+            var isH = Math.random() > 0.5;
+            dir = isH ? (y % 2 === 0 ? 'right' : 'left') : (x % 2 === 0 ? 'down' : 'up');
+          }
+          pigs.push({x: x, y: y, dir: dir});
         }
       }
       return pigs;
@@ -399,13 +557,18 @@
       gState.pigs = [];
       gState.activeTool = null;
       gState.animating = false;
+      gState.coins = 0;
+      gState.timeSeconds = 0;
+      timeDisplay.textContent = '00:00';
       var data = generateLevel(level);
+      gState.totalPigCount = data.length;
       data.forEach(function(d, i) {
         var el = createPig(d.x, d.y, d.dir, i);
         gState.pigs.push({id:i, x:d.x, y:d.y, dir:d.dir, el:el});
         placePig(el, d.x, d.y);
       });
       levelNum.textContent = level;
+      coinCountEl.textContent = '0';
     }
 
     function createPig(x, y, dir, id) {
@@ -532,7 +695,7 @@
       }
     }
 
-    // Quiz system — 忠实于原始题库和答题逻辑
+    // Quiz system
     function openQuiz(toolName) {
       gState.currentQuizTool = toolName;
       gState.answerAttempts = 0;
@@ -588,19 +751,54 @@
       gState.currentQuiz = null;
     }
 
-    // Win / Next Level
+    // Win / Next Level / Back to select
     function checkWin() {
       if (gState.pigs.length === 0) {
-        var levelScore = gState.coins + 30;
-        gState.coins += 30;
+        stopTimer();
+        playSound('win', gState.soundEnabled);
+
+        // 判断是否首次通关
+        var levelKey = String(gState.level);
+        var prevLevelData = qs.pigRunLevels[levelKey];
+        var isFirstClear = !prevLevelData || !prevLevelData.cleared;
+
+        // 保存成绩
+        var result = saveLevelResult(student, gState.level, gState.totalPigCount, gState.timeSeconds, isFirstClear);
+
+        // 更新本地 qs 引用
+        qs = ensurePigRunState(student);
+
+        // 计算基础分和时间分
+        var baseScore = gState.totalPigCount * 5;
+        var timeBonus = result.levelScore - baseScore;
+
+        // 构建胜利弹窗
+        var winHtml = '<div class="pig-modal-title">🎉 全部逃脱成功！</div>';
+        winHtml += '<div class="pig-modal-sub">第' + gState.level + '关通关</div>';
+        winHtml += '<div class="pig-modal-score">得分: ' + result.levelScore + '分</div>';
+        winHtml += '<div class="pig-modal-sub" style="font-size:13px;color:#888;">';
+        winHtml += '基础分: ' + baseScore + ' (' + gState.totalPigCount + '只×5) + 时间分: ' + timeBonus;
+        winHtml += '</div>';
+        if (isFirstClear && result.coinReward > 0) {
+          winHtml += '<div class="pig-modal-coins">💰 首次通关奖励: +' + result.coinReward + '金币</div>';
+        } else if (!isFirstClear && result.scoreDiff > 0) {
+          winHtml += '<div class="pig-modal-sub" style="color:#389e0d;">分数提高 +' + result.scoreDiff + '！</div>';
+        } else if (!isFirstClear && result.scoreDiff <= 0) {
+          winHtml += '<div class="pig-modal-sub" style="color:#888;">本次未超过最佳成绩</div>';
+        }
+        winHtml += '<div style="margin-top:16px;">';
+        winHtml += '<button class="pig-modal-btn" id="pigNextLevelBtn">▶ 下一关</button>';
+        winHtml += '<button class="pig-modal-btn secondary" id="pigBackBtn">🏠 关卡选择</button>';
+        winHtml += '</div>';
+        winContent.innerHTML = winHtml;
+
         setTimeout(function(){
           winModal.classList.add('show');
-          stopTimer();
-          playSound('win', gState.soundEnabled);
-          // Save score to student
-          savePigRunScore(student, levelScore);
-          student.pigRunState.todayScore += levelScore;
-          updateUI();
+          // Bind buttons
+          var nextBtn = document.getElementById('pigNextLevelBtn');
+          var backBtn = document.getElementById('pigBackBtn');
+          if (nextBtn) nextBtn.addEventListener('click', nextLevel);
+          if (backBtn) backBtn.addEventListener('click', backToSelect);
         }, 300);
       }
     }
@@ -608,14 +806,20 @@
     function nextLevel() {
       gState.level++;
       winModal.classList.remove('show');
-      gState.tools.remove = Math.min(gState.tools.remove+1, 5);
-      gState.tools.shuffle = Math.min(gState.tools.shuffle+1, 3);
-      gState.tools.rotate = Math.min(gState.tools.rotate+1, 3);
+      gState.tools = {remove:1, shuffle:1, rotate:1};
       gState.timeSeconds = 0;
       timeDisplay.textContent = '00:00';
       startTimer();
       loadLevel(gState.level);
       updateUI();
+    }
+
+    function backToSelect() {
+      winModal.classList.remove('show');
+      stopTimer();
+      // 重新渲染关卡选择
+      qs = ensurePigRunState(student);
+      renderLevelSelect(container, student, qs);
     }
 
     function updateUI() {
@@ -650,7 +854,6 @@
     }
 
     // Bind events
-    nextBtn.addEventListener('click', nextLevel);
     removeBtn.addEventListener('click', function(){ onToolClick('remove'); });
     shuffleBtn.addEventListener('click', function(){ onToolClick('shuffle'); });
     rotateBtn.addEventListener('click', function(){ onToolClick('rotate'); });
@@ -660,6 +863,7 @@
     });
     pauseBtn.addEventListener('click', togglePause);
     resumeBtn.addEventListener('click', togglePause);
+    if (quitBtn) quitBtn.addEventListener('click', backToSelect);
     quizCloseBtn.addEventListener('click', closeQuiz);
 
     // Init
@@ -669,5 +873,5 @@
     startTimer();
   }
 
-  console.log('[小猪快跑] v3 loaded');
+  console.log('[小猪快跑] v5 loaded');
 })();

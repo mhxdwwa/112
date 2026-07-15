@@ -711,13 +711,13 @@ function revertToLog(logId){
   showNotification('撤销成功', revertDetail, 'success');
 }
 function _historyActionIcon(type){
-  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄'};
+  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','小猪快跑':'🐷','取金阁':'📝'};
   return icons[type]||'📝';
 }
 function _historyActionColor(type){
   if(type==='惩罚致死'||type==='饿死') return '#ff4444';
   if(type.includes('惩罚')||type==='PK失败') return '#e07050';
-  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡'||type==='每日打卡') return '#4a9e4a';
+  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡'||type==='每日打卡'||type==='小猪快跑'||type==='取金阁') return '#4a9e4a';
   if(type==='PK平局') return '#8888aa';
   if(type==='复活') return '#9b59b6';
   if(type==='商店购买') return '#8e44ad';
@@ -2113,12 +2113,28 @@ function renderPigRunRanking() {
   const emptyHint = document.getElementById('pigRunRankEmptyHint');
   const statsBar = document.getElementById('rankPigRunStatsBar');
 
-  // Sort students by pigRunScore (stored in quizState.pigRunScore)
-  const allList = cur.students.map(s => ({
-    name: s.name,
-    totalScore: (s.quizState && s.quizState.pigRunScore) || s.pigRunScore || 0,
-    student: s
-  })).filter(x => x.totalScore > 0).sort((a, b) => b.totalScore - a.totalScore);
+  // 新数据结构：quizState.pigRunLevels = { "1": {bestScore, bestTime, coinsEarned, cleared}, ... }
+  // quizState.pigRunTotalScore = 所有关卡 bestScore 之和
+  const allList = cur.students.map(s => {
+    var qs = s.quizState || {};
+    var pigRunLevels = qs.pigRunLevels || {};
+    var totalScore = qs.pigRunTotalScore || 0;
+    // 兼容旧数据
+    if (totalScore === 0 && qs.pigRunScore) totalScore = qs.pigRunScore;
+    var clearedCount = Object.keys(pigRunLevels).filter(k => pigRunLevels[k] && pigRunLevels[k].cleared).length;
+    var maxLevel = 0;
+    Object.keys(pigRunLevels).forEach(k => {
+      var lv = parseInt(k);
+      if (pigRunLevels[k] && pigRunLevels[k].cleared && lv > maxLevel) maxLevel = lv;
+    });
+    return {
+      name: s.name,
+      totalScore: totalScore,
+      clearedLevels: clearedCount,
+      maxLevel: maxLevel,
+      student: s
+    };
+  }).filter(x => x.totalScore > 0 || x.clearedLevels > 0).sort((a, b) => b.totalScore - a.totalScore);
 
   if (allList.length === 0) {
     if (topThreeEl) topThreeEl.innerHTML = '';
@@ -2164,10 +2180,10 @@ function renderPigRunRanking() {
         <div class="podium-avatar"><span style="font-size:36px;">🐷</span><div class="podium-medal">${medalNum}</div></div>
       </div>
       <div class="podium-name">${esc(item.name)}</div>
-      <div class="podium-pet-name">${item.totalScore} 分</div>
+      <div class="podium-pet-name">第${item.maxLevel}关 · ${item.totalScore}分</div>
       <div class="podium-pillar">
         <div class="podium-rank-num">${medalNum}</div>
-        <div class="podium-growth-val">${item.totalScore} 分</div>
+        <div class="podium-growth-val">${item.totalScore}分 · ${item.clearedLevels}关</div>
       </div>
     </div>`;
   });
@@ -2185,10 +2201,10 @@ function renderPigRunRanking() {
         <div class="rank-row-avatar"><span style="font-size:22px;">🐷</span></div>
         <div class="rank-row-info">
           <div class="rank-row-name">${esc(item.name)} <span class="rank-title-badge ${title.cls}">${title.text}</span></div>
-          <div class="rank-row-pet">累计获得 ${item.totalScore} 分</div>
+          <div class="rank-row-pet">第${item.maxLevel}关 · 通关${item.clearedLevels}关 · 总分 ${item.totalScore}分</div>
           <div class="rank-progress-wrap">
             <div class="rank-progress-bar"><div class="rank-progress-fill" style="width:${pct}%;background:linear-gradient(90deg,#52c41a,#389e0d);"></div></div>
-            <div class="rank-growth-num">${item.totalScore} 分</div>
+            <div class="rank-growth-num">${item.totalScore}分</div>
           </div>
         </div>
       </div>`;
