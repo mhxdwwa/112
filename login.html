@@ -132,10 +132,27 @@ body {
     </div>
     <div class="error-msg" id="teacherError"></div>
     <button type="submit" class="btn btn-primary">登录</button>
+    <button type="button" class="btn" onclick="showQRLogin()" style="background:linear-gradient(135deg,#52c41a,#389e0d);color:white;margin-top:10px;">📱 扫码登录</button>
     <div style="text-align: center; margin-top: 15px; font-size: 14px; color: #886;">
       还没有账号？<a href="javascript:void(0)" onclick="showRegister('teacher')" style="color: #c04058;">立即注册</a>
     </div>
   </form>
+
+  <!-- 扫码登录弹窗 -->
+  <div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:none;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:24px;padding:32px;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:22px;font-weight:700;color:#c04058;margin-bottom:16px;">📱 扫码登录</div>
+      <div style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6;">
+        请使用手机QQ扫描二维码<br>并在弹出的页面中确认登录
+      </div>
+      <div id="qrCodeWrap" style="display:inline-block;padding:16px;background:#fff;border:2px solid #f0d0c8;border-radius:16px;margin-bottom:16px;"></div>
+      <div id="qrStatus" style="font-size:14px;color:#d4a017;margin-bottom:12px;">等待扫码...</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="refreshQR()" style="flex:1;padding:10px;border:none;border-radius:10px;background:#f0f0f0;color:#666;font-size:14px;font-weight:600;cursor:pointer;">🔄 刷新</button>
+        <button onclick="closeQRModal()" style="flex:1;padding:10px;border:none;border-radius:10px;background:#ffe0e0;color:#c04058;font-size:14px;font-weight:600;cursor:pointer;">关闭</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 老师注册表单 -->
   <form id="teacherRegisterForm" class="hidden" onsubmit="handleTeacherRegister(event)">
@@ -209,6 +226,7 @@ body {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="login.js?v=6"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="login.js?v=7"></script>
 </body>
 </html>

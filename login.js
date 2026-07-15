@@ -436,6 +436,14 @@ async function handleStudentRegister(e) {
 
 // 页面加载时自动获取可用班级列表
 (function() {
+  // 自动填充上次使用的教师邮箱
+  var savedEmail = localStorage.getItem('userEmail');
+  var savedType = localStorage.getItem('userType');
+  if (savedEmail && savedType === 'teacher') {
+    var emailInput = document.getElementById('teacherEmail');
+    if (emailInput) emailInput.value = savedEmail;
+  }
+
   // 等 Supabase 连接好后再加载
   function tryLoad() {
     if (db) {
@@ -447,3 +455,227 @@ async function handleStudentRegister(e) {
   // 延迟执行，等页面渲染完
   setTimeout(tryLoad, 500);
 })();
+
+// ===== 扫码登录功能 =====
+var _qrToken = null;
+var _qrPollTimer = null;
+
+function showQRLogin() {
+  var modal = document.getElementById('qrModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    generateQRCode();
+  }
+}
+
+function closeQRModal() {
+  var modal = document.getElementById('qrModal');
+  if (modal) modal.style.display = 'none';
+  stopQRPolling();
+  _qrToken = null;
+}
+
+function refreshQR() {
+  stopQRPolling();
+  generateQRCode();
+}
+
+function stopQRPolling() {
+  if (_qrPollTimer) {
+    clearInterval(_qrPollTimer);
+    _qrPollTimer = null;
+  }
+}
+
+async function generateQRCode() {
+  var qrWrap = document.getElementById('qrCodeWrap');
+  var qrStatus = document.getElementById('qrStatus');
+  if (!qrWrap || !qrStatus) return;
+
+  // 获取教师邮箱
+  var emailInput = document.getElementById('teacherEmail');
+  var email = emailInput ? emailInput.value.trim() : '';
+  if (!email) {
+    qrWrap.innerHTML = '';
+    qrStatus.innerHTML = '❌ 请先输入邮箱地址';
+    qrStatus.style.color = '#e74c3c';
+    return;
+  }
+
+  qrWrap.innerHTML = '';
+  qrStatus.textContent = '正在生成二维码...';
+  qrStatus.style.color = '#d4a017';
+
+  if (!db) {
+    qrStatus.textContent = '❌ 网络连接失败';
+    qrStatus.style.color = '#e74c3c';
+    return;
+  }
+
+  try {
+    // 生成随机token
+    _qrToken = 'qr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
+    var expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5分钟后过期
+
+    // 存储token到Supabase
+    var insertResult = await db
+      .from('qr_login_tokens')
+      .insert([{
+        token: _qrToken,
+        email: email,
+        status: 'pending',
+        expires_at: expiresAt
+      }]);
+
+    if (insertResult.error) {
+      // 表可能不存在，给出创建提示
+      console.error('二维码表不存在:', insertResult.error.message);
+      qrStatus.innerHTML = '❌ 扫码功能未启用<br><span style="font-size:11px;color:#888;line-height:1.6;">需要在Supabase中创建qr_login_tokens表<br>请联系管理员或查看控制台获取SQL</span>';
+      qrStatus.style.color = '#e74c3c';
+      console.log('%c[扫码登录] 需要在Supabase中执行以下SQL创建数据表:', 'color:#c04058;font-weight:bold;');
+      console.log('%cCREATE TABLE IF NOT EXISTS qr_login_tokens (\n  id BIGSERIAL PRIMARY KEY,\n  token TEXT NOT NULL UNIQUE,\n  email TEXT,\n  status TEXT NOT NULL DEFAULT \'pending\',\n  expires_at TIMESTAMPTZ NOT NULL,\n  verified_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- 启用RLS\nALTER TABLE qr_login_tokens ENABLE ROW LEVEL SECURITY;\n\n-- 允许匿名插入（用于生成token）\nCREATE POLICY "Allow anonymous insert" ON qr_login_tokens FOR INSERT TO anon WITH CHECK (true);\n\n-- 允许匿名读取（用于轮询状态）\nCREATE POLICY "Allow anonymous select" ON qr_login_tokens FOR SELECT TO anon USING (true);\n\n-- 允许匿名更新（用于验证确认）\nCREATE POLICY "Allow anonymous update" ON qr_login_tokens FOR UPDATE TO anon USING (true);', 'color:#333;font-family:monospace;font-size:11px;');
+      return;
+    }
+
+    // 生成二维码URL
+    var baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+    var verifyUrl = baseUrl + 'qr-verify.html?token=' + encodeURIComponent(_qrToken);
+
+    // 渲染二维码
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(qrWrap, {
+        text: verifyUrl,
+        width: 200,
+        height: 200,
+        colorDark: '#333333',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else {
+      // Fallback: 显示URL
+      qrWrap.innerHTML = '<div style="font-size:12px;color:#666;word-break:break-all;padding:10px;">' + verifyUrl + '</div>';
+    }
+
+    qrStatus.textContent = '等待扫码...';
+    qrStatus.style.color = '#d4a017';
+
+    // 开始轮询检查token状态
+    startQRPolling();
+
+  } catch(e) {
+    console.error('生成二维码失败:', e);
+    qrStatus.textContent = '❌ 生成失败: ' + e.message;
+    qrStatus.style.color = '#e74c3c';
+  }
+}
+
+function startQRPolling() {
+  if (!_qrToken) return;
+  
+  stopQRPolling();
+  _qrPollTimer = setInterval(checkQRStatus, 2000);
+}
+
+async function checkQRStatus() {
+  if (!_qrToken || !db) return;
+
+  try {
+    var result = await db
+      .from('qr_login_tokens')
+      .select('*')
+      .eq('token', _qrToken)
+      .single();
+
+    if (result.error || !result.data) {
+      stopQRPolling();
+      var qrStatus = document.getElementById('qrStatus');
+      if (qrStatus) {
+        qrStatus.textContent = '❌ 二维码已失效';
+        qrStatus.style.color = '#e74c3c';
+      }
+      return;
+    }
+
+    var tokenData = result.data;
+
+    // 检查是否过期
+    if (new Date(tokenData.expires_at) < new Date()) {
+      stopQRPolling();
+      var qrStatus = document.getElementById('qrStatus');
+      if (qrStatus) {
+        qrStatus.textContent = '❌ 二维码已过期，请点击刷新';
+        qrStatus.style.color = '#e74c3c';
+      }
+      return;
+    }
+
+    // 检查是否已验证
+    if (tokenData.status === 'verified') {
+      stopQRPolling();
+      var qrStatus = document.getElementById('qrStatus');
+      if (qrStatus) {
+        qrStatus.textContent = '✅ 验证成功，正在登录...';
+        qrStatus.style.color = '#389e0d';
+      }
+
+      // 使用token中的email自动登录
+      if (tokenData.email) {
+        await autoLoginWithToken(tokenData.email);
+      } else {
+        // token中没有email，需要查询teachers表
+        var qrStatus = document.getElementById('qrStatus');
+        if (qrStatus) {
+          qrStatus.textContent = '❌ 登录信息缺失';
+          qrStatus.style.color = '#e74c3c';
+        }
+      }
+    }
+
+  } catch(e) {
+    console.warn('检查二维码状态失败:', e);
+  }
+}
+
+async function autoLoginWithToken(email) {
+  try {
+    // 查找教师信息
+    var teacherResult = await db
+      .from('teachers')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (teacherResult.error || !teacherResult.data) {
+      var qrStatus = document.getElementById('qrStatus');
+      if (qrStatus) {
+        qrStatus.textContent = '❌ 教师账号不存在';
+        qrStatus.style.color = '#e74c3c';
+      }
+      return;
+    }
+
+    // 保存登录信息
+    localStorage.setItem('userType', 'teacher');
+    localStorage.setItem('userId', teacherResult.data.id);
+    localStorage.setItem('userEmail', email);
+
+    var qrStatus = document.getElementById('qrStatus');
+    if (qrStatus) {
+      qrStatus.textContent = '✅ 登录成功！正在跳转...';
+      qrStatus.style.color = '#389e0d';
+    }
+
+    // 延迟跳转
+    setTimeout(function() {
+      window.location.href = 'index.html';
+    }, 1000);
+
+  } catch(e) {
+    console.error('自动登录失败:', e);
+    var qrStatus = document.getElementById('qrStatus');
+    if (qrStatus) {
+      qrStatus.textContent = '❌ 登录失败: ' + e.message;
+      qrStatus.style.color = '#e74c3c';
+    }
+  }
+}

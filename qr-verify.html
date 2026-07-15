@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>扫码验证 - 宠物世界</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: "Microsoft YaHei", sans-serif;
+  background: linear-gradient(135deg, #ffe6dd, #ffd4e8, #ffe0f0);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.verify-container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(255, 180, 160, 0.3);
+  text-align: center;
+}
+.verify-title {
+  font-size: 24px;
+  color: #c04058;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+.verify-icon {
+  font-size: 60px;
+  margin-bottom: 16px;
+}
+.verify-msg {
+  font-size: 15px;
+  color: #666;
+  line-height: 1.8;
+  margin-bottom: 24px;
+}
+.verify-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: linear-gradient(135deg, #52c41a, #389e0d);
+  color: white;
+}
+.verify-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(82, 196, 26, 0.4);
+}
+.verify-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.verify-status {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  display: none;
+}
+.verify-status.success {
+  display: block;
+  background: #f0fff0;
+  color: #389e0d;
+  border: 1px solid #90ee90;
+}
+.verify-status.error {
+  display: block;
+  background: #fff5f5;
+  color: #e74c3c;
+  border: 1px solid #ffb0b0;
+}
+.verify-status.loading {
+  display: block;
+  background: #fffbe6;
+  color: #d4a017;
+  border: 1px solid #ffd080;
+}
+.qq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #e8f5ff;
+  color: #1890ff;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+</style>
+</head>
+<body>
+<div class="verify-container">
+  <div class="verify-icon">🔐</div>
+  <div class="verify-title">扫码验证登录</div>
+  <div id="qqBadge" class="qq-badge" style="display:none;">
+    <span>📱</span><span>QQ浏览器</span>
+  </div>
+  <div class="verify-msg" id="verifyMsg">
+    正在验证二维码...
+  </div>
+  <button class="verify-btn" id="verifyBtn" style="display:none;" onclick="confirmLogin()">
+    ✅ 确认登录
+  </button>
+  <div class="verify-status" id="verifyStatus"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Supabase 配置
+var SUPABASE_URL = 'https://xbygooadskfqllnhwmet.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
+var db;
+
+try {
+  if (window.supabase && window.supabase.createClient) {
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch(e) {
+  console.error('Supabase init error:', e);
+}
+
+// 检测是否是QQ浏览器
+function isQQBrowser() {
+  var ua = navigator.userAgent.toLowerCase();
+  return ua.indexOf('qq') > -1 || ua.indexOf('qcloud') > -1;
+}
+
+// 获取URL参数
+function getUrlParam(name) {
+  var reg = new RegExp('(^|&)' + name + '=([^&]*)(&|$)', 'i');
+  var r = window.location.search.substr(1).match(reg);
+  if (r != null) return decodeURIComponent(r[2]);
+  return null;
+}
+
+var token = getUrlParam('token');
+var msgEl = document.getElementById('verifyMsg');
+var btnEl = document.getElementById('verifyBtn');
+var statusEl = document.getElementById('verifyStatus');
+var qqBadge = document.getElementById('qqBadge');
+
+// 页面加载
+(function init() {
+  if (!token) {
+    msgEl.textContent = '❌ 无效的二维码链接';
+    statusEl.className = 'verify-status error';
+    statusEl.textContent = '二维码缺少验证信息，请重新生成';
+    return;
+  }
+
+  // 检测QQ浏览器
+  if (isQQBrowser()) {
+    qqBadge.style.display = 'inline-flex';
+  }
+
+  // 检查token状态
+  checkToken();
+})();
+
+async function checkToken() {
+  if (!db) {
+    msgEl.textContent = '❌ 网络连接失败';
+    statusEl.className = 'verify-status error';
+    statusEl.textContent = '无法连接到服务器，请检查网络';
+    return;
+  }
+
+  try {
+    var result = await db
+      .from('qr_login_tokens')
+      .select('*')
+      .eq('token', token)
+      .eq('status', 'pending')
+      .single();
+
+    if (result.error || !result.data) {
+      // Token不存在或已过期
+      msgEl.textContent = '❌ 二维码已失效';
+      statusEl.className = 'verify-status error';
+      statusEl.textContent = '二维码已过期或已被使用，请在电脑上重新生成';
+      return;
+    }
+
+    // Token有效，显示确认按钮
+    msgEl.innerHTML = '您正在登录教师账号<br><strong style="color:#c04058;">' + 
+      escapeHtml(result.data.email || '') + '</strong><br><br>请确认是本人操作';
+    btnEl.style.display = 'block';
+  } catch(e) {
+    console.error('检查token失败:', e);
+    msgEl.textContent = '❌ 验证失败';
+    statusEl.className = 'verify-status error';
+    statusEl.textContent = '请重试或返回电脑重新生成二维码';
+  }
+}
+
+async function confirmLogin() {
+  if (!db || !token) return;
+
+  btnEl.disabled = true;
+  btnEl.textContent = '验证中...';
+  statusEl.className = 'verify-status loading';
+  statusEl.textContent = '正在确认登录...';
+
+  try {
+    // 更新token状态为verified
+    var result = await db
+      .from('qr_login_tokens')
+      .update({ 
+        status: 'verified',
+        verified_at: new Date().toISOString()
+      })
+      .eq('token', token)
+      .eq('status', 'pending');
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    // 成功
+    btnEl.textContent = '✅ 已确认';
+    statusEl.className = 'verify-status success';
+    statusEl.innerHTML = '登录成功！<br>您可以关闭此页面，电脑端将自动登录';
+    
+    // 3秒后显示关闭提示
+    setTimeout(function() {
+      msgEl.innerHTML = '✅ 验证成功<br><span style="font-size:13px;color:#888;">您可以关闭此页面</span>';
+      btnEl.style.display = 'none';
+    }, 2000);
+
+  } catch(e) {
+    console.error('确认登录失败:', e);
+    btnEl.disabled = false;
+    btnEl.textContent = '✅ 确认登录';
+    statusEl.className = 'verify-status error';
+    statusEl.textContent = '确认失败，请重试: ' + e.message;
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
