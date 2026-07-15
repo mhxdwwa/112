@@ -631,7 +631,7 @@
   // 渲染学生列表弹窗（支持两步：先选人，再确认开始）
   function _renderStudentListModal(students, activityName, selectedId) {
     var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" id="selectStudentModal">';
-    html += '<div style="background:#fff;border-radius:20px;padding:24px;max-width:700px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
+    html += '<div style="background:#fff;border-radius:20px;padding:24px;width:1100px;max-width:95vw;height:650px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
 
     // Header
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
@@ -643,7 +643,7 @@
     html += '<div style="font-size:13px;color:#888;margin-bottom:14px;">点击学生姓名选中，然后点击「开始参加比赛」进入游戏。成绩和奖励记录在该学生名下。</div>';
 
     // Student list - 流式排列，类似批量奖惩（单选）
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;max-height:50vh;overflow-y:auto;border:1.5px solid rgba(255,210,200,0.6);border-radius:18px;padding:12px;margin-bottom:14px;background:#fffaf5;">';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-height:0;overflow-y:auto;border:1.5px solid rgba(255,210,200,0.6);border-radius:18px;padding:12px;margin-bottom:14px;background:#fffaf5;align-content:flex-start;">';
     students.forEach(function(stu) {
       var isSelected = selectedId && selectedId.toString() === stu.id.toString();
       var bgColor = isSelected ? '#e8ffe8' : '#fff';
@@ -805,5 +805,5 @@
   window.getQuizState = getQuizState;
   window.resetQuizIfNeeded = resetQuizIfNeeded;
 
-  console.log('[取金阁] v9 loaded (每次进入自动弹出选取名单+流式排列)');
+  console.log('[取金阁] v10 loaded (名单弹窗1100x650)');
 })();
