@@ -2012,12 +2012,15 @@ function renderQuizRanking() {
   const emptyHint = document.getElementById('quizRankEmptyHint');
   const statsBar = document.getElementById('rankQuizStatsBar');
 
-  // Sort students by total quiz coins (student.coins)
-  const allList = cur.students.map(s => ({
-    name: s.name,
-    totalCoins: s.coins || 0,
-    student: s
-  })).filter(x => x.totalCoins > 0).sort((a, b) => b.totalCoins - a.totalCoins);
+  // 仅统计每日一练答题获得的金币（quizState.totalQuizCoins），不含其他来源
+  const allList = cur.students.map(s => {
+    var quizCoins = (s.quizState && s.quizState.totalQuizCoins) || 0;
+    return {
+      name: s.name,
+      totalCoins: quizCoins,
+      student: s
+    };
+  }).filter(x => x.totalCoins > 0).sort((a, b) => b.totalCoins - a.totalCoins);
 
   if (allList.length === 0) {
     if (topThreeEl) topThreeEl.innerHTML = '';

@@ -45,7 +45,8 @@
         questionsToday: [],
         totalQuestions: 0,
         started: false,
-        pigRunScore: 0
+        pigRunScore: 0,
+        totalQuizCoins: 0
       };
     }
     // Add to total pig run score stored in quiz_state
@@ -126,7 +127,8 @@
         questionsToday: [],
         totalQuestions: 0,
         started: false,
-        pigRunScore: 0
+        pigRunScore: 0,
+        totalQuizCoins: 0
       };
     }
     if (!student.quizState.pigRunScore) student.quizState.pigRunScore = 0;
@@ -149,8 +151,23 @@
   }
   window.renderPigRunPage = renderPigRunPage;
 
+  // === 小猪图片 CDN 地址（webp 压缩版，加速加载）===
+  var PIG_IMG_URL = 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA.webp';
+
+  // === 方向对应旋转角度（小猪.png 默认头朝下=down）===
+  // down:0deg  up:180deg  left:90deg  right:-90deg
+  function dirToRotation(dir) {
+    if (dir === 'up') return 180;
+    if (dir === 'left') return 90;
+    if (dir === 'right') return -90;
+    return 0; // down
+  }
+
   // === PLACEHOLDER: renderPigRunGame - 实际游戏渲染 ===
   function renderPigRunGame(container, student) {
+    // 移动端检测：减小棋盘高度，避免渲染过多 DOM 导致崩溃
+    var isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+    var boardH = isMobile ? '65vh' : '680px';
     var html = '<div style="max-width:500px;margin:0 auto;padding:16px;text-align:center;">';
     // Score display
     html += '<div style="background:#f0fff0;border-radius:12px;padding:12px;margin-bottom:16px;border:1px solid #90ee90;">';
@@ -158,9 +175,9 @@
     html += '<span style="font-size:13px;font-weight:600;color:#389e0d;">🐷 今日得分: ' + student.pigRunState.todayScore + '</span>';
     html += '<span style="font-size:13px;font-weight:600;color:#d4a017;">🏆 总分: ' + (student.quizState.pigRunScore || 0) + '</span>';
     html += '</div></div>';
-    // Game area
-    html += '<div id="pigRunGameArea" style="position:relative;width:100%;max-width:430px;margin:0 auto;aspect-ratio:9/16;background:linear-gradient(180deg,#d9ff8a 0%,#9be26b 30%,#76c543 70%,#4d8a28 100%);border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.15);">';
-    html += '<div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;">';
+    // Game area — 使用固定高度，避免移动端 aspect-ratio + 大量 DOM 导致崩溃
+    html += '<div id="pigRunGameArea" style="position:relative;width:100%;max-width:430px;height:' + boardH + ';margin:0 auto;background:linear-gradient(180deg,#d9ff8a 0%,#9be26b 30%,#76c543 70%,#4d8a28 100%);border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.15);">';
+    html += '<div id="pigRunStartWrap" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;">';
     html += '<div style="font-size:80px;margin-bottom:20px;">🐷</div>';
     html += '<div style="font-size:20px;font-weight:700;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.3);margin-bottom:16px;">小猪快跑</div>';
     html += '<button id="pigRunStartBtn" style="background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:25px;padding:14px 40px;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(255,200,0,0.4);transition:all 0.3s;">';
@@ -214,8 +231,8 @@
     gameHtml += '<button id="pigSoundBtn" style="width:40px;height:40px;border-radius:12px;background:#fff;border:2px solid #e8e8e8;font-size:18px;cursor:pointer;box-shadow:0 3px 0 #d0d0d0;display:flex;align-items:center;justify-content:center;">🔊</button>';
     gameHtml += '</div>';
 
-    // Game board
-    gameHtml += '<div id="pigGameBoard" style="position:absolute;top:65px;bottom:105px;left:10px;right:10px;width:calc(100% - 20px);height:calc(100% - 170px);z-index:10;"></div>';
+    // Game board — top/bottom 定位，不用显式 height，避免移动端布局异常
+    gameHtml += '<div id="pigGameBoard" style="position:absolute;top:65px;bottom:105px;left:10px;right:10px;z-index:10;"></div>';
 
     // Bottom bar with tools
     gameHtml += '<div style="position:absolute;bottom:0;left:0;width:100%;padding:12px 20px 20px;display:flex;justify-content:space-around;align-items:center;background:linear-gradient(0deg,rgba(90,184,58,0.6) 0%,transparent 100%);z-index:100;">';
@@ -341,10 +358,14 @@
       }
     }
 
-    // Level generation
+    // 移动端检测：减少小猪数量，降低渲染压力
+    var _isMobilePig = window.innerWidth <= 768 || ('ontouchstart' in window);
+
+    // Level generation — 移动端降低填充率，减少 DOM 元素数量
     function generateLevel(level) {
       var pigs = [];
-      var fillRate = Math.min(0.92, 0.75 + level * 0.035);
+      var baseFill = Math.min(0.92, 0.75 + level * 0.035);
+      var fillRate = _isMobilePig ? Math.min(baseFill, 0.72) : baseFill;
       for (var y = 0; y < ROWS; y++) {
         for (var x = 0; x < COLS; x++) {
           if (Math.random() > fillRate) continue;
@@ -380,8 +401,10 @@
       pig.dataset.id = id;
       pig.dataset.dir = dir;
 
+      var rot = dirToRotation(dir);
       var inner = document.createElement('div');
-      inner.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background-image:url("小猪.png");background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;transform:scale(1.7);';
+      // 使用 CDN webp 压缩图片（61KB vs 原始 PNG 1.3MB），大幅减少内存占用
+      inner.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background-image:url("' + PIG_IMG_URL + '");background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;transform:rotate(' + rot + 'deg) scale(1.7);';
       pig.appendChild(inner);
 
       pig.addEventListener('click', function(e) {
@@ -509,8 +532,8 @@
       pig.dir = order[(idx + 1) % 4];
       var inner = pig.el.querySelector('div');
       if (inner) {
-        var rot = pig.dir === 'up' ? 'rotate(180deg)' : pig.dir === 'left' ? 'rotate(90deg)' : pig.dir === 'right' ? 'rotate(-90deg)' : 'rotate(0deg)';
-        inner.style.transform = rot + ' scale(1.7)';
+        var rot = dirToRotation(pig.dir);
+        inner.style.transform = 'rotate(' + rot + 'deg) scale(1.7)';
       }
       updateUI();
     }

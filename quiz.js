@@ -132,8 +132,13 @@
         todayCoins: 0,
         questionsToday: [],
         totalQuestions: 0,
-        started: false
+        started: false,
+        totalQuizCoins: 0  // 累计答题获得的总金币（仅每日一练，不含其他来源）
       };
+    }
+    // 兼容旧数据：没有 totalQuizCoins 字段时初始化为 0
+    if (typeof student.quizState.totalQuizCoins === 'undefined') {
+      student.quizState.totalQuizCoins = 0;
     }
     return student.quizState;
   }
@@ -147,6 +152,7 @@
       state.questionsToday = [];
       state.totalQuestions = 0;
       state.started = false;
+      // 注意：totalQuizCoins 不重置，它是累计值
     }
   }
 
@@ -242,6 +248,7 @@
       var coins = calculateCoins(qState.attempts);
       qState.coins = coins;
       state.todayCoins += coins;
+      state.totalQuizCoins = (state.totalQuizCoins || 0) + coins;  // 累计答题金币
       student.coins += coins;
 
       // 记录操作日志
