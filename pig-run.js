@@ -35,6 +35,8 @@
     } else if (tabName === 'daily') {
       setTimeout(function() { 
         renderQuizPage(); 
+        // 教师进入每日一练时自动加载自定义题库
+        if (!isStudentView && typeof _dailyQuizAutoLoad === 'function') _dailyQuizAutoLoad();
         // Show modal for teacher view
         if (!isStudentView) {
           if (typeof window._setQuizModalShown === 'function') window._setQuizModalShown(true);
@@ -527,18 +529,6 @@
     html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
     html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
     html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 通关时间越短，时间分越高<br>5. 首次通关获得3-9金币奖励<br>6. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
-    
-    // 教师题库管理按钮
-    var isTeacherView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher';
-    if (isTeacherView) {
-      var qCount = (customQuestionBank && customQuestionBank.length > 0) ? customQuestionBank.length : questionBank.length;
-      var qSource = (customQuestionBank && customQuestionBank.length > 0) ? '自定义题库' : '默认题库';
-      html += '<div style="margin-top:10px;padding:10px 12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">';
-      html += '<div style="font-size:13px;color:#666;">📚 题库：<strong>' + qSource + '</strong>（' + qCount + ' 题）</div>';
-      html += '<button onclick="openPigRunQuestionManager()" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(102,126,234,0.3);">📝 题库管理</button>';
-      html += '</div>';
-    }
-    
     html += '</div>';
     container.innerHTML = html;
   }

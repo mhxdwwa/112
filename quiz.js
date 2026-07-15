@@ -163,6 +163,20 @@
     var state = getQuizState(student);
     var allQ = chapter.questions;
 
+    // 合并自定义题目（格式转换）
+    if (_dailyCustomQuestions && _dailyCustomQuestions.length > 0) {
+      var customFormatted = _dailyCustomQuestions.map(function(cq) {
+        return {
+          id: 'custom_' + cq.id,
+          q: cq.question,
+          opts: (cq.options || []).map(function(o, i) { return String.fromCharCode(65 + i) + '. ' + o; }),
+          ans: cq.answer,
+          exp: cq.explanation || ''
+        };
+      });
+      allQ = allQ.concat(customFormatted);
+    }
+
     if (state.questionsToday.length === 0) {
       var today = new Date().toDateString();
       var seed = hashCode(student.id + '_' + today);
@@ -207,6 +221,23 @@
 
   // === 查找题目 ===
   function findQuestion(questionId) {
+    // 先查自定义题目
+    if (questionId.indexOf('custom_') === 0 && _dailyCustomQuestions && _dailyCustomQuestions.length > 0) {
+      var customId = questionId.replace('custom_', '');
+      for (var j = 0; j < _dailyCustomQuestions.length; j++) {
+        var cq = _dailyCustomQuestions[j];
+        if (cq.id.toString() === customId.toString()) {
+          return {
+            id: cq.id,
+            q: cq.question,
+            opts: (cq.options || []).map(function(o, i) { return String.fromCharCode(65 + i) + '. ' + o; }),
+            ans: cq.answer,
+            exp: cq.explanation || ''
+          };
+        }
+      }
+    }
+    // 再查默认题库
     if (typeof QUIZ_BANK === 'undefined') return null;
     var all = QUIZ_BANK.getAllQuestions();
     for (var i = 0; i < all.length; i++) {
@@ -739,8 +770,12 @@
     var icon = activityType === 'dailyQuiz' ? '🏛️' : '🐷';
     var html = '<div style="max-width:500px;margin:0 auto;padding:40px;text-align:center;">';
     html += '<div style="font-size:60px;margin-bottom:16px;">' + icon + '</div>';
-    html += '<div style="font-size:18px;font-weight:700;margin-bottom:12px;">' + activityName + '</div>';
-    html += '<div style="font-size:14px;color:#888;">正在选取参赛学生...</div>';
+    html += '<div style="font-size:18px;font-weight:700;margin-bottom:20px;">' + activityName + '</div>';
+    // 两个功能按钮
+    html += '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">';
+    html += '<button onclick="showSelectStudentModal(\'' + activityType + '\')" style="background:linear-gradient(135deg,#ffd700,#ffaa00);color:#fff;border:none;border-radius:14px;padding:14px 36px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(255,200,0,0.3);min-width:140px;">▶ 开始</button>';
+    html += '<button onclick="openQuizQuestionManager(\'' + activityType + '\')" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:14px;padding:14px 36px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(102,126,234,0.3);min-width:140px;">📚 题库管理</button>';
+    html += '</div>';
     html += '</div>';
     return html;
   }
@@ -805,5 +840,345 @@
   window.getQuizState = getQuizState;
   window.resetQuizIfNeeded = resetQuizIfNeeded;
 
-  console.log('[取金阁] v10 loaded (名单弹窗1100x650)');
+  // === 题库管理入口 ===
+  window.openQuizQuestionManager = function(activityType) {
+    if (activityType === 'pigrun') {
+      // 小猪快跑题库管理（在 pig-run.js 中定义）
+      if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager();
+    } else {
+      // 每日一练题库管理
+      openDailyQuizQuestionManager();
+    }
+  };
+
+  // === 每日一练自定义题库 ===
+  var _dailyCustomQuestions = null; // null=未加载, []=已加载但空, [...]=有题目
+  var _dailyCustomLoading = false;
+
+  function loadDailyCustomQuestions(teacherId) {
+    if (!teacherId || _dailyCustomLoading) return Promise.resolve();
+    if (_dailyCustomQuestions !== null) return Promise.resolve();
+    _dailyCustomLoading = true;
+    if (typeof db === 'undefined' || !db) { _dailyCustomLoading = false; return Promise.resolve(); }
+    return db.from('daily_quiz_questions').select('*').eq('teacher_id', teacherId).order('created_at', { ascending: false }).then(function(r) {
+      _dailyCustomLoading = false;
+      if (r.error) { console.warn('[每日一练] 加载自定义题库失败:', r.error.message); _dailyCustomQuestions = null; return; }
+      if (r.data && r.data.length > 0) {
+        _dailyCustomQuestions = r.data.map(function(q) {
+          var opts = [];
+          try { opts = typeof q.options === 'string' ? JSON.parse(q.options) : (q.options || []); } catch(e) { opts = []; }
+          return { id: q.id, chapter: q.chapter || '默认', question: q.question || '', options: opts, answer: typeof q.answer === 'number' ? q.answer : 0, explanation: q.explanation || '' };
+        });
+        console.log('[每日一练] 加载了 ' + _dailyCustomQuestions.length + ' 道自定义题目');
+      } else {
+        _dailyCustomQuestions = [];
+        console.log('[每日一练] 教师无自定义题目，使用默认题库');
+      }
+    }).catch(function(e) { _dailyCustomLoading = false; console.warn('[每日一练] 加载自定义题库异常:', e); });
+  }
+
+  // 教师进入取金阁时自动加载
+  var _dailyQuizAutoLoad = function() {
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
+      var teacherId = currentUser.id;
+      if (teacherId && _dailyCustomQuestions === null) loadDailyCustomQuestions(teacherId);
+    }
+  };
+
+  function openDailyQuizQuestionManager() {
+    var container = document.getElementById('quizContent');
+    if (!container) return;
+    var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
+    if (!teacherId) return;
+    // 确保题库已加载
+    if (_dailyCustomQuestions === null) {
+      loadDailyCustomQuestions(teacherId).then(function() { renderDailyQuizManager(container, teacherId); });
+    } else {
+      renderDailyQuizManager(container, teacherId);
+    }
+  }
+
+  function renderDailyQuizManager(container, teacherId) {
+    var questions = (_dailyCustomQuestions && _dailyCustomQuestions.length > 0) ? _dailyCustomQuestions : [];
+    var chapterStats = {};
+    questions.forEach(function(q) { var ch = q.chapter || '默认'; chapterStats[ch] = (chapterStats[ch] || 0) + 1; });
+
+    var html = '<div style="max-width:600px;margin:0 auto;padding:12px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<h2 style="font-size:20px;font-weight:800;color:#d4a017;margin:0;">📚 每日一练题库管理</h2>';
+    html += '<button onclick="backToDailyQuizLanding()" style="background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">← 返回</button>';
+    html += '</div>';
+
+    // Stats
+    html += '<div style="background:#fff8e6;border-radius:12px;padding:12px;border:1px solid #ffd080;margin-bottom:16px;">';
+    html += '<div style="font-size:14px;font-weight:700;color:#b08040;margin-bottom:8px;">题库概况</div>';
+    html += '<div style="font-size:13px;color:#555;">自定义题数：<strong>' + questions.length + '</strong>（默认题库 300 题）</div>';
+    if (Object.keys(chapterStats).length > 0) {
+      html += '<div style="font-size:12px;color:#888;margin-top:4px;">章节分布：';
+      var chKeys = Object.keys(chapterStats);
+      chKeys.forEach(function(ch, i) { html += ch + '(' + chapterStats[ch] + '题)'; if (i < chKeys.length - 1) html += '、'; });
+      html += '</div>';
+    }
+    html += '<div style="font-size:11px;color:#aaa;margin-top:6px;">自定义题目会与默认题库合并，学生答题时随机抽取</div>';
+    html += '</div>';
+
+    // Action buttons
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">';
+    html += '<button onclick="showDailyAddForm()" style="flex:1;min-width:120px;background:#d4a017;color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(212,160,23,0.3);">➕ 手动添加</button>';
+    html += '<button onclick="showDailyExcelForm()" style="flex:1;min-width:120px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(102,126,234,0.3);">📊 Excel导入</button>';
+    html += '<button onclick="downloadDailyTemplate()" style="flex:1;min-width:120px;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">📥 下载模板</button>';
+    html += '</div>';
+
+    // Add form (hidden)
+    html += '<div id="dailyAddForm" style="display:none;background:#fff;border-radius:12px;padding:16px;border:1px solid #e0e0e0;margin-bottom:16px;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#333;margin-bottom:12px;">添加新题目</div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">章节</label><input id="dailyNewChapter" type="text" placeholder="例：第13章 三角形" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">题目</label><textarea id="dailyNewQuestion" rows="2" placeholder="输入题目内容" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项A</label><input id="dailyNewOptA" type="text" placeholder="选项A" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项B</label><input id="dailyNewOptB" type="text" placeholder="选项B" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项C</label><input id="dailyNewOptC" type="text" placeholder="选项C" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项D</label><input id="dailyNewOptD" type="text" placeholder="选项D" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">正确答案</label><select id="dailyNewAnswer" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>';
+    html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">解析（可选）</label><textarea id="dailyNewExp" rows="2" placeholder="题目解析" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="submitDailyNewQuestion()" style="flex:1;background:#d4a017;color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">确认添加</button>';
+    html += '<button onclick="hideDailyAddForm()" style="flex:1;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
+    html += '</div></div>';
+
+    // Excel import form (hidden)
+    html += '<div id="dailyExcelForm" style="display:none;background:#fff;border-radius:12px;padding:16px;border:1px solid #e0e0e0;margin-bottom:16px;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#333;margin-bottom:8px;">📊 Excel批量导入</div>';
+    html += '<div style="font-size:12px;color:#888;margin-bottom:12px;line-height:1.6;">';
+    html += 'Excel格式：第一行为表头，列顺序为：<br>';
+    html += '<strong>章节 | 题目 | 选项A | 选项B | 选项C | 选项D | 正确答案 | 解析（可选）</strong><br>';
+    html += '正确答案填字母 A/B/C/D，支持 .xlsx 和 .xls 格式';
+    html += '</div>';
+    html += '<input type="file" id="dailyExcelFileInput" accept=".xlsx,.xls" style="margin-bottom:12px;">';
+    html += '<div id="dailyExcelStatus" style="font-size:13px;color:#666;margin-bottom:8px;min-height:20px;"></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="processDailyExcelImport()" style="flex:1;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">开始导入</button>';
+    html += '<button onclick="hideDailyExcelForm()" style="flex:1;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
+    html += '</div></div>';
+
+    // Question list
+    html += '<div style="font-size:14px;font-weight:700;color:#555;margin-bottom:8px;">自定义题目列表（' + questions.length + ' 题）</div>';
+    if (questions.length === 0) {
+      html += '<div style="text-align:center;padding:30px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;">';
+      html += '<div style="font-size:40px;margin-bottom:8px;">📭</div>';
+      html += '<div style="font-size:14px;color:#888;">暂无自定义题目</div>';
+      html += '<div style="font-size:12px;color:#aaa;margin-top:4px;">学生将使用默认题库（300 题）</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="max-height:400px;overflow-y:auto;">';
+      questions.forEach(function(q, idx) {
+        html += '<div style="background:#fff;border-radius:10px;padding:12px;border:1px solid #e8e8e8;margin-bottom:8px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+        html += '<div style="flex:1;">';
+        html += '<div style="font-size:11px;color:#999;margin-bottom:4px;">' + (q.chapter || '默认') + '</div>';
+        html += '<div style="font-size:13px;color:#333;font-weight:600;margin-bottom:6px;">' + (idx + 1) + '. ' + escapeHtmlSimple(q.question) + '</div>';
+        var opts = q.options || [];
+        var labels = ['A', 'B', 'C', 'D'];
+        opts.forEach(function(opt, oi) {
+          var isCorrect = oi === q.answer;
+          html += '<div style="font-size:12px;color:' + (isCorrect ? '#389e0d' : '#666') + ';margin-left:8px;">' + labels[oi] + '. ' + escapeHtmlSimple(opt) + (isCorrect ? ' ✓' : '') + '</div>';
+        });
+        html += '</div>';
+        html += '<button onclick="deleteDailyQuestion(\'' + q.id + '\')" style="background:#ff4757;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:8px;">删除</button>';
+        html += '</div></div>';
+      });
+      html += '</div>';
+      html += '<div style="margin-top:12px;text-align:center;">';
+      html += '<button onclick="clearAllDailyQuestions()" style="background:#fff;color:#ff4757;border:2px solid #ff4757;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;">🗑️ 清空所有题目</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function escapeHtmlSimple(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  window.backToDailyQuizLanding = function() {
+    _quizModalShown = false;
+    window._pigRunModalShown = false;
+    _teacherPlayingAsStudent = null;
+    window._teacherPlayingAsStudent = null;
+    renderQuizPage();
+  };
+
+  window.showDailyAddForm = function() { var f = document.getElementById('dailyAddForm'); if (f) f.style.display = 'block'; };
+  window.hideDailyAddForm = function() { var f = document.getElementById('dailyAddForm'); if (f) f.style.display = 'none'; };
+  window.showDailyExcelForm = function() { var f = document.getElementById('dailyExcelForm'); if (f) f.style.display = 'block'; };
+  window.hideDailyExcelForm = function() { var f = document.getElementById('dailyExcelForm'); if (f) f.style.display = 'none'; };
+
+  window.submitDailyNewQuestion = function() {
+    var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
+    if (!teacherId) return;
+    var chapter = document.getElementById('dailyNewChapter').value.trim();
+    var question = document.getElementById('dailyNewQuestion').value.trim();
+    var optA = document.getElementById('dailyNewOptA').value.trim();
+    var optB = document.getElementById('dailyNewOptB').value.trim();
+    var optC = document.getElementById('dailyNewOptC').value.trim();
+    var optD = document.getElementById('dailyNewOptD').value.trim();
+    var answer = parseInt(document.getElementById('dailyNewAnswer').value);
+    var explanation = document.getElementById('dailyNewExp').value.trim();
+    if (!question) { alert('请输入题目内容'); return; }
+    if (!optA || !optB) { alert('至少需要选项A和B'); return; }
+    var options = [optA, optB, optC, optD].filter(Boolean);
+    if (typeof db === 'undefined' || !db) { alert('数据库未连接'); return; }
+    db.from('daily_quiz_questions').insert([{
+      teacher_id: teacherId, chapter: chapter || '默认', question: question,
+      options: JSON.stringify(options), answer: answer, explanation: explanation || ''
+    }]).then(function(r) {
+      if (r.error) { alert('添加失败: ' + r.error.message); return; }
+      _dailyCustomQuestions = null;
+      loadDailyCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('quizContent');
+        if (container) renderDailyQuizManager(container, teacherId);
+        if (typeof showNotification === 'function') showNotification('成功', '题目已添加', 'success');
+      });
+    });
+  };
+
+  window.deleteDailyQuestion = function(qId) {
+    if (!confirm('确定删除这道题目？')) return;
+    var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
+    if (!teacherId || typeof db === 'undefined' || !db) return;
+    db.from('daily_quiz_questions').delete().eq('id', qId).eq('teacher_id', teacherId).then(function(r) {
+      if (r.error) { alert('删除失败: ' + r.error.message); return; }
+      _dailyCustomQuestions = null;
+      loadDailyCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('quizContent');
+        if (container) renderDailyQuizManager(container, teacherId);
+      });
+    });
+  };
+
+  window.clearAllDailyQuestions = function() {
+    if (!confirm('确定清空所有自定义题目？此操作不可恢复！')) return;
+    if (!confirm('再次确认：清空后学生将使用默认题库，确定继续？')) return;
+    var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
+    if (!teacherId || typeof db === 'undefined' || !db) return;
+    db.from('daily_quiz_questions').delete().eq('teacher_id', teacherId).then(function(r) {
+      if (r.error) { alert('清空失败: ' + r.error.message); return; }
+      _dailyCustomQuestions = null;
+      loadDailyCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('quizContent');
+        if (container) renderDailyQuizManager(container, teacherId);
+        if (typeof showNotification === 'function') showNotification('成功', '题库已清空', 'success');
+      });
+    });
+  };
+
+  window.downloadDailyTemplate = function() {
+    if (typeof XLSX === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+      script.onload = function() { generateDailyTemplateExcel(); };
+      script.onerror = function() { alert('Excel库加载失败，请检查网络'); };
+      document.head.appendChild(script);
+    } else { generateDailyTemplateExcel(); }
+  };
+
+  function generateDailyTemplateExcel() {
+    var headers = ['章节', '题目', '选项A', '选项B', '选项C', '选项D', '正确答案', '解析'];
+    var example = ['第13章 三角形', '下列各组线段中，能组成三角形的是（）', '1, 2, 3', '2, 3, 4', '1, 1, 2', '3, 3, 7', 'B', '三角形三边关系：任意两边之和大于第三边'];
+    var ws = XLSX.utils.aoa_to_sheet([headers, example]);
+    ws['!cols'] = [{wch:18},{wch:40},{wch:20},{wch:20},{wch:20},{wch:20},{wch:10},{wch:40}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '每日一练模板');
+    XLSX.writeFile(wb, '每日一练题目模板.xlsx');
+  }
+
+  window.processDailyExcelImport = function() {
+    var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
+    if (!teacherId) { alert('请先登录教师账号'); return; }
+    var fileInput = document.getElementById('dailyExcelFileInput');
+    var statusEl = document.getElementById('dailyExcelStatus');
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">请先选择Excel文件</span>';
+      return;
+    }
+    if (typeof XLSX === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+      script.onload = function() { doDailyExcelImport(teacherId, fileInput.files[0], statusEl); };
+      script.onerror = function() { if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">Excel库加载失败</span>'; };
+      document.head.appendChild(script);
+    } else { doDailyExcelImport(teacherId, fileInput.files[0], statusEl); }
+  };
+
+  function doDailyExcelImport(teacherId, file, statusEl) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#666;">正在解析文件...</span>';
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = new Uint8Array(e.target.result);
+        var workbook = XLSX.read(data, { type: 'array' });
+        var sheet = workbook.Sheets[workbook.SheetNames[0]];
+        var jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        if (jsonData.length < 2) { if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">文件中没有数据</span>'; return; }
+        var questions = [];
+        var answerMap = { 'A': 0, 'a': 0, 'B': 1, 'b': 1, 'C': 2, 'c': 2, 'D': 3, 'd': 3 };
+        var errors = [];
+        for (var i = 1; i < jsonData.length; i++) {
+          var row = jsonData[i];
+          if (!row || row.length < 3) continue;
+          var chapter = (row[0] || '默认').toString().trim();
+          var question = (row[1] || '').toString().trim();
+          var optA = (row[2] || '').toString().trim();
+          var optB = (row[3] || '').toString().trim();
+          var optC = (row[4] || '').toString().trim();
+          var optD = (row[5] || '').toString().trim();
+          var answerRaw = (row[6] || 'A').toString().trim();
+          var explanation = (row[7] || '').toString().trim();
+          if (!question) { errors.push('第' + (i+1) + '行：题目为空'); continue; }
+          if (!optA || !optB) { errors.push('第' + (i+1) + '行：至少需要选项A和B'); continue; }
+          var answer = answerMap[answerRaw];
+          if (answer === undefined) {
+            answer = parseInt(answerRaw);
+            if (isNaN(answer) || answer < 0 || answer > 3) { errors.push('第' + (i+1) + '行：正确答案格式错误'); continue; }
+          }
+          var options = [optA, optB, optC, optD].filter(Boolean);
+          questions.push({ teacher_id: teacherId, chapter: chapter, question: question, options: JSON.stringify(options), answer: answer, explanation: explanation });
+        }
+        if (errors.length > 0 && questions.length === 0) {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">发现 ' + errors.length + ' 个错误：<br>' + errors.slice(0, 5).join('<br>') + '</span>';
+          return;
+        }
+        if (questions.length === 0) { if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">没有有效的题目可导入</span>'; return; }
+        if (statusEl) statusEl.innerHTML = '<span style="color:#666;">正在导入 ' + questions.length + ' 道题目...</span>';
+        db.from('daily_quiz_questions').select('question').eq('teacher_id', teacherId).then(function(existingR) {
+          var existingQuestions = {};
+          if (existingR.data) existingR.data.forEach(function(q) { existingQuestions[q.question] = true; });
+          var newQuestions = questions.filter(function(q) { return !existingQuestions[q.question]; });
+          var dupCount = questions.length - newQuestions.length;
+          if (newQuestions.length === 0) {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#ff8800;">所有题目已存在（' + dupCount + ' 道重复）</span>';
+            return;
+          }
+          db.from('daily_quiz_questions').insert(newQuestions).then(function(r) {
+            if (r.error) { if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">导入失败: ' + r.error.message + '</span>'; return; }
+            _dailyCustomQuestions = null;
+            loadDailyCustomQuestions(teacherId).then(function() {
+              var msg = '成功导入 ' + newQuestions.length + ' 道题目';
+              if (dupCount > 0) msg += '（跳过 ' + dupCount + ' 道重复）';
+              if (statusEl) statusEl.innerHTML = '<span style="color:#389e0d;">' + msg + '</span>';
+              setTimeout(function() {
+                var container = document.getElementById('quizContent');
+                if (container) renderDailyQuizManager(container, teacherId);
+              }, 1000);
+            });
+          });
+        });
+      } catch(err) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#ff4757;">文件解析失败: ' + err.message + '</span>';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  console.log('[取金阁] v11 loaded (教师双按钮+题库管理)');
 })();
