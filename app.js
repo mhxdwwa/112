@@ -2291,10 +2291,13 @@ function renderQuizRanking() {
     const cls = ['gold', 'silver', 'bronze'][pi];
     const crown = pi === 0 ? '<div class="podium-crown">👑</div>' : '';
     const medalNum = pi + 1;
+    // 获取学生宠物头像
+    const activePet = getActivePet(item.student);
+    const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:36px;">📝</span>';
     podiumHtml += `<div class="podium-slot ${cls}">
       <div class="podium-avatar-wrap">
         ${crown}
-        <div class="podium-avatar"><span style="font-size:36px;">📝</span><div class="podium-medal">${medalNum}</div></div>
+        <div class="podium-avatar">${petAvatar}<div class="podium-medal">${medalNum}</div></div>
       </div>
       <div class="podium-name">${esc(item.name)}</div>
       <div class="podium-pet-name">${item.totalCoins} 金币</div>
@@ -2314,9 +2317,12 @@ function renderQuizRanking() {
       const topCls = idx === 0 ? 'top1' : idx === 1 ? 'top2' : idx === 2 ? 'top3' : '';
       const pct = Math.round((item.totalCoins / maxCoins) * 100);
       const title = getQuizRankTitle(idx, allList.length);
+      // 获取学生宠物头像
+      const activePet = getActivePet(item.student);
+      const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:22px;">📝</span>';
       listHtml += `<div class="rank-row ${topCls}">
         <div class="rank-num">${idx + 1}</div>
-        <div class="rank-row-avatar"><span style="font-size:22px;">📝</span></div>
+        <div class="rank-row-avatar">${petAvatar}</div>
         <div class="rank-row-info">
           <div class="rank-row-name">${esc(item.name)} <span class="rank-title-badge ${title.cls}">${title.text}</span></div>
           <div class="rank-row-pet">累计获得 ${item.totalCoins} 金币</div>
@@ -2403,10 +2409,13 @@ function renderPigRunRanking() {
     const cls = ['gold', 'silver', 'bronze'][pi];
     const crown = pi === 0 ? '<div class="podium-crown">👑</div>' : '';
     const medalNum = pi + 1;
+    // 获取学生宠物头像
+    const activePet = getActivePet(item.student);
+    const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:36px;">🐷</span>';
     podiumHtml += `<div class="podium-slot ${cls}">
       <div class="podium-avatar-wrap">
         ${crown}
-        <div class="podium-avatar"><span style="font-size:36px;">🐷</span><div class="podium-medal">${medalNum}</div></div>
+        <div class="podium-avatar">${petAvatar}<div class="podium-medal">${medalNum}</div></div>
       </div>
       <div class="podium-name">${esc(item.name)}</div>
       <div class="podium-pet-name">第${item.maxLevel}关 · ${item.totalScore}分</div>
@@ -2425,9 +2434,12 @@ function renderPigRunRanking() {
       const topCls = idx === 0 ? 'top1' : idx === 1 ? 'top2' : idx === 2 ? 'top3' : '';
       const pct = Math.round((item.totalScore / maxScore) * 100);
       const title = getPigRunRankTitle(idx, allList.length);
+      // 获取学生宠物头像
+      const activePet = getActivePet(item.student);
+      const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:22px;">🐷</span>';
       listHtml += `<div class="rank-row ${topCls}">
         <div class="rank-num">${idx + 1}</div>
-        <div class="rank-row-avatar"><span style="font-size:22px;">🐷</span></div>
+        <div class="rank-row-avatar">${petAvatar}</div>
         <div class="rank-row-info">
           <div class="rank-row-name">${esc(item.name)} <span class="rank-title-badge ${title.cls}">${title.text}</span></div>
           <div class="rank-row-pet">第${item.maxLevel}关 · 通关${item.clearedLevels}关 · 总分 ${item.totalScore}分</div>
