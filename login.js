@@ -459,6 +459,9 @@ async function handleStudentRegister(e) {
 // ===== 扫码登录功能 =====
 var _qrToken = null;
 var _qrPollTimer = null;
+var _qrPollCount = 0;
+var _qrRealtimeChannel = null;
+var _qrVerified = false;
 
 function showQRLogin() {
   var modal = document.getElementById('qrModal');
@@ -471,20 +474,26 @@ function showQRLogin() {
 function closeQRModal() {
   var modal = document.getElementById('qrModal');
   if (modal) modal.style.display = 'none';
-  stopQRPolling();
+  stopQRDetection();
   _qrToken = null;
+  _qrVerified = false;
 }
 
 function refreshQR() {
-  stopQRPolling();
+  stopQRDetection();
   generateQRCode();
 }
 
-function stopQRPolling() {
+function stopQRDetection() {
   if (_qrPollTimer) {
     clearInterval(_qrPollTimer);
     _qrPollTimer = null;
   }
+  if (_qrRealtimeChannel && db) {
+    try { db.removeChannel(_qrRealtimeChannel); } catch(e) {}
+    _qrRealtimeChannel = null;
+  }
+  _qrPollCount = 0;
 }
 
 async function generateQRCode() {
@@ -495,14 +504,15 @@ async function generateQRCode() {
   qrWrap.innerHTML = '';
   qrStatus.textContent = '正在检查扫码功能...';
   qrStatus.style.color = '#d4a017';
+  _qrVerified = false;
 
   if (!db) {
-    qrStatus.textContent = '❌ 数据库未连接';
+    qrStatus.textContent = '❌ 数据库未连接，请刷新页面';
     qrStatus.style.color = '#e74c3c';
     return;
   }
 
-  // 先检查表是否存在（通过尝试查询一条记录）
+  // 先检查表是否存在
   var tableCheck = await db
     .from('qr_login_tokens')
     .select('id')
@@ -513,8 +523,6 @@ async function generateQRCode() {
     if (tableCheck.error.message && tableCheck.error.message.indexOf('does not exist') !== -1) {
       qrStatus.innerHTML = '❌ 扫码功能未启用<br><span style="font-size:11px;color:#888;line-height:1.6;">需要在Supabase中创建qr_login_tokens表<br>请联系管理员执行建表SQL</span>';
       qrStatus.style.color = '#e74c3c';
-      console.log('%c[扫码登录] 需要在Supabase中执行以下SQL:', 'color:#c04058;font-weight:bold;');
-      console.log('%cCREATE TABLE IF NOT EXISTS qr_login_tokens (\n  id BIGSERIAL PRIMARY KEY,\n  token TEXT NOT NULL UNIQUE,\n  email TEXT,\n  status TEXT NOT NULL DEFAULT \'pending\',\n  expires_at TIMESTAMPTZ NOT NULL,\n  verified_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nALTER TABLE qr_login_tokens ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow anonymous insert" ON qr_login_tokens FOR INSERT TO anon WITH CHECK (true);\nCREATE POLICY "Allow anonymous select" ON qr_login_tokens FOR SELECT TO anon USING (true);\nCREATE POLICY "Allow anonymous update" ON qr_login_tokens FOR UPDATE TO anon USING (true);', 'color:#333;font-family:monospace;font-size:11px;');
       return;
     }
     qrStatus.textContent = '❌ 数据库错误: ' + tableCheck.error.message;
@@ -544,7 +552,23 @@ async function generateQRCode() {
       return;
     }
 
-    // 生成二维码URL - 指向扫码页面
+    // 验证插入成功
+    var verifyInsert = await db
+      .from('qr_login_tokens')
+      .select('token, status')
+      .eq('token', _qrToken)
+      .single();
+    
+    if (verifyInsert.error || !verifyInsert.data) {
+      console.error('[扫码登录] 插入验证失败:', verifyInsert.error ? verifyInsert.error.message : 'no data');
+      qrStatus.innerHTML = '❌ 二维码写入失败，请刷新重试';
+      qrStatus.style.color = '#e74c3c';
+      return;
+    }
+
+    console.log('[扫码登录] Token已创建并验证:', _qrToken.substring(0, 20) + '...');
+
+    // 生成二维码URL
     var baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
     var scanUrl = baseUrl + 'qr-scan.html?token=' + encodeURIComponent(_qrToken);
 
@@ -562,8 +586,8 @@ async function generateQRCode() {
       qrWrap.innerHTML = '<div style="font-size:12px;color:#666;word-break:break-all;padding:10px;">' + scanUrl + '</div>';
     }
 
-    // 开始轮询（会显示轮询状态）
-    startQRPolling();
+    // 启动检测（Realtime + 轮询双保险）
+    startQRDetection();
 
   } catch(e) {
     console.error('[扫码登录] 生成二维码失败:', e);
@@ -572,65 +596,100 @@ async function generateQRCode() {
   }
 }
 
-function startQRPolling() {
+// === 双通道检测：Realtime实时推送 + 轮询备份 ===
+function startQRDetection() {
   if (!_qrToken) return;
-  stopQRPolling();
+  stopQRDetection();
+  _qrPollCount = 0;
   
-  // 显示轮询状态指示器
+  updateQRWaitingStatus();
+  
+  // 通道1：Supabase Realtime 实时推送
+  try {
+    _qrRealtimeChannel = db
+      .channel('qr_' + _qrToken)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'qr_login_tokens',
+        filter: 'token=eq.' + _qrToken
+      }, function(payload) {
+        console.log('[扫码登录] Realtime收到更新:', payload.new);
+        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
+          onQRVerified(payload.new.email);
+        }
+      })
+      .subscribe(function(status) {
+        console.log('[扫码登录] Realtime订阅状态:', status);
+      });
+  } catch(e) {
+    console.warn('[扫码登录] Realtime初始化失败:', e.message);
+  }
+  
+  // 通道2：轮询备份（每1秒一次）
+  _qrPollTimer = setInterval(pollQRStatus, 1000);
+  // 立即执行一次
+  pollQRStatus();
+  
+  console.log('[扫码登录] 开始检测（Realtime+轮询），token:', _qrToken.substring(0, 20) + '...');
+}
+
+function updateQRWaitingStatus() {
   var qrStatus = document.getElementById('qrStatus');
   if (qrStatus) {
     qrStatus.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">' +
       '<span style="width:8px;height:8px;background:#52c41a;border-radius:50%;animation:qrPulse 1.5s infinite;"></span>' +
       '等待手机扫码确认...' +
       '</span>' +
+      '<div id="qrPollInfo" style="font-size:11px;color:#aaa;margin-top:4px;">检测中...</div>' +
       '<style>@keyframes qrPulse{0%,100%{opacity:0.3}50%{opacity:1}}</style>';
     qrStatus.style.color = '#d4a017';
   }
-  
-  _qrPollTimer = setInterval(checkQRStatus, 1500);
-  console.log('[扫码登录] 开始轮询，token:', _qrToken.substring(0, 20) + '...');
 }
 
-async function checkQRStatus() {
-  if (!_qrToken || !db) {
-    console.warn('[扫码登录] 轮询跳过: token=' + !!_qrToken + ', db=' + !!db);
-    return;
+function updatePollInfo(statusText) {
+  var info = document.getElementById('qrPollInfo');
+  if (info) {
+    info.textContent = '轮询#' + _qrPollCount + ' | ' + statusText;
   }
+}
 
+// 轮询检测
+async function pollQRStatus() {
+  if (_qrVerified || !_qrToken || !db) return;
+  
+  _qrPollCount++;
+  
   try {
     var result = await db
       .from('qr_login_tokens')
-      .select('*')
+      .select('status, email, expires_at')
       .eq('token', _qrToken)
       .single();
 
     if (result.error) {
-      console.warn('[扫码登录] 查询失败:', result.error.message);
-      // 如果是表不存在的错误，停止轮询并显示提示
-      if (result.error.message && result.error.message.indexOf('does not exist') !== -1) {
-        stopQRPolling();
-        var qrStatus = document.getElementById('qrStatus');
-        if (qrStatus) {
-          qrStatus.innerHTML = '❌ 扫码功能未启用<br><span style="font-size:11px;color:#888;">需要在Supabase中创建qr_login_tokens表</span>';
-          qrStatus.style.color = '#e74c3c';
-        }
-        return;
-      }
-      // 其他错误继续轮询（可能是网络暂时不可用）
+      console.warn('[扫码登录] 轮询#' + _qrPollCount + ' 查询失败:', result.error.message);
+      updatePollInfo('查询失败');
       return;
     }
 
     if (!result.data) {
-      console.warn('[扫码登录] 未找到token数据');
+      updatePollInfo('未找到数据');
       return;
     }
 
-    var tokenData = result.data;
-    console.log('[扫码登录] 轮询状态:', tokenData.status, tokenData.email ? '(email: ' + tokenData.email + ')' : '(无email)');
+    var data = result.data;
+    
+    // 每5次轮询打印一次状态（避免日志太多）
+    if (_qrPollCount % 5 === 1) {
+      console.log('[扫码登录] 轮询#' + _qrPollCount + ' status=' + data.status + ' email=' + (data.email || '无'));
+    }
+    
+    updatePollInfo('status=' + data.status + (data.email ? ' email=' + data.email.substring(0, 8) + '...' : ''));
 
     // 检查过期
-    if (new Date(tokenData.expires_at) < new Date()) {
-      stopQRPolling();
+    if (new Date(data.expires_at) < new Date()) {
+      stopQRDetection();
       var qrStatus = document.getElementById('qrStatus');
       if (qrStatus) {
         qrStatus.textContent = '❌ 二维码已过期，请点击刷新';
@@ -640,21 +699,32 @@ async function checkQRStatus() {
     }
 
     // 检查是否已验证
-    if (tokenData.status === 'verified' && tokenData.email) {
-      stopQRPolling();
-      console.log('[扫码登录] 检测到已验证，开始自动登录:', tokenData.email);
-      var qrStatus = document.getElementById('qrStatus');
-      if (qrStatus) {
-        qrStatus.innerHTML = '✅ 验证成功！正在登录 ' + escapeHtml(tokenData.email) + ' ...';
-        qrStatus.style.color = '#389e0d';
-      }
-      // 自动登录
-      await doAutoLogin(tokenData.email);
+    if (data.status === 'verified' && data.email) {
+      console.log('[扫码登录] 轮询检测到verified! email=' + data.email);
+      onQRVerified(data.email);
     }
 
   } catch(e) {
-    console.warn('[扫码登录] 检查状态异常:', e.message);
+    console.warn('[扫码登录] 轮询#' + _qrPollCount + ' 异常:', e.message);
+    updatePollInfo('异常: ' + e.message.substring(0, 20));
   }
+}
+
+// 统一处理验证成功
+async function onQRVerified(email) {
+  if (_qrVerified) return; // 防止重复触发
+  _qrVerified = true;
+  
+  stopQRDetection();
+  console.log('[扫码登录] 验证成功，开始自动登录:', email);
+  
+  var qrStatus = document.getElementById('qrStatus');
+  if (qrStatus) {
+    qrStatus.innerHTML = '✅ 验证成功！正在登录 ' + escapeHtml(email) + ' ...';
+    qrStatus.style.color = '#389e0d';
+  }
+  
+  await doAutoLogin(email);
 }
 
 async function doAutoLogin(email) {
@@ -706,6 +776,7 @@ async function doAutoLogin(email) {
 
   } catch(e) {
     console.error('[扫码登录] 自动登录失败:', e);
+    _qrVerified = false; // 允许重试
     var qrStatus = document.getElementById('qrStatus');
     if (qrStatus) {
       qrStatus.innerHTML = '❌ 登录失败: ' + escapeHtml(e.message) + '<br><span style="font-size:12px;color:#888;">请刷新页面重试</span>';
@@ -718,3 +789,65 @@ function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// 手动检测按钮（用于调试）
+async function manualCheckQR() {
+  var qrStatus = document.getElementById('qrStatus');
+  if (!qrStatus) return;
+  
+  if (!_qrToken) {
+    qrStatus.innerHTML = '❌ 没有活动的二维码，请刷新';
+    qrStatus.style.color = '#e74c3c';
+    return;
+  }
+  
+  if (!db) {
+    qrStatus.innerHTML = '❌ 数据库未连接';
+    qrStatus.style.color = '#e74c3c';
+    return;
+  }
+  
+  qrStatus.innerHTML = '🔍 正在检测...';
+  qrStatus.style.color = '#0066cc';
+  
+  try {
+    var result = await db
+      .from('qr_login_tokens')
+      .select('*')
+      .eq('token', _qrToken)
+      .single();
+    
+    if (result.error) {
+      qrStatus.innerHTML = '❌ 查询失败: ' + escapeHtml(result.error.message);
+      qrStatus.style.color = '#e74c3c';
+      return;
+    }
+    
+    if (!result.data) {
+      qrStatus.innerHTML = '❌ 未找到token数据';
+      qrStatus.style.color = '#e74c3c';
+      return;
+    }
+    
+    var data = result.data;
+    var info = 'Token状态: ' + data.status + '<br>';
+    info += 'Email: ' + (data.email || '无') + '<br>';
+    info += '过期时间: ' + new Date(data.expires_at).toLocaleString() + '<br>';
+    info += '当前时间: ' + new Date().toLocaleString();
+    
+    if (data.status === 'verified' && data.email) {
+      info += '<br><strong style="color:#389e0d;">✅ 已验证！正在登录...</strong>';
+      qrStatus.innerHTML = info;
+      qrStatus.style.color = '#389e0d';
+      await onQRVerified(data.email);
+    } else {
+      qrStatus.innerHTML = info + '<br><span style="color:#888;">等待手机扫码确认...</span>';
+      qrStatus.style.color = '#d4a017';
+    }
+    
+  } catch(e) {
+    qrStatus.innerHTML = '❌ 检测异常: ' + escapeHtml(e.message);
+    qrStatus.style.color = '#e74c3c';
+  }
+}
+window.manualCheckQR = manualCheckQR;
