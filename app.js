@@ -1988,7 +1988,215 @@ function renderClassTopThree(){
     fullListEl.innerHTML=listHtml;
   }
 }
-function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');/* v16: For students, force-reload operation logs before rendering PK/Jianghu pages to ensure latest data */var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed, rendering with existing data:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{/* 延迟重渲染，让页面切换动画先执行，避免阻塞主线程 */requestAnimationFrame(()=>{if(pageId==='honor-board-page')renderClassTopThree();else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
+// ========== 排行榜三分类标签切换 ==========
+function switchRankTab(tabName) {
+  document.querySelectorAll('.rank-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.rank-tab-content').forEach(c => c.classList.remove('active'));
+  const tabs = document.querySelectorAll('.rank-tab');
+  const idx = tabName === 'growth' ? 0 : tabName === 'quiz' ? 1 : 2;
+  if (tabs[idx]) tabs[idx].classList.add('active');
+  const contentId = tabName === 'growth' ? 'rankGrowthContent' : tabName === 'quiz' ? 'rankQuizContent' : 'rankPigRunContent';
+  const content = document.getElementById(contentId);
+  if (content) content.classList.add('active');
+  if (tabName === 'quiz') renderQuizRanking();
+  if (tabName === 'pigrun') renderPigRunRanking();
+}
+window.switchRankTab = switchRankTab;
+
+// ========== 每日一练排行榜 ==========
+function renderQuizRanking() {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur) return;
+  const topThreeEl = document.getElementById('quizTopThree');
+  const fullListEl = document.getElementById('fullQuizRankList');
+  const emptyHint = document.getElementById('quizRankEmptyHint');
+  const statsBar = document.getElementById('rankQuizStatsBar');
+
+  // Sort students by total quiz coins (student.coins)
+  const allList = cur.students.map(s => ({
+    name: s.name,
+    totalCoins: s.coins || 0,
+    student: s
+  })).filter(x => x.totalCoins > 0).sort((a, b) => b.totalCoins - a.totalCoins);
+
+  if (allList.length === 0) {
+    if (topThreeEl) topThreeEl.innerHTML = '';
+    if (fullListEl) fullListEl.innerHTML = '';
+    if (statsBar) statsBar.innerHTML = '';
+    if (emptyHint) emptyHint.style.display = 'block';
+    return;
+  }
+  if (emptyHint) emptyHint.style.display = 'none';
+
+  const maxCoins = allList[0]?.totalCoins || 1;
+  const totalStudents = cur.students.length;
+  const totalCoinsAll = allList.reduce((s, x) => s + x.totalCoins, 0);
+
+  // Stats bar
+  if (statsBar) {
+    statsBar.innerHTML = `<div class="rank-stats-banner">
+      <div class="rank-stat-chip"><div class="chip-num">${totalStudents}</div><div class="chip-label">班级人数</div></div>
+      <div class="rank-stat-chip"><div class="chip-num">${allList.length}</div><div class="chip-label">上榜人数</div></div>
+      <div class="rank-stat-chip"><div class="chip-num">${totalCoinsAll}</div><div class="chip-label">全班总金币</div></div>
+    </div>`;
+  }
+
+  function getQuizRankTitle(idx, total) {
+    if (idx === 0) return { text: '答题王者', cls: 'champion' };
+    if (idx === 1) return { text: '答题达人', cls: 'elite' };
+    if (idx === 2) return { text: '答题能手', cls: 'brave' };
+    if (idx < Math.ceil(total * 0.3)) return { text: '答题新星', cls: 'rising' };
+    return { text: '答题学员', cls: 'starter' };
+  }
+
+  // Top 3 podium
+  const top3 = allList.slice(0, 3);
+  const podiumOrder = [1, 0, 2];
+  let podiumHtml = '<div class="podium-section">';
+  podiumOrder.forEach(pi => {
+    const item = top3[pi];
+    if (!item) return;
+    const cls = ['gold', 'silver', 'bronze'][pi];
+    const crown = pi === 0 ? '<div class="podium-crown">👑</div>' : '';
+    const medalNum = pi + 1;
+    podiumHtml += `<div class="podium-slot ${cls}">
+      <div class="podium-avatar-wrap">
+        ${crown}
+        <div class="podium-avatar"><span style="font-size:36px;">📝</span><div class="podium-medal">${medalNum}</div></div>
+      </div>
+      <div class="podium-name">${esc(item.name)}</div>
+      <div class="podium-pet-name">${item.totalCoins} 金币</div>
+      <div class="podium-pillar">
+        <div class="podium-rank-num">${medalNum}</div>
+        <div class="podium-growth-val">${item.totalCoins} 金币</div>
+      </div>
+    </div>`;
+  });
+  podiumHtml += '</div><div class="podium-base"></div>';
+  if (topThreeEl) topThreeEl.innerHTML = podiumHtml;
+
+  // Full list
+  if (fullListEl) {
+    let listHtml = '<div class="full-rank-section"><div class="full-rank-title">📊 全班排行</div><div class="rank-list">';
+    allList.forEach((item, idx) => {
+      const topCls = idx === 0 ? 'top1' : idx === 1 ? 'top2' : idx === 2 ? 'top3' : '';
+      const pct = Math.round((item.totalCoins / maxCoins) * 100);
+      const title = getQuizRankTitle(idx, allList.length);
+      listHtml += `<div class="rank-row ${topCls}">
+        <div class="rank-num">${idx + 1}</div>
+        <div class="rank-row-avatar"><span style="font-size:22px;">📝</span></div>
+        <div class="rank-row-info">
+          <div class="rank-row-name">${esc(item.name)} <span class="rank-title-badge ${title.cls}">${title.text}</span></div>
+          <div class="rank-row-pet">累计获得 ${item.totalCoins} 金币</div>
+          <div class="rank-progress-wrap">
+            <div class="rank-progress-bar"><div class="rank-progress-fill" style="width:${pct}%;background:linear-gradient(90deg,#ffd700,#ffaa00);"></div></div>
+            <div class="rank-growth-num">${item.totalCoins} 金币</div>
+          </div>
+        </div>
+      </div>`;
+    });
+    listHtml += '</div></div>';
+    fullListEl.innerHTML = listHtml;
+  }
+}
+window.renderQuizRanking = renderQuizRanking;
+
+// ========== 小猪快跑排行榜 ==========
+function renderPigRunRanking() {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur) return;
+  const topThreeEl = document.getElementById('pigRunTopThree');
+  const fullListEl = document.getElementById('fullPigRunRankList');
+  const emptyHint = document.getElementById('pigRunRankEmptyHint');
+  const statsBar = document.getElementById('rankPigRunStatsBar');
+
+  // Sort students by pigRunScore (stored in quizState.pigRunScore)
+  const allList = cur.students.map(s => ({
+    name: s.name,
+    totalScore: (s.quizState && s.quizState.pigRunScore) || s.pigRunScore || 0,
+    student: s
+  })).filter(x => x.totalScore > 0).sort((a, b) => b.totalScore - a.totalScore);
+
+  if (allList.length === 0) {
+    if (topThreeEl) topThreeEl.innerHTML = '';
+    if (fullListEl) fullListEl.innerHTML = '';
+    if (statsBar) statsBar.innerHTML = '';
+    if (emptyHint) emptyHint.style.display = 'block';
+    return;
+  }
+  if (emptyHint) emptyHint.style.display = 'none';
+
+  const maxScore = allList[0]?.totalScore || 1;
+  const totalStudents = cur.students.length;
+  const totalScoreAll = allList.reduce((s, x) => s + x.totalScore, 0);
+
+  if (statsBar) {
+    statsBar.innerHTML = `<div class="rank-stats-banner">
+      <div class="rank-stat-chip"><div class="chip-num">${totalStudents}</div><div class="chip-label">班级人数</div></div>
+      <div class="rank-stat-chip"><div class="chip-num">${allList.length}</div><div class="chip-label">上榜人数</div></div>
+      <div class="rank-stat-chip"><div class="chip-num">${totalScoreAll}</div><div class="chip-label">全班总分</div></div>
+    </div>`;
+  }
+
+  function getPigRunRankTitle(idx, total) {
+    if (idx === 0) return { text: '跑猪王者', cls: 'champion' };
+    if (idx === 1) return { text: '跑猪达人', cls: 'elite' };
+    if (idx === 2) return { text: '跑猪能手', cls: 'brave' };
+    if (idx < Math.ceil(total * 0.3)) return { text: '跑猪新星', cls: 'rising' };
+    return { text: '跑猪学员', cls: 'starter' };
+  }
+
+  const top3 = allList.slice(0, 3);
+  const podiumOrder = [1, 0, 2];
+  let podiumHtml = '<div class="podium-section">';
+  podiumOrder.forEach(pi => {
+    const item = top3[pi];
+    if (!item) return;
+    const cls = ['gold', 'silver', 'bronze'][pi];
+    const crown = pi === 0 ? '<div class="podium-crown">👑</div>' : '';
+    const medalNum = pi + 1;
+    podiumHtml += `<div class="podium-slot ${cls}">
+      <div class="podium-avatar-wrap">
+        ${crown}
+        <div class="podium-avatar"><span style="font-size:36px;">🐷</span><div class="podium-medal">${medalNum}</div></div>
+      </div>
+      <div class="podium-name">${esc(item.name)}</div>
+      <div class="podium-pet-name">${item.totalScore} 分</div>
+      <div class="podium-pillar">
+        <div class="podium-rank-num">${medalNum}</div>
+        <div class="podium-growth-val">${item.totalScore} 分</div>
+      </div>
+    </div>`;
+  });
+  podiumHtml += '</div><div class="podium-base"></div>';
+  if (topThreeEl) topThreeEl.innerHTML = podiumHtml;
+
+  if (fullListEl) {
+    let listHtml = '<div class="full-rank-section"><div class="full-rank-title">📊 全班排行</div><div class="rank-list">';
+    allList.forEach((item, idx) => {
+      const topCls = idx === 0 ? 'top1' : idx === 1 ? 'top2' : idx === 2 ? 'top3' : '';
+      const pct = Math.round((item.totalScore / maxScore) * 100);
+      const title = getPigRunRankTitle(idx, allList.length);
+      listHtml += `<div class="rank-row ${topCls}">
+        <div class="rank-num">${idx + 1}</div>
+        <div class="rank-row-avatar"><span style="font-size:22px;">🐷</span></div>
+        <div class="rank-row-info">
+          <div class="rank-row-name">${esc(item.name)} <span class="rank-title-badge ${title.cls}">${title.text}</span></div>
+          <div class="rank-row-pet">累计获得 ${item.totalScore} 分</div>
+          <div class="rank-progress-wrap">
+            <div class="rank-progress-bar"><div class="rank-progress-fill" style="width:${pct}%;background:linear-gradient(90deg,#52c41a,#389e0d);"></div></div>
+            <div class="rank-growth-num">${item.totalScore} 分</div>
+          </div>
+        </div>
+      </div>`;
+    });
+    listHtml += '</div></div>';
+    fullListEl.innerHTML = listHtml;
+  }
+}
+window.renderPigRunRanking = renderPigRunRanking;
+
+function switchPage(pageId){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{requestAnimationFrame(()=>{if(pageId==='honor-board-page'){renderClassTopThree();var art=document.querySelector('.rank-tab.active');if(art&&art.textContent.includes('\u6bcf\u65e5'))renderQuizRanking();else if(art&&art.textContent.includes('\u5c0f\u732a'))renderPigRunRanking();}else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();var aqt=document.querySelector('.quiz-tab.active');if(aqt&&aqt.textContent.includes('\u5c0f\u732a')){if(typeof renderPigRunPage==='function')renderPigRunPage();}}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
