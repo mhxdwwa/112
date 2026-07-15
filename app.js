@@ -1362,8 +1362,8 @@ function getStudentShopEffects(student){
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
 /* ===== 一键排序功能 ===== */
-// 排序模式: 0=默认(不排序), 1=按特效数量, 2=按成长值, 3=按金币
-let _petSortMode = 0;
+// 每个班级独立的排序模式: { classId: mode } mode: 0=默认(不排序), 1=按特效数量, 2=按成长值, 3=按金币
+let _petSortModes = {};
 const _SORT_LABELS = ['🔀 一键排序', '🔀 按特效数↓', '🔀 按成长值↓', '🔀 按金币↓'];
 
 function _countEquippedEffects(student) {
@@ -1377,27 +1377,43 @@ function _getPetGrowth(student) {
   return pet ? (pet.growth || 0) : 0;
 }
 
+function _hasPet(student) {
+  return student.pets && student.pets.length > 0;
+}
+
 function cycleSortPets() {
-  _petSortMode = (_petSortMode % 3) + 1; // cycle: 1→2→3→1
-  const btn = document.getElementById('sortPetsBtn');
-  if (btn) btn.innerHTML = '<span>' + _SORT_LABELS[_petSortMode].split(' ')[0] + '</span> ' + _SORT_LABELS[_petSortMode].split(' ').slice(1).join(' ');
+  if (!currentClassId) return;
+  var currentMode = _petSortModes[currentClassId] || 0;
+  var newMode = (currentMode % 3) + 1; // cycle: 1→2→3→1
+  _petSortModes[currentClassId] = newMode;
+  var btn = document.getElementById('sortPetsBtn');
+  if (btn) btn.innerHTML = '<span>' + _SORT_LABELS[newMode].split(' ')[0] + '</span> ' + _SORT_LABELS[newMode].split(' ').slice(1).join(' ');
   renderHomePetGrid();
   const modeNames = ['', '特效数量', '成长值', '金币'];
-  showNotification('排序已切换', '当前按' + modeNames[_petSortMode] + '从多到少排序', 'info');
+  showNotification('排序已切换', '当前按' + modeNames[newMode] + '从多到少排序', 'info');
 }
 window.cycleSortPets = cycleSortPets;
 
 function _getSortedStudents(students, mode) {
   var arr = students.slice(); // shallow copy, don't mutate original
   if (mode === 1) {
-    // 按特效数量从多到少
-    arr.sort(function(a, b) { return _countEquippedEffects(b) - _countEquippedEffects(a); });
+    // 按特效数量从多到少，未领养宠物的学生排最后
+    var withPets = arr.filter(_hasPet);
+    var noPets = arr.filter(function(s) { return !_hasPet(s); });
+    withPets.sort(function(a, b) { return _countEquippedEffects(b) - _countEquippedEffects(a); });
+    arr = withPets.concat(noPets);
   } else if (mode === 2) {
-    // 按成长值从多到少
-    arr.sort(function(a, b) { return _getPetGrowth(b) - _getPetGrowth(a); });
+    // 按成长值从多到少，未领养宠物的学生排最后
+    var withPets = arr.filter(_hasPet);
+    var noPets = arr.filter(function(s) { return !_hasPet(s); });
+    withPets.sort(function(a, b) { return _getPetGrowth(b) - _getPetGrowth(a); });
+    arr = withPets.concat(noPets);
   } else if (mode === 3) {
-    // 按金币持有量从多到少
-    arr.sort(function(a, b) { return (b.coins || 0) - (a.coins || 0); });
+    // 按金币持有量从多到少，未领养宠物的学生排最后
+    var withPets = arr.filter(_hasPet);
+    var noPets = arr.filter(function(s) { return !_hasPet(s); });
+    withPets.sort(function(a, b) { return (b.coins || 0) - (a.coins || 0); });
+    arr = withPets.concat(noPets);
   }
   return arr;
 }
@@ -1456,7 +1472,13 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
   const cur=classesData.find(c=>c.id===currentClassId);
   if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;}
-  _gridStudents = _petSortMode > 0 ? _getSortedStudents(cur.students, _petSortMode) : cur.students; _gridRenderedCount=0; grid.innerHTML='';
+  _gridStudents = (_petSortModes[currentClassId] || 0) > 0 ? _getSortedStudents(cur.students, _petSortModes[currentClassId]) : cur.students; _gridRenderedCount=0; grid.innerHTML='';
+  // 更新排序按钮显示（切换班级时保持正确状态）
+  var _sortBtn = document.getElementById('sortPetsBtn');
+  if (_sortBtn) {
+    var _curMode = _petSortModes[currentClassId] || 0;
+    _sortBtn.innerHTML = '<span>' + _SORT_LABELS[_curMode].split(' ')[0] + '</span> ' + _SORT_LABELS[_curMode].split(' ').slice(1).join(' ');
+  }
   _renderGridBatch(grid);
   if(_gridRenderedCount<_gridStudents.length){
     const sentinel=document.createElement('div');sentinel.id='grid-scroll-sentinel';sentinel.style.cssText='height:1px;width:100%;';
