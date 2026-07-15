@@ -168,14 +168,14 @@
       '.pig-game-container{position:relative;width:100%;aspect-ratio:9/16;background:radial-gradient(circle at 10% 10%,rgba(255,255,255,0.45) 0%,transparent 50%),radial-gradient(circle at 90% 18%,rgba(255,255,255,0.35) 0%,transparent 45%),radial-gradient(circle at 15% 85%,rgba(255,255,255,0.35) 0%,transparent 45%),linear-gradient(180deg,#d9ff8a 0%,#9be26b 30%,#76c543 70%,#4d8a28 100%);border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.15);}',
       '.pig-game-container::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,0.18) 0%,transparent 35%),radial-gradient(circle at 80% 20%,rgba(255,255,255,0.15) 0%,transparent 30%),radial-gradient(circle at 50% 90%,rgba(255,255,255,0.12) 0%,transparent 40%),repeating-linear-gradient(90deg,transparent,transparent 2px,rgba(255,255,255,0.06) 2px,rgba(255,255,255,0.06) 4px),repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,0.08) 3px,rgba(255,255,255,0.08) 6px);pointer-events:none;z-index:1;}',
       '.pig-game-container::after{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 12% 18%,rgba(255,255,255,0.22) 0%,transparent 25%),radial-gradient(circle at 85% 12%,rgba(255,255,255,0.18) 0%,transparent 22%),radial-gradient(circle at 8% 78%,rgba(255,255,255,0.16) 0%,transparent 28%),radial-gradient(circle at 92% 82%,rgba(255,255,255,0.14) 0%,transparent 24%);pointer-events:none;z-index:2;}',
-      '.pig-top-bar{position:absolute;top:0;left:0;width:100%;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;z-index:100;gap:4px;}',
+      '.pig-top-bar{position:relative;width:100%;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:4px;}',
       '.pig-top-left-group{display:flex;align-items:center;gap:4px;}',
       '.pig-time-display{background:#fff;padding:4px 8px;border-radius:8px;font-weight:bold;color:#333;font-size:13px;border:2px solid #e8e8e8;box-shadow:0 2px 0 #d0d0d0;min-width:50px;text-align:center;}',
       '.pig-btn-icon{width:32px;height:32px;border-radius:8px;background:#fff;border:2px solid #e8e8e8;font-size:14px;cursor:pointer;box-shadow:0 2px 0 #d0d0d0;display:flex;align-items:center;justify-content:center;flex-shrink:0;}',
       '.pig-btn-icon:active{transform:translateY(2px);box-shadow:0 1px 0 #d0d0d0;}',
       '.pig-coin-display{display:flex;align-items:center;gap:4px;background:#fff;padding:4px 10px;border-radius:12px;font-weight:bold;color:#f5a623;font-size:13px;box-shadow:0 2px 0 #e0c080;}',
       '.pig-level-title{font-size:18px;font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,0.2);letter-spacing:1px;}',
-      '.pig-game-board{position:absolute;top:48px;bottom:130px;left:10px;right:10px;width:calc(100% - 20px);height:calc(100% - 178px);z-index:10;}',
+      '.pig-game-board{position:absolute;top:0;bottom:130px;left:10px;right:10px;width:calc(100% - 20px);height:calc(100% - 130px);z-index:10;}',
       '.pig{position:absolute;cursor:pointer;z-index:10;transition:left 0.085s linear,top 0.085s linear;will-change:left,top;}',
       '.pig:active{transform:scale(0.96);}',
       '.pig-hit{position:absolute;inset:-12px;border-radius:50%;z-index:20;}',
@@ -450,9 +450,7 @@
   // === 渲染游戏主体 ===
   function renderPigRunGame(container, student, qs, level) {
     var html = '<div class="pig-run-wrap">';
-    // Game container
-    html += '<div class="pig-game-container" id="pigGameContainer">';
-    // Top bar - compact layout: controls + score on left, level on right
+    // Top bar - OUTSIDE game container so it doesn't block game area
     html += '<div class="pig-top-bar">';
     html += '<div class="pig-top-left-group">';
     html += '<button class="pig-btn-icon" id="pigPauseBtn" style="width:32px;height:32px;border-radius:8px;font-size:14px;">⏸</button>';
@@ -463,6 +461,8 @@
     html += '<div class="pig-level-title" style="font-size:18px;">第<span id="pigLevelNum">' + level + '</span>关</div>';
     html += '<button class="pig-btn-icon" id="pigSoundBtn" style="width:32px;height:32px;border-radius:8px;font-size:14px;">🔊</button>';
     html += '</div>';
+    // Game container
+    html += '<div class="pig-game-container" id="pigGameContainer">';
     // Game board
     html += '<div class="pig-game-board" id="pigGameBoard"></div>';
     // Bottom bar
