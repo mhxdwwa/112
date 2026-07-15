@@ -1362,9 +1362,22 @@ function getStudentShopEffects(student){
   });return{borderClasses,topHtml,baseHtml,particleHtml,titleHtml,sceneClass};
 }
 /* ===== 一键排序功能 ===== */
-// 每个班级独立的排序模式: { classId: mode } mode: 0=默认(不排序), 1=按特效数量, 2=按成长值, 3=按金币
-let _petSortModes = {};
-const _SORT_LABELS = ['🔀 一键排序', '🔀 按特效数↓', '🔀 按成长值↓', '🔀 按金币↓'];
+// 每个班级独立的排序模式: { classId: mode } mode: 0=默认(不排序), 1=按特效数量, 2=按成长值, 3=按金币, 4=按体型(等级)
+const _SORT_LABELS = ['🔀 一键排序', '🔀 按特效数↓', '🔀 按成长值↓', '🔀 按金币↓', '🔀 按体型↓'];
+const _SORT_STORAGE_KEY = 'petSortModes';
+
+function _loadSortModes() {
+  try {
+    var saved = localStorage.getItem(_SORT_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch(e) { return {}; }
+}
+
+function _saveSortModes() {
+  try { localStorage.setItem(_SORT_STORAGE_KEY, JSON.stringify(_petSortModes)); } catch(e) {}
+}
+
+let _petSortModes = _loadSortModes();
 
 function _countEquippedEffects(student) {
   const eq = student.equippedItems || {};
@@ -1377,19 +1390,29 @@ function _getPetGrowth(student) {
   return pet ? (pet.growth || 0) : 0;
 }
 
+function _getPetLevel(student) {
+  const pet = getActivePet(student);
+  return pet ? (pet.level || 0) : 0;
+}
+
 function _hasPet(student) {
   return student.pets && student.pets.length > 0;
 }
 
+function _isTeacher() {
+  return typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher';
+}
+
 function cycleSortPets() {
-  if (!currentClassId) return;
+  if (!currentClassId || !_isTeacher()) return;
   var currentMode = _petSortModes[currentClassId] || 0;
-  var newMode = (currentMode % 3) + 1; // cycle: 1→2→3→1
+  var newMode = (currentMode % 4) + 1; // cycle: 1→2→3→4→1
   _petSortModes[currentClassId] = newMode;
+  _saveSortModes();
   var btn = document.getElementById('sortPetsBtn');
   if (btn) btn.innerHTML = '<span>' + _SORT_LABELS[newMode].split(' ')[0] + '</span> ' + _SORT_LABELS[newMode].split(' ').slice(1).join(' ');
   renderHomePetGrid();
-  const modeNames = ['', '特效数量', '成长值', '金币'];
+  const modeNames = ['', '特效数量', '成长值', '金币', '体型(等级)'];
   showNotification('排序已切换', '当前按' + modeNames[newMode] + '从多到少排序', 'info');
 }
 window.cycleSortPets = cycleSortPets;
@@ -1413,6 +1436,12 @@ function _getSortedStudents(students, mode) {
     var withPets = arr.filter(_hasPet);
     var noPets = arr.filter(function(s) { return !_hasPet(s); });
     withPets.sort(function(a, b) { return (b.coins || 0) - (a.coins || 0); });
+    arr = withPets.concat(noPets);
+  } else if (mode === 4) {
+    // 按体型(等级)从多到少，未领养宠物的学生排最后
+    var withPets = arr.filter(_hasPet);
+    var noPets = arr.filter(function(s) { return !_hasPet(s); });
+    withPets.sort(function(a, b) { return _getPetLevel(b) - _getPetLevel(a); });
     arr = withPets.concat(noPets);
   }
   return arr;
@@ -1469,13 +1498,19 @@ function _applyGridBatchPostProcess(){
 function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if(_gridObserver){_gridObserver.disconnect();_gridObserver=null;}
   const oldSentinel=document.getElementById('grid-scroll-sentinel');if(oldSentinel)oldSentinel.remove();
+  // 控制排序按钮可见性（仅教师可见）
+  var _sortBtn = document.getElementById('sortPetsBtn');
+  if (_sortBtn) {
+    _sortBtn.style.display = _isTeacher() ? '' : 'none';
+  }
   if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
   const cur=classesData.find(c=>c.id===currentClassId);
   if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;}
-  _gridStudents = (_petSortModes[currentClassId] || 0) > 0 ? _getSortedStudents(cur.students, _petSortModes[currentClassId]) : cur.students; _gridRenderedCount=0; grid.innerHTML='';
+  // 使用排序模式（仅教师账户下生效）
+  var _sortMode = _isTeacher() ? (_petSortModes[currentClassId] || 0) : 0;
+  _gridStudents = _sortMode > 0 ? _getSortedStudents(cur.students, _sortMode) : cur.students; _gridRenderedCount=0; grid.innerHTML='';
   // 更新排序按钮显示（切换班级时保持正确状态）
-  var _sortBtn = document.getElementById('sortPetsBtn');
-  if (_sortBtn) {
+  if (_sortBtn && _isTeacher()) {
     var _curMode = _petSortModes[currentClassId] || 0;
     _sortBtn.innerHTML = '<span>' + _SORT_LABELS[_curMode].split(' ')[0] + '</span> ' + _SORT_LABELS[_curMode].split(' ').slice(1).join(' ');
   }
