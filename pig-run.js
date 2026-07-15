@@ -231,25 +231,25 @@
     gameHtml += '<button id="pigSoundBtn" style="width:40px;height:40px;border-radius:12px;background:#fff;border:2px solid #e8e8e8;font-size:18px;cursor:pointer;box-shadow:0 3px 0 #d0d0d0;display:flex;align-items:center;justify-content:center;">🔊</button>';
     gameHtml += '</div>';
 
-    // Game board — top/bottom 定位，不用显式 height，避免移动端布局异常
-    gameHtml += '<div id="pigGameBoard" style="position:absolute;top:65px;bottom:105px;left:10px;right:10px;z-index:10;"></div>';
+    // Game board — 预留更多底部空间（移动端工具栏较高，130px 防止遮挡小猪）
+    gameHtml += '<div id="pigGameBoard" style="position:absolute;top:65px;bottom:130px;left:10px;right:10px;z-index:10;"></div>';
 
-    // Bottom bar with tools
-    gameHtml += '<div style="position:absolute;bottom:0;left:0;width:100%;padding:12px 20px 20px;display:flex;justify-content:space-around;align-items:center;background:linear-gradient(0deg,rgba(90,184,58,0.6) 0%,transparent 100%);z-index:100;">';
-    gameHtml += '<div class="pig-tool-btn" id="pigRemoveTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;min-width:80px;box-shadow:0 4px 0 #e0a000;">';
-    gameHtml += '<span style="font-size:28px;" id="pigRemoveIcon">🗑</span>';
-    gameHtml += '<span style="font-size:15px;font-weight:900;color:#8b5a2b;">移除</span>';
-    gameHtml += '<span id="pigRemoveCount" style="position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
+    // Bottom bar with tools — 移动端用更紧凑的内边距，防止超出棋盘区域
+    gameHtml += '<div style="position:absolute;bottom:0;left:0;width:100%;padding:8px 12px 10px;display:flex;justify-content:space-around;align-items:flex-end;background:linear-gradient(0deg,rgba(90,184,58,0.7) 0%,transparent 100%);z-index:100;">';
+    gameHtml += '<div class="pig-tool-btn" id="pigRemoveTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;background:#ffe066;border:3px solid #ffb800;border-radius:12px;padding:4px 10px;cursor:pointer;min-width:72px;box-shadow:0 3px 0 #e0a000;">';
+    gameHtml += '<span style="font-size:24px;" id="pigRemoveIcon">🗑</span>';
+    gameHtml += '<span style="font-size:13px;font-weight:900;color:#8b5a2b;">移除</span>';
+    gameHtml += '<span id="pigRemoveCount" style="position:absolute;top:-7px;right:-7px;background:#ff4757;color:white;font-size:12px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
     gameHtml += '</div>';
-    gameHtml += '<div class="pig-tool-btn" id="pigShuffleTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;min-width:80px;box-shadow:0 4px 0 #e0a000;">';
-    gameHtml += '<span style="font-size:28px;" id="pigShuffleIcon">🔀</span>';
-    gameHtml += '<span style="font-size:15px;font-weight:900;color:#8b5a2b;">洗牌</span>';
-    gameHtml += '<span id="pigShuffleCount" style="position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
+    gameHtml += '<div class="pig-tool-btn" id="pigShuffleTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;background:#ffe066;border:3px solid #ffb800;border-radius:12px;padding:4px 10px;cursor:pointer;min-width:72px;box-shadow:0 3px 0 #e0a000;">';
+    gameHtml += '<span style="font-size:24px;" id="pigShuffleIcon">🔀</span>';
+    gameHtml += '<span style="font-size:13px;font-weight:900;color:#8b5a2b;">洗牌</span>';
+    gameHtml += '<span id="pigShuffleCount" style="position:absolute;top:-7px;right:-7px;background:#ff4757;color:white;font-size:12px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
     gameHtml += '</div>';
-    gameHtml += '<div class="pig-tool-btn" id="pigRotateTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;min-width:80px;box-shadow:0 4px 0 #e0a000;">';
-    gameHtml += '<span style="font-size:28px;" id="pigRotateIcon">🔄</span>';
-    gameHtml += '<span style="font-size:15px;font-weight:900;color:#8b5a2b;">转向</span>';
-    gameHtml += '<span id="pigRotateCount" style="position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
+    gameHtml += '<div class="pig-tool-btn" id="pigRotateTool" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;background:#ffe066;border:3px solid #ffb800;border-radius:12px;padding:4px 10px;cursor:pointer;min-width:72px;box-shadow:0 3px 0 #e0a000;">';
+    gameHtml += '<span style="font-size:24px;" id="pigRotateIcon">🔄</span>';
+    gameHtml += '<span style="font-size:13px;font-weight:900;color:#8b5a2b;">转向</span>';
+    gameHtml += '<span id="pigRotateCount" style="position:absolute;top:-7px;right:-7px;background:#ff4757;color:white;font-size:12px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;">1</span>';
     gameHtml += '</div>';
     gameHtml += '</div>';
 
@@ -265,6 +265,16 @@
     gameHtml += '<div style="font-size:28px;font-weight:900;color:#333;margin-bottom:20px;">🎉 全部逃脱成功！</div>';
     gameHtml += '<div id="pigWinScore" style="font-size:18px;color:#52c41a;font-weight:700;margin-bottom:16px;"></div>';
     gameHtml += '<button id="pigNextLevelBtn" style="background:#52c41a;color:white;border:none;padding:12px 32px;border-radius:26px;font-size:18px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #389e0d;">下一关</button>';
+    gameHtml += '</div></div>';
+
+    // Tool quiz modal — 道具耗尽时弹出答题，答对获得道具
+    gameHtml += '<div id="pigToolQuizModal" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:250;opacity:0;pointer-events:none;transition:opacity 0.3s ease;">';
+    gameHtml += '<div id="pigToolQuizBox" style="background:#fff;padding:24px 20px;border-radius:20px;text-align:center;width:85%;max-width:320px;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
+    gameHtml += '<div id="pigToolQuizTitle" style="font-size:16px;font-weight:700;color:#333;margin-bottom:8px;">📝 答对题目获得道具</div>';
+    gameHtml += '<div id="pigToolQuizDesc" style="font-size:13px;color:#888;margin-bottom:16px;"></div>';
+    gameHtml += '<div id="pigToolQuizQuestion" style="font-size:26px;font-weight:900;color:#d4a017;margin-bottom:20px;"></div>';
+    gameHtml += '<div id="pigToolQuizOptions" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>';
+    gameHtml += '<div id="pigToolQuizResult" style="margin-top:14px;font-size:15px;font-weight:700;min-height:22px;"></div>';
     gameHtml += '</div></div>';
 
     gameArea.innerHTML = gameHtml;
@@ -605,6 +615,120 @@
       removeIcon.textContent = gState.tools.remove > 0 ? '🗑' : '📝';
       shuffleIcon.textContent = gState.tools.shuffle > 0 ? '🔀' : '📝';
       rotateIcon.textContent = gState.tools.rotate > 0 ? '🔄' : '📝';
+      // 耗尽的道具按钮加视觉提示（灰色闪烁边框）
+      removeBtn.style.opacity = gState.tools.remove > 0 ? '1' : '0.65';
+      shuffleBtn.style.opacity = gState.tools.shuffle > 0 ? '1' : '0.65';
+      rotateBtn.style.opacity = gState.tools.rotate > 0 ? '1' : '0.65';
+    }
+
+    // === 生成数学题目（适合小学生）===
+    function generateMathQuestion() {
+      var types = ['add', 'sub', 'mul'];
+      var type = types[Math.floor(Math.random() * types.length)];
+      var a, b, answer, text;
+      if (type === 'add') {
+        a = Math.floor(Math.random() * 50) + 10;
+        b = Math.floor(Math.random() * 50) + 10;
+        answer = a + b;
+        text = a + ' + ' + b + ' = ?';
+      } else if (type === 'sub') {
+        a = Math.floor(Math.random() * 50) + 30;
+        b = Math.floor(Math.random() * 25) + 5;
+        answer = a - b;
+        text = a + ' - ' + b + ' = ?';
+      } else {
+        a = Math.floor(Math.random() * 9) + 2;
+        b = Math.floor(Math.random() * 9) + 2;
+        answer = a * b;
+        text = a + ' × ' + b + ' = ?';
+      }
+      // 生成 4 个选项（含正确答案）
+      var options = [answer];
+      while (options.length < 4) {
+        var offset = Math.floor(Math.random() * 10) - 5;
+        if (offset === 0) offset = (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 5) + 1);
+        var wrong = answer + offset;
+        if (wrong > 0 && options.indexOf(wrong) === -1) options.push(wrong);
+      }
+      // 打乱选项
+      for (var i = options.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = options[i]; options[i] = options[j]; options[j] = tmp;
+      }
+      return { text: text, answer: answer, options: options };
+    }
+
+    // === 道具答题弹窗 ===
+    var _quizToolName = '';  // 当前答题申请的道具名
+    var _quizAnswered = false;  // 防止重复点击
+
+    function showToolQuiz(toolName) {
+      _quizToolName = toolName;
+      _quizAnswered = false;
+      var modal = document.getElementById('pigToolQuizModal');
+      var titleEl = document.getElementById('pigToolQuizTitle');
+      var descEl = document.getElementById('pigToolQuizDesc');
+      var questionEl = document.getElementById('pigToolQuizQuestion');
+      var optionsEl = document.getElementById('pigToolQuizOptions');
+      var resultEl = document.getElementById('pigToolQuizResult');
+
+      var toolLabels = { remove: '移除', shuffle: '洗牌', rotate: '转向' };
+      var toolEmojis = { remove: '🗑', shuffle: '🔀', rotate: '🔄' };
+      titleEl.textContent = '📝 答对题目获得' + toolLabels[toolName] + '道具';
+      descEl.textContent = '道具已用完，答对这道数学题即可补充 1 个' + toolLabels[toolName] + '道具！';
+      resultEl.textContent = '';
+      resultEl.style.color = '#333';
+
+      var q = generateMathQuestion();
+      questionEl.textContent = q.text;
+
+      var optHtml = '';
+      q.options.forEach(function(opt) {
+        optHtml += '<button class="pig-quiz-opt" data-val="' + opt + '" style="flex:1;min-width:calc(50% - 4px);padding:12px 8px;font-size:20px;font-weight:700;border:2px solid #e8e0d0;border-radius:12px;background:#fff;cursor:pointer;color:#333;transition:all 0.2s;">' + opt + '</button>';
+      });
+      optionsEl.innerHTML = optHtml;
+
+      // 绑定选项点击
+      var btns = optionsEl.querySelectorAll('.pig-quiz-opt');
+      btns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          if (_quizAnswered) return;
+          _quizAnswered = true;
+          var val = parseInt(btn.dataset.val);
+          if (val === q.answer) {
+            // 答对：奖励道具
+            gState.tools[toolName] = (gState.tools[toolName] || 0) + 1;
+            btn.style.background = '#d4edda';
+            btn.style.borderColor = '#52c41a';
+            resultEl.textContent = '✅ 答对了！获得 1 个' + toolEmojis[toolName] + toolLabels[toolName] + '道具';
+            resultEl.style.color = '#52c41a';
+            updateUI();
+            setTimeout(function() {
+              modal.style.opacity = '0';
+              modal.style.pointerEvents = 'none';
+            }, 1100);
+          } else {
+            // 答错：高亮正确答案，关闭弹窗
+            btn.style.background = '#ffe0e0';
+            btn.style.borderColor = '#ff4757';
+            btns.forEach(function(b) {
+              if (parseInt(b.dataset.val) === q.answer) {
+                b.style.background = '#d4edda';
+                b.style.borderColor = '#52c41a';
+              }
+            });
+            resultEl.textContent = '❌ 答错了，正确答案是 ' + q.answer;
+            resultEl.style.color = '#ff4757';
+            setTimeout(function() {
+              modal.style.opacity = '0';
+              modal.style.pointerEvents = 'none';
+            }, 1500);
+          }
+        });
+      });
+
+      modal.style.opacity = '1';
+      modal.style.pointerEvents = 'all';
     }
 
     // Bind events
@@ -623,11 +747,18 @@
         removeBtn.style.borderColor = gState.activeTool === 'remove' ? '#ff4757' : '#ffb800';
         shuffleBtn.style.borderColor = '#ffb800';
         rotateBtn.style.borderColor = '#ffb800';
+      } else {
+        // 道具耗尽：弹出答题，答对奖励道具
+        showToolQuiz('remove');
       }
     });
     shuffleBtn.addEventListener('click', function() {
       if (gState.paused) return;
-      if (gState.tools.shuffle > 0) doShuffle();
+      if (gState.tools.shuffle > 0) {
+        doShuffle();
+      } else {
+        showToolQuiz('shuffle');
+      }
     });
     rotateBtn.addEventListener('click', function() {
       if (gState.paused) return;
@@ -636,6 +767,8 @@
         rotateBtn.style.borderColor = gState.activeTool === 'rotate' ? '#ff4757' : '#ffb800';
         removeBtn.style.borderColor = '#ffb800';
         shuffleBtn.style.borderColor = '#ffb800';
+      } else {
+        showToolQuiz('rotate');
       }
     });
 
