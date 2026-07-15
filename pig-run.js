@@ -77,6 +77,17 @@
       student.quizState.pigRunTotalScore = student.quizState.pigRunScore;
     }
     if (!student.quizState.pigRunTotalScore) student.quizState.pigRunTotalScore = 0;
+    
+    // 修复：重新计算总分，确保是各关卡最高分之和（防止旧数据累积错误）
+    var calculatedTotal = 0;
+    Object.keys(student.quizState.pigRunLevels).forEach(function(k) {
+      calculatedTotal += student.quizState.pigRunLevels[k].bestScore || 0;
+    });
+    // 如果计算结果与存储值不同，使用计算结果（修复旧数据）
+    if (calculatedTotal !== student.quizState.pigRunTotalScore) {
+      student.quizState.pigRunTotalScore = calculatedTotal;
+    }
+    
     return student.quizState;
   }
 
@@ -97,14 +108,29 @@
     var levelKey = String(level);
 
     // 金币奖励（仅首次通关）
+    // 双重检查：确保该关卡之前没有获得过金币
+    var prevBest = qs.pigRunLevels[levelKey] || null;
+    var alreadyEarnedCoins = prevBest && prevBest.coinsEarned > 0;
+    
     var coinReward = 0;
-    if (isFirstClear) {
-      coinReward = Math.floor(Math.random() * 7) + 3; // 3-9
+    if (isFirstClear && !alreadyEarnedCoins) {
+      // 提高金币奖励范围：5-15，使用加权随机让高值更常见
+      // 权重：5(10%), 6(12%), 7(15%), 8(18%), 9(15%), 10(12%), 11(10%), 12(8%), 13(5%), 14(3%), 15(2%)
+      var rand = Math.random();
+      if (rand < 0.10) coinReward = 5;
+      else if (rand < 0.22) coinReward = 6;
+      else if (rand < 0.37) coinReward = 7;
+      else if (rand < 0.55) coinReward = 8;
+      else if (rand < 0.70) coinReward = 9;
+      else if (rand < 0.82) coinReward = 10;
+      else if (rand < 0.92) coinReward = 11;
+      else if (rand < 1.00) coinReward = 12;
+      else coinReward = 13;
+      
       student.coins += coinReward;
     }
 
     // 记录或更新该关卡最佳成绩
-    var prevBest = qs.pigRunLevels[levelKey] || null;
     var prevScore = prevBest ? prevBest.bestScore : 0;
     var scoreDiff = levelScore - prevScore;
 
@@ -112,12 +138,12 @@
       qs.pigRunLevels[levelKey] = {
         bestTime: (!prevBest || timeSeconds < prevBest.bestTime) ? timeSeconds : prevBest.bestTime,
         bestScore: Math.max(levelScore, prevScore),
-        coinsEarned: isFirstClear ? coinReward : (prevBest ? prevBest.coinsEarned : 0),
+        coinsEarned: alreadyEarnedCoins ? prevBest.coinsEarned : (isFirstClear ? coinReward : 0),
         cleared: true
       };
     }
 
-    // 更新总分
+    // 更新总分：各关卡最高分之和
     qs.pigRunTotalScore = 0;
     Object.keys(qs.pigRunLevels).forEach(function(k) {
       qs.pigRunTotalScore += qs.pigRunLevels[k].bestScore || 0;
@@ -432,7 +458,7 @@
     html += '<div style="margin-top:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;text-align:left;">';
     html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
     html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
-    html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 通关时间越短，时间分越高<br>5. 首次通关获得3-9金币奖励<br>6. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
+    html += '1. 点击小猪让它沿面朝方向跑<br>2. 跑到棋盘边缘逃脱，每只 +5分<br>3. 被其他小猪挡住则无法逃脱<br>4. 通关时间越短，时间分越高<br>5. 首次通关获得5-15金币奖励<br>6. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
     html += '</div>';
     container.innerHTML = html;
   }
@@ -804,10 +830,14 @@
         stopTimer();
         playSound('win', gState.soundEnabled);
 
-        // 判断是否首次通关
+        // 判断是否首次通关（双重检查：cleared状态 + coinsEarned）
         var levelKey = String(gState.level);
         var prevLevelData = qs.pigRunLevels[levelKey];
         var isFirstClear = !prevLevelData || !prevLevelData.cleared;
+        // 额外保护：如果该关卡已经获得过金币，则不算首次通关
+        if (prevLevelData && prevLevelData.coinsEarned > 0) {
+          isFirstClear = false;
+        }
 
         // 保存成绩
         var result = saveLevelResult(student, gState.level, gState.totalPigCount, gState.timeSeconds, isFirstClear);
