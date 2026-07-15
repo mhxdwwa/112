@@ -29,15 +29,15 @@
       var myStudentId = parseInt(currentUser.studentId);
       var myClassId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
       if (!myStudentId || !myClassId) return null;
-      var cur = classesData.find(function(c) { return c.id === myClassId; });
+      var cur = classesData.find(function(c) { return c.id === myClassId || c.id.toString() === myClassId.toString(); });
       if (!cur) return null;
       return cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
     } else {
       // Teacher view: use the selected student
       if (!window._teacherPlayingAsStudent) return null;
-      var classId = parseInt(localStorage.getItem('classId'));
-      if (!classId || !classesData) return null;
-      var cls = classesData.find(function(c) { return c.id === classId; });
+      var cid = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
+      if (!cid || !classesData) return null;
+      var cls = classesData.find(function(c) { return c.id === cid || c.id.toString() === cid.toString(); });
       if (!cls) return null;
       return cls.students.find(function(s) { return s.id.toString() === window._teacherPlayingAsStudent.toString(); });
     }

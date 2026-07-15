@@ -63,7 +63,7 @@
   // 参考 _writeUnsyncedLogsToSupabase 的模式，但学生可以直接写入
   function saveQuizLogDirect(log) {
     if (typeof db === 'undefined' || !db) return;
-    var classId = parseInt(localStorage.getItem('classId'));
+    var classId = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
     if (!classId) return;
 
     // 找到班级的 teacher_id 和 name（upsert classes 表需要这些字段）
@@ -587,24 +587,24 @@
       var myStudentId = parseInt(currentUser.studentId);
       var myClassId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
       if (!myStudentId || !myClassId) return null;
-      var cur = classesData.find(function(c) { return c.id === myClassId; });
+      var cur = classesData.find(function(c) { return c.id === myClassId || c.id.toString() === myClassId.toString(); });
       if (!cur) return null;
       return cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
     } else {
       // 教师视图：返回教师选择的学生
       if (!_teacherPlayingAsStudent) return null;
-      var classId = parseInt(localStorage.getItem('classId'));
-      if (!classId || !classesData) return null;
-      var cls = classesData.find(function(c) { return c.id === classId; });
+      var cid = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
+      if (!cid || !classesData) return null;
+      var cls = classesData.find(function(c) { return c.id === cid || c.id.toString() === cid.toString(); });
       if (!cls) return null;
       return cls.students.find(function(s) { return s.id.toString() === _teacherPlayingAsStudent.toString(); });
     }
   }
 
   function getCurrentClassStudents() {
-    var classId = parseInt(localStorage.getItem('classId'));
-    if (!classId || !classesData) return [];
-    var cls = classesData.find(function(c) { return c.id === classId; });
+    var cid = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
+    if (!cid || !classesData) return [];
+    var cls = classesData.find(function(c) { return c.id === cid || c.id.toString() === cid.toString(); });
     return cls ? cls.students : [];
   }
 
@@ -719,6 +719,7 @@
   window.showSelectStudentModal = showSelectStudentModal;
   window._teacherPlayingAsStudent = _teacherPlayingAsStudent;
   window.getCurrentClassStudents = getCurrentClassStudents;
+  window.renderTeacherSelectView = renderTeacherSelectView;
 
   function renderTeacherSelectView(activityType) {
     var students = getCurrentClassStudents();
