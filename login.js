@@ -503,38 +503,37 @@ async function generateQRCode() {
   }
 
   try {
-    // 生成随机token（不需要输入邮箱）
+    // 生成随机token
     _qrToken = 'qr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
-    var expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5分钟后过期
+    var expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    // 存储token到Supabase（不存储email，扫码后由手机端确认）
+    // 存储token到Supabase
     var insertResult = await db
       .from('qr_login_tokens')
       .insert([{
         token: _qrToken,
-        email: '', // 先不存储email
+        email: '',
         status: 'pending',
         expires_at: expiresAt
       }]);
 
     if (insertResult.error) {
-      // 表可能不存在，给出创建提示
       console.error('二维码表不存在:', insertResult.error.message);
-      qrStatus.innerHTML = '❌ 扫码功能未启用<br><span style="font-size:11px;color:#888;line-height:1.6;">需要在Supabase中创建qr_login_tokens表<br>请联系管理员或查看控制台获取SQL</span>';
+      qrStatus.innerHTML = '❌ 扫码功能未启用<br><span style="font-size:11px;color:#888;line-height:1.6;">需要在Supabase中创建qr_login_tokens表<br>请查看控制台获取SQL</span>';
       qrStatus.style.color = '#e74c3c';
-      console.log('%c[扫码登录] 需要在Supabase中执行以下SQL创建数据表:', 'color:#c04058;font-weight:bold;');
-      console.log('%cCREATE TABLE IF NOT EXISTS qr_login_tokens (\n  id BIGSERIAL PRIMARY KEY,\n  token TEXT NOT NULL UNIQUE,\n  email TEXT,\n  status TEXT NOT NULL DEFAULT \'pending\',\n  expires_at TIMESTAMPTZ NOT NULL,\n  verified_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- 启用RLS\nALTER TABLE qr_login_tokens ENABLE ROW LEVEL SECURITY;\n\n-- 允许匿名插入（用于生成token）\nCREATE POLICY "Allow anonymous insert" ON qr_login_tokens FOR INSERT TO anon WITH CHECK (true);\n\n-- 允许匿名读取（用于轮询状态）\nCREATE POLICY "Allow anonymous select" ON qr_login_tokens FOR SELECT TO anon USING (true);\n\n-- 允许匿名更新（用于验证确认）\nCREATE POLICY "Allow anonymous update" ON qr_login_tokens FOR UPDATE TO anon USING (true);', 'color:#333;font-family:monospace;font-size:11px;');
+      console.log('%c[扫码登录] 需要在Supabase中执行以下SQL:', 'color:#c04058;font-weight:bold;');
+      console.log('%cCREATE TABLE IF NOT EXISTS qr_login_tokens (\n  id BIGSERIAL PRIMARY KEY,\n  token TEXT NOT NULL UNIQUE,\n  email TEXT,\n  status TEXT NOT NULL DEFAULT \'pending\',\n  expires_at TIMESTAMPTZ NOT NULL,\n  verified_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nALTER TABLE qr_login_tokens ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow anonymous insert" ON qr_login_tokens FOR INSERT TO anon WITH CHECK (true);\nCREATE POLICY "Allow anonymous select" ON qr_login_tokens FOR SELECT TO anon USING (true);\nCREATE POLICY "Allow anonymous update" ON qr_login_tokens FOR UPDATE TO anon USING (true);', 'color:#333;font-family:monospace;font-size:11px;');
       return;
     }
 
-    // 生成二维码URL
+    // 生成二维码URL - 指向扫码页面
     var baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-    var verifyUrl = baseUrl + 'qr-verify.html?token=' + encodeURIComponent(_qrToken);
+    var scanUrl = baseUrl + 'qr-scan.html?token=' + encodeURIComponent(_qrToken);
 
     // 渲染二维码
     if (typeof QRCode !== 'undefined') {
       new QRCode(qrWrap, {
-        text: verifyUrl,
+        text: scanUrl,
         width: 200,
         height: 200,
         colorDark: '#333333',
@@ -542,14 +541,13 @@ async function generateQRCode() {
         correctLevel: QRCode.CorrectLevel.M
       });
     } else {
-      // Fallback: 显示URL
-      qrWrap.innerHTML = '<div style="font-size:12px;color:#666;word-break:break-all;padding:10px;">' + verifyUrl + '</div>';
+      qrWrap.innerHTML = '<div style="font-size:12px;color:#666;word-break:break-all;padding:10px;">' + scanUrl + '</div>';
     }
 
-    qrStatus.textContent = '等待扫码...';
+    qrStatus.textContent = '等待手机扫码...';
     qrStatus.style.color = '#d4a017';
 
-    // 开始轮询检查token状态
+    // 开始轮询
     startQRPolling();
 
   } catch(e) {
@@ -561,9 +559,8 @@ async function generateQRCode() {
 
 function startQRPolling() {
   if (!_qrToken) return;
-  
   stopQRPolling();
-  _qrPollTimer = setInterval(checkQRStatus, 1500); // 加快轮询速度
+  _qrPollTimer = setInterval(checkQRStatus, 1500);
 }
 
 async function checkQRStatus() {
@@ -588,7 +585,7 @@ async function checkQRStatus() {
 
     var tokenData = result.data;
 
-    // 检查是否过期
+    // 检查过期
     if (new Date(tokenData.expires_at) < new Date()) {
       stopQRPolling();
       var qrStatus = document.getElementById('qrStatus');
@@ -600,21 +597,15 @@ async function checkQRStatus() {
     }
 
     // 检查是否已验证
-    if (tokenData.status === 'verified') {
+    if (tokenData.status === 'verified' && tokenData.email) {
       stopQRPolling();
       var qrStatus = document.getElementById('qrStatus');
       if (qrStatus) {
-        qrStatus.innerHTML = '✅ 验证成功，正在登录...<br><span style="font-size:12px;color:#888;">即将跳转到教师账户</span>';
+        qrStatus.innerHTML = '✅ 验证成功！正在登录 ' + escapeHtml(tokenData.email) + ' ...';
         qrStatus.style.color = '#389e0d';
       }
-
-      // 使用token中的email自动登录
-      if (tokenData.email) {
-        await autoLoginWithToken(tokenData.email);
-      } else {
-        // token中没有email，尝试获取第一个教师账号
-        await autoLoginFirstTeacher();
-      }
+      // 自动登录
+      await doAutoLogin(tokenData.email);
     }
 
   } catch(e) {
@@ -622,40 +613,8 @@ async function checkQRStatus() {
   }
 }
 
-async function autoLoginFirstTeacher() {
+async function doAutoLogin(email) {
   try {
-    // 获取第一个教师账号
-    var teacherResult = await db
-      .from('teachers')
-      .select('*')
-      .limit(1)
-      .single();
-
-    if (teacherResult.error || !teacherResult.data) {
-      var qrStatus = document.getElementById('qrStatus');
-      if (qrStatus) {
-        qrStatus.textContent = '❌ 未找到教师账号';
-        qrStatus.style.color = '#e74c3c';
-      }
-      return;
-    }
-
-    var email = teacherResult.data.email;
-    await autoLoginWithToken(email);
-
-  } catch(e) {
-    console.error('获取教师账号失败:', e);
-    var qrStatus = document.getElementById('qrStatus');
-    if (qrStatus) {
-      qrStatus.textContent = '❌ 登录失败: ' + e.message;
-      qrStatus.style.color = '#e74c3c';
-    }
-  }
-}
-
-async function autoLoginWithToken(email) {
-  try {
-    // 查找教师信息
     var teacherResult = await db
       .from('teachers')
       .select('*')
@@ -665,7 +624,7 @@ async function autoLoginWithToken(email) {
     if (teacherResult.error || !teacherResult.data) {
       var qrStatus = document.getElementById('qrStatus');
       if (qrStatus) {
-        qrStatus.textContent = '❌ 教师账号不存在';
+        qrStatus.textContent = '❌ 教师账号不存在: ' + email;
         qrStatus.style.color = '#e74c3c';
       }
       return;
@@ -678,11 +637,11 @@ async function autoLoginWithToken(email) {
 
     var qrStatus = document.getElementById('qrStatus');
     if (qrStatus) {
-      qrStatus.innerHTML = '✅ 登录成功！<br><span style="font-size:12px;color:#888;">正在跳转到教师账户...</span>';
+      qrStatus.innerHTML = '✅ 登录成功！正在跳转...';
       qrStatus.style.color = '#389e0d';
     }
 
-    // 立即跳转（不需要延迟）
+    // 跳转
     setTimeout(function() {
       window.location.href = 'index.html';
     }, 500);
@@ -695,4 +654,9 @@ async function autoLoginWithToken(email) {
       qrStatus.style.color = '#e74c3c';
     }
   }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
