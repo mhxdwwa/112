@@ -354,7 +354,9 @@
       click: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'),
       escape: new Audio('https://assets.mixkit.co/active_storage/sfx/1661/1661-preview.mp3'),
       blocked: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
-      win: new Audio('https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3')
+      win: new Audio('https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3'),
+      pigEscaped: new Audio('https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/猪逃跑了.mp3'),
+      pigCollision: new Audio('https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/撞到猪了.mp3')
     };
   }
   function playSound(name, soundEnabled) {
@@ -688,7 +690,7 @@
         var nx=pig.x+dx, ny=pig.y+dy;
         if (nx<0||nx>=COLS||ny<0||ny>=ROWS) { escapeOut(pig); return; }
         var hit = gState.pigs.some(function(p){return p.id!==pig.id && p.x===nx && p.y===ny;});
-        if (hit) { pig.el.classList.remove('running'); gState.animating=false; playSound('blocked',gState.soundEnabled); return; }
+        if (hit) { pig.el.classList.remove('running'); gState.animating=false; playSound('blocked',gState.soundEnabled); if (Math.random() < 0.25) { playSound('pigCollision',gState.soundEnabled); } return; }
         pig.x=nx; pig.y=ny;
         pig.el.style.left='calc('+nx*CELL_W+'% + '+gapX+'%)';
         pig.el.style.top='calc('+ny*CELL_H+'% + '+gapY+'%)';
@@ -707,6 +709,10 @@
       if (dy>0) fT=bH+50; if (dy<0) fT=-100;
       pig.el.style.left=fL+'px'; pig.el.style.top=fT+'px'; pig.el.style.opacity='0';
       playSound('escape', gState.soundEnabled);
+      // 25%几率播放小猪逃跑成功音效
+      if (Math.random() < 0.25) {
+        playSound('pigEscaped', gState.soundEnabled);
+      }
       setTimeout(function(){
         gState.pigs = gState.pigs.filter(function(p){return p.id!==pig.id;});
         pig.el.remove();
