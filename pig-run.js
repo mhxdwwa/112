@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v15 - 修复关卡数据丢失：配合quiz.js v14的竞态条件修复
+// v20 - 修复CSS全屏降级：应用到.pig-run-wrap(包含top-bar)+隐藏导航栏等页面元素
 
 (function() {
   'use strict';
@@ -366,11 +366,22 @@
       '.pig-game-container:-webkit-full-screen .pig-top-bar{position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(255,255,255,0.98)!important;}',
       '.pig-game-container:-webkit-full-screen .pig-bottom-bar{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:9999!important;}',
       '.pig-game-container:-webkit-full-screen .pig-game-board{position:absolute!important;top:60px!important;bottom:80px!important;left:0!important;right:0!important;}',
-      // CSS fullscreen mode (mobile fallback)
-      '.pig-css-fullscreen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;aspect-ratio:auto!important;border-radius:0!important;top:0!important;left:0!important;}',
-      '.pig-css-fullscreen .pig-top-bar{position:absolute!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(58,122,29,0.3)!important;border-radius:0!important;}',
-      '.pig-css-fullscreen .pig-bottom-bar{position:absolute!important;bottom:0!important;left:0!important;right:0!important;width:100%!important;z-index:100!important;}',
-      '.pig-css-fullscreen .pig-game-board{position:absolute!important;top:50px!important;bottom:70px!important;left:0!important;right:0!important;width:auto!important;height:auto!important;}',
+      // CSS fullscreen mode (mobile fallback) — applied to .pig-run-wrap
+      '.pig-run-wrap.pig-css-fullscreen{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;max-height:none!important;z-index:2147483647!important;overflow:hidden!important;margin:0!important;padding:0!important;border-radius:0!important;}',
+      '.pig-run-wrap.pig-css-fullscreen .pig-game-container{aspect-ratio:unset!important;border-radius:0!important;width:100%!important;height:100%!important;}',
+      '.pig-run-wrap.pig-css-fullscreen .pig-top-bar{border-radius:0!important;}',
+      '.pig-run-wrap.pig-css-fullscreen .pig-bottom-bar{width:100%!important;}',
+      '.pig-run-wrap.pig-css-fullscreen .pig-game-board{position:absolute!important;top:0!important;bottom:130px!important;left:10px!important;right:10px!important;width:calc(100% - 20px)!important;height:calc(100% - 130px)!important;}',
+      // Hide all non-game page elements during CSS fullscreen
+      'html.pig-css-fs-active .nav-bar{display:none!important;}',
+      'html.pig-css-fs-active .page{display:none!important;}',
+      'html.pig-css-fs-active .quiz-tabs{display:none!important;}',
+      'html.pig-css-fs-active .bottom-nav{display:none!important;}',
+      'html.pig-css-fs-active .pet-status-bar{display:none!important;}',
+      'html.pig-css-fs-active body{overflow:hidden!important;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;margin:0!important;padding:0!important;}',
+      // Show only the quiz-pig-run tab content during fullscreen
+      'html.pig-css-fs-active #quizPigRunContent{display:block!important;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:2147483646!important;margin:0!important;padding:0!important;background:#4a8f26!important;}',
+      'html.pig-css-fs-active #pigRunContent{margin:0!important;padding:0!important;width:100%!important;height:100%!important;}',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -1203,36 +1214,24 @@
     var _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-    function enterCSSFullscreen(gameContainer) {
-      // Inject a dynamic <style> with the highest possible specificity
+    function enterCSSFullscreen() {
+      // Find the .pig-run-wrap element (parent of both top-bar and game-container)
+      var wrapEl = document.querySelector('.pig-run-wrap');
+      if (!wrapEl) { console.warn('[PigRun] .pig-run-wrap not found'); return; }
+
+      // Inject a dynamic <style> for maximum override on iOS
       if (!_cssFullscreenStyleEl) {
         _cssFullscreenStyleEl = document.createElement('style');
         _cssFullscreenStyleEl.id = 'pig-css-fullscreen-style';
+        // Minimal extra rules — main rules are in the static injected styles
         _cssFullscreenStyleEl.textContent = [
-          'html.pig-css-fs-active, html.pig-css-fs-active body {',
-          '  overflow:hidden!important; position:fixed!important;',
-          '  top:0!important; left:0!important; width:100%!important; height:100%!important;',
-          '  margin:0!important; padding:0!important;',
+          'html.pig-css-fs-active #quizPigRunContent {',
+          '  display:block!important; position:fixed!important; top:0!important; left:0!important;',
+          '  width:100%!important; height:100%!important; z-index:2147483646!important;',
+          '  margin:0!important; padding:0!important; background:#4a8f26!important;',
           '}',
-          '#pigGameContainer.pig-css-fullscreen {',
-          '  position:fixed!important; top:0!important; left:0!important;',
-          '  width:100vw!important; height:100vh!important; height:100dvh!important;',
-          '  max-width:none!important; max-height:none!important;',
-          '  aspect-ratio:unset!important;',
-          '  z-index:2147483647!important; overflow:hidden!important;',
-          '  border-radius:0!important; margin:0!important; padding:0!important;',
-          '}',
-          '#pigGameContainer.pig-css-fullscreen .pig-game-board {',
-          '  position:absolute!important; top:50px!important; bottom:70px!important;',
-          '  left:0!important; right:0!important; width:auto!important; height:auto!important;',
-          '}',
-          '#pigGameContainer.pig-css-fullscreen .pig-top-bar {',
-          '  position:absolute!important; top:0!important; left:0!important; right:0!important;',
-          '  z-index:9999!important;',
-          '}',
-          '#pigGameContainer.pig-css-fullscreen .pig-bottom-bar {',
-          '  position:absolute!important; bottom:0!important; left:0!important; right:0!important;',
-          '  width:100%!important; z-index:100!important;',
+          'html.pig-css-fs-active #pigRunContent {',
+          '  margin:0!important; padding:0!important; width:100%!important; height:100%!important;',
           '}',
         ].join('\n');
         document.head.appendChild(_cssFullscreenStyleEl);
@@ -1244,19 +1243,20 @@
         overflow: document.body.style.cssText
       };
 
-      // Add class to html to lock scroll
+      // Add class to html to lock scroll and hide nav/other pages
       document.documentElement.classList.add('pig-css-fs-active');
-      // Add class to game container
-      gameContainer.classList.add('pig-css-fullscreen');
+      // Add class to .pig-run-wrap (covers top-bar + game-container + bottom-bar)
+      wrapEl.classList.add('pig-css-fullscreen');
 
       _cssFullscreenActive = true;
       fullscreenBtn.textContent = '⛶';
       console.log('[PigRun] CSS fullscreen entered');
     }
 
-    function exitCSSFullscreen(gameContainer) {
+    function exitCSSFullscreen() {
+      var wrapEl = document.querySelector('.pig-run-wrap');
       document.documentElement.classList.remove('pig-css-fs-active');
-      gameContainer.classList.remove('pig-css-fullscreen');
+      if (wrapEl) wrapEl.classList.remove('pig-css-fullscreen');
 
       // Remove dynamic style
       if (_cssFullscreenStyleEl) {
@@ -1278,12 +1278,9 @@
     if (fullscreenBtn) {
       fullscreenBtn.style.display = 'flex';
       fullscreenBtn.addEventListener('click', function() {
-        var gameContainer = document.getElementById('pigGameContainer');
-        if (!gameContainer) return;
-
         // If CSS fullscreen is active, exit it
         if (_cssFullscreenActive) {
-          exitCSSFullscreen(gameContainer);
+          exitCSSFullscreen();
           return;
         }
 
@@ -1299,28 +1296,31 @@
 
         // iOS: skip native API entirely, use CSS fullscreen directly
         if (_isIOS) {
-          enterCSSFullscreen(gameContainer);
+          enterCSSFullscreen();
           return;
         }
 
         // Desktop/Android: try native fullscreen first
-        try {
-          var p = gameContainer.requestFullscreen();
-          if (p && typeof p.then === 'function') {
-            p.then(function() {
-              if (document.fullscreenElement) {
-                fullscreenBtn.textContent = '⛶';
-              } else {
-                enterCSSFullscreen(gameContainer);
-              }
-            }).catch(function() {
-              enterCSSFullscreen(gameContainer);
-            });
-          } else {
-            fullscreenBtn.textContent = '⛶';
+        var gameContainer = document.getElementById('pigGameContainer');
+        if (gameContainer) {
+          try {
+            var p = gameContainer.requestFullscreen();
+            if (p && typeof p.then === 'function') {
+              p.then(function() {
+                if (document.fullscreenElement) {
+                  fullscreenBtn.textContent = '⛶';
+                } else {
+                  enterCSSFullscreen();
+                }
+              }).catch(function() {
+                enterCSSFullscreen();
+              });
+            } else {
+              fullscreenBtn.textContent = '⛶';
+            }
+          } catch(e) {
+            enterCSSFullscreen();
           }
-        } catch(e) {
-          enterCSSFullscreen(gameContainer);
         }
       });
 
