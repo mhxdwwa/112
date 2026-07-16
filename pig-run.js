@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v20 - 修复CSS全屏降级：应用到.pig-run-wrap(包含top-bar)+隐藏导航栏等页面元素
+// v21 - 彻底重写全屏逻辑：移动端全部使用内联样式CSS全屏(最可靠)
 
 (function() {
   'use strict';
@@ -1210,66 +1210,111 @@
     var _cssFullscreenSavedBody = null;
     var _cssFullscreenStyleEl = null;
 
-    // Detect iOS — Safari has requestFullscreen but it silently does nothing
-    var _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    // Detect mobile — native Fullscreen API is unreliable on ALL mobile browsers
+    var _isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+    // Track saved inline styles for restoration
+    var _cssFullscreenSavedStyles = {};
+
     function enterCSSFullscreen() {
-      // Find the .pig-run-wrap element (parent of both top-bar and game-container)
       var wrapEl = document.querySelector('.pig-run-wrap');
       if (!wrapEl) { console.warn('[PigRun] .pig-run-wrap not found'); return; }
 
-      // Inject a dynamic <style> for maximum override on iOS
-      if (!_cssFullscreenStyleEl) {
-        _cssFullscreenStyleEl = document.createElement('style');
-        _cssFullscreenStyleEl.id = 'pig-css-fullscreen-style';
-        // Minimal extra rules — main rules are in the static injected styles
-        _cssFullscreenStyleEl.textContent = [
-          'html.pig-css-fs-active #quizPigRunContent {',
-          '  display:block!important; position:fixed!important; top:0!important; left:0!important;',
-          '  width:100%!important; height:100%!important; z-index:2147483646!important;',
-          '  margin:0!important; padding:0!important; background:#4a8f26!important;',
-          '}',
-          'html.pig-css-fs-active #pigRunContent {',
-          '  margin:0!important; padding:0!important; width:100%!important; height:100%!important;',
-          '}',
-        ].join('\n');
-        document.head.appendChild(_cssFullscreenStyleEl);
-      }
+      // === 1. Use INLINE STYLES for maximum reliability (overrides everything) ===
+      var htmlEl = document.documentElement;
+      var bodyEl = document.body;
+      var quizTab = document.getElementById('quizPigRunContent');
+      var pigContent = document.getElementById('pigRunContent');
+      var navBar = document.querySelector('.nav-bar');
+      var allPages = document.querySelectorAll('.page');
+      var quizTabs = document.querySelector('.quiz-tabs');
 
-      // Save body scroll position
-      _cssFullscreenSavedBody = {
-        scrollTop: document.body.scrollTop || document.documentElement.scrollTop,
-        overflow: document.body.style.cssText
+      // Save original styles
+      _cssFullscreenSavedStyles = {
+        html: htmlEl.style.cssText,
+        body: bodyEl.style.cssText,
+        wrap: wrapEl.style.cssText,
+        gameContainer: (document.getElementById('pigGameContainer') || {}).style ? document.getElementById('pigGameContainer').style.cssText : '',
+        quizTab: quizTab ? quizTab.style.cssText : '',
+        pigContent: pigContent ? pigContent.style.cssText : '',
+        navBar: navBar ? navBar.style.cssText : '',
+        scrollTop: bodyEl.scrollTop || htmlEl.scrollTop
       };
 
-      // Add class to html to lock scroll and hide nav/other pages
-      document.documentElement.classList.add('pig-css-fs-active');
-      // Add class to .pig-run-wrap (covers top-bar + game-container + bottom-bar)
-      wrapEl.classList.add('pig-css-fullscreen');
+      // Hide nav bar
+      if (navBar) navBar.style.cssText = 'display:none!important;';
+      // Hide all .page elements
+      for (var i = 0; i < allPages.length; i++) {
+        allPages[i].style.setProperty('display', 'none', 'important');
+      }
+      // Hide quiz tabs
+      if (quizTabs) quizTabs.style.cssText = 'display:none!important;';
+
+      // Make quiz pig-run tab fill viewport
+      if (quizTab) {
+        quizTab.style.cssText = 'display:block!important;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;height:100dvh!important;z-index:2147483646!important;margin:0!important;padding:0!important;background:#4a8f26!important;overflow:hidden!important;';
+      }
+      if (pigContent) {
+        pigContent.style.cssText = 'margin:0!important;padding:0!important;width:100%!important;height:100%!important;';
+      }
+
+      // Make .pig-run-wrap fill viewport
+      wrapEl.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;max-height:none!important;z-index:2147483647!important;overflow:hidden!important;margin:0!important;padding:0!important;border-radius:0!important;';
+
+      // Remove aspect-ratio from game container
+      var gc = document.getElementById('pigGameContainer');
+      if (gc) {
+        gc.style.setProperty('aspect-ratio', 'unset', 'important');
+        gc.style.setProperty('border-radius', '0', 'important');
+        gc.style.setProperty('width', '100%', 'important');
+        gc.style.setProperty('height', '100%', 'important');
+      }
+
+      // Lock body scroll
+      htmlEl.style.setProperty('overflow', 'hidden', 'important');
+      bodyEl.style.setProperty('overflow', 'hidden', 'important');
+      bodyEl.style.setProperty('position', 'fixed', 'important');
+      bodyEl.style.setProperty('width', '100%', 'important');
+      bodyEl.style.setProperty('height', '100%', 'important');
+      bodyEl.style.setProperty('top', '0', 'important');
+      bodyEl.style.setProperty('left', '0', 'important');
+      bodyEl.style.setProperty('margin', '0', 'important');
+      bodyEl.style.setProperty('padding', '0', 'important');
 
       _cssFullscreenActive = true;
       fullscreenBtn.textContent = '⛶';
-      console.log('[PigRun] CSS fullscreen entered');
+      console.log('[PigRun] CSS fullscreen entered (inline styles)');
     }
 
     function exitCSSFullscreen() {
       var wrapEl = document.querySelector('.pig-run-wrap');
-      document.documentElement.classList.remove('pig-css-fs-active');
-      if (wrapEl) wrapEl.classList.remove('pig-css-fullscreen');
+      var quizTab = document.getElementById('quizPigRunContent');
+      var pigContent = document.getElementById('pigRunContent');
+      var navBar = document.querySelector('.nav-bar');
+      var allPages = document.querySelectorAll('.page');
+      var quizTabs = document.querySelector('.quiz-tabs');
+      var gc = document.getElementById('pigGameContainer');
 
-      // Remove dynamic style
-      if (_cssFullscreenStyleEl) {
-        _cssFullscreenStyleEl.remove();
-        _cssFullscreenStyleEl = null;
+      // Restore all saved inline styles
+      document.documentElement.style.cssText = _cssFullscreenSavedStyles.html || '';
+      document.body.style.cssText = _cssFullscreenSavedStyles.body || '';
+      if (wrapEl) wrapEl.style.cssText = _cssFullscreenSavedStyles.wrap || '';
+      if (gc) gc.style.cssText = _cssFullscreenSavedStyles.gameContainer || '';
+      if (quizTab) quizTab.style.cssText = _cssFullscreenSavedStyles.quizTab || '';
+      if (pigContent) pigContent.style.cssText = _cssFullscreenSavedStyles.pigContent || '';
+      if (navBar) navBar.style.cssText = _cssFullscreenSavedStyles.navBar || '';
+      for (var i = 0; i < allPages.length; i++) {
+        allPages[i].style.removeProperty('display');
       }
+      if (quizTabs) quizTabs.style.removeProperty('display');
 
       // Restore scroll
-      if (_cssFullscreenSavedBody) {
-        window.scrollTo(0, _cssFullscreenSavedBody.scrollTop);
-        _cssFullscreenSavedBody = null;
+      if (_cssFullscreenSavedStyles.scrollTop) {
+        window.scrollTo(0, _cssFullscreenSavedStyles.scrollTop);
       }
 
+      _cssFullscreenSavedStyles = {};
       _cssFullscreenActive = false;
       fullscreenBtn.textContent = '⛶';
       console.log('[PigRun] CSS fullscreen exited');
@@ -1294,15 +1339,15 @@
           return;
         }
 
-        // iOS: skip native API entirely, use CSS fullscreen directly
-        if (_isIOS) {
+        // ALL mobile devices: use CSS fullscreen directly (native API is unreliable)
+        if (_isMobileDevice) {
           enterCSSFullscreen();
           return;
         }
 
-        // Desktop/Android: try native fullscreen first
+        // Desktop only: try native fullscreen first, fallback to CSS
         var gameContainer = document.getElementById('pigGameContainer');
-        if (gameContainer) {
+        if (gameContainer && typeof gameContainer.requestFullscreen === 'function') {
           try {
             var p = gameContainer.requestFullscreen();
             if (p && typeof p.then === 'function') {
@@ -1316,22 +1361,25 @@
                 enterCSSFullscreen();
               });
             } else {
+              // No promise returned, assume it worked
               fullscreenBtn.textContent = '⛶';
             }
           } catch(e) {
             enterCSSFullscreen();
           }
+        } else {
+          enterCSSFullscreen();
         }
       });
 
-      // Listen for native fullscreen change
+      // Listen for native fullscreen change (desktop)
       document.addEventListener('fullscreenchange', function() {
-        if (!document.fullscreenElement) {
+        if (!document.fullscreenElement && !_cssFullscreenActive) {
           fullscreenBtn.textContent = '⛶';
         }
       });
       document.addEventListener('webkitfullscreenchange', function() {
-        if (!document.webkitFullscreenElement) {
+        if (!document.webkitFullscreenElement && !_cssFullscreenActive) {
           fullscreenBtn.textContent = '⛶';
         }
       });
