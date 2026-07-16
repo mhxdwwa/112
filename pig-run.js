@@ -28,6 +28,8 @@
         renderPigRunPage(); 
       }, 100);
     } else if (tabName === 'daily') {
+      // 切换到每日一练时停止小猪快跑背景音乐
+      if (typeof stopBGM === 'function') stopBGM();
       setTimeout(function() { 
         renderQuizPage(); 
         // 教师进入每日一练时自动加载自定义题库
@@ -481,6 +483,9 @@
     }
     return bgmEnabled;
   }
+
+  // 暴露给外部调用（如 switchPage 切换页面时停止音乐）
+  window._stopPigRunBGM = stopBGM;
 
   // === 渲染小猪快跑页面（关卡选择）===
   function renderPigRunPage() {
