@@ -1033,10 +1033,31 @@
           html += '<div style="font-size:12px;color:' + (isCorrect ? '#389e0d' : '#666') + ';margin-left:8px;">' + labels[oi] + '. ' + escapeHtmlSimple(opt) + (isCorrect ? ' ✓' : '') + '</div>';
         });
         html += '</div>';
-        html += '<button onclick="deleteDailyQuestion(\'' + q.id + '\')" style="background:#ff4757;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:8px;">删除</button>';
+        html += '<div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">';
+        html += '<button onclick="editDailyQuestion(\'' + q.id + '\')" style="background:#1890ff;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;">编辑</button>';
+        html += '<button onclick="deleteDailyQuestion(\'' + q.id + '\')" style="background:#ff4757;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;">删除</button>';
+        html += '</div>';
         html += '</div></div>';
       });
       html += '</div>';
+
+      // Edit form (hidden by default)
+      html += '<div id="dailyEditForm" style="display:none;background:#fff8e6;border-radius:12px;padding:16px;border:2px solid #d4a017;margin-top:16px;">';
+      html += '<div style="font-size:15px;font-weight:700;color:#d4a017;margin-bottom:12px;">✏️ 编辑题目</div>';
+      html += '<input type="hidden" id="dailyEditQId">';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">章节</label><input id="dailyEditChapter" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">题目</label><textarea id="dailyEditQuestion" rows="2" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项A</label><input id="dailyEditOptA" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项B</label><input id="dailyEditOptB" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项C</label><input id="dailyEditOptC" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项D</label><input id="dailyEditOptD" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">正确答案</label><select id="dailyEditAnswer" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">解析（可选）</label><textarea id="dailyEditExp" rows="2" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea></div>';
+      html += '<div style="display:flex;gap:8px;">';
+      html += '<button onclick="submitDailyEditQuestion()" style="flex:1;background:#d4a017;color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">💾 保存修改</button>';
+      html += '<button onclick="hideDailyEditForm()" style="flex:1;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
+      html += '</div></div>';
+
       html += '<div style="margin-top:12px;text-align:center;">';
       html += '<button onclick="clearAllDailyQuestions()" style="background:#fff;color:#ff4757;border:2px solid #ff4757;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;">🗑️ 清空所有题目</button>';
       html += '</div>';
@@ -1102,6 +1123,62 @@
       loadDailyCustomQuestions(teacherId).then(function() {
         var container = document.getElementById('quizContent');
         if (container) renderDailyQuizManager(container, teacherId);
+      });
+    });
+  };
+
+  // 编辑题目
+  window.editDailyQuestion = function(qId) {
+    var q = null;
+    if (_dailyCustomQuestions) {
+      for (var i = 0; i < _dailyCustomQuestions.length; i++) {
+        if (String(_dailyCustomQuestions[i].id) === String(qId)) { q = _dailyCustomQuestions[i]; break; }
+      }
+    }
+    if (!q) { alert('未找到该题目'); return; }
+    document.getElementById('dailyEditQId').value = q.id;
+    document.getElementById('dailyEditChapter').value = q.chapter || '';
+    document.getElementById('dailyEditQuestion').value = q.question || '';
+    var opts = q.options || [];
+    document.getElementById('dailyEditOptA').value = opts[0] || '';
+    document.getElementById('dailyEditOptB').value = opts[1] || '';
+    document.getElementById('dailyEditOptC').value = opts[2] || '';
+    document.getElementById('dailyEditOptD').value = opts[3] || '';
+    document.getElementById('dailyEditAnswer').value = q.answer || 0;
+    document.getElementById('dailyEditExp').value = q.explanation || '';
+    var form = document.getElementById('dailyEditForm');
+    if (form) { form.style.display = 'block'; form.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  };
+  window.hideDailyEditForm = function() {
+    var form = document.getElementById('dailyEditForm');
+    if (form) form.style.display = 'none';
+  };
+  window.submitDailyEditQuestion = function() {
+    var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
+    if (!teacherId) return;
+    var qId = document.getElementById('dailyEditQId').value;
+    var chapter = document.getElementById('dailyEditChapter').value.trim();
+    var question = document.getElementById('dailyEditQuestion').value.trim();
+    var optA = document.getElementById('dailyEditOptA').value.trim();
+    var optB = document.getElementById('dailyEditOptB').value.trim();
+    var optC = document.getElementById('dailyEditOptC').value.trim();
+    var optD = document.getElementById('dailyEditOptD').value.trim();
+    var answer = parseInt(document.getElementById('dailyEditAnswer').value);
+    var explanation = document.getElementById('dailyEditExp').value.trim();
+    if (!question) { alert('请输入题目内容'); return; }
+    if (!optA || !optB) { alert('至少需要选项A和B'); return; }
+    var options = [optA, optB, optC, optD].filter(Boolean);
+    if (typeof db === 'undefined' || !db) { alert('数据库未连接'); return; }
+    db.from('daily_quiz_questions').update({
+      chapter: chapter || '默认', question: question,
+      options: JSON.stringify(options), answer: answer, explanation: explanation || ''
+    }).eq('id', qId).eq('teacher_id', teacherId).then(function(r) {
+      if (r.error) { alert('修改失败: ' + r.error.message); return; }
+      _dailyCustomQuestions = null;
+      loadDailyCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('quizContent');
+        if (container) renderDailyQuizManager(container, teacherId);
+        if (typeof showNotification === 'function') showNotification('成功', '题目已修改', 'success');
       });
     });
   };

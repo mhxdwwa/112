@@ -1561,10 +1561,29 @@
           html += '<div style="font-size:12px;color:' + (isCorrect ? '#389e0d' : '#666') + ';margin-left:8px;">' + labels[oi] + '. ' + escapeHtml(opt) + (isCorrect ? ' ✓' : '') + '</div>';
         });
         html += '</div>';
-        html += '<button onclick="deletePigRunQuestion(\'' + q.id + '\')" style="background:#ff4757;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:8px;">删除</button>';
+        html += '<div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">';
+        html += '<button onclick="editPigRunQuestion(\'' + q.id + '\')" style="background:#1890ff;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;">编辑</button>';
+        html += '<button onclick="deletePigRunQuestion(\'' + q.id + '\')" style="background:#ff4757;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;">删除</button>';
+        html += '</div>';
         html += '</div></div>';
       });
       html += '</div>';
+      
+      // Edit form (hidden by default)
+      html += '<div id="editQuestionForm" style="display:none;background:#e8f4ff;border-radius:12px;padding:16px;border:2px solid #1890ff;margin-top:16px;">';
+      html += '<div style="font-size:15px;font-weight:700;color:#1890ff;margin-bottom:12px;">✏️ 编辑题目</div>';
+      html += '<input type="hidden" id="editQId">';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">章节</label><input id="editQChapter" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">题目</label><textarea id="editQQuestion" rows="2" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项A</label><input id="editQOptA" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项B</label><input id="editQOptB" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项C</label><input id="editQOptC" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:12px;color:#888;">选项D</label><input id="editQOptD" type="text" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"></div>';
+      html += '<div style="margin-bottom:12px;"><label style="font-size:12px;color:#888;">正确答案</label><select id="editQAnswer" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>';
+      html += '<div style="display:flex;gap:8px;">';
+      html += '<button onclick="submitEditQuestion()" style="flex:1;background:#1890ff;color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">💾 保存修改</button>';
+      html += '<button onclick="hideEditQuestionForm()" style="flex:1;background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
+      html += '</div></div>';
       
       // Clear all button
       html += '<div style="margin-top:12px;text-align:center;">';
@@ -1659,6 +1678,60 @@
       loadCustomQuestions(teacherId).then(function() {
         var container = document.getElementById('pigRunContent');
         if (container) renderQuestionManager(container, teacherId);
+      });
+    });
+  };
+
+  // 编辑题目
+  window.editPigRunQuestion = function(qId) {
+    var q = null;
+    if (customQuestionBank) {
+      for (var i = 0; i < customQuestionBank.length; i++) {
+        if (String(customQuestionBank[i].id) === String(qId)) { q = customQuestionBank[i]; break; }
+      }
+    }
+    if (!q) { alert('未找到该题目'); return; }
+    document.getElementById('editQId').value = q.id;
+    document.getElementById('editQChapter').value = q.chapter || '';
+    document.getElementById('editQQuestion').value = q.question || '';
+    var opts = q.options || [];
+    document.getElementById('editQOptA').value = opts[0] || '';
+    document.getElementById('editQOptB').value = opts[1] || '';
+    document.getElementById('editQOptC').value = opts[2] || '';
+    document.getElementById('editQOptD').value = opts[3] || '';
+    document.getElementById('editQAnswer').value = q.answer || 0;
+    var form = document.getElementById('editQuestionForm');
+    if (form) { form.style.display = 'block'; form.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  };
+  window.hideEditQuestionForm = function() {
+    var form = document.getElementById('editQuestionForm');
+    if (form) form.style.display = 'none';
+  };
+  window.submitEditQuestion = function() {
+    var teacherId = getCurrentTeacherId();
+    if (!teacherId) return;
+    var qId = document.getElementById('editQId').value;
+    var chapter = document.getElementById('editQChapter').value.trim();
+    var question = document.getElementById('editQQuestion').value.trim();
+    var optA = document.getElementById('editQOptA').value.trim();
+    var optB = document.getElementById('editQOptB').value.trim();
+    var optC = document.getElementById('editQOptC').value.trim();
+    var optD = document.getElementById('editQOptD').value.trim();
+    var answer = parseInt(document.getElementById('editQAnswer').value);
+    if (!question) { alert('请输入题目内容'); return; }
+    if (!optA || !optB) { alert('至少需要选项A和B'); return; }
+    var options = [optA, optB, optC, optD].filter(Boolean);
+    if (typeof db === 'undefined' || !db) { alert('数据库未连接'); return; }
+    db.from('pig_run_questions').update({
+      chapter: chapter || '默认', question: question,
+      options: JSON.stringify(options), answer: answer
+    }).eq('id', qId).eq('teacher_id', teacherId).then(function(r) {
+      if (r.error) { alert('修改失败: ' + r.error.message); return; }
+      customQuestionBank = null;
+      loadCustomQuestions(teacherId).then(function() {
+        var container = document.getElementById('pigRunContent');
+        if (container) renderQuestionManager(container, teacherId);
+        if (typeof showNotification === 'function') showNotification('成功', '题目已修改', 'success');
       });
     });
   };
