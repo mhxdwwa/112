@@ -707,13 +707,13 @@ function _loadCustomActions() {
  * v29: Logs are stored as JSON in the classes table — same sync channel as student data.
  * No more operation_logs table (had FK constraints that broke on mobile).
  * Uses upsert (same pattern as student coins) — proven reliable.
- * Max 1000 logs per class — oldest are trimmed automatically.
+ * Max 5000 logs per class — oldest are trimmed automatically.
  *
  * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → classes.upsert
  * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
  */
 
-var _OP_LOGS_MAX_PER_CLASS = 1000;
+var _OP_LOGS_MAX_PER_CLASS = 5000;
 
 // Get class IDs for this user
 function _getOpLogClassIds() {
@@ -810,7 +810,7 @@ var _writingLogsToSupabase = false;
 var _pendingLogWrites = 0;
 
 // v29: Write unsynced logs to classes.operation_logs_json — same channel as student data.
-// Uses upsert (proven reliable on mobile). Max 1000 logs per class, oldest trimmed.
+// Uses upsert (proven reliable on mobile). Max 5000 logs per class, oldest trimmed.
 function _writeUnsyncedLogsToSupabase() {
   if (_writingLogsToSupabase) {
     console.log('[DAL] v29 Write already in progress, queueing...');

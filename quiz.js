@@ -107,7 +107,7 @@
 
       // 按时间倒序，最多保留 1000 条
       existing.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
-      if (existing.length > 1000) existing = existing.slice(0, 1000);
+      if (existing.length > 5000) existing = existing.slice(0, 5000);
 
       // 标记本地日志为已同步
       if (typeof window.operationLogs !== 'undefined') {
