@@ -596,18 +596,58 @@
   // 暴露给外部调用（如 switchPage 切换页面时停止音乐）
   window._stopPigRunBGM = stopBGM;
 
+  // === 自动加载自定义题库（教师和学生都加载）===
+  function _pigRunAutoLoadQuestions() {
+    if (typeof currentUser === 'undefined' || !currentUser) return;
+    if (customQuestionBank !== null) return; // 已加载过
+    
+    var teacherId = null;
+    
+    if (currentUser.type === 'teacher') {
+      // 教师：直接用自己的 ID
+      teacherId = currentUser.id;
+    } else if (currentUser.type === 'student') {
+      // 学生：从班级数据中找到 teacher_id
+      var classId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
+      if (classId && typeof classesData !== 'undefined' && classesData) {
+        for (var i = 0; i < classesData.length; i++) {
+          if (classesData[i].id === classId) {
+            teacherId = classesData[i].teacher_id;
+            break;
+          }
+        }
+      }
+      // 如果 classesData 还没加载，尝试从 Supabase 查
+      if (!teacherId && typeof db !== 'undefined' && db) {
+        db.from('classes').select('teacher_id').eq('id', classId).single().then(function(r) {
+          if (r.data && r.data.teacher_id) {
+            loadCustomQuestions(r.data.teacher_id).then(function() {
+              // 加载完成后重新渲染页面，使自定义题目生效
+              renderPigRunPage();
+            });
+          }
+        });
+        return;
+      }
+    }
+    
+    if (teacherId) {
+      loadCustomQuestions(teacherId).then(function() {
+        // 加载完成后重新渲染页面，使自定义题目生效
+        renderPigRunPage();
+      });
+    }
+  }
+
   // === 渲染小猪快跑页面（关卡选择）===
   function renderPigRunPage() {
     var container = document.getElementById('pigRunContent');
     if (!container) return;
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
     
-    // 教师进入时自动加载自定义题库
-    if (!isStudentView) {
-      var teacherId = getCurrentTeacherId();
-      if (teacherId && customQuestionBank === null) {
-        loadCustomQuestions(teacherId);
-      }
+    // 教师和学生进入时都自动加载自定义题库
+    if (customQuestionBank === null) {
+      _pigRunAutoLoadQuestions();
     }
     
     if (!isStudentView) {
