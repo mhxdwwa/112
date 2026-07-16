@@ -367,10 +367,10 @@
       '.pig-game-container:-webkit-full-screen .pig-bottom-bar{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:9999!important;}',
       '.pig-game-container:-webkit-full-screen .pig-game-board{position:absolute!important;top:60px!important;bottom:80px!important;left:0!important;right:0!important;}',
       // CSS fullscreen mode (mobile fallback)
-      '.pig-css-fullscreen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;}',
-      '.pig-css-fullscreen .pig-top-bar{position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(255,255,255,0.98)!important;}',
-      '.pig-css-fullscreen .pig-bottom-bar{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:9999!important;}',
-      '.pig-css-fullscreen .pig-game-board{position:absolute!important;top:60px!important;bottom:80px!important;left:0!important;right:0!important;}',
+      '.pig-css-fullscreen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;aspect-ratio:auto!important;border-radius:0!important;top:0!important;left:0!important;}',
+      '.pig-css-fullscreen .pig-top-bar{position:absolute!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(58,122,29,0.3)!important;border-radius:0!important;}',
+      '.pig-css-fullscreen .pig-bottom-bar{position:absolute!important;bottom:0!important;left:0!important;right:0!important;width:100%!important;z-index:100!important;}',
+      '.pig-css-fullscreen .pig-game-board{position:absolute!important;top:50px!important;bottom:70px!important;left:0!important;right:0!important;width:auto!important;height:auto!important;}',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -1197,39 +1197,76 @@
     var fullscreenBtn = document.getElementById('pigFullscreenBtn');
     var _cssFullscreenActive = false;
     var _cssFullscreenSavedStyles = null;
+    var _cssFullscreenSavedBody = null;
 
     function enterCSSFullscreen(gameContainer) {
-      // CSS fallback for mobile (iOS Safari etc.) where native Fullscreen API is unavailable
+      // Lock body scroll
+      _cssFullscreenSavedBody = {
+        overflow: document.body.style.overflow,
+        position: document.body.style.position,
+        top: document.body.style.top,
+        width: document.body.style.width,
+        height: document.body.style.height
+      };
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = '0';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+
+      // Save and override container styles
       _cssFullscreenSavedStyles = {
         position: gameContainer.style.position,
         top: gameContainer.style.top,
         left: gameContainer.style.left,
         width: gameContainer.style.width,
         height: gameContainer.style.height,
+        maxWidth: gameContainer.style.maxWidth,
+        maxHeight: gameContainer.style.maxHeight,
+        aspectRatio: gameContainer.style.aspectRatio,
         zIndex: gameContainer.style.zIndex,
-        overflow: gameContainer.style.overflow
+        overflow: gameContainer.style.overflow,
+        borderRadius: gameContainer.style.borderRadius
       };
-      gameContainer.style.position = 'fixed';
-      gameContainer.style.top = '0';
-      gameContainer.style.left = '0';
-      gameContainer.style.width = '100vw';
-      gameContainer.style.height = '100vh';
-      gameContainer.style.zIndex = '999999';
-      gameContainer.style.overflow = 'hidden';
+      gameContainer.style.setProperty('position', 'fixed', 'important');
+      gameContainer.style.setProperty('top', '0', 'important');
+      gameContainer.style.setProperty('left', '0', 'important');
+      gameContainer.style.setProperty('width', '100%', 'important');
+      gameContainer.style.setProperty('height', '100%', 'important');
+      gameContainer.style.setProperty('max-width', 'none', 'important');
+      gameContainer.style.setProperty('max-height', 'none', 'important');
+      gameContainer.style.setProperty('aspect-ratio', 'auto', 'important');
+      gameContainer.style.setProperty('z-index', '999999', 'important');
+      gameContainer.style.setProperty('overflow', 'hidden', 'important');
+      gameContainer.style.setProperty('border-radius', '0', 'important');
       gameContainer.classList.add('pig-css-fullscreen');
       _cssFullscreenActive = true;
       fullscreenBtn.textContent = '⛶';
     }
 
     function exitCSSFullscreen(gameContainer) {
+      // Restore body
+      if (_cssFullscreenSavedBody) {
+        document.body.style.overflow = _cssFullscreenSavedBody.overflow;
+        document.body.style.position = _cssFullscreenSavedBody.position;
+        document.body.style.top = _cssFullscreenSavedBody.top;
+        document.body.style.width = _cssFullscreenSavedBody.width;
+        document.body.style.height = _cssFullscreenSavedBody.height;
+        _cssFullscreenSavedBody = null;
+      }
+      // Restore container
       if (_cssFullscreenSavedStyles) {
         gameContainer.style.position = _cssFullscreenSavedStyles.position;
         gameContainer.style.top = _cssFullscreenSavedStyles.top;
         gameContainer.style.left = _cssFullscreenSavedStyles.left;
         gameContainer.style.width = _cssFullscreenSavedStyles.width;
         gameContainer.style.height = _cssFullscreenSavedStyles.height;
+        gameContainer.style.maxWidth = _cssFullscreenSavedStyles.maxWidth;
+        gameContainer.style.maxHeight = _cssFullscreenSavedStyles.maxHeight;
+        gameContainer.style.aspectRatio = _cssFullscreenSavedStyles.aspectRatio;
         gameContainer.style.zIndex = _cssFullscreenSavedStyles.zIndex;
         gameContainer.style.overflow = _cssFullscreenSavedStyles.overflow;
+        gameContainer.style.borderRadius = _cssFullscreenSavedStyles.borderRadius;
         _cssFullscreenSavedStyles = null;
       }
       gameContainer.classList.remove('pig-css-fullscreen');
@@ -1237,9 +1274,19 @@
       fullscreenBtn.textContent = '⛶';
     }
 
-    function isNativeFullscreenSupported() {
-      var el = document.documentElement;
-      return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen);
+    function tryNativeFullscreen(gameContainer) {
+      // Try native Fullscreen API (works on desktop Chrome/Firefox, some Android)
+      var p = null;
+      if (typeof gameContainer.requestFullscreen === 'function') {
+        p = gameContainer.requestFullscreen();
+      } else if (typeof gameContainer.webkitRequestFullscreen === 'function') {
+        gameContainer.webkitRequestFullscreen();
+        return 'native';
+      }
+      if (p && typeof p.then === 'function') {
+        return p.then(function() { return 'native'; }).catch(function() { return 'failed'; });
+      }
+      return p ? 'native' : 'failed';
     }
 
     if (fullscreenBtn) {
@@ -1264,32 +1311,20 @@
           return;
         }
 
-        // Try native fullscreen first
-        if (isNativeFullscreenSupported()) {
-          var promise;
-          if (gameContainer.requestFullscreen) {
-            promise = gameContainer.requestFullscreen();
-          } else if (gameContainer.webkitRequestFullscreen) {
-            gameContainer.webkitRequestFullscreen();
-            fullscreenBtn.textContent = '⛶';
-            return;
-          } else if (gameContainer.msRequestFullscreen) {
-            gameContainer.msRequestFullscreen();
-            fullscreenBtn.textContent = '⛶';
-            return;
-          }
-          if (promise && promise.then) {
-            promise.then(function() {
+        // Try native fullscreen first, fall back to CSS on failure
+        var result = tryNativeFullscreen(gameContainer);
+        if (result === 'native') {
+          fullscreenBtn.textContent = '⛶';
+        } else if (result && typeof result.then === 'function') {
+          result.then(function(status) {
+            if (status === 'native') {
               fullscreenBtn.textContent = '⛶';
-            }).catch(function() {
-              // Native fullscreen failed (e.g. iOS), fall back to CSS
+            } else {
               enterCSSFullscreen(gameContainer);
-            });
-          } else {
-            fullscreenBtn.textContent = '⛶';
-          }
+            }
+          });
         } else {
-          // No native support, use CSS fullscreen
+          // No native support at all, use CSS fullscreen
           enterCSSFullscreen(gameContainer);
         }
       });
