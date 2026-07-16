@@ -366,6 +366,11 @@
       '.pig-game-container:-webkit-full-screen .pig-top-bar{position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(255,255,255,0.98)!important;}',
       '.pig-game-container:-webkit-full-screen .pig-bottom-bar{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:9999!important;}',
       '.pig-game-container:-webkit-full-screen .pig-game-board{position:absolute!important;top:60px!important;bottom:80px!important;left:0!important;right:0!important;}',
+      // CSS fullscreen mode (mobile fallback)
+      '.pig-css-fullscreen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;}',
+      '.pig-css-fullscreen .pig-top-bar{position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(255,255,255,0.98)!important;}',
+      '.pig-css-fullscreen .pig-bottom-bar{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:9999!important;}',
+      '.pig-css-fullscreen .pig-game-board{position:absolute!important;top:60px!important;bottom:80px!important;left:0!important;right:0!important;}',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -1190,34 +1195,106 @@
     
     // Fullscreen button (all devices)
     var fullscreenBtn = document.getElementById('pigFullscreenBtn');
+    var _cssFullscreenActive = false;
+    var _cssFullscreenSavedStyles = null;
+
+    function enterCSSFullscreen(gameContainer) {
+      // CSS fallback for mobile (iOS Safari etc.) where native Fullscreen API is unavailable
+      _cssFullscreenSavedStyles = {
+        position: gameContainer.style.position,
+        top: gameContainer.style.top,
+        left: gameContainer.style.left,
+        width: gameContainer.style.width,
+        height: gameContainer.style.height,
+        zIndex: gameContainer.style.zIndex,
+        overflow: gameContainer.style.overflow
+      };
+      gameContainer.style.position = 'fixed';
+      gameContainer.style.top = '0';
+      gameContainer.style.left = '0';
+      gameContainer.style.width = '100vw';
+      gameContainer.style.height = '100vh';
+      gameContainer.style.zIndex = '999999';
+      gameContainer.style.overflow = 'hidden';
+      gameContainer.classList.add('pig-css-fullscreen');
+      _cssFullscreenActive = true;
+      fullscreenBtn.textContent = '⛶';
+    }
+
+    function exitCSSFullscreen(gameContainer) {
+      if (_cssFullscreenSavedStyles) {
+        gameContainer.style.position = _cssFullscreenSavedStyles.position;
+        gameContainer.style.top = _cssFullscreenSavedStyles.top;
+        gameContainer.style.left = _cssFullscreenSavedStyles.left;
+        gameContainer.style.width = _cssFullscreenSavedStyles.width;
+        gameContainer.style.height = _cssFullscreenSavedStyles.height;
+        gameContainer.style.zIndex = _cssFullscreenSavedStyles.zIndex;
+        gameContainer.style.overflow = _cssFullscreenSavedStyles.overflow;
+        _cssFullscreenSavedStyles = null;
+      }
+      gameContainer.classList.remove('pig-css-fullscreen');
+      _cssFullscreenActive = false;
+      fullscreenBtn.textContent = '⛶';
+    }
+
+    function isNativeFullscreenSupported() {
+      var el = document.documentElement;
+      return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen);
+    }
+
     if (fullscreenBtn) {
       fullscreenBtn.style.display = 'flex';
       fullscreenBtn.addEventListener('click', function() {
         var gameContainer = document.getElementById('pigGameContainer');
         if (!gameContainer) return;
-        
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          if (gameContainer.requestFullscreen) {
-            gameContainer.requestFullscreen();
-          } else if (gameContainer.webkitRequestFullscreen) {
-            gameContainer.webkitRequestFullscreen();
-          } else if (gameContainer.msRequestFullscreen) {
-            gameContainer.msRequestFullscreen();
-          }
-          fullscreenBtn.textContent = '⛶';
-        } else {
+
+        // If CSS fullscreen is active, exit it
+        if (_cssFullscreenActive) {
+          exitCSSFullscreen(gameContainer);
+          return;
+        }
+
+        // If native fullscreen is active, exit it
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
           if (document.exitFullscreen) {
             document.exitFullscreen();
           } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
           }
-          fullscreenBtn.textContent = '⛶';
+          return;
+        }
+
+        // Try native fullscreen first
+        if (isNativeFullscreenSupported()) {
+          var promise;
+          if (gameContainer.requestFullscreen) {
+            promise = gameContainer.requestFullscreen();
+          } else if (gameContainer.webkitRequestFullscreen) {
+            gameContainer.webkitRequestFullscreen();
+            fullscreenBtn.textContent = '⛶';
+            return;
+          } else if (gameContainer.msRequestFullscreen) {
+            gameContainer.msRequestFullscreen();
+            fullscreenBtn.textContent = '⛶';
+            return;
+          }
+          if (promise && promise.then) {
+            promise.then(function() {
+              fullscreenBtn.textContent = '⛶';
+            }).catch(function() {
+              // Native fullscreen failed (e.g. iOS), fall back to CSS
+              enterCSSFullscreen(gameContainer);
+            });
+          } else {
+            fullscreenBtn.textContent = '⛶';
+          }
+        } else {
+          // No native support, use CSS fullscreen
+          enterCSSFullscreen(gameContainer);
         }
       });
-      
-      // Listen for fullscreen change
+
+      // Listen for native fullscreen change
       document.addEventListener('fullscreenchange', function() {
         if (!document.fullscreenElement) {
           fullscreenBtn.textContent = '⛶';
