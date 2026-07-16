@@ -60,6 +60,79 @@
     }
   }
 
+  // === 修复小猪快跑数据（重新计算总分）===
+  // 调用方式：在浏览器控制台执行 repairPigRunData()
+  window.repairPigRunData = function() {
+    if (!classesData || !classesData.length) {
+      console.error('没有班级数据');
+      return;
+    }
+    
+    var repairedCount = 0;
+    classesData.forEach(function(cls) {
+      if (!cls.students) return;
+      cls.students.forEach(function(s) {
+        if (!s.quizState || !s.quizState.pigRunLevels) return;
+        
+        var qs = s.quizState;
+        var levels = qs.pigRunLevels || {};
+        var levelKeys = Object.keys(levels);
+        
+        if (levelKeys.length === 0) return;
+        
+        // 重新计算总分
+        var calculatedTotal = 0;
+        var maxLevel = 0;
+        var clearedCount = 0;
+        
+        levelKeys.forEach(function(k) {
+          var lvData = levels[k];
+          if (lvData && lvData.cleared) {
+            calculatedTotal += lvData.bestScore || 0;
+            clearedCount++;
+            var lv = parseInt(k);
+            if (lv > maxLevel) maxLevel = lv;
+          }
+        });
+        
+        // 如果计算结果与存储值不同，修复它
+        if (calculatedTotal !== qs.pigRunTotalScore) {
+          console.log('修复学生 ' + s.name + ' 的小猪快跑数据：');
+          console.log('  关卡数：' + levelKeys.length + '，已通关：' + clearedCount + '，最高关卡：' + maxLevel);
+          console.log('  原总分：' + qs.pigRunTotalScore + ' → 新总分：' + calculatedTotal);
+          qs.pigRunTotalScore = calculatedTotal;
+          repairedCount++;
+        }
+      });
+    });
+    
+    // 保存数据
+    if (typeof saveClassData === 'function') {
+      saveClassData();
+    }
+    
+    // 同步到 Supabase
+    if (typeof db !== 'undefined' && db) {
+      classesData.forEach(function(cls) {
+        if (!cls.students) return;
+        cls.students.forEach(function(s) {
+          if (s.quizState && s.quizState.pigRunTotalScore !== undefined) {
+            db.from('students').update({
+              quiz_state: JSON.stringify(s.quizState)
+            }).eq('id', s.id).then(function(r) {
+              if (r.error) {
+                console.error('同步学生 ' + s.name + ' 数据失败:', r.error.message);
+              }
+            });
+          }
+        });
+      });
+    }
+    
+    console.log('修复完成！共修复 ' + repairedCount + ' 个学生的数据');
+    return repairedCount;
+  };
+  
   // === 初始化学生的小猪快跑状态 ===
   function ensurePigRunState(student) {
     if (!student.quizState || typeof student.quizState !== 'object') {
@@ -77,15 +150,8 @@
       student.quizState.pigRunTools = { remove: 1, shuffle: 1, rotate: 1 };
     }
     
-    // 修复：重新计算总分，确保是各关卡最高分之和（防止旧数据累积错误）
-    var calculatedTotal = 0;
-    Object.keys(student.quizState.pigRunLevels).forEach(function(k) {
-      calculatedTotal += student.quizState.pigRunLevels[k].bestScore || 0;
-    });
-    // 如果计算结果与存储值不同，使用计算结果（修复旧数据）
-    if (calculatedTotal !== student.quizState.pigRunTotalScore) {
-      student.quizState.pigRunTotalScore = calculatedTotal;
-    }
+    // 注意：不再在这里重新计算总分，避免数据丢失
+    // 总分只在 saveLevelResult 中显式计算和更新
     
     return student.quizState;
   }
@@ -155,11 +221,23 @@
     if (typeof saveCoinsAndQuizState === 'function') {
       saveCoinsAndQuizState(student);
     } else if (typeof db !== 'undefined' && db) {
+      // 标记 quizState 为本地修改，防止 Realtime 事件覆盖
+      window._quizStateLocallyModified = true;
       db.from('students').update({
         coins: student.coins,
         quiz_state: JSON.stringify(qs)
       }).eq('id', student.id).then(function(r) {
-        if (r.error) console.error('[小猪快跑] 保存失败:', r.error.message);
+        if (r.error) {
+          console.error('[小猪快跑] 保存失败:', r.error.message);
+        } else {
+          // 保存成功后更新快照，防止 Realtime echo 覆盖
+          if (typeof _lastOwnWriteTime !== 'undefined') {
+            window._lastOwnWriteTime = Date.now();
+          }
+          if (typeof _takeSnapshot === 'function') {
+            _takeSnapshot();
+          }
+        }
       });
     }
 
@@ -277,7 +355,17 @@
       '.pig-level-card .lv-num{font-size:18px;font-weight:800;color:#333;}',
       '.pig-level-card .lv-score{font-size:11px;color:#d4a017;font-weight:600;}',
       '.pig-level-card .lv-coins{font-size:10px;color:#f5a623;}',
-      '.pig-level-card .lv-check{position:absolute;top:-4px;right:-4px;background:#52c41a;color:#fff;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;}'
+      '.pig-level-card .lv-check{position:absolute;top:-4px;right:-4px;background:#52c41a;color:#fff;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;}',
+      '.pig-game-container:-webkit-full-screen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;}',
+      '.pig-game-container:-moz-full-screen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;}',
+      '.pig-game-container:-ms-fullscreen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;}',
+      '.pig-game-container:fullscreen{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;}',
+      '.pig-game-container:fullscreen .pig-top-bar{position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(255,255,255,0.98)!important;}',
+      '.pig-game-container:fullscreen .pig-bottom-bar{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:9999!important;}',
+      '.pig-game-container:fullscreen .pig-game-board{position:absolute!important;top:60px!important;bottom:80px!important;left:0!important;right:0!important;}',
+      '.pig-game-container:-webkit-full-screen .pig-top-bar{position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:9999!important;background:rgba(255,255,255,0.98)!important;}',
+      '.pig-game-container:-webkit-full-screen .pig-bottom-bar{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:9999!important;}',
+      '.pig-game-container:-webkit-full-screen .pig-game-board{position:absolute!important;top:60px!important;bottom:80px!important;left:0!important;right:0!important;}',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -457,8 +545,13 @@
 
   function onBGMEnded() {
     bgmIndex = (bgmIndex + 1) % BGM_URLS.length;
-    bgmAudio.src = BGM_URLS[bgmIndex];
-    bgmAudio.play().catch(function() {});
+    // 间隔15秒后再播放下一首
+    setTimeout(function() {
+      if (bgmEnabled && bgmAudio) {
+        bgmAudio.src = BGM_URLS[bgmIndex];
+        bgmAudio.play().catch(function() {});
+      }
+    }, 15000);
   }
 
   function startBGM() {
@@ -615,7 +708,10 @@
     html += '<div style="display:flex;align-items:center;gap:3px;background:rgba(255,255,255,0.95);padding:4px 8px;border-radius:8px;font-weight:bold;color:#b8860b;font-size:13px;border:2px solid #5ea832;box-shadow:0 2px 0 #3a7a1d;"><span>🏆</span><span id="pigTotalScore">' + (qs.pigRunTotalScore || 0) + '</span></div>';
     html += '</div>';
     html += '<div class="pig-level-title" style="font-size:18px;">第<span id="pigLevelNum">' + level + '</span>关</div>';
+    html += '<div style="display:flex;gap:4px;">';
+    html += '<button class="pig-btn-icon" id="pigFullscreenBtn" style="width:32px;height:32px;border-radius:8px;font-size:14px;display:none;">⛶</button>';
     html += '<button class="pig-btn-icon" id="pigSoundBtn" style="width:32px;height:32px;border-radius:8px;font-size:14px;">🔊</button>';
+    html += '</div>';
     html += '</div>';
     // Game container
     html += '<div class="pig-game-container" id="pigGameContainer">';
@@ -1091,6 +1187,48 @@
       var bgmOn = toggleBGM();
       soundBtn.textContent = bgmOn ? '🔊' : '🔇';
     });
+    
+    // Fullscreen button (mobile only)
+    var fullscreenBtn = document.getElementById('pigFullscreenBtn');
+    if (fullscreenBtn && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+      fullscreenBtn.style.display = 'flex';
+      fullscreenBtn.addEventListener('click', function() {
+        var gameContainer = document.getElementById('pigGameContainer');
+        if (!gameContainer) return;
+        
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (gameContainer.requestFullscreen) {
+            gameContainer.requestFullscreen();
+          } else if (gameContainer.webkitRequestFullscreen) {
+            gameContainer.webkitRequestFullscreen();
+          } else if (gameContainer.msRequestFullscreen) {
+            gameContainer.msRequestFullscreen();
+          }
+          fullscreenBtn.textContent = '⛶';
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
+          fullscreenBtn.textContent = '⛶';
+        }
+      });
+      
+      // Listen for fullscreen change
+      document.addEventListener('fullscreenchange', function() {
+        if (!document.fullscreenElement) {
+          fullscreenBtn.textContent = '⛶';
+        }
+      });
+      document.addEventListener('webkitfullscreenchange', function() {
+        if (!document.webkitFullscreenElement) {
+          fullscreenBtn.textContent = '⛶';
+        }
+      });
+    }
     pauseBtn.addEventListener('click', togglePause);
     resumeBtn.addEventListener('click', togglePause);
     if (quitBtn) quitBtn.addEventListener('click', backToSelect);
