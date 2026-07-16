@@ -872,15 +872,20 @@
   // === 每日一练自定义题库 ===
   var _dailyCustomQuestions = null; // null=未加载, []=已加载但空, [...]=有题目
   var _dailyCustomLoading = false;
+  var _dailyLoadingPromise = null; // 跟踪进行中的加载
 
   function loadDailyCustomQuestions(teacherId) {
-    if (!teacherId || _dailyCustomLoading) return Promise.resolve();
+    if (!teacherId) return Promise.resolve();
     if (_dailyCustomQuestions !== null) return Promise.resolve();
+    if (_dailyCustomLoading && _dailyLoadingPromise) return _dailyLoadingPromise; // 正在加载，返回同一个 promise
+    if (typeof db === 'undefined' || !db) {
+      console.warn('[每日一练] db 未初始化，无法加载自定义题库');
+      return Promise.resolve();
+    }
     _dailyCustomLoading = true;
-    if (typeof db === 'undefined' || !db) { _dailyCustomLoading = false; return Promise.resolve(); }
-    return db.from('daily_quiz_questions').select('*').eq('teacher_id', teacherId).order('created_at', { ascending: false }).then(function(r) {
+    _dailyLoadingPromise = db.from('daily_quiz_questions').select('*').eq('teacher_id', teacherId).order('created_at', { ascending: false }).then(function(r) {
       _dailyCustomLoading = false;
-      if (r.error) { console.warn('[每日一练] 加载自定义题库失败:', r.error.message); _dailyCustomQuestions = null; return; }
+      if (r.error) { console.warn('[每日一练] 加载自定义题库失败:', r.error.message); _dailyCustomQuestions = null; _dailyLoadingPromise = null; return; }
       if (r.data && r.data.length > 0) {
         _dailyCustomQuestions = r.data.map(function(q) {
           var opts = [];
@@ -892,13 +897,16 @@
         _dailyCustomQuestions = [];
         console.log('[每日一练] 教师无自定义题目，使用默认题库');
       }
-    }).catch(function(e) { _dailyCustomLoading = false; console.warn('[每日一练] 加载自定义题库异常:', e); });
+    }).catch(function(e) { _dailyCustomLoading = false; _dailyLoadingPromise = null; console.warn('[每日一练] 加载自定义题库异常:', e); });
+    return _dailyLoadingPromise;
   }
 
   // 教师或学生进入取金阁时自动加载自定义题库
+  var _dailyQuizAutoLoadRetry = 0;
   var _dailyQuizAutoLoad = function() {
     if (typeof currentUser === 'undefined' || !currentUser) return;
     if (_dailyCustomQuestions !== null) return; // 已加载过
+    if (_dailyCustomLoading) return; // 正在加载中
 
     var teacherId = null;
 
@@ -906,30 +914,42 @@
       // 教师：直接用自己的 ID
       teacherId = currentUser.id;
     } else if (currentUser.type === 'student') {
-      // 学生：从班级数据中找到 teacher_id
+      // 学生：直接从 Supabase 查询 teacher_id（不依赖 classesData，因为 let 声明跨 script 不可访问）
       var classId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
-      if (classId && typeof classesData !== 'undefined' && classesData) {
-        for (var i = 0; i < classesData.length; i++) {
-          if (classesData[i].id === classId) {
-            teacherId = classesData[i].teacher_id;
-            break;
-          }
-        }
-      }
-      // 如果 classesData 还没加载，尝试从 Supabase 查
-      if (!teacherId && typeof db !== 'undefined' && db) {
-        db.from('classes').select('teacher_id').eq('id', classId).single().then(function(r) {
-          if (r.data && r.data.teacher_id) {
-            loadDailyCustomQuestions(r.data.teacher_id);
-          }
-        });
+      if (!classId) {
+        console.warn('[每日一练] 学生无 classId，无法加载自定义题库');
         return;
       }
+      if (typeof db === 'undefined' || !db) {
+        // db 还没初始化，重试（最多 10 次）
+        if (_dailyQuizAutoLoadRetry < 10) {
+          _dailyQuizAutoLoadRetry++;
+          console.log('[每日一练] db 未就绪，第 ' + _dailyQuizAutoLoadRetry + ' 次重试...');
+          setTimeout(_dailyQuizAutoLoad, 500);
+        } else {
+          console.warn('[每日一练] db 始终未就绪，放弃加载自定义题库');
+        }
+        return;
+      }
+      _dailyQuizAutoLoadRetry = 0;
+      console.log('[每日一练] 学生端查询 teacher_id, classId=' + classId);
+      db.from('classes').select('teacher_id').eq('id', classId).single().then(function(r) {
+        if (r.data && r.data.teacher_id) {
+          console.log('[每日一练] 找到 teacher_id=' + r.data.teacher_id);
+          loadDailyCustomQuestions(r.data.teacher_id).then(function() {
+            if (typeof renderQuizPage === 'function') renderQuizPage();
+          });
+        } else {
+          console.warn('[每日一练] 未找到 teacher_id:', r.error || '无数据');
+        }
+      }).catch(function(e) {
+        console.warn('[每日一练] 查询 teacher_id 失败:', e);
+      });
+      return;
     }
 
     if (teacherId) {
       loadDailyCustomQuestions(teacherId).then(function() {
-        // 加载完成后重新渲染取金阁页面，使自定义题目生效
         if (typeof renderQuizPage === 'function') renderQuizPage();
       });
     }

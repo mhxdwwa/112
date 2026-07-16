@@ -461,23 +461,26 @@
   // === 自定义题库（从 Supabase 加载）===
   var customQuestionBank = null; // null = 未加载, [] = 已加载但为空, [...] = 有题目
   var customQuestionsLoading = false;
+  var _loadingPromise = null; // 跟踪进行中的加载，让并发调用者可以等待
 
   // 从 Supabase 加载教师自定义题目
   function loadCustomQuestions(teacherId) {
-    if (!teacherId || customQuestionsLoading) return Promise.resolve();
+    if (!teacherId) return Promise.resolve();
     if (customQuestionBank !== null) return Promise.resolve(); // 已加载
-    customQuestionsLoading = true;
-    
+    if (customQuestionsLoading && _loadingPromise) return _loadingPromise; // 正在加载，返回同一个 promise
+
     if (typeof db === 'undefined' || !db) {
-      customQuestionsLoading = false;
+      console.warn('[小猪快跑] db 未初始化，无法加载自定义题库');
       return Promise.resolve();
     }
-    
-    return db.from('pig_run_questions').select('*').eq('teacher_id', teacherId).order('created_at', { ascending: false }).then(function(r) {
+
+    customQuestionsLoading = true;
+    _loadingPromise = db.from('pig_run_questions').select('*').eq('teacher_id', teacherId).order('created_at', { ascending: false }).then(function(r) {
       customQuestionsLoading = false;
       if (r.error) {
         console.warn('[小猪快跑] 加载自定义题库失败:', r.error.message);
         customQuestionBank = null;
+        _loadingPromise = null;
         return;
       }
       if (r.data && r.data.length > 0) {
@@ -499,8 +502,10 @@
       }
     }).catch(function(e) {
       customQuestionsLoading = false;
+      _loadingPromise = null;
       console.warn('[小猪快跑] 加载自定义题库异常:', e);
     });
+    return _loadingPromise;
   }
 
   // 获取当前可用题库（优先自定义，降级默认）
@@ -597,9 +602,12 @@
   window._stopPigRunBGM = stopBGM;
 
   // === 自动加载自定义题库（教师和学生都加载）===
+  var _pigRunLoadRetryCount = 0;
+
   function _pigRunAutoLoadQuestions() {
     if (typeof currentUser === 'undefined' || !currentUser) return;
     if (customQuestionBank !== null) return; // 已加载过
+    if (customQuestionsLoading) return; // 正在加载中，等待结果
     
     var teacherId = null;
     
@@ -607,33 +615,42 @@
       // 教师：直接用自己的 ID
       teacherId = currentUser.id;
     } else if (currentUser.type === 'student') {
-      // 学生：从班级数据中找到 teacher_id
+      // 学生：直接从 Supabase 查询 teacher_id（不依赖 classesData，因为 let 声明跨 script 不可访问）
       var classId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
-      if (classId && typeof classesData !== 'undefined' && classesData) {
-        for (var i = 0; i < classesData.length; i++) {
-          if (classesData[i].id === classId) {
-            teacherId = classesData[i].teacher_id;
-            break;
-          }
-        }
-      }
-      // 如果 classesData 还没加载，尝试从 Supabase 查
-      if (!teacherId && typeof db !== 'undefined' && db) {
-        db.from('classes').select('teacher_id').eq('id', classId).single().then(function(r) {
-          if (r.data && r.data.teacher_id) {
-            loadCustomQuestions(r.data.teacher_id).then(function() {
-              // 加载完成后重新渲染页面，使自定义题目生效
-              renderPigRunPage();
-            });
-          }
-        });
+      if (!classId) {
+        console.warn('[小猪快跑] 学生无 classId，无法加载自定义题库');
         return;
       }
+      if (typeof db === 'undefined' || !db) {
+        // db 还没初始化，重试（最多 10 次）
+        if (_pigRunLoadRetryCount < 10) {
+          _pigRunLoadRetryCount++;
+          console.log('[小猪快跑] db 未就绪，第 ' + _pigRunLoadRetryCount + ' 次重试...');
+          setTimeout(_pigRunAutoLoadQuestions, 500);
+        } else {
+          console.warn('[小猪快跑] db 始终未就绪，放弃加载自定义题库');
+        }
+        return;
+      }
+      _pigRunLoadRetryCount = 0;
+      console.log('[小猪快跑] 学生端查询 teacher_id, classId=' + classId);
+      db.from('classes').select('teacher_id').eq('id', classId).single().then(function(r) {
+        if (r.data && r.data.teacher_id) {
+          console.log('[小猪快跑] 找到 teacher_id=' + r.data.teacher_id);
+          loadCustomQuestions(r.data.teacher_id).then(function() {
+            renderPigRunPage();
+          });
+        } else {
+          console.warn('[小猪快跑] 未找到 teacher_id:', r.error || '无数据');
+        }
+      }).catch(function(e) {
+        console.warn('[小猪快跑] 查询 teacher_id 失败:', e);
+      });
+      return;
     }
     
     if (teacherId) {
       loadCustomQuestions(teacherId).then(function() {
-        // 加载完成后重新渲染页面，使自定义题目生效
         renderPigRunPage();
       });
     }
