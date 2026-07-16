@@ -1472,10 +1472,24 @@
     html += '<button onclick="backToPigRunLevels()" style="background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">← 返回</button>';
     html += '</div>';
     
+    // ★ 学生当前使用的题库状态
+    var usingCustom = customQuestionBank && customQuestionBank.length > 0;
+    if (usingCustom) {
+      html += '<div style="background:linear-gradient(135deg,#e8ffe8,#d0f0d0);border-radius:12px;padding:14px;border:2px solid #52c41a;margin-bottom:16px;text-align:center;">';
+      html += '<div style="font-size:15px;font-weight:800;color:#389e0d;">✅ 学生当前使用：您导入的自定义题库</div>';
+      html += '<div style="font-size:13px;color:#555;margin-top:6px;">共 <strong>' + customQuestionBank.length + '</strong> 道题目，已替代系统默认题库</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="background:linear-gradient(135deg,#fff8e0,#ffefb0);border-radius:12px;padding:14px;border:2px solid #f0c040;margin-bottom:16px;text-align:center;">';
+      html += '<div style="font-size:15px;font-weight:800;color:#b08800;">📦 学生当前使用：系统默认题库</div>';
+      html += '<div style="font-size:13px;color:#888;margin-top:6px;">共 <strong>' + questionBank.length + '</strong> 道题目（您尚未导入自定义题目）</div>';
+      html += '</div>';
+    }
+    
     // Stats
     html += '<div style="background:#f0fff0;border-radius:12px;padding:12px;border:1px solid #90ee90;margin-bottom:16px;">';
     html += '<div style="font-size:14px;font-weight:700;color:#389e0d;margin-bottom:8px;">题库概况</div>';
-    html += '<div style="font-size:13px;color:#555;">总题数：<strong>' + questions.length + '</strong></div>';
+    html += '<div style="font-size:13px;color:#555;">自定义题数：<strong>' + questions.length + '</strong></div>';
     if (Object.keys(chapterStats).length > 0) {
       html += '<div style="font-size:12px;color:#888;margin-top:4px;">章节分布：';
       var chKeys = Object.keys(chapterStats);
