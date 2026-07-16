@@ -920,7 +920,8 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     // Only teachers can revoke operations; students cannot
     if(!isReverted && isCurrentMonth && !isStudentView){
       btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog(${log.id});closeModal();}">撤销</button>`;
-      if(snap && snap.quizStateSnapshot) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;" onclick="restoreToLogEntry(${log.id})">恢复到此</button>` + btnHtml;
+      // v46: Show "恢复到此" button for all logs with snapshot
+      if(snap && (snap.coinsAfter !== undefined || snap.quizStateSnapshot)) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry(${log.id})">恢复到此</button>` + btnHtml;
     }
     html += `<div class="history-log-item ${isReverted?'history-reverted':''}" style="${opacity}border-left:3px solid ${color};padding-left:14px;">
       <div style="flex:1;min-width:0;">
