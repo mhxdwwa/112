@@ -432,6 +432,56 @@
     audio.play().catch(function() {});
   }
 
+  // === 背景音乐（BGM）===
+  var BGM_URLS = [
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/1.mp3',
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/2.mp3',
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/3.mp3',
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/4.mp3'
+  ];
+  var bgmAudio = null;
+  var bgmIndex = 0;
+  var bgmEnabled = true;
+
+  function initBGM() {
+    if (bgmAudio) {
+      bgmAudio.pause();
+      bgmAudio.removeEventListener('ended', onBGMEnded);
+    }
+    bgmAudio = new Audio(BGM_URLS[bgmIndex]);
+    bgmAudio.volume = 0.4;
+    bgmAudio.addEventListener('ended', onBGMEnded);
+  }
+
+  function onBGMEnded() {
+    bgmIndex = (bgmIndex + 1) % BGM_URLS.length;
+    bgmAudio.src = BGM_URLS[bgmIndex];
+    bgmAudio.play().catch(function() {});
+  }
+
+  function startBGM() {
+    if (!bgmAudio) initBGM();
+    if (bgmEnabled) {
+      bgmAudio.play().catch(function() {});
+    }
+  }
+
+  function stopBGM() {
+    if (bgmAudio) {
+      bgmAudio.pause();
+    }
+  }
+
+  function toggleBGM() {
+    bgmEnabled = !bgmEnabled;
+    if (bgmEnabled) {
+      if (bgmAudio) bgmAudio.play().catch(function() {});
+    } else {
+      if (bgmAudio) bgmAudio.pause();
+    }
+    return bgmEnabled;
+  }
+
   // === 渲染小猪快跑页面（关卡选择）===
   function renderPigRunPage() {
     var container = document.getElementById('pigRunContent');
@@ -991,6 +1041,7 @@
     function backToSelect() {
       winModal.classList.remove('show');
       stopTimer();
+      stopBGM();
       // 重新渲染关卡选择
       qs = ensurePigRunState(student);
       renderLevelSelect(container, student, qs);
@@ -1032,8 +1083,8 @@
     shuffleBtn.addEventListener('click', function(){ onToolClick('shuffle'); });
     rotateBtn.addEventListener('click', function(){ onToolClick('rotate'); });
     soundBtn.addEventListener('click', function(){
-      gState.soundEnabled = !gState.soundEnabled;
-      soundBtn.textContent = gState.soundEnabled ? '🔊' : '🔇';
+      var bgmOn = toggleBGM();
+      soundBtn.textContent = bgmOn ? '🔊' : '🔇';
     });
     pauseBtn.addEventListener('click', togglePause);
     resumeBtn.addEventListener('click', togglePause);
@@ -1045,6 +1096,7 @@
     loadLevel(gState.level);
     updateUI();
     startTimer();
+    startBGM();
   }
 
   // === 题库管理界面 ===
