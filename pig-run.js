@@ -205,7 +205,7 @@
       '.pig{position:absolute;cursor:pointer;z-index:10;transition:left 0.085s linear,top 0.085s linear;will-change:left,top;}',
       '.pig:active{transform:scale(0.96);}',
       '.pig-hit{position:absolute;inset:-12px;border-radius:50%;z-index:20;}',
-      '.pig-inner{position:absolute;inset:0;width:100%;height:100%;background-image:url("'+PIG_IMG_URL+'");background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;}',
+      '.pig-inner{position:absolute;inset:0;width:100%;height:100%;background-size:contain;background-position:center;background-repeat:no-repeat;pointer-events:none;}',
       '.pig[data-dir="down"] .pig-inner{transform:rotate(0deg) scale(1.7);}',
       '.pig[data-dir="up"] .pig-inner{transform:rotate(180deg) scale(1.7);}',
       '.pig[data-dir="left"] .pig-inner{transform:rotate(90deg) scale(1.7);}',
@@ -280,8 +280,13 @@
     document.head.appendChild(style);
   }
 
-  // === 小猪图片 CDN 地址（webp 压缩版）===
-  var PIG_IMG_URL = 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA.webp';
+  // === 小猪图片 CDN 地址（webp 压缩版，4种皮肤随机分配）===
+  var PIG_IMG_URLS = [
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA.webp',
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA1.webp',
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA2.webp',
+    'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/%E5%B0%8F%E7%8C%AA3.webp'
+  ];
 
   // === 数学题库（完整60道，忠实于原始代码）===
   var questionBank = [
@@ -719,7 +724,9 @@
       pig.className = 'pig';
       pig.dataset.id = id;
       pig.dataset.dir = dir;
-      pig.innerHTML = '<div class="pig-hit"></div><div class="pig-inner"></div>';
+      // 随机分配4种小猪皮肤之一
+      var randomImg = PIG_IMG_URLS[Math.floor(Math.random() * PIG_IMG_URLS.length)];
+      pig.innerHTML = '<div class="pig-hit"></div><div class="pig-inner" style="background-image:url(\''+randomImg+'\')"></div>';
       pig.addEventListener('click', function(e) {
         e.stopPropagation();
         if (gState.paused || gState.animating) return;
