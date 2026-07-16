@@ -1188,9 +1188,9 @@
       soundBtn.textContent = bgmOn ? '🔊' : '🔇';
     });
     
-    // Fullscreen button (mobile only)
+    // Fullscreen button (all devices)
     var fullscreenBtn = document.getElementById('pigFullscreenBtn');
-    if (fullscreenBtn && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+    if (fullscreenBtn) {
       fullscreenBtn.style.display = 'flex';
       fullscreenBtn.addEventListener('click', function() {
         var gameContainer = document.getElementById('pigGameContainer');

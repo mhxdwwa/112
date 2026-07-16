@@ -370,6 +370,9 @@
     var container = document.getElementById('quizContent');
     if (!container) return;
 
+    // 自动加载自定义题库（教师和学生都会加载）
+    _dailyQuizAutoLoad();
+
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
     
     if (!isStudentView) {
@@ -892,11 +895,43 @@
     }).catch(function(e) { _dailyCustomLoading = false; console.warn('[每日一练] 加载自定义题库异常:', e); });
   }
 
-  // 教师进入取金阁时自动加载
+  // 教师或学生进入取金阁时自动加载自定义题库
   var _dailyQuizAutoLoad = function() {
-    if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
-      var teacherId = currentUser.id;
-      if (teacherId && _dailyCustomQuestions === null) loadDailyCustomQuestions(teacherId);
+    if (typeof currentUser === 'undefined' || !currentUser) return;
+    if (_dailyCustomQuestions !== null) return; // 已加载过
+
+    var teacherId = null;
+
+    if (currentUser.type === 'teacher') {
+      // 教师：直接用自己的 ID
+      teacherId = currentUser.id;
+    } else if (currentUser.type === 'student') {
+      // 学生：从班级数据中找到 teacher_id
+      var classId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
+      if (classId && typeof classesData !== 'undefined' && classesData) {
+        for (var i = 0; i < classesData.length; i++) {
+          if (classesData[i].id === classId) {
+            teacherId = classesData[i].teacher_id;
+            break;
+          }
+        }
+      }
+      // 如果 classesData 还没加载，尝试从 Supabase 查
+      if (!teacherId && typeof db !== 'undefined' && db) {
+        db.from('classes').select('teacher_id').eq('id', classId).single().then(function(r) {
+          if (r.data && r.data.teacher_id) {
+            loadDailyCustomQuestions(r.data.teacher_id);
+          }
+        });
+        return;
+      }
+    }
+
+    if (teacherId) {
+      loadDailyCustomQuestions(teacherId).then(function() {
+        // 加载完成后重新渲染取金阁页面，使自定义题目生效
+        if (typeof renderQuizPage === 'function') renderQuizPage();
+      });
     }
   };
 
