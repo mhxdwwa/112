@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v21 - 彻底重写全屏逻辑：移动端全部使用内联样式CSS全屏(最可靠)
+// v22 - 修复CSS全屏降级：不隐藏#quiz-page(游戏容器)，只隐藏其他页面
 
 (function() {
   'use strict';
@@ -1214,107 +1214,153 @@
     var _isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-    // Track saved inline styles for restoration
-    var _cssFullscreenSavedStyles = {};
+    // Saved styles for restoration on exit
+    var _fsSaved = {};
 
     function enterCSSFullscreen() {
       var wrapEl = document.querySelector('.pig-run-wrap');
       if (!wrapEl) { console.warn('[PigRun] .pig-run-wrap not found'); return; }
 
-      // === 1. Use INLINE STYLES for maximum reliability (overrides everything) ===
-      var htmlEl = document.documentElement;
-      var bodyEl = document.body;
-      var quizTab = document.getElementById('quizPigRunContent');
+      var quizPage = document.getElementById('quiz-page');
+      var quizPigRun = document.getElementById('quizPigRunContent');
       var pigContent = document.getElementById('pigRunContent');
       var navBar = document.querySelector('.nav-bar');
-      var allPages = document.querySelectorAll('.page');
-      var quizTabs = document.querySelector('.quiz-tabs');
+      var musicPanel = document.getElementById('musicPanel');
+      var footer = document.querySelector('.cute-footer');
+      var contentContainer = document.querySelector('.content-container');
+      var quizTabsEl = document.querySelector('.quiz-tabs');
+      var gc = document.getElementById('pigGameContainer');
 
-      // Save original styles
-      _cssFullscreenSavedStyles = {
-        html: htmlEl.style.cssText,
-        body: bodyEl.style.cssText,
+      // Save all original inline styles (empty string = had none)
+      _fsSaved = {
+        html: document.documentElement.style.cssText,
+        body: document.body.style.cssText,
+        navBar: navBar ? navBar.style.cssText : null,
+        musicPanel: musicPanel ? musicPanel.style.cssText : null,
+        footer: footer ? footer.style.cssText : null,
+        contentContainer: contentContainer ? contentContainer.style.cssText : null,
+        quizPage: quizPage ? quizPage.style.cssText : null,
+        quizTabs: quizTabsEl ? quizTabsEl.style.cssText : null,
+        quizPigRun: quizPigRun ? quizPigRun.style.cssText : null,
+        pigContent: pigContent ? pigContent.style.cssText : null,
         wrap: wrapEl.style.cssText,
-        gameContainer: (document.getElementById('pigGameContainer') || {}).style ? document.getElementById('pigGameContainer').style.cssText : '',
-        quizTab: quizTab ? quizTab.style.cssText : '',
-        pigContent: pigContent ? pigContent.style.cssText : '',
-        navBar: navBar ? navBar.style.cssText : '',
-        scrollTop: bodyEl.scrollTop || htmlEl.scrollTop
+        gc: gc ? gc.style.cssText : null,
+        scrollTop: document.body.scrollTop || document.documentElement.scrollTop
       };
 
-      // Hide nav bar
-      if (navBar) navBar.style.cssText = 'display:none!important;';
-      // Hide all .page elements
-      for (var i = 0; i < allPages.length; i++) {
-        allPages[i].style.setProperty('display', 'none', 'important');
-      }
-      // Hide quiz tabs
-      if (quizTabs) quizTabs.style.cssText = 'display:none!important;';
+      // Save original classes for quizPigRunContent
+      _fsSaved.quizPigRunClass = quizPigRun ? quizPigRun.className : '';
 
-      // Make quiz pig-run tab fill viewport
-      if (quizTab) {
-        quizTab.style.cssText = 'display:block!important;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;height:100dvh!important;z-index:2147483646!important;margin:0!important;padding:0!important;background:#4a8f26!important;overflow:hidden!important;';
+      // === Hide everything except the game ===
+      if (navBar) navBar.style.cssText = 'display:none!important;';
+      if (musicPanel) musicPanel.style.cssText = 'display:none!important;';
+      if (footer) footer.style.cssText = 'display:none!important;';
+
+      // Hide other .page elements (NOT #quiz-page — it contains the game!)
+      var pages = document.querySelectorAll('.page');
+      for (var i = 0; i < pages.length; i++) {
+        if (pages[i].id !== 'quiz-page') {
+          pages[i].style.setProperty('display', 'none', 'important');
+        }
       }
+
+      // === Make #quiz-page fill viewport ===
+      if (quizPage) {
+        quizPage.style.cssText = 'display:block!important;position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;height:100dvh!important;margin:0!important;padding:0!important;border-radius:0!important;border:none!important;box-shadow:none!important;z-index:999998!important;overflow:hidden!important;background:#4a8f26!important;backdrop-filter:none!important;';
+      }
+
+      // Hide quiz tabs (每日一练/小猪快跑 switcher)
+      if (quizTabsEl) quizTabsEl.style.cssText = 'display:none!important;';
+
+      // Hide the daily quiz tab content
+      var quizDaily = document.getElementById('quizDailyContent');
+      if (quizDaily) {
+        _fsSaved.quizDaily = quizDaily.style.cssText;
+        quizDaily.style.cssText = 'display:none!important;';
+      }
+
+      // Make #quizPigRunContent fill the quiz-page
+      if (quizPigRun) {
+        // Remove 'active' class dependency — use inline style directly
+        quizPigRun.style.cssText = 'display:block!important;width:100%!important;height:100%!important;margin:0!important;padding:0!important;';
+      }
+
+      // Make #pigRunContent fill its parent
       if (pigContent) {
-        pigContent.style.cssText = 'margin:0!important;padding:0!important;width:100%!important;height:100%!important;';
+        pigContent.style.cssText = 'margin:0!important;padding:0!important;width:100%!important;height:100%!important;background:#4a8f26!important;';
       }
 
       // Make .pig-run-wrap fill viewport
-      wrapEl.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;max-height:none!important;z-index:2147483647!important;overflow:hidden!important;margin:0!important;padding:0!important;border-radius:0!important;';
+      wrapEl.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;max-height:none!important;z-index:999999!important;overflow:hidden!important;margin:0!important;padding:0!important;border-radius:0!important;background:linear-gradient(180deg,#7bc043 0%,#5ea832 30%,#4a8f26 70%,#3a7a1d 100%)!important;';
 
-      // Remove aspect-ratio from game container
-      var gc = document.getElementById('pigGameContainer');
+      // Remove aspect-ratio from game container, make it fill wrap
       if (gc) {
         gc.style.setProperty('aspect-ratio', 'unset', 'important');
         gc.style.setProperty('border-radius', '0', 'important');
         gc.style.setProperty('width', '100%', 'important');
         gc.style.setProperty('height', '100%', 'important');
+        gc.style.setProperty('max-width', 'none', 'important');
+        gc.style.setProperty('max-height', 'none', 'important');
       }
 
       // Lock body scroll
-      htmlEl.style.setProperty('overflow', 'hidden', 'important');
-      bodyEl.style.setProperty('overflow', 'hidden', 'important');
-      bodyEl.style.setProperty('position', 'fixed', 'important');
-      bodyEl.style.setProperty('width', '100%', 'important');
-      bodyEl.style.setProperty('height', '100%', 'important');
-      bodyEl.style.setProperty('top', '0', 'important');
-      bodyEl.style.setProperty('left', '0', 'important');
-      bodyEl.style.setProperty('margin', '0', 'important');
-      bodyEl.style.setProperty('padding', '0', 'important');
+      document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+      document.body.style.setProperty('overflow', 'hidden', 'important');
+      document.body.style.setProperty('position', 'fixed', 'important');
+      document.body.style.setProperty('width', '100%', 'important');
+      document.body.style.setProperty('height', '100%', 'important');
+      document.body.style.setProperty('top', '0', 'important');
+      document.body.style.setProperty('left', '0', 'important');
+      document.body.style.setProperty('margin', '0', 'important');
+      document.body.style.setProperty('padding', '0', 'important');
 
       _cssFullscreenActive = true;
       fullscreenBtn.textContent = '⛶';
-      console.log('[PigRun] CSS fullscreen entered (inline styles)');
+      console.log('[PigRun] CSS fullscreen entered');
     }
 
     function exitCSSFullscreen() {
       var wrapEl = document.querySelector('.pig-run-wrap');
-      var quizTab = document.getElementById('quizPigRunContent');
+      var quizPage = document.getElementById('quiz-page');
+      var quizPigRun = document.getElementById('quizPigRunContent');
       var pigContent = document.getElementById('pigRunContent');
       var navBar = document.querySelector('.nav-bar');
-      var allPages = document.querySelectorAll('.page');
-      var quizTabs = document.querySelector('.quiz-tabs');
+      var musicPanel = document.getElementById('musicPanel');
+      var footer = document.querySelector('.cute-footer');
+      var contentContainer = document.querySelector('.content-container');
+      var quizTabsEl = document.querySelector('.quiz-tabs');
+      var quizDaily = document.getElementById('quizDailyContent');
       var gc = document.getElementById('pigGameContainer');
 
-      // Restore all saved inline styles
-      document.documentElement.style.cssText = _cssFullscreenSavedStyles.html || '';
-      document.body.style.cssText = _cssFullscreenSavedStyles.body || '';
-      if (wrapEl) wrapEl.style.cssText = _cssFullscreenSavedStyles.wrap || '';
-      if (gc) gc.style.cssText = _cssFullscreenSavedStyles.gameContainer || '';
-      if (quizTab) quizTab.style.cssText = _cssFullscreenSavedStyles.quizTab || '';
-      if (pigContent) pigContent.style.cssText = _cssFullscreenSavedStyles.pigContent || '';
-      if (navBar) navBar.style.cssText = _cssFullscreenSavedStyles.navBar || '';
-      for (var i = 0; i < allPages.length; i++) {
-        allPages[i].style.removeProperty('display');
+      // Restore all saved styles
+      document.documentElement.style.cssText = _fsSaved.html || '';
+      document.body.style.cssText = _fsSaved.body || '';
+      if (navBar && _fsSaved.navBar !== null) navBar.style.cssText = _fsSaved.navBar;
+      if (musicPanel && _fsSaved.musicPanel !== null) musicPanel.style.cssText = _fsSaved.musicPanel;
+      if (footer && _fsSaved.footer !== null) footer.style.cssText = _fsSaved.footer;
+      if (contentContainer && _fsSaved.contentContainer !== null) contentContainer.style.cssText = _fsSaved.contentContainer;
+      if (quizPage && _fsSaved.quizPage !== null) quizPage.style.cssText = _fsSaved.quizPage;
+      if (quizTabsEl && _fsSaved.quizTabs !== null) quizTabsEl.style.cssText = _fsSaved.quizTabs;
+      if (quizDaily && _fsSaved.quizDaily !== undefined && _fsSaved.quizDaily !== null) quizDaily.style.cssText = _fsSaved.quizDaily;
+      if (quizPigRun && _fsSaved.quizPigRun !== null) quizPigRun.style.cssText = _fsSaved.quizPigRun;
+      if (pigContent && _fsSaved.pigContent !== null) pigContent.style.cssText = _fsSaved.pigContent;
+      if (wrapEl) wrapEl.style.cssText = _fsSaved.wrap || '';
+      if (gc && _fsSaved.gc !== null) gc.style.cssText = _fsSaved.gc;
+
+      // Restore other pages visibility
+      var pages = document.querySelectorAll('.page');
+      for (var i = 0; i < pages.length; i++) {
+        if (pages[i].id !== 'quiz-page') {
+          pages[i].style.removeProperty('display');
+        }
       }
-      if (quizTabs) quizTabs.style.removeProperty('display');
 
       // Restore scroll
-      if (_cssFullscreenSavedStyles.scrollTop) {
-        window.scrollTo(0, _cssFullscreenSavedStyles.scrollTop);
+      if (_fsSaved.scrollTop) {
+        window.scrollTo(0, _fsSaved.scrollTop);
       }
 
-      _cssFullscreenSavedStyles = {};
+      _fsSaved = {};
       _cssFullscreenActive = false;
       fullscreenBtn.textContent = '⛶';
       console.log('[PigRun] CSS fullscreen exited');
@@ -1361,7 +1407,6 @@
                 enterCSSFullscreen();
               });
             } else {
-              // No promise returned, assume it worked
               fullscreenBtn.textContent = '⛶';
             }
           } catch(e) {
