@@ -1325,15 +1325,15 @@
       var shuffleAvailable = gState.tools.shuffle >= cost && !gState.levelToolsUsed.shuffle && gState.levelTotalUsed < maxUses;
       var rotateAvailable = gState.tools.rotate >= cost && !gState.levelToolsUsed.rotate && gState.levelTotalUsed < maxUses;
       
-      removeCnt.textContent = gState.tools.remove;
-      shuffleCnt.textContent = gState.tools.shuffle;
-      rotateCnt.textContent = gState.tools.rotate;
-      
-      // 50关后显示消耗成本
+      // 显示道具数量（50关后用小字显示消耗）
       if (level >= 50) {
-        removeCnt.textContent = gState.tools.remove + '(-' + cost + ')';
-        shuffleCnt.textContent = gState.tools.shuffle + '(-' + cost + ')';
-        rotateCnt.textContent = gState.tools.rotate + '(-' + cost + ')';
+        removeCnt.innerHTML = gState.tools.remove + '<span style="font-size:10px;color:#ff6b6b;margin-left:2px;">(-' + cost + ')</span>';
+        shuffleCnt.innerHTML = gState.tools.shuffle + '<span style="font-size:10px;color:#ff6b6b;margin-left:2px;">(-' + cost + ')</span>';
+        rotateCnt.innerHTML = gState.tools.rotate + '<span style="font-size:10px;color:#ff6b6b;margin-left:2px;">(-' + cost + ')</span>';
+      } else {
+        removeCnt.textContent = gState.tools.remove;
+        shuffleCnt.textContent = gState.tools.shuffle;
+        rotateCnt.textContent = gState.tools.rotate;
       }
       
       removeIcon.textContent = gState.tools.remove > 0 ? '🗑' : '📝';
