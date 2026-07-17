@@ -842,7 +842,10 @@
       currentQuizTool: null,
       currentQuiz: null,
       answerAttempts: 0,
-      totalPigCount: 0
+      totalPigCount: 0,
+      // 50关后道具限制追踪
+      levelToolsUsed: { remove: false, shuffle: false, rotate: false },
+      levelTotalUsed: 0
     };
 
     var board = document.getElementById('pigGameBoard');
@@ -974,8 +977,36 @@
       var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
       playSound('click', gState.soundEnabled);
-      if (gState.activeTool === 'remove') { doRemove(id); gState.activeTool=null; updateToolUI(); return; }
-      if (gState.activeTool === 'rotate') { doRotate(id); gState.activeTool=null; updateToolUI(); return; }
+      if (gState.activeTool === 'remove') {
+        // 50关后：实际使用时扣除道具值
+        if (gState.level >= 50) {
+          var cost = 2;
+          gState.tools.remove -= cost;
+          gState.levelToolsUsed.remove = true;
+          gState.levelTotalUsed++;
+          if (qs.pigRunTools) qs.pigRunTools.remove = gState.tools.remove;
+          if (typeof saveClassData === 'function') saveClassData();
+        }
+        doRemove(id);
+        gState.activeTool = null;
+        updateToolUI();
+        return;
+      }
+      if (gState.activeTool === 'rotate') {
+        // 50关后：实际使用时扣除道具值
+        if (gState.level >= 50) {
+          var cost = 2;
+          gState.tools.rotate -= cost;
+          gState.levelToolsUsed.rotate = true;
+          gState.levelTotalUsed++;
+          if (qs.pigRunTools) qs.pigRunTools.rotate = gState.tools.rotate;
+          if (typeof saveClassData === 'function') saveClassData();
+        }
+        doRotate(id);
+        gState.activeTool = null;
+        updateToolUI();
+        return;
+      }
       runPig(pig);
     }
 
@@ -1026,10 +1057,12 @@
     function doRemove(id) {
       var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
-      gState.tools.remove--;
-      // 同步到持久化存储并保存
-      if (qs.pigRunTools) qs.pigRunTools.remove = gState.tools.remove;
-      if (typeof saveClassData === 'function') saveClassData();
+      // 50关后道具扣除已在 onToolClick 中处理
+      if (gState.level < 50) {
+        gState.tools.remove--;
+        if (qs.pigRunTools) qs.pigRunTools.remove = gState.tools.remove;
+        if (typeof saveClassData === 'function') saveClassData();
+      }
       pig.el.style.transition='transform 0.25s ease, opacity 0.25s ease';
       pig.el.style.transform='scale(0)'; pig.el.style.opacity='0';
       setTimeout(function(){
@@ -1042,10 +1075,12 @@
     function doRotate(id) {
       var pig = gState.pigs.find(function(p){return p.id===id;});
       if (!pig) return;
-      gState.tools.rotate--;
-      // 同步到持久化存储并保存
-      if (qs.pigRunTools) qs.pigRunTools.rotate = gState.tools.rotate;
-      if (typeof saveClassData === 'function') saveClassData();
+      // 50关后道具扣除已在 onToolClick 中处理
+      if (gState.level < 50) {
+        gState.tools.rotate--;
+        if (qs.pigRunTools) qs.pigRunTools.rotate = gState.tools.rotate;
+        if (typeof saveClassData === 'function') saveClassData();
+      }
       var order=['up','right','down','left'];
       var idx=order.indexOf(pig.dir);
       pig.dir = order[(idx+1)%4];
@@ -1054,11 +1089,14 @@
     }
 
     function doShuffle() {
-      if (gState.tools.shuffle<=0||gState.animating||gState.paused) return;
-      gState.tools.shuffle--;
-      // 同步到持久化存储并保存
-      if (qs.pigRunTools) qs.pigRunTools.shuffle = gState.tools.shuffle;
-      if (typeof saveClassData === 'function') saveClassData();
+      if (gState.animating||gState.paused) return;
+      // 50关后道具扣除已在 onToolClick 中处理
+      if (gState.level < 50) {
+        if (gState.tools.shuffle<=0) return;
+        gState.tools.shuffle--;
+        if (qs.pigRunTools) qs.pigRunTools.shuffle = gState.tools.shuffle;
+        if (typeof saveClassData === 'function') saveClassData();
+      }
       var allPos=[];
       for (var y=0;y<ROWS;y++) for (var x=0;x<COLS;x++) allPos.push({x:x,y:y});
       for (var i=allPos.length-1;i>0;i--) { var j=Math.floor(Math.random()*(i+1)); var t=allPos[i];allPos[i]=allPos[j];allPos[j]=t; }
@@ -1073,12 +1111,60 @@
 
     function onToolClick(toolName) {
       if (gState.paused) return;
-      if (gState.tools[toolName] > 0) {
-        if (toolName==='shuffle') { doShuffle(); updateUI(); return; }
-        gState.activeTool = gState.activeTool===toolName ? null : toolName;
-        updateToolUI();
+      var level = gState.level;
+      var cost = level >= 50 ? 2 : 1;
+      var toolValue = gState.tools[toolName];
+      
+      // 50关后：检查道具限制
+      if (level >= 50) {
+        // 检查该道具本局是否已使用
+        if (gState.levelToolsUsed[toolName]) {
+          alert('本局该道具已使用过，无法再次使用');
+          return;
+        }
+        
+        // 检查本局总使用次数限制
+        var maxUses = level >= 100 ? 2 : 3;
+        if (gState.levelTotalUsed >= maxUses) {
+          alert('本局道具使用次数已达上限（' + maxUses + '次）');
+          return;
+        }
+        
+        // 检查道具值是否足够
+        if (toolValue < cost) {
+          alert('道具值不够，请答题获取道具值');
+          openQuiz(toolName);
+          return;
+        }
+        
+        // 可以使用道具
+        if (toolName === 'shuffle') {
+          // shuffle立即使用，扣除道具值
+          gState.tools[toolName] -= cost;
+          gState.levelToolsUsed[toolName] = true;
+          gState.levelTotalUsed++;
+          if (qs.pigRunTools) qs.pigRunTools[toolName] = gState.tools[toolName];
+          if (typeof saveClassData === 'function') saveClassData();
+          doShuffle();
+          updateUI();
+        } else {
+          // remove/rotate激活，不扣除，等点击小猪时才扣除
+          gState.activeTool = gState.activeTool === toolName ? null : toolName;
+          updateToolUI();
+        }
       } else {
-        openQuiz(toolName);
+        // 50关前：原有逻辑
+        if (toolValue > 0) {
+          if (toolName === 'shuffle') {
+            doShuffle();
+            updateUI();
+          } else {
+            gState.activeTool = gState.activeTool === toolName ? null : toolName;
+            updateToolUI();
+          }
+        } else {
+          openQuiz(toolName);
+        }
       }
     }
 
@@ -1205,6 +1291,9 @@
       gState.level++;
       winModal.classList.remove('show');
       // 道具不重置，保持当前数量（持久化存储）
+      // 重置本局道具使用追踪（50关后生效）
+      gState.levelToolsUsed = { remove: false, shuffle: false, rotate: false };
+      gState.levelTotalUsed = 0;
       gState.timeSeconds = 0;
       timeDisplay.textContent = '00:00';
       startTimer();
@@ -1227,15 +1316,34 @@
     }
 
     function updateToolUI() {
+      var level = gState.level;
+      var cost = level >= 50 ? 2 : 1;
+      var maxUses = level >= 100 ? 2 : (level >= 50 ? 3 : 999);
+      
+      // 计算每个道具的状态
+      var removeAvailable = gState.tools.remove >= cost && !gState.levelToolsUsed.remove && gState.levelTotalUsed < maxUses;
+      var shuffleAvailable = gState.tools.shuffle >= cost && !gState.levelToolsUsed.shuffle && gState.levelTotalUsed < maxUses;
+      var rotateAvailable = gState.tools.rotate >= cost && !gState.levelToolsUsed.rotate && gState.levelTotalUsed < maxUses;
+      
       removeCnt.textContent = gState.tools.remove;
       shuffleCnt.textContent = gState.tools.shuffle;
       rotateCnt.textContent = gState.tools.rotate;
-      removeIcon.textContent = gState.tools.remove>0 ? '🗑' : '📝';
-      shuffleIcon.textContent = gState.tools.shuffle>0 ? '🔀' : '📝';
-      rotateIcon.textContent = gState.tools.rotate>0 ? '🔄' : '📝';
-      removeBtn.classList.toggle('disabled', gState.tools.remove<=0);
-      shuffleBtn.classList.toggle('disabled', gState.tools.shuffle<=0);
-      rotateBtn.classList.toggle('disabled', gState.tools.rotate<=0);
+      
+      // 50关后显示消耗成本
+      if (level >= 50) {
+        removeCnt.textContent = gState.tools.remove + '(-' + cost + ')';
+        shuffleCnt.textContent = gState.tools.shuffle + '(-' + cost + ')';
+        rotateCnt.textContent = gState.tools.rotate + '(-' + cost + ')';
+      }
+      
+      removeIcon.textContent = gState.tools.remove > 0 ? '🗑' : '📝';
+      shuffleIcon.textContent = gState.tools.shuffle > 0 ? '🔀' : '📝';
+      rotateIcon.textContent = gState.tools.rotate > 0 ? '🔄' : '📝';
+      
+      removeBtn.classList.toggle('disabled', !removeAvailable && level >= 50 || gState.tools.remove <= 0 && level < 50);
+      shuffleBtn.classList.toggle('disabled', !shuffleAvailable && level >= 50 || gState.tools.shuffle <= 0 && level < 50);
+      rotateBtn.classList.toggle('disabled', !rotateAvailable && level >= 50 || gState.tools.rotate <= 0 && level < 50);
+      
       removeBtn.classList.toggle('active', gState.activeTool==='remove');
       rotateBtn.classList.toggle('active', gState.activeTool==='rotate');
     }
