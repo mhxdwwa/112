@@ -1132,7 +1132,7 @@
         
         // 检查道具值是否足够
         if (toolValue < cost) {
-          alert('道具值不够，请答题获取道具值');
+          alert('使用道具需消耗2点道具值，请答题获取道具值。');
           openQuiz(toolName);
           return;
         }
@@ -1325,16 +1325,10 @@
       var shuffleAvailable = gState.tools.shuffle >= cost && !gState.levelToolsUsed.shuffle && gState.levelTotalUsed < maxUses;
       var rotateAvailable = gState.tools.rotate >= cost && !gState.levelToolsUsed.rotate && gState.levelTotalUsed < maxUses;
       
-      // 显示道具数量（50关后用小字显示消耗）
-      if (level >= 50) {
-        removeCnt.innerHTML = gState.tools.remove + '<span style="font-size:10px;color:#ff6b6b;margin-left:2px;">(-' + cost + ')</span>';
-        shuffleCnt.innerHTML = gState.tools.shuffle + '<span style="font-size:10px;color:#ff6b6b;margin-left:2px;">(-' + cost + ')</span>';
-        rotateCnt.innerHTML = gState.tools.rotate + '<span style="font-size:10px;color:#ff6b6b;margin-left:2px;">(-' + cost + ')</span>';
-      } else {
-        removeCnt.textContent = gState.tools.remove;
-        shuffleCnt.textContent = gState.tools.shuffle;
-        rotateCnt.textContent = gState.tools.rotate;
-      }
+      // 显示道具数量
+      removeCnt.textContent = gState.tools.remove;
+      shuffleCnt.textContent = gState.tools.shuffle;
+      rotateCnt.textContent = gState.tools.rotate;
       
       removeIcon.textContent = gState.tools.remove > 0 ? '🗑' : '📝';
       shuffleIcon.textContent = gState.tools.shuffle > 0 ? '🔀' : '📝';
