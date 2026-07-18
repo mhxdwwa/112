@@ -79,38 +79,31 @@ function _takeSnapshot() {
   _snapshotClassesData = (typeof structuredClone === 'function')
     ? structuredClone(classesData)
     : JSON.parse(JSON.stringify(classesData));
-  console.log('[DAL] Snapshot taken: ' + _snapshotClassesData.length + ' classes');
+  // 预构建索引 Map，加速后续查找（O(1) 替代 O(n) 线性扫描）
+  _snapshotStudentMap = {};
+  _snapshotPetMap = {};
+  _snapshotClassesData.forEach(function(cls) {
+    (cls.students || []).forEach(function(stu) {
+      _snapshotStudentMap[stu.id] = stu;
+      (stu.pets || []).forEach(function(pet) {
+        _snapshotPetMap[pet.id] = pet;
+      });
+    });
+  });
+  console.log('[DAL] Snapshot taken: ' + _snapshotClassesData.length + ' classes, ' +
+    Object.keys(_snapshotStudentMap).length + ' students, ' +
+    Object.keys(_snapshotPetMap).length + ' pets (indexed)');
 }
 
+var _snapshotStudentMap = {};
+var _snapshotPetMap = {};
+
 function _findStudentInSnapshot(studentId) {
-  if (!_snapshotClassesData) return null;
-  for (var i = 0; i < _snapshotClassesData.length; i++) {
-    var cls = _snapshotClassesData[i];
-    if (cls.students) {
-      for (var j = 0; j < cls.students.length; j++) {
-        if (cls.students[j].id == studentId) return cls.students[j];
-      }
-    }
-  }
-  return null;
+  return _snapshotStudentMap[studentId] || null;
 }
 
 function _findPetInSnapshot(petId) {
-  if (!_snapshotClassesData) return null;
-  for (var i = 0; i < _snapshotClassesData.length; i++) {
-    var cls = _snapshotClassesData[i];
-    if (cls.students) {
-      for (var j = 0; j < cls.students.length; j++) {
-        var stu = cls.students[j];
-        if (stu.pets) {
-          for (var k = 0; k < stu.pets.length; k++) {
-            if (stu.pets[k].id == petId) return stu.pets[k];
-          }
-        }
-      }
-    }
-  }
-  return null;
+  return _snapshotPetMap[petId] || null;
 }
 
 /* ===== Smart Merge Refresh (v7.0) ===== */
