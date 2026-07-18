@@ -8,30 +8,34 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com" crossorigin>
+<link rel="preconnect" href="https://xbygooadskfqllnhwmet.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="dns-prefetch" href="https://xbygooadskfqllnhwmet.supabase.co">
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap"></noscript>
 <title>🍭宠物世界🍭</title>
 <link rel="stylesheet" href="style.css?v=19">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script defer src="auth-check.js?v=18"></script>
+<link rel="preload" as="script" href="auth-check.js?v=19">
+  <script defer src="auth-check.js?v=19"></script>
 </head>
 <body>
-<!-- Loading overlay - shown until data loads from Supabase -->
-<div id="dalLoadingOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#fff5f8,#f0f8ff);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s;">
-  <div style="font-size:60px;animation:dalBounce 1s infinite;">🐾</div>
-  <div style="font-size:20px;font-weight:700;color:#666;margin-top:16px;">正在加载数据...</div>
-  <div style="font-size:14px;color:#999;margin-top:8px;">从云端同步最新数据</div>
+<!-- Loading overlay - v45: lightweight, non-blocking, hidden as soon as cache renders -->
+<div id="dalLoadingOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#fff5f8,#f0f8ff);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.3s;">
+  <div style="font-size:48px;animation:dalBounce 0.8s infinite;">🐾</div>
+  <div style="font-size:16px;font-weight:700;color:#666;margin-top:12px;">正在加载数据...</div>
 </div>
-<style>@keyframes dalBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}</style>
+<style>@keyframes dalBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}</style>
 <script>
-// Hide loading overlay when DAL is ready
+// v45: Hide loading overlay — called by dal.js cache render OR Supabase load
 window._hideDalLoading = function() {
   var ov = document.getElementById('dalLoadingOverlay');
-  if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.remove(); }, 500); }
+  if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.remove(); }, 300); }
 };
-// Safety timeout: if DAL doesn't load in 15s, hide overlay anyway
-setTimeout(function() { window._hideDalLoading(); }, 15000);
+// Safety timeout: if DAL doesn't load in 10s, hide overlay anyway (reduced from 15s)
+setTimeout(function() { window._hideDalLoading(); }, 10000);
 </script>
 <!-- 可爱浮动装饰 -->
 <div class="deco-corner deco-corner-tl">🐾</div>
@@ -626,7 +630,8 @@ function escapeHtmlSimple(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
-<script defer src="dal.js?v=50"></script>
+<link rel="preload" as="script" href="dal.js?v=51">
+<script defer src="dal.js?v=51"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
