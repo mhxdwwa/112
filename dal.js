@@ -855,6 +855,68 @@ function _getOpLogClassIds() {
 // v69: Load operation logs from operation_logs table ONLY (single source of truth).
 // All blob logs have been migrated to the table — no longer reading from classes.operation_logs_json.
 // Local unsynced logs (negative IDs) are preserved and merged with server logs.
+// v69: Query EACH CLASS INDIVIDUALLY — Supabase has a hard 1000-row limit per query.
+// Using .in('class_id', [2,3,4]) returns max 1000 rows TOTAL across all classes,
+// which means some classes get 0 rows. Per-class queries ensure every class gets its data.
+var _OP_LOGS_COLS = 'id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, snapshot, reverted, created_at';
+var _OP_LOGS_PAGE = 1000; // Supabase max rows per query
+
+function _rowToLog(row) {
+  var extra = row.extra || {};
+  var log = {
+    id: row.id,
+    timestamp: row.created_at,
+    classId: row.class_id,
+    studentId: row.student_id,
+    studentName: row.student_name || '',
+    actionType: row.action_type || '',
+    details: row.details || '',
+    coinDelta: parseInt(row.coin_delta) || 0,
+    expDelta: parseInt(row.exp_delta) || 0,
+    petId: row.pet_id || null,
+    extra: (extra.pkChallenge || extra.pkAccept || extra.shopItemId || extra.causedDeath || extra.starvation || extra.prevGrowth !== undefined) ? extra : (extra.fullSnapshot ? null : extra),
+    snapshot: row.snapshot || null,
+    fullSnapshot: extra.fullSnapshot || null,
+    reverted: !!row.reverted,
+    _synced: true,
+    _fromSupabase: true
+  };
+  if (log.extra && log.extra.fullSnapshot) {
+    var cleanExtra = {};
+    Object.keys(log.extra).forEach(function(k) {
+      if (k !== 'fullSnapshot') cleanExtra[k] = log.extra[k];
+    });
+    log.extra = Object.keys(cleanExtra).length > 0 ? cleanExtra : null;
+  }
+  return log;
+}
+
+// Fetch ALL logs for a single class, paginating in chunks of _OP_LOGS_PAGE
+function _fetchAllLogsForClass(classId) {
+  var allRows = [];
+  function fetchPage(offset) {
+    return db.from('operation_logs')
+      .select(_OP_LOGS_COLS)
+      .eq('class_id', classId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + _OP_LOGS_PAGE - 1)
+      .then(function(r) {
+        if (r.error) {
+          console.error('[DAL] v69 query error for class', classId, 'offset', offset + ':', r.error.message);
+          return allRows;
+        }
+        var rows = r.data || [];
+        allRows = allRows.concat(rows);
+        if (rows.length >= _OP_LOGS_PAGE) {
+          // Might be more pages — fetch next
+          return fetchPage(offset + _OP_LOGS_PAGE);
+        }
+        return allRows;
+      });
+  }
+  return fetchPage(0);
+}
+
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
@@ -872,45 +934,20 @@ function _loadOperationLogs() {
     }
     console.log('[DAL] v69 Loading operation logs for class_ids:', classIds);
 
-    // v69: Read ONLY from operation_logs table (single source of truth)
-    return db.from('operation_logs').select('id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, snapshot, reverted, created_at').in('class_id', classIds).order('created_at', { ascending: false }).then(function(tableR) {
-      var serverLogs = [];
-      if (tableR.error) {
-        console.error('[DAL] v69 operation_logs query failed:', tableR.error.message);
-        return;
-      }
+    // v69: Query each class INDIVIDUALLY with pagination to bypass 1000-row hard limit
+    var perClassQueries = classIds.map(function(cid) {
+      return _fetchAllLogsForClass(cid);
+    });
 
-      (tableR.data || []).forEach(function(row) {
-        var extra = row.extra || {};
-        var log = {
-          id: row.id,
-          timestamp: row.created_at,
-          classId: row.class_id,
-          studentId: row.student_id,
-          studentName: row.student_name || '',
-          actionType: row.action_type || '',
-          details: row.details || '',
-          coinDelta: parseInt(row.coin_delta) || 0,
-          expDelta: parseInt(row.exp_delta) || 0,
-          petId: row.pet_id || null,
-          extra: (extra.pkChallenge || extra.pkAccept || extra.shopItemId || extra.causedDeath || extra.starvation || extra.prevGrowth !== undefined) ? extra : (extra.fullSnapshot ? null : extra),
-          snapshot: row.snapshot || null,
-          fullSnapshot: extra.fullSnapshot || null,
-          reverted: !!row.reverted,
-          _synced: true,
-          _fromSupabase: true
-        };
-        // Clean up extra: remove fullSnapshot from it since it's now a top-level field
-        if (log.extra && log.extra.fullSnapshot) {
-          var cleanExtra = {};
-          Object.keys(log.extra).forEach(function(k) {
-            if (k !== 'fullSnapshot') cleanExtra[k] = log.extra[k];
-          });
-          log.extra = Object.keys(cleanExtra).length > 0 ? cleanExtra : null;
-        }
-        serverLogs.push(log);
+    return Promise.all(perClassQueries).then(function(perClassResults) {
+      var serverLogs = [];
+      perClassResults.forEach(function(rows, idx) {
+        rows.forEach(function(row) {
+          serverLogs.push(_rowToLog(row));
+        });
+        console.log('[DAL] v69 Class', classIds[idx] + ':', rows.length, 'logs loaded');
       });
-      console.log('[DAL] v69 Loaded ' + serverLogs.length + ' logs from operation_logs table');
+      console.log('[DAL] v69 Total from table:', serverLogs.length, 'logs');
 
       // Preserve any local unsynced logs (negative IDs, not yet in table)
       var localUnsynced = window.operationLogs.filter(function(l) {
@@ -918,21 +955,14 @@ function _loadOperationLogs() {
       });
 
       // v69: Content-based dedup — remove local unsynced logs that duplicate server logs
-      // This handles the case where a local log was synced to the table (got positive ID)
-      // but the local copy wasn't updated before the page closed.
-      var serverLogIds = {};
       var serverContentKeys = {};
       serverLogs.forEach(function(l) {
-        serverLogIds[l.id] = true;
-        // Content key: timestamp(19) + actionType + studentName (no studentId — table may have null)
         var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
         serverContentKeys[key] = true;
       });
 
       var dedupedLocal = localUnsynced.filter(function(l) {
-        // If local log has same ID as a server log, skip it
-        if (l.id > 0 && serverLogIds[l.id]) return false;
-        // If local log has same content as a server log, skip it
+        if (l.id > 0) return false; // positive ID = already in table
         var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
         if (serverContentKeys[key]) return false;
         return true;
@@ -945,7 +975,7 @@ function _loadOperationLogs() {
 
       // Backup to localStorage
       try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-      console.log('[DAL] v69 Total: ' + serverLogs.length + ' server logs, ' + dedupedLocal.length + ' local unsynced kept, ' + (localUnsynced.length - dedupedLocal.length) + ' deduped out');
+      console.log('[DAL] v69 Final: ' + serverLogs.length + ' server + ' + dedupedLocal.length + ' local unsynced = ' + window.operationLogs.length + ' total');
     });
   }).catch(function(e) {
     console.warn('[DAL] v69 _loadOperationLogs error:', e);
