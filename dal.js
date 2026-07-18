@@ -2342,10 +2342,13 @@ function _initDALCore() {
   // Show loading state
   _updateCloudStatus('syncing');
 
-  // v45: Try loading from cache FIRST for instant first paint
+  // v45: Load cache into classesData for faster data availability.
+  // We do NOT call init() here — the normal flow below handles all rendering.
+  // The cache just ensures classesData is populated immediately so that when
+  // the Supabase query returns, the merge/diff is faster and data is already warm.
   var cached = _loadFromCache();
   if (cached) {
-    _loadedFromCache = true;
+    // Pre-populate classesData from cache (will be overwritten by fresh load below)
     classesData = cached.classesData;
     if (cached.currentClassId && typeof currentClassId !== 'undefined') {
       currentClassId = cached.currentClassId;
@@ -2353,65 +2356,15 @@ function _initDALCore() {
     if (cached.customActions && typeof customActions !== 'undefined') {
       customActions = cached.customActions;
     }
-    if (cached.operationLogs && typeof window.operationLogs !== 'undefined') {
+    if (cached.operationLogs) {
       window.operationLogs = cached.operationLogs;
     }
-    _takeSnapshot();
-
-    // Render UI immediately with cached data
-    console.log('[DAL] Rendering from cache for instant paint...');
-    if (typeof init === 'function') init();
-    if (typeof renderClassList === 'function') renderClassList();
-    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-
-    // Hide loading overlay immediately — user sees data!
-    if (typeof window._hideDalLoading === 'function') window._hideDalLoading();
-    _dalReady = true;
-    _updateCloudStatus('syncing'); // Still syncing fresh data
-
-    // Wrap save functions early so user interactions are captured
-    wrapSaveFunctions();
-    applyStudentRestrictions();
-
-    // Setup cloud status click for manual sync
-    var cloudEl = document.getElementById('cloudSyncStatus');
-    if (cloudEl) {
-      cloudEl.style.cursor = 'pointer';
-      cloudEl.onclick = function() { forceManualSync(); };
-    }
-
-    // Now load fresh data from Supabase in background
-    console.log('[DAL] Background refresh from Supabase...');
-    loadFromSupabase().then(function() {
-      _loadedFromCache = false;
-      // Re-render with fresh data
-      if (typeof init === 'function') init();
-      if (typeof renderClassList === 'function') renderClassList();
-      if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-
-      // Setup realtime subscriptions
-      _setupRealtimeSubscriptions();
-      _setupPageLifecycle();
-
-      _updateCloudStatus('synced');
-      console.log('[DAL] Background refresh complete ✓');
-
-      // PK badge, RLS check, etc.
-      _postInitSetup();
-    }).catch(function(err) {
-      console.warn('[DAL] Background refresh failed, using cached data:', err.message);
-      _setupRealtimeSubscriptions();
-      _setupPageLifecycle();
-      _updateCloudStatus('error');
-      _postInitSetup();
-    });
-
-    return;
+    console.log('[DAL] Cache pre-loaded into memory');
   }
 
-  // No cache — do full load (original flow)
-  console.log('[DAL] No cache available, doing full load...');
+  // Full load from Supabase (single source of truth)
   loadFromSupabase().then(function() {
+    // Re-render the app with fresh data
     if (typeof init === 'function') init();
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
@@ -2441,8 +2394,20 @@ function _initDALCore() {
     console.error('[DAL] Init load failed:', err);
     _updateCloudStatus('error');
     _showNotification('数据加载失败，请刷新页面重试', 'error');
-    // Hide overlay even on failure (safety timeout will also do this)
     if (typeof window._hideDalLoading === 'function') window._hideDalLoading();
+
+    // v45: If we have cache data, at least render that instead of nothing
+    if (cached && cached.classesData && cached.classesData.length > 0) {
+      console.log('[DAL] Falling back to cached data after load failure...');
+      classesData = cached.classesData;
+      if (cached.currentClassId) currentClassId = cached.currentClassId;
+      if (typeof init === 'function') init();
+      if (typeof renderClassList === 'function') renderClassList();
+      if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+      wrapSaveFunctions();
+      applyStudentRestrictions();
+      _dalReady = true;
+    }
 
     setTimeout(function() {
       _dalReady = false;
