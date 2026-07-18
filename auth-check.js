@@ -32,7 +32,7 @@ async function checkLogin() {
   if (!userType || !userId) {
     // 没有登录信息，跳转到登录页
     window.location.href = 'login.html';
-    return;
+    return; // Stop execution — no currentUser set, _onAuthReady won't fire
   }
   
   // 如果有 Supabase 连接，验证 session（仅老师需要，学生不走 Supabase Auth）
@@ -124,4 +124,10 @@ async function logout() {
 }
 
 // 页面加载时检查登录
-checkLogin();
+checkLogin().then(function() {
+  // v45: Notify dal.js that auth is ready (event-driven init, no polling)
+  // Only fire if currentUser was actually set (not redirected to login)
+  if (currentUser && typeof window._onAuthReady === 'function') {
+    window._onAuthReady();
+  }
+});
