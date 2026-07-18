@@ -1659,7 +1659,12 @@ function _generateStudentCardHTML(s){
   const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
   let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
   const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
-  return `<div class="${cardClass}" data-sid="${s.id}" data-hash="${_studentDataHash(s)}" onclick="openStudentModal('${s.id}')">${fx.topHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}${fx.titleHtml}<div class="home-pet-middle">${esc(s.name)}·${esc(p.nickname||p.name)}<span class="rename-pet-btn" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" title="修改宠物名字">✏️</span></div><div class="home-pet-bottom"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;
+  // 检查宠物是否正在出逃（用于DOM重建时保持出逃状态）
+  const isEscaped = window._escapedPetIds && window._escapedPetIds.has(String(p.id));
+  const petImgStyle = isEscaped ? 'opacity:0;transition:opacity 0.3s;' : '';
+  const petImgAttr = isEscaped ? 'data-escape-hidden="1"' : '';
+  const escapeHint = isEscaped ? '<div class="escape-empty-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:13px;color:#cba090;font-weight:700;pointer-events:none;text-align:center;line-height:1.6;">🐾<br>出逃中…</div>' : '';
+  return `<div class="${cardClass}" data-sid="${s.id}" data-hash="${_studentDataHash(s)}" onclick="openStudentModal('${s.id}')">${fx.topHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1).replace('<img ', `<img style="${petImgStyle}" ${petImgAttr} `)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}${escapeHint}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}${fx.titleHtml}<div class="home-pet-middle">${esc(s.name)}·${esc(p.nickname||p.name)}<span class="rename-pet-btn" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" title="修改宠物名字">✏️</span></div><div class="home-pet-bottom"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;
   }else{return `<div class="home-pet-card" data-sid="${s.id}" data-hash="${_studentDataHash(s)}" onclick="showAdoptModal('${s.id}')"><div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}
 
 function _renderGridBatch(grid){
@@ -8860,6 +8865,8 @@ function petCardDrop(e){
 // ========== 宠物生机系统结束 ==========
 
 // ========== 闲置宠物出逃系统 ==========
+// 全局跟踪当前出逃中的宠物ID（用于DOM重建时保持出逃状态）
+window._escapedPetIds = new Set();
 (function(){
   const IDLE_THRESHOLD = 15000;       // 15秒无操作触发
   const ESCAPE_DURATION = 12000;      // 出逃持续12秒
@@ -9211,11 +9218,29 @@ function petCardDrop(e){
       if (!img && !emoji) return;
       const nameEl = card.querySelector('.home-pet-middle');
       const name = nameEl ? nameEl.textContent.trim().split('✏')[0].trim() : '宠物';
+      // 提取学生ID和宠物ID（从onclick属性）
+      const onclick = card.getAttribute('onclick') || '';
+      const studentIdMatch = onclick.match(/openStudentModal\('([^']+)'\)/);
+      const studentId = studentIdMatch ? studentIdMatch[1] : null;
+      // 从学生数据中获取活跃宠物ID
+      let petId = null;
+      if (studentId && typeof classesData !== 'undefined') {
+        for (const cls of classesData) {
+          const stu = cls.students.find(s => String(s.id) === String(studentId));
+          if (stu && stu.pets && stu.pets.length > 0) {
+            const activePet = stu.pets.find(p => String(p.id) === String(stu.activePetId)) || stu.pets[0];
+            if (activePet) petId = activePet.id;
+            break;
+          }
+        }
+      }
       result.push({
         card,
         imgSrc: img ? img.src : null,
         emoji: emoji ? emoji.textContent : null,
-        name
+        name,
+        studentId,
+        petId
       });
     });
     return result;
@@ -9417,6 +9442,8 @@ function petCardDrop(e){
       el.remove();
       // 从列表中移除
       escapedPets = escapedPets.filter(p => p !== petData);
+      // 从全局出逃集合中移除
+      if (petInfo.petId) window._escapedPetIds.delete(String(petInfo.petId));
       // 如果所有宠物都被捕获了，结束出逃状态
       if (escapedPets.length === 0) {
         escapeActive = false;
@@ -9753,6 +9780,8 @@ function petCardDrop(e){
         const personality = detectPersonality(petInfo);
         const petData = { el, petInfo, phase: 'jumpOut', caught: false, personality };
         escapedPets.push(petData);
+        // 记录出逃宠物ID（用于DOM重建时保持出逃状态）
+        if (petInfo.petId) window._escapedPetIds.add(String(petInfo.petId));
 
         // 点击捕获
         el.addEventListener('click', (e) => {
@@ -10046,6 +10075,8 @@ function petCardDrop(e){
       escapedPets.forEach(p => {
         if (p.el && p.el.isConnected) p.el.remove();
         if (p.petInfo && p.petInfo.card) showCardPet(p.petInfo.card);
+        // 从全局出逃集合中移除
+        if (p.petInfo && p.petInfo.petId) window._escapedPetIds.delete(String(p.petInfo.petId));
       });
       escapedPets = [];
       // 清理残留脚印和轨迹
@@ -10061,6 +10092,8 @@ function petCardDrop(e){
     escapedPets.forEach(p => {
       // 恢复卡片上的宠物图片
       if (p.petInfo && p.petInfo.card) showCardPet(p.petInfo.card);
+      // 从全局出逃集合中移除
+      if (p.petInfo && p.petInfo.petId) window._escapedPetIds.delete(String(p.petInfo.petId));
       if (p.el && p.el.isConnected) {
         p.el.style.transition = 'opacity 0.4s';
         p.el.style.opacity = '0';
