@@ -9427,7 +9427,17 @@ window._escapedPetIds = new Set();
     // 飞回卡片
     setTimeout(() => {
       if (!el.isConnected) return;
-      const endRect = petInfo.card.getBoundingClientRect();
+      // v47: 动态查找当前有效的卡片元素（可能被 renderHomePetGrid 重建过）
+      let currentCard = petInfo.card;
+      if (petInfo.studentId) {
+        const newCard = document.querySelector(`#homePetGrid .home-pet-card[data-sid="${petInfo.studentId}"]`);
+        if (newCard && newCard.isConnected) currentCard = newCard;
+      }
+      if (!currentCard || !currentCard.isConnected) { el.remove(); return; }
+      const endRect = currentCard.getBoundingClientRect();
+      // v47: 强制reflow确保移动端CSS transition生效
+      el.style.transition = 'none';
+      void el.offsetWidth;
       el.style.transition = 'left 0.6s ease-in, top 0.6s ease-in, opacity 0.6s';
       el.style.left = (endRect.left + endRect.width / 2 - 65) + 'px';
       el.style.top = (endRect.top + endRect.height / 2 - 65) + 'px';
@@ -9436,15 +9446,23 @@ window._escapedPetIds = new Set();
 
     // 恢复卡片
     setTimeout(() => {
-      showCardPet(petInfo.card);
-      petInfo.card.style.transition = 'transform 0.3s';
-      petInfo.card.style.transform = 'scale(1.08)';
-      setTimeout(() => {
-        petInfo.card.style.transform = '';
-        setTimeout(() => petInfo.card.style.transition = '', 300);
-      }, 300);
-      // === "刚回来"气喘吁吁状态（被捕获后也有）===
-      setTimeout(() => showJustReturnedState(petInfo.card), 400);
+      // v47: 动态查找当前有效的卡片元素
+      let currentCard = petInfo.card;
+      if (petInfo.studentId) {
+        const newCard = document.querySelector(`#homePetGrid .home-pet-card[data-sid="${petInfo.studentId}"]`);
+        if (newCard && newCard.isConnected) currentCard = newCard;
+      }
+      if (currentCard && currentCard.isConnected) {
+        showCardPet(currentCard);
+        currentCard.style.transition = 'transform 0.3s';
+        currentCard.style.transform = 'scale(1.08)';
+        setTimeout(() => {
+          currentCard.style.transform = '';
+          setTimeout(() => { currentCard.style.transition = ''; }, 300);
+        }, 300);
+        // === "刚回来"气喘吁吁状态（被捕获后也有）===
+        setTimeout(() => showJustReturnedState(currentCard), 400);
+      }
       el.remove();
       // 从列表中移除
       escapedPets = escapedPets.filter(p => p !== petData);
@@ -10158,7 +10176,6 @@ window._escapedPetIds = new Set();
             if (speechTimeout) clearTimeout(speechTimeout);
             if (animalSoundInterval) clearInterval(animalSoundInterval);
             if (petData.interactionInterval) clearInterval(petData.interactionInterval);
-            if (interactionInterval) clearInterval(interactionInterval);
           }
 
           // 时间到：跑回卡片
@@ -10185,7 +10202,11 @@ window._escapedPetIds = new Set();
             }
 
             // 飞回卡片位置
+            if (!currentCard || !currentCard.isConnected) { el.remove(); return; }
             const endRect = currentCard.getBoundingClientRect();
+            // v47: 先清除旧transition，强制reflow，再设置新transition（修复移动端CSS transition不生效）
+            el.style.transition = 'none';
+            void el.offsetWidth; // 强制reflow
             el.style.transition = 'left 0.8s ease-in, top 0.8s ease-in, opacity 0.8s';
             el.style.left = (endRect.left + endRect.width / 2 - 65) + 'px';
             el.style.top = (endRect.top + endRect.height / 2 - 65) + 'px';
