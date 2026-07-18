@@ -120,6 +120,8 @@ async function logout() {
   localStorage.removeItem('classId');
   localStorage.removeItem('className');
   localStorage.removeItem('qrLoginTime');
+  // v47: Clear DAL cache on logout to prevent cross-account data leakage
+  localStorage.removeItem('_dal_cache_v1');
   window.location.href = 'login.html';
 }
 
