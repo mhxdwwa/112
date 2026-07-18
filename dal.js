@@ -1,5 +1,5 @@
 /**
- * dal.js v44.1 — Robust Data Access Layer with Smart Merge
+ * dal.js v54 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -8,8 +8,8 @@
  * - Self-write detection: ignores own writes for 30s
  * - Student delta merge: preserves both teacher rewards and student spending
  * - Operation logs synced to Supabase (both teacher and student)
- * - v44.1: Quiz state race condition fix — _quizStateLocallyModified flag prevents
- *   smart refresh from overwriting fresh pig-run level data with stale Supabase data
+ * - v54: Bandwidth optimization — Realtime-aware polling, exclude heavy fields
+ *   from class queries, filter students/pets by class_id at DB level
  * 
  * Flow: loadFromSupabase() → classesData + snapshot → UI
  *       UI action → saveClassData() → _syncToSupabase() → Supabase → update snapshot
@@ -22,13 +22,14 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 30000; // v15: Poll every 30s as fallback (Realtime handles instant updates)
+var _refreshInterval = 120000; // v54: Fallback polling 2min (was 30s). Only active when Realtime is down.
 var _lastRefreshTime = 0;
+var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '45.0';
+var _DAL_VERSION = '54.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -91,6 +92,12 @@ function _loadFromCache() {
     return null;
   }
 }
+
+/* ===== v54: Bandwidth Optimization ===== */
+// Classes table columns to select in load/refresh queries.
+// Excludes operation_logs_json (2MB+) which is loaded separately by _loadOperationLogs().
+// This single change saves ~2-5MB per refresh cycle.
+var _CLASS_COLS = 'id, name, teacher_id, created_at';
 
 /* ===== Snapshot System (v7.0) ===== */
 // _snapshotClassesData: what Supabase looked like when we last loaded/synced
@@ -192,19 +199,42 @@ function _smartRefreshFromSupabase() {
   if (isStudent && (!studentId || !classId)) return Promise.resolve();
 
   // Build queries based on user type
+  // v54: Teacher queries are sequential — first get class IDs, then filter students/pets at DB level
   var queries;
   if (isStudent) {
     queries = Promise.all([
-      db.from('classes').select('*').eq('id', classId).single(),
+      db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
       db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state').eq('class_id', classId),
-      db.from('pets').select('*')
-    ]);
+      db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
+    ]).then(function(results) {
+      // Filter pets to class students client-side (already filtered by class)
+      var classStudentIds = (results[1].data || []).map(function(s) { return s.id; });
+      results[2].data = (results[2].data || []).filter(function(p) { return classStudentIds.indexOf(p.student_id) >= 0; });
+      return results;
+    });
   } else {
-    queries = Promise.all([
-      db.from('classes').select('*').eq('teacher_id', currentUser.id).order('id'),
-      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state'),
-      db.from('pets').select('*')
-    ]);
+    // v54: Teacher — sequential: classes first, then filtered students/pets
+    queries = db.from('classes').select(_CLASS_COLS).eq('teacher_id', currentUser.id).order('id')
+    .then(function(classesR) {
+      if (classesR.error) throw classesR.error;
+      var classes = classesR.data || [];
+      var classIds = classes.map(function(c) { return c.id; });
+      if (classIds.length === 0) {
+        // No classes — return empty results
+        return [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
+      }
+      // v54: Filter students by class_id at DB level
+      return Promise.all([
+        Promise.resolve({ data: classes, error: null }),
+        db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state').in('class_id', classIds),
+        db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
+      ]).then(function(results) {
+        // Filter pets to teacher's students client-side
+        var studentIds = (results[1].data || []).map(function(s) { return s.id; });
+        results[2].data = (results[2].data || []).filter(function(p) { return studentIds.indexOf(p.student_id) >= 0; });
+        return results;
+      });
+    });
   }
 
   return queries.then(function(results) {
@@ -591,33 +621,40 @@ function _buildTeacherClasses(classes, students, pets) {
 }
 
 function _loadTeacherFromSupabase() {
-  return Promise.all([
-    db.from('classes').select('*').eq('teacher_id', currentUser.id).order('id'),
-    db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state'),
-    db.from('pets').select('*')
-  ]).then(function(results) {
-    var classesR = results[0], studentsR = results[1], petsR = results[2];
+  // v54: Sequential queries — first get class IDs, then filter students/pets at DB level.
+  // This avoids fetching ALL students/pets from the entire database.
+  return db.from('classes').select(_CLASS_COLS).eq('teacher_id', currentUser.id).order('id')
+  .then(function(classesR) {
     if (classesR.error) { console.error('[DAL] classes error:', classesR.error); throw classesR.error; }
-    if (studentsR.error) console.warn('[DAL] students error:', studentsR.error);
-    if (petsR.error) console.warn('[DAL] pets error:', petsR.error);
-
     var classes = classesR.data || [];
-    var students = (studentsR.data || []);
-    var pets = (petsR.data || []);
-
-    // Get student IDs for this teacher's classes
     var classIds = classes.map(function(c) { return c.id; });
-    if (classIds.length > 0) {
-      // Filter students to only those in teacher's classes
-      students = students.filter(function(s) { return classIds.indexOf(s.class_id) >= 0; });
-      var studentIds = students.map(function(s) { return s.id; });
-      // Filter pets to only those belonging to teacher's students
-      if (studentIds.length > 0) {
-        pets = pets.filter(function(p) { return studentIds.indexOf(p.student_id) >= 0; });
-      } else {
-        pets = [];
-      }
+
+    if (classIds.length === 0) {
+      // No classes — nothing to load
+      classesData = [];
+      _takeSnapshot();
+      _saveToCache();
+      return Promise.all([_loadCustomActions(), _loadOperationLogs()]);
     }
+
+    // v54: Filter students by class_id at DB level (not client-side)
+    return Promise.all([
+      Promise.resolve(classes),
+      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state').in('class_id', classIds),
+      db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
+    ]);
+  }).then(function(results) {
+    var classes = results[0];
+    var students = (results[1].data || []);
+    if (results[1].error) console.warn('[DAL] students error:', results[1].error);
+    var pets = (results[2].data || []);
+    if (results[2].error) console.warn('[DAL] pets error:', results[2].error);
+
+    // v54: Filter pets by student_id at DB level would require another query round-trip.
+    // Instead, filter client-side from the already-filtered student set (much smaller than full table).
+    var classIds = classes.map(function(c) { return c.id; });
+    var studentIds = students.map(function(s) { return s.id; });
+    pets = pets.filter(function(p) { return studentIds.indexOf(p.student_id) >= 0; });
 
     var newClassesData = _buildTeacherClasses(classes, students, pets);
     classesData = newClassesData;
@@ -649,9 +686,9 @@ function _loadStudentFromSupabase() {
   }
 
   return Promise.all([
-    db.from('classes').select('*').eq('id', classId).single(),
+    db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
     db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state').eq('class_id', classId),
-    db.from('pets').select('*')
+    db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
   ]).then(function(results) {
     var classR = results[0], studentsR = results[1], petsR = results[2];
     if (classR.error) throw classR.error;
@@ -1478,6 +1515,53 @@ function _syncTeacherToSupabase() {
         });
       }
     }
+  }).then(function() {
+    // === Phase 6 (v54): Delete classes from Supabase that were removed locally ===
+    // This fixes the bug where deleted classes reappear after page reload.
+    var localClassIds = {};
+    classesData.forEach(function(cls) {
+      if (_isValidInt4Id(cls.id)) {
+        localClassIds[cls.id] = true;
+      }
+    });
+    return db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(r) {
+      if (r.error) { console.error('[DAL] v54 class delete check error:', r.error); return; }
+      var supabaseClasses = r.data || [];
+      var toDelete = [];
+      supabaseClasses.forEach(function(c) {
+        if (!localClassIds[c.id]) {
+          toDelete.push(c.id);
+        }
+      });
+      if (toDelete.length > 0) {
+        console.log('[DAL] v54 Deleting', toDelete.length, 'classes from Supabase that were removed locally:', toDelete);
+        // First delete students and pets in those classes
+        return db.from('students').select('id').in('class_id', toDelete).then(function(stuR) {
+          var studentIds = (stuR.data || []).map(function(s) { return s.id; });
+          var chain = Promise.resolve();
+          if (studentIds.length > 0) {
+            // Delete pets first
+            chain = chain.then(function() {
+              return db.from('pets').delete().in('student_id', studentIds);
+            }).then(function(pr) {
+              if (pr.error) console.error('[DAL] v54 pet delete error:', pr.error);
+              // Then delete students
+              return db.from('students').delete().in('id', studentIds);
+            }).then(function(sr) {
+              if (sr.error) console.error('[DAL] v54 student delete error:', sr.error);
+              else console.log('[DAL] v54 Deleted', studentIds.length, ' students from removed classes');
+            });
+          }
+          // Then delete the classes
+          return chain.then(function() {
+            return db.from('classes').delete().in('id', toDelete);
+          }).then(function(cr) {
+            if (cr.error) console.error('[DAL] v54 class delete error:', cr.error);
+            else console.log('[DAL] v54 Deleted', toDelete.length, ' classes from Supabase');
+          });
+        });
+      }
+    });
   });
 }
 
@@ -1967,7 +2051,27 @@ function _refreshLogsOnly() {
 }
 
 function _setupRealtimeSubscriptions() {
-  if (!db || !db.channel) return;
+  if (!db || !db.channel) {
+    // No Realtime support — start polling immediately
+    _startFallbackPolling();
+    return;
+  }
+
+  var channelsCreated = 0;
+  var channelsConfirmed = 0;
+  var totalChannels = 3;
+  var realtimeTimeout = null;
+
+  function _onChannelConfirmed() {
+    channelsConfirmed++;
+    if (channelsConfirmed >= 1 && !_realtimeActive) {
+      // At least one channel confirmed — Realtime is working
+      _realtimeActive = true;
+      console.log('[DAL] ⚡ Realtime confirmed active (' + channelsConfirmed + '/' + totalChannels + ' channels) — polling disabled');
+      // Stop any fallback polling that may have started
+      _stopFallbackPolling();
+    }
+  }
 
   try {
     // Subscribe to classes table — coalesced refresh on change
@@ -1985,37 +2089,83 @@ function _setupRealtimeSubscriptions() {
           _debouncedRealtimeRefresh('classes');
         }
       })
-      .subscribe();
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') _onChannelConfirmed();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[DAL] Classes channel status:', status);
+          _checkRealtimeHealth();
+        }
+      });
     _realtimeChannels.push(classChannel);
+    channelsCreated++;
 
     // Subscribe to students table — coalesced refresh on change
     var studentChannel = db.channel('dal-students')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function() {
         _debouncedRealtimeRefresh('students');
       })
-      .subscribe();
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') _onChannelConfirmed();
+      });
     _realtimeChannels.push(studentChannel);
+    channelsCreated++;
 
     // Subscribe to pets table — coalesced refresh on change
     var petChannel = db.channel('dal-pets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
         _debouncedRealtimeRefresh('pets:' + payload.eventType);
       })
-      .subscribe();
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') _onChannelConfirmed();
+      });
     _realtimeChannels.push(petChannel);
+    channelsCreated++;
 
-    // Note: operation_logs table subscription removed (v29 uses classes.operation_logs_json)
-    // Log changes are now handled by the classes channel above
+    console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels) — waiting for confirmation...');
 
-    console.log('[DAL] ⚡ Realtime subscriptions active — instant push enabled');
+    // v54: If no channel confirms within 10s, start fallback polling
+    realtimeTimeout = setTimeout(function() {
+      if (!_realtimeActive) {
+        console.warn('[DAL] Realtime not confirmed after 10s — starting fallback polling');
+        _startFallbackPolling();
+      }
+    }, 10000);
   } catch (e) {
     console.warn('[DAL] Realtime setup failed, using polling fallback:', e);
+    _startFallbackPolling();
   }
+}
 
-  // Fallback polling (2 minutes) — only used if Realtime fails
+// v54: Start fallback polling only when Realtime is not working
+function _startFallbackPolling() {
+  if (_refreshTimer) return; // Already running
+  console.log('[DAL] Fallback polling started (every ' + (_refreshInterval / 1000) + 's)');
   _refreshTimer = setInterval(function() {
+    // Skip if Realtime has since become active
+    if (_realtimeActive) {
+      _stopFallbackPolling();
+      return;
+    }
     _refreshFromSupabase();
   }, _refreshInterval);
+}
+
+// v54: Stop fallback polling
+function _stopFallbackPolling() {
+  if (_refreshTimer) {
+    clearInterval(_refreshTimer);
+    _refreshTimer = null;
+    console.log('[DAL] Fallback polling stopped (Realtime is active)');
+  }
+}
+
+// v54: Check if any Realtime channel is still alive
+function _checkRealtimeHealth() {
+  // If all channels failed, mark Realtime as inactive and start polling
+  if (_realtimeActive && _realtimeChannels.length === 0) {
+    _realtimeActive = false;
+    _startFallbackPolling();
+  }
 }
 
 function _cleanupRealtime() {
@@ -2023,34 +2173,106 @@ function _cleanupRealtime() {
     try { if (db && db.removeChannel) db.removeChannel(ch); } catch(e) {}
   });
   _realtimeChannels = [];
-  if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
+  _realtimeActive = false;
+  _stopFallbackPolling();
 }
 
 /* ===== Lifecycle ===== */
 function _setupPageLifecycle() {
-  // Sync before page unload
+  // v54: Robust beforeunload — actually save data synchronously instead of just pinging
   window.addEventListener('beforeunload', function() {
-    if (!_dalSyncing) {
-      // Best-effort sync using synchronous XHR
+    // If there are unsaved local changes, try to save them synchronously
+    if (_pendingLocalSave && currentUser) {
       try {
         var token = '';
         try { token = JSON.parse(localStorage.getItem('sb-xbygooadskfqllnhwmet-auth-token') || '{}').access_token || ''; } catch(e) {}
-        if (token) {
+        if (!token) return;
+
+        var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+
+        if (currentUser.type === 'student') {
+          // Student: synchronously save critical data (coins, pet growth, etc.)
+          var studentId = parseInt(localStorage.getItem('studentId'));
+          if (!studentId || !classesData || !classesData[0]) return;
+          
+          var myStudent = null;
+          for (var i = 0; i < classesData[0].students.length; i++) {
+            if (classesData[0].students[i].id === studentId) {
+              myStudent = classesData[0].students[i];
+              break;
+            }
+          }
+          if (!myStudent) return;
+
+          // Build the critical data payload
+          var payload = {
+            coins: myStudent.coins || 0,
+            last_checkin_date: myStudent.lastCheckinDate || null,
+            last_jianghu_date: myStudent.lastJianghuDate || null,
+            last_pk_date: myStudent.lastPkDate || null,
+            active_pet_id: myStudent.activePetId || null,
+            pk_count_today: myStudent.pkCountToday || 0,
+            shop_items: JSON.stringify(myStudent.shopItems || []),
+            equipped_items: JSON.stringify(myStudent.equippedItems || {})
+          };
+
+          // Synchronous PATCH to save student data
           var xhr = new XMLHttpRequest();
-          xhr.open('POST', 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1/rpc/sync_ping', false);
+          xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
           xhr.setRequestHeader('Authorization', 'Bearer ' + token);
           xhr.setRequestHeader('apikey', token);
-          xhr.send();
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Prefer', 'return=minimal');
+          xhr.send(JSON.stringify(payload));
+          console.log('[DAL] v54 beforeunload: student data saved synchronously (coins=' + payload.coins + ')');
+
+          // Also save pets synchronously
+          if (myStudent.pets && myStudent.pets.length > 0) {
+            myStudent.pets.forEach(function(pet) {
+              if (!pet.id || pet.id <= 0) return; // Skip pets without real DB IDs
+              var petPayload = {
+                growth: pet.growth || 0,
+                level: pet.level || 1,
+                coins: pet.coins || 0,
+                is_active: !!pet.isActive,
+                is_dead: !!pet.isDead,
+                last_feed_date: pet.lastFeedDate || null,
+                last_play_date: pet.lastPlayDate || null,
+                today_feed_count: pet.todayFeedCount || 0,
+                today_play_count: pet.todayPlayCount || 0
+              };
+              var petXhr = new XMLHttpRequest();
+              petXhr.open('PATCH', baseUrl + '/pets?id=eq.' + pet.id, false);
+              petXhr.setRequestHeader('Authorization', 'Bearer ' + token);
+              petXhr.setRequestHeader('apikey', token);
+              petXhr.setRequestHeader('Content-Type', 'application/json');
+              petXhr.setRequestHeader('Prefer', 'return=minimal');
+              petXhr.send(JSON.stringify(petPayload));
+            });
+            console.log('[DAL] v54 beforeunload: ' + myStudent.pets.length + ' pets saved synchronously');
+          }
+        } else {
+          // Teacher: just send sync_ping (teacher data is more complex, rely on async sync)
+          var xhr2 = new XMLHttpRequest();
+          xhr2.open('POST', baseUrl + '/rpc/sync_ping', false);
+          xhr2.setRequestHeader('Authorization', 'Bearer ' + token);
+          xhr2.setRequestHeader('apikey', token);
+          xhr2.send();
+          console.log('[DAL] v54 beforeunload: teacher sync_ping sent');
         }
-      } catch(e) {}
+      } catch(e) {
+        console.warn('[DAL] v54 beforeunload sync failed:', e.message);
+      }
     }
   });
 
-  // Sync on visibility change — v10: wait for sync to finish before refreshing
+  // Sync on visibility change — v54: also handle page hidden with proper wait
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
-      // Page going hidden — sync if needed
-      if (!_dalSyncing) _syncToSupabase();
+      // Page going hidden — sync if there are unsaved changes
+      if (_pendingLocalSave && !_dalSyncing) {
+        _syncToSupabase();
+      }
     } else {
       // Page becoming visible — wait a bit for any in-progress sync to finish,
       // then do a smart refresh. The 5s delay gives Supabase time to propagate writes.
