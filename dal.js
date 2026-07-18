@@ -33,7 +33,7 @@ var _pendingLocalSave = false; // True when local data has unsaved changes — p
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
 /* ===== v45: localStorage Cache for Instant First Paint ===== */
-var _CACHE_KEY = '_dal_cache_v1';
+var _CACHE_KEY = '_dal_cache_v2';
 var _CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 var _loadedFromCache = false;
 
@@ -1130,49 +1130,114 @@ function loadFromSupabase() {
 }
 
 /* ===== Save ===== */
+// v48: INT4 max — class/student/pet IDs from Date.now() overflow PostgreSQL integer
+// The classes table id column is INT4 (max 2147483647), but Date.now() returns ~1.78 trillion.
+// This caused ALL syncs to fail silently for new teachers (HTTP 400 on class upsert).
+var _INT4_MAX = 2147483647;
+function _isValidInt4Id(id) {
+  return typeof id === 'number' && id > 0 && id <= _INT4_MAX && id === Math.floor(id);
+}
+
 function _syncTeacherToSupabase() {
-  // === Phase 1: Upsert classes + categorize students ===
+  // === Phase 1: Insert/Upsert classes FIRST (v48: resolve real IDs before processing students) ===
   var classPromises = [];
   var newStudents = [];   // { payload, stuRef }
   var existingStudents = []; // { payload, stuRef }
+  // v48: Track ID mappings for new classes (string/overflow ID → real DB ID)
+  var classIdMap = {}; // oldId → newId
 
   classesData.forEach(function(cls) {
-    classPromises.push(
-      db.from('classes').upsert([{
-        id: cls.id,
-        name: cls.name,
-        teacher_id: currentUser.id
-      }]).then(function(r) {
-        if (r.error) console.error('[DAL] class upsert error:', r.error);
-      })
-    );
+    var isNewClass = !_isValidInt4Id(cls.id);
 
-    cls.students.forEach(function(stu) {
-      var payload = {
-        name: stu.name,
-        class_id: cls.id,
-        coins: stu.coins || 0,
-        last_checkin_date: stu.lastCheckinDate || null,
-        last_jianghu_date: stu.lastJianghuDate || null,
-        last_pk_date: stu.lastPkDate || null,
-        active_pet_id: stu.activePetId || null,
-        pk_count_today: stu.pkCountToday || 0,
-        // v39: REMOVED shop_items and equipped_items from teacher sync.
-        // Only the student should write these fields to prevent race conditions
-        // where teacher's stale local data overwrites student's purchases.
-        password: stu.password || ''
-      };
-
-      if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
-        existingStudents.push({ payload: Object.assign({ id: stu.id }, payload), stuRef: stu });
-      } else {
-        newStudents.push({ payload: payload, stuRef: stu });
-      }
-    });
+    if (isNewClass) {
+      // v48: New class — INSERT without id, let DB auto-generate INT4 ID
+      var insertPayload = { name: cls.name, teacher_id: currentUser.id };
+      classPromises.push(
+        db.from('classes').insert([insertPayload]).select().then(function(r) {
+          if (r.error) {
+            console.error('[DAL] v48 class insert error:', r.error);
+            return;
+          }
+          if (r.data && r.data[0]) {
+            var oldId = cls.id;
+            var newId = r.data[0].id;
+            cls.id = newId;
+            classIdMap[oldId] = newId;
+            console.log('[DAL] v48 New class "' + cls.name + '" → DB ID ' + newId + ' (was ' + oldId + ')');
+          }
+        })
+      );
+    } else {
+      // Existing class with valid INT4 ID — upsert
+      classPromises.push(
+        db.from('classes').upsert([{
+          id: cls.id,
+          name: cls.name,
+          teacher_id: currentUser.id
+        }]).then(function(r) {
+          if (r.error) console.error('[DAL] class upsert error:', r.error);
+        })
+      );
+    }
   });
 
-  // === Phase 2: Insert new students first to get real IDs ===
+  // === Phase 1b: Wait for class IDs, then categorize students (v48: class_id now uses real IDs) ===
   return Promise.all(classPromises).then(function() {
+    // v48: Update currentClassId and other references BEFORE processing students
+    var oldKeys = Object.keys(classIdMap);
+    if (oldKeys.length > 0) {
+      console.log('[DAL] v48 Resolved ' + oldKeys.length + ' new class IDs');
+
+      // Update currentClassId if it points to a remapped class
+      if (typeof currentClassId !== 'undefined' && classIdMap[currentClassId]) {
+        var oldClassId = currentClassId;
+        currentClassId = classIdMap[currentClassId];
+        console.log('[DAL] v48 currentClassId: ' + oldClassId + ' → ' + currentClassId);
+      }
+
+      // Update customActions class_id references
+      if (typeof customActions !== 'undefined') {
+        customActions.forEach(function(a) {
+          if (classIdMap[a.class_id]) {
+            a.class_id = classIdMap[a.class_id];
+          }
+        });
+      }
+
+      // Update operationLogs classId references
+      if (typeof window.operationLogs !== 'undefined') {
+        window.operationLogs.forEach(function(l) {
+          if (classIdMap[l.classId]) {
+            l.classId = classIdMap[l.classId];
+          }
+        });
+      }
+    }
+
+    // v48: NOW categorize students — cls.id is already the real DB ID
+    classesData.forEach(function(cls) {
+      cls.students.forEach(function(stu) {
+        var payload = {
+          name: stu.name,
+          class_id: cls.id,
+          coins: stu.coins || 0,
+          last_checkin_date: stu.lastCheckinDate || null,
+          last_jianghu_date: stu.lastJianghuDate || null,
+          last_pk_date: stu.lastPkDate || null,
+          active_pet_id: stu.activePetId || null,
+          pk_count_today: stu.pkCountToday || 0,
+          password: stu.password || ''
+        };
+
+        if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
+          existingStudents.push({ payload: Object.assign({ id: stu.id }, payload), stuRef: stu });
+        } else {
+          newStudents.push({ payload: payload, stuRef: stu });
+        }
+      });
+    });
+
+    // === Phase 2: Insert new students first to get real IDs ===
     if (newStudents.length === 0) return;
     var promises = newStudents.map(function(item) {
       return db.from('students').insert([item.payload]).select().then(function(r) {
