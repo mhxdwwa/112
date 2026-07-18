@@ -29,10 +29,12 @@
 
 *{margin:0;padding:0;box-sizing:border-box;font-family:"Nunito","Microsoft YaHei","Comic Sans MS",cursive,sans-serif;}
 .page-title, .nav-logo, .podium-name, .modal-title, .modal-student-title{font-family:"Ma Shan Zheng","Nunito","Microsoft YaHei",cursive,sans-serif;}
-body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe6dd);background-image:radial-gradient(circle at 15% 20%, rgba(220,150,170,0.15) 0%, transparent 22%),
+body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe6dd);color:#2c2020;line-height:1.6;min-height:100vh;overflow-x:hidden;position:relative;}
+body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background-image:radial-gradient(circle at 15% 20%, rgba(220,150,170,0.15) 0%, transparent 22%),
     radial-gradient(circle at 85% 15%, rgba(180,165,220,0.14) 0%, transparent 20%),
     radial-gradient(circle at 50% 80%, rgba(170,200,235,0.12) 0%, transparent 25%),
-    radial-gradient(circle at 75% 55%, rgba(150,210,190,0.1) 0%, transparent 18%);background-attachment:fixed;color:#2c2020;line-height:1.6;min-height:100vh;overflow-x:hidden;background-size:400% 400%;animation:bgShift 40s ease infinite;}
+    radial-gradient(circle at 75% 55%, rgba(150,210,190,0.1) 0%, transparent 18%);background-size:400% 400%;animation:bgShiftFixed 40s ease infinite;z-index:-1;will-change:transform;pointer-events:none;}
+@keyframes bgShiftFixed{0%,100%{transform:translate3d(0,0,0)}25%{transform:translate3d(-3%,-2%,0)}50%{transform:translate3d(-2%,-3%,0)}75%{transform:translate3d(-3%,-1%,0)}}
 .nav-bar{background:linear-gradient(135deg, rgba(255,183,183,0.88) 0%, rgba(255,192,184,0.88) 40%, rgba(255,214,176,0.88) 100%);padding:15px 25px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:999;box-shadow:0 4px 30px rgba(255,150,120,0.25), 0 1px 0 rgba(255,255,255,0.4) inset;border-bottom:1px solid rgba(255,255,255,0.3);overflow:hidden;backdrop-filter:blur(4px) saturate(120%);-webkit-backdrop-filter:blur(4px) saturate(120%);}
 .nav-bar::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(120deg,transparent,transparent 30px,rgba(255,255,255,0.06) 30px,rgba(255,255,255,0.06) 60px);pointer-events:none;}
 .nav-bar::after{content:'';position:absolute;bottom:-2px;left:0;right:0;font-size:0;letter-spacing:0;text-align:left;opacity:1;pointer-events:none;line-height:1;height:2px;background:linear-gradient(90deg,transparent,rgba(255,200,180,0.6),rgba(255,180,180,0.8),rgba(255,200,180,0.6),transparent);}
@@ -74,7 +76,7 @@ body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe
   0%,100%{transform:translateY(0)}
   50%{transform:translateY(-5px)}
 }
-.home-pet-card{width:100%;height:280px;position:relative;overflow:visible;animation:petFloat 4s ease-in-out infinite;animation-delay:var(--card-float-delay,0s);}
+.home-pet-card{width:100%;height:280px;position:relative;overflow:visible;animation:petFloat 4s ease-in-out infinite;animation-delay:var(--card-float-delay,0s);contain:layout style paint;}
 .home-pet-inner{width:100%;height:100%;background:linear-gradient(170deg,#ffffff 0%,#fdfaf8 50%,#faf5f2 100%);border-radius:22px;border:2px solid #e8d5cc;transition:border-color 0.4s, box-shadow 0.4s;cursor:pointer;box-shadow:0 4px 20px rgba(255,180,160,0.18), 0 1px 3px rgba(0,0,0,0.04), 0 1px 0 rgba(255,255,255,0.8) inset;display:flex;flex-direction:column;position:relative;overflow:hidden;}
 .home-pet-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#e8637a,#f07b68,#f5a054);border-radius:24px 24px 0 0;z-index:0;}
 .home-pet-card:hover{transition:transform 0.2s ease;}
@@ -147,7 +149,7 @@ body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe
 .dead-tag{background:#b0a0a0;color:#3e2a2a;text-decoration:line-through;}
 .no-pet-card{width:100%;height:280px;background:linear-gradient(170deg,#fff8f4,#ffefe8);border:3px dashed #ffd0c0;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all 0.4s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden;}
 .no-pet-card:hover{background:linear-gradient(170deg,#fff2ea,#ffe6d8);border-color:#ff9e9e;transform:translateY(-8px) scale(1.02);box-shadow:0 16px 32px rgba(255,160,140,0.2);}
-.class-card{background:linear-gradient(145deg, #ffffff, #faf5f2);border-radius:22px;padding:20px;margin-bottom:15px;cursor:grab;transition:all 0.4s cubic-bezier(.4,0,.2,1);border:2px solid #e0cfc8;box-shadow:0 4px 20px rgba(255,200,180,0.15), 0 1px 0 rgba(255,255,255,0.6) inset;position:relative;display:inline-block;margin-right:15px;min-width:280px;user-select:none;overflow:hidden;border-left:5px solid #ffb0a0;}
+.class-card{background:linear-gradient(145deg, #ffffff, #faf5f2);border-radius:22px;padding:20px;margin-bottom:15px;cursor:grab;transition:all 0.4s cubic-bezier(.4,0,.2,1);border:2px solid #e0cfc8;box-shadow:0 4px 20px rgba(255,200,180,0.15), 0 1px 0 rgba(255,255,255,0.6) inset;position:relative;display:inline-block;margin-right:15px;min-width:280px;user-select:none;overflow:hidden;border-left:5px solid #ffb0a0;contain:layout style paint;}
 .class-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#e8637a,#f07b68,#f5a054);border-radius:24px 24px 0 0;}
 .class-card.dragging{opacity:0.4;transform:scale(0.95);border-color:#ff8d8d;cursor:grabbing;}
 .class-card.drag-over{border-color:#ff6b6b;box-shadow:0 0 0 3px rgba(255,107,107,0.4),0 8px 14px #ffd8c8;transform:translateY(-3px);}
@@ -259,7 +261,7 @@ body{background:linear-gradient(-45deg, #ffe6dd, #ffd4e8, #ffe0f0, #ffecd2, #ffe
 .home-stat:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 10px 24px rgba(255,170,150,0.35);}
 .dead-pet-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);border-radius:30px;display:flex;align-items:center;justify-content:center;z-index:5;font-size:42px;}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
-.upgrade-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;overflow:hidden;animation:overlayFadeIn 0.5s ease;will-change:opacity;transform:translateZ(0);}
+.upgrade-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:99999;display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;overflow:hidden;animation:overlayFadeIn 0.5s ease;will-change:opacity;transform:translateZ(0);}
 @keyframes overlayFadeIn{from{opacity:0}to{opacity:1}}
 .upgrade-box{text-align:center;position:relative;z-index:2;perspective:800px;width:500px;height:600px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .upgrade-old-pet{width:200px;height:200px;margin:0 auto;border-radius:50%;padding:16px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,#fff5ee,#ffe0d0);box-shadow:0 0 0 6px rgba(200,180,160,0.4),0 0 20px 10px rgba(180,140,100,0.2);transition:all 0.4s;position:relative;z-index:3;}
@@ -2798,7 +2800,6 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
   text-shadow:0 1px 3px rgba(0,0,0,0.3);
   animation:shopTitlePulse 2s ease-in-out infinite;
   border:1px solid rgba(255,255,255,0.2);
-  backdrop-filter:blur(2px);
 }
 /* 学霸 - 蓝色智慧光芒 */
 .shop-title-badge.pet-title-xueba{
