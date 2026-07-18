@@ -58,82 +58,6 @@ function showLogin(type) {
   }
 }
 
-// 加载可用班级列表（帮助学生选择正确班级）
-async function loadAvailableClasses() {
-  if (!db) return;
-  try {
-    // 按 ID 升序，确保同名班级优先返回最早创建的
-    var result = await db.from('classes').select('id, name').order('id', { ascending: true });
-    if (result.data && result.data.length > 0) {
-      // 去重：同名班级只保留 ID 最小的那个
-      var seen = {};
-      var uniqueClasses = [];
-      result.data.forEach(function(c) {
-        if (!seen[c.name]) {
-          seen[c.name] = true;
-          uniqueClasses.push(c);
-        }
-      });
-      window._availableClasses = uniqueClasses;
-      updateClassDatalist(uniqueClasses);
-    } else {
-      window._availableClasses = [];
-    }
-  } catch (e) {
-    console.warn('加载班级列表失败:', e.message);
-    window._availableClasses = [];
-  }
-}
-
-// 更新班级下拉提示
-function updateClassDatalist(classes) {
-  var datalist = document.getElementById('classSuggestions');
-  if (!datalist) return;
-  datalist.innerHTML = '';
-  var seen = {};
-  classes.forEach(function(c) {
-    if (!seen[c.name]) {
-      seen[c.name] = true;
-      var opt = document.createElement('option');
-      opt.value = c.name;
-      datalist.appendChild(opt);
-    }
-  });
-}
-
-// 显示可用班级弹窗
-function showClassListModal(targetInputId) {
-  if (!window._availableClasses || window._availableClasses.length === 0) {
-    alert('目前没有可用班级。请确认老师已经创建了班级并同步到云端。\n\n你可以：\n1. 确认班级名称是否拼写正确\n2. 请老师打开页面确认右上角显示"已同步"\n3. 请老师点击"手动同步"按钮');
-    return;
-  }
-  var names = window._availableClasses.map(function(c) { return c.name; });
-  var unique = [];
-  var seen = {};
-  names.forEach(function(n) { if (!seen[n]) { seen[n] = true; unique.push(n); } });
-  var html = '<div style="max-height:300px;overflow-y:auto;">';
-  unique.forEach(function(name) {
-    html += '<div onclick="pickClass(\'' + name.replace(/'/g, "\\'") + '\', \'' + targetInputId + '\')" style="padding:12px 16px;margin:6px 0;background:#fff5f5;border:1px solid #ffd0d0;border-radius:12px;cursor:pointer;font-size:15px;transition:all 0.2s;" onmouseover="this.style.background=\'#ffe8e8\'" onmouseout="this.style.background=\'#fff5f5\'">' + name + '</div>';
-  });
-  html += '</div>';
-  // 简单弹窗
-  var overlay = document.createElement('div');
-  overlay.id = 'classListOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = '<div style="background:#fff;border-radius:20px;padding:24px;max-width:360px;width:90%;max-height:80vh;overflow-y:auto;">' +
-    '<div style="font-size:18px;font-weight:700;color:#c04058;margin-bottom:16px;text-align:center;">选择班级</div>' +
-    html +
-    '<div style="text-align:center;margin-top:16px;"><button onclick="document.getElementById(\'classListOverlay\').remove()" style="padding:8px 24px;border:none;border-radius:12px;background:#eee;color:#666;font-size:14px;cursor:pointer;">取消</button></div>' +
-    '</div>';
-  document.body.appendChild(overlay);
-}
-
-function pickClass(name, inputId) {
-  document.getElementById(inputId).value = name;
-  var overlay = document.getElementById('classListOverlay');
-  if (overlay) overlay.remove();
-}
-
 // 显示错误信息
 function showError(elementId, message) {
   const el = document.getElementById(elementId);
@@ -253,46 +177,26 @@ async function handleStudentLogin(e) {
   }
   
   try {
-    // 优先使用缓存的班级列表，避免网络查询
-    var matchedClass = null;
-    if (window._availableClasses && window._availableClasses.length > 0) {
-      matchedClass = window._availableClasses.find(function(c) { return c.name === className; });
+    // 查询 Supabase 匹配班级
+    const { data: classData, error: classError } = await db
+      .from('classes')
+      .select('id, name')
+      .eq('name', className)
+      .order('id', { ascending: true })
+      .limit(1);
+    
+    if (classError) {
+      console.error('[Login] class query error:', classError);
+      showError('studentError', '网络连接失败，请检查网络后重试');
+      return;
     }
     
-    // 如果缓存没有，再查询 Supabase
-    if (!matchedClass) {
-      const { data: classData, error: classError } = await db
-        .from('classes')
-        .select('id, name')
-        .eq('name', className)
-        .order('id', { ascending: true })
-        .limit(1);
-      
-      if (classError) {
-        console.error('[Login] class query error:', classError);
-        showError('studentError', '网络连接失败，请检查网络后重试');
-        return;
-      }
-      
-      if (!classData || classData.length === 0) {
-        // 班级不存在 - 提供具体帮助
-        var availMsg = '';
-        if (window._availableClasses && window._availableClasses.length > 0) {
-          var names = [];
-          var seen = {};
-          window._availableClasses.forEach(function(c) {
-            if (!seen[c.name]) { seen[c.name] = true; names.push('「' + c.name + '」'); }
-          });
-          availMsg = '\n\n当前可用班级：' + names.join('、') + '\n请检查班级名称是否完全一致。';
-        } else {
-          availMsg = '\n\n云端暂无班级。请联系老师：\n1. 打开宠物世界页面\n2. 确认班级已创建\n3. 确认右上角显示"☁️ 已同步"';
-        }
-        showError('studentError', '班级「' + className + '」不存在。' + availMsg);
-        return;
-      }
-      
-      matchedClass = classData[0];
+    if (!classData || classData.length === 0) {
+      showError('studentError', '班级「' + className + '」不存在。\n\n云端暂无班级。请联系老师：\n1. 打开宠物世界页面\n2. 确认班级已创建\n3. 确认右上角显示"☁️ 已同步"');
+      return;
     }
+    
+    var matchedClass = classData[0];
     
     // 查找学生
     const { data: student, error: studentError } = await db
@@ -349,45 +253,26 @@ async function handleStudentRegister(e) {
   }
   
   try {
-    // 优先使用缓存的班级列表，避免网络查询
-    var matchedClass = null;
-    if (window._availableClasses && window._availableClasses.length > 0) {
-      matchedClass = window._availableClasses.find(function(c) { return c.name === className; });
+    // 查询 Supabase 匹配班级
+    const { data: classData, error: classError } = await db
+      .from('classes')
+      .select('id, name')
+      .eq('name', className)
+      .order('id', { ascending: true })
+      .limit(1);
+    
+    if (classError) {
+      console.error('[Register] class query error:', classError);
+      showError('studentRegError', '网络连接失败，请检查网络后重试');
+      return;
     }
     
-    // 如果缓存没有，再查询 Supabase
-    if (!matchedClass) {
-      const { data: classData, error: classError } = await db
-        .from('classes')
-        .select('id, name')
-        .eq('name', className)
-        .order('id', { ascending: true })
-        .limit(1);
-      
-      if (classError) {
-        console.error('[Register] class query error:', classError);
-        showError('studentRegError', '网络连接失败，请检查网络后重试');
-        return;
-      }
-      
-      if (!classData || classData.length === 0) {
-        var availMsg = '';
-        if (window._availableClasses && window._availableClasses.length > 0) {
-          var names = [];
-          var seen = {};
-          window._availableClasses.forEach(function(c) {
-            if (!seen[c.name]) { seen[c.name] = true; names.push('「' + c.name + '」'); }
-          });
-          availMsg = '\n\n当前可用班级：' + names.join('、');
-        } else {
-          availMsg = '\n\n云端暂无班级。请联系老师创建班级并确保已同步。';
-        }
-        showError('studentRegError', '班级「' + className + '」不存在。' + availMsg);
-        return;
-      }
-      
-      matchedClass = classData[0];
+    if (!classData || classData.length === 0) {
+      showError('studentRegError', '班级「' + className + '」不存在。\n\n云端暂无班级。请联系老师创建班级并确保已同步。');
+      return;
     }
+    
+    var matchedClass = classData[0];
     
     // 检查学生是否已在名单中
     const { data: existingStudent } = await db
@@ -434,26 +319,14 @@ async function handleStudentRegister(e) {
   }
 }
 
-// 页面加载时自动获取可用班级列表
+// 页面加载时自动填充上次使用的教师邮箱
 (function() {
-  // 自动填充上次使用的教师邮箱
   var savedEmail = localStorage.getItem('userEmail');
   var savedType = localStorage.getItem('userType');
   if (savedEmail && savedType === 'teacher') {
     var emailInput = document.getElementById('teacherEmail');
     if (emailInput) emailInput.value = savedEmail;
   }
-
-  // 等 Supabase 连接好后再加载
-  function tryLoad() {
-    if (db) {
-      loadAvailableClasses();
-    } else {
-      setTimeout(tryLoad, 1000);
-    }
-  }
-  // 延迟执行，等页面渲染完
-  setTimeout(tryLoad, 500);
 })();
 
 // ===== 扫码登录功能 =====
