@@ -1,5 +1,5 @@
 /**
- * dal.js v62 — Robust Data Access Layer with Smart Merge
+ * dal.js v64 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '63.0';
+var _DAL_VERSION = '64.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -1025,88 +1025,105 @@ function _writeUnsyncedLogsToSupabase() {
     if (skippedClassIds.length > 0) {
       console.log('[DAL] v62 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
     }
+
+    // v64: If no valid classes, skip the re-read and resolve immediately
+    if (validClassIds.length === 0) {
+      console.log('[DAL] v64 No valid classes to write logs to, skipping');
+      return Promise.resolve();
+    }
     
-    var upsertPromises = validClassIds.map(function(cid) {
-      var existing = existingByClass[cid] || [];
-      var newLogs = logsByClass[cid] || [];
-
-      // Build index of existing logs by ID for deduplication
-      var existingById = {};
-      existing.forEach(function(l, idx) { existingById[l.id] = idx; });
-
-      newLogs.forEach(function(entry) {
-        var l = entry.log;
-        var merged = {
-          id: l.id,
-          timestamp: l.timestamp || new Date().toISOString(),
-          classId: cid,
-          studentId: l.studentId,
-          studentName: l.studentName || '',
-          actionType: l.actionType || '',
-          details: l.details || '',
-          coinDelta: parseInt(l.coinDelta) || 0,
-          expDelta: parseInt(l.expDelta) || 0,
-          petId: l.petId || null,
-          extra: l.extra || null,
-          snapshot: l.snapshot || null,
-          fullSnapshot: l.fullSnapshot || null,
-          reverted: !!l.reverted
-        };
-
-        // v34: If log with same ID already exists (modified log), REPLACE it instead of duplicating
-        if (existingById[l.id] !== undefined) {
-          existing[existingById[l.id]] = merged;
-        } else {
-          existing.push(merged);
-          existingById[l.id] = existing.length - 1;
-        }
-
-        // Mark local log as synced
-        if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-          window.operationLogs[entry.index]._synced = true;
-          window.operationLogs[entry.index]._fromSupabase = true;
-        }
-      });
-
-      // Sort by timestamp descending, cap at 1000
-      existing.sort(function(a, b) {
-        return (b.timestamp || '').localeCompare(a.timestamp || '');
-      });
-      if (existing.length > _OP_LOGS_MAX_PER_CLASS) {
-        existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
+    // v64: Re-read existing logs from Supabase RIGHT BEFORE writing.
+    // This is critical to prevent the race condition where two devices read the same
+    // data, each adds their new log, and the last writer overwrites the other's log.
+    // By re-reading immediately before writing, we get the latest data from other devices.
+    return db.from('classes').select('id, operation_logs_json').in('id', validClassIds).then(function(freshR) {
+      if (freshR.error) {
+        console.error('[DAL] v64 Failed to re-read logs before write:', freshR.error.message);
+        // Fall back to initial read data
+        freshR = { data: [] };
       }
-
-      // Build upsert payload — same pattern as student data
-      // Need teacher_id and name for the class
-      var cls = null;
-      if (classesData) {
-        for (var i = 0; i < classesData.length; i++) {
-          if (classesData[i].id == cid) { cls = classesData[i]; break; }
-        }
-      }
-
-      // v28: Use update (not upsert) to only modify operation_logs_json.
-      // Previously used upsert with teacher_id: currentUser.id, but for students
-      // currentUser.id is the student row ID, not a valid teacher UUID.
-      // This caused FK/RLS violation and all student logs were silently lost.
-      return db.from('classes').update({
-        operation_logs_json: JSON.stringify(existing)
-      }).eq('id', cid).then(function(ur) {
-        if (ur.error) {
-          console.error('[DAL] v29 Upsert FAILED for class', cid + ':', ur.error.message);
-          // Mark logs as unsynced again so they retry
-          (logsByClass[cid] || []).forEach(function(entry) {
-            if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-              window.operationLogs[entry.index]._synced = false;
-            }
-          });
-        } else {
-          console.log('[DAL] v29 Upserted ' + existing.length + ' logs for class', cid);
-        }
+      var freshByClass = {};
+      (freshR.data || []).forEach(function(cls) {
+        try {
+          freshByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
+        } catch(e) { freshByClass[cls.id] = []; }
       });
+
+      var upsertPromises = validClassIds.map(function(cid) {
+        // v64: Use FRESH data from Supabase (not stale initial read)
+        var existing = freshByClass[cid] || [];
+        var newLogs = logsByClass[cid] || [];
+
+        // Build index of existing logs by ID for deduplication
+        var existingById = {};
+        existing.forEach(function(l, idx) { existingById[l.id] = idx; });
+
+        newLogs.forEach(function(entry) {
+          var l = entry.log;
+          var merged = {
+            id: l.id,
+            timestamp: l.timestamp || new Date().toISOString(),
+            classId: cid,
+            studentId: l.studentId,
+            studentName: l.studentName || '',
+            actionType: l.actionType || '',
+            details: l.details || '',
+            coinDelta: parseInt(l.coinDelta) || 0,
+            expDelta: parseInt(l.expDelta) || 0,
+            petId: l.petId || null,
+            extra: l.extra || null,
+            snapshot: l.snapshot || null,
+            fullSnapshot: l.fullSnapshot || null,
+            reverted: !!l.reverted,
+            _synced: true,
+            _fromSupabase: true
+          };
+
+          // v34: If log with same ID already exists (modified log), REPLACE it instead of duplicating
+          if (existingById[l.id] !== undefined) {
+            existing[existingById[l.id]] = merged;
+          } else {
+            existing.push(merged);
+            existingById[l.id] = existing.length - 1;
+          }
+
+          // Mark local log as synced
+          if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+            window.operationLogs[entry.index]._synced = true;
+            window.operationLogs[entry.index]._fromSupabase = true;
+          }
+        });
+
+        // Sort by timestamp descending, cap at max
+        existing.sort(function(a, b) {
+          return (b.timestamp || '').localeCompare(a.timestamp || '');
+        });
+        if (existing.length > _OP_LOGS_MAX_PER_CLASS) {
+          existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
+        }
+
+        // v28: Use update (not upsert) to only modify operation_logs_json.
+        return db.from('classes').update({
+          operation_logs_json: JSON.stringify(existing)
+        }).eq('id', cid).then(function(ur) {
+          if (ur.error) {
+            console.error('[DAL] v29 Upsert FAILED for class', cid + ':', ur.error.message);
+            // Mark logs as unsynced again so they retry
+            (logsByClass[cid] || []).forEach(function(entry) {
+              if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+                window.operationLogs[entry.index]._synced = false;
+              }
+            });
+          } else {
+            console.log('[DAL] v64 Upserted ' + existing.length + ' logs for class', cid);
+            // v64: Update own write time to prevent unnecessary realtime refresh
+            _lastOwnWriteTime = Date.now();
+          }
+        });
+      });
+
+      return Promise.all(upsertPromises);
     });
-
-    return Promise.all(upsertPromises);
   }).then(function() {
     _writingLogsToSupabase = false;
 
