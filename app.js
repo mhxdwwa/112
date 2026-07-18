@@ -9498,21 +9498,21 @@ window._escapedPetIds = new Set();
   // ===== 宠物个性系统 =====
   // 根据宠物名字/emoji推测类型，赋予不同性格
   const PET_PERSONALITIES = {
-    cat:    { speed: 1.8, pauseChance: 0.35, sounds: ['meow','purr'], preferActions: ['sit','sniff','stretch','sleep','peek'],
+    cat:    { speed: 2.8, pauseChance: 0.30, sounds: ['meow','purr'], preferActions: ['sit','sniff','stretch','sleep','peek'],
               speeches: ['喵~','好高的地方~','我要躲起来~','不要碰我的尾巴！','哼，懒得理你~','给我小鱼干！'], emotes: ['🐟','💤','😼','🐾','✨'] },
-    dog:    { speed: 3.2, pauseChance: 0.18, sounds: ['bark'], preferActions: ['bounce','roll','shake','hop','wave'],
+    dog:    { speed: 4.8, pauseChance: 0.15, sounds: ['bark'], preferActions: ['bounce','roll','shake','hop','wave'],
               speeches: ['汪汪！','好开心！','一起跑步！','接飞盘！','我最忠诚了！','尾巴摇摇~'], emotes: ['🦴','❤️','🎾','💕','😆'] },
-    bird:   { speed: 2.8, pauseChance: 0.22, sounds: ['chirp'], preferActions: ['hop','bounce','wave','peek'],
+    bird:   { speed: 4.2, pauseChance: 0.18, sounds: ['chirp'], preferActions: ['hop','bounce','wave','peek'],
               speeches: ['叽叽！','我会飞哦~','好高好高~','种子在哪？','唧唧喳喳~','翅膀好累~'], emotes: ['🌸','🎵','🎶','✨','☁️'] },
-    hamster:{ speed: 1.5, pauseChance: 0.38, sounds: ['squeak'], preferActions: ['spin','roll','sniff','nuzzle','sleep'],
+    hamster:{ speed: 2.3, pauseChance: 0.32, sounds: ['squeak'], preferActions: ['spin','roll','sniff','nuzzle','sleep'],
               speeches: ['吱吱！','转圈圈~','我的瓜子呢？','好小好可爱~','仓鼠球！','让我存粮~'], emotes: ['🌻','🥜','😊','💦','⭐'] },
-    rabbit: { speed: 2.4, pauseChance: 0.28, sounds: ['squeak','cute'], preferActions: ['hop','bounce','nuzzle','sniff','peek'],
+    rabbit: { speed: 3.6, pauseChance: 0.22, sounds: ['squeak','cute'], preferActions: ['hop','bounce','nuzzle','sniff','peek'],
               speeches: ['蹦蹦跳~','胡萝卜！','耳朵痒痒~','我最软了~','抱抱我~','跳跳跳！'], emotes: ['🥕','💕','🌟','🐾','😊'] },
-    frog:   { speed: 2.0, pauseChance: 0.32, sounds: ['ribbit'], preferActions: ['hop','bounce','sit','sniff'],
+    frog:   { speed: 3.0, pauseChance: 0.28, sounds: ['ribbit'], preferActions: ['hop','bounce','sit','sniff'],
               speeches: ['呱呱~','好湿润~','跳远冠军！','池塘在哪？','我是王子哦~','虫子！'], emotes: ['🌿','💧','👑','🪷','⭐'] },
-    fish:   { speed: 1.2, pauseChance: 0.4, sounds: ['cute','squeak'], preferActions: ['wave','nuzzle','spin','sit'],
+    fish:   { speed: 1.8, pauseChance: 0.35, sounds: ['cute','squeak'], preferActions: ['wave','nuzzle','spin','sit'],
               speeches: ['咕噜噜~','水在哪呀~','我会游泳！','泡泡~','鱼缸太小了！','自由啦~'], emotes: ['💧','🫧','🌊','✨','💦'] },
-    default:{ speed: 2.2, pauseChance: 0.28, sounds: ['cute','squeak','meow'], preferActions: ['sit','wave','spin','hop','bounce','nuzzle'],
+    default:{ speed: 3.3, pauseChance: 0.22, sounds: ['cute','squeak','meow'], preferActions: ['sit','wave','spin','hop','bounce','nuzzle'],
               speeches: null, emotes: null }
   };
 
@@ -9864,13 +9864,55 @@ window._escapedPetIds = new Set();
             return cardScore * 0.6 + petScore * 0.4;
           }
 
-          // 全屏智能选目标点：优先远处、空旷的位置
+          // 随机漫游系统：宠物沿随机曲线路径移动，每次路径都不同
+          let wanderAngle = Math.random() * Math.PI * 2; // 初始随机方向
+          let wanderTimer = 0;
+          const WANDER_CHANGE_INTERVAL = 1500 + Math.random() * 2000; // 1.5~3.5秒换一次大方向
+          let lastWanderChange = Date.now();
+
+          // 更新漫游方向（每帧调用）
+          function updateWander() {
+            const now = Date.now();
+            // 每帧小幅随机偏转（自然曲线）
+            wanderAngle += (Math.random() - 0.5) * 0.15;
+
+            // 定期大转向
+            if (now - lastWanderChange > WANDER_CHANGE_INTERVAL) {
+              wanderAngle += (Math.random() - 0.5) * Math.PI * 0.8; // 大幅转向
+              lastWanderChange = now;
+            }
+
+            // 边界回避：接近边缘时转向中心
+            const cx = currentX + HALF;
+            const cy = currentY + HALF;
+            const margin = 80;
+            if (cx < margin) wanderAngle = Math.abs(wanderAngle) < Math.PI / 2 ? wanderAngle : 0;
+            if (cx > W - margin) wanderAngle = Math.abs(wanderAngle) > Math.PI / 2 ? wanderAngle : Math.PI;
+            if (cy < margin) wanderAngle = wanderAngle > 0 ? wanderAngle : -wanderAngle;
+            if (cy > H - margin) wanderAngle = wanderAngle < 0 ? wanderAngle : -wanderAngle;
+
+            // 卡片回避：检测前方是否有卡片，有则转向
+            const centers = getCardCenters();
+            const lookAhead = 120;
+            const futureX = cx + Math.cos(wanderAngle) * lookAhead;
+            const futureY = cy + Math.sin(wanderAngle) * lookAhead;
+            for (const c of centers) {
+              const dx = futureX - c.x;
+              const dy = futureY - c.y;
+              if (Math.sqrt(dx * dx + dy * dy) < 100) {
+                wanderAngle += (Math.random() > 0.5 ? 1 : -1) * Math.PI * 0.5;
+                break;
+              }
+            }
+          }
+
+          // 全屏智能选目标点：优先远处、空旷的位置（用于首次目标和动作后重新出发）
           function pickSafeTarget() {
             const padX = 30, padY = 10;
             const centers = getCardCenters();
-            // 最小跑动距离：视口对角线的25%，至少150px，确保宠物跑远
+            // 最小跑动距离：视口对角线的35%，至少200px，确保宠物跑得更远
             const diag = Math.sqrt(W * W + H * H);
-            const minRunDist = Math.max(150, diag * 0.25);
+            const minRunDist = Math.max(200, diag * 0.35);
 
             let bestTarget = null;
             let bestScore = -1;
@@ -9945,8 +9987,9 @@ window._escapedPetIds = new Set();
           let pawprintInterval = null;
           let animalSoundInterval = null;
           let paused = false;
-          let target = pickSafeTarget();
-          let speed = personality.speed + Math.random() * 0.5;
+          let target = pickSafeTarget(); // 首次目标（远处空旷位置）
+          let speed = personality.speed + Math.random() * 1.0; // 基础速度+随机浮动
+          let useWanderMode = false; // 到达首个目标后切换为漫游模式
 
           el.style.transition = 'none';
 
@@ -9981,22 +10024,39 @@ window._escapedPetIds = new Set();
           // 出场叫声（个性化）
           setTimeout(() => playPersonalitySound(personality), 800);
 
-          // 跑动帧 - 全屏自由移动
+          // 跑动帧 - 混合模式：先跑到远处目标，然后切换为随机漫游
           function runStep() {
             if (!escapeActive || !el.isConnected || petData.caught) { cleanup(); return; }
             if (!paused) {
-              const dx = target.x - currentX;
-              const dy = target.y - currentY;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist < 5) {
-                target = pickSafeTarget();
+              if (!useWanderMode) {
+                // 阶段1：跑到首个远处目标
+                const dx = target.x - currentX;
+                const dy = target.y - currentY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 10) {
+                  // 到达目标，切换为漫游模式
+                  useWanderMode = true;
+                  wanderAngle = Math.atan2(dy, dx) + (Math.random() - 0.5) * Math.PI; // 从到达方向继续偏转
+                } else {
+                  currentX += (dx / dist) * speed;
+                  currentY += (dy / dist) * speed;
+                  el.style.left = currentX + 'px';
+                  el.style.top = currentY + 'px';
+                  if (inner) {
+                    inner.style.transform = dx < 0 ? 'scaleX(-1)' : '';
+                  }
+                }
               } else {
-                currentX += (dx / dist) * speed;
-                currentY += (dy / dist) * speed;
+                // 阶段2：随机漫游模式
+                updateWander();
+                const moveX = Math.cos(wanderAngle) * speed;
+                const moveY = Math.sin(wanderAngle) * speed;
+                currentX += moveX;
+                currentY += moveY;
                 el.style.left = currentX + 'px';
                 el.style.top = currentY + 'px';
                 if (inner) {
-                  inner.style.transform = dx < 0 ? 'scaleX(-1)' : '';
+                  inner.style.transform = moveX < 0 ? 'scaleX(-1)' : '';
                 }
               }
             }
@@ -10036,8 +10096,10 @@ window._escapedPetIds = new Set();
               // 恢复跑动
               setTimeout(() => {
                 paused = false;
-                // 到新目标
-                target = pickSafeTarget();
+                // 切换到漫游模式，随机新方向
+                useWanderMode = true;
+                wanderAngle = Math.random() * Math.PI * 2;
+                lastWanderChange = Date.now();
                 if (inner) inner.style.animation = 'escapeRun 0.5s linear infinite';
                 scheduleCuteAction();
               }, 1500 + Math.random() * 1500);
