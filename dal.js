@@ -1,5 +1,5 @@
 /**
- * dal.js v64 — Robust Data Access Layer with Smart Merge
+ * dal.js v65 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '64.0';
+var _DAL_VERSION = '65.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -933,6 +933,113 @@ function _loadOperationLogs() {
 var _writingLogsToSupabase = false;
 var _pendingLogWrites = 0;
 
+// v65: Verify that our logs weren't overwritten by another device's concurrent write.
+// If our logs are missing, re-read from Supabase, re-merge, and re-write.
+// Retries up to 3 times with increasing delays.
+function _verifyLogWrite(classId, writtenLogIds, retryCount) {
+  if (retryCount >= 3 || !writtenLogIds || writtenLogIds.length === 0) {
+    return Promise.resolve();
+  }
+  // Wait 500ms to let any concurrent writes settle
+  return new Promise(function(resolve) {
+    setTimeout(resolve, 500 + retryCount * 500);
+  }).then(function() {
+    return db.from('classes').select('id, operation_logs_json').eq('id', classId).single();
+  }).then(function(r) {
+    if (r.error || !r.data) {
+      console.warn('[DAL] v65 Verify read failed for class', classId + ':', r.error ? r.error.message : 'no data');
+      return;
+    }
+    var serverLogs = [];
+    try {
+      serverLogs = r.data.operation_logs_json ? JSON.parse(r.data.operation_logs_json) : [];
+    } catch(e) { serverLogs = []; }
+    
+    // Check which of our logs are missing
+    var serverLogIds = {};
+    serverLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+    var missingIds = writtenLogIds.filter(function(id) { return !serverLogIds[id]; });
+    
+    if (missingIds.length === 0) {
+      console.log('[DAL] v65 Verify OK: all', writtenLogIds.length, 'logs present for class', classId);
+      return;
+    }
+    
+    console.warn('[DAL] v65 CONFLICT DETECTED! ' + missingIds.length + '/' + writtenLogIds.length + 
+      ' logs overwritten by another device for class', classId, '(retry ' + retryCount + ')');
+    
+    // Re-merge: take server logs + add our missing logs
+    var merged = serverLogs.slice();
+    var mergedById = {};
+    merged.forEach(function(l, idx) { mergedById[l.id] = idx; });
+    
+    // Find our missing logs from window.operationLogs
+    var addedCount = 0;
+    missingIds.forEach(function(missingId) {
+      for (var i = 0; i < window.operationLogs.length; i++) {
+        if (window.operationLogs[i].id === missingId) {
+          var l = window.operationLogs[i];
+          var mergedLog = {
+            id: l.id,
+            timestamp: l.timestamp || new Date().toISOString(),
+            classId: classId,
+            studentId: l.studentId,
+            studentName: l.studentName || '',
+            actionType: l.actionType || '',
+            details: l.details || '',
+            coinDelta: parseInt(l.coinDelta) || 0,
+            expDelta: parseInt(l.expDelta) || 0,
+            petId: l.petId || null,
+            extra: l.extra || null,
+            snapshot: l.snapshot || null,
+            fullSnapshot: l.fullSnapshot || null,
+            reverted: !!l.reverted,
+            _synced: true,
+            _fromSupabase: true
+          };
+          if (mergedById[l.id] !== undefined) {
+            merged[mergedById[l.id]] = mergedLog;
+          } else {
+            merged.push(mergedLog);
+            mergedById[l.id] = merged.length - 1;
+            addedCount++;
+          }
+          break;
+        }
+      }
+    });
+    
+    if (addedCount === 0) {
+      console.log('[DAL] v65 No missing logs found locally, skipping re-write');
+      return;
+    }
+    
+    // Sort and cap
+    merged.sort(function(a, b) {
+      return (b.timestamp || '').localeCompare(a.timestamp || '');
+    });
+    if (merged.length > _OP_LOGS_MAX_PER_CLASS) {
+      merged = merged.slice(0, _OP_LOGS_MAX_PER_CLASS);
+    }
+    
+    console.log('[DAL] v65 Re-merging: added', addedCount, 'missing logs, total:', merged.length);
+    
+    // Re-write
+    return db.from('classes').update({
+      operation_logs_json: JSON.stringify(merged)
+    }).eq('id', classId).then(function(ur) {
+      if (ur.error) {
+        console.error('[DAL] v65 Re-write failed:', ur.error.message);
+      } else {
+        console.log('[DAL] v65 Re-write OK:', merged.length, 'logs for class', classId);
+        _lastOwnWriteTime = Date.now();
+        // Verify again to make sure our re-write wasn't overwritten
+        return _verifyLogWrite(classId, writtenLogIds, retryCount + 1);
+      }
+    });
+  });
+}
+
 // v29: Write unsynced logs to classes.operation_logs_json — same channel as student data.
 // Uses upsert (proven reliable on mobile). Max 5000 logs per class, oldest trimmed.
 function _writeUnsyncedLogsToSupabase() {
@@ -1103,6 +1210,8 @@ function _writeUnsyncedLogsToSupabase() {
         }
 
         // v28: Use update (not upsert) to only modify operation_logs_json.
+        // v65: Track the log IDs we wrote for verification
+        var writtenLogIds = newLogs.map(function(entry) { return entry.log.id; });
         return db.from('classes').update({
           operation_logs_json: JSON.stringify(existing)
         }).eq('id', cid).then(function(ur) {
@@ -1115,9 +1224,11 @@ function _writeUnsyncedLogsToSupabase() {
               }
             });
           } else {
-            console.log('[DAL] v64 Upserted ' + existing.length + ' logs for class', cid);
+            console.log('[DAL] v65 Upserted ' + existing.length + ' logs for class', cid);
             // v64: Update own write time to prevent unnecessary realtime refresh
             _lastOwnWriteTime = Date.now();
+            // v65: Verify our logs weren't overwritten by another device
+            return _verifyLogWrite(cid, writtenLogIds, 0);
           }
         });
       });
