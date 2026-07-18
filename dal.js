@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '65.0';
+var _DAL_VERSION = '66.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -1278,6 +1278,24 @@ window._checkOpLogsStatus = function() {
   console.log('Writing in progress:', _writingLogsToSupabase);
   console.log('Pending writes:', _pendingLogWrites);
   
+  // v65: Show detailed info about unsynced logs
+  if (window.operationLogs) {
+    var unsynced = window.operationLogs.filter(function(l) { return !l._synced; });
+    if (unsynced.length > 0) {
+      console.log('\n=== Unsynced Logs Details ===');
+      var classIdStats = {};
+      unsynced.forEach(function(l) {
+        var cid = l.classId || 'null';
+        if (!classIdStats[cid]) classIdStats[cid] = 0;
+        classIdStats[cid]++;
+      });
+      console.log('Unsynced logs by classId:', classIdStats);
+      console.log('Sample unsynced logs:', unsynced.slice(0, 5).map(function(l) {
+        return { id: l.id, classId: l.classId, actionType: l.actionType, timestamp: l.timestamp };
+      }));
+    }
+  }
+  
   if (db && currentUser) {
     var classIds = [];
     if (currentUser.type === 'teacher') {
@@ -1307,6 +1325,45 @@ window._checkOpLogsStatus = function() {
     }
   }
   return 'Check browser console for details';
+};
+
+// v65: Force sync unsynced logs - useful for debugging and fixing sync issues
+window._forceSyncLogs = function() {
+  if (!window.operationLogs) {
+    console.log('No operation logs found');
+    return 'No operation logs found';
+  }
+  
+  var unsynced = window.operationLogs.filter(function(l) { return !l._synced; });
+  console.log('Found', unsynced.length, 'unsynced logs');
+  
+  if (unsynced.length === 0) {
+    console.log('All logs are already synced');
+    return 'All logs are already synced';
+  }
+  
+  // Show breakdown by classId
+  var byClass = {};
+  unsynced.forEach(function(l) {
+    var cid = l.classId || 'null';
+    if (!byClass[cid]) byClass[cid] = [];
+    byClass[cid].push(l);
+  });
+  
+  console.log('Unsynced logs by classId:');
+  Object.keys(byClass).forEach(function(cid) {
+    console.log('  classId', cid, ':', byClass[cid].length, 'logs');
+    console.log('    Sample:', byClass[cid][0]);
+  });
+  
+  // Trigger sync
+  console.log('Triggering sync...');
+  if (typeof _writeUnsyncedLogsToSupabase === 'function') {
+    _writeUnsyncedLogsToSupabase();
+    return 'Sync triggered. Check console for results.';
+  } else {
+    return 'Sync function not available';
+  }
 };
 
 /* ===== Main Load Entry ===== */
