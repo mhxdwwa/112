@@ -42,14 +42,22 @@ function scheduleRender(flags) {
     if (f & _RF_JH) renderJianghuPage();
   });
 }
-function scheduleAllRenders() { scheduleRender(_RF_GRID | _RF_TOP3 | _RF_PK | _RF_JH); }
+function scheduleAllRenders() {
+  // 始终渲染当前可见页面 + 成长榜（数据共享）
+  scheduleRender(_RF_GRID | _RF_TOP3);
+  // 只在页面可见时渲染 PK 和江湖行页面
+  var pkPage = document.getElementById('pk-page');
+  var jhPage = document.getElementById('jianghu-page');
+  if (pkPage && pkPage.classList.contains('active')) scheduleRender(_RF_PK);
+  if (jhPage && jhPage.classList.contains('active')) scheduleRender(_RF_JH);
+}
 
 // ========== 性能优化：低端设备检测与降级 ==========
 (function(){
   var isLowEnd = false;
   // 检测低端设备：内存少、CPU核心少、或触屏旧设备
-  if(navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) isLowEnd = true;
-  if(navigator.deviceMemory && navigator.deviceMemory <= 2) isLowEnd = true;
+  if(navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) isLowEnd = true;
+  if(navigator.deviceMemory && navigator.deviceMemory <= 4) isLowEnd = true;
   // 帧率检测：如果前30帧平均低于45fps，启用降级
   var _perfFrames = [], _perfStart = 0, _perfChecked = false;
   function _perfCheck(ts){
@@ -840,8 +848,26 @@ function refreshHistoryModalIfOpen(){
   if(!_currentHistoryMonth || months.indexOf(_currentHistoryMonth)===-1) _currentHistoryMonth = months[0];
   var contentEl = modalOverlay.querySelector('.modal-content');
   if(contentEl) {
-    // 保存滚动位置
+    // === 增量更新优化：先检查日志数量是否变化，无变化则跳过 ===
+    var newLogCount = getAllLogsForMonth(_currentHistoryMonth).filter(function(log) {
+      if(log.classId) { if(log.classId.toString() !== (currentClassId || '').toString()) return false; }
+      else if(curClass) { if(!curClass.students.some(function(s){return s.id.toString()===log.studentId.toString();})) return false; }
+      else return false;
+      if(_historyFilterEnabled && _historyFilterStudentId) {
+        if(log.studentId.toString() !== _historyFilterStudentId.toString()) return false;
+      }
+      return true;
+    }).length;
     var logList = contentEl.querySelector('#historyLogList');
+    var existingCount = logList ? logList.children.length : -1;
+    // 如果日志数量没变，大概率内容没变，跳过重建（避免闪烁）
+    if (existingCount === newLogCount && newLogCount > 0) {
+      // 只更新标题（月份/班级名可能变了）
+      if(titleEl) titleEl.textContent = '\uD83D\uDCDC 历史操作记录【' + className + '】';
+      return;
+    }
+    // 数量变了，需要重建（新增/撤销了日志）
+    // 保存滚动位置
     var savedScrollTop = logList ? logList.scrollTop : 0;
     // 重建内容
     contentEl.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
@@ -1620,14 +1646,21 @@ let _gridStudents=[], _gridRenderedCount=0;
 const _GRID_BATCH_SIZE=12;
 let _gridObserver=null, _gridBatchBusy=false;
 
+/* 快速计算学生数据哈希，用于 DOM diff 判断卡片是否需要更新 */
+function _studentDataHash(s) {
+  var p = getActivePet(s);
+  if (!p) return s.id + '_nopet_' + (s.coins||0);
+  return s.id + '_' + (s.coins||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (s.pets?s.pets.length:0);
+}
+
 function _generateStudentCardHTML(s){
   updatePetDeathStatus(s);const activePet = getActivePet(s);
   if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=1440?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
   const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
   let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
   const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
-  return `<div class="${cardClass}" onclick="openStudentModal('${s.id}')">${fx.topHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}${fx.titleHtml}<div class="home-pet-middle">${esc(s.name)}·${esc(p.nickname||p.name)}<span class="rename-pet-btn" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" title="修改宠物名字">✏️</span></div><div class="home-pet-bottom"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;
-  }else{return `<div class="home-pet-card" onclick="showAdoptModal('${s.id}')"><div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}
+  return `<div class="${cardClass}" data-sid="${s.id}" data-hash="${_studentDataHash(s)}" onclick="openStudentModal('${s.id}')">${fx.topHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}${fx.titleHtml}<div class="home-pet-middle">${esc(s.name)}·${esc(p.nickname||p.name)}<span class="rename-pet-btn" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" title="修改宠物名字">✏️</span></div><div class="home-pet-bottom"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;
+  }else{return `<div class="home-pet-card" data-sid="${s.id}" data-hash="${_studentDataHash(s)}" onclick="showAdoptModal('${s.id}')"><div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}
 
 function _renderGridBatch(grid){
   if(_gridBatchBusy) return;
@@ -1681,24 +1714,71 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;}
   // 使用排序模式（仅教师账户下生效）
   var _sortMode = _isTeacher() ? (_petSortModes[currentClassId] || 0) : 0;
-  _gridStudents = _sortMode > 0 ? _getSortedStudents(cur.students, _sortMode) : cur.students; _gridRenderedCount=0; grid.innerHTML='';
+  _gridStudents = _sortMode > 0 ? _getSortedStudents(cur.students, _sortMode) : cur.students;
   // 更新排序按钮显示（切换班级时保持正确状态）
   if (_sortBtn && _isTeacher()) {
     var _curMode = _petSortModes[currentClassId] || 0;
     _sortBtn.innerHTML = '<span>' + _SORT_LABELS[_curMode].split(' ')[0] + '</span> ' + _SORT_LABELS[_curMode].split(' ').slice(1).join(' ');
   }
-  _renderGridBatch(grid);
-  if(_gridRenderedCount<_gridStudents.length){
-    const sentinel=document.createElement('div');sentinel.id='grid-scroll-sentinel';sentinel.style.cssText='height:1px;width:100%;';
-    grid.parentNode.insertBefore(sentinel,grid.nextSibling);
-    _gridObserver=new IntersectionObserver((entries)=>{
-      if(entries[0].isIntersecting && _gridRenderedCount<_gridStudents.length){
-        _renderGridBatch(grid);
-        if(_gridRenderedCount>=_gridStudents.length){_gridObserver.disconnect();sentinel.remove();}
-      }
-    },{rootMargin:'300px'});
-    _gridObserver.observe(sentinel);
-    requestAnimationFrame(()=>_gridCheckSentinel(grid,sentinel));
+  // === DOM diff: 增量更新卡片，避免全量重建导致闪烁 ===
+  var existingCards = {};
+  grid.querySelectorAll('.home-pet-card[data-sid]').forEach(function(card) {
+    existingCards[card.dataset.sid] = card;
+  });
+  var newSids = {};
+  _gridStudents.forEach(function(s) { newSids[s.id] = true; });
+  // 移除不再存在的学生卡片
+  Object.keys(existingCards).forEach(function(sid) {
+    if (!newSids[sid]) existingCards[sid].remove();
+  });
+  // 检查是否有需要更新或新增的卡片
+  var needsFullRebuild = false;
+  var changedSids = [];
+  _gridStudents.forEach(function(s) {
+    var existing = existingCards[s.id];
+    var newHash = _studentDataHash(s);
+    if (!existing) {
+      needsFullRebuild = true; // 新学生，需要创建卡片
+    } else if (existing.dataset.hash !== newHash) {
+      changedSids.push(s.id); // 数据变了，需要更新
+    }
+    // else: hash 相同，跳过
+  });
+  // 如果没有新增也没有变化，直接返回（最快路径）
+  if (!needsFullRebuild && changedSids.length === 0 && Object.keys(existingCards).length === _gridStudents.length) {
+    return;
+  }
+  // 如果有新增卡片或排序变了，做全量重建（保持排序正确）
+  if (needsFullRebuild || changedSids.length > 2) {
+    _gridRenderedCount = 0; grid.innerHTML = '';
+    _renderGridBatch(grid);
+    if(_gridRenderedCount<_gridStudents.length){
+      const sentinel=document.createElement('div');sentinel.id='grid-scroll-sentinel';sentinel.style.cssText='height:1px;width:100%;';
+      grid.parentNode.insertBefore(sentinel,grid.nextSibling);
+      if(_gridObserver) _gridObserver.disconnect();
+      _gridObserver=new IntersectionObserver((entries)=>{
+        if(entries[0].isIntersecting && _gridRenderedCount<_gridStudents.length){
+          _renderGridBatch(grid);
+          if(_gridRenderedCount>=_gridStudents.length){_gridObserver.disconnect();sentinel.remove();}
+        }
+      },{rootMargin:'300px'});
+      _gridObserver.observe(sentinel);
+      requestAnimationFrame(()=>_gridCheckSentinel(grid,sentinel));
+    }
+  } else {
+    // 只更新变化的卡片（少量变化，1-2张卡片）
+    changedSids.forEach(function(sid) {
+      var oldCard = existingCards[sid];
+      if (!oldCard) return;
+      var s = _gridStudents.find(function(st) { return st.id == sid; });
+      if (!s) return;
+      var temp = document.createElement('div');
+      temp.innerHTML = _generateStudentCardHTML(s);
+      var newCard = temp.firstElementChild;
+      if (newCard) oldCard.replaceWith(newCard);
+    });
+    _gridRenderedCount = _gridStudents.length; // 标记全部已渲染
+    _applyGridBatchPostProcess();
   }
 }
 function _gridCheckSentinel(grid,sentinel){
