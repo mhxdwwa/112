@@ -395,6 +395,8 @@ function getAvailableMonths(){
   return [...months].sort().reverse();
 }
 let _currentHistoryMonth = null;
+let _historyFilterStudentId = null; // 历史操作筛选：选中的学生ID（null表示不筛选）
+let _historyFilterEnabled = false;  // 历史操作筛选：是否启用筛选
 const DATA_FOLDER_NAME = '数据';
 const DATA_FILES = {
   classPetData: '班级宠物数据.json',
@@ -858,9 +860,14 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
   const isStudentView = _isStudentHistoryView;
   const classLogs = allLogs.filter(log => {
     // v12: Use toString() comparison to avoid type mismatch (number vs string)
-    if(log.classId) return log.classId.toString() === (currentClassId || '').toString();
-    if(curClass) return curClass.students.some(s=>s.id.toString()===log.studentId.toString());
-    return false;
+    if(log.classId) { if(log.classId.toString() !== (currentClassId || '').toString()) return false; }
+    else if(curClass) { if(!curClass.students.some(s=>s.id.toString()===log.studentId.toString())) return false; }
+    else return false;
+    // 筛选：如果启用筛选且选中了学生，只显示该学生的记录
+    if(_historyFilterEnabled && _historyFilterStudentId) {
+      if(log.studentId.toString() !== _historyFilterStudentId.toString()) return false;
+    }
+    return true;
   });
   let html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center;">';
   html += '<span style="font-size:13px;color:#886;margin-right:4px;">月份：</span>';
@@ -869,6 +876,14 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     const isActive = m === activeMonth;
     html += `<button onclick="switchHistoryMonth('${m}')" style="padding:4px 12px;border-radius:14px;border:1.5px solid ${isActive?'#e8637a':'#e0d0c8'};background:${isActive?'linear-gradient(135deg,#e8637a,#f5a054)':'#fff8f5'};color:${isActive?'#fff':'#886'};font-size:12px;font-weight:${isActive?'700':'400'};cursor:pointer;transition:all 0.2s;">${label}${m===curMonth?' (本月)':''}</button>`;
   });
+  html += '</div>';
+  // 筛选功能：在月份按钮行后面添加
+  html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">';
+  html += '<input type="checkbox" id="historyFilterCheck" ' + (_historyFilterEnabled ? 'checked' : '') + ' onchange="toggleHistoryFilter(this.checked)" style="width:16px;height:16px;cursor:pointer;">';
+  html += '<button onclick="showHistoryStudentFilter()" style="padding:4px 12px;border-radius:14px;border:1.5px solid ' + (_historyFilterEnabled && _historyFilterStudentId ? '#52c41a' : '#e0d0c8') + ';background:' + (_historyFilterEnabled && _historyFilterStudentId ? '#f0fff0' : '#fff8f5') + ';color:' + (_historyFilterEnabled && _historyFilterStudentId ? '#389e0d' : '#886') + ';font-size:12px;cursor:pointer;transition:all 0.2s;">筛选' + (_historyFilterStudentId ? '：' + _getHistoryFilterStudentName() : '') + '</button>';
+  if (_historyFilterEnabled && _historyFilterStudentId) {
+    html += '<button onclick="clearHistoryFilter()" style="padding:2px 8px;border-radius:10px;border:1px solid #ffcccc;background:#fff5f5;color:#cc5555;font-size:11px;cursor:pointer;">✕ 清除</button>';
+  }
   html += '</div>';
   if(classLogs.length===0){
     html += '<div style="text-align:center;padding:25px;color:#bba;">该月无操作记录</div>';
@@ -946,6 +961,90 @@ function toggleRevertedVisibility(show){
     el.style.display = show ? '' : 'none';
   });
 }
+// === 历史操作筛选功能 ===
+function _getHistoryFilterStudentName() {
+  if (!_historyFilterStudentId) return '';
+  var curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) return '未知';
+  var stu = curClass.students.find(s => s.id.toString() === _historyFilterStudentId.toString());
+  return stu ? stu.name : '未知';
+}
+function toggleHistoryFilter(enabled) {
+  _historyFilterEnabled = enabled;
+  if (!enabled) _historyFilterStudentId = null;
+  _refreshHistoryContent();
+}
+function clearHistoryFilter() {
+  _historyFilterStudentId = null;
+  _historyFilterEnabled = false;
+  _refreshHistoryContent();
+}
+function _refreshHistoryContent() {
+  var curClass = classesData.find(c => c.id === currentClassId);
+  var className = curClass ? curClass.name : '未选择班级';
+  var months = getAvailableMonths();
+  if (months.length === 0) return;
+  if (!_currentHistoryMonth || months.indexOf(_currentHistoryMonth) === -1) _currentHistoryMonth = months[0];
+  var container = document.querySelector('.modal-content');
+  if (container) container.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+}
+function showHistoryStudentFilter() {
+  var curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass || !curClass.students || curClass.students.length === 0) {
+    alert('当前班级没有学生');
+    return;
+  }
+  var students = curClass.students;
+  _renderHistoryFilterStudentList(students, _historyFilterStudentId);
+}
+function _renderHistoryFilterStudentList(students, selectedId) {
+  var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" id="historyFilterModal">';
+  html += '<div style="background:#fff;border-radius:20px;padding:24px;width:900px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
+  // Header
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+  html += '<div style="font-size:18px;font-weight:700;">📋 选择学生 - 历史操作筛选</div>';
+  html += '<button onclick="closeHistoryFilterModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;">×</button>';
+  html += '</div>';
+  // Description
+  html += '<div style="font-size:13px;color:#888;margin-bottom:14px;">点击学生姓名进行筛选，筛选后只显示该学生的操作记录。</div>';
+  // Student list
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;overflow-y:auto;border:1.5px solid rgba(255,210,200,0.6);border-radius:18px;padding:12px;background:#fffaf5;align-content:flex-start;max-height:400px;">';
+  students.forEach(function(stu) {
+    var isSelected = selectedId && selectedId.toString() === stu.id.toString();
+    var bgColor = isSelected ? '#e8ffe8' : '#fff';
+    var borderColor = isSelected ? '#52c41a' : '#ffe2d6';
+    html += '<div onclick="onHistoryFilterStudentClick(' + stu.id + ')" style="display:flex;align-items:center;padding:5px 10px;border:1.5px solid ' + borderColor + ';border-radius:12px;gap:6px;background:' + bgColor + ';font-size:14px;white-space:nowrap;cursor:pointer;transition:all 0.15s;">';
+    if (isSelected) {
+      html += '<span style="width:16px;height:16px;border-radius:50%;background:#52c41a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;flex-shrink:0;">✓</span>';
+    } else {
+      html += '<span style="width:16px;height:16px;border-radius:50%;border:1.5px solid #ddd;flex-shrink:0;"></span>';
+    }
+    html += '<span style="font-weight:600;">' + (stu.name || '未命名') + '</span>';
+    html += '<span style="font-size:12px;color:#999;">💰' + (stu.coins || 0) + '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  // Bottom buttons
+  html += '<div style="text-align:center;margin-top:14px;">';
+  html += '<button onclick="closeHistoryFilterModal()" style="background:#f0f0f0;color:#666;border:none;border-radius:12px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;">取消</button>';
+  html += '</div>';
+  html += '</div></div>';
+  var container = document.getElementById('modalContainer');
+  if (container) container.innerHTML = html;
+}
+window.onHistoryFilterStudentClick = function(studentId) {
+  _historyFilterStudentId = parseInt(studentId);
+  _historyFilterEnabled = true;
+  closeHistoryFilterModal();
+  _refreshHistoryContent();
+  // Also update the checkbox
+  var check = document.getElementById('historyFilterCheck');
+  if (check) check.checked = true;
+};
+window.closeHistoryFilterModal = function() {
+  var modal = document.getElementById('historyFilterModal');
+  if (modal) modal.remove();
+};
 function getPetImage(petName, level=1) { const cfg = PET_CONFIG[petName]; if (!cfg) return '<span>🐾</span>'; return `<img src="${_img(`${cfg.id}/${level}.webp`)}" alt="${petName}" loading="lazy" decoding="async" style="max-width:100%; max-height:100%; object-fit: contain;" onerror="this.onerror=null; this.parentNode.innerHTML='<span style=\'font-size:48px;\'>${cfg.emoji}</span>';">`; }
 function getEggImage() { return `<img src="${_img('蛋.webp')}" alt="宠物蛋" class="egg-img" loading="lazy" decoding="async" style="max-width:100%; max-height:100%; object-fit: contain;" onerror="this.onerror=null; this.parentNode.innerHTML='<span style=\'font-size:60px;\'>🥚</span>';">`; }
 
