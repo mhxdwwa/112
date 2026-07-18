@@ -68,10 +68,18 @@ function _loadFromCache() {
       console.log('[DAL] Cache expired, ignoring');
       return null;
     }
-    // Check user match
-    var userId = currentUser ? (currentUser.id || currentUser.studentId || 'anon') : 'anon';
+    // v47: Check user match — must have valid currentUser and matching userId
+    if (!currentUser) {
+      console.log('[DAL] Cache load skipped: currentUser not set');
+      return null;
+    }
+    var userId = currentUser.id || currentUser.studentId || 'anon';
+    if (userId === 'anon' || payload.userId === 'anon') {
+      console.log('[DAL] Cache load skipped: anonymous user');
+      return null;
+    }
     if (payload.userId !== userId) {
-      console.log('[DAL] Cache user mismatch, ignoring');
+      console.log('[DAL] Cache user mismatch (' + payload.userId + ' !== ' + userId + '), ignoring');
       return null;
     }
     if (!payload.classesData || !Array.isArray(payload.classesData) || payload.classesData.length === 0) return null;
