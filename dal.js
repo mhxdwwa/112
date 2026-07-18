@@ -1,5 +1,5 @@
 /**
- * dal.js v54 — Robust Data Access Layer with Smart Merge
+ * dal.js v55 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1552,8 +1552,13 @@ function _syncTeacherToSupabase() {
               else console.log('[DAL] v54 Deleted', studentIds.length, ' students from removed classes');
             });
           }
-          // Then delete the classes
+          // v55: Delete custom_actions referencing these classes (fixes 409 FK constraint error)
           return chain.then(function() {
+            return db.from('custom_actions').delete().in('class_id', toDelete);
+          }).then(function(caR) {
+            if (caR.error) console.error('[DAL] v55 custom_actions delete error:', caR.error);
+            else console.log('[DAL] v55 Deleted custom_actions for removed classes');
+            // Then delete the classes
             return db.from('classes').delete().in('id', toDelete);
           }).then(function(cr) {
             if (cr.error) console.error('[DAL] v54 class delete error:', cr.error);
