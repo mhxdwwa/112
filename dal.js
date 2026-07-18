@@ -28,9 +28,61 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '44.1';
+var _DAL_VERSION = '45.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
+
+/* ===== v45: localStorage Cache for Instant First Paint ===== */
+var _CACHE_KEY = '_dal_cache_v1';
+var _CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+var _loadedFromCache = false;
+
+function _saveToCache() {
+  try {
+    if (!classesData || !Array.isArray(classesData) || classesData.length === 0) return;
+    var userId = currentUser ? (currentUser.id || currentUser.studentId || 'anon') : 'anon';
+    var payload = {
+      v: 1,
+      userId: userId,
+      ts: Date.now(),
+      classesData: classesData,
+      currentClassId: (typeof currentClassId !== 'undefined') ? currentClassId : null,
+      customActions: (typeof customActions !== 'undefined') ? customActions : [],
+      operationLogs: (typeof window.operationLogs !== 'undefined') ? window.operationLogs.slice(0, 500) : []
+    };
+    localStorage.setItem(_CACHE_KEY, JSON.stringify(payload));
+    console.log('[DAL] Cache saved (' + (JSON.stringify(payload).length / 1024).toFixed(1) + ' KB)');
+  } catch(e) {
+    console.warn('[DAL] Cache save failed:', e.message);
+  }
+}
+
+function _loadFromCache() {
+  try {
+    var raw = localStorage.getItem(_CACHE_KEY);
+    if (!raw) return null;
+    var payload = JSON.parse(raw);
+    if (!payload || payload.v !== 1) return null;
+    // Check age
+    if (Date.now() - payload.ts > _CACHE_MAX_AGE_MS) {
+      console.log('[DAL] Cache expired, ignoring');
+      return null;
+    }
+    // Check user match
+    var userId = currentUser ? (currentUser.id || currentUser.studentId || 'anon') : 'anon';
+    if (payload.userId !== userId) {
+      console.log('[DAL] Cache user mismatch, ignoring');
+      return null;
+    }
+    if (!payload.classesData || !Array.isArray(payload.classesData) || payload.classesData.length === 0) return null;
+    console.log('[DAL] Cache loaded: ' + payload.classesData.length + ' classes, age=' + 
+      Math.round((Date.now() - payload.ts) / 1000) + 's');
+    return payload;
+  } catch(e) {
+    console.warn('[DAL] Cache load failed:', e.message);
+    return null;
+  }
+}
 
 /* ===== Snapshot System (v7.0) ===== */
 // _snapshotClassesData: what Supabase looked like when we last loaded/synced
@@ -570,6 +622,9 @@ function _loadTeacherFromSupabase() {
     // Take snapshot after initial load
     _takeSnapshot();
 
+    // v45: Save to localStorage cache for instant next-load
+    _saveToCache();
+
     return Promise.all([
       _loadCustomActions(),
       _loadOperationLogs()
@@ -685,6 +740,9 @@ function _loadStudentFromSupabase() {
     _takeSnapshot();
 
     console.log('[DAL] Student loaded: ' + classmates.length + ' classmates, ' + classPets.length + ' pets');
+
+    // v45: Save to localStorage cache for instant next-load
+    _saveToCache();
 
     return Promise.all([
       _loadCustomActions(),
@@ -1576,6 +1634,8 @@ function _syncToSupabase() {
     // can safely merge quiz_state changes from the server again.
     window._quizStateLocallyModified = false;
     _updateCloudStatus('synced');
+    // v45: Update cache after successful sync
+    _saveToCache();
     console.log('[DAL] Data sync complete');
   }).catch(function(err) {
     _lastSyncFailed = true;
@@ -2206,27 +2266,73 @@ function importDataFromUSB() {
 }
 
 /* ===== Init ===== */
-function initDAL() {
-  if (_dalReady) return;
+// v45: Event-driven init — no more polling. Supabase/auth-check call window._onAuthReady() when ready.
+var _authReady = false;
+var _dbReady = false;
+window._onAuthReady = function() {
+  _authReady = true;
+  console.log('[DAL] Auth ready (event-driven)');
+  _tryInitDAL();
+};
+// Watch for db availability (Supabase client loaded via defer script)
+var _dbCheckInterval = null;
+function _watchForDb() {
+  if (typeof db !== 'undefined' && db) {
+    _dbReady = true;
+    if (_dbCheckInterval) { clearInterval(_dbCheckInterval); _dbCheckInterval = null; }
+    console.log('[DAL] DB ready (event-driven)');
+    _tryInitDAL();
+    return;
+  }
+  // Fallback: check every 200ms (max 5s)
+  if (!_dbCheckInterval) {
+    var _checks = 0;
+    _dbCheckInterval = setInterval(function() {
+      _checks++;
+      if ((typeof db !== 'undefined' && db) || _checks > 25) {
+        clearInterval(_dbCheckInterval);
+        _dbCheckInterval = null;
+        if (typeof db !== 'undefined' && db) {
+          _dbReady = true;
+          _tryInitDAL();
+        }
+      }
+    }, 200);
+  }
+}
+// Start watching immediately
+_watchForDb();
+// Also trigger auth check when auth-check.js finishes (it sets currentUser)
+// auth-check.js runs as defer, so it executes before DOMContentLoaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof currentUser !== 'undefined' && currentUser) {
+      _authReady = true;
+      _tryInitDAL();
+    }
+  });
+} else {
+  // DOM already loaded (shouldn't happen with defer, but just in case)
+  if (typeof currentUser !== 'undefined' && currentUser) {
+    _authReady = true;
+    _tryInitDAL();
+  }
+}
 
-  // Wait for Supabase client and auth
-  if (typeof db === 'undefined' || !db) {
-    console.log('[DAL] Waiting for Supabase client...');
-    setTimeout(initDAL, 1000);
-    return;
-  }
-  if (typeof currentUser === 'undefined' || !currentUser) {
-    console.log('[DAL] Waiting for currentUser...');
-    setTimeout(initDAL, 1000);
-    return;
-  }
+var _dalInitStarted = false;
+function _tryInitDAL() {
+  if (_dalInitStarted) return;
+  if (!_dbReady || !_authReady) return;
+  _dalInitStarted = true;
+  _initDALCore();
+}
+
+function _initDALCore() {
+  if (_dalReady) return;
 
   console.log('[DAL] Initializing v' + _DAL_VERSION + ' for ' + currentUser.type + ': ' + (currentUser.email || currentUser.studentName));
 
   // Clean up truly stale localStorage keys only.
-  // IMPORTANT: Do NOT clear 'operationLogs' or 'customActions' here — they may contain
-  // unsynced data from the previous session. app.js loads them at page start; if we clear
-  // them now and the Supabase load below fails, that data is permanently lost.
   var staleKeys = ['classPetData', '_dalDeletedClassIds', '_dalIdMap', '_dal_unsyncedFlag', 'deletedClasses', 'logArchives'];
   staleKeys.forEach(function(key) {
     try { localStorage.removeItem(key); } catch(e) {}
@@ -2236,28 +2342,35 @@ function initDAL() {
   // Show loading state
   _updateCloudStatus('syncing');
 
-  // Load data from Supabase (single source of truth)
-  loadFromSupabase().then(function() {
-    // Re-render the app with fresh data
+  // v45: Try loading from cache FIRST for instant first paint
+  var cached = _loadFromCache();
+  if (cached) {
+    _loadedFromCache = true;
+    classesData = cached.classesData;
+    if (cached.currentClassId && typeof currentClassId !== 'undefined') {
+      currentClassId = cached.currentClassId;
+    }
+    if (cached.customActions && typeof customActions !== 'undefined') {
+      customActions = cached.customActions;
+    }
+    if (cached.operationLogs && typeof window.operationLogs !== 'undefined') {
+      window.operationLogs = cached.operationLogs;
+    }
+    _takeSnapshot();
+
+    // Render UI immediately with cached data
+    console.log('[DAL] Rendering from cache for instant paint...');
     if (typeof init === 'function') init();
     if (typeof renderClassList === 'function') renderClassList();
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    
-    // Update PK invite badge for students
-    if (typeof _updatePKInviteBadge === 'function') {
-      setTimeout(_updatePKInviteBadge, 500);
-    }
 
-    // Wrap save functions to auto-sync
+    // Hide loading overlay immediately — user sees data!
+    if (typeof window._hideDalLoading === 'function') window._hideDalLoading();
+    _dalReady = true;
+    _updateCloudStatus('syncing'); // Still syncing fresh data
+
+    // Wrap save functions early so user interactions are captured
     wrapSaveFunctions();
-
-    // Setup realtime subscriptions
-    _setupRealtimeSubscriptions();
-
-    // Setup page lifecycle handlers
-    _setupPageLifecycle();
-
-    // Apply student restrictions if needed
     applyStudentRestrictions();
 
     // Setup cloud status click for manual sync
@@ -2267,48 +2380,117 @@ function initDAL() {
       cloudEl.onclick = function() { forceManualSync(); };
     }
 
+    // Now load fresh data from Supabase in background
+    console.log('[DAL] Background refresh from Supabase...');
+    loadFromSupabase().then(function() {
+      _loadedFromCache = false;
+      // Re-render with fresh data
+      if (typeof init === 'function') init();
+      if (typeof renderClassList === 'function') renderClassList();
+      if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+
+      // Setup realtime subscriptions
+      _setupRealtimeSubscriptions();
+      _setupPageLifecycle();
+
+      _updateCloudStatus('synced');
+      console.log('[DAL] Background refresh complete ✓');
+
+      // PK badge, RLS check, etc.
+      _postInitSetup();
+    }).catch(function(err) {
+      console.warn('[DAL] Background refresh failed, using cached data:', err.message);
+      _setupRealtimeSubscriptions();
+      _setupPageLifecycle();
+      _updateCloudStatus('error');
+      _postInitSetup();
+    });
+
+    return;
+  }
+
+  // No cache — do full load (original flow)
+  console.log('[DAL] No cache available, doing full load...');
+  loadFromSupabase().then(function() {
+    if (typeof init === 'function') init();
+    if (typeof renderClassList === 'function') renderClassList();
+    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    
+    if (typeof _updatePKInviteBadge === 'function') {
+      setTimeout(_updatePKInviteBadge, 500);
+    }
+
+    wrapSaveFunctions();
+    _setupRealtimeSubscriptions();
+    _setupPageLifecycle();
+    applyStudentRestrictions();
+
+    var cloudEl = document.getElementById('cloudSyncStatus');
+    if (cloudEl) {
+      cloudEl.style.cursor = 'pointer';
+      cloudEl.onclick = function() { forceManualSync(); };
+    }
+
     _dalReady = true;
     _updateCloudStatus('synced');
-    // Hide loading overlay
     if (typeof window._hideDalLoading === 'function') window._hideDalLoading();
     console.log('[DAL] Ready ✓');
     
-    // Periodic PK badge check for students (every 10 seconds)
-    if (currentUser.type === 'student' && typeof _updatePKInviteBadge === 'function') {
-      setInterval(_updatePKInviteBadge, 10000);
-    }
-    
-    // v18: For teachers, auto-check if operation_logs RLS allows student reads
-    if (currentUser.type === 'teacher') {
-      setTimeout(function() {
-        var classId = typeof currentClassId !== 'undefined' ? currentClassId : (classesData[0] ? classesData[0].id : null);
-        if (!classId) return;
-        db.from('operation_logs').select('id').eq('class_id', classId).limit(1).then(function(r) {
-          if (r.error) {
-            console.warn('[DAL] v18 AUTO-CHECK: operation_logs RLS is blocking reads! Students cannot see your operation records.');
-            console.warn('[DAL] v18 FIX SQL:\n' +
-              'CREATE POLICY IF NOT EXISTS "Students can read class operation logs" ON operation_logs FOR SELECT USING (true);\n' +
-              'CREATE POLICY IF NOT EXISTS "Anyone can insert operation logs" ON operation_logs FOR INSERT WITH CHECK (true);\n' +
-              'CREATE POLICY IF NOT EXISTS "Anyone can update operation logs" ON operation_logs FOR UPDATE USING (true);');
-            if (typeof showNotification === 'function') {
-              showNotification('重要提示', '学生无法看到操作记录！请在浏览器控制台(F12)查看修复方法，或在Supabase SQL Editor中执行修复SQL', 'error');
-            }
-          }
-        }).catch(function() {});
-      }, 3000);
-    }
+    _postInitSetup();
   }).catch(function(err) {
     console.error('[DAL] Init load failed:', err);
     _updateCloudStatus('error');
     _showNotification('数据加载失败，请刷新页面重试', 'error');
+    // Hide overlay even on failure (safety timeout will also do this)
+    if (typeof window._hideDalLoading === 'function') window._hideDalLoading();
 
-    // Retry after 5 seconds
     setTimeout(function() {
       _dalReady = false;
-      initDAL();
+      _dalInitStarted = false;
+      _initDALCore();
     }, 5000);
   });
 }
 
+function _postInitSetup() {
+  // Periodic PK badge check for students (every 10 seconds)
+  if (currentUser.type === 'student' && typeof _updatePKInviteBadge === 'function') {
+    setInterval(_updatePKInviteBadge, 10000);
+  }
+  
+  // v18: For teachers, auto-check if operation_logs RLS allows student reads
+  if (currentUser.type === 'teacher') {
+    setTimeout(function() {
+      var classId = typeof currentClassId !== 'undefined' ? currentClassId : (classesData[0] ? classesData[0].id : null);
+      if (!classId) return;
+      db.from('operation_logs').select('id').eq('class_id', classId).limit(1).then(function(r) {
+        if (r.error) {
+          console.warn('[DAL] v18 AUTO-CHECK: operation_logs RLS is blocking reads!');
+        }
+      }).catch(function() {});
+    }, 3000);
+  }
+}
+
+// Keep initDAL as an alias for backward compatibility
+function initDAL() {
+  // Legacy entry point — the event-driven system handles init now
+  // But if called manually (e.g., from retry), try to init
+  if (!_dalInitStarted) {
+    if (typeof db !== 'undefined' && db) _dbReady = true;
+    if (typeof currentUser !== 'undefined' && currentUser) _authReady = true;
+    _tryInitDAL();
+  }
+}
+
 /* ===== Auto-init ===== */
-setTimeout(function() { initDAL(); }, 200);
+// v45: Event-driven init — no more setTimeout polling.
+// The _watchForDb() and DOMContentLoaded listener above handle triggering init.
+// auth-check.js should call window._onAuthReady() when currentUser is set.
+// Fallback: if after 3s auth hasn't fired, check manually.
+setTimeout(function() {
+  if (!_dalInitStarted && typeof currentUser !== 'undefined' && currentUser) {
+    _authReady = true;
+    _tryInitDAL();
+  }
+}, 3000);
