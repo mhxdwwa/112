@@ -1349,7 +1349,7 @@ function saveDeletedClasses(){safeLSSave('deletedClasses', deletedClasses); sche
 function showDeletedClassesModal(){if(deletedClasses.length===0){showModal('🗑️ 已删除班级','<div style="text-align:center;padding:20px;">暂无已删除的班级</div>',[{text:'关闭',onclick:'closeModal()'}],false);return;}let html='<div style="max-height:400px;overflow:auto;">';[...deletedClasses].reverse().forEach((cls,i)=>{const time=new Date(cls.deletedAt).toLocaleString();const stuCount=cls.students?cls.students.length:0;const petCount=cls.students?cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0):0;html+=`<div class="history-log-item"><div><div class="history-log-time">${time} 删除</div><div><strong>${esc(cls.name)}</strong></div><div style="font-size:12px;">👨‍🎓 ${stuCount}名学生 · 🐕 ${petCount}只宠物</div></div><div style="display:flex;gap:6px;"><button class="btn btn-primary" style="padding:6px 12px;" onclick="restoreClass('${cls.id}');closeModal();">恢复</button><button class="btn btn-danger" style="padding:6px 12px;" onclick="permanentDeleteClass('${cls.id}');closeModal();">彻底删除</button></div></div>`;});html+='</div>';showModal('🗑️ 已删除班级',html,[{text:'关闭',onclick:'closeModal()'}],true);}
 function restoreClass(id){const idx=deletedClasses.findIndex(c=>c.id===id);if(idx===-1){showNotification('恢复失败','未找到该班级数据','error');return;}const cls=deletedClasses[idx];const restored={id:cls.id,name:cls.name,students:JSON.parse(JSON.stringify(cls.students))};if(classesData.find(c=>c.id===restored.id)){restored.id=Date.now().toString();}classesData.push(restored);deletedClasses.splice(idx,1);saveClassData();saveDeletedClasses();currentClassId=restored.id;renderClassList();scheduleAllRenders();showNotification('恢复成功',`班级【${cls.name}】已恢复`,'success');}
 function permanentDeleteClass(id){if(!confirm('彻底删除后将无法恢复，确定？'))return;const idx=deletedClasses.findIndex(c=>c.id===id);if(idx!==-1){const name=deletedClasses[idx].name;deletedClasses.splice(idx,1);saveDeletedClasses();showNotification('已彻底删除',`班级【${name}】已永久删除`,'info');showDeletedClassesModal();}}
-function renderClassList(){ const c=document.getElementById('classListContainer'); if(classesData.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">暂无班级，点击新建</div>';return;} c.innerHTML=''; classesData.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);});}
+function renderClassList(){ const c=document.getElementById('classListContainer'); if(!c){console.warn('[DAL] renderClassList: classListContainer not found');return;} if(classesData.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">暂无班级，点击新建</div>';return;} c.innerHTML=''; classesData.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);});}
 let classDragIdx=null;
 function classDragStart(e){classDragIdx=+this.dataset.classIdx;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';}
 function classDragEnd(e){this.classList.remove('dragging');classDragIdx=null;document.querySelectorAll('.class-card.drag-over').forEach(el=>el.classList.remove('drag-over'));}
@@ -2805,6 +2805,10 @@ window.renderHomePetGrid = function() {
 };
 function attachCardHeartListeners() {
   document.querySelectorAll('.home-pet-card').forEach(card => {
+    // v46: Prevent duplicate listeners (called from both _applyGridBatchPostProcess and wrapper)
+    if (card.dataset.heartListenerAttached) return;
+    card.dataset.heartListenerAttached = '1';
+    
     const onclick = card.getAttribute('onclick');
     if (!onclick) return;
     const m = onclick.match(/openStudentModal\(['"]([^'"]+)['"]\)/);
@@ -9185,8 +9189,10 @@ window._escapedPetIds = new Set();
   function showCardPet(card) {
     const top = card.querySelector('.home-pet-top');
     if (top) {
-      const img = top.querySelector('img[data-escape-hidden]');
-      const span = top.querySelector('span[data-escape-hidden]');
+      // v46: Handle both data-escape-hidden attribute AND inline opacity:0 style
+      // (rebuilt cards from renderHomePetGrid use inline style, not data attribute)
+      const img = top.querySelector('img[data-escape-hidden]') || top.querySelector('img[style*="opacity: 0"]') || top.querySelector('img[style*="opacity:0"]');
+      const span = top.querySelector('span[data-escape-hidden]') || top.querySelector('span[style*="opacity: 0"]') || top.querySelector('span[style*="opacity:0"]');
       // 先移除提示
       const hint = top.querySelector('.escape-empty-hint');
       if (hint) { hint.style.opacity = '0'; setTimeout(() => hint.remove(), 300); }
@@ -10109,7 +10115,7 @@ window._escapedPetIds = new Set();
 
           // 宠物间互动检测
           let lastInteraction = 0;
-          const interactionInterval = setInterval(() => {
+          petData.interactionInterval = setInterval(() => {
             if (paused || petData.caught || !el.isConnected) return;
             if (Date.now() - lastInteraction < 5000) return;
             for (const other of escapedPets) {
@@ -10151,6 +10157,7 @@ window._escapedPetIds = new Set();
             if (pawprintInterval) clearInterval(pawprintInterval);
             if (speechTimeout) clearTimeout(speechTimeout);
             if (animalSoundInterval) clearInterval(animalSoundInterval);
+            if (petData.interactionInterval) clearInterval(petData.interactionInterval);
             if (interactionInterval) clearInterval(interactionInterval);
           }
 
@@ -10250,7 +10257,15 @@ window._escapedPetIds = new Set();
     if (!escapeActive) return;
     escapeActive = false;
     lastEscapeEnd = Date.now();
+    
+    // v46: Clear timers to prevent immediate re-escape
+    clearTimeout(guaranteedTimer);
+    clearTimeout(idleTimer);
+    
     escapedPets.forEach(p => {
+      // v46: Clear interaction interval to prevent leak
+      if (p.interactionInterval) clearInterval(p.interactionInterval);
+      
       // 查找当前有效的卡片元素（可能被 renderHomePetGrid 重建过）
       let currentCard = p.petInfo ? p.petInfo.card : null;
       if (p.petInfo && p.petInfo.studentId) {
