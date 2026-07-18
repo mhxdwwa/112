@@ -1,5 +1,5 @@
 /**
- * dal.js v58 — Robust Data Access Layer with Smart Merge
+ * dal.js v59 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -10,8 +10,10 @@
  * - Operation logs synced to Supabase (both teacher and student)
  * - v54: Bandwidth optimization — Realtime-aware polling, exclude heavy fields
  *   from class queries, filter students/pets by class_id at DB level
- * - v58: Smart refresh now syncs class list — removes deleted classes and adds
- *   new ones from server. Fixes "deleted class recreated by queued sync" bug.
+ * - v59: Fix delete-class race condition — Phase 1 now checks current classesData
+ *   (not captured forEach reference) to prevent re-upserting deleted classes.
+ *   Phase 6 tracks deleted class IDs across syncs to ensure Supabase cleanup.
+ *   Reverted v58 smartRefresh class list sync (caused conflicts with concurrent syncs).
  * 
  * Flow: loadFromSupabase() → classesData + snapshot → UI
  *       UI action → saveClassData() → _syncToSupabase() → Supabase → update snapshot
@@ -31,9 +33,10 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '58.0';
+var _DAL_VERSION = '59.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
+var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
 
 /* ===== v45: localStorage Cache for Instant First Paint ===== */
 var _CACHE_KEY = '_dal_cache_v2';
@@ -532,51 +535,6 @@ function _smartRefreshFromSupabase() {
       }
       if (myStu && _myBaseCoins === null) {
         _myBaseCoins = myStu.coins;
-      }
-    }
-
-    // v58: Sync class list — remove classes deleted on server, add new ones
-    // This fixes the "deleted class recreated" bug: _smartRefreshFromSupabase() previously
-    // only merged student/pet data within existing classes but never synced the class list.
-    // When a class was deleted, a queued sync would see it in classesData and re-upsert it.
-    if (!isStudent) {
-      var freshClassIds = {};
-      classes.forEach(function(c) { freshClassIds[c.id] = true; });
-      // Remove classes from classesData that no longer exist on server
-      var removedCount = 0;
-      for (var i = classesData.length - 1; i >= 0; i--) {
-        if (!freshClassIds[classesData[i].id]) {
-          console.log('[DAL] v58 Removing class ' + classesData[i].id + ' from classesData (deleted on server)');
-          classesData.splice(i, 1);
-          removedCount++;
-        }
-      }
-      // Add new classes from server that don't exist locally
-      var localClassIds = {};
-      classesData.forEach(function(c) { localClassIds[c.id] = true; });
-      classes.forEach(function(c) {
-        if (!localClassIds[c.id]) {
-          console.log('[DAL] v58 Adding new class ' + c.id + ' "' + c.name + '" from server');
-          classesData.push({
-            id: c.id,
-            name: c.name || '',
-            teacher_id: c.teacher_id,
-            students: [],
-            createdAt: c.created_at || null
-          });
-          changesApplied++;
-        }
-      });
-      if (removedCount > 0) {
-        changesApplied += removedCount;
-        // Update currentClassId if it was removed
-        if (typeof currentClassId !== 'undefined' && !freshClassIds[currentClassId]) {
-          currentClassId = classesData.length > 0 ? classesData[0].id : null;
-        }
-        // Clean up customActions for removed classes
-        if (typeof customActions !== 'undefined') {
-          customActions = customActions.filter(function(a) { return freshClassIds[a.class_id]; });
-        }
       }
     }
 
@@ -1230,7 +1188,24 @@ function _syncTeacherToSupabase() {
   // v48: Track ID mappings for new classes (string/overflow ID → real DB ID)
   var classIdMap = {}; // oldId → newId
 
+  // v59: Build set of CURRENT class IDs to detect classes deleted during sync.
+  // deleteClass() reassigns classesData to a new array, but the forEach below
+  // captures the OLD array reference. Without this check, a deleted class would
+  // be re-upserted by the running sync, causing the "delete doesn't persist" bug.
+  var currentClassIdSet = {};
+  classesData.forEach(function(c) { currentClassIdSet[c.id] = true; });
+
   classesData.forEach(function(cls) {
+    // v59: Skip if this class was deleted from classesData during this sync
+    // (deleteClass() reassigned the global classesData, removing this class)
+    if (!currentClassIdSet[cls.id]) {
+      console.log('[DAL] v59 Skipping deleted class ' + cls.id + ' in Phase 1');
+      // Track for Phase 6 cleanup — ensure it gets deleted from Supabase
+      if (_isValidInt4Id(cls.id) && _syncDeletedClassIds.indexOf(cls.id) === -1) {
+        _syncDeletedClassIds.push(cls.id);
+      }
+      return;
+    }
     var isNewClass = !_isValidInt4Id(cls.id);
 
     if (isNewClass) {
@@ -1590,6 +1565,16 @@ function _syncTeacherToSupabase() {
           toDelete.push(c.id);
         }
       });
+      // v59: Also include classes tracked as deleted during sync (race condition fix)
+      // These are classes that Phase 1 skipped because they were deleted mid-sync
+      _syncDeletedClassIds.forEach(function(id) {
+        if (toDelete.indexOf(id) === -1) {
+          toDelete.push(id);
+          console.log('[DAL] v59 Phase 6: also deleting tracked-deleted class', id);
+        }
+      });
+      // Clear the tracking array after use
+      _syncDeletedClassIds = [];
       if (toDelete.length > 0) {
         console.log('[DAL] v54 Deleting', toDelete.length, 'classes from Supabase that were removed locally:', toDelete);
         // First delete students and pets in those classes
