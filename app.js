@@ -6112,8 +6112,9 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
     const cx = parseFloat(cockpit.dataset.cx) || 0.50;
     const cy = parseFloat(cockpit.dataset.cy) || 0.46;
     
+    // v47: 向上偏移57px（约1.5cm @96DPI）
     cockpit.style.left = (oX + rW * cx) + 'px';
-    cockpit.style.top = (oY + rH * cy) + 'px';
+    cockpit.style.top = (oY + rH * cy - 57) + 'px';
   }
   
   positionCockpit(img1);
@@ -6187,8 +6188,9 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
     requestAnimationFrame(() => {
       const targetSize = 90;
       // 左侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.513, cy=0.44）
+      // v47: 向上偏移57px（约1.5cm @96DPI）
       const targetX1 = mecha1Bounds.left + mecha1Bounds.width * 0.513 - targetSize/2;
-      const targetY1 = mecha1Bounds.top + mecha1Bounds.height * 0.44 - targetSize/2;
+      const targetY1 = mecha1Bounds.top + mecha1Bounds.height * 0.44 - targetSize/2 - 57;
       petFly1.style.width = targetSize + 'px';
       petFly1.style.height = targetSize + 'px';
       petFly1.style.left = targetX1 + 'px';
@@ -6196,9 +6198,10 @@ async function runClassPKTransformSequence(student1, student2, pet1, pet2, robot
       petFly1.style.opacity = '0.6';
       
       // 右侧：飞向机甲胸口透明玻璃驾驶舱（cx=0.487, cy=0.44）
+      // v47: 向上偏移57px（约1.5cm @96DPI）
       const targetSize2 = 90;
       const targetX2 = mecha2Bounds.left + mecha2Bounds.width * 0.487 - targetSize2/2;
-      const targetY2 = mecha2Bounds.top + mecha2Bounds.height * 0.44 - targetSize2/2;
+      const targetY2 = mecha2Bounds.top + mecha2Bounds.height * 0.44 - targetSize2/2 - 57;
       petFly2.style.width = targetSize2 + 'px';
       petFly2.style.height = targetSize2 + 'px';
       petFly2.style.left = targetX2 + 'px';
