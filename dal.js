@@ -1626,8 +1626,10 @@ function _syncToSupabase() {
   // Previously, log writes were chained AFTER teacher sync, so if teacher sync
   // failed, logs would NEVER be written — causing the "records don't sync" bug.
   var _lastStudentSyncOk = null;
+  var _syncSucceeded = false;
   return syncFn().then(function(result) {
     _lastStudentSyncOk = result;
+    _syncSucceeded = true;
     _takeSnapshot();
     // v31: Clear quiz_state local modification flag after successful sync.
     // The sync has persisted the local quiz_state to Supabase, so smart refresh
@@ -1653,8 +1655,15 @@ function _syncToSupabase() {
     // v27: This runs regardless of whether data sync succeeded or failed.
     // Write unsynced operation logs independently.
     _dalSyncing = false;
-    _pendingLocalSave = false;
-    _lastOwnWriteTime = Date.now();
+    // v46: Only clear _pendingLocalSave if sync actually succeeded.
+    // If sync failed, we must remember there are unsaved changes for retry.
+    if (_syncSucceeded) {
+      _pendingLocalSave = false;
+      _lastOwnWriteTime = Date.now();
+    } else {
+      // Sync failed — keep _pendingLocalSave true so next sync attempt will retry
+      console.warn('[DAL] Sync failed — keeping _pendingLocalSave=true for retry');
+    }
     // For student: update base coins/pets ONLY if sync was confirmed successful
     // v28: Previously updated unconditionally, which caused coins to revert
     // if the student upsert had failed (delta was zeroed out).
@@ -1786,14 +1795,26 @@ function _refreshFromSupabase() {
 }
 
 // Immediate refresh — called by Realtime events (no debounce, instant push)
+var _immediateRefreshRetryCount = 0;
+var _IMMEDIATE_REFRESH_MAX_RETRIES = 10;
 function _immediateRefreshFromSupabase() {
   // Don't refresh while syncing
   if (_dalSyncing) {
-    console.log('[DAL] Immediate refresh skipped - sync in progress, will retry');
+    // v46: Limit retries to prevent unbounded timer chain
+    if (_immediateRefreshRetryCount >= _IMMEDIATE_REFRESH_MAX_RETRIES) {
+      console.warn('[DAL] Immediate refresh retry limit reached, giving up');
+      _immediateRefreshRetryCount = 0;
+      return;
+    }
+    console.log('[DAL] Immediate refresh skipped - sync in progress, will retry (' + _immediateRefreshRetryCount + '/' + _IMMEDIATE_REFRESH_MAX_RETRIES + ')');
+    _immediateRefreshRetryCount++;
     // Queue a refresh after current sync completes
     setTimeout(_immediateRefreshFromSupabase, 500);
     return;
   }
+  
+  // Reset retry count on successful attempt
+  _immediateRefreshRetryCount = 0;
   
   // Skip own writes (ignore our own changes for 30s)
   if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
