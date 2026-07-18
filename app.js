@@ -9498,21 +9498,21 @@ window._escapedPetIds = new Set();
   // ===== 宠物个性系统 =====
   // 根据宠物名字/emoji推测类型，赋予不同性格
   const PET_PERSONALITIES = {
-    cat:    { speed: 1.2, pauseChance: 0.45, sounds: ['meow','purr'], preferActions: ['sit','sniff','stretch','sleep','peek'],
+    cat:    { speed: 1.8, pauseChance: 0.35, sounds: ['meow','purr'], preferActions: ['sit','sniff','stretch','sleep','peek'],
               speeches: ['喵~','好高的地方~','我要躲起来~','不要碰我的尾巴！','哼，懒得理你~','给我小鱼干！'], emotes: ['🐟','💤','😼','🐾','✨'] },
-    dog:    { speed: 2.2, pauseChance: 0.25, sounds: ['bark'], preferActions: ['bounce','roll','shake','hop','wave'],
+    dog:    { speed: 3.2, pauseChance: 0.18, sounds: ['bark'], preferActions: ['bounce','roll','shake','hop','wave'],
               speeches: ['汪汪！','好开心！','一起跑步！','接飞盘！','我最忠诚了！','尾巴摇摇~'], emotes: ['🦴','❤️','🎾','💕','😆'] },
-    bird:   { speed: 1.8, pauseChance: 0.3, sounds: ['chirp'], preferActions: ['hop','bounce','wave','peek'],
+    bird:   { speed: 2.8, pauseChance: 0.22, sounds: ['chirp'], preferActions: ['hop','bounce','wave','peek'],
               speeches: ['叽叽！','我会飞哦~','好高好高~','种子在哪？','唧唧喳喳~','翅膀好累~'], emotes: ['🌸','🎵','🎶','✨','☁️'] },
-    hamster:{ speed: 1.0, pauseChance: 0.5, sounds: ['squeak'], preferActions: ['spin','roll','sniff','nuzzle','sleep'],
+    hamster:{ speed: 1.5, pauseChance: 0.38, sounds: ['squeak'], preferActions: ['spin','roll','sniff','nuzzle','sleep'],
               speeches: ['吱吱！','转圈圈~','我的瓜子呢？','好小好可爱~','仓鼠球！','让我存粮~'], emotes: ['🌻','🥜','😊','💦','⭐'] },
-    rabbit: { speed: 1.6, pauseChance: 0.35, sounds: ['squeak','cute'], preferActions: ['hop','bounce','nuzzle','sniff','peek'],
+    rabbit: { speed: 2.4, pauseChance: 0.28, sounds: ['squeak','cute'], preferActions: ['hop','bounce','nuzzle','sniff','peek'],
               speeches: ['蹦蹦跳~','胡萝卜！','耳朵痒痒~','我最软了~','抱抱我~','跳跳跳！'], emotes: ['🥕','💕','🌟','🐾','😊'] },
-    frog:   { speed: 1.3, pauseChance: 0.4, sounds: ['ribbit'], preferActions: ['hop','bounce','sit','sniff'],
+    frog:   { speed: 2.0, pauseChance: 0.32, sounds: ['ribbit'], preferActions: ['hop','bounce','sit','sniff'],
               speeches: ['呱呱~','好湿润~','跳远冠军！','池塘在哪？','我是王子哦~','虫子！'], emotes: ['🌿','💧','👑','🪷','⭐'] },
-    fish:   { speed: 0.8, pauseChance: 0.5, sounds: ['cute','squeak'], preferActions: ['wave','nuzzle','spin','sit'],
+    fish:   { speed: 1.2, pauseChance: 0.4, sounds: ['cute','squeak'], preferActions: ['wave','nuzzle','spin','sit'],
               speeches: ['咕噜噜~','水在哪呀~','我会游泳！','泡泡~','鱼缸太小了！','自由啦~'], emotes: ['💧','🫧','🌊','✨','💦'] },
-    default:{ speed: 1.5, pauseChance: 0.35, sounds: ['cute','squeak','meow'], preferActions: ['sit','wave','spin','hop','bounce','nuzzle'],
+    default:{ speed: 2.2, pauseChance: 0.28, sounds: ['cute','squeak','meow'], preferActions: ['sit','wave','spin','hop','bounce','nuzzle'],
               speeches: null, emotes: null }
   };
 
@@ -9803,7 +9803,7 @@ window._escapedPetIds = new Set();
           const PET_SIZE = 130;
           const HALF = PET_SIZE / 2;
 
-          // 收集未出逃的宠物卡片图片中心点作为禁区（半径50px的小圆）
+          // 收集未出逃的宠物卡片图片中心点作为禁区（扩大半径）
           function getCardCenters() {
             const centers = [];
             document.querySelectorAll('#homePetGrid .home-pet-card').forEach(c => {
@@ -9814,17 +9814,17 @@ window._escapedPetIds = new Set();
               if (!r) return;
               const rect = r.getBoundingClientRect();
               if (rect.width > 0 && rect.height > 0) {
-                centers.push({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                centers.push({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, w: rect.width, h: rect.height });
               }
             });
             return centers;
           }
 
-          // 检查宠物中心是否落在某个卡片图片中心的禁区内（半径50px）
+          // 检查宠物中心是否落在某个卡片图片中心的禁区内（半径扩大到80px）
           function hitsCardCenter(px, py, centers) {
             const cx = px + HALF, cy = py + HALF;
             for (const c of centers) {
-              if (Math.abs(cx - c.x) < 50 && Math.abs(cy - c.y) < 50) return true;
+              if (Math.abs(cx - c.x) < 80 && Math.abs(cy - c.y) < 80) return true;
             }
             return false;
           }
@@ -9842,22 +9842,92 @@ window._escapedPetIds = new Set();
             return false;
           }
 
-          // 全屏随机选一个目标点（不落在卡片图片中心、不与其他出逃宠物叠加）
+          // 计算一个位置的"空旷度"分数：离所有卡片和其他出逃宠物越远越好
+          function emptinessScore(px, py, centers) {
+            const cx = px + HALF, cy = py + HALF;
+            let minCardDist = Infinity;
+            for (const c of centers) {
+              const d = Math.sqrt((cx - c.x) ** 2 + (cy - c.y) ** 2);
+              if (d < minCardDist) minCardDist = d;
+            }
+            let minPetDist = Infinity;
+            for (const p of escapedPets) {
+              if (p.el === el || !p.el.isConnected) continue;
+              const ox = (parseFloat(p.el.style.left) || 0) + HALF;
+              const oy = (parseFloat(p.el.style.top) || 0) + HALF;
+              const d = Math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2);
+              if (d < minPetDist) minPetDist = d;
+            }
+            // 综合得分：离卡片和其他宠物都越远越好
+            const cardScore = Math.min(minCardDist, 500) / 500; // 归一化到0~1
+            const petScore = minPetDist === Infinity ? 1 : Math.min(minPetDist, 400) / 400;
+            return cardScore * 0.6 + petScore * 0.4;
+          }
+
+          // 全屏智能选目标点：优先远处、空旷的位置
           function pickSafeTarget() {
             const padX = 30, padY = 10;
             const centers = getCardCenters();
-            // 第一轮：严格模式
+            // 最小跑动距离：视口对角线的25%，至少150px，确保宠物跑远
+            const diag = Math.sqrt(W * W + H * H);
+            const minRunDist = Math.max(150, diag * 0.25);
+
+            let bestTarget = null;
+            let bestScore = -1;
+
+            // 第一轮：严格模式（避开卡片+避开其他宠物+满足最小距离+空旷度评分）
+            for (let i = 0; i < 60; i++) {
+              const tx = padX + Math.random() * (W - 2 * padX - PET_SIZE);
+              const ty = padY + Math.random() * (H - 2 * padY - PET_SIZE);
+              if (!hitsCardCenter(tx, ty, centers) && !overlapsOtherPets(tx, ty, el)) {
+                // 检查最小距离（从当前位置出发）
+                const dx = (tx + HALF) - (currentX + HALF);
+                const dy = (ty + HALF) - (currentY + HALF);
+                const distFromHere = Math.sqrt(dx * dx + dy * dy);
+                if (distFromHere >= minRunDist) {
+                  const score = emptinessScore(tx, ty, centers);
+                  if (score > bestScore) {
+                    bestScore = score;
+                    bestTarget = { x: tx, y: ty };
+                  }
+                }
+              }
+            }
+            if (bestTarget) return bestTarget;
+
+            // 第二轮：放宽最小距离到50%，仍然选最空旷的
             for (let i = 0; i < 40; i++) {
               const tx = padX + Math.random() * (W - 2 * padX - PET_SIZE);
               const ty = padY + Math.random() * (H - 2 * padY - PET_SIZE);
-              if (!hitsCardCenter(tx, ty, centers) && !overlapsOtherPets(tx, ty, el)) return { x: tx, y: ty };
+              if (!hitsCardCenter(tx, ty, centers) && !overlapsOtherPets(tx, ty, el)) {
+                const dx = (tx + HALF) - (currentX + HALF);
+                const dy = (ty + HALF) - (currentY + HALF);
+                const distFromHere = Math.sqrt(dx * dx + dy * dy);
+                if (distFromHere >= minRunDist * 0.5) {
+                  const score = emptinessScore(tx, ty, centers);
+                  if (score > bestScore) {
+                    bestScore = score;
+                    bestTarget = { x: tx, y: ty };
+                  }
+                }
+              }
             }
-            // 第二轮：只避免宠物叠加
-            for (let i = 0; i < 20; i++) {
+            if (bestTarget) return bestTarget;
+
+            // 第三轮：只避免宠物叠加，选最空旷的
+            for (let i = 0; i < 30; i++) {
               const tx = padX + Math.random() * (W - 2 * padX - PET_SIZE);
               const ty = padY + Math.random() * (H - 2 * padY - PET_SIZE);
-              if (!overlapsOtherPets(tx, ty, el)) return { x: tx, y: ty };
+              if (!overlapsOtherPets(tx, ty, el)) {
+                const score = emptinessScore(tx, ty, centers);
+                if (score > bestScore) {
+                  bestScore = score;
+                  bestTarget = { x: tx, y: ty };
+                }
+              }
             }
+            if (bestTarget) return bestTarget;
+
             // 退路
             return { x: padX + Math.random() * (W - 2 * padX - PET_SIZE), y: padY + Math.random() * (H - 2 * padY - PET_SIZE) };
           }
@@ -9936,7 +10006,7 @@ window._escapedPetIds = new Set();
 
           // 随机停下做动作 + 说话 + 表情（个性化频率）
           function scheduleCuteAction() {
-            const wait = 1500 + Math.random() * 2000;
+            const wait = 2200 + Math.random() * 2800;
             actionTimeout = setTimeout(() => {
               if (!escapeActive || !el.isConnected || petData.caught) return;
               // 根据性格决定是否停下（活泼的宠物停的少）
