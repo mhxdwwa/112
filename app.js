@@ -1030,7 +1030,12 @@ function _renderHistoryFilterStudentList(students, selectedId) {
   html += '</div>';
   html += '</div></div>';
   var container = document.getElementById('modalContainer');
-  if (container) container.innerHTML = html;
+  if (container) {
+    // 先移除已有的筛选弹窗（如有）
+    var old = document.getElementById('historyFilterModal');
+    if (old) old.remove();
+    container.insertAdjacentHTML('beforeend', html);
+  }
 }
 window.onHistoryFilterStudentClick = function(studentId) {
   _historyFilterStudentId = parseInt(studentId);
