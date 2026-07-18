@@ -1,5 +1,5 @@
 /**
- * dal.js v55 — Robust Data Access Layer with Smart Merge
+ * dal.js v56 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1499,13 +1499,23 @@ function _syncTeacherToSupabase() {
   }).then(function() {
     // === Phase 5: Save custom actions ===
     if (typeof customActions !== 'undefined' && customActions.length > 0) {
+      // v55: Build set of valid class IDs to filter out orphaned custom_actions
+      var validClassIds = {};
+      classesData.forEach(function(cls) {
+        if (_isValidInt4Id(cls.id)) {
+          validClassIds[cls.id] = true;
+        }
+      });
       var actionPayloads = customActions.map(function(a) {
         return {
           class_id: a.class_id || (classesData[0] ? classesData[0].id : null),
           name: a.name,
           coins: a.coins || 0
         };
-      }).filter(function(a) { return a.class_id; });
+      }).filter(function(a) { 
+        // v55: Only include custom_actions with valid class_id (exists in classesData)
+        return a.class_id && validClassIds[a.class_id]; 
+      });
       if (actionPayloads.length > 0) {
         var classIds = Array.from(new Set(actionPayloads.map(function(a) { return a.class_id; })));
         return db.from('custom_actions').delete().in('class_id', classIds).then(function() {
