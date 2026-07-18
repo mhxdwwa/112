@@ -73,67 +73,67 @@
   }
 
   // === 直接保存操作日志到 Supabase ===
-  // 参考 _writeUnsyncedLogsToSupabase 的模式，但学生可以直接写入
+  // v67: Uses INSERT into operation_logs table (atomic, no race condition)
   function saveQuizLogDirect(log) {
     if (typeof db === 'undefined' || !db) return;
     var classId = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
     if (!classId) return;
+    if (typeof classId === 'string') classId = parseInt(classId);
 
-    // 找到班级的 teacher_id 和 name（upsert classes 表需要这些字段）
-    var teacherId = null;
-    var className = '';
-    if (typeof classesData !== 'undefined' && classesData && classesData.length > 0) {
-      var cls = classesData.find(function(c) { return c.id === classId; });
-      if (cls) {
-        teacherId = cls.teacher_id || null;
-        className = cls.name || '';
-      }
+    // Build the extra JSONB field
+    var extraPayload = log.extra || null;
+    if (log.fullSnapshot) {
+      extraPayload = extraPayload ? Object.assign({}, extraPayload) : {};
+      extraPayload.fullSnapshot = log.fullSnapshot;
     }
 
-    // 读取现有日志 → 追加新日志 → 写回
-    db.from('classes').select('id, operation_logs_json').eq('id', classId).single().then(function(r) {
-      if (r.error) {
-        console.error('[取金阁] 读取操作日志失败:', r.error.message);
+    // v67: INSERT directly into operation_logs table (atomic, no race condition)
+    var payload = {
+      class_id: classId,
+      student_id: (log.studentId && log.studentId > 0 && log.studentId === Math.floor(log.studentId)) ? log.studentId : null,
+      student_name: log.studentName || '',
+      action_type: log.actionType || '',
+      details: log.details || '',
+      coin_delta: parseInt(log.coinDelta) || 0,
+      exp_delta: parseInt(log.expDelta) || 0,
+      pet_id: log.petId || null,
+      extra: extraPayload,
+      snapshot: log.snapshot || null,
+      reverted: !!log.reverted
+    };
+
+    db.from('operation_logs').insert([payload]).select('id').then(function(ir) {
+      if (ir.error) {
+        // FK constraint on student_id? Retry without
+        if (ir.error.code === '23503' && payload.student_id) {
+          payload.student_id = null;
+          return db.from('operation_logs').insert([payload]).select('id');
+        }
+        console.error('[取金阁] v67 操作日志INSERT失败:', ir.error.message);
+        return null;
+      }
+      return ir;
+    }).then(function(result) {
+      if (!result) return;
+      if (result.error) {
+        console.error('[取金阁] v67 操作日志INSERT重试失败:', result.error.message);
         return;
       }
-      var existing = [];
-      try {
-        existing = r.data && r.data.operation_logs_json ? JSON.parse(r.data.operation_logs_json) : [];
-      } catch(e) { existing = []; }
-
-      // 标记为已同步（直接写入 Supabase 的日志不需要再次同步）
-      var syncedLog = Object.assign({}, log, { _synced: true, _fromSupabase: true });
-      existing.push(syncedLog);
-
-      // 按时间倒序，最多保留 1000 条
-      existing.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
-      if (existing.length > 5000) existing = existing.slice(0, 5000);
-
-      // 标记本地日志为已同步
+      var newId = result.data && result.data[0] ? result.data[0].id : null;
+      // Mark local log as synced
       if (typeof window.operationLogs !== 'undefined') {
         for (var i = 0; i < window.operationLogs.length; i++) {
           if (window.operationLogs[i].id === log.id) {
+            if (newId) window.operationLogs[i].id = newId;
             window.operationLogs[i]._synced = true;
             window.operationLogs[i]._fromSupabase = true;
             break;
           }
         }
       }
-
-      // 写回 classes 表
-      var upsertData = { id: classId, operation_logs_json: JSON.stringify(existing) };
-      if (teacherId) upsertData.teacher_id = teacherId;
-      if (className) upsertData.name = className;
-
-      return db.from('classes').upsert([upsertData]).then(function(ur) {
-        if (ur.error) {
-          console.error('[取金阁] 操作日志保存失败:', ur.error.message);
-        } else {
-          console.log('[取金阁] 操作日志已直接保存');
-        }
-      });
+      console.log('[取金阁] v67 操作日志已直接保存到operation_logs表', newId ? '(ID: ' + newId + ')' : '');
     }).catch(function(e) {
-      console.error('[取金阁] 操作日志保存异常:', e);
+      console.error('[取金阁] v67 saveQuizLogDirect error:', e);
     });
   }
 

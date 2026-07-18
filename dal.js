@@ -1,5 +1,5 @@
 /**
- * dal.js v65 — Robust Data Access Layer with Smart Merge
+ * dal.js v67 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -853,7 +853,8 @@ function _getOpLogClassIds() {
   }
 }
 
-// v29: Load operation logs from classes.operation_logs_json
+// v67: Load operation logs from operation_logs table (individual rows, no race condition)
+// Falls back to classes.operation_logs_json for backward compatibility
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
@@ -866,65 +867,124 @@ function _loadOperationLogs() {
 
   return _getOpLogClassIds().then(function(classIds) {
     if (!classIds || classIds.length === 0) {
-      console.warn('[DAL] v29 _loadOperationLogs: no classIds');
+      console.warn('[DAL] v67 _loadOperationLogs: no classIds');
       return;
     }
-    console.log('[DAL] v29 Loading operation logs from classes table for class_ids:', classIds);
+    console.log('[DAL] v67 Loading operation logs for class_ids:', classIds);
 
-    // v29: Read from classes.operation_logs_json — same channel as student data
-    return db.from('classes').select('id, operation_logs_json').in('id', classIds);
-  }).then(function(r) {
-    if (!r) return;
-    if (r.error) {
-      console.error('[DAL] v29 classes query FAILED:', r.error.message);
-      return;
-    }
+    // v67: Read from operation_logs table (individual rows — no race condition)
+    return db.from('operation_logs').select('id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, snapshot, reverted, created_at').in('class_id', classIds).order('created_at', { ascending: false }).limit(_OP_LOGS_MAX_PER_CLASS).then(function(tableR) {
+      var tableLogs = [];
+      if (tableR.error) {
+        console.warn('[DAL] v67 operation_logs query failed:', tableR.error.message, '— falling back to JSON blob');
+      } else {
+        (tableR.data || []).forEach(function(row) {
+          var extra = row.extra || {};
+          var log = {
+            id: row.id,
+            timestamp: row.created_at,
+            classId: row.class_id,
+            studentId: row.student_id,
+            studentName: row.student_name || '',
+            actionType: row.action_type || '',
+            details: row.details || '',
+            coinDelta: parseInt(row.coin_delta) || 0,
+            expDelta: parseInt(row.exp_delta) || 0,
+            petId: row.pet_id || null,
+            extra: (extra.pkChallenge || extra.pkAccept || extra.shopItemId || extra.causedDeath || extra.starvation || extra.prevGrowth !== undefined) ? extra : (extra.fullSnapshot ? null : extra),
+            snapshot: row.snapshot || null,
+            fullSnapshot: extra.fullSnapshot || null,
+            reverted: !!row.reverted,
+            _synced: true,
+            _fromSupabase: true
+          };
+          // Clean up extra: remove fullSnapshot from it since it's now a top-level field
+          if (log.extra && log.extra.fullSnapshot) {
+            var cleanExtra = {};
+            Object.keys(log.extra).forEach(function(k) {
+              if (k !== 'fullSnapshot') cleanExtra[k] = log.extra[k];
+            });
+            log.extra = Object.keys(cleanExtra).length > 0 ? cleanExtra : null;
+          }
+          tableLogs.push(log);
+        });
+        console.log('[DAL] v67 Loaded ' + tableLogs.length + ' logs from operation_logs table');
+      }
 
-    // Parse operation_logs_json from each class
-    var allLogs = [];
-    (r.data || []).forEach(function(cls) {
-      if (!cls.operation_logs_json) return;
-      try {
-        var logs = JSON.parse(cls.operation_logs_json);
-        if (Array.isArray(logs)) {
-          logs.forEach(function(l) {
-            l._synced = true;
-            l._fromSupabase = true;
-            if (!l.classId) l.classId = cls.id;
-            allLogs.push(l);
+      // v67: Also read from classes.operation_logs_json for backward compatibility
+      // This ensures old logs stored in the JSON blob are not lost
+      return db.from('classes').select('id, operation_logs_json').in('id', classIds).then(function(blobR) {
+        var blobLogs = [];
+        if (blobR.error) {
+          console.warn('[DAL] v67 classes blob query failed:', blobR.error.message);
+        } else {
+          (blobR.data || []).forEach(function(cls) {
+            if (!cls.operation_logs_json) return;
+            try {
+              var logs = JSON.parse(cls.operation_logs_json);
+              if (Array.isArray(logs)) {
+                logs.forEach(function(l) {
+                  l._synced = true;
+                  l._fromSupabase = true;
+                  if (!l.classId) l.classId = cls.id;
+                  blobLogs.push(l);
+                });
+              }
+            } catch(e) {
+              console.warn('[DAL] v67 Failed to parse operation_logs_json for class', cls.id, e);
+            }
           });
+          console.log('[DAL] v67 Loaded ' + blobLogs.length + ' logs from JSON blob');
         }
-      } catch(e) {
-        console.warn('[DAL] v29 Failed to parse operation_logs_json for class', cls.id, e);
-      }
-    });
 
-    // Preserve any local unsynced logs (new logs with negative ID, OR modified logs with positive ID)
-    var localUnsynced = window.operationLogs.filter(function(l) {
-      return !l._synced;
-    });
+        // v67: Merge table logs and blob logs, deduplicating by ID
+        // Table logs take priority (they have real Supabase IDs)
+        var allLogs = tableLogs.slice();
+        var tableLogIds = {};
+        tableLogs.forEach(function(l) { tableLogIds[l.id] = true; });
 
-    // v34: Deduplicate — if local unsynced log has same ID as a server log, local wins (it's newer)
-    var serverLogIds = {};
-    allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
-    var dedupedServer = allLogs.filter(function(l) {
-      // Remove server log if local has a newer unsynced version
-      for (var i = 0; i < localUnsynced.length; i++) {
-        if (localUnsynced[i].id === l.id) return false;
-      }
-      return true;
-    });
+        // Add blob logs that aren't already in table logs
+        // Match by: positive ID not in table, or by timestamp+actionType+studentName for negative IDs
+        var tableLogKeys = {};
+        tableLogs.forEach(function(l) {
+          tableLogKeys[l.timestamp + '|' + l.actionType + '|' + l.studentName + '|' + (l.studentId || '')] = true;
+        });
 
-    window.operationLogs = dedupedServer.concat(localUnsynced);
-    window.operationLogs.sort(function(a, b) {
-      return (b.timestamp || '').localeCompare(a.timestamp || '');
-    });
+        blobLogs.forEach(function(l) {
+          // Skip if table already has this log (by ID or by content key)
+          if (l.id > 0 && tableLogIds[l.id]) return;
+          var key = l.timestamp + '|' + l.actionType + '|' + l.studentName + '|' + (l.studentId || '');
+          if (tableLogKeys[key]) return;
+          allLogs.push(l);
+        });
 
-    // Backup to localStorage
-    try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v29 Loaded ' + allLogs.length + ' logs from Supabase, ' + localUnsynced.length + ' local unsynced kept');
+        // Preserve any local unsynced logs
+        var localUnsynced = window.operationLogs.filter(function(l) {
+          return !l._synced;
+        });
+
+        // Deduplicate: remove server logs if local has a newer unsynced version with same ID
+        var serverLogIds = {};
+        allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+        var dedupedServer = allLogs.filter(function(l) {
+          for (var i = 0; i < localUnsynced.length; i++) {
+            if (localUnsynced[i].id === l.id) return false;
+          }
+          return true;
+        });
+
+        window.operationLogs = dedupedServer.concat(localUnsynced);
+        window.operationLogs.sort(function(a, b) {
+          return (b.timestamp || '').localeCompare(a.timestamp || '');
+        });
+
+        // Backup to localStorage
+        try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+        console.log('[DAL] v67 Total: ' + allLogs.length + ' server logs (' + tableLogs.length + ' table + ' + blobLogs.length + ' blob), ' + localUnsynced.length + ' local unsynced kept');
+      });
+    });
   }).catch(function(e) {
-    console.warn('[DAL] v29 _loadOperationLogs error:', e);
+    console.warn('[DAL] v67 _loadOperationLogs error:', e);
   });
 }
 
@@ -1040,25 +1100,28 @@ function _verifyLogWrite(classId, writtenLogIds, retryCount) {
   });
 }
 
-// v29: Write unsynced logs to classes.operation_logs_json — same channel as student data.
-// Uses upsert (proven reliable on mobile). Max 5000 logs per class, oldest trimmed.
+// v29: Write unsynced logs to Supabase.
+// v67: REWRITTEN — Uses INSERT into operation_logs table (atomic, no race condition).
+// Old approach (v29-v66): read-modify-write on classes.operation_logs_json JSON blob.
+// Two devices writing concurrently would overwrite each other's logs.
+// New approach: each log is an individual INSERT row — completely independent, no conflicts.
 function _writeUnsyncedLogsToSupabase() {
   if (_writingLogsToSupabase) {
-    console.log('[DAL] v29 Write already in progress, queueing...');
+    console.log('[DAL] v67 Write already in progress, queueing...');
     _pendingLogWrites++;
     return Promise.resolve();
   }
 
   if (!db || !currentUser) {
-    console.warn('[DAL] v29 Cannot write logs: db or currentUser not ready');
+    console.warn('[DAL] v67 Cannot write logs: db or currentUser not ready');
     return Promise.resolve();
   }
   if (typeof window.operationLogs === 'undefined' || !Array.isArray(window.operationLogs)) {
-    console.warn('[DAL] v29 Cannot write logs: window.operationLogs invalid');
+    console.warn('[DAL] v67 Cannot write logs: window.operationLogs invalid');
     return Promise.resolve();
   }
 
-  // Collect unsynced logs: new logs (negative ID) OR modified logs (marked _synced=false after being true)
+  // Collect unsynced logs
   var unsynced = [];
   for (var i = 0; i < window.operationLogs.length; i++) {
     if (!window.operationLogs[i]._synced) {
@@ -1070,7 +1133,7 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
-  console.log('[DAL] v29 Writing ' + unsynced.length + ' unsynced logs to classes table');
+  console.log('[DAL] v67 Writing ' + unsynced.length + ' unsynced logs via INSERT to operation_logs table');
 
   // Determine fallback classId
   var defaultClassId = null;
@@ -1083,7 +1146,7 @@ function _writeUnsyncedLogsToSupabase() {
   }
 
   if (!defaultClassId) {
-    console.error('[DAL] v29 Cannot write logs - classId is null!');
+    console.error('[DAL] v67 Cannot write logs - classId is null!');
     return Promise.resolve();
   }
 
@@ -1101,154 +1164,171 @@ function _writeUnsyncedLogsToSupabase() {
 
   var classIds = Object.keys(logsByClass).map(Number);
 
-  // Step 1: Read existing logs from Supabase for affected classes
-  return db.from('classes').select('id, operation_logs_json').in('id', classIds).then(function(r) {
+  // v67: First, verify which classIds actually exist in Supabase (FK constraint)
+  return db.from('classes').select('id').in('id', classIds).then(function(r) {
     if (r.error) {
-      console.error('[DAL] v29 Failed to read existing logs:', r.error.message);
+      console.error('[DAL] v67 Failed to check class existence:', r.error.message);
       _writingLogsToSupabase = false;
       setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
       return;
     }
 
-    // Parse existing logs from Supabase
-    var existingByClass = {};
-    (r.data || []).forEach(function(cls) {
-      try {
-        existingByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
-      } catch(e) {
-        existingByClass[cls.id] = [];
-      }
-    });
+    var validClassIds = {};
+    (r.data || []).forEach(function(cls) { validClassIds[cls.id] = true; });
 
-    // Step 2: Merge — add new logs to existing, UPDATE modified logs, mark as synced
-    // v62: Filter out classes that don't exist in Supabase yet (e.g., new classes with string IDs)
-    // These logs will be written after the class is synced and gets a valid ID
-    var validClassIds = classIds.filter(function(cid) {
-      return existingByClass[cid] !== undefined;
-    });
-    var skippedClassIds = classIds.filter(function(cid) {
-      return existingByClass[cid] === undefined;
-    });
+    var skippedClassIds = classIds.filter(function(cid) { return !validClassIds[cid]; });
     if (skippedClassIds.length > 0) {
-      console.log('[DAL] v62 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
+      console.log('[DAL] v67 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
     }
 
-    // v64: If no valid classes, skip the re-read and resolve immediately
-    if (validClassIds.length === 0) {
-      console.log('[DAL] v64 No valid classes to write logs to, skipping');
-      return Promise.resolve();
+    var validCids = classIds.filter(function(cid) { return validClassIds[cid]; });
+    if (validCids.length === 0) {
+      console.log('[DAL] v67 No valid classes to write logs to, skipping');
+      _writingLogsToSupabase = false;
+      return;
     }
-    
-    // v64: Re-read existing logs from Supabase RIGHT BEFORE writing.
-    // This is critical to prevent the race condition where two devices read the same
-    // data, each adds their new log, and the last writer overwrites the other's log.
-    // By re-reading immediately before writing, we get the latest data from other devices.
-    return db.from('classes').select('id, operation_logs_json').in('id', validClassIds).then(function(freshR) {
-      if (freshR.error) {
-        console.error('[DAL] v64 Failed to re-read logs before write:', freshR.error.message);
-        // Fall back to initial read data
-        freshR = { data: [] };
-      }
-      var freshByClass = {};
-      (freshR.data || []).forEach(function(cls) {
-        try {
-          freshByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
-        } catch(e) { freshByClass[cls.id] = []; }
-      });
 
-      var upsertPromises = validClassIds.map(function(cid) {
-        // v64: Use FRESH data from Supabase (not stale initial read)
-        var existing = freshByClass[cid] || [];
-        var newLogs = logsByClass[cid] || [];
+    // v67: INSERT or UPDATE each log individually in operation_logs table
+    // Each operation is atomic — no race condition between devices
+    // - New logs (negative ID): INSERT → get auto-generated ID
+    // - Modified logs (positive ID, previously synced): UPDATE existing row
+    var writePromises = [];
 
-        // Build index of existing logs by ID for deduplication
-        var existingById = {};
-        existing.forEach(function(l, idx) { existingById[l.id] = idx; });
+    validCids.forEach(function(cid) {
+      var logs = logsByClass[cid] || [];
+      logs.forEach(function(entry) {
+        var l = entry.log;
 
-        newLogs.forEach(function(entry) {
-          var l = entry.log;
-          var merged = {
-            id: l.id,
-            timestamp: l.timestamp || new Date().toISOString(),
-            classId: cid,
-            studentId: l.studentId,
-            studentName: l.studentName || '',
-            actionType: l.actionType || '',
-            details: l.details || '',
-            coinDelta: parseInt(l.coinDelta) || 0,
-            expDelta: parseInt(l.expDelta) || 0,
-            petId: l.petId || null,
-            extra: l.extra || null,
-            snapshot: l.snapshot || null,
-            fullSnapshot: l.fullSnapshot || null,
-            reverted: !!l.reverted,
-            _synced: true,
-            _fromSupabase: true
-          };
-
-          // v34: If log with same ID already exists (modified log), REPLACE it instead of duplicating
-          if (existingById[l.id] !== undefined) {
-            existing[existingById[l.id]] = merged;
-          } else {
-            existing.push(merged);
-            existingById[l.id] = existing.length - 1;
-          }
-
-          // Mark local log as synced
-          if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-            window.operationLogs[entry.index]._synced = true;
-            window.operationLogs[entry.index]._fromSupabase = true;
-          }
-        });
-
-        // Sort by timestamp descending, cap at max
-        existing.sort(function(a, b) {
-          return (b.timestamp || '').localeCompare(a.timestamp || '');
-        });
-        if (existing.length > _OP_LOGS_MAX_PER_CLASS) {
-          existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
+        // Build the extra JSONB field — include fullSnapshot if present
+        var extraPayload = l.extra || null;
+        if (l.fullSnapshot) {
+          extraPayload = extraPayload ? Object.assign({}, extraPayload) : {};
+          extraPayload.fullSnapshot = l.fullSnapshot;
         }
 
-        // v28: Use update (not upsert) to only modify operation_logs_json.
-        // v65: Track the log IDs we wrote for verification
-        var writtenLogIds = newLogs.map(function(entry) { return entry.log.id; });
-        return db.from('classes').update({
-          operation_logs_json: JSON.stringify(existing)
-        }).eq('id', cid).then(function(ur) {
-          if (ur.error) {
-            console.error('[DAL] v29 Upsert FAILED for class', cid + ':', ur.error.message);
-            // Mark logs as unsynced again so they retry
-            (logsByClass[cid] || []).forEach(function(entry) {
-              if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-                window.operationLogs[entry.index]._synced = false;
-              }
-            });
-          } else {
-            console.log('[DAL] v65 Upserted ' + existing.length + ' logs for class', cid);
-            // v64: Update own write time to prevent unnecessary realtime refresh
-            _lastOwnWriteTime = Date.now();
-            // v65: Verify our logs weren't overwritten by another device
-            return _verifyLogWrite(cid, writtenLogIds, 0);
-          }
-        });
-      });
+        // Build payload matching operation_logs table columns
+        var payload = {
+          class_id: cid,
+          student_id: (l.studentId && l.studentId > 0 && l.studentId === Math.floor(l.studentId)) ? l.studentId : null,
+          student_name: l.studentName || '',
+          action_type: l.actionType || '',
+          details: l.details || '',
+          coin_delta: parseInt(l.coinDelta) || 0,
+          exp_delta: parseInt(l.expDelta) || 0,
+          pet_id: l.petId || null,
+          extra: extraPayload,
+          snapshot: l.snapshot || null,
+          reverted: !!l.reverted
+        };
 
-      return Promise.all(upsertPromises);
+        // v67: If log has a positive ID, it was previously synced — UPDATE instead of INSERT
+        var isUpdate = (l.id > 0 && l._fromSupabase);
+
+        if (isUpdate) {
+          // UPDATE existing row (e.g., PK challenge status change)
+          writePromises.push(
+            db.from('operation_logs').update(payload).eq('id', l.id).then(function(ur) {
+              if (ur.error) {
+                // FK constraint on student_id? Retry without student_id
+                if (ur.error.code === '23503' && payload.student_id) {
+                  console.warn('[DAL] v67 FK violation on update for student_id', payload.student_id, '— retrying without');
+                  payload.student_id = null;
+                  return db.from('operation_logs').update(payload).eq('id', l.id).then(function(ur2) {
+                    if (ur2.error) {
+                      console.error('[DAL] v67 Update retry failed:', ur2.error.message);
+                      return { success: false, entry: entry };
+                    }
+                    return { success: true, entry: entry, newId: l.id };
+                  });
+                }
+                console.error('[DAL] v67 Update failed for log', l.id + ':', ur.error.message);
+                return { success: false, entry: entry };
+              }
+              return { success: true, entry: entry, newId: l.id };
+            })
+          );
+        } else {
+          // INSERT new log with return=representation to get the auto-generated ID
+          writePromises.push(
+            db.from('operation_logs').insert([payload]).select('id').then(function(ir) {
+              if (ir.error) {
+                // FK constraint on student_id? Retry without student_id
+                if (ir.error.code === '23503' && payload.student_id) {
+                  console.warn('[DAL] v67 FK violation for student_id', payload.student_id, '— retrying without');
+                  payload.student_id = null;
+                  return db.from('operation_logs').insert([payload]).select('id').then(function(ir2) {
+                    if (ir2.error) {
+                      console.error('[DAL] v67 Insert retry failed:', ir2.error.message);
+                      return { success: false, entry: entry };
+                    }
+                    if (ir2.data && ir2.data[0]) {
+                      return { success: true, entry: entry, newId: ir2.data[0].id };
+                    }
+                    return { success: false, entry: entry };
+                  });
+                }
+                console.error('[DAL] v67 Insert failed for class', cid + ':', ir.error.message);
+                return { success: false, entry: entry };
+              }
+              if (ir.data && ir.data[0]) {
+                return { success: true, entry: entry, newId: ir.data[0].id };
+              }
+              return { success: false, entry: entry };
+            })
+          );
+        }
+      });
     });
-  }).then(function() {
+
+    return Promise.all(writePromises);
+  }).then(function(results) {
     _writingLogsToSupabase = false;
+
+    if (!results) {
+      // No valid classes — already handled
+      return;
+    }
+
+    var successCount = 0;
+    var failCount = 0;
+
+    results.forEach(function(result) {
+      if (!result) return;
+      if (result.success) {
+        var idx = result.entry.index;
+        if (idx >= 0 && idx < window.operationLogs.length) {
+          // Update local log with real Supabase ID (for new inserts) and mark as synced
+          if (result.newId && result.newId > 0) {
+            window.operationLogs[idx].id = result.newId;
+          }
+          window.operationLogs[idx]._synced = true;
+          window.operationLogs[idx]._fromSupabase = true;
+        }
+        successCount++;
+      } else {
+        // Mark as unsynced so it retries next time
+        var idx = result.entry.index;
+        if (idx >= 0 && idx < window.operationLogs.length) {
+          window.operationLogs[idx]._synced = false;
+        }
+        failCount++;
+      }
+    });
 
     // Persist to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
 
-    var syncedCount = unsynced.filter(function(entry) {
-      return window.operationLogs[entry.index] && window.operationLogs[entry.index]._synced;
-    }).length;
-    console.log('[DAL] v29 Write complete: ' + syncedCount + '/' + unsynced.length + ' logs synced');
+    console.log('[DAL] v67 Write complete: ' + successCount + '/' + unsynced.length + ' logs inserted successfully' +
+      (failCount > 0 ? ', ' + failCount + ' failed (will retry)' : ''));
+
+    // v67: Update own write time to prevent unnecessary realtime refresh
+    if (successCount > 0) {
+      _lastOwnWriteTime = Date.now();
+    }
 
     // Retry if some failed
-    if (syncedCount < unsynced.length) {
-      console.warn('[DAL] v29 ' + (unsynced.length - syncedCount) + ' logs still unsynced, retry in 5s');
+    if (failCount > 0) {
+      console.warn('[DAL] v67 ' + failCount + ' logs failed, retry in 5s');
       setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
     }
 
@@ -1259,7 +1339,7 @@ function _writeUnsyncedLogsToSupabase() {
     }
   }).catch(function(err) {
     _writingLogsToSupabase = false;
-    console.error('[DAL] v29 CRITICAL: write exception:', err.message);
+    console.error('[DAL] v67 CRITICAL: write exception:', err.message);
     setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
   });
 }
@@ -2316,7 +2396,7 @@ function _setupRealtimeSubscriptions() {
 
   var channelsCreated = 0;
   var channelsConfirmed = 0;
-  var totalChannels = 3;
+  var totalChannels = 4;
   var realtimeTimeout = null;
 
   function _onChannelConfirmed() {
@@ -2332,8 +2412,8 @@ function _setupRealtimeSubscriptions() {
 
   try {
     // Subscribe to classes table — coalesced refresh on change
-    // Note: operation_logs are stored in classes.operation_logs_json (v29),
-    // so classes table changes include both class data and log updates
+    // v67: operation_logs are now in a separate table, but classes table still
+    // triggers refresh for class data changes (name, teacher_id, etc.)
     var classChannel = db.channel('dal-classes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
         // 检查是否只有 operation_logs_json 变化（通过比较列）
@@ -2376,6 +2456,22 @@ function _setupRealtimeSubscriptions() {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
       });
     _realtimeChannels.push(petChannel);
+    channelsCreated++;
+
+    // v67: Subscribe to operation_logs table — lightweight refresh on new log entries
+    // This replaces the old approach where logs were stored in classes.operation_logs_json
+    var opLogsChannel = db.channel('dal-oplogs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function() {
+        console.log('[DAL] v67 operation_logs change detected — lightweight refresh');
+        _refreshLogsOnly();
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') _onChannelConfirmed();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[DAL] OpLogs channel status:', status);
+        }
+      });
+    _realtimeChannels.push(opLogsChannel);
     channelsCreated++;
 
     console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels) — waiting for confirmation...');
