@@ -839,7 +839,16 @@ function refreshHistoryModalIfOpen(){
   if(months.length===0) return;
   if(!_currentHistoryMonth || months.indexOf(_currentHistoryMonth)===-1) _currentHistoryMonth = months[0];
   var contentEl = modalOverlay.querySelector('.modal-content');
-  if(contentEl) contentEl.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+  if(contentEl) {
+    // 保存滚动位置
+    var logList = contentEl.querySelector('#historyLogList');
+    var savedScrollTop = logList ? logList.scrollTop : 0;
+    // 重建内容
+    contentEl.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+    // 恢复滚动位置
+    var newLogList = contentEl.querySelector('#historyLogList');
+    if(newLogList) newLogList.scrollTop = savedScrollTop;
+  }
   // Also update the title to reflect latest data
   if(titleEl) titleEl.textContent = '\uD83D\uDCDC 历史操作记录【' + className + '】';
 }
@@ -986,7 +995,15 @@ function _refreshHistoryContent() {
   if (months.length === 0) return;
   if (!_currentHistoryMonth || months.indexOf(_currentHistoryMonth) === -1) _currentHistoryMonth = months[0];
   var container = document.querySelector('.modal-content');
-  if (container) container.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+  if (container) {
+    // 保存滚动位置
+    var logList = container.querySelector('#historyLogList');
+    var savedScrollTop = logList ? logList.scrollTop : 0;
+    container.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+    // 恢复滚动位置
+    var newLogList = container.querySelector('#historyLogList');
+    if(newLogList) newLogList.scrollTop = savedScrollTop;
+  }
 }
 function showHistoryStudentFilter() {
   var curClass = classesData.find(c => c.id === currentClassId);
