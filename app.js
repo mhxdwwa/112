@@ -382,7 +382,17 @@ function triggerRealtimeSync() {
 // out of window.operationLogs into logArchives on every save, causing the visible
 // log count to decrease. Archiving is no longer needed since _loadOperationLogs()
 // loads ALL logs from Supabase and getAllLogsForMonth() includes archived logs.
-function saveLogs(){safeLSSave('operationLogs', window.operationLogs); scheduleFileSave(); triggerRealtimeSync();}
+function saveLogs(){
+  safeLSSave('operationLogs', window.operationLogs);
+  scheduleFileSave();
+  triggerRealtimeSync();
+  // v70: ALSO write unsynced logs to Supabase IMMEDIATELY (independent of data sync).
+  // Previously, logs were only written AFTER the data sync completed. If the data sync
+  // was slow or already in progress, logs were delayed — causing "history doesn't update" bugs.
+  if (typeof _writeUnsyncedLogsToSupabase === 'function') {
+    try { _writeUnsyncedLogsToSupabase(); } catch(e) { console.warn('[v70] immediate log write failed:', e); }
+  }
+}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
   var logs = getOpLogs();
@@ -848,8 +858,8 @@ function refreshHistoryModalIfOpen(){
   if(!_currentHistoryMonth || months.indexOf(_currentHistoryMonth)===-1) _currentHistoryMonth = months[0];
   var contentEl = modalOverlay.querySelector('.modal-content');
   if(contentEl) {
-    // === 增量更新优化：先检查日志数量是否变化，无变化则跳过 ===
-    var newLogCount = getAllLogsForMonth(_currentHistoryMonth).filter(function(log) {
+    // v70: 使用内容指纹（数量+首尾日志ID）代替纯数量比较，避免内容变化但数量不变时跳过更新
+    var filteredLogs = getAllLogsForMonth(_currentHistoryMonth).filter(function(log) {
       if(log.classId) { if(log.classId.toString() !== (currentClassId || '').toString()) return false; }
       else if(curClass) { if(!curClass.students.some(function(s){return s.id.toString()===log.studentId.toString();})) return false; }
       else return false;
@@ -857,16 +867,19 @@ function refreshHistoryModalIfOpen(){
         if(log.studentId.toString() !== _historyFilterStudentId.toString()) return false;
       }
       return true;
-    }).length;
+    });
+    var newLogCount = filteredLogs.length;
+    var newFingerprint = newLogCount + '_' + (filteredLogs[0] ? filteredLogs[0].id : '') + '_' + (filteredLogs[newLogCount-1] ? filteredLogs[newLogCount-1].id : '');
     var logList = contentEl.querySelector('#historyLogList');
     var existingCount = logList ? logList.children.length : -1;
-    // 如果日志数量没变，大概率内容没变，跳过重建（避免闪烁）
-    if (existingCount === newLogCount && newLogCount > 0) {
+    // v70: 比较指纹（数量+首尾ID），如果没变则跳过重建
+    if (existingCount === newLogCount && newLogCount > 0 && window._lastHistoryFingerprint === newFingerprint) {
       // 只更新标题（月份/班级名可能变了）
       if(titleEl) titleEl.textContent = '\uD83D\uDCDC 历史操作记录【' + className + '】';
       return;
     }
-    // 数量变了，需要重建（新增/撤销了日志）
+    window._lastHistoryFingerprint = newFingerprint;
+    // 指纹变了，需要重建（新增/撤销了日志）
     // 保存滚动位置
     var savedScrollTop = logList ? logList.scrollTop : 0;
     // 重建内容

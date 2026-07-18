@@ -28,7 +28,7 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 120000; // v54: Fallback polling 2min (was 30s). Only active when Realtime is down.
+var _refreshInterval = 30000; // v70: Fallback polling 30s (was 2min). Only active when Realtime is down.
 var _lastRefreshTime = 0;
 var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
@@ -130,19 +130,34 @@ function _capPetGrowth(pet) {
 var _refreshDebounceTimer = null;
 var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
-var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after our own write (was 30s)
+var _OWN_WRITE_IGNORE_MS = 3000; // v70: Ignore Realtime events for 3s after our own write (was 10s — too aggressive, blocked legitimate updates from other devices)
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
 // Coalesces multiple events within 3s into a single refresh.
 var _realtimeCoalesceTimer = null;
+var _realtimeEventsPending = 0; // v70: track events arriving during coalesce window
 function _debouncedRealtimeRefresh(source) {
-  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (3s)');
-  if (_realtimeCoalesceTimer) return; // already scheduled, skip
+  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (1.5s)');
+  if (_realtimeCoalesceTimer) {
+    // v70: Don't drop the event — mark that more events arrived during the wait
+    _realtimeEventsPending++;
+    return;
+  }
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
     _immediateRefreshFromSupabase();
-  }, 3000);
+    // v70: If events arrived during the wait, schedule another refresh
+    if (_realtimeEventsPending > 0) {
+      var pendingCount = _realtimeEventsPending;
+      _realtimeEventsPending = 0;
+      console.log('[DAL] v70 ' + pendingCount + ' events pending — scheduling follow-up refresh');
+      _realtimeCoalesceTimer = setTimeout(function() {
+        _realtimeCoalesceTimer = null;
+        _immediateRefreshFromSupabase();
+      }, 1500);
+    }
+  }, 1500);
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
@@ -188,9 +203,7 @@ function _findPetInSnapshot(petId) {
 function _smartRefreshFromSupabase() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   
-  // v30: Use full _OWN_WRITE_IGNORE_MS protection (was 2s, too short for mobile).
-  // On mobile, Realtime echo of our own write can arrive 3-5s after the upsert.
-  // The old 2s protection expired before the echo arrived, causing stale data overwrite.
+  // v70: Use 3s own-write protection (was 10s). Smart merge handles stale echoes safely.
   if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
     console.log('[DAL] Smart refresh skipped — own write echo (' + 
       Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
@@ -2199,7 +2212,7 @@ function _immediateRefreshFromSupabase() {
   // Reset retry count on successful attempt
   _immediateRefreshRetryCount = 0;
   
-  // Skip own writes (ignore our own changes for 30s)
+  // Skip own writes (ignore our own changes for 3s, v70: was 10s)
   if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
     console.log('[DAL] Immediate refresh skipped — own write echo (' + 
       Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
@@ -2224,10 +2237,10 @@ function _doSmartRefresh() {
     if (typeof renderClassList === 'function') renderClassList();
     // scheduleAllRenders already includes PK + Jianghu renders, no need to call them again
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    // v53: Debounce history modal refresh to avoid flickering (max once per 3s)
+    // v70: Debounce history modal refresh (max once per 1s, was 3s — too slow)
     if (typeof refreshHistoryModalIfOpen === 'function') {
       clearTimeout(window._historyRefreshDebounce);
-      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 3000);
+      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
     }
     
     // For students: check for accepted PK challenges and update invite badge
@@ -2252,16 +2265,19 @@ function _doSmartRefresh() {
   });
 }
 
-// 仅刷新操作日志（不触发UI重建，避免频繁闪烁）
+// v70: 刷新操作日志 + 触发主UI刷新（确保其他设备的购买/操作实时可见）
 function _refreshLogsOnly() {
-  console.log('[DAL] Refreshing logs only (no UI rebuild)...');
+  console.log('[DAL] v70 Refreshing logs + triggering UI rebuild...');
   _loadOperationLogs().then(function() {
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    // 只在历史弹窗打开时刷新弹窗内容
+    // v70: 刷新历史弹窗内容（如果打开的话）
     if (typeof refreshHistoryModalIfOpen === 'function') {
       clearTimeout(window._historyRefreshDebounce);
-      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 2000);
+      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
     }
+    // v70: 触发主UI重建 — 确保其他设备的操作（如购买特效）立即反映在宠物卡片上
+    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    if (typeof renderClassList === 'function') renderClassList();
     // 学生端：检查PK挑战（PK挑战记录在operation_logs中）
     if (currentUser && currentUser.type === 'student') {
       if (typeof _checkAcceptedPKChallenge === 'function') {
