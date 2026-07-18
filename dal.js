@@ -1,5 +1,5 @@
 /**
- * dal.js v57 — Robust Data Access Layer with Smart Merge
+ * dal.js v58 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -10,6 +10,8 @@
  * - Operation logs synced to Supabase (both teacher and student)
  * - v54: Bandwidth optimization — Realtime-aware polling, exclude heavy fields
  *   from class queries, filter students/pets by class_id at DB level
+ * - v58: Smart refresh now syncs class list — removes deleted classes and adds
+ *   new ones from server. Fixes "deleted class recreated by queued sync" bug.
  * 
  * Flow: loadFromSupabase() → classesData + snapshot → UI
  *       UI action → saveClassData() → _syncToSupabase() → Supabase → update snapshot
@@ -29,7 +31,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '54.0';
+var _DAL_VERSION = '58.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 
@@ -530,6 +532,51 @@ function _smartRefreshFromSupabase() {
       }
       if (myStu && _myBaseCoins === null) {
         _myBaseCoins = myStu.coins;
+      }
+    }
+
+    // v58: Sync class list — remove classes deleted on server, add new ones
+    // This fixes the "deleted class recreated" bug: _smartRefreshFromSupabase() previously
+    // only merged student/pet data within existing classes but never synced the class list.
+    // When a class was deleted, a queued sync would see it in classesData and re-upsert it.
+    if (!isStudent) {
+      var freshClassIds = {};
+      classes.forEach(function(c) { freshClassIds[c.id] = true; });
+      // Remove classes from classesData that no longer exist on server
+      var removedCount = 0;
+      for (var i = classesData.length - 1; i >= 0; i--) {
+        if (!freshClassIds[classesData[i].id]) {
+          console.log('[DAL] v58 Removing class ' + classesData[i].id + ' from classesData (deleted on server)');
+          classesData.splice(i, 1);
+          removedCount++;
+        }
+      }
+      // Add new classes from server that don't exist locally
+      var localClassIds = {};
+      classesData.forEach(function(c) { localClassIds[c.id] = true; });
+      classes.forEach(function(c) {
+        if (!localClassIds[c.id]) {
+          console.log('[DAL] v58 Adding new class ' + c.id + ' "' + c.name + '" from server');
+          classesData.push({
+            id: c.id,
+            name: c.name || '',
+            teacher_id: c.teacher_id,
+            students: [],
+            createdAt: c.created_at || null
+          });
+          changesApplied++;
+        }
+      });
+      if (removedCount > 0) {
+        changesApplied += removedCount;
+        // Update currentClassId if it was removed
+        if (typeof currentClassId !== 'undefined' && !freshClassIds[currentClassId]) {
+          currentClassId = classesData.length > 0 ? classesData[0].id : null;
+        }
+        // Clean up customActions for removed classes
+        if (typeof customActions !== 'undefined') {
+          customActions = customActions.filter(function(a) { return freshClassIds[a.class_id]; });
+        }
       }
     }
 
