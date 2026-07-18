@@ -1,5 +1,5 @@
 /**
- * dal.js v59 — Robust Data Access Layer with Smart Merge
+ * dal.js v60 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -14,6 +14,8 @@
  *   (not captured forEach reference) to prevent re-upserting deleted classes.
  *   Phase 6 tracks deleted class IDs across syncs to ensure Supabase cleanup.
  *   Reverted v58 smartRefresh class list sync (caused conflicts with concurrent syncs).
+ * - v60: Fix pet is_active sync — derive from student.activePetId instead of
+ *   local pet.isActive to prevent sync loop that kept resetting is_active=false.
  * 
  * Flow: loadFromSupabase() → classesData + snapshot → UI
  *       UI action → saveClassData() → _syncToSupabase() → Supabase → update snapshot
@@ -1329,7 +1331,7 @@ function _syncTeacherToSupabase() {
               level: pet.level || 1,
               growth: pet.growth || 0,
               coins: pet.coins || 0,
-              is_active: pet.isActive !== undefined ? pet.isActive : true,
+              is_active: (stu.activePetId === pet.id),
               is_dead: !!pet.isDead,
               last_feed_date: pet.lastFeedDate || null,
               last_play_date: pet.lastPlayDate || null,
@@ -1640,7 +1642,7 @@ function _syncStudentToSupabase() {
         level: pet.level || 1,
         growth: pet.growth || 0,
         coins: pet.coins || 0,
-        is_active: pet.isActive !== undefined ? pet.isActive : true,
+        is_active: (myStudent.activePetId === pet.id),
         is_dead: !!pet.isDead,
         last_feed_date: pet.lastFeedDate || null,
         last_play_date: pet.lastPlayDate || null,
@@ -2281,7 +2283,7 @@ function _setupPageLifecycle() {
                 growth: pet.growth || 0,
                 level: pet.level || 1,
                 coins: pet.coins || 0,
-                is_active: !!pet.isActive,
+                is_active: (myStudent.activePetId === pet.id),
                 is_dead: !!pet.isDead,
                 last_feed_date: pet.lastFeedDate || null,
                 last_play_date: pet.lastPlayDate || null,
