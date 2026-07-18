@@ -1,5 +1,5 @@
 /**
- * dal.js v67 — Robust Data Access Layer with Smart Merge
+ * dal.js v68 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -963,9 +963,18 @@ function _loadOperationLogs() {
           return !l._synced;
         });
 
-        // Deduplicate: remove server logs if local has a newer unsynced version with same ID
+        // v67: Content-based dedup — remove server logs if local has a newer unsynced version
+        // with same ID OR same content (timestamp+actionType+studentName+studentId)
+        // This handles the case where a local log (negative ID) was synced to the table
+        // (got positive ID) but the local copy wasn't updated before the page closed.
         var serverLogIds = {};
-        allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+        var serverContentKeys = {};
+        allLogs.forEach(function(l) {
+          serverLogIds[l.id] = true;
+          var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '') + '|' + (l.studentId || '');
+          serverContentKeys[key] = true;
+        });
+
         var dedupedServer = allLogs.filter(function(l) {
           for (var i = 0; i < localUnsynced.length; i++) {
             if (localUnsynced[i].id === l.id) return false;
@@ -973,7 +982,17 @@ function _loadOperationLogs() {
           return true;
         });
 
-        window.operationLogs = dedupedServer.concat(localUnsynced);
+        // v67: Also remove local unsynced logs that duplicate server logs by content
+        var dedupedLocal = localUnsynced.filter(function(l) {
+          // If local log has same ID as a server log, skip it
+          if (serverLogIds[l.id]) return false;
+          // If local log has same content as a server log, skip it
+          var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '') + '|' + (l.studentId || '');
+          if (serverContentKeys[key]) return false;
+          return true;
+        });
+
+        window.operationLogs = dedupedServer.concat(dedupedLocal);
         window.operationLogs.sort(function(a, b) {
           return (b.timestamp || '').localeCompare(a.timestamp || '');
         });
