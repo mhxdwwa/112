@@ -1348,6 +1348,84 @@ window._forceSyncLogs = function() {
   }
 };
 
+// v70: Comprehensive diagnostic — shows log counts per class, time ranges, and gaps
+window._diagnoseHistory = function() {
+  if (!db || !currentUser) return 'DB or user not ready';
+  console.log('=== History Diagnostic v70 ===');
+  
+  var isTeacher = currentUser.type === 'teacher';
+  var classIds = [];
+  
+  var getClassIdsPromise = isTeacher
+    ? db.from('classes').select('id, name').eq('teacher_id', currentUser.id)
+    : Promise.resolve({ data: [{ id: parseInt(localStorage.getItem('classId')), name: 'My Class' }] });
+  
+  return getClassIdsPromise.then(function(r) {
+    if (!r.data || r.data.length === 0) {
+      console.log('No classes found');
+      return 'No classes found';
+    }
+    classIds = r.data.map(function(c) { return c.id; });
+    var classNames = {};
+    r.data.forEach(function(c) { classNames[c.id] = c.name; });
+    console.log('Classes:', classIds.map(function(id) { return id + ' (' + classNames[id] + ')'; }).join(', '));
+    
+    // Query log counts and time ranges per class
+    return Promise.all(classIds.map(function(cid) {
+      return db.from('operation_logs')
+        .select('id, created_at, action_type')
+        .eq('class_id', cid)
+        .order('created_at', { ascending: true })
+        .then(function(r) {
+          if (r.error) {
+            console.error('Class', cid, 'query failed:', r.error.message);
+            return { classId: cid, name: classNames[cid], count: 0, error: r.error.message };
+          }
+          var logs = r.data || [];
+          var first = logs[0];
+          var last = logs[logs.length - 1];
+          console.log('\nClass', cid, '(' + classNames[cid] + '):');
+          console.log('  Total logs:', logs.length);
+          if (first) console.log('  First log:', first.created_at, '(' + first.action_type + ')');
+          if (last) console.log('  Last log:', last.created_at, '(' + last.action_type + ')');
+          return { classId: cid, name: classNames[cid], count: logs.length, first: first ? first.created_at : null, last: last ? last.created_at : null };
+        });
+    }));
+  }).then(function(results) {
+    if (!results) return;
+    console.log('\n=== Summary ===');
+    console.table(results);
+    
+    // Check local unsynced logs
+    var localUnsynced = (window.operationLogs || []).filter(function(l) { return !l._synced; });
+    console.log('\nLocal unsynced logs:', localUnsynced.length);
+    if (localUnsynced.length > 0) {
+      var byClass = {};
+      localUnsynced.forEach(function(l) {
+        var cid = l.classId || 'null';
+        if (!byClass[cid]) byClass[cid] = 0;
+        byClass[cid]++;
+      });
+      console.log('Unsynced by class:', byClass);
+    }
+    
+    return 'Check browser console for details';
+  });
+};
+
+// v70: Force reload ALL logs from Supabase (bypass cache)
+window._forceReloadHistory = function() {
+  console.log('[v70] Force reloading all logs from Supabase...');
+  return _loadOperationLogs().then(function() {
+    console.log('[v70] Reload complete. Total logs:', (window.operationLogs || []).length);
+    if (typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
+    return 'Reloaded ' + (window.operationLogs || []).length + ' logs';
+  }).catch(function(e) {
+    console.error('[v70] Reload failed:', e);
+    return 'Reload failed: ' + e.message;
+  });
+};
+
 /* ===== Main Load Entry ===== */
 function loadFromSupabase() {
   if (currentUser && currentUser.type === 'student') {
@@ -2265,10 +2343,71 @@ function _doSmartRefresh() {
   });
 }
 
-// v70: 刷新操作日志 + 触发主UI刷新（确保其他设备的购买/操作实时可见）
+// v70: 刷新操作日志 + 拉取最新学生数据 + 触发主UI刷新
 function _refreshLogsOnly() {
-  console.log('[DAL] v70 Refreshing logs + triggering UI rebuild...');
-  _loadOperationLogs().then(function() {
+  console.log('[DAL] v70 Refreshing logs + student data + UI rebuild...');
+
+  // Step 1: Fetch fresh student data from Supabase (coins, shopItems, equippedItems)
+  // This ensures purchases/operations from other devices are reflected in classesData
+  var _studentDataPromise;
+  if (!db || !currentUser || !currentUser.id) {
+    _studentDataPromise = Promise.resolve();
+  } else {
+    var isStudent = currentUser.type === 'student';
+    var studentId = isStudent ? parseInt(localStorage.getItem('studentId')) : null;
+    var classId = isStudent ? parseInt(localStorage.getItem('classId')) : null;
+
+    if (isStudent && (!studentId || !classId)) {
+      _studentDataPromise = Promise.resolve();
+    } else {
+      var query;
+      if (isStudent) {
+        query = db.from('students')
+          .select('id, coins, shop_items, equipped_items, active_pet_id')
+          .eq('class_id', classId);
+      } else {
+        // Teacher: get all students in teacher's classes
+        var teacherClassIds = (classesData || []).map(function(c) { return c.id; });
+        if (teacherClassIds.length === 0) {
+          query = Promise.resolve({ data: [], error: null });
+        } else {
+          query = db.from('students')
+            .select('id, coins, shop_items, equipped_items, active_pet_id')
+            .in('class_id', teacherClassIds);
+        }
+      }
+
+      _studentDataPromise = Promise.resolve(query).then(function(r) {
+        if (!r || r.error || !r.data) return;
+        var freshMap = {};
+        r.data.forEach(function(s) {
+          freshMap[s.id] = {
+            coins: s.coins || 0,
+            shopItems: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
+            equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
+            activePetId: s.active_pet_id || null
+          };
+        });
+        // Merge into classesData
+        (classesData || []).forEach(function(cls) {
+          (cls.students || []).forEach(function(stu) {
+            var fresh = freshMap[stu.id];
+            if (!fresh) return;
+            stu.coins = fresh.coins;
+            stu.shopItems = fresh.shopItems;
+            stu.equippedItems = fresh.equippedItems;
+            if (fresh.activePetId !== null) stu.activePetId = fresh.activePetId;
+          });
+        });
+        console.log('[DAL] v70 Student data refreshed from Supabase:', r.data.length, 'students');
+      }).catch(function(e) {
+        console.warn('[DAL] v70 Student data fetch failed:', e);
+      });
+    }
+  }
+
+  // Step 2: Load operation logs + rebuild UI after student data is fresh
+  Promise.all([_studentDataPromise, _loadOperationLogs()]).then(function() {
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
     // v70: 刷新历史弹窗内容（如果打开的话）
     if (typeof refreshHistoryModalIfOpen === 'function') {
@@ -2288,7 +2427,7 @@ function _refreshLogsOnly() {
       }
     }
   }).catch(function(e) {
-    console.warn('[DAL] Logs-only refresh error:', e);
+    console.warn('[DAL] v70 Logs+data refresh error:', e);
   });
 }
 
@@ -2984,6 +3123,17 @@ function _initDALCore() {
 }
 
 function _postInitSetup() {
+  // v70: Immediately write any unsynced logs from localStorage to Supabase.
+  // This recovers logs that were created but never synced (e.g., due to old bug
+  // where log writes depended on data sync completing first).
+  if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
+    var unsyncedCount = window.operationLogs.filter(function(l) { return !l._synced && l.id < 0; }).length;
+    if (unsyncedCount > 0) {
+      console.log('[DAL] v70 Post-init: found ' + unsyncedCount + ' unsynced logs in localStorage — syncing now');
+      _writeUnsyncedLogsToSupabase();
+    }
+  }
+
   // Periodic PK badge check for students (every 10 seconds)
   if (currentUser.type === 'student' && typeof _updatePKInviteBadge === 'function') {
     setInterval(_updatePKInviteBadge, 10000);
