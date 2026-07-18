@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '62.0';
+var _DAL_VERSION = '63.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -1014,7 +1014,19 @@ function _writeUnsyncedLogsToSupabase() {
     });
 
     // Step 2: Merge — add new logs to existing, UPDATE modified logs, mark as synced
-    var upsertPromises = classIds.map(function(cid) {
+    // v62: Filter out classes that don't exist in Supabase yet (e.g., new classes with string IDs)
+    // These logs will be written after the class is synced and gets a valid ID
+    var validClassIds = classIds.filter(function(cid) {
+      return existingByClass[cid] !== undefined;
+    });
+    var skippedClassIds = classIds.filter(function(cid) {
+      return existingByClass[cid] === undefined;
+    });
+    if (skippedClassIds.length > 0) {
+      console.log('[DAL] v62 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
+    }
+    
+    var upsertPromises = validClassIds.map(function(cid) {
       var existing = existingByClass[cid] || [];
       var newLogs = logsByClass[cid] || [];
 
@@ -1273,8 +1285,14 @@ function _syncTeacherToSupabase() {
       // Update operationLogs classId references
       if (typeof window.operationLogs !== 'undefined') {
         window.operationLogs.forEach(function(l) {
-          if (classIdMap[l.classId]) {
-            l.classId = classIdMap[l.classId];
+          // v62: Handle both string and numeric classId to prevent type mismatch
+          var oldId = l.classId;
+          if (classIdMap[oldId]) {
+            l.classId = classIdMap[oldId];
+          } else if (classIdMap[String(oldId)]) {
+            l.classId = classIdMap[String(oldId)];
+          } else if (classIdMap[parseInt(oldId)]) {
+            l.classId = classIdMap[parseInt(oldId)];
           }
         });
       }
