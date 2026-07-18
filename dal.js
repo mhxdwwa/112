@@ -1,5 +1,5 @@
 /**
- * dal.js v68 — Robust Data Access Layer with Smart Merge
+ * dal.js v69 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -102,8 +102,7 @@ function _loadFromCache() {
 
 /* ===== v54: Bandwidth Optimization ===== */
 // Classes table columns to select in load/refresh queries.
-// Excludes operation_logs_json (2MB+) which is loaded separately by _loadOperationLogs().
-// This single change saves ~2-5MB per refresh cycle.
+// Excludes operation_logs_json (legacy, no longer used). Logs are in operation_logs table.
 var _CLASS_COLS = 'id, name, teacher_id, created_at';
 
 /* ===== Snapshot System (v7.0) ===== */
@@ -826,15 +825,15 @@ function _loadCustomActions() {
   }).catch(function(e) { console.warn('[DAL] custom_actions load error:', e); });
 }
 
-/* ===== Operation Logs: classes.operation_logs_json architecture (v29) =====
+/* ===== Operation Logs: operation_logs table architecture (v69) =====
  *
- * v29: Logs are stored as JSON in the classes table — same sync channel as student data.
- * No more operation_logs table (had FK constraints that broke on mobile).
- * Uses upsert (same pattern as student coins) — proven reliable.
- * Max 5000 logs per class — oldest are trimmed automatically.
+ * v69: All logs stored in operation_logs table (individual rows, atomic INSERTs).
+ * No more JSON blob (classes.operation_logs_json) — all blob logs migrated to table.
+ * No race conditions: each device INSERTs independently, no read-modify-write.
  *
- * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → classes.upsert
- * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
+ * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → operation_logs INSERT
+ * READ:  init/refresh → _loadOperationLogs() → operation_logs SELECT (single source of truth)
+ * REALTIME: operation_logs channel → _refreshLogsOnly() on any INSERT/UPDATE
  */
 
 var _OP_LOGS_MAX_PER_CLASS = 5000;
@@ -853,8 +852,9 @@ function _getOpLogClassIds() {
   }
 }
 
-// v67: Load operation logs from operation_logs table (individual rows, no race condition)
-// Falls back to classes.operation_logs_json for backward compatibility
+// v69: Load operation logs from operation_logs table ONLY (single source of truth).
+// All blob logs have been migrated to the table — no longer reading from classes.operation_logs_json.
+// Local unsynced logs (negative IDs) are preserved and merged with server logs.
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
@@ -867,143 +867,88 @@ function _loadOperationLogs() {
 
   return _getOpLogClassIds().then(function(classIds) {
     if (!classIds || classIds.length === 0) {
-      console.warn('[DAL] v67 _loadOperationLogs: no classIds');
+      console.warn('[DAL] v69 _loadOperationLogs: no classIds');
       return;
     }
-    console.log('[DAL] v67 Loading operation logs for class_ids:', classIds);
+    console.log('[DAL] v69 Loading operation logs for class_ids:', classIds);
 
-    // v67: Read from operation_logs table (individual rows — no race condition)
-    return db.from('operation_logs').select('id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, snapshot, reverted, created_at').in('class_id', classIds).order('created_at', { ascending: false }).limit(_OP_LOGS_MAX_PER_CLASS).then(function(tableR) {
-      var tableLogs = [];
+    // v69: Read ONLY from operation_logs table (single source of truth)
+    return db.from('operation_logs').select('id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, snapshot, reverted, created_at').in('class_id', classIds).order('created_at', { ascending: false }).then(function(tableR) {
+      var serverLogs = [];
       if (tableR.error) {
-        console.warn('[DAL] v67 operation_logs query failed:', tableR.error.message, '— falling back to JSON blob');
-      } else {
-        (tableR.data || []).forEach(function(row) {
-          var extra = row.extra || {};
-          var log = {
-            id: row.id,
-            timestamp: row.created_at,
-            classId: row.class_id,
-            studentId: row.student_id,
-            studentName: row.student_name || '',
-            actionType: row.action_type || '',
-            details: row.details || '',
-            coinDelta: parseInt(row.coin_delta) || 0,
-            expDelta: parseInt(row.exp_delta) || 0,
-            petId: row.pet_id || null,
-            extra: (extra.pkChallenge || extra.pkAccept || extra.shopItemId || extra.causedDeath || extra.starvation || extra.prevGrowth !== undefined) ? extra : (extra.fullSnapshot ? null : extra),
-            snapshot: row.snapshot || null,
-            fullSnapshot: extra.fullSnapshot || null,
-            reverted: !!row.reverted,
-            _synced: true,
-            _fromSupabase: true
-          };
-          // Clean up extra: remove fullSnapshot from it since it's now a top-level field
-          if (log.extra && log.extra.fullSnapshot) {
-            var cleanExtra = {};
-            Object.keys(log.extra).forEach(function(k) {
-              if (k !== 'fullSnapshot') cleanExtra[k] = log.extra[k];
-            });
-            log.extra = Object.keys(cleanExtra).length > 0 ? cleanExtra : null;
-          }
-          tableLogs.push(log);
-        });
-        console.log('[DAL] v67 Loaded ' + tableLogs.length + ' logs from operation_logs table');
+        console.error('[DAL] v69 operation_logs query failed:', tableR.error.message);
+        return;
       }
 
-      // v67: Also read from classes.operation_logs_json for backward compatibility
-      // This ensures old logs stored in the JSON blob are not lost
-      return db.from('classes').select('id, operation_logs_json').in('id', classIds).then(function(blobR) {
-        var blobLogs = [];
-        if (blobR.error) {
-          console.warn('[DAL] v67 classes blob query failed:', blobR.error.message);
-        } else {
-          (blobR.data || []).forEach(function(cls) {
-            if (!cls.operation_logs_json) return;
-            try {
-              var logs = JSON.parse(cls.operation_logs_json);
-              if (Array.isArray(logs)) {
-                logs.forEach(function(l) {
-                  l._synced = true;
-                  l._fromSupabase = true;
-                  if (!l.classId) l.classId = cls.id;
-                  blobLogs.push(l);
-                });
-              }
-            } catch(e) {
-              console.warn('[DAL] v67 Failed to parse operation_logs_json for class', cls.id, e);
-            }
+      (tableR.data || []).forEach(function(row) {
+        var extra = row.extra || {};
+        var log = {
+          id: row.id,
+          timestamp: row.created_at,
+          classId: row.class_id,
+          studentId: row.student_id,
+          studentName: row.student_name || '',
+          actionType: row.action_type || '',
+          details: row.details || '',
+          coinDelta: parseInt(row.coin_delta) || 0,
+          expDelta: parseInt(row.exp_delta) || 0,
+          petId: row.pet_id || null,
+          extra: (extra.pkChallenge || extra.pkAccept || extra.shopItemId || extra.causedDeath || extra.starvation || extra.prevGrowth !== undefined) ? extra : (extra.fullSnapshot ? null : extra),
+          snapshot: row.snapshot || null,
+          fullSnapshot: extra.fullSnapshot || null,
+          reverted: !!row.reverted,
+          _synced: true,
+          _fromSupabase: true
+        };
+        // Clean up extra: remove fullSnapshot from it since it's now a top-level field
+        if (log.extra && log.extra.fullSnapshot) {
+          var cleanExtra = {};
+          Object.keys(log.extra).forEach(function(k) {
+            if (k !== 'fullSnapshot') cleanExtra[k] = log.extra[k];
           });
-          console.log('[DAL] v67 Loaded ' + blobLogs.length + ' logs from JSON blob');
+          log.extra = Object.keys(cleanExtra).length > 0 ? cleanExtra : null;
         }
-
-        // v67: Merge table logs and blob logs, deduplicating by ID
-        // Table logs take priority (they have real Supabase IDs)
-        var allLogs = tableLogs.slice();
-        var tableLogIds = {};
-        tableLogs.forEach(function(l) { tableLogIds[l.id] = true; });
-
-        // Add blob logs that aren't already in table logs
-        // Match by: positive ID not in table, or by timestamp+actionType+studentName for negative IDs
-        var tableLogKeys = {};
-        tableLogs.forEach(function(l) {
-          tableLogKeys[l.timestamp + '|' + l.actionType + '|' + l.studentName + '|' + (l.studentId || '')] = true;
-        });
-
-        blobLogs.forEach(function(l) {
-          // Skip if table already has this log (by ID or by content key)
-          if (l.id > 0 && tableLogIds[l.id]) return;
-          var key = l.timestamp + '|' + l.actionType + '|' + l.studentName + '|' + (l.studentId || '');
-          if (tableLogKeys[key]) return;
-          allLogs.push(l);
-        });
-
-        // Preserve any local unsynced logs
-        var localUnsynced = window.operationLogs.filter(function(l) {
-          return !l._synced;
-        });
-
-        // v67: Content-based dedup — remove server logs if local has a newer unsynced version
-        // with same ID OR same content (timestamp+actionType+studentName+studentId)
-        // This handles the case where a local log (negative ID) was synced to the table
-        // (got positive ID) but the local copy wasn't updated before the page closed.
-        var serverLogIds = {};
-        var serverContentKeys = {};
-        allLogs.forEach(function(l) {
-          serverLogIds[l.id] = true;
-          var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '') + '|' + (l.studentId || '');
-          serverContentKeys[key] = true;
-        });
-
-        var dedupedServer = allLogs.filter(function(l) {
-          for (var i = 0; i < localUnsynced.length; i++) {
-            if (localUnsynced[i].id === l.id) return false;
-          }
-          return true;
-        });
-
-        // v67: Also remove local unsynced logs that duplicate server logs by content
-        var dedupedLocal = localUnsynced.filter(function(l) {
-          // If local log has same ID as a server log, skip it
-          if (serverLogIds[l.id]) return false;
-          // If local log has same content as a server log, skip it
-          var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '') + '|' + (l.studentId || '');
-          if (serverContentKeys[key]) return false;
-          return true;
-        });
-
-        window.operationLogs = dedupedServer.concat(dedupedLocal);
-        window.operationLogs.sort(function(a, b) {
-          return (b.timestamp || '').localeCompare(a.timestamp || '');
-        });
-
-        // Backup to localStorage
-        try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-        console.log('[DAL] v67 Total: ' + allLogs.length + ' server logs (' + tableLogs.length + ' table + ' + blobLogs.length + ' blob), ' + localUnsynced.length + ' local unsynced kept');
+        serverLogs.push(log);
       });
+      console.log('[DAL] v69 Loaded ' + serverLogs.length + ' logs from operation_logs table');
+
+      // Preserve any local unsynced logs (negative IDs, not yet in table)
+      var localUnsynced = window.operationLogs.filter(function(l) {
+        return !l._synced;
+      });
+
+      // v69: Content-based dedup — remove local unsynced logs that duplicate server logs
+      // This handles the case where a local log was synced to the table (got positive ID)
+      // but the local copy wasn't updated before the page closed.
+      var serverLogIds = {};
+      var serverContentKeys = {};
+      serverLogs.forEach(function(l) {
+        serverLogIds[l.id] = true;
+        // Content key: timestamp(19) + actionType + studentName (no studentId — table may have null)
+        var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
+        serverContentKeys[key] = true;
+      });
+
+      var dedupedLocal = localUnsynced.filter(function(l) {
+        // If local log has same ID as a server log, skip it
+        if (l.id > 0 && serverLogIds[l.id]) return false;
+        // If local log has same content as a server log, skip it
+        var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
+        if (serverContentKeys[key]) return false;
+        return true;
+      });
+
+      window.operationLogs = serverLogs.concat(dedupedLocal);
+      window.operationLogs.sort(function(a, b) {
+        return (b.timestamp || '').localeCompare(a.timestamp || '');
+      });
+
+      // Backup to localStorage
+      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+      console.log('[DAL] v69 Total: ' + serverLogs.length + ' server logs, ' + dedupedLocal.length + ' local unsynced kept, ' + (localUnsynced.length - dedupedLocal.length) + ' deduped out');
     });
   }).catch(function(e) {
-    console.warn('[DAL] v67 _loadOperationLogs error:', e);
+    console.warn('[DAL] v69 _loadOperationLogs error:', e);
   });
 }
 
@@ -1012,115 +957,10 @@ function _loadOperationLogs() {
 var _writingLogsToSupabase = false;
 var _pendingLogWrites = 0;
 
-// v65: Verify that our logs weren't overwritten by another device's concurrent write.
-// If our logs are missing, re-read from Supabase, re-merge, and re-write.
-// Retries up to 3 times with increasing delays.
-function _verifyLogWrite(classId, writtenLogIds, retryCount) {
-  if (retryCount >= 3 || !writtenLogIds || writtenLogIds.length === 0) {
-    return Promise.resolve();
-  }
-  // Wait 500ms to let any concurrent writes settle
-  return new Promise(function(resolve) {
-    setTimeout(resolve, 500 + retryCount * 500);
-  }).then(function() {
-    return db.from('classes').select('id, operation_logs_json').eq('id', classId).single();
-  }).then(function(r) {
-    if (r.error || !r.data) {
-      console.warn('[DAL] v65 Verify read failed for class', classId + ':', r.error ? r.error.message : 'no data');
-      return;
-    }
-    var serverLogs = [];
-    try {
-      serverLogs = r.data.operation_logs_json ? JSON.parse(r.data.operation_logs_json) : [];
-    } catch(e) { serverLogs = []; }
-    
-    // Check which of our logs are missing
-    var serverLogIds = {};
-    serverLogs.forEach(function(l) { serverLogIds[l.id] = true; });
-    var missingIds = writtenLogIds.filter(function(id) { return !serverLogIds[id]; });
-    
-    if (missingIds.length === 0) {
-      console.log('[DAL] v65 Verify OK: all', writtenLogIds.length, 'logs present for class', classId);
-      return;
-    }
-    
-    console.warn('[DAL] v65 CONFLICT DETECTED! ' + missingIds.length + '/' + writtenLogIds.length + 
-      ' logs overwritten by another device for class', classId, '(retry ' + retryCount + ')');
-    
-    // Re-merge: take server logs + add our missing logs
-    var merged = serverLogs.slice();
-    var mergedById = {};
-    merged.forEach(function(l, idx) { mergedById[l.id] = idx; });
-    
-    // Find our missing logs from window.operationLogs
-    var addedCount = 0;
-    missingIds.forEach(function(missingId) {
-      for (var i = 0; i < window.operationLogs.length; i++) {
-        if (window.operationLogs[i].id === missingId) {
-          var l = window.operationLogs[i];
-          var mergedLog = {
-            id: l.id,
-            timestamp: l.timestamp || new Date().toISOString(),
-            classId: classId,
-            studentId: l.studentId,
-            studentName: l.studentName || '',
-            actionType: l.actionType || '',
-            details: l.details || '',
-            coinDelta: parseInt(l.coinDelta) || 0,
-            expDelta: parseInt(l.expDelta) || 0,
-            petId: l.petId || null,
-            extra: l.extra || null,
-            snapshot: l.snapshot || null,
-            fullSnapshot: l.fullSnapshot || null,
-            reverted: !!l.reverted,
-            _synced: true,
-            _fromSupabase: true
-          };
-          if (mergedById[l.id] !== undefined) {
-            merged[mergedById[l.id]] = mergedLog;
-          } else {
-            merged.push(mergedLog);
-            mergedById[l.id] = merged.length - 1;
-            addedCount++;
-          }
-          break;
-        }
-      }
-    });
-    
-    if (addedCount === 0) {
-      console.log('[DAL] v65 No missing logs found locally, skipping re-write');
-      return;
-    }
-    
-    // Sort and cap
-    merged.sort(function(a, b) {
-      return (b.timestamp || '').localeCompare(a.timestamp || '');
-    });
-    if (merged.length > _OP_LOGS_MAX_PER_CLASS) {
-      merged = merged.slice(0, _OP_LOGS_MAX_PER_CLASS);
-    }
-    
-    console.log('[DAL] v65 Re-merging: added', addedCount, 'missing logs, total:', merged.length);
-    
-    // Re-write
-    return db.from('classes').update({
-      operation_logs_json: JSON.stringify(merged)
-    }).eq('id', classId).then(function(ur) {
-      if (ur.error) {
-        console.error('[DAL] v65 Re-write failed:', ur.error.message);
-      } else {
-        console.log('[DAL] v65 Re-write OK:', merged.length, 'logs for class', classId);
-        _lastOwnWriteTime = Date.now();
-        // Verify again to make sure our re-write wasn't overwritten
-        return _verifyLogWrite(classId, writtenLogIds, retryCount + 1);
-      }
-    });
-  });
-}
+// v69: Removed _verifyLogWrite — was dead code from v65 (JSON blob approach).
+// With operation_logs table using atomic INSERTs, no verification is needed.
 
-// v29: Write unsynced logs to Supabase.
-// v67: REWRITTEN — Uses INSERT into operation_logs table (atomic, no race condition).
+// v69: Write unsynced logs to Supabase using INSERT into operation_logs table (atomic, no race condition).
 // Old approach (v29-v66): read-modify-write on classes.operation_logs_json JSON blob.
 // Two devices writing concurrently would overwrite each other's logs.
 // New approach: each log is an individual INSERT row — completely independent, no conflicts.
@@ -2431,19 +2271,11 @@ function _setupRealtimeSubscriptions() {
 
   try {
     // Subscribe to classes table — coalesced refresh on change
-    // v67: operation_logs are now in a separate table, but classes table still
-    // triggers refresh for class data changes (name, teacher_id, etc.)
+    // v69: operation_logs are in a separate table now. Classes channel only handles
+    // class data changes (name, teacher_id, etc.)
     var classChannel = db.channel('dal-classes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
-        // 检查是否只有 operation_logs_json 变化（通过比较列）
-        // 如果只有日志变化，使用轻量级刷新（不重建UI）
-        if (payload.columns && payload.columns.length === 1 && payload.columns[0].name === 'operation_logs_json') {
-          console.log('[DAL] Classes channel: logs-only change, using lightweight refresh');
-          _refreshLogsOnly();
-        } else {
-          // 其他 classes 变化（班级名称等），触发完整刷新
-          _debouncedRealtimeRefresh('classes');
-        }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function() {
+        _debouncedRealtimeRefresh('classes');
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
