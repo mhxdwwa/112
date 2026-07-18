@@ -61,15 +61,15 @@ var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after o
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
-// Coalesces multiple events within 1.5s into a single refresh.
+// Coalesces multiple events within 3s into a single refresh.
 var _realtimeCoalesceTimer = null;
 function _debouncedRealtimeRefresh(source) {
-  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (1.5s)');
+  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (3s)');
   if (_realtimeCoalesceTimer) return; // already scheduled, skip
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
     _immediateRefreshFromSupabase();
-  }, 1500);
+  }, 3000);
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
@@ -1788,14 +1788,48 @@ function _doSmartRefresh() {
   });
 }
 
+// 仅刷新操作日志（不触发UI重建，避免频繁闪烁）
+function _refreshLogsOnly() {
+  console.log('[DAL] Refreshing logs only (no UI rebuild)...');
+  _loadOperationLogs().then(function() {
+    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+    // 只在历史弹窗打开时刷新弹窗内容
+    if (typeof refreshHistoryModalIfOpen === 'function') {
+      clearTimeout(window._historyRefreshDebounce);
+      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 2000);
+    }
+    // 学生端：检查PK挑战（PK挑战记录在operation_logs中）
+    if (currentUser && currentUser.type === 'student') {
+      if (typeof _checkAcceptedPKChallenge === 'function') {
+        _checkAcceptedPKChallenge();
+      }
+      if (typeof _updatePKInviteBadge === 'function') {
+        _updatePKInviteBadge();
+      }
+    }
+  }).catch(function(e) {
+    console.warn('[DAL] Logs-only refresh error:', e);
+  });
+}
+
 function _setupRealtimeSubscriptions() {
   if (!db || !db.channel) return;
 
   try {
     // Subscribe to classes table — coalesced refresh on change
+    // Note: operation_logs are stored in classes.operation_logs_json (v29),
+    // so classes table changes include both class data and log updates
     var classChannel = db.channel('dal-classes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function() {
-        _debouncedRealtimeRefresh('classes');
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
+        // 检查是否只有 operation_logs_json 变化（通过比较列）
+        // 如果只有日志变化，使用轻量级刷新（不重建UI）
+        if (payload.columns && payload.columns.length === 1 && payload.columns[0].name === 'operation_logs_json') {
+          console.log('[DAL] Classes channel: logs-only change, using lightweight refresh');
+          _refreshLogsOnly();
+        } else {
+          // 其他 classes 变化（班级名称等），触发完整刷新
+          _debouncedRealtimeRefresh('classes');
+        }
       })
       .subscribe();
     _realtimeChannels.push(classChannel);
@@ -1816,13 +1850,8 @@ function _setupRealtimeSubscriptions() {
       .subscribe();
     _realtimeChannels.push(petChannel);
 
-    // Subscribe to operation_logs table — coalesced refresh on change
-    var logChannel = db.channel('dal-operation-logs')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function() {
-        _debouncedRealtimeRefresh('operation_logs');
-      })
-      .subscribe();
-    _realtimeChannels.push(logChannel);
+    // Note: operation_logs table subscription removed (v29 uses classes.operation_logs_json)
+    // Log changes are now handled by the classes channel above
 
     console.log('[DAL] ⚡ Realtime subscriptions active — instant push enabled');
   } catch (e) {
