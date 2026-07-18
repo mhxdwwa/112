@@ -10168,8 +10168,17 @@ window._escapedPetIds = new Set();
 
             playEscapeSound('bye');
 
+            // 查找当前有效的卡片元素（可能被 renderHomePetGrid 重建过）
+            let currentCard = petInfo.card;
+            if (petInfo.studentId) {
+              const newCard = document.querySelector(`#homePetGrid .home-pet-card[data-sid="${petInfo.studentId}"]`);
+              if (newCard && newCard.isConnected) {
+                currentCard = newCard;
+              }
+            }
+
             // 飞回卡片位置
-            const endRect = petInfo.card.getBoundingClientRect();
+            const endRect = currentCard.getBoundingClientRect();
             el.style.transition = 'left 0.8s ease-in, top 0.8s ease-in, opacity 0.8s';
             el.style.left = (endRect.left + endRect.width / 2 - 65) + 'px';
             el.style.top = (endRect.top + endRect.height / 2 - 65) + 'px';
@@ -10181,15 +10190,27 @@ window._escapedPetIds = new Set();
 
             // 卡片恢复弹跳 + 宠物图片恢复显示
             setTimeout(() => {
-              showCardPet(petInfo.card);
-              petInfo.card.style.transition = 'transform 0.3s';
-              petInfo.card.style.transform = 'scale(1.05)';
+              // 从全局出逃集合中移除（必须在 showCardPet 之前，否则卡片仍显示"出逃中"）
+              if (petInfo.petId) window._escapedPetIds.delete(String(petInfo.petId));
+              escapedPets = escapedPets.filter(p => p !== petData);
+
+              // 恢复卡片宠物显示
+              showCardPet(currentCard);
+              currentCard.style.transition = 'transform 0.3s';
+              currentCard.style.transform = 'scale(1.05)';
               setTimeout(() => {
-                petInfo.card.style.transform = '';
-                setTimeout(() => petInfo.card.style.transition = '', 300);
+                currentCard.style.transform = '';
+                setTimeout(() => currentCard.style.transition = '', 300);
               }, 300);
               // === "刚回来"气喘吁吁状态 ===
-              setTimeout(() => showJustReturnedState(petInfo.card), 400);
+              setTimeout(() => showJustReturnedState(currentCard), 400);
+
+              // 如果所有宠物都回来了，结束出逃状态
+              if (escapedPets.length === 0) {
+                escapeActive = false;
+                lastEscapeEnd = Date.now();
+                document.querySelectorAll('.escape-pawprint, .escaped-pet-trail, .escape-food-card, .escape-action-particle').forEach(e => e.remove());
+              }
             }, 1000);
 
             setTimeout(() => el.remove(), 1500);
@@ -10206,7 +10227,15 @@ window._escapedPetIds = new Set();
       lastEscapeEnd = Date.now();
       escapedPets.forEach(p => {
         if (p.el && p.el.isConnected) p.el.remove();
-        if (p.petInfo && p.petInfo.card) showCardPet(p.petInfo.card);
+        // 查找当前有效的卡片元素（可能被 renderHomePetGrid 重建过）
+        let currentCard = p.petInfo ? p.petInfo.card : null;
+        if (p.petInfo && p.petInfo.studentId) {
+          const newCard = document.querySelector(`#homePetGrid .home-pet-card[data-sid="${p.petInfo.studentId}"]`);
+          if (newCard && newCard.isConnected) {
+            currentCard = newCard;
+          }
+        }
+        if (currentCard) showCardPet(currentCard);
         // 从全局出逃集合中移除
         if (p.petInfo && p.petInfo.petId) window._escapedPetIds.delete(String(p.petInfo.petId));
       });
@@ -10222,8 +10251,16 @@ window._escapedPetIds = new Set();
     escapeActive = false;
     lastEscapeEnd = Date.now();
     escapedPets.forEach(p => {
+      // 查找当前有效的卡片元素（可能被 renderHomePetGrid 重建过）
+      let currentCard = p.petInfo ? p.petInfo.card : null;
+      if (p.petInfo && p.petInfo.studentId) {
+        const newCard = document.querySelector(`#homePetGrid .home-pet-card[data-sid="${p.petInfo.studentId}"]`);
+        if (newCard && newCard.isConnected) {
+          currentCard = newCard;
+        }
+      }
       // 恢复卡片上的宠物图片
-      if (p.petInfo && p.petInfo.card) showCardPet(p.petInfo.card);
+      if (currentCard) showCardPet(currentCard);
       // 从全局出逃集合中移除
       if (p.petInfo && p.petInfo.petId) window._escapedPetIds.delete(String(p.petInfo.petId));
       if (p.el && p.el.isConnected) {
