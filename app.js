@@ -2945,7 +2945,7 @@ function _startPKChallengePolling() {
         _checkAcceptedPKChallenge();
       }).catch(function() {});
     }
-  }, 2000);
+  }, 5000); // v53: 5s interval (was 2s) — reduces 150 queries/challenge to 60
 }
 
 function _stopPKChallengePolling() {

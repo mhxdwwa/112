@@ -59,10 +59,26 @@ var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
 var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after our own write (was 30s)
 
+/* ===== Realtime Channel Coalescing (v53) ===== */
+// All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
+// Coalesces multiple events within 1.5s into a single refresh.
+var _realtimeCoalesceTimer = null;
+function _debouncedRealtimeRefresh(source) {
+  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (1.5s)');
+  if (_realtimeCoalesceTimer) return; // already scheduled, skip
+  _realtimeCoalesceTimer = setTimeout(function() {
+    _realtimeCoalesceTimer = null;
+    _immediateRefreshFromSupabase();
+  }, 1500);
+}
+
 /* ===== Snapshot Helpers (v7.0) ===== */
 function _takeSnapshot() {
   if (!classesData || !Array.isArray(classesData)) return;
-  _snapshotClassesData = JSON.parse(JSON.stringify(classesData));
+  // v53: Use structuredClone (3-5x faster than JSON round-trip), fallback for older browsers
+  _snapshotClassesData = (typeof structuredClone === 'function')
+    ? structuredClone(classesData)
+    : JSON.parse(JSON.stringify(classesData));
   console.log('[DAL] Snapshot taken: ' + _snapshotClassesData.length + ' classes');
 }
 
@@ -1749,13 +1765,13 @@ function _doSmartRefresh() {
     
     // Re-render the UI with merged data
     if (typeof renderClassList === 'function') renderClassList();
+    // scheduleAllRenders already includes PK + Jianghu renders, no need to call them again
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    // v15: Also re-render PK page to update qualification status
-    if (typeof renderPKPage === 'function') { try { renderPKPage(); } catch(e) {} }
-    // v15: Also re-render jianghu page to update qualification status
-    if (typeof renderJianghuPage === 'function') { try { renderJianghuPage(); } catch(e) {} }
-    // v12: Refresh history modal if open — show latest logs in real-time
-    if (typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
+    // v53: Debounce history modal refresh to avoid flickering (max once per 3s)
+    if (typeof refreshHistoryModalIfOpen === 'function') {
+      clearTimeout(window._historyRefreshDebounce);
+      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 3000);
+    }
     
     // For students: check for accepted PK challenges and update invite badge
     if (currentUser && currentUser.type === 'student') {
@@ -1783,38 +1799,34 @@ function _setupRealtimeSubscriptions() {
   if (!db || !db.channel) return;
 
   try {
-    // Subscribe to classes table — immediate refresh on change
+    // Subscribe to classes table — coalesced refresh on change
     var classChannel = db.channel('dal-classes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function() {
-        console.log('[DAL] 🔔 Realtime classes event');
-        _immediateRefreshFromSupabase();
+        _debouncedRealtimeRefresh('classes');
       })
       .subscribe();
     _realtimeChannels.push(classChannel);
 
-    // Subscribe to students table — immediate refresh on change
+    // Subscribe to students table — coalesced refresh on change
     var studentChannel = db.channel('dal-students')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function() {
-        console.log('[DAL] 🔔 Realtime students event');
-        _immediateRefreshFromSupabase();
+        _debouncedRealtimeRefresh('students');
       })
       .subscribe();
     _realtimeChannels.push(studentChannel);
 
-    // Subscribe to pets table — immediate refresh on change
+    // Subscribe to pets table — coalesced refresh on change
     var petChannel = db.channel('dal-pets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
-        console.log('[DAL] 🔔 Realtime pets event:', payload.eventType);
-        _immediateRefreshFromSupabase();
+        _debouncedRealtimeRefresh('pets:' + payload.eventType);
       })
       .subscribe();
     _realtimeChannels.push(petChannel);
 
-    // Subscribe to operation_logs table — immediate refresh on change
+    // Subscribe to operation_logs table — coalesced refresh on change
     var logChannel = db.channel('dal-operation-logs')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function() {
-        console.log('[DAL] 🔔 Realtime operation_logs event');
-        _immediateRefreshFromSupabase();
+        _debouncedRealtimeRefresh('operation_logs');
       })
       .subscribe();
     _realtimeChannels.push(logChannel);
