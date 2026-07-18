@@ -1302,6 +1302,10 @@
     }
 
     function backToSelect() {
+      // 退出CSS全屏模式（如果激活）
+      if (_cssFullscreenActive) {
+        exitCSSFullscreen();
+      }
       winModal.classList.remove('show');
       stopTimer();
       stopBGM();
@@ -1587,6 +1591,15 @@
           fullscreenBtn.textContent = '⛶';
         }
       });
+
+      // 监听页面切换，如果离开quiz-page时CSS全屏激活，则退出
+      var origSwitchPage = window.switchPage;
+      window.switchPage = function(pageId) {
+        if (pageId !== 'quiz-page' && _cssFullscreenActive) {
+          exitCSSFullscreen();
+        }
+        if (origSwitchPage) origSwitchPage(pageId);
+      };
     }
     pauseBtn.addEventListener('click', togglePause);
     resumeBtn.addEventListener('click', togglePause);
