@@ -1673,8 +1673,14 @@ let _gridObserver=null, _gridBatchBusy=false;
 /* 快速计算学生数据哈希，用于 DOM diff 判断卡片是否需要更新 */
 function _studentDataHash(s) {
   var p = getActivePet(s);
-  if (!p) return s.id + '_nopet_' + (s.coins||0);
-  return s.id + '_' + (s.coins||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (s.pets?s.pets.length:0);
+  // v71: Include shopItems and equippedItems in hash so card re-renders when items change
+  // (e.g., purchasing an effect that doesn't change coins enough to notice)
+  var itemsHash = '';
+  try {
+    itemsHash = '_' + JSON.stringify(s.shopItems || []) + '_' + JSON.stringify(s.equippedItems || {});
+  } catch(e) { itemsHash = ''; }
+  if (!p) return s.id + '_nopet_' + (s.coins||0) + itemsHash;
+  return s.id + '_' + (s.coins||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (s.pets?s.pets.length:0) + itemsHash;
 }
 
 function _generateStudentCardHTML(s){

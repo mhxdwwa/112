@@ -876,9 +876,18 @@ var _OP_LOGS_PAGE = 1000; // Supabase max rows per query
 
 function _rowToLog(row) {
   var extra = row.extra || {};
+  // v71: Ensure created_at is treated as UTC. Supabase may return timestamps
+  // without timezone indicator (e.g. "2026-07-18T23:08:00.000") which the browser
+  // interprets as LOCAL time, causing e.g. 7:08 AM UTC+8 to display as "23:08".
+  // Append 'Z' if no timezone info is present so new Date() correctly interprets it as UTC.
+  var rawTs = row.created_at || '';
+  var fixedTs = rawTs;
+  if (rawTs && !rawTs.endsWith('Z') && !rawTs.includes('+') && !rawTs.match(/-\d{2}:\d{2}$/)) {
+    fixedTs = rawTs + 'Z';
+  }
   var log = {
     id: row.id,
-    timestamp: row.created_at,
+    timestamp: fixedTs,
     classId: row.class_id,
     studentId: row.student_id,
     studentName: row.student_name || '',
@@ -2345,6 +2354,28 @@ function _doSmartRefresh() {
 
 // v70: 刷新操作日志 + 拉取最新学生数据 + 触发主UI刷新
 function _refreshLogsOnly() {
+  // v71: Skip if this is an echo of our own write (within 5s window).
+  // Without this, a purchase on device A triggers:
+  //   1. In-memory data updated + renderHomePetGrid() → shows new item
+  //   2. _writeUnsyncedLogsToSupabase() → INSERT into operation_logs
+  //   3. Realtime echo → _refreshLogsOnly() → fetches stale student data from Supabase
+  //   4. Stale data overwrites fresh in-memory data → item disappears!
+  // The 5s window is longer than _OWN_WRITE_IGNORE_MS (3s) because student data sync
+  // (_syncToSupabase) may take longer than the log write.
+  if (_lastOwnWriteTime && Date.now() - _lastOwnWriteTime < 5000) {
+    console.log('[DAL] v71 _refreshLogsOnly skipped — own write echo (' +
+      Math.round((5000 - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
+    // Still reload logs (they're local-safe) but don't overwrite student data
+    _loadOperationLogs().then(function() {
+      if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+      if (typeof refreshHistoryModalIfOpen === 'function') {
+        clearTimeout(window._historyRefreshDebounce);
+        window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
+      }
+    });
+    return;
+  }
+
   console.log('[DAL] v70 Refreshing logs + student data + UI rebuild...');
 
   // Step 1: Fetch fresh student data from Supabase (coins, shopItems, equippedItems)
