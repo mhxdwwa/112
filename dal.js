@@ -1570,6 +1570,22 @@ function _syncTeacherToSupabase() {
           }
         });
       }
+
+      // v71: Update _userDeletedClassIds when class IDs are remapped
+      // This fixes the "create class → immediately delete" bug where:
+      // 1. Class created with string ID "1721..."
+      // 2. Sync inserts to Supabase, gets INT4 ID 42
+      // 3. User deletes class, _userDeletedClassIds has "1721..."
+      // 4. Phase 6 checks if 42 is in _userDeletedClassIds → NO → class not deleted!
+      if (typeof _userDeletedClassIds !== 'undefined' && _userDeletedClassIds.length > 0) {
+        oldKeys.forEach(function(oldId) {
+          var idx = _userDeletedClassIds.indexOf(oldId);
+          if (idx !== -1) {
+            _userDeletedClassIds[idx] = classIdMap[oldId];
+            console.log('[DAL] v71 Updated _userDeletedClassIds: ' + oldId + ' → ' + classIdMap[oldId]);
+          }
+        });
+      }
     }
 
     // v48: NOW categorize students — cls.id is already the real DB ID
