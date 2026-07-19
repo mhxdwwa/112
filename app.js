@@ -686,7 +686,7 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
 function recordResetAction(classId, className, fullSnapshot){ var _n=new Date(); var _lt=_n.getFullYear()+'-'+String(_n.getMonth()+1).padStart(2,'0')+'-'+String(_n.getDate()).padStart(2,'0')+'T'+String(_n.getHours()).padStart(2,'0')+':'+String(_n.getMinutes()).padStart(2,'0')+':'+String(_n.getSeconds()).padStart(2,'0')+'.'+String(_n.getMilliseconds()).padStart(3,'0'); const log = { id: _genLocalId(), timestamp: _lt, classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
 function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } unequipItem(student, itemId); } }
-function restoreToLogEntry(logId){
+async function restoreToLogEntry(logId){
   var _logs = getOpLogs();
   const log = _logs.find(l => l.id === logId);
   if(!log) return;
@@ -694,7 +694,13 @@ function restoreToLogEntry(logId){
   if(!curClass) return;
   const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString());
   if(!student){ showNotification('恢复失败','未找到该学生', 'error'); return; }
-  const snap = log.snapshot;
+  // v75: Fetch snapshot on demand if not already loaded
+  let snap = log.snapshot;
+  if(!snap && typeof _fetchLogSnapshot === 'function'){
+    showNotification('加载中','正在获取快照数据...','info');
+    snap = await _fetchLogSnapshot(logId);
+    if(snap) log.snapshot = snap; // cache it in memory for subsequent clicks
+  }
   if(!snap){ showNotification('恢复失败','该日志没有快照数据', 'error'); return; }
   if(!confirm(`确定将「${log.studentName}」的数据恢复到 ${log.timestamp} 的状态？\n这将覆盖当前的金币、成长值和小猪快跑数据。`)) return;
   // 1. Restore coins and pet growth
@@ -730,13 +736,17 @@ function restoreToLogEntry(logId){
   }
   showNotification('恢复成功', detail, 'success');
 }
-function revertToLog(logId){
+async function revertToLog(logId){
   var _logs = getOpLogs();
   const log = _logs.find(l => l.id === logId);
   if(!log) return;
   if(log.reverted){ showNotification('无法撤销','该操作已被撤销过', 'warning'); return; }
   const curClass = classesData.find(c=>c.id===currentClassId);
   if(!curClass) return;
+  // v75: Fetch snapshot on demand for display purposes (before/after values in notification)
+  if(!log.snapshot && typeof _fetchLogSnapshot === 'function'){
+    log.snapshot = await _fetchLogSnapshot(logId);
+  }
   // 重置班级宠物：恢复完整快照
   if(log.fullSnapshot){
     curClass.students = JSON.parse(JSON.stringify(log.fullSnapshot));
@@ -1006,8 +1016,10 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     // Only teachers can revoke operations; students cannot
     if(!isReverted && isCurrentMonth && !isStudentView){
       btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog(${log.id});closeModal();}">撤销</button>`;
-      // v46: Show "恢复到此" button for all logs with snapshot
-      if(snap && (snap.coinsAfter !== undefined || snap.quizStateSnapshot)) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry(${log.id})">恢复到此</button>` + btnHtml;
+      // v75: Show "恢复到此" button for logs that likely have snapshot (coin/exp changes or quiz actions)
+      // Snapshot is fetched on demand in restoreToLogEntry
+      const hasSnapshotData = snap ? (snap.coinsAfter !== undefined || snap.quizStateSnapshot) : (log.coinDelta !== 0 || log.expDelta !== 0 || log.actionType === '小猪快跑');
+      if(hasSnapshotData) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry(${log.id})">恢复到此</button>` + btnHtml;
     }
     html += `<div class="history-log-item ${isReverted?'history-reverted':''}" style="${opacity}border-left:3px solid ${color};padding-left:14px;">
       <div style="flex:1;min-width:0;">

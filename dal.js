@@ -891,7 +891,7 @@ function _getOpLogClassIds() {
 // v69: Query EACH CLASS INDIVIDUALLY — Supabase has a hard 1000-row limit per query.
 // Using .in('class_id', [2,3,4]) returns max 1000 rows TOTAL across all classes,
 // which means some classes get 0 rows. Per-class queries ensure every class gets its data.
-var _OP_LOGS_COLS = 'id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, snapshot, reverted, created_at';
+var _OP_LOGS_COLS = 'id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, reverted, created_at';
 var _OP_LOGS_PAGE = 1000; // Supabase max rows per query
 
 function _rowToLog(row) {
@@ -957,6 +957,22 @@ function _fetchAllLogsForClass(classId) {
       });
   }
   return fetchPage(0);
+}
+
+// v75: Fetch a single log's snapshot on demand (to avoid loading all snapshots on every refresh)
+function _fetchLogSnapshot(logId) {
+  if (!db) return Promise.resolve(null);
+  return db.from('operation_logs')
+    .select('snapshot')
+    .eq('id', logId)
+    .single()
+    .then(function(r) {
+      if (r.error) {
+        console.warn('[DAL] _fetchLogSnapshot error:', r.error.message);
+        return null;
+      }
+      return (r.data && r.data.snapshot) || null;
+    });
 }
 
 function _loadOperationLogs() {
