@@ -1527,6 +1527,36 @@ function _syncTeacherToSupabase() {
                 console.log('[DAL] v71 Immediate _userDeletedClassIds update: ' + oldId + ' → ' + newId);
               }
             }
+            // v72: CRITICAL FIX — detect user deletion during INSERT (race condition).
+            // If user created class → INSERT started → user deleted class before INSERT resolved,
+            // the class now exists in Supabase but is NOT in current classesData.
+            // Without this fix, Phase 6 might re-upsert the class (if it captured the old classesData
+            // before deletion), or the Realtime event could re-add it from Supabase.
+            // Solution: Immediately delete the class from Supabase and mark for Phase 6 cleanup.
+            var _inCurrentClassesData = false;
+            for (var _ci = 0; _ci < classesData.length; _ci++) {
+              if (classesData[_ci].id == newId || classesData[_ci].id === newId) {
+                _inCurrentClassesData = true;
+                break;
+              }
+            }
+            if (!_inCurrentClassesData) {
+              console.log('[DAL] v72 Class ' + cls.name + ' (DB ID ' + newId + ') was deleted by user during INSERT — deleting from Supabase immediately');
+              // Update currentClassIdSet so Phase 6 knows this class is gone
+              currentClassIdSet[newId] = false;
+              // Track for Phase 6 backup cleanup
+              if (_syncDeletedClassIds.indexOf(newId) === -1) {
+                _syncDeletedClassIds.push(newId);
+              }
+              // Immediately delete from Supabase to prevent Realtime re-adding it
+              db.from('classes').delete().eq('id', newId).eq('teacher_id', currentUser.id).then(function(delR) {
+                if (delR.error) {
+                  console.warn('[DAL] v72 Immediate delete failed for class ' + newId + ':', delR.error);
+                } else {
+                  console.log('[DAL] v72 Class ' + newId + ' deleted from Supabase immediately');
+                }
+              });
+            }
           }
         })
       );
