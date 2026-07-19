@@ -1516,6 +1516,17 @@ function _syncTeacherToSupabase() {
             cls.id = newId;
             classIdMap[oldId] = newId;
             console.log('[DAL] v48 New class "' + cls.name + '" → DB ID ' + newId + ' (was ' + oldId + ')');
+            // v71: IMMEDIATELY update _userDeletedClassIds here (not in Phase 1b).
+            // This prevents a race condition where a Realtime event triggers
+            // _smartRefreshFromSupabase() between INSERT and Phase 1b, re-adding
+            // the class to classesData before _userDeletedClassIds is updated.
+            if (typeof _userDeletedClassIds !== 'undefined') {
+              var _delIdx = _userDeletedClassIds.indexOf(oldId);
+              if (_delIdx !== -1) {
+                _userDeletedClassIds[_delIdx] = newId;
+                console.log('[DAL] v71 Immediate _userDeletedClassIds update: ' + oldId + ' → ' + newId);
+              }
+            }
           }
         })
       );
