@@ -829,8 +829,11 @@ function showHistoryModal(){
       return;
     }
     _currentHistoryMonth = months[0];
-    let html = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
-    showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
+    // v74: Refresh backup count from Supabase before rendering
+    _refreshBackupCountCache().then(function() {
+      let html = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
+      showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
+    });
   };
 
   // v25: Step 1: Sync local unsynced logs to Supabase first
@@ -1127,34 +1130,66 @@ window.closeHistoryFilterModal = function() {
   if (modal) modal.remove();
 };
 
-// === 班级数据备份/还原/清空功能 ===
-// 获取当前班级的备份数量
+// === 班级数据备份/还原/清空功能 (v74: Supabase-backed) ===
+// Cache for backup count (updated async from Supabase)
+var _cachedBackupCount = 0;
+var _cachedBackupCountClassId = null;
+
+// 获取当前班级的备份数量（返回缓存值，异步更新）
 function _getClassBackupCount() {
   if (!currentClassId) return 0;
-  var key = 'classBackups_' + currentClassId;
-  try {
-    var backups = JSON.parse(localStorage.getItem(key) || '[]');
-    return backups.length;
-  } catch (e) { return 0; }
+  if (_cachedBackupCountClassId === currentClassId) return _cachedBackupCount;
+  // Trigger async refresh if cache is stale
+  _refreshBackupCountCache();
+  return _cachedBackupCount;
 }
 
-// 获取当前班级的所有备份
-function _getClassBackups() {
-  if (!currentClassId) return [];
-  var key = 'classBackups_' + currentClassId;
-  try {
-    return JSON.parse(localStorage.getItem(key) || '[]');
-  } catch (e) { return []; }
+// 异步刷新备份数量缓存
+function _refreshBackupCountCache() {
+  if (!currentClassId || typeof fetchClassBackups !== 'function') return Promise.resolve(0);
+  return fetchClassBackups(currentClassId).then(function(backups) {
+    _cachedBackupCount = backups.length;
+    _cachedBackupCountClassId = currentClassId;
+    // Update button text if visible
+    var btn = document.querySelector('button[onclick="createClassBackup()"]');
+    if (btn) {
+      btn.textContent = '💾 备份' + (_cachedBackupCount > 0 ? '(' + _cachedBackupCount + ')' : '');
+    }
+    return _cachedBackupCount;
+  });
 }
 
-// 保存当前班级的所有备份
-function _saveClassBackups(backups) {
-  if (!currentClassId) return;
-  var key = 'classBackups_' + currentClassId;
-  localStorage.setItem(key, JSON.stringify(backups));
+// 异步获取当前班级的所有备份（从 Supabase）
+function _fetchClassBackupsAsync() {
+  if (!currentClassId || typeof fetchClassBackups !== 'function') return Promise.resolve([]);
+  return fetchClassBackups(currentClassId).then(function(rows) {
+    // Transform Supabase rows to match the format expected by UI
+    return rows.map(function(row) {
+      return {
+        id: row.id,
+        name: row.name,
+        time: row.created_at,
+        timeDisplay: _formatBackupTime(row.created_at),
+        data: row.snapshot_data
+      };
+    });
+  });
 }
 
-// 创建班级备份
+// 格式化备份时间显示
+function _formatBackupTime(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  if (isNaN(d.getTime())) return isoStr;
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + ' ' +
+    String(d.getHours()).padStart(2, '0') + ':' +
+    String(d.getMinutes()).padStart(2, '0') + ':' +
+    String(d.getSeconds()).padStart(2, '0');
+}
+
+// 创建班级备份（保存到 Supabase）
 function createClassBackup() {
   var curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) { showNotification('备份失败', '未找到当前班级', 'error'); return; }
@@ -1167,153 +1202,185 @@ function createClassBackup() {
     String(now.getMinutes()).padStart(2, '0') + ':' +
     String(now.getSeconds()).padStart(2, '0');
   
-  // 创建备份（深拷贝当前班级数据）
-  var backup = {
-    id: Date.now().toString(),
-    name: '备份 ' + timeStr,
-    time: now.toISOString(),
-    timeDisplay: timeStr,
-    data: JSON.parse(JSON.stringify(curClass))
-  };
+  var backupName = '备份 ' + timeStr;
+  var snapshotData = JSON.parse(JSON.stringify(curClass));
   
-  // 获取现有备份并添加新备份
-  var backups = _getClassBackups();
-  backups.push(backup);
-  _saveClassBackups(backups);
-  
-  showNotification('备份成功', '已创建备份：' + backup.name, 'success');
-  _refreshHistoryContent();
-}
-
-// 显示还原弹窗
-function showRestoreModal() {
-  var backups = _getClassBackups();
-  if (backups.length === 0) {
-    showNotification('还原失败', '暂无备份点', 'warning');
+  if (typeof insertClassBackup !== 'function') {
+    showNotification('备份失败', '数据层未就绪，请稍后重试', 'error');
     return;
   }
   
-  var curClass = classesData.find(c => c.id === currentClassId);
-  var className = curClass ? curClass.name : '未选择班级';
+  insertClassBackup(currentClassId, backupName, snapshotData).then(function(row) {
+    if (row) {
+      showNotification('备份成功', '已创建备份：' + backupName, 'success');
+      _cachedBackupCount++;
+      _cachedBackupCountClassId = currentClassId;
+      _refreshHistoryContent();
+    } else {
+      showNotification('备份失败', '保存到云端失败，请重试', 'error');
+    }
+  });
+}
+
+// 显示还原弹窗（异步从 Supabase 加载备份列表）
+function showRestoreModal() {
+  // Show loading state first
+  showModal('🔄 选择备份点', '<div style="text-align:center;padding:30px;color:#888;">加载中...</div>', [{text: '关闭', onclick: 'closeModal()'}], true);
   
-  var html = '<div style="max-height:400px;overflow:auto;">';
-  html += '<div style="padding:8px 12px;background:#fff8f0;border-radius:10px;margin-bottom:10px;font-size:13px;color:#886;">';
-  html += '💡 点击"还原"按钮将把班级数据恢复到备份时间点的状态';
-  html += '</div>';
+  _fetchClassBackupsAsync().then(function(backups) {
+    if (backups.length === 0) {
+      closeModal();
+      showNotification('还原失败', '暂无备份点', 'warning');
+      return;
+    }
+    
+    var curClass = classesData.find(c => c.id === currentClassId);
+    var className = curClass ? curClass.name : '未选择班级';
+    
+    var html = '<div style="max-height:400px;overflow:auto;">';
+    html += '<div style="padding:8px 12px;background:#fff8f0;border-radius:10px;margin-bottom:10px;font-size:13px;color:#886;">';
+    html += '💡 点击"还原"按钮将把班级数据恢复到备份时间点的状态';
+    html += '</div>';
+    
+    // 倒序显示（最新的在前）— already sorted DESC from Supabase
+    backups.forEach(function(backup, idx) {
+      var studentCount = backup.data.students ? backup.data.students.length : 0;
+      var petCount = backup.data.students ? backup.data.students.reduce(function(sum, s) { return sum + (s.pets ? s.pets.length : 0); }, 0) : 0;
+      
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:#f8f8f5;border-radius:10px;border:1px solid #e8e8e0;">';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:13px;font-weight:600;color:#445;">' + esc(backup.name) + '</div>';
+      html += '<div style="font-size:11px;color:#888;margin-top:2px;">';
+      html += '👨‍🎓 ' + studentCount + '名学生 · 🐕 ' + petCount + '只宠物';
+      html += '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px;">';
+      html += '<button onclick="renameBackup(' + backup.id + ')" style="padding:4px 8px;font-size:11px;border:1px solid #ccc;background:#fff;border-radius:6px;cursor:pointer;">✏️</button>';
+      html += '<button onclick="deleteBackup(' + backup.id + ')" style="padding:4px 8px;font-size:11px;border:1px solid #faa;background:#fff5f5;color:#c55;border-radius:6px;cursor:pointer;">🗑️</button>';
+      html += '<button onclick="confirmRestoreBackup(' + backup.id + ')" style="padding:4px 12px;font-size:12px;border:1px solid #5a5;background:#f0fff0;color:#3a3;border-radius:6px;cursor:pointer;font-weight:600;">还原</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+    
+    html += '</div>';
+    
+    showModal('🔄 选择备份点 - ' + className, html, [{text: '关闭', onclick: 'closeModal()'}], true);
+  });
+}
+
+// 重命名备份（Supabase）
+window.renameBackup = function(backupId) {
+  if (typeof updateClassBackupName !== 'function') {
+    showNotification('操作失败', '数据层未就绪', 'error');
+    return;
+  }
+  var newName = prompt('请输入新的备份名称：');
+  if (!newName || !newName.trim()) return;
   
-  // 倒序显示（最新的在前）
-  var sortedBackups = [...backups].reverse();
-  sortedBackups.forEach(function(backup, idx) {
+  updateClassBackupName(backupId, newName.trim()).then(function(ok) {
+    if (ok) {
+      showNotification('重命名成功', '备份已更名为：' + newName.trim(), 'success');
+      showRestoreModal();
+    } else {
+      showNotification('重命名失败', '请重试', 'error');
+    }
+  });
+};
+
+// 删除备份（Supabase）
+window.deleteBackup = function(backupId) {
+  if (!confirm('确定要删除这个备份点吗？')) return;
+  if (typeof deleteClassBackup !== 'function') {
+    showNotification('操作失败', '数据层未就绪', 'error');
+    return;
+  }
+  
+  deleteClassBackup(backupId).then(function(ok) {
+    if (ok) {
+      showNotification('删除成功', '备份点已删除', 'success');
+      _cachedBackupCount = Math.max(0, _cachedBackupCount - 1);
+      _refreshHistoryContent();
+      showRestoreModal();
+    } else {
+      showNotification('删除失败', '请重试', 'error');
+    }
+  });
+};
+
+// 确认还原备份（从 Supabase 获取备份数据）
+window.confirmRestoreBackup = function(backupId) {
+  if (typeof fetchClassBackupById !== 'function') {
+    showNotification('还原失败', '数据层未就绪', 'error');
+    return;
+  }
+  
+  fetchClassBackupById(backupId).then(function(row) {
+    if (!row) {
+      showNotification('还原失败', '未找到备份点', 'error');
+      return;
+    }
+    
+    var backup = {
+      id: row.id,
+      name: row.name,
+      time: row.created_at,
+      data: row.snapshot_data
+    };
+    
+    var curClass = classesData.find(c => c.id === currentClassId);
+    var className = curClass ? curClass.name : '未选择班级';
+    
     var studentCount = backup.data.students ? backup.data.students.length : 0;
     var petCount = backup.data.students ? backup.data.students.reduce(function(sum, s) { return sum + (s.pets ? s.pets.length : 0); }, 0) : 0;
     
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:#f8f8f5;border-radius:10px;border:1px solid #e8e8e0;">';
-    html += '<div style="flex:1;min-width:0;">';
-    html += '<div style="font-size:13px;font-weight:600;color:#445;">' + esc(backup.name) + '</div>';
-    html += '<div style="font-size:11px;color:#888;margin-top:2px;">';
-    html += '👨‍🎓 ' + studentCount + '名学生 · 🐕 ' + petCount + '只宠物';
+    var html = '<div style="padding:16px;text-align:center;">';
+    html += '<div style="font-size:48px;margin-bottom:16px;">⚠️</div>';
+    html += '<div style="font-size:15px;font-weight:600;color:#c33;margin-bottom:12px;">确定要还原到以下备份点吗？</div>';
+    html += '<div style="background:#fff8f0;padding:12px;border-radius:10px;margin-bottom:16px;text-align:left;">';
+    html += '<div style="font-size:14px;font-weight:600;color:#445;">' + esc(backup.name) + '</div>';
+    html += '<div style="font-size:12px;color:#888;margin-top:4px;">👨‍🎓 ' + studentCount + '名学生 · 🐕 ' + petCount + '只宠物</div>';
+    html += '</div>';
+    html += '<div style="font-size:13px;color:#666;line-height:1.6;">';
+    html += '还原后，所有学生的宠物数据、金币、道具、闯关进度等都将恢复到备份时间点的状态。';
+    html += '<br><strong style="color:#c33;">此操作不可撤销！</strong>';
     html += '</div>';
     html += '</div>';
-    html += '<div style="display:flex;gap:6px;flex-shrink:0;margin-left:10px;">';
-    html += '<button onclick="renameBackup(\'' + backup.id + '\')" style="padding:4px 8px;font-size:11px;border:1px solid #ccc;background:#fff;border-radius:6px;cursor:pointer;">✏️</button>';
-    html += '<button onclick="deleteBackup(\'' + backup.id + '\')" style="padding:4px 8px;font-size:11px;border:1px solid #faa;background:#fff5f5;color:#c55;border-radius:6px;cursor:pointer;">🗑️</button>';
-    html += '<button onclick="confirmRestoreBackup(\'' + backup.id + '\')" style="padding:4px 12px;font-size:12px;border:1px solid #5a5;background:#f0fff0;color:#3a3;border-radius:6px;cursor:pointer;font-weight:600;">还原</button>';
-    html += '</div>';
-    html += '</div>';
+    
+    showModal('⚠️ 确认还原 - ' + className, html, [
+      {text: '取消', onclick: 'closeModal()'},
+      {text: '确定还原', onclick: 'executeRestoreBackup(' + backupId + ')', style: 'background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;border:none;font-weight:700;'}
+    ], false);
   });
-  
-  html += '</div>';
-  
-  showModal('🔄 选择备份点 - ' + className, html, [{text: '关闭', onclick: 'closeModal()'}], true);
-}
-
-// 重命名备份
-window.renameBackup = function(backupId) {
-  var backups = _getClassBackups();
-  var backup = backups.find(b => b.id === backupId);
-  if (!backup) return;
-  
-  var newName = prompt('请输入新的备份名称：', backup.name);
-  if (!newName || !newName.trim()) return;
-  
-  backup.name = newName.trim();
-  _saveClassBackups(backups);
-  showNotification('重命名成功', '备份已更名为：' + backup.name, 'success');
-  showRestoreModal();
 };
 
-// 删除备份
-window.deleteBackup = function(backupId) {
-  if (!confirm('确定要删除这个备份点吗？')) return;
-  
-  var backups = _getClassBackups();
-  var backup = backups.find(b => b.id === backupId);
-  if (!backup) return;
-  
-  backups = backups.filter(b => b.id !== backupId);
-  _saveClassBackups(backups);
-  
-  showNotification('删除成功', '备份点已删除', 'success');
-  
-  if (backups.length === 0) {
-    closeModal();
-  } else {
-    showRestoreModal();
-  }
-  _refreshHistoryContent();
-};
-
-// 确认还原备份
-window.confirmRestoreBackup = function(backupId) {
-  var backups = _getClassBackups();
-  var backup = backups.find(b => b.id === backupId);
-  if (!backup) { showNotification('还原失败', '未找到备份点', 'error'); return; }
-  
-  var curClass = classesData.find(c => c.id === currentClassId);
-  var className = curClass ? curClass.name : '未选择班级';
-  
-  var studentCount = backup.data.students ? backup.data.students.length : 0;
-  var petCount = backup.data.students ? backup.data.students.reduce(function(sum, s) { return sum + (s.pets ? s.pets.length : 0); }, 0) : 0;
-  
-  var html = '<div style="padding:16px;text-align:center;">';
-  html += '<div style="font-size:48px;margin-bottom:16px;">⚠️</div>';
-  html += '<div style="font-size:15px;font-weight:600;color:#c33;margin-bottom:12px;">确定要还原到以下备份点吗？</div>';
-  html += '<div style="background:#fff8f0;padding:12px;border-radius:10px;margin-bottom:16px;text-align:left;">';
-  html += '<div style="font-size:14px;font-weight:600;color:#445;">' + esc(backup.name) + '</div>';
-  html += '<div style="font-size:12px;color:#888;margin-top:4px;">👨‍🎓 ' + studentCount + '名学生 · 🐕 ' + petCount + '只宠物</div>';
-  html += '</div>';
-  html += '<div style="font-size:13px;color:#666;line-height:1.6;">';
-  html += '还原后，所有学生的宠物数据、金币、道具、闯关进度等都将恢复到备份时间点的状态。';
-  html += '<br><strong style="color:#c33;">此操作不可撤销！</strong>';
-  html += '</div>';
-  html += '</div>';
-  
-  showModal('⚠️ 确认还原 - ' + className, html, [
-    {text: '取消', onclick: 'closeModal()'},
-    {text: '确定还原', onclick: 'executeRestoreBackup(\'' + backupId + '\')', style: 'background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;border:none;font-weight:700;'}
-  ], false);
-};
-
-// 执行还原备份
+// 执行还原备份（从 Supabase 获取并还原）
 window.executeRestoreBackup = function(backupId) {
-  var backups = _getClassBackups();
-  var backup = backups.find(b => b.id === backupId);
-  if (!backup) { showNotification('还原失败', '未找到备份点', 'error'); return; }
+  if (typeof fetchClassBackupById !== 'function') {
+    showNotification('还原失败', '数据层未就绪', 'error');
+    return;
+  }
   
-  var classIdx = classesData.findIndex(c => c.id === currentClassId);
-  if (classIdx === -1) { showNotification('还原失败', '未找到当前班级', 'error'); return; }
-  
-  // 还原数据（深拷贝备份数据）
-  classesData[classIdx] = JSON.parse(JSON.stringify(backup.data));
-  saveClassData();
-  
-  closeModal();
-  showNotification('还原成功', '已还原到：' + backup.name, 'success');
-  scheduleAllRenders();
-  _refreshHistoryContent();
+  fetchClassBackupById(backupId).then(function(row) {
+    if (!row) {
+      showNotification('还原失败', '未找到备份点', 'error');
+      return;
+    }
+    
+    var classIdx = classesData.findIndex(c => c.id === currentClassId);
+    if (classIdx === -1) { showNotification('还原失败', '未找到当前班级', 'error'); return; }
+    
+    // 还原数据（深拷贝备份数据）
+    classesData[classIdx] = JSON.parse(JSON.stringify(row.snapshot_data));
+    saveClassData();
+    
+    closeModal();
+    showNotification('还原成功', '已还原到：' + row.name, 'success');
+    scheduleAllRenders();
+    _refreshHistoryContent();
+  });
 };
 
-// 清空当前班级的操作日志
+// 清空当前班级的操作日志和备份
 function clearClassOperationLogs() {
   var curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) { showNotification('清空失败', '未找到当前班级', 'error'); return; }
@@ -1324,20 +1391,25 @@ function clearClassOperationLogs() {
     return curClass.students.some(function(s) { return s.id.toString() === log.studentId.toString(); });
   });
   
-  if (classLogs.length === 0) {
-    showNotification('无需清空', '当前班级暂无操作记录', 'info');
+  var backupInfo = '';
+  if (_cachedBackupCountClassId === currentClassId && _cachedBackupCount > 0) {
+    backupInfo = '，以及 <strong style="color:#c33;">' + _cachedBackupCount + '</strong> 个备份点';
+  }
+  
+  if (classLogs.length === 0 && _cachedBackupCount === 0) {
+    showNotification('无需清空', '当前班级暂无操作记录和备份', 'info');
     return;
   }
   
   var html = '<div style="padding:16px;text-align:center;">';
   html += '<div style="font-size:48px;margin-bottom:16px;">🗑️</div>';
-  html += '<div style="font-size:15px;font-weight:600;color:#c33;margin-bottom:12px;">确定要清空所有操作记录吗？</div>';
+  html += '<div style="font-size:15px;font-weight:600;color:#c33;margin-bottom:12px;">确定要清空所有数据吗？</div>';
   html += '<div style="background:#fff5f5;padding:12px;border-radius:10px;margin-bottom:16px;">';
-  html += '<div style="font-size:14px;color:#665;">当前班级共有 <strong style="color:#c33;">' + classLogs.length + '</strong> 条操作记录</div>';
+  html += '<div style="font-size:14px;color:#665;">当前班级共有 <strong style="color:#c33;">' + classLogs.length + '</strong> 条操作记录' + backupInfo + '</div>';
   html += '</div>';
   html += '<div style="font-size:13px;color:#666;line-height:1.6;">';
-  html += '清空后，所有操作历史将被删除，从当前时间开始重新记录。';
-  html += '<br><strong style="color:#c33;">此操作不可撤销！建议先备份。</strong>';
+  html += '清空后，所有操作历史和备份数据将被删除，从当前时间开始重新记录。';
+  html += '<br><strong style="color:#c33;">此操作不可撤销！</strong>';
   html += '</div>';
   html += '</div>';
   
@@ -1347,7 +1419,7 @@ function clearClassOperationLogs() {
   ], false);
 }
 
-// 执行清空操作日志
+// 执行清空操作日志和备份
 window.executeClearOperationLogs = function() {
   var curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) return;
@@ -1364,7 +1436,7 @@ window.executeClearOperationLogs = function() {
   });
   saveLogs();
   
-  // 2. 从 Supabase 删除当前班级的操作日志
+  // 2. 从 Supabase 删除当前班级的操作日志和备份
   if (typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser) {
     // 获取当前班级的学生 ID 列表
     var studentIds = curClass.students.map(function(s) { return s.id; });
@@ -1382,10 +1454,20 @@ window.executeClearOperationLogs = function() {
       if (r.error) console.warn('[清空日志] 班级日志删除失败:', r.error.message);
       else console.log('[清空日志] 班级日志已删除:', r.data ? r.data.length : 0, '条');
     });
+    
+    // 删除该班级的所有备份（v74）
+    if (typeof deleteAllClassBackups === 'function') {
+      deleteAllClassBackups(currentClassId).then(function(ok) {
+        if (ok) {
+          console.log('[清空] 班级备份已全部删除');
+          _cachedBackupCount = 0;
+        }
+      });
+    }
   }
   
   closeModal();
-  showNotification('清空成功', '所有操作记录已清空', 'success');
+  showNotification('清空成功', '所有操作记录和备份已清空', 'success');
   _refreshHistoryContent();
 };
 

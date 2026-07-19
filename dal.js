@@ -3267,6 +3267,123 @@ function _postInitSetup() {
   }
 }
 
+/* ===== Class Backups: Supabase-backed backup/restore/clear (v74) ===== */
+// Table: class_backups (id, class_id, teacher_id, name, snapshot_data, created_at)
+
+/**
+ * Fetch all backups for a class, ordered by created_at DESC (newest first).
+ * Returns array of {id, class_id, teacher_id, name, snapshot_data, created_at}
+ */
+function fetchClassBackups(classId) {
+  if (!classId || !db) return Promise.resolve([]);
+  return db.from('class_backups')
+    .select('id, class_id, teacher_id, name, snapshot_data, created_at')
+    .eq('class_id', classId)
+    .order('created_at', { ascending: false })
+    .then(function(r) {
+      if (r.error) {
+        console.warn('[DAL] fetchClassBackups error:', r.error.message);
+        return [];
+      }
+      return r.data || [];
+    });
+}
+
+/**
+ * Create a new backup for a class.
+ * @param {number|string} classId
+ * @param {string} name - backup display name
+ * @param {object} snapshotData - full class data (classesData entry) to store
+ * @returns {Promise<object|null>} the inserted row or null
+ */
+function insertClassBackup(classId, name, snapshotData) {
+  if (!classId || !db) return Promise.resolve(null);
+  var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.id || currentUser.studentId || '') : '';
+  var payload = {
+    class_id: classId,
+    teacher_id: teacherId,
+    name: name || '备份',
+    snapshot_data: snapshotData
+  };
+  return db.from('class_backups').insert([payload]).select('id, class_id, teacher_id, name, snapshot_data, created_at').then(function(r) {
+    if (r.error) {
+      console.warn('[DAL] insertClassBackup error:', r.error.message);
+      return null;
+    }
+    return r.data && r.data[0] ? r.data[0] : null;
+  });
+}
+
+/**
+ * Rename a backup.
+ * @param {number} backupId
+ * @param {string} newName
+ * @returns {Promise<boolean>}
+ */
+function updateClassBackupName(backupId, newName) {
+  if (!backupId || !db) return Promise.resolve(false);
+  return db.from('class_backups').update({ name: newName }).eq('id', backupId).then(function(r) {
+    if (r.error) {
+      console.warn('[DAL] updateClassBackupName error:', r.error.message);
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Delete a single backup.
+ * @param {number} backupId
+ * @returns {Promise<boolean>}
+ */
+function deleteClassBackup(backupId) {
+  if (!backupId || !db) return Promise.resolve(false);
+  return db.from('class_backups').delete().eq('id', backupId).then(function(r) {
+    if (r.error) {
+      console.warn('[DAL] deleteClassBackup error:', r.error.message);
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Delete ALL backups for a class (used by "清空" feature).
+ * @param {number|string} classId
+ * @returns {Promise<boolean>}
+ */
+function deleteAllClassBackups(classId) {
+  if (!classId || !db) return Promise.resolve(false);
+  return db.from('class_backups').delete().eq('class_id', classId).then(function(r) {
+    if (r.error) {
+      console.warn('[DAL] deleteAllClassBackups error:', r.error.message);
+      return false;
+    }
+    console.log('[DAL] deleteAllClassBackups: deleted', r.data ? r.data.length : 0, 'backups for class', classId);
+    return true;
+  });
+}
+
+/**
+ * Fetch a single backup by ID (used for restore).
+ * @param {number} backupId
+ * @returns {Promise<object|null>}
+ */
+function fetchClassBackupById(backupId) {
+  if (!backupId || !db) return Promise.resolve(null);
+  return db.from('class_backups')
+    .select('id, class_id, teacher_id, name, snapshot_data, created_at')
+    .eq('id', backupId)
+    .single()
+    .then(function(r) {
+      if (r.error) {
+        console.warn('[DAL] fetchClassBackupById error:', r.error.message);
+        return null;
+      }
+      return r.data;
+    });
+}
+
 // Keep initDAL as an alias for backward compatibility
 function initDAL() {
   // Legacy entry point — the event-driven system handles init now
