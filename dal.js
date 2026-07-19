@@ -39,6 +39,9 @@ var _DAL_VERSION = '66.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
+// v71: Track class IDs deleted by user via deleteClass(). Prevents Realtime/smart-refresh
+// from re-adding the class before Supabase delete completes. Cleaned up after Supabase confirms deletion.
+var _userDeletedClassIds = [];
 
 /* ===== v45: localStorage Cache for Instant First Paint ===== */
 var _CACHE_KEY = '_dal_cache_v2';
@@ -264,6 +267,23 @@ function _smartRefreshFromSupabase() {
     var classes = isStudent ? [classesR.data] : (classesR.data || []);
     var allStudents = studentsR.data || [];
     var allPets = petsR.data || [];
+
+    // v71: Filter out classes that user has deleted locally but haven't been deleted from
+    // Supabase yet. Without this, Realtime events can fetch the class from Supabase and
+    // the merge logic can re-add it to classesData, causing the "delete doesn't work" bug.
+    if (_userDeletedClassIds.length > 0 && !isStudent) {
+      classes = classes.filter(function(c) {
+        return _userDeletedClassIds.indexOf(c.id) === -1;
+      });
+      // Also filter students/pets for deleted classes
+      var deletedClassIdsSet = {};
+      _userDeletedClassIds.forEach(function(id) { deletedClassIdsSet[id] = true; });
+      allStudents = allStudents.filter(function(s) { return !deletedClassIdsSet[s.class_id]; });
+      allPets = allPets.filter(function(p) {
+        // Keep only pets whose students are not in deleted classes
+        return allStudents.some(function(s) { return s.id === p.student_id; });
+      });
+    }
 
     // Filter to relevant students/pets
     if (!isStudent) {
@@ -1883,7 +1903,13 @@ function _syncTeacherToSupabase() {
             return db.from('classes').delete().in('id', toDelete);
           }).then(function(cr) {
             if (cr.error) console.error('[DAL] v54 class delete error:', cr.error);
-            else console.log('[DAL] v54 Deleted', toDelete.length, ' classes from Supabase');
+            else {
+              console.log('[DAL] v54 Deleted', toDelete.length, ' classes from Supabase');
+              // v71: Clean up _userDeletedClassIds — remove IDs that were successfully deleted
+              _userDeletedClassIds = _userDeletedClassIds.filter(function(id) {
+                return toDelete.indexOf(id) === -1;
+              });
+            }
           });
         });
       }
