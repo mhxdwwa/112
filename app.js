@@ -663,19 +663,11 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
       }
     }
   }
-  // v70: Store timestamp in LOCAL time (no Z suffix) so display matches user's clock.
-  // Previously used new Date().toISOString() which converts to UTC, causing e.g.
-  // 7:08 AM UTC+8 to display as "23:08" the previous day.
-  var _now = new Date();
-  var _localTs = _now.getFullYear() + '-' +
-    String(_now.getMonth()+1).padStart(2,'0') + '-' +
-    String(_now.getDate()).padStart(2,'0') + 'T' +
-    String(_now.getHours()).padStart(2,'0') + ':' +
-    String(_now.getMinutes()).padStart(2,'0') + ':' +
-    String(_now.getSeconds()).padStart(2,'0') + '.' +
-    String(_now.getMilliseconds()).padStart(3,'0');
+  // v79: Store timestamp in UTC format (ISO string) to match Supabase's created_at format.
+  // This fixes deduplication issues where local time vs UTC caused duplicate log entries.
+  // Display code uses toLocaleString with timeZone:'Asia/Shanghai' to convert UTC to Beijing time.
   const log = {
-    id: _genLocalId(), timestamp: _localTs,
+    id: _genLocalId(), timestamp: new Date().toISOString(),
     classId: currentClassId, studentId, studentName, actionType, details,
     coinDelta, expDelta, petId, extra, snapshot, reverted: false, _synced: false
   };
@@ -683,7 +675,7 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
   window.operationLogs.push(log);
   saveLogs();
 }
-function recordResetAction(classId, className, fullSnapshot){ var _n=new Date(); var _lt=_n.getFullYear()+'-'+String(_n.getMonth()+1).padStart(2,'0')+'-'+String(_n.getDate()).padStart(2,'0')+'T'+String(_n.getHours()).padStart(2,'0')+':'+String(_n.getMinutes()).padStart(2,'0')+':'+String(_n.getSeconds()).padStart(2,'0')+'.'+String(_n.getMilliseconds()).padStart(3,'0'); const log = { id: _genLocalId(), timestamp: _lt, classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
+function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
 function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } unequipItem(student, itemId); } }
 async function restoreToLogEntry(logId){
