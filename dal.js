@@ -2563,6 +2563,126 @@ function _refreshLogsOnly() {
   });
 }
 
+/* ===== v80: Incremental Realtime Sync ===== */
+// Instead of full refresh on every Realtime event, update only the changed row.
+// This reduces each sync from ~500KB to ~2-3KB.
+
+function _applyStudentIncrementalUpdate(payload) {
+  if (!payload || !payload.new || !classesData) return false;
+  // Skip own write echo
+  if (_lastOwnWriteTime && Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
+    console.log('[DAL] v80 Student incremental update skipped — own write echo');
+    return true;
+  }
+  // Skip if local save is pending (protect unsaved local changes)
+  if (_pendingLocalSave) {
+    console.log('[DAL] v80 Student incremental update skipped — local save pending');
+    return false; // Return false to trigger full refresh later
+  }
+
+  var row = payload.new;
+  var studentId = row.id;
+  var classId = row.class_id;
+
+  // Find the class in classesData
+  var cls = null;
+  for (var i = 0; i < classesData.length; i++) {
+    if (classesData[i].id === classId) { cls = classesData[i]; break; }
+  }
+  if (!cls) {
+    console.log('[DAL] v80 Student incremental update: class', classId, 'not found locally — falling back to full refresh');
+    return false;
+  }
+
+  // Find the student in the class
+  var student = null;
+  for (var j = 0; j < cls.students.length; j++) {
+    if (cls.students[j].id === studentId) { student = cls.students[j]; break; }
+  }
+  if (!student) {
+    console.log('[DAL] v80 Student incremental update: student', studentId, 'not found locally — falling back to full refresh');
+    return false;
+  }
+
+  // Update student fields (snake_case → camelCase)
+  student.name = row.name || student.name;
+  student.coins = row.coins !== undefined ? row.coins : student.coins;
+  student.lastCheckinDate = row.last_checkin_date || null;
+  student.lastJianghuDate = row.last_jianghu_date || null;
+  student.lastPkDate = row.last_pk_date || null;
+  student.activePetId = row.active_pet_id || null;
+  student.pkCountToday = row.pk_count_today || 0;
+  student.password = row.password || student.password;
+  // JSON fields — clone to avoid reference issues
+  student.shopItems = row.shop_items ? (typeof row.shop_items === 'string' ? JSON.parse(row.shop_items) : JSON.parse(JSON.stringify(row.shop_items))) : [];
+  student.equippedItems = row.equipped_items ? (typeof row.equipped_items === 'string' ? JSON.parse(row.equipped_items) : JSON.parse(JSON.stringify(row.equipped_items))) : {};
+  student.quizState = row.quiz_state ? (typeof row.quiz_state === 'string' ? JSON.parse(row.quiz_state) : JSON.parse(JSON.stringify(row.quiz_state))) : null;
+
+  console.log('[DAL] v80 Student', studentId, 'incremental update applied (coins=' + student.coins + ')');
+  return true;
+}
+
+function _applyPetIncrementalUpdate(payload) {
+  if (!payload || !payload.new || !classesData) return false;
+  // Skip own write echo
+  if (_lastOwnWriteTime && Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
+    console.log('[DAL] v80 Pet incremental update skipped — own write echo');
+    return true;
+  }
+  // Skip if local save is pending
+  if (_pendingLocalSave) {
+    console.log('[DAL] v80 Pet incremental update skipped — local save pending');
+    return false;
+  }
+
+  var row = payload.new;
+  var petId = row.id;
+  var studentId = row.student_id;
+
+  // Find the student who owns this pet (search all classes)
+  var student = null;
+  for (var i = 0; i < classesData.length; i++) {
+    for (var j = 0; j < classesData[i].students.length; j++) {
+      if (classesData[i].students[j].id === studentId) {
+        student = classesData[i].students[j];
+        break;
+      }
+    }
+    if (student) break;
+  }
+  if (!student) {
+    console.log('[DAL] v80 Pet incremental update: student', studentId, 'not found locally — falling back to full refresh');
+    return false;
+  }
+
+  // Find the pet in the student's pets array
+  var pet = null;
+  if (student.pets) {
+    for (var k = 0; k < student.pets.length; k++) {
+      if (student.pets[k].id === petId) { pet = student.pets[k]; break; }
+    }
+  }
+  if (!pet) {
+    console.log('[DAL] v80 Pet incremental update: pet', petId, 'not found locally — falling back to full refresh');
+    return false;
+  }
+
+  // Update pet fields (snake_case → camelCase)
+  pet.name = row.name || pet.name;
+  pet.nickname = row.nickname || pet.nickname;
+  pet.level = row.level !== undefined ? row.level : pet.level;
+  pet.growth = row.growth !== undefined ? row.growth : pet.growth;
+  pet.isDead = !!row.is_dead;
+  pet.lastFeedDate = row.last_feed_date || null;
+  pet.todayFeedCount = row.today_feed_count || 0;
+  pet.lastPlayDate = row.last_play_date || null;
+  pet.todayPlayCount = row.today_play_count || 0;
+  pet.penaltyStreak = row.penalty_streak || 0;
+
+  console.log('[DAL] v80 Pet', petId, 'incremental update applied (growth=' + pet.growth + ', level=' + pet.level + ')');
+  return true;
+}
+
 function _setupRealtimeSubscriptions() {
   if (!db || !db.channel) {
     // No Realtime support — start polling immediately
@@ -2604,10 +2724,23 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(classChannel);
     channelsCreated++;
 
-    // Subscribe to students table — coalesced refresh on change
+    // v80: Subscribe to students table — incremental update (only ~2KB instead of ~500KB)
     var studentChannel = db.channel('dal-students')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function() {
-        _debouncedRealtimeRefresh('students');
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
+        var success = _applyStudentIncrementalUpdate(payload);
+        if (success) {
+          // Incremental update succeeded — re-render UI
+          if (typeof renderClassList === 'function') renderClassList();
+          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+          if (typeof refreshHistoryModalIfOpen === 'function') {
+            clearTimeout(window._historyRefreshDebounce);
+            window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
+          }
+        } else {
+          // Incremental update failed (student not found, local save pending, etc.) — fall back to full refresh
+          console.log('[DAL] v80 Student incremental update failed — falling back to full refresh');
+          _debouncedRealtimeRefresh('students');
+        }
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
@@ -2615,10 +2748,19 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(studentChannel);
     channelsCreated++;
 
-    // Subscribe to pets table — coalesced refresh on change
+    // v80: Subscribe to pets table — incremental update (only ~1KB instead of ~500KB)
     var petChannel = db.channel('dal-pets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
-        _debouncedRealtimeRefresh('pets:' + payload.eventType);
+        var success = _applyPetIncrementalUpdate(payload);
+        if (success) {
+          // Incremental update succeeded — re-render UI
+          if (typeof renderClassList === 'function') renderClassList();
+          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+        } else {
+          // Incremental update failed — fall back to full refresh
+          console.log('[DAL] v80 Pet incremental update failed — falling back to full refresh');
+          _debouncedRealtimeRefresh('pets:' + payload.eventType);
+        }
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
