@@ -414,7 +414,7 @@ function jhGenMtnSVG(type) {
 }
 
 function jhGenBossSVG(boss) {
-  return `<img src="战斗兽宠文件夹/${esc(boss.name)}.webp" alt="${esc(boss.name)}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 20px ${boss.accent});"/>`;
+  return `<img src="${_oss(`战斗兽宠文件夹/${esc(boss.name)}.webp`)}" alt="${esc(boss.name)}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 20px ${boss.accent});"/>`;
 }
 
 /* Generate wuxia-style ancient building silhouettes SVG */
