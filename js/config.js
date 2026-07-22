@@ -1,9 +1,13 @@
 // ========== CDN 图片加速 + 安全工具 ==========
 // ========== CDN 图片加速 ==========
+// 阿里云 OSS 基础域名
+const OSS_BASE = 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com';
 // 阿里云 CDN 域名（配好后填入，留空则使用本地 images/）
 // 示例: 'https://cdn.yourdomain.com/images'
-const IMG_CDN_BASE = 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images';
+const IMG_CDN_BASE = OSS_BASE + '/images';
 function _img(path) { return (IMG_CDN_BASE || 'images') + '/' + path; }
+// 阿里云 OSS 资源路径辅助函数（战斗兽宠、战斗机器人等）
+function _oss(path) { return OSS_BASE + '/' + path; }
 
 // ========== 安全工具函数 ==========
 function escapeHTML(str) {
