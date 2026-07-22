@@ -2199,4 +2199,769 @@ function getPetImageSrc(petName, level) {
   return _img(`${cfg.id}/${level}.webp`);
 }
 
+function _startPKChallengePolling() {
+  _stopPKChallengePolling();
+  var pollStart = Date.now();
+  _pkChallengePollTimer = setInterval(function() {
+    // Stop after 5 minutes (timeout)
+    if (Date.now() - pollStart > 5 * 60 * 1000 || pkState.isFighting) {
+      _stopPKChallengePolling();
+      return;
+    }
+    // Reload logs from Supabase and check for acceptance
+    if (typeof _loadOperationLogs === 'function') {
+      _loadOperationLogs().then(function() {
+        if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+        _checkAcceptedPKChallenge();
+      }).catch(function() {});
+    }
+  }, 5000); // v53: 5s interval (was 2s) — reduces 150 queries/challenge to 60
+}
+
+function _stopPKChallengePolling() {
+  if (_pkChallengePollTimer) {
+    clearInterval(_pkChallengePollTimer);
+    _pkChallengePollTimer = null;
+  }
+}
+
+// Helper: count pending challenges I sent today (not yet accepted/declined)
+function _countMyPendingPKChallenges() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return { total: 0, targets: {} };
+  const myStudentId = parseInt(currentUser.studentId);
+  const today = new Date().toDateString();
+  var _logs = getOpLogs();
+  let total = 0;
+  const targets = {}; // targetId -> count
+  for (let i = 0; i < _logs.length; i++) {
+    const log = _logs[i];
+    if (log.actionType !== 'PK挑战') continue;
+    if (log.reverted) continue;
+    if (!log.extra || !log.extra.pkChallenge) continue;
+    if (log.extra.challengerId !== myStudentId) continue;
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (log.extra.status !== 'pending') continue;
+    // Check not expired (within 5 minutes)
+    const challengeTime = new Date(log.timestamp).getTime();
+    if (Date.now() - challengeTime > 5 * 60 * 1000) continue;
+    total++;
+    const tid = log.extra.targetId;
+    targets[tid] = (targets[tid] || 0) + 1;
+  }
+  return { total, targets };
+}
+
+// Helper: check if I already have a pending/in-progress PK battle (only check isFighting flag)
+function _hasActivePKBattle() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return false;
+  // Only block if currently fighting - allow re-invite after battle completes
+  return pkState.isFighting;
+}
+
+function selectPKOpponent(studentId) {
+  if(pkState.isFighting) return;
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return selectPKPlayer(studentId); // Fall back to teacher behavior
+  
+  const myStudentId = parseInt(currentUser.studentId);
+  const cur = classesData.find(c=>c.id===currentClassId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
+  const opponent = cur.students.find(s=>s.id.toString()===studentId.toString());
+  if (!myStudent || !opponent) return;
+  
+  const myPet = getActivePet(myStudent);
+  const opponentPet = getActivePet(opponent);
+  if (!myPet || !opponentPet) {
+    showNotification('无法选择', '宠物未存活', 'warning');
+    return;
+  }
+  
+  // Always keep myself as first player, toggle opponent as second
+  if (pkState.players.length === 2 && pkState.players[1].studentId.toString() === studentId.toString()) {
+    // Deselect
+    pkState.players = [{ studentId: myStudentId, studentName: myStudent.name, pet: {...myPet} }];
+  } else {
+    pkState.players = [
+      { studentId: myStudentId, studentName: myStudent.name, pet: {...myPet} },
+      { studentId: opponent.id, studentName: opponent.name, pet: {...opponentPet} }
+    ];
+  }
+  renderPKPage();
+}
+
+function sendPKChallenge() {
+  if (pkState.players.length !== 2) return;
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return;
+  
+  const myStudentId = parseInt(currentUser.studentId);
+  const challenger = pkState.players.find(p => p.studentId === myStudentId);
+  const target = pkState.players.find(p => p.studentId !== myStudentId);
+  
+  if (!challenger || !target) return;
+  
+  // === 邀请限制检查 ===
+  // 1. 检查是否已经有活跃的战斗
+  if (_hasActivePKBattle()) {
+    showNotification('无法发起', '你已有一场进行中的PK，请等待结束', 'warning');
+    pkState.players = [];
+    renderPKPage();
+    return;
+  }
+  
+  // 2. 检查待处理邀请总数（最多3个）
+  const pendingInfo = _countMyPendingPKChallenges();
+  if (pendingInfo.total >= 3) {
+    showNotification('邀请已满', '你最多同时向3位同学发出邀请，请等待对方回应', 'warning');
+    pkState.players = [];
+    renderPKPage();
+    return;
+  }
+  
+  // 3. 检查是否已经向同一学生发出过邀请（同一学生只能邀请一次）
+  if (pendingInfo.targets[target.studentId] > 0) {
+    showNotification('重复邀请', `你已经向 ${target.studentName} 发出过邀请，请等待对方回应`, 'warning');
+    pkState.players = [];
+    renderPKPage();
+    return;
+  }
+  
+  // Create challenge log entry
+  const log = {
+    id: _genLocalId(),
+    timestamp: new Date().toISOString(),
+    classId: currentClassId,
+    studentId: target.studentId,
+    studentName: target.studentName,
+    actionType: 'PK挑战',
+    details: `${challenger.studentName} 向 ${target.studentName} 发起PK挑战`,
+    coinDelta: 0,
+    expDelta: 0,
+    petId: null,
+    extra: {
+      pkChallenge: true,
+      challengerId: challenger.studentId,
+      challengerName: challenger.studentName,
+      targetId: target.studentId,
+      targetName: target.studentName,
+      status: 'pending',
+      challengerPet: challenger.pet,
+      targetPet: target.pet
+    },
+    reverted: false,
+    _synced: false
+  };
+  
+  window.operationLogs.push(log);
+  saveLogs();
+  
+  // Show waiting message
+  showNotification('挑战已发送', `等待 ${target.studentName} 接受挑战...`, 'info');
+  
+  // Store challenge state locally
+  _pkChallengeState.pending = {
+    challengerId: challenger.studentId,
+    targetId: target.studentId,
+    timestamp: Date.now()
+  };
+  
+  // v35: Start fast polling to detect acceptance quickly (replaces 30s wait)
+  _startPKChallengePolling();
+  
+  // Reset selection
+  pkState.players = [];
+  renderPKPage();
+}
+
+// v12: Show modal for student to select opponent and send challenge
+function showStudentPKChallengeModal() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return;
+  
+  const myStudentId = parseInt(currentUser.studentId);
+  const cur = classesData.find(c=>c.id===currentClassId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
+  const myPet = myStudent ? getActivePet(myStudent) : null;
+  
+  if (!myStudent || !myPet) {
+    showNotification('无法发起挑战', '你的宠物未存活', 'warning');
+    return;
+  }
+  
+  // Check if student has PK qualification
+  if (!hasPKQualificationToday(myStudentId)) {
+    showNotification('无PK资格', '今日需要通过奖惩/打卡/取金阁获得至少5金币', 'warning');
+    return;
+  }
+  
+  // Check daily PK limit
+  if ((myStudent.pkCountToday || 0) >= 3) {
+    showNotification('已达上限', '今日PK次数已用完（最多3次）', 'warning');
+    return;
+  }
+  
+  // Check pending invitations limit
+  const pendingInfo = _countMyPendingPKChallenges();
+  if (pendingInfo.total >= 3) {
+    showNotification('邀请已满', '你最多同时向3位同学发出邀请，请等待对方回应', 'warning');
+    return;
+  }
+  
+  // Check for active battle
+  if (_hasActivePKBattle()) {
+    showNotification('无法发起', '你已有一场进行中的PK', 'warning');
+    return;
+  }
+  
+  // Get eligible opponents (exclude already-invited students)
+  const opponents = cur.students.filter(s => {
+    if (s.id.toString() === myStudentId.toString()) return false;
+    const p = getActivePet(s);
+    if (!p || p.isDead || !hasPKQualificationToday(s.id)) return false;
+    // Exclude students I already have a pending invitation to
+    if (pendingInfo.targets[s.id] > 0) return false;
+    return true;
+  });
+  
+  if (opponents.length === 0) {
+    showNotification('无可挑战对象', '当前没有其他有资格的学生可挑战', 'info');
+    return;
+  }
+  
+  // Build opponent selection modal
+  let html = `<div style="padding:12px;background:#f0f8ff;border-radius:12px;border:2px solid #4a90d9;margin-bottom:16px;">`;
+  html += `<div style="font-size:13px;color:#4a90d9;margin-bottom:8px;">⚔️ 你的出战宠物</div>`;
+  html += `<div style="display:flex;align-items:center;gap:12px;">
+    <div style="font-size:36px;">${getPetImage(myPet.name, myPet.level)}</div>
+    <div>
+      <div style="font-weight:700;font-size:16px;">${esc(myStudent.name)}</div>
+      <div style="font-size:14px;">${esc(myPet.nickname||myPet.name)} Lv.${myPet.level}</div>
+      <div style="font-size:12px;color:#ff8844;">📊 今日PK: ${myStudent.pkCountToday || 0}/3次</div>
+    </div>
+  </div>`;
+  html += `</div>`;
+  
+  html += `<div style="font-size:13px;color:#666;margin-bottom:8px;">选择一名对手发起挑战：</div>`;
+  html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;max-height:400px;overflow:auto;">`;
+  opponents.forEach(s => {
+    const p = getActivePet(s);
+    html += `<div class="pk-opponent-item" onclick="selectStudentPKOpponentAndSend('${s.id}')" style="cursor:pointer;">
+      <div class="pk-opponent-avatar">${getPetImage(p.name, p.level)}</div>
+      <div>
+        <div style="font-weight:700;">${esc(s.name)}</div>
+        <div style="font-size:14px;">${esc(p.nickname||p.name)} Lv.${p.level}</div>
+        <div style="font-size:12px;color:#885555;">成长: ${p.level>=9?getExpNeeded(p):p.growth}</div>
+        <div style="font-size:12px;color:#d4a017;margin-top:2px;">💰 金币: ${s.coins}</div>
+        <div style="font-size:12px;color:#ff8844;margin-top:4px;">📊 今日PK: ${s.pkCountToday || 0}/3次</div>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  
+  showModal('⚔️ 发起PK挑战', html, [{text:'取消', class:'btn-secondary', onclick:'closeModal()'}], true);
+}
+
+// v12: Select opponent and immediately send challenge
+function selectStudentPKOpponentAndSend(opponentId) {
+  const myStudentId = parseInt(currentUser.studentId);
+  const cur = classesData.find(c=>c.id===currentClassId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
+  const opponent = cur.students.find(s=>s.id.toString()===opponentId.toString());
+  if (!myStudent || !opponent) return;
+  
+  const myPet = getActivePet(myStudent);
+  const opponentPet = getActivePet(opponent);
+  if (!myPet || !opponentPet) {
+    showNotification('无法选择', '宠物未存活', 'warning');
+    return;
+  }
+  
+  // Check invitation limits before sending
+  if (_hasActivePKBattle()) {
+    showNotification('无法发起', '你已有一场进行中的PK', 'warning');
+    return;
+  }
+  const pendingInfo = _countMyPendingPKChallenges();
+  if (pendingInfo.total >= 3) {
+    showNotification('邀请已满', '最多同时向3位同学发出邀请', 'warning');
+    return;
+  }
+  if (pendingInfo.targets[opponent.id] > 0) {
+    showNotification('重复邀请', `已向 ${opponent.name} 发出过邀请`, 'warning');
+    return;
+  }
+  
+  // Set up pkState for challenge
+  pkState.players = [
+    { studentId: myStudentId, studentName: myStudent.name, pet: {...myPet} },
+    { studentId: opponent.id, studentName: opponent.name, pet: {...opponentPet} }
+  ];
+  
+  closeModal();
+  sendPKChallenge();
+}
+
+function _getPendingPKChallengeForMe() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return null;
+  
+  const myStudentId = parseInt(currentUser.studentId);
+  const today = new Date().toDateString();
+  
+  // Look for pending challenges targeting me
+  var _logs = getOpLogs();
+  for (let i = _logs.length - 1; i >= 0; i--) {
+    const log = _logs[i];
+    if (log.actionType !== 'PK挑战') continue;
+    if (log.reverted) continue;
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (!log.extra || !log.extra.pkChallenge) continue;
+    if (log.extra.targetId !== myStudentId) continue;
+    if (log.extra.status !== 'pending') continue;
+    
+    // Check if this challenge was already handled (accepted/declined)
+    if (_handledPKChallengeIds.has(log.id)) continue;
+    
+    // Check if challenge is not too old (within 5 minutes)
+    const challengeTime = new Date(log.timestamp).getTime();
+    if (Date.now() - challengeTime > 5 * 60 * 1000) continue;
+    
+    return log;
+  }
+  return null;
+}
+
+function _checkPendingPKChallenge() {
+  const challenge = _getPendingPKChallengeForMe();
+  if (challenge) {
+    _showPKChallengeDialog(challenge);
+    return true;
+  }
+  return false;
+}
+
+// Check for pending PK challenges and update the badge on the PK tab
+function _updatePKInviteBadge() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  const pkNavItem = document.getElementById('pk-nav-item');
+  if (!pkNavItem) return;
+  
+  if (!isStudentView) {
+    // Remove badge for teacher view
+    const existingBadge = pkNavItem.querySelector('.pk-invite-badge');
+    if (existingBadge) existingBadge.remove();
+    return;
+  }
+  
+  const challenge = _getPendingPKChallengeForMe();
+  const existingBadge = pkNavItem.querySelector('.pk-invite-badge');
+  
+  if (challenge) {
+    // Show badge if not already shown
+    if (!existingBadge) {
+      const badge = document.createElement('div');
+      badge.className = 'pk-invite-badge';
+      badge.innerHTML = '!';
+      pkNavItem.appendChild(badge);
+    }
+  } else {
+    // Remove badge if shown
+    if (existingBadge) existingBadge.remove();
+  }
+}
+
+// Handle PK tab click - show pending challenge if exists
+function handlePKTabClick() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  
+  if (isStudentView) {
+    const challenge = _getPendingPKChallengeForMe();
+    if (challenge) {
+      if (_pkChallengeState._lastShownChallengeId !== challenge.id) {
+        _pkChallengeState._lastShownChallengeId = challenge.id;
+        _showPKChallengeDialog(challenge);
+      }
+      return;
+    }
+  }
+  
+  // No pending challenge, switch to PK page normally
+  switchPage('pk-page');
+}
+
+function _showPKChallengeDialog(challenge) {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur) return;
+  
+  const myStudentId = parseInt(currentUser.studentId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
+  const myPet = myStudent ? getActivePet(myStudent) : null;
+  
+  const challengerName = challenge.extra.challengerName;
+  const challengerPet = challenge.extra.challengerPet;
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'pk-challenge-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
+  
+  overlay.innerHTML = `
+    <div style="background:linear-gradient(135deg,#fff5e6,#ffe4b5);border-radius:20px;padding:30px;max-width:400px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+      <div style="font-size:48px;margin-bottom:16px;">⚔️</div>
+      <h2 style="margin:0 0 8px 0;color:#a06040;">PK挑战！</h2>
+      <p style="margin:0 0 20px 0;color:#666;">${esc(challengerName)} 向你发起PK挑战！</p>
+      
+      <div style="display:flex;justify-content:space-around;margin:20px 0;">
+        <div style="text-align:center;">
+          <div style="font-size:36px;margin-bottom:8px;">${challengerPet ? getPetImage(challengerPet.name, challengerPet.level) : '🐾'}</div>
+          <div style="font-weight:700;">${esc(challengerName)}</div>
+          <div style="font-size:12px;color:#888;">${challengerPet ? esc(challengerPet.nickname||challengerPet.name) + ' Lv.' + challengerPet.level : ''}</div>
+        </div>
+        <div style="font-size:36px;color:#a06040;align-self:center;">VS</div>
+        <div style="text-align:center;">
+          <div style="font-size:36px;margin-bottom:8px;">${myPet ? getPetImage(myPet.name, myPet.level) : '🐾'}</div>
+          <div style="font-weight:700;">${esc(myStudent ? myStudent.name : '你')}</div>
+          <div style="font-size:12px;color:#888;">${myPet ? esc(myPet.nickname||myPet.name) + ' Lv.' + myPet.level : ''}</div>
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;">
+        <button onclick="declinePKChallenge(${challenge.id})" style="padding:12px 24px;background:#ccc;color:#666;border:none;border-radius:20px;font-size:15px;font-weight:700;cursor:pointer;">拒绝</button>
+        <button onclick="acceptPKChallenge(${challenge.id})" style="padding:12px 24px;background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:white;border:none;border-radius:20px;font-size:15px;font-weight:700;cursor:pointer;">接受挑战！</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+}
+
+function acceptPKChallenge(challengeLogId) {
+  // Remove overlay
+  const overlay = document.querySelector('.pk-challenge-overlay');
+  if (overlay) overlay.remove();
+  
+  // Prevent duplicate acceptance if already in a battle
+  if (pkState.isFighting) {
+    showNotification('战斗中', '你正在一场PK战斗中，无法接受新挑战', 'warning');
+    return;
+  }
+  
+  // Find the challenge log
+  var _logs = getOpLogs();
+  const log = _logs.find(l => l.id === challengeLogId);
+  if (!log || !log.extra) return;
+  
+  // Check if already accepted or declined
+  if (log.extra.status !== 'pending') {
+    showNotification('已处理', '该挑战已被处理', 'info');
+    return;
+  }
+  
+  // Mark as accepted locally
+  log.extra.status = 'accepted';
+  // v34: Mark as unsynced so the status change is written back to Supabase
+  log._synced = false;
+  saveLogs();
+  
+  // Track this challenge as handled (prevents infinite loops on log reload)
+  _handledPKChallengeIds.add(challengeLogId);
+  _saveHandledPKChallengeIds();
+  
+  // Create a "PK接受" log entry to notify the challenger
+  const myStudentId = parseInt(currentUser.studentId);
+  const cur = classesData.find(c => c.id === currentClassId);
+  const myStudent = cur.students.find(s => s.id.toString() === myStudentId.toString());
+  const myPet = myStudent ? getActivePet(myStudent) : null;
+  const challengerPet = log.extra.challengerPet;
+  
+  if (!myPet || !challengerPet) {
+    showNotification('PK失败', '宠物状态异常', 'error');
+    return;
+  }
+  
+  // Generate battle seed for synchronized combat
+  const battleSeed = Math.floor(Math.random() * 2147483647);
+  
+  // Create accept log entry for sync
+  const acceptLog = {
+    id: _genLocalId(),
+    timestamp: new Date().toISOString(),
+    classId: currentClassId,
+    studentId: log.extra.challengerId,
+    studentName: log.extra.challengerName,
+    actionType: 'PK接受',
+    details: `${myStudent.name} 接受了 ${log.extra.challengerName} 的PK挑战`,
+    coinDelta: 0,
+    expDelta: 0,
+    petId: null,
+    extra: {
+      pkAccept: true,
+      challengerId: log.extra.challengerId,
+      challengerName: log.extra.challengerName,
+      targetId: myStudentId,
+      targetName: myStudent.name,
+      challengerPet: challengerPet,
+      targetPet: {...myPet},
+      battleSeed: battleSeed
+    },
+    reverted: false,
+    _synced: false
+  };
+  
+  window.operationLogs.push(acceptLog);
+  saveLogs();
+  
+  // Reset shown challenge tracking
+  _pkChallengeState._lastShownChallengeId = null;
+  
+  // Set up PK state
+  pkState.players = [
+    { studentId: log.extra.challengerId, studentName: log.extra.challengerName, pet: {...challengerPet} },
+    { studentId: myStudentId, studentName: myStudent.name, pet: {...myPet} }
+  ];
+  pkState.battleSeed = battleSeed;
+  
+  // Switch to PK page and start battle
+  switchPage('pk-page');
+  setTimeout(() => {
+    startPKBattle();
+  }, 500);
+}
+
+// Check for accepted PK challenges (for the challenger to start battle)
+function _checkAcceptedPKChallenge() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (!isStudentView) return false;
+  
+  // Don't start a new battle if one is already in progress
+  if (pkState.isFighting) return false;
+  
+  const myStudentId = parseInt(currentUser.studentId);
+  const today = new Date().toDateString();
+  
+  // Look for accepted challenges where I am the challenger
+  var _logs = getOpLogs();
+  for (let i = _logs.length - 1; i >= 0; i--) {
+    const log = _logs[i];
+    if (log.actionType !== 'PK接受') continue;
+    if (log.reverted) continue;
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (!log.extra || !log.extra.pkAccept) continue;
+    if (log.extra.challengerId !== myStudentId) continue;
+    
+    // Check if this challenge was already handled (battle started)
+    if (_handledPKChallengeIds.has(log.id)) continue;
+    
+    // Check if challenge is recent (within 10 minutes)
+    const acceptTime = new Date(log.timestamp).getTime();
+    if (Date.now() - acceptTime > 10 * 60 * 1000) continue;
+    
+    // Check if we haven't already started this battle
+    if (log.extra._battleStarted) continue;
+    
+    // Mark as started to avoid duplicate starts
+    log.extra._battleStarted = true;
+    // v34: Mark as unsynced so the flag is written back to Supabase
+    log._synced = false;
+    // Persist the flag by saving logs
+    saveLogs();
+    
+    // Track this challenge as handled (prevents infinite loops on log reload)
+    _handledPKChallengeIds.add(log.id);
+    _saveHandledPKChallengeIds();
+    
+    // Start the battle
+    const challengerPet = log.extra.challengerPet;
+    const targetPet = log.extra.targetPet;
+    
+    if (!challengerPet || !targetPet) return false;
+    
+    pkState.players = [
+      { studentId: log.extra.challengerId, studentName: log.extra.challengerName, pet: {...challengerPet} },
+      { studentId: log.extra.targetId, studentName: log.extra.targetName, pet: {...targetPet} }
+    ];
+    // Use the same battle seed generated by the accepting student
+    pkState.battleSeed = log.extra.battleSeed || Math.floor(Math.random() * 2147483647);
+    
+    // Show notification and start battle
+    showNotification('挑战被接受！', `${log.extra.targetName} 接受了你的挑战！`, 'success');
+    // v35: Stop fast polling since we found the acceptance
+    _stopPKChallengePolling();
+    switchPage('pk-page');
+    setTimeout(() => {
+      startPKBattle();
+    }, 500);
+    
+    return true;
+  }
+  return false;
+}
+
+function declinePKChallenge(challengeLogId) {
+  // Remove overlay
+  const overlay = document.querySelector('.pk-challenge-overlay');
+  if (overlay) overlay.remove();
+  
+  // Find the challenge log and mark as declined
+  var _logs = getOpLogs();
+  const log = _logs.find(l => l.id === challengeLogId);
+  if (log && log.extra) {
+    log.extra.status = 'declined';
+    // v34: Mark as unsynced so the status change is written back to Supabase
+    log._synced = false;
+    saveLogs();
+    // Track this challenge as handled (prevents infinite loops on log reload)
+    _handledPKChallengeIds.add(challengeLogId);
+    _saveHandledPKChallengeIds();
+  }
+  
+  // Reset shown challenge tracking
+  _pkChallengeState._lastShownChallengeId = null;
+  
+  showNotification('已拒绝挑战', '你拒绝了PK挑战', 'info');
+  renderPKPage();
+}
+
+function selectPKPlayer(studentId) {
+  if(pkState.isFighting) return;
+  const cur = classesData.find(c=>c.id===currentClassId);
+  const student = cur.students.find(s=>s.id.toString()===studentId.toString());
+  const pet = getActivePet(student);
+  if(!pet || pet.isDead) {
+    showNotification('无法选择', '宠物未存活', 'warning');
+    return;
+  }
+  resetDailyPkCountIfNeeded(student);
+  const existingIndex = pkState.players.findIndex(p => p.studentId === studentId);
+  if(existingIndex !== -1) {
+    pkState.players.splice(existingIndex, 1);
+  } else {
+    pkState.players.push({ studentId, studentName: student.name, pet: {...pet} });
+    if(pkState.players.length > 2) {
+      pkState.players.shift(); // 移除最早选中的
+    }
+  }
+  renderPKPage();
+}
+
+function resetPKSelection() {
+  pkState = { players: [], isFighting: false, _battleCompleted: false };
+  renderPKPage();
+}
+
+
+function spawnThemeParticles(arena, skillType) {
+  // 获取或创建粒子容器
+  let particlesDiv = arena.querySelector('.pk-arena-particles');
+  if(!particlesDiv) {
+    particlesDiv = document.createElement('div');
+    particlesDiv.className = 'pk-arena-particles';
+    arena.appendChild(particlesDiv);
+  }
+  // 清空旧粒子
+  particlesDiv.innerHTML = '';
+  // 根据技能类型生成不同粒子
+  const particleCount = 15;
+  if(skillType === 'fire' || skillType === 'dragonfire') {
+    // 火焰余烬
+    for(let i = 0; i < particleCount; i++) {
+      const ember = document.createElement('div');
+      const size = 3 + Math.random() * 6;
+      const colors = ['#ff6600','#ff9933','#ffcc00','#ff3300'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      ember.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:${color};border-radius:50%;left:${Math.random()*100}%;bottom:0;box-shadow:0 0 ${size*2}px ${color};animation:emberFloat ${3+Math.random()*4}s ease-in-out infinite;animation-delay:${Math.random()*2}s;opacity:0;`;
+      particlesDiv.appendChild(ember);
+      setTimeout(() => { ember.style.opacity = '0.8'; }, 100);
+    }
+  } else if(skillType === 'ice' || skillType === 'iceground') {
+    // 冰晶
+    for(let i = 0; i < particleCount; i++) {
+      const crystal = document.createElement('div');
+      const size = 8 + Math.random() * 15;
+      const colors = ['#aaddff','#66ccff','#ffffff','#88eeff'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      crystal.style.cssText = `position:absolute;width:${size}px;height:${size*1.5}px;background:${color};clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);left:${Math.random()*100}%;bottom:0;box-shadow:0 0 ${size}px ${color};animation:iceCrystalFloat ${4+Math.random()*3}s ease-in-out infinite;animation-delay:${Math.random()*2}s;opacity:0;`;
+      particlesDiv.appendChild(crystal);
+      setTimeout(() => { crystal.style.opacity = '0.9'; }, 100);
+    }
+  } else if(skillType === 'thunder') {
+    // 雷电火花
+    for(let i = 0; i < 20; i++) {
+      const spark = document.createElement('div');
+      const size = 4 + Math.random() * 8;
+      spark.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:#ffff88;border-radius:50%;left:${Math.random()*100}%;top:${Math.random()*100}%;box-shadow:0 0 ${size*3}px #ffff00,0 0 ${size*5}px #ffaa00;--lx:${(Math.random()-0.5)*100}px;--ly:${(Math.random()-0.5)*100}px;animation:lightningSpark ${0.5+Math.random()*0.5}s ease-out infinite;animation-delay:${Math.random()*1}s;opacity:0;`;
+      particlesDiv.appendChild(spark);
+    }
+  } else if(skillType === 'poison') {
+    // 毒雾泡泡
+    for(let i = 0; i < particleCount; i++) {
+      const bubble = document.createElement('div');
+      const size = 10 + Math.random() * 20;
+      const colors = ['#66ff33','#99ff66','#33cc00'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      bubble.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:radial-gradient(circle,${color},transparent);border-radius:50%;left:${Math.random()*100}%;bottom:0;box-shadow:0 0 ${size}px ${color};animation:poisonBubble ${3+Math.random()*4}s ease-out infinite;animation-delay:${Math.random()*2}s;opacity:0;`;
+      particlesDiv.appendChild(bubble);
+    }
+  } else if(skillType === 'wind') {
+    // 风之树叶
+    for(let i = 0; i < 12; i++) {
+      const leaf = document.createElement('div');
+      const size = 12 + Math.random() * 18;
+      const colors = ['#88ccff','#aaddff','#66bbee'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      leaf.style.cssText = `position:absolute;width:${size}px;height:${size*0.6}px;background:${color};border-radius:50% 0 50% 0;left:${Math.random()*100}%;top:${Math.random()*100}%;box-shadow:0 0 ${size/2}px ${color};--wx:${200+Math.random()*300}px;--wy:${-50+Math.random()*100}px;animation:windLeaf ${2+Math.random()*2}s ease-out infinite;animation-delay:${Math.random()*2}s;opacity:0;`;
+      particlesDiv.appendChild(leaf);
+    }
+  } else if(skillType === 'shadow') {
+    // 暗影游魂
+    for(let i = 0; i < 10; i++) {
+      const wisp = document.createElement('div');
+      const size = 20 + Math.random() * 30;
+      wisp.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:radial-gradient(circle,rgba(150,50,255,0.8),transparent);border-radius:50%;left:${Math.random()*100}%;top:${Math.random()*100}%;box-shadow:0 0 ${size}px rgba(150,50,255,0.6);--sx:${(Math.random()-0.5)*200}px;--sy:${(Math.random()-0.5)*200}px;animation:shadowWisp ${3+Math.random()*3}s ease-out infinite;animation-delay:${Math.random()*2}s;`;
+      particlesDiv.appendChild(wisp);
+    }
+  } else if(skillType === 'meteor') {
+    // 陨石轨迹
+    for(let i = 0; i < 8; i++) {
+      const trail = document.createElement('div');
+      const size = 6 + Math.random() * 10;
+      trail.style.cssText = `position:absolute;width:${size*3}px;height:${size}px;background:linear-gradient(90deg,transparent,#ff6600,#ffcc00);border-radius:50%;left:${Math.random()*50}%;top:${Math.random()*50}%;box-shadow:0 0 ${size*2}px #ff6600;--mx:${200+Math.random()*200}px;--my:${100+Math.random()*200}px;animation:meteorTrail ${1.5+Math.random()*1.5}s ease-out infinite;animation-delay:${Math.random()*2}s;opacity:0;`;
+      particlesDiv.appendChild(trail);
+    }
+  } else if(skillType === 'holy') {
+    // 圣光光球
+    for(let i = 0; i < 15; i++) {
+      const glow = document.createElement('div');
+      const size = 8 + Math.random() * 16;
+      glow.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:radial-gradient(circle,#ffffff,#ffee77,transparent);border-radius:50%;left:${Math.random()*100}%;bottom:0;box-shadow:0 0 ${size*2}px #ffee77;animation:holyGlow ${3+Math.random()*3}s ease-out infinite;animation-delay:${Math.random()*2}s;`;
+      particlesDiv.appendChild(glow);
+    }
+  } else if(skillType === 'lava') {
+    // 岩浆气泡
+    for(let i = 0; i < 18; i++) {
+      const bubble = document.createElement('div');
+      const size = 10 + Math.random() * 20;
+      const colors = ['#ff3300','#ff6600','#ff0000'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      bubble.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:radial-gradient(circle,${color},#660000);border-radius:50%;left:${Math.random()*100}%;bottom:0;box-shadow:0 0 ${size}px ${color};animation:lavaBubble ${2.5+Math.random()*2.5}s ease-out infinite;animation-delay:${Math.random()*2}s;opacity:0;`;
+      particlesDiv.appendChild(bubble);
+    }
+  } else if(skillType === 'starburst') {
+    // 星光闪烁
+    for(let i = 0; i < 20; i++) {
+      const star = document.createElement('div');
+      const size = 6 + Math.random() * 12;
+      const colors = ['#ffcc00','#ffee77','#ffffff'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      star.style.cssText = `position:absolute;width:${size}px;height:${size}px;background:${color};clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);left:${Math.random()*100}%;top:${Math.random()*100}%;box-shadow:0 0 ${size}px ${color};animation:starTwinkle ${1.5+Math.random()*2}s ease-in-out infinite;animation-delay:${Math.random()*2}s;`;
+      particlesDiv.appendChild(star);
+    }
+  }
+}
+
+
 // ========== 萌萌江湖行系统 ==========

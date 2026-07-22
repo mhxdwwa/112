@@ -1793,3 +1793,23 @@ function closeJianghuGame() {
   renderJianghuPage();
   renderPKPage();
 }
+
+function renderJianghuPage() {
+  const container = document.getElementById('jhPageContent');
+  if(!container) return;
+  if(!currentClassId) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;">请先在【宠物管理】页面选择一个班级</div>';
+    return;
+  }
+  const cur = classesData.find(c=>c.id===currentClassId);
+  if(!cur || cur.students.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;">班级中暂无学生</div>';
+    return;
+  }
+  const validStudents = cur.students.filter(s => {
+    const p = getActivePet(s);
+    return p && !p.isDead;
+  });
+  let html = renderJianghuColumn(cur, validStudents);
+  container.innerHTML = html;
+}
