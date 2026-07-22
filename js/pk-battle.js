@@ -953,8 +953,6 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
 // ========== 课堂PK系统（图片导入+手写答题版）==========
 let classPKState = {
   selectedStudents: [],
