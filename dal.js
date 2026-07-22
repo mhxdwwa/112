@@ -28,7 +28,9 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 30000; // v70: Fallback polling 30s (was 2min). Only active when Realtime is down.
+var _refreshInterval = 30000; // v80: Deprecated - polling replaced with event-driven sync
+var _lastInteractionSync = 0; // v80: Track last sync time for debounce
+var _INTERACTION_DEBOUNCE_MS = 2000; // v80: 2s debounce for interaction-triggered syncs
 var _lastRefreshTime = 0;
 var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
@@ -2655,26 +2657,36 @@ function _setupRealtimeSubscriptions() {
   }
 }
 
-// v54: Start fallback polling only when Realtime is not working
+// v80: Event-driven sync - triggered by user interaction when Realtime is down
 function _startFallbackPolling() {
-  if (_refreshTimer) return; // Already running
-  console.log('[DAL] Fallback polling started (every ' + (_refreshInterval / 1000) + 's)');
-  _refreshTimer = setInterval(function() {
-    // Skip if Realtime has since become active
-    if (_realtimeActive) {
-      _stopFallbackPolling();
-      return;
-    }
+  if (_refreshTimer) return; // Already set up
+  console.log('[DAL] v80 Event-driven sync started (replaces polling)');
+  _refreshTimer = true; // Just a flag to indicate setup is done
+  
+  // Add event listeners for user interactions
+  var syncOnInteraction = function() {
+    // Skip if Realtime is active
+    if (_realtimeActive) return;
+    // Debounce: skip if synced recently
+    if (Date.now() - _lastInteractionSync < _INTERACTION_DEBOUNCE_MS) return;
+    _lastInteractionSync = Date.now();
+    console.log('[DAL] v80 User interaction detected — syncing data');
     _refreshFromSupabase();
-  }, _refreshInterval);
+  };
+  
+  // Listen for user interactions
+  document.addEventListener('click', syncOnInteraction, { passive: true });
+  document.addEventListener('focus', syncOnInteraction, { passive: true, capture: true });
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) syncOnInteraction();
+  });
 }
 
-// v54: Stop fallback polling
+// v80: Stop event-driven sync (when Realtime becomes active)
 function _stopFallbackPolling() {
   if (_refreshTimer) {
-    clearInterval(_refreshTimer);
     _refreshTimer = null;
-    console.log('[DAL] Fallback polling stopped (Realtime is active)');
+    console.log('[DAL] v80 Event-driven sync stopped (Realtime is active)');
   }
 }
 

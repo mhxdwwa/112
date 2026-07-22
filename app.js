@@ -633,11 +633,16 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
   if(coinDelta === 0 && expDelta === 0 && !extra) return;
   const cur = classesData.find(c=>c.id===currentClassId);
   let snapshot = null;
+  // v80: Build summary for extra field (for history display without loading snapshot)
+  let summary = {};
   if(cur){
     const stu = cur.students.find(s=>s.id.toString()===studentId.toString());
     if(stu){
       const pet = petId ? (stu.pets||[]).find(p=>p.id===petId) : getActivePet(stu);
       snapshot = { coinsBefore: stu.coins - (coinDelta||0), coinsAfter: stu.coins };
+      // v80: Store summary in extra for history display
+      summary.coinsBefore = snapshot.coinsBefore;
+      summary.coinsAfter = snapshot.coinsAfter;
       if(pet){
         snapshot.petNick = pet.nickname||pet.name;
         snapshot.petRealName = pet.name;
@@ -648,6 +653,14 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
         snapshot.penaltyStreak = pet.penaltyStreak||0;
         const cfg = PET_CONFIG[pet.name];
         if(cfg){ const stg = cfg.stages.find(s=>s.stage===pet.level); snapshot.stageName = stg ? stg.stageName : '阶段'+pet.level; }
+        // v80: Store pet summary in extra
+        summary.petNick = snapshot.petNick;
+        summary.petLevel = snapshot.petLevel;
+        summary.stageName = snapshot.stageName;
+        summary.growthBefore = snapshot.growthBefore;
+        summary.growthAfter = snapshot.growthAfter;
+        summary.isDead = snapshot.isDead;
+        summary.penaltyStreak = snapshot.penaltyStreak;
       }
       // v45: Expand snapshot with complete quizState for point-in-time recovery
       // Stores full pigRunLevels dict so "恢复到此" can restore all levels at once
@@ -663,6 +676,10 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
       }
     }
   }
+  // v80: Merge summary into extra (preserve existing extra fields like shopItemId, pkType, etc.)
+  if(Object.keys(summary).length > 0){
+    extra = Object.assign({}, extra || {}, summary);
+  }
   // v79: Store timestamp in UTC format (ISO string) to match Supabase's created_at format.
   // This fixes deduplication issues where local time vs UTC caused duplicate log entries.
   // Display code uses toLocaleString with timeZone:'Asia/Shanghai' to convert UTC to Beijing time.
@@ -675,7 +692,27 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
   window.operationLogs.push(log);
   saveLogs();
 }
-function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
+function recordResetAction(classId, className, fullSnapshot){ 
+  // v80: Add summary to extra for history display
+  const extra = { resetStudentCount: fullSnapshot.length };
+  const log = { 
+    id: _genLocalId(), 
+    timestamp: new Date().toISOString(), 
+    classId: classId, 
+    studentId: classId, 
+    studentName: className, 
+    actionType: "重置班级宠物", 
+    details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, 
+    fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), 
+    coinDelta: 0, 
+    expDelta: 0, 
+    extra: extra,
+    reverted: false, 
+    _synced: false 
+  }; 
+  window.operationLogs.push(log); 
+  saveLogs(); 
+}
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
 function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } unequipItem(student, itemId); } }
 async function restoreToLogEntry(logId){
@@ -976,22 +1013,34 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     const icon = _historyActionIcon(log.actionType);
     const color = _historyActionColor(log.actionType);
     const isReverted = log.reverted;
+    // v80: Read summary from extra first, fall back to snapshot for backward compatibility
     const snap = log.snapshot;
+    const extra = log.extra || {};
+    // v80: Use extra for display (with snapshot fallback for old logs)
+    const coinsBefore = extra.coinsBefore !== undefined ? extra.coinsBefore : (snap && snap.coinsBefore);
+    const coinsAfter = extra.coinsAfter !== undefined ? extra.coinsAfter : (snap && snap.coinsAfter);
+    const growthBefore = extra.growthBefore !== undefined ? extra.growthBefore : (snap && snap.growthBefore);
+    const growthAfter = extra.growthAfter !== undefined ? extra.growthAfter : (snap && snap.growthAfter);
+    const petNick = extra.petNick || (snap && snap.petNick);
+    const petLevel = extra.petLevel || (snap && snap.petLevel);
+    const stageName = extra.stageName || (snap && snap.stageName);
+    const isDead = extra.isDead !== undefined ? extra.isDead : (snap && snap.isDead);
+    const penaltyStreak = extra.penaltyStreak !== undefined ? extra.penaltyStreak : (snap && snap.penaltyStreak);
     let coinLine = '';
     if(log.coinDelta !== 0){
       const sign = log.coinDelta > 0 ? '+' : '';
       coinLine = `<span style="color:${log.coinDelta>0?'#4a9e4a':'#cc5544'};font-weight:600;">💰${sign}${log.coinDelta}</span>`;
-      if(snap) coinLine += `<span style="color:#aaa;margin-left:4px;">(${snap.coinsBefore}→${snap.coinsAfter})</span>`;
+      if(coinsBefore !== undefined && coinsAfter !== undefined) coinLine += `<span style="color:#aaa;margin-left:4px;">(${coinsBefore}→${coinsAfter})</span>`;
     }
     let expLine = '';
     if(log.expDelta !== 0){
       const sign = log.expDelta > 0 ? '+' : '';
       expLine = `<span style="color:${log.expDelta>0?'#4a9e4a':'#cc5544'};font-weight:600;margin-left:8px;">🌱${sign}${log.expDelta}</span>`;
-      if(snap) expLine += `<span style="color:#aaa;margin-left:4px;">(${snap.growthBefore}→${snap.growthAfter})</span>`;
+      if(growthBefore !== undefined && growthAfter !== undefined) expLine += `<span style="color:#aaa;margin-left:4px;">(${growthBefore}→${growthAfter})</span>`;
     }
     let petInfo = '';
-    if(snap && snap.petNick){
-      petInfo = `<span style="background:#fff0e8;padding:1px 8px;border-radius:8px;font-size:11px;margin-left:6px;">🐾 ${esc(snap.petNick)} Lv.${snap.petLevel}${snap.stageName?' · '+esc(snap.stageName):''}</span>`;
+    if(petNick){
+      petInfo = `<span style="background:#fff0e8;padding:1px 8px;border-radius:8px;font-size:11px;margin-left:6px;">🐾 ${esc(petNick)} Lv.${petLevel}${stageName?' · '+esc(stageName):''}</span>`;
     }
     let extraInfo = '';
     if(log.extra){
@@ -1000,8 +1049,8 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
       if(log.extra.pkType === 'lose') extraInfo += `<span style="margin-left:6px;font-size:12px;">🎯 胜者: ${esc(log.extra.opponentName)}</span>`;
       if(log.extra.pkType === 'draw') extraInfo += `<span style="margin-left:6px;font-size:12px;">🤝 对手: ${esc(log.extra.opponentName)}</span>`;
     }
-    if(snap && snap.isDead && !log.extra?.causedDeath) extraInfo += '<span style="color:#999;margin-left:6px;font-size:11px;">（宠物已死亡）</span>';
-    if(snap && snap.penaltyStreak >= 2 && !log.extra?.causedDeath) extraInfo += `<span style="color:#ee6633;margin-left:6px;font-size:11px;">⚠ 连续惩罚${snap.penaltyStreak}次</span>`;
+    if(isDead && !log.extra?.causedDeath) extraInfo += '<span style="color:#999;margin-left:6px;font-size:11px;">（宠物已死亡）</span>';
+    if(penaltyStreak >= 2 && !log.extra?.causedDeath) extraInfo += `<span style="color:#ee6633;margin-left:6px;font-size:11px;">⚠ 连续惩罚${penaltyStreak}次</span>`;
     const opacity = isReverted ? 'opacity:0.45;' : '';
     const revertedBadge = isReverted ? '<span style="background:#ffcc00;color:#665500;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">已撤销</span>' : '';
     let btnHtml = '';
