@@ -2084,7 +2084,9 @@ function refreshCurrentStudentModal(){
   const myStudentId = _mySid ? (isNaN(parseInt(_mySid)) ? _mySid : parseInt(_mySid)) : null;
   const isViewingOtherStudent = isStudentView && myStudentId !== null && String(student.id) !== String(myStudentId);
   const contentBuilder = isViewingOtherStudent ? buildReadOnlyStudentModalContent : buildStudentModalContent;
-  modalDiv.querySelector('.modal-content').innerHTML = contentBuilder(student, activePet); 
+  modalDiv.querySelector('.modal-content').innerHTML = contentBuilder(student, activePet);
+  const actionsDiv = modalDiv.querySelector('.modal-actions');
+  if(actionsDiv) actionsDiv.innerHTML = `<button class="btn btn-secondary" onclick="playClickSound(); closeModal()">关闭</button>`;
   setTimeout(()=>{ startHeartForCurrentPet(currentModalStudentId);
     const petImgEl = document.querySelector('.modal-pet-img[data-pet-img-container]');
     if(petImgEl) initPetModalEnhancements(petImgEl, activePet.name, activePet.level||1, activePet.growth||0, getExpNeeded(activePet));
