@@ -1,4 +1,4 @@
-// match3.js v6 — 宠物消消乐
+// match3.js v7 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -14,7 +14,7 @@ var TILE_TYPES = [
   { name: '奶牛', path: CDN_BASE + '%E5%A5%B6%E7%89%9B.png' },
   { name: '狐狸', path: CDN_BASE + '%E7%8B%90%E7%8B%B8.png' }
 ];
-var TILE_SIZE = 42;
+var TILE_SIZE = 50;
 var MAX_SLOTS = 6;
 
 var _m3Tiles = [];
@@ -392,13 +392,15 @@ function _m3InitLevel(level) {
   html += '<span style="font-size:13px;">得分: <span id="m3Score">0</span></span>';
   html += '</div>';
 
-  // 游戏区
-  html += '<div id="m3GameArea" style="position:relative;width:360px;height:380px;margin:0 auto;background:rgba(255,255,255,0.1);border-radius:12px;overflow:hidden;"></div>';
+  // 游戏区（根据关卡层数动态计算高度）
+  var gameAreaHeight = Math.max(200, (config.layers - 1) * 22 + TILE_SIZE + 20);
+  var gameAreaMaxHeight = Math.min(450, gameAreaHeight);
+  html += '<div id="m3GameArea" style="position:relative;width:360px;height:' + gameAreaMaxHeight + 'px;margin:0 auto;background:rgba(255,255,255,0.1);border-radius:12px;overflow:auto;"></div>';
 
   // 槽位栏
-  html += '<div id="m3SlotBar" style="display:flex;gap:5px;margin:8px auto;padding:8px;background:rgba(255,255,255,0.9);border-radius:10px;min-height:52px;align-items:center;justify-content:center;width:300px;">';
+  html += '<div id="m3SlotBar" style="display:flex;gap:6px;margin:10px auto;padding:10px;background:rgba(255,255,255,0.9);border-radius:10px;min-height:60px;align-items:center;justify-content:center;width:340px;">';
   for (var s = 0; s < MAX_SLOTS; s++) {
-    html += '<div class="m3-slot" style="width:38px;height:38px;border:2px dashed #ccc;border-radius:8px;display:flex;align-items:center;justify-content:center;"></div>';
+    html += '<div class="m3-slot" style="width:44px;height:44px;border:2px dashed #ccc;border-radius:8px;display:flex;align-items:center;justify-content:center;"></div>';
   }
   html += '</div>';
 
@@ -439,7 +441,7 @@ function _m3InitLevel(level) {
   for (var layer = 0; layer < config.layers; layer++) {
     var size = config.layerSizes[layer];
     var offsetX = (7 - size) * TILE_SIZE / 2;
-    var offsetY = layer * 16;
+    var offsetY = layer * 22;
     var created = 0;
     for (var r = 0; r < size; r++) {
       for (var c = 0; c < size; c++) {
