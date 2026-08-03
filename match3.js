@@ -1,4 +1,4 @@
-// match3.js v7 — 宠物消消乐
+// match3.js v8 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -372,49 +372,41 @@ function _m3InitLevel(level) {
 
   // 创建多层方块
   var qs = ensureMatch3State(_m3CurrentStudent);
-  var html = '<div class="m3-game-wrap" style="position:relative;">';
-  // Top bar
-  html += '<div class="m3-top-bar">';
-  html += '<div class="m3-top-left-group">';
-  html += '<button class="m3-btn-icon" id="m3PauseBtn">⏸</button>';
-  html += '<div class="m3-time-display" id="m3TimeDisplay">00:00</div>';
-  html += '<div class="m3-coin-display"><span>🪙</span><span id="m3CoinCount">' + (_m3CurrentStudent.coins || 0) + '</span></div>';
-  html += '<div class="m3-score-display"><span>🏆</span><span id="m3TotalScoreDisplay">' + (qs.match3TotalScore || 0) + '</span></div>';
-  html += '</div>';
-  html += '<div class="m3-level-title">第<span id="m3LevelNum">' + level + '</span>关</div>';
-  html += '<div class="m3-top-right-group">';
-  html += '<button class="m3-btn-icon" id="m3SoundBtn">🔊</button>';
-  html += '</div>';
-  html += '</div>';
-  // Game info bar
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0 10px;">';
-  html += '<span style="font-size:13px;">剩余: <span id="m3Remaining">' + tileTypes.length + '</span></span>';
-  html += '<span style="font-size:13px;">得分: <span id="m3Score">0</span></span>';
+  // 游戏区域高度：根据层数动态计算，让游戏区占满可用空间
+  var contentHeight = (config.layers - 1) * 22 + TILE_SIZE + 40;
+  var gameAreaHeight = Math.min(Math.max(contentHeight, 260), 480);
+
+  var html = '<div class="m3-game-wrap" style="position:relative;display:flex;flex-direction:column;height:' + (gameAreaHeight + 140) + 'px;">';
+
+  // 顶栏：精简为一行，只保留核心功能
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;margin:0 8px 6px 8px;">';
+  html += '<button class="m3-btn-icon" id="m3PauseBtn" style="width:30px;height:30px;font-size:13px;">⏸</button>';
+  html += '<div style="color:#fff;font-weight:700;font-size:15px;">第<span id="m3LevelNum">' + level + '</span>关</div>';
+  html += '<div style="color:#fff;font-weight:600;font-size:14px;background:rgba(255,255,255,0.2);padding:3px 8px;border-radius:6px;" id="m3TimeDisplay">00:00</div>';
+  html += '<div style="color:#ffe082;font-size:13px;font-weight:600;">💰<span id="m3Score">0</span></div>';
+  html += '<button class="m3-btn-icon" id="m3SoundBtn" style="width:30px;height:30px;font-size:13px;">🔊</button>';
   html += '</div>';
 
-  // 游戏区（根据关卡层数动态计算高度）
-  var gameAreaHeight = Math.max(200, (config.layers - 1) * 22 + TILE_SIZE + 20);
-  var gameAreaMaxHeight = Math.min(450, gameAreaHeight);
-  html += '<div id="m3GameArea" style="position:relative;width:360px;height:' + gameAreaMaxHeight + 'px;margin:0 auto;background:rgba(255,255,255,0.1);border-radius:12px;overflow:auto;"></div>';
+  // 游戏区：占主要空间，可滚动
+  html += '<div id="m3GameArea" style="position:relative;width:100%;flex:1;margin:0 auto;background:linear-gradient(180deg,#f8f6ff,#ede8ff);border-radius:10px;overflow:auto;min-height:200px;"></div>';
 
+  // 底部：槽位 + 道具 合为一行
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;gap:8px;margin-top:6px;">';
   // 槽位栏
-  html += '<div id="m3SlotBar" style="display:flex;gap:6px;margin:10px auto;padding:10px;background:rgba(255,255,255,0.9);border-radius:10px;min-height:60px;align-items:center;justify-content:center;width:340px;">';
+  html += '<div id="m3SlotBar" style="display:flex;gap:4px;align-items:center;justify-content:center;background:rgba(255,255,255,0.95);border-radius:10px;padding:6px 8px;min-height:50px;flex:1;">';
   for (var s = 0; s < MAX_SLOTS; s++) {
-    html += '<div class="m3-slot" style="width:44px;height:44px;border:2px dashed #ccc;border-radius:8px;display:flex;align-items:center;justify-content:center;"></div>';
+    html += '<div class="m3-slot" style="width:40px;height:40px;border:2px dashed #ccc;border-radius:7px;display:flex;align-items:center;justify-content:center;"></div>';
   }
   html += '</div>';
-
-  // 道具栏（与小猪快跑一致）
-  html += '<div id="m3ToolBar" style="display:flex;gap:10px;justify-content:center;margin-top:8px;padding:0 10px;">';
-  html += '<div class="m3-tool-btn" id="m3ShuffleTool"><span class="icon" id="m3ShuffleIcon">🔀</span><span class="text">洗牌</span><span class="count" id="m3ShuffleCount">1</span></div>';
-  html += '<div class="m3-tool-btn" id="m3UndoTool"><span class="icon" id="m3UndoIcon">↩️</span><span class="text">撤销</span><span class="count" id="m3UndoCount">1</span></div>';
+  // 道具按钮（紧凑）
+  html += '<div style="display:flex;flex-direction:column;gap:5px;">';
+  html += '<div class="m3-tool-btn" id="m3ShuffleTool" style="padding:4px 10px;min-width:58px;border-radius:10px;"><span class="icon" id="m3ShuffleIcon" style="font-size:18px;">🔀</span><span class="count" id="m3ShuffleCount" style="top:-6px;right:-6px;width:18px;height:18px;font-size:11px;">1</span></div>';
+  html += '<div class="m3-tool-btn" id="m3UndoTool" style="padding:4px 10px;min-width:58px;border-radius:10px;"><span class="icon" id="m3UndoIcon" style="font-size:18px;">↩️</span><span class="count" id="m3UndoCount" style="top:-6px;right:-6px;width:18px;height:18px;font-size:11px;">1</span></div>';
+  html += '</div>';
   html += '</div>';
 
-  // 控制按钮
-  html += '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">';
-  html += '<button onclick="startMatch3Level(' + level + ')" style="padding:6px 14px;font-size:13px;border:none;border-radius:8px;background:#fff;color:#667eea;cursor:pointer;font-weight:600;">🔄 重来</button>';
-  html += '<button onclick="renderMatch3Page()" style="padding:6px 14px;font-size:13px;border:none;border-radius:8px;background:#ff6b6b;color:#fff;cursor:pointer;font-weight:600;">← 返回</button>';
-  html += '</div>';
+  // 剩余提示（小字）
+  html += '<div style="text-align:center;font-size:11px;color:#aaa;margin-top:2px;">剩余: <span id="m3Remaining">' + tileTypes.length + '</span></div>';
 
   // 答题弹窗（道具用尽时获取道具）
   html += '<div class="m3-quiz-modal" id="m3QuizModal">';
@@ -429,6 +421,7 @@ function _m3InitLevel(level) {
   html += '<div class="m3-pause-mask" id="m3PauseMask">';
   html += '<div class="m3-pause-title">游戏暂停</div>';
   html += '<button class="m3-pause-btn" id="m3ResumeBtn">▶ 继续游戏</button>';
+  html += '<button class="m3-pause-btn secondary" onclick="startMatch3Level(' + level + ')" style="font-size:16px;padding:10px 30px;">🔄 重新开始</button>';
   html += '<button class="m3-pause-btn secondary" id="m3QuitBtn">🏠 返回关卡选择</button>';
   html += '</div>';
   html += '</div>'; // close m3-game-wrap
