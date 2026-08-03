@@ -10481,8 +10481,7 @@ window._escapedPetIds = new Set();
 (function() {
   'use strict';
 
-  // 记录已播报的班级 {classId: true}，每次登录每个班级只播报一次
-  var _announcedClassIds = {};
+  // 记录已播报的班级，使用localStorage持久化（每个账户每班级1小时冷却）
   var _announcementQueue = [];
 
   // 获取当前班级的排行榜前三名
@@ -10549,7 +10548,11 @@ window._escapedPetIds = new Set();
     if (_announcementQueue.length === 0) {
       var banner = document.getElementById('rankAnnouncementBanner');
       if (banner) banner.classList.remove('show');
-      _announcedClassIds[announceClassId] = true;
+      // 记录播报时间到localStorage，1小时内不再重复
+      try {
+        var storageKey = _getAnnounceStorageKey(announceClassId);
+        localStorage.setItem(storageKey, String(Date.now()));
+      } catch(e) {}
       return;
     }
     var text = _announcementQueue.shift();
@@ -10558,10 +10561,31 @@ window._escapedPetIds = new Set();
     });
   }
 
+  // 每个账户每个班级至少间隔1小时才滚动公告一次
+  var ANNOUNCE_COOLDOWN_MS = 60 * 60 * 1000; // 1小时
+
+  function _getAnnounceStorageKey(classId) {
+    var userId = 'anon';
+    try {
+      if (typeof currentUser !== 'undefined' && currentUser) {
+        userId = currentUser.id || currentUser.name || 'anon';
+      }
+    } catch(e) {}
+    return 'm3_announce_' + userId + '_' + classId;
+  }
+
   // 启动排行榜公告（指定班级）
   window.showRankAnnouncement = function(targetClassId) {
     var classId = targetClassId || currentClassId;
-    if (_announcedClassIds[classId]) return;  // 该班级本次登录已播报
+
+    // 检查localStorage中的上次播报时间，间隔不足1小时则跳过
+    try {
+      var storageKey = _getAnnounceStorageKey(classId);
+      var lastTime = parseInt(localStorage.getItem(storageKey)) || 0;
+      var now = Date.now();
+      if (now - lastTime < ANNOUNCE_COOLDOWN_MS) return;
+    } catch(e) {}
+
     if (!classesData || !classesData.length) return;
 
     _announcementQueue = [];
@@ -10597,14 +10621,16 @@ window._escapedPetIds = new Set();
     if (_announcementQueue.length > 0) {
       showNextAnnouncement(classId);
     } else {
-      // 没有数据也标记为已播报，避免重复触发
-      _announcedClassIds[classId] = true;
+      // 没有数据也记录时间戳，避免重复触发
+      try {
+        var storageKey = _getAnnounceStorageKey(classId);
+        localStorage.setItem(storageKey, String(Date.now()));
+      } catch(e) {}
     }
   };
 
   // 重置公告状态（用于测试）
   window.resetRankAnnouncement = function() {
-    _announcedClassIds = {};
     _announcementQueue = [];
     var banner = document.getElementById('rankAnnouncementBanner');
     if (banner) banner.classList.remove('show');

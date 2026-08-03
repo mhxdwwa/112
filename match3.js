@@ -1,4 +1,4 @@
-// match3.js v11 — 宠物消消乐
+// match3.js v12 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -15,7 +15,7 @@ var TILE_TYPES = [
   { name: '狐狸', path: CDN_BASE + '%E7%8B%90%E7%8B%B8.png' }
 ];
 var TILE_SIZE = 50;
-var MAX_SLOTS = 6;
+var MAX_SLOTS = 5;
 
 var _m3Tiles = [];
 var _m3Selected = [];
@@ -185,14 +185,14 @@ function _m3SoundFail() { _m3PlayTone(200, 0.5, 'sawtooth', 0.15); }
 
 // ===== 关卡配置（无限关卡）=====
 function _m3GetLevelConfig(level) {
-  var baseLayers = 6;
+  var baseLayers = 7;
   var extraLayers = Math.min(Math.floor((level - 1) / 2), 6);
   var totalLayers = baseLayers + extraLayers;
   var layerSizes = [];
   for (var i = 0; i < totalLayers; i++) {
     layerSizes.push(4 + (i % 2));
   }
-  var availableTypes = Math.min(5 + Math.floor((level - 1) / 12), 8);
+  var availableTypes = Math.min(4 + Math.floor((level - 1) / 8), 8);
   return { layers: totalLayers, layerSizes: layerSizes, typesToUse: TILE_TYPES.slice(0, availableTypes) };
 }
 
@@ -360,7 +360,7 @@ function _m3InitLevel(level) {
   config.layerSizes.forEach(function(size, layerIdx) {
     for (var row = 0; row < size; row++) {
       for (var col = 0; col < size; col++) {
-        if ((row + col + layerIdx) % 3 !== 0) actualPositions++;
+        if ((row + col + layerIdx) % 2 !== 0) actualPositions++;
       }
     }
   });
@@ -385,7 +385,7 @@ function _m3InitLevel(level) {
   // 创建多层方块 — 9:16 竖屏游戏框架
   var qs = ensureMatch3State(_m3CurrentStudent);
   var tools = qs.match3Tools || { shuffle: 1, undo: 1 };
-  var contentHeight = (config.layers - 1) * 22 + TILE_SIZE + 40;
+  var contentHeight = (config.layers - 1) * 26 + TILE_SIZE + 40;
 
   var html = '<div class="m3-game-frame">';
 
@@ -443,11 +443,11 @@ function _m3InitLevel(level) {
   for (var layer = 0; layer < config.layers; layer++) {
     var size = config.layerSizes[layer];
     var offsetX = (7 - size) * TILE_SIZE / 2;
-    var offsetY = layer * 22;
+    var offsetY = layer * 26;
     var created = 0;
     for (var r = 0; r < size; r++) {
       for (var c = 0; c < size; c++) {
-        if ((r + c + layer) % 3 === 0) continue;
+        if ((r + c + layer) % 2 === 0) continue;
         if (startIndex + created >= tileTypes.length) break;
         var type = tileTypes[startIndex + created];
         var tile = {
