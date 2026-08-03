@@ -1,4 +1,4 @@
-// match3.js v12 — 宠物消消乐
+// match3.js v13 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -46,7 +46,7 @@ var M3_BGM_URLS = [
 ];
 var _m3BgmAudio = null;
 var _m3BgmIndex = 0;
-var _m3BgmEnabled = true;
+var _m3BgmEnabled = false; // 初始静音，不加载音频
 
 function _m3InitBGM() {
   if (_m3BgmAudio) {
@@ -67,8 +67,9 @@ function _m3OnBGMEnded() {
   }, 15000);
 }
 function _m3StartBGM() {
+  if (!_m3BgmEnabled) return; // 初始静音状态，不加载音频
   if (!_m3BgmAudio) _m3InitBGM();
-  if (_m3BgmEnabled) _m3BgmAudio.play().catch(function() {});
+  _m3BgmAudio.play().catch(function() {});
 }
 function _m3StopBGM() {
   if (_m3BgmAudio) _m3BgmAudio.pause();
@@ -76,7 +77,8 @@ function _m3StopBGM() {
 function _m3ToggleBGM() {
   _m3BgmEnabled = !_m3BgmEnabled;
   if (_m3BgmEnabled) {
-    if (_m3BgmAudio) _m3BgmAudio.play().catch(function() {});
+    if (!_m3BgmAudio) _m3InitBGM();
+    _m3BgmAudio.play().catch(function() {});
   } else {
     if (_m3BgmAudio) _m3BgmAudio.pause();
   }
@@ -395,7 +397,7 @@ function _m3InitLevel(level) {
   html += '<div class="m3-level-label">第<span id="m3LevelNum">' + level + '</span>关</div>';
   html += '<div class="m3-time-display" id="m3TimeDisplay">00:00</div>';
   html += '<div class="m3-score-label">💰<span id="m3Score">0</span></div>';
-  html += '<button class="m3-btn-icon" id="m3SoundBtn" style="width:28px;height:28px;font-size:12px;">🔊</button>';
+  html += '<button class="m3-btn-icon" id="m3SoundBtn" style="width:28px;height:28px;font-size:12px;">🔇</button>';
   html += '</div>';
 
   // 游戏区：占主要空间，可滚动

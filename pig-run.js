@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v22 - 修复CSS全屏降级：不隐藏#quiz-page(游戏容器)，只隐藏其他页面
+// v31 - BGM初始静音，点击喇叭后才加载播放
 
 (function() {
   'use strict';
@@ -560,7 +560,7 @@
   ];
   var bgmAudio = null;
   var bgmIndex = 0;
-  var bgmEnabled = true;
+  var bgmEnabled = false; // 初始静音，不加载音频
 
   function initBGM() {
     if (bgmAudio) {
@@ -584,10 +584,9 @@
   }
 
   function startBGM() {
+    if (!bgmEnabled) return; // 初始静音状态，不加载音频
     if (!bgmAudio) initBGM();
-    if (bgmEnabled) {
-      bgmAudio.play().catch(function() {});
-    }
+    bgmAudio.play().catch(function() {});
   }
 
   function stopBGM() {
@@ -599,7 +598,8 @@
   function toggleBGM() {
     bgmEnabled = !bgmEnabled;
     if (bgmEnabled) {
-      if (bgmAudio) bgmAudio.play().catch(function() {});
+      if (!bgmAudio) initBGM();
+      bgmAudio.play().catch(function() {});
     } else {
       if (bgmAudio) bgmAudio.pause();
     }
@@ -791,7 +791,7 @@
     html += '<div class="pig-level-title" style="font-size:18px;">第<span id="pigLevelNum">' + level + '</span>关</div>';
     html += '<div style="display:flex;gap:4px;">';
     html += '<button class="pig-btn-icon" id="pigFullscreenBtn" style="width:32px;height:32px;border-radius:8px;font-size:14px;display:none;">⛶</button>';
-    html += '<button class="pig-btn-icon" id="pigSoundBtn" style="width:32px;height:32px;border-radius:8px;font-size:14px;">🔊</button>';
+    html += '<button class="pig-btn-icon" id="pigSoundBtn" style="width:32px;height:32px;border-radius:8px;font-size:14px;">🔇</button>';
     html += '</div>';
     html += '</div>';
     // Game container

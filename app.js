@@ -252,56 +252,14 @@ function createFirework(parent){
 }
 function generateStageCurve() { return [{stage:1,growthRequired:0,stageName:"神秘宠物蛋"},{stage:2,growthRequired:30,stageName:"可爱幼体"},{stage:3,growthRequired:90,stageName:"成长伙伴"},{stage:4,growthRequired:210,stageName:"成熟伙伴"},{stage:5,growthRequired:410,stageName:"完美精灵"},{stage:6,growthRequired:740,stageName:"传说神兽"},{stage:7,growthRequired:1200,stageName:"远古守护"},{stage:8,growthRequired:1800,stageName:"星辰之主"},{stage:9,growthRequired:2600,stageName:"万物之神"}]; }
 // 动态宠物配置：支持 images 目录下任意数字文件夹作为宠物
-// 基础配置保留原有55只作为默认/回退，但可通过动态加载扩展
-const PET_CONFIG_BASE = { "雪貂":{id:1,emoji:"🐕"},"六角恐龙":{id:2,emoji:"🐺"},"吉祥神兽":{id:3,emoji:"🦮"},"海马":{id:4,emoji:"🐶"},"荷兰兔":{id:5,emoji:"🐩"},"胖仓鼠":{id:6,emoji:"🐕‍🦺"},"小老鼠":{id:7,emoji:"🐕"},"七彩貂":{id:8,emoji:"🦮"},"比尔鸭":{id:9,emoji:"🐶"},"大白兔":{id:10,emoji:"🐕"},"北美浣熊":{id:11,emoji:"🐱"},"萌萌羊":{id:12,emoji:"🐈"},"泰迪":{id:13,emoji:"🐈"},"花斑虎":{id:14,emoji:"🐱"},"送财龙":{id:15,emoji:"🐈"},"青云龙":{id:16,emoji:"🐠"},"苍狮":{id:17,emoji:"🐟"},"七彩鸟":{id:18,emoji:"🦜"},"考拉":{id:19,emoji:"🐹"},"萌蝙蝠":{id:20,emoji:"🐰"},"淡火狐":{id:21,emoji:"🐢"},"长毛汪":{id:22,emoji:"🦔"},"呆呆熊":{id:23,emoji:"🐭"},"熊猫大侠":{id:24,emoji:"🐿️"},"荷兰猪":{id:25,emoji:"🐹"},"白白东":{id:26,emoji:"🦄"},"大神龟":{id:27,emoji:"🔥"},"不萌鼠":{id:28,emoji:"🐲"},"柯基犬":{id:29,emoji:"🐧"},"咩咩咩":{id:30,emoji:"🦉"},"白眉汪":{id:31,emoji:"🦅"},"哮天犬":{id:32,emoji:"🦚"},"芦丁鸡":{id:33,emoji:"🕊️"},"大萌星":{id:34,emoji:"🐤"},"小白":{id:35,emoji:"🐬"},"多萌肉":{id:36,emoji:"🐙"},"踏天马":{id:37,emoji:"🦈"},"刺猬":{id:38,emoji:"🐋"},"黑白犬":{id:39,emoji:"🦑"},"羊驼":{id:40,emoji:"🪼"},"黄牛":{id:41,emoji:"🦋"},"美杜莎":{id:42,emoji:"🐞"},"六耳猕狗":{id:43,emoji:"🐝"},"猫猫虎":{id:44,emoji:"🐌"},"黑白猪":{id:45,emoji:"🕷️"},"非洲象":{id:46,emoji:"🐜"},"幸运猫":{id:47,emoji:"🐻"},"孔雀":{id:48,emoji:"🐼"},"蜥蜴":{id:49,emoji:"🐨"},"恐龙":{id:50,emoji:"🦁"},"梅花鹿":{id:51,emoji:"🐯"},"火凤凰":{id:52,emoji:"🐘"},"寄居蟹":{id:53,emoji:"🦒"},"九尾天狐":{id:54,emoji:"🦓"},"果冻蝾螈":{id:55,emoji:"🦛"} };
+// 宠物配置：共84只（如需新增，手动添加并上传对应图片即可）
+const PET_CONFIG_BASE = { "雪貂":{id:1,emoji:"🐕"},"六角恐龙":{id:2,emoji:"🐺"},"吉祥神兽":{id:3,emoji:"🦮"},"海马":{id:4,emoji:"🐶"},"荷兰兔":{id:5,emoji:"🐩"},"胖仓鼠":{id:6,emoji:"🐕‍🦺"},"小老鼠":{id:7,emoji:"🐕"},"七彩貂":{id:8,emoji:"🦮"},"比尔鸭":{id:9,emoji:"🐶"},"大白兔":{id:10,emoji:"🐕"},"北美浣熊":{id:11,emoji:"🐱"},"萌萌羊":{id:12,emoji:"🐈"},"泰迪":{id:13,emoji:"🐈"},"花斑虎":{id:14,emoji:"🐱"},"送财龙":{id:15,emoji:"🐈"},"青云龙":{id:16,emoji:"🐠"},"苍狮":{id:17,emoji:"🐟"},"七彩鸟":{id:18,emoji:"🦜"},"考拉":{id:19,emoji:"🐹"},"萌蝙蝠":{id:20,emoji:"🐰"},"淡火狐":{id:21,emoji:"🐢"},"长毛汪":{id:22,emoji:"🦔"},"呆呆熊":{id:23,emoji:"🐭"},"熊猫大侠":{id:24,emoji:"🐿️"},"荷兰猪":{id:25,emoji:"🐹"},"白白东":{id:26,emoji:"🦄"},"大神龟":{id:27,emoji:"🔥"},"不萌鼠":{id:28,emoji:"🐲"},"柯基犬":{id:29,emoji:"🐧"},"咩咩咩":{id:30,emoji:"🦉"},"白眉汪":{id:31,emoji:"🦅"},"哮天犬":{id:32,emoji:"🦚"},"芦丁鸡":{id:33,emoji:"🕊️"},"大萌星":{id:34,emoji:"🐤"},"小白":{id:35,emoji:"🐬"},"多萌肉":{id:36,emoji:"🐙"},"踏天马":{id:37,emoji:"🦈"},"刺猬":{id:38,emoji:"🐋"},"黑白犬":{id:39,emoji:"🦑"},"羊驼":{id:40,emoji:"🪼"},"黄牛":{id:41,emoji:"🦋"},"美杜莎":{id:42,emoji:"🐞"},"六耳猕狗":{id:43,emoji:"🐝"},"猫猫虎":{id:44,emoji:"🐌"},"黑白猪":{id:45,emoji:"🕷️"},"非洲象":{id:46,emoji:"🐜"},"幸运猫":{id:47,emoji:"🐻"},"孔雀":{id:48,emoji:"🐼"},"蜥蜴":{id:49,emoji:"🐨"},"恐龙":{id:50,emoji:"🦁"},"梅花鹿":{id:51,emoji:"🐯"},"火凤凰":{id:52,emoji:"🐘"},"寄居蟹":{id:53,emoji:"🦒"},"九尾天狐":{id:54,emoji:"🦓"},"果冻蝾螈":{id:55,emoji:"🦛"},"宠物56":{id:56,emoji:"🐾"},"宠物57":{id:57,emoji:"🐾"},"宠物58":{id:58,emoji:"🐾"},"宠物59":{id:59,emoji:"🐾"},"宠物60":{id:60,emoji:"🐾"},"宠物61":{id:61,emoji:"🐾"},"宠物62":{id:62,emoji:"🐾"},"宠物63":{id:63,emoji:"🐾"},"宠物64":{id:64,emoji:"🐾"},"宠物65":{id:65,emoji:"🐾"},"宠物66":{id:66,emoji:"🐾"},"宠物67":{id:67,emoji:"🐾"},"宠物68":{id:68,emoji:"🐾"},"宠物69":{id:69,emoji:"🐾"},"宠物70":{id:70,emoji:"🐾"},"宠物71":{id:71,emoji:"🐾"},"宠物72":{id:72,emoji:"🐾"},"宠物73":{id:73,emoji:"🐾"},"宠物74":{id:74,emoji:"🐾"},"宠物75":{id:75,emoji:"🐾"},"宠物76":{id:76,emoji:"🐾"},"宠物77":{id:77,emoji:"🐾"},"宠物78":{id:78,emoji:"🐾"},"宠物79":{id:79,emoji:"🐾"},"宠物80":{id:80,emoji:"🐾"},"宠物81":{id:81,emoji:"🐾"},"宠物82":{id:82,emoji:"🐾"},"宠物83":{id:83,emoji:"🐾"},"宠物84":{id:84,emoji:"🐾"} };
 const PET_CONFIG = {};
 Object.keys(PET_CONFIG_BASE).forEach(name=>{ PET_CONFIG[name] = {...PET_CONFIG_BASE[name], stages: generateStageCurve(), adoptCoins:0}; });
 
-// ========== 全自动新宠物发现机制 ==========
-// 无需手动配置！系统会自动尝试加载 images/数字/1.webp
-// 只要文件夹存在，就会自动以 "宠物+数字" 命名并注册，数量不限！
-function autoDiscoverPets() {
-  let startId = 56; // 从 56 开始探测（1-55 已内置）
-  let consecutiveFailures = 0;
-  const maxFailures = 3; // 连续 3 个找不到图片就停止探测
-  const maxCheck = 100; // 绝对上限（实际只需到 58 左右）
-
-  function checkNext(id) {
-    if (id > maxCheck || consecutiveFailures >= maxFailures) {
-      const newCount = Object.keys(PET_CONFIG).length - 55;
-      if (newCount > 0) console.log(`[宠物系统] 自动探测完成，成功发现并注册了 ${newCount} 只新宠物！`);
-      return;
-    }
-
-    const img = new Image();
-    img.onload = function() {
-      // 成功加载！自动注册该数字宠物
-      const petName = `宠物${id}`;
-      PET_CONFIG[petName] = {
-        id: id,
-        emoji: '🐾',
-        stages: generateStageCurve(),
-        adoptCoins: 0
-      };
-      console.log(`[宠物系统] 自动发现新宠物: ${petName} (ID: ${id})`);
-      consecutiveFailures = 0; // 找到后重置失败计数
-      checkNext(id + 1); // 继续探测下一个
-    };
-    img.onerror = function() {
-      // 找不到图片，失败计数+1，继续探测下一个
-      consecutiveFailures++;
-      checkNext(id + 1);
-    };
-    // 尝试加载该宠物的 1 级图片
-    img.src = _img(`${id}/1.webp`);
-  }
-
-  // 启动自动探测
-  checkNext(startId);
-}
-
-// 页面加载时立即开始自动探测
-autoDiscoverPets();
+// ========== 宠物配置已固定为84只 ==========
+// 如需新增宠物，在上方 PET_CONFIG_BASE 中添加对应条目，并上传 images/数字/1.webp 图片
+console.log('[宠物系统] 已加载 ' + Object.keys(PET_CONFIG).length + ' 只宠物配置（固定）');
 /* ========== U盘/本地文件存储系统（变量提前声明） ========== */
 let _dirHandle = null;
 let _dataDirHandle = null;
