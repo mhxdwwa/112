@@ -1,4 +1,4 @@
-// match3.js v3 — 宠物消消乐
+// match3.js v4 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -31,6 +31,93 @@ var _m3GameActive = false;
 
 // 道具会话追踪（跨关卡累计，每局游戏会话限制）
 var _m3SessionToolsUsed = { shuffle: 0, undo: 0 };
+
+// 计时器与暂停
+var _m3Timer = null;
+var _m3TimeSeconds = 0;
+var _m3Paused = false;
+
+// ===== 背景音乐（BGM）=====
+var M3_BGM_URLS = [
+  'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/1.mp3',
+  'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/2.mp3',
+  'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/3.mp3',
+  'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/4.mp3'
+];
+var _m3BgmAudio = null;
+var _m3BgmIndex = 0;
+var _m3BgmEnabled = true;
+
+function _m3InitBGM() {
+  if (_m3BgmAudio) {
+    _m3BgmAudio.pause();
+    _m3BgmAudio.removeEventListener('ended', _m3OnBGMEnded);
+  }
+  _m3BgmAudio = new Audio(M3_BGM_URLS[_m3BgmIndex]);
+  _m3BgmAudio.volume = 0.4;
+  _m3BgmAudio.addEventListener('ended', _m3OnBGMEnded);
+}
+function _m3OnBGMEnded() {
+  _m3BgmIndex = (_m3BgmIndex + 1) % M3_BGM_URLS.length;
+  setTimeout(function() {
+    if (_m3BgmEnabled && _m3BgmAudio) {
+      _m3BgmAudio.src = M3_BGM_URLS[_m3BgmIndex];
+      _m3BgmAudio.play().catch(function() {});
+    }
+  }, 15000);
+}
+function _m3StartBGM() {
+  if (!_m3BgmAudio) _m3InitBGM();
+  if (_m3BgmEnabled) _m3BgmAudio.play().catch(function() {});
+}
+function _m3StopBGM() {
+  if (_m3BgmAudio) _m3BgmAudio.pause();
+}
+function _m3ToggleBGM() {
+  _m3BgmEnabled = !_m3BgmEnabled;
+  if (_m3BgmEnabled) {
+    if (_m3BgmAudio) _m3BgmAudio.play().catch(function() {});
+  } else {
+    if (_m3BgmAudio) _m3BgmAudio.pause();
+  }
+  return _m3BgmEnabled;
+}
+window._stopMatch3BGM = _m3StopBGM;
+
+// ===== 计时器 =====
+function _m3FormatTime(s) {
+  var m = Math.floor(s / 60).toString().padStart(2, '0');
+  var sec = (s % 60).toString().padStart(2, '0');
+  return m + ':' + sec;
+}
+function _m3StartTimer() {
+  if (_m3Timer) clearInterval(_m3Timer);
+  _m3TimeSeconds = 0;
+  var timeEl = document.getElementById('m3TimeDisplay');
+  if (timeEl) timeEl.textContent = '00:00';
+  _m3Timer = setInterval(function() {
+    if (!_m3Paused) {
+      _m3TimeSeconds++;
+      var timeEl = document.getElementById('m3TimeDisplay');
+      if (timeEl) timeEl.textContent = _m3FormatTime(_m3TimeSeconds);
+    }
+  }, 1000);
+}
+function _m3StopTimer() {
+  if (_m3Timer) { clearInterval(_m3Timer); _m3Timer = null; }
+}
+function _m3TogglePause() {
+  _m3Paused = !_m3Paused;
+  var pauseBtn = document.getElementById('m3PauseBtn');
+  var pauseMask = document.getElementById('m3PauseMask');
+  if (_m3Paused) {
+    if (pauseBtn) pauseBtn.textContent = '▶';
+    if (pauseMask) pauseMask.classList.add('show');
+  } else {
+    if (pauseBtn) pauseBtn.textContent = '⏸';
+    if (pauseMask) pauseMask.classList.remove('show');
+  }
+}
 
 // ===== 获取当前学生 =====
 function getCurrentStudent() {
@@ -270,12 +357,26 @@ function _m3InitLevel(level) {
   tileTypes.sort(function() { return Math.random() - 0.5; });
 
   // 创建多层方块
-  var html = '<div style="text-align:center;padding:8px;">';
+  var qs = ensureMatch3State(_m3CurrentStudent);
+  var html = '<div class="m3-game-wrap" style="position:relative;">';
+  // Top bar
+  html += '<div class="m3-top-bar">';
+  html += '<div class="m3-top-left-group">';
+  html += '<button class="m3-btn-icon" id="m3PauseBtn">⏸</button>';
+  html += '<div class="m3-time-display" id="m3TimeDisplay">00:00</div>';
+  html += '<div class="m3-coin-display"><span>🪙</span><span id="m3CoinCount">' + (_m3CurrentStudent.coins || 0) + '</span></div>';
+  html += '<div class="m3-score-display"><span>🏆</span><span id="m3TotalScoreDisplay">' + (qs.match3TotalScore || 0) + '</span></div>';
+  html += '</div>';
+  html += '<div class="m3-level-title">第<span id="m3LevelNum">' + level + '</span>关</div>';
+  html += '<div class="m3-top-right-group">';
+  html += '<button class="m3-btn-icon" id="m3SoundBtn">🔊</button>';
+  html += '</div>';
+  html += '</div>';
+  // Game info bar
   html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0 10px;">';
-  html += '<span style="font-size:14px;font-weight:700;">第 ' + level + ' 关</span>';
   html += '<span style="font-size:13px;">剩余: <span id="m3Remaining">' + tileTypes.length + '</span></span>';
   html += '<span style="font-size:13px;">得分: <span id="m3Score">0</span></span>';
-  html += '</div></div>';
+  html += '</div>';
 
   // 游戏区
   html += '<div id="m3GameArea" style="position:relative;width:360px;height:420px;margin:0 auto;background:rgba(255,255,255,0.1);border-radius:12px;overflow:hidden;"></div>';
@@ -308,6 +409,13 @@ function _m3InitLevel(level) {
   html += '<div class="m3-quiz-tip" id="m3QuizTip"></div>';
   html += '<button class="m3-quiz-close-btn" id="m3QuizCloseBtn" style="display:none;">关闭</button>';
   html += '</div></div>';
+  // Pause mask overlay
+  html += '<div class="m3-pause-mask" id="m3PauseMask">';
+  html += '<div class="m3-pause-title">游戏暂停</div>';
+  html += '<button class="m3-pause-btn" id="m3ResumeBtn">▶ 继续游戏</button>';
+  html += '<button class="m3-pause-btn secondary" id="m3QuitBtn">🏠 返回关卡选择</button>';
+  html += '</div>';
+  html += '</div>'; // close m3-game-wrap
 
   _m3Container.innerHTML = html;
 
@@ -344,6 +452,9 @@ function _m3InitLevel(level) {
   _m3UpdateBlocked();
   _m3InitToolSystem();
   _m3UpdateToolUI();
+  _m3InitTopBarEvents();
+  _m3StartTimer();
+  _m3StartBGM();
 }
 
 function _m3RenderTiles(gameArea) {
@@ -480,6 +591,25 @@ function _m3UpdateDisplay() {
 }
 
 // ===== 道具系统（与小猪快跑一致）=====
+function _m3InitTopBarEvents() {
+  var pauseBtn = document.getElementById('m3PauseBtn');
+  var soundBtn = document.getElementById('m3SoundBtn');
+  var resumeBtn = document.getElementById('m3ResumeBtn');
+  var quitBtn = document.getElementById('m3QuitBtn');
+  if (pauseBtn) pauseBtn.addEventListener('click', _m3TogglePause);
+  if (soundBtn) soundBtn.addEventListener('click', function() {
+    var bgmOn = _m3ToggleBGM();
+    soundBtn.textContent = bgmOn ? '🔊' : '🔇';
+  });
+  if (resumeBtn) resumeBtn.addEventListener('click', _m3TogglePause);
+  if (quitBtn) quitBtn.addEventListener('click', function() {
+    _m3StopTimer();
+    _m3StopBGM();
+    _m3Paused = false;
+    renderMatch3Page();
+  });
+}
+
 function _m3InitToolSystem() {
   var shuffleBtn = document.getElementById('m3ShuffleTool');
   var undoBtn = document.getElementById('m3UndoTool');
@@ -666,11 +796,13 @@ function _m3SelectAnswer(index) {
 
 // ===== 通关/失败结果 =====
 function _m3ShowResult(success) {
+  _m3StopTimer();
+  _m3StopBGM();
   if (!_m3CurrentStudent) return;
   var qs = ensureMatch3State(_m3CurrentStudent);
   var levelKey = String(_m3CurrentLevel);
   var prev = qs.match3Levels[levelKey] || null;
-  var elapsed = Math.round((Date.now() - _m3StartTime) / 1000);
+  var elapsed = _m3TimeSeconds;
 
   if (success) {
     var timeBonus = Math.max(0, 120 - elapsed);
@@ -741,10 +873,10 @@ function _m3ShowResult(success) {
   }
 }
 
-// 注入道具和弹窗样式
+// 注入道具、弹窗、顶栏、暂停遮罩样式
 (function() {
   var style = document.createElement('style');
-  style.textContent = '.m3-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;transition:transform 0.1s;min-width:72px;box-shadow:0 4px 0 #e0a000;}.m3-tool-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #e0a000;}.m3-tool-btn .icon{font-size:24px;line-height:1;}.m3-tool-btn .text{font-size:13px;font-weight:900;color:#8b5a2b;}.m3-tool-btn .count{position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;}.m3-tool-btn.disabled{opacity:0.6;background:#d0d0d0;border-color:#999;box-shadow:0 4px 0 #777;cursor:not-allowed;}.m3-quiz-modal{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;padding:20px;}.m3-quiz-modal.show{opacity:1;pointer-events:all;}.m3-quiz-content{background:#fff;padding:24px;border-radius:20px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,0.3);}.m3-quiz-chapter{font-size:13px;color:#888;margin-bottom:8px;}.m3-quiz-question{font-size:17px;font-weight:bold;color:#333;line-height:1.6;margin-bottom:16px;}.m3-quiz-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}.m3-quiz-option{padding:12px 16px;border:2px solid #e8e8e8;border-radius:12px;cursor:pointer;font-size:15px;color:#333;transition:all 0.2s;}.m3-quiz-option:hover{border-color:#52c41a;background:#f6ffed;}.m3-quiz-option.correct{border-color:#52c41a;background:#f6ffed;color:#389e0d;}.m3-quiz-option.wrong{border-color:#ff4757;background:#fff1f0;color:#cf1322;}.m3-quiz-option.disabled{pointer-events:none;}.m3-quiz-tip{text-align:center;font-size:14px;color:#666;margin-bottom:12px;min-height:20px;}.m3-quiz-close-btn{width:100%;background:#52c41a;color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #389e0d;}';
+  style.textContent = '.m3-top-bar{position:relative;width:100%;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:4px;background:rgba(102,126,234,0.15);border-radius:12px;}.m3-top-left-group{display:flex;align-items:center;gap:4px;}.m3-top-right-group{display:flex;gap:4px;}.m3-btn-icon{width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.95);border:2px solid #667eea;font-size:14px;cursor:pointer;box-shadow:0 2px 0 #4a5dbd;display:flex;align-items:center;justify-content:center;flex-shrink:0;}.m3-btn-icon:active{transform:translateY(2px);box-shadow:0 1px 0 #4a5dbd;}.m3-time-display{background:rgba(255,255,255,0.95);padding:4px 8px;border-radius:8px;font-weight:bold;color:#4a3d8c;font-size:14px;border:2px solid #667eea;box-shadow:0 2px 0 #4a5dbd;min-width:50px;text-align:center;}.m3-coin-display{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.95);padding:4px 10px;border-radius:12px;font-weight:bold;color:#d4760a;font-size:14px;border:2px solid #667eea;box-shadow:0 2px 0 #4a5dbd;}.m3-score-display{display:flex;align-items:center;gap:3px;background:rgba(255,255,255,0.95);padding:4px 8px;border-radius:8px;font-weight:bold;color:#b8860b;font-size:13px;border:2px solid #667eea;box-shadow:0 2px 0 #4a5dbd;}.m3-level-title{font-size:18px;font-weight:900;color:#4a3d8c;}.m3-pause-mask{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:150;opacity:0;pointer-events:none;transition:opacity 0.3s ease;}.m3-pause-mask.show{opacity:1;pointer-events:all;}.m3-pause-title{font-size:36px;font-weight:900;color:#fff;margin-bottom:30px;letter-spacing:4px;}.m3-pause-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:14px 40px;border-radius:30px;font-size:20px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #4a3d8c;margin-bottom:16px;transition:transform 0.1s;}.m3-pause-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #4a3d8c;}.m3-pause-btn.secondary{background:#fff;color:#333;box-shadow:0 4px 0 #ccc;}.m3-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;transition:transform 0.1s;min-width:72px;box-shadow:0 4px 0 #e0a000;}.m3-tool-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #e0a000;}.m3-tool-btn .icon{font-size:24px;line-height:1;}.m3-tool-btn .text{font-size:13px;font-weight:900;color:#8b5a2b;}.m3-tool-btn .count{position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;}.m3-tool-btn.disabled{opacity:0.6;background:#d0d0d0;border-color:#999;box-shadow:0 4px 0 #777;cursor:not-allowed;}.m3-quiz-modal{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;padding:20px;}.m3-quiz-modal.show{opacity:1;pointer-events:all;}.m3-quiz-content{background:#fff;padding:24px;border-radius:20px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,0.3);}.m3-quiz-chapter{font-size:13px;color:#888;margin-bottom:8px;}.m3-quiz-question{font-size:17px;font-weight:bold;color:#333;line-height:1.6;margin-bottom:16px;}.m3-quiz-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}.m3-quiz-option{padding:12px 16px;border:2px solid #e8e8e8;border-radius:12px;cursor:pointer;font-size:15px;color:#333;transition:all 0.2s;}.m3-quiz-option:hover{border-color:#667eea;background:#f0f2ff;}.m3-quiz-option.correct{border-color:#52c41a;background:#f6ffed;color:#389e0d;}.m3-quiz-option.wrong{border-color:#ff4757;background:#fff1f0;color:#cf1322;}.m3-quiz-option.disabled{pointer-events:none;}.m3-quiz-tip{text-align:center;font-size:14px;color:#666;margin-bottom:12px;min-height:20px;}.m3-quiz-close-btn{width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #4a3d8c;}';
   document.head.appendChild(style);
 })();
 

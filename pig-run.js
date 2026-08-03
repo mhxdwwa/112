@@ -6,6 +6,8 @@
 
   // === 取金阁标签切换 ===
   function switchQuizTab(tabName) {
+    // 切换标签时停止消消乐背景音乐
+    if (typeof window._stopMatch3BGM === 'function') window._stopMatch3BGM();
     document.querySelectorAll('.quiz-tab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.quiz-tab-content').forEach(function(c) { c.classList.remove('active'); });
     var tabs = document.querySelectorAll('.quiz-tab');
