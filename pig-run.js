@@ -518,6 +518,7 @@
     if (customQuestionBank && customQuestionBank.length > 0) return customQuestionBank;
     return questionBank;
   }
+  window._getActiveQuestionBank = getActiveQuestionBank;
 
   // 获取当前教师ID
   function getCurrentTeacherId() {

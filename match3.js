@@ -1,4 +1,4 @@
-// match3.js v2 — 宠物消消乐
+// match3.js v3 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -29,6 +29,9 @@ var _m3Container = null;
 var _m3CurrentStudent = null;
 var _m3GameActive = false;
 
+// 道具会话追踪（跨关卡累计，每局游戏会话限制）
+var _m3SessionToolsUsed = { shuffle: 0, undo: 0 };
+
 // ===== 获取当前学生 =====
 function getCurrentStudent() {
   var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
@@ -54,6 +57,7 @@ function ensureMatch3State(student) {
   if (!student.quizState) student.quizState = {};
   if (!student.quizState.match3Levels) student.quizState.match3Levels = {};
   if (!student.quizState.match3TotalScore) student.quizState.match3TotalScore = 0;
+  if (!student.quizState.match3Tools) student.quizState.match3Tools = { shuffle: 1, undo: 1 };
   return student.quizState;
 }
 
@@ -92,7 +96,7 @@ function _m3SoundMatch() { [523,659,784].forEach(function(f,i){ setTimeout(funct
 function _m3SoundWin() { [523,659,784,1047].forEach(function(f,i){ setTimeout(function(){_m3PlayTone(f,0.4,'sine',0.2);},i*100); }); }
 function _m3SoundFail() { _m3PlayTone(200, 0.5, 'sawtooth', 0.15); }
 
-// ===== 关卡配置 =====
+// ===== 关卡配置（无限关卡）=====
 function _m3GetLevelConfig(level) {
   var baseLayers = 6;
   var extraLayers = Math.min(Math.floor((level - 1) / 2), 6);
@@ -101,7 +105,7 @@ function _m3GetLevelConfig(level) {
   for (var i = 0; i < totalLayers; i++) {
     layerSizes.push(4 + (i % 2));
   }
-  var availableTypes = Math.min(5 + Math.floor((level - 1) / 12), 7);
+  var availableTypes = Math.min(5 + Math.floor((level - 1) / 12), 8);
   return { layers: totalLayers, layerSizes: layerSizes, typesToUse: TILE_TYPES.slice(0, availableTypes) };
 }
 
@@ -113,7 +117,6 @@ function renderMatch3Page() {
   var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
 
   if (!isStudentView) {
-    // 教师视图
     if (window._teacherPlayingAsStudent && window._match3ModalShown) {
       var student = getCurrentStudent();
       if (student) {
@@ -149,15 +152,18 @@ function renderMatch3LevelSelect(container, student) {
   var levels = qs.match3Levels || {};
   var totalScore = qs.match3TotalScore || 0;
 
-  // 计算已通关数和最高关
+  // 计算已通关数和最高通关关卡
   var clearedCount = 0;
-  var maxLevel = 0;
+  var maxClearedLevel = 0;
   Object.keys(levels).forEach(function(k) {
     if (levels[k] && levels[k].cleared) {
       clearedCount++;
-      if (parseInt(k) > maxLevel) maxLevel = parseInt(k);
+      if (parseInt(k) > maxClearedLevel) maxClearedLevel = parseInt(k);
     }
   });
+
+  // 下一关 = maxClearedLevel + 1（第一关始终可玩）
+  var nextLevel = maxClearedLevel + 1;
 
   var html = '<div style="text-align:center;padding:15px;">';
   html += '<div style="font-size:36px;">🧩</div>';
@@ -165,22 +171,40 @@ function renderMatch3LevelSelect(container, student) {
   html += '<div style="font-size:13px;color:#888;">已通关 ' + clearedCount + ' 关 · 总分 ' + totalScore + '</div>';
   html += '</div>';
 
-  // 关卡网格
+  // 关卡网格（无限关卡，显示到 maxClearedLevel + 10）
+  var showLevels = Math.max(nextLevel + 9, 20);
   html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px;max-height:400px;overflow-y:auto;">';
-  var showLevels = Math.max(maxLevel + 5, 20);
   for (var i = 1; i <= showLevels; i++) {
     var lv = levels[String(i)];
     var cleared = lv && lv.cleared;
     var score = lv ? (lv.bestScore || 0) : 0;
-    var bg = cleared ? 'linear-gradient(135deg,#52c41a,#389e0d)' : 'linear-gradient(135deg,#fff5f0,#ffe8e0)';
-    var color = cleared ? '#fff' : '#886';
-    var border = cleared ? '2px solid #389e0d' : '2px solid #f0d0c8';
-    html += '<div onclick="startMatch3Level(' + i + ')" style="background:' + bg + ';border:' + border + ';border-radius:10px;padding:8px 4px;text-align:center;cursor:pointer;transition:all 0.2s;">';
-    html += '<div style="font-size:14px;font-weight:700;color:' + color + ';">第' + i + '关</div>';
+    var unlocked = (i === 1) || (i <= nextLevel); // 第一关始终解锁，其他需前一关通关
+    var isNext = (i === nextLevel);
+
     if (cleared) {
+      // 已通关 - 绿色
+      html += '<div onclick="startMatch3Level(' + i + ')" style="background:linear-gradient(135deg,#52c41a,#389e0d);border:2px solid #389e0d;border-radius:10px;padding:8px 4px;text-align:center;cursor:pointer;transition:all 0.2s;">';
+      html += '<div style="font-size:14px;font-weight:700;color:#fff;">第' + i + '关</div>';
       html += '<div style="font-size:10px;color:#fff;margin-top:2px;">' + score + '分</div>';
+      html += '</div>';
+    } else if (unlocked && isNext) {
+      // 当前可玩关卡 - 高亮橙色
+      html += '<div onclick="startMatch3Level(' + i + ')" style="background:linear-gradient(135deg,#ff9800,#f57c00);border:2px solid #e65100;border-radius:10px;padding:8px 4px;text-align:center;cursor:pointer;transition:all 0.2s;box-shadow:0 0 8px rgba(255,152,0,0.5);">';
+      html += '<div style="font-size:14px;font-weight:700;color:#fff;">第' + i + '关</div>';
+      html += '<div style="font-size:10px;color:#ffe0b2;margin-top:2px;">挑战</div>';
+      html += '</div>';
+    } else if (unlocked) {
+      // 已解锁但未通关（重试）
+      html += '<div onclick="startMatch3Level(' + i + ')" style="background:linear-gradient(135deg,#fff5f0,#ffe8e0);border:2px solid #f0d0c8;border-radius:10px;padding:8px 4px;text-align:center;cursor:pointer;transition:all 0.2s;">';
+      html += '<div style="font-size:14px;font-weight:700;color:#886;">第' + i + '关</div>';
+      html += '</div>';
+    } else {
+      // 未解锁 - 锁定状态
+      html += '<div style="background:linear-gradient(135deg,#e0e0e0,#bdbdbd);border:2px solid #9e9e9e;border-radius:10px;padding:8px 4px;text-align:center;cursor:not-allowed;opacity:0.6;">';
+      html += '<div style="font-size:14px;font-weight:700;color:#757575;">🔒</div>';
+      html += '<div style="font-size:10px;color:#999;margin-top:2px;">第' + i + '关</div>';
+      html += '</div>';
     }
-    html += '</div>';
   }
   html += '</div>';
 
@@ -189,11 +213,24 @@ function renderMatch3LevelSelect(container, student) {
 
 // ===== 开始关卡 =====
 window.startMatch3Level = function(level) {
+  // 检查关卡是否解锁
+  if (!_m3CurrentStudent) return;
+  var qs = ensureMatch3State(_m3CurrentStudent);
+  var levels = qs.match3Levels || {};
+  var maxClearedLevel = 0;
+  Object.keys(levels).forEach(function(k) {
+    if (levels[k] && levels[k].cleared && parseInt(k) > maxClearedLevel) maxClearedLevel = parseInt(k);
+  });
+  var nextLevel = maxClearedLevel + 1;
+  if (level > nextLevel) return; // 关卡未解锁
+
   _m3CurrentLevel = level;
   _m3Score = 0;
   _m3BlocksCleared = 0;
   _m3StartTime = Date.now();
   _m3GameActive = true;
+  // 重置会话道具使用计数（仅在新的一局开始时）
+  _m3SessionToolsUsed = { shuffle: 0, undo: 0 };
   _m3InitLevel(level);
 };
 
@@ -250,13 +287,27 @@ function _m3InitLevel(level) {
   }
   html += '</div>';
 
+  // 道具栏（与小猪快跑一致）
+  html += '<div id="m3ToolBar" style="display:flex;gap:10px;justify-content:center;margin-top:8px;padding:0 10px;">';
+  html += '<div class="m3-tool-btn" id="m3ShuffleTool"><span class="icon" id="m3ShuffleIcon">🔀</span><span class="text">洗牌</span><span class="count" id="m3ShuffleCount">1</span></div>';
+  html += '<div class="m3-tool-btn" id="m3UndoTool"><span class="icon" id="m3UndoIcon">↩️</span><span class="text">撤销</span><span class="count" id="m3UndoCount">1</span></div>';
+  html += '</div>';
+
   // 控制按钮
   html += '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">';
-  html += '<button onclick="m3Shuffle()" style="padding:6px 14px;font-size:13px;border:none;border-radius:8px;background:#fff;color:#667eea;cursor:pointer;font-weight:600;">🔀 洗牌</button>';
-  html += '<button onclick="m3Undo()" style="padding:6px 14px;font-size:13px;border:none;border-radius:8px;background:#fff;color:#667eea;cursor:pointer;font-weight:600;">↩️ 撤销</button>';
   html += '<button onclick="startMatch3Level(' + level + ')" style="padding:6px 14px;font-size:13px;border:none;border-radius:8px;background:#fff;color:#667eea;cursor:pointer;font-weight:600;">🔄 重来</button>';
   html += '<button onclick="renderMatch3Page()" style="padding:6px 14px;font-size:13px;border:none;border-radius:8px;background:#ff6b6b;color:#fff;cursor:pointer;font-weight:600;">← 返回</button>';
   html += '</div>';
+
+  // 答题弹窗（道具用尽时获取道具）
+  html += '<div class="m3-quiz-modal" id="m3QuizModal">';
+  html += '<div class="m3-quiz-content">';
+  html += '<div class="m3-quiz-chapter" id="m3QuizChapter"></div>';
+  html += '<div class="m3-quiz-question" id="m3QuizQuestion"></div>';
+  html += '<div class="m3-quiz-options" id="m3QuizOptions"></div>';
+  html += '<div class="m3-quiz-tip" id="m3QuizTip"></div>';
+  html += '<button class="m3-quiz-close-btn" id="m3QuizCloseBtn" style="display:none;">关闭</button>';
+  html += '</div></div>';
 
   _m3Container.innerHTML = html;
 
@@ -291,6 +342,8 @@ function _m3InitLevel(level) {
 
   _m3RenderTiles(gameArea);
   _m3UpdateBlocked();
+  _m3InitToolSystem();
+  _m3UpdateToolUI();
 }
 
 function _m3RenderTiles(gameArea) {
@@ -426,6 +479,191 @@ function _m3UpdateDisplay() {
   });
 }
 
+// ===== 道具系统（与小猪快跑一致）=====
+function _m3InitToolSystem() {
+  var shuffleBtn = document.getElementById('m3ShuffleTool');
+  var undoBtn = document.getElementById('m3UndoTool');
+  if (shuffleBtn) {
+    shuffleBtn.addEventListener('click', function() { _m3OnToolClick('shuffle'); });
+  }
+  if (undoBtn) {
+    undoBtn.addEventListener('click', function() { _m3OnToolClick('undo'); });
+  }
+}
+
+function _m3UpdateToolUI() {
+  if (!_m3CurrentStudent) return;
+  var qs = ensureMatch3State(_m3CurrentStudent);
+  var tools = qs.match3Tools || { shuffle: 1, undo: 1 };
+  var level = _m3CurrentLevel;
+  var cost = level >= 50 ? 2 : 1;
+
+  // 50关后每种道具限制：50-99关=4次，100+关=3次
+  var maxPerTool = level >= 100 ? 3 : (level >= 50 ? 4 : 999);
+
+  var shuffleAvailable = level < 50 ? (tools.shuffle > 0) : (tools.shuffle >= cost && _m3SessionToolsUsed.shuffle < maxPerTool);
+  var undoAvailable = level < 50 ? (tools.undo > 0) : (tools.undo >= cost && _m3SessionToolsUsed.undo < maxPerTool);
+
+  var shuffleCnt = document.getElementById('m3ShuffleCount');
+  var undoCnt = document.getElementById('m3UndoCount');
+  var shuffleIcon = document.getElementById('m3ShuffleIcon');
+  var undoIcon = document.getElementById('m3UndoIcon');
+  var shuffleBtn = document.getElementById('m3ShuffleTool');
+  var undoBtn = document.getElementById('m3UndoTool');
+
+  if (shuffleCnt) shuffleCnt.textContent = tools.shuffle;
+  if (undoCnt) undoCnt.textContent = tools.undo;
+  if (shuffleIcon) shuffleIcon.textContent = tools.shuffle > 0 ? '🔀' : '📝';
+  if (undoIcon) undoIcon.textContent = tools.undo > 0 ? '↩️' : '📝';
+  if (shuffleBtn) shuffleBtn.classList.toggle('disabled', !shuffleAvailable);
+  if (undoBtn) undoBtn.classList.toggle('disabled', !undoAvailable);
+}
+
+function _m3OnToolClick(toolName) {
+  if (!_m3GameActive) return;
+  if (!_m3CurrentStudent) return;
+  var qs = ensureMatch3State(_m3CurrentStudent);
+  var tools = qs.match3Tools;
+  var level = _m3CurrentLevel;
+  var cost = level >= 50 ? 2 : 1;
+  var toolValue = tools[toolName];
+
+  if (level >= 50) {
+    var maxPerTool = level >= 100 ? 3 : 4;
+    if (_m3SessionToolsUsed[toolName] >= maxPerTool) {
+      alert('本局该道具使用次数已达上限（' + maxPerTool + '次）');
+      return;
+    }
+    if (toolValue < cost) {
+      alert('使用道具需消耗' + cost + '点道具值，请答题获取道具值。');
+      _m3OpenQuiz(toolName);
+      return;
+    }
+    // 可以使用
+    if (toolName === 'shuffle') {
+      tools.shuffle -= cost;
+      _m3SessionToolsUsed.shuffle++;
+      if (typeof saveClassData === 'function') saveClassData();
+      _m3DoShuffle();
+      _m3UpdateToolUI();
+    } else if (toolName === 'undo') {
+      tools.undo -= cost;
+      _m3SessionToolsUsed.undo++;
+      if (typeof saveClassData === 'function') saveClassData();
+      _m3DoUndo();
+      _m3UpdateToolUI();
+    }
+  } else {
+    // 50关前
+    if (toolValue > 0) {
+      if (toolName === 'shuffle') {
+        _m3DoShuffle();
+      } else if (toolName === 'undo') {
+        _m3DoUndo();
+      }
+      _m3UpdateToolUI();
+    } else {
+      _m3OpenQuiz(toolName);
+    }
+  }
+}
+
+function _m3DoShuffle() {
+  if (!_m3GameActive || _m3Tiles.length === 0) return;
+  _m3Tiles.forEach(function(tile) {
+    tile.x = Math.random() * 280 + 10;
+    tile.y = Math.random() * 340 + 10;
+    var elem = document.getElementById(tile.id);
+    if (elem) { elem.style.left = tile.x + 'px'; elem.style.top = tile.y + 'px'; }
+  });
+  _m3UpdateBlocked();
+}
+
+function _m3DoUndo() {
+  if (!_m3GameActive || _m3MoveHistory.length === 0) return;
+  _m3Selected = _m3MoveHistory.pop();
+  var gameArea = document.getElementById('m3GameArea');
+  if (gameArea) _m3RenderTiles(gameArea);
+  _m3UpdateBlocked();
+  _m3UpdateDisplay();
+}
+
+// 答题获取道具
+var _m3QuizState = { tool: null, attempts: 0, question: null };
+
+function _m3OpenQuiz(toolName) {
+  _m3QuizState.tool = toolName;
+  _m3QuizState.attempts = 0;
+  var bank = (typeof window._getActiveQuestionBank === 'function') ? window._getActiveQuestionBank() : [];
+  if (bank.length === 0) {
+    alert('暂无题库，无法答题获取道具');
+    return;
+  }
+  var ri = Math.floor(Math.random() * bank.length);
+  _m3QuizState.question = bank[ri];
+
+  var quizModal = document.getElementById('m3QuizModal');
+  var quizChapter = document.getElementById('m3QuizChapter');
+  var quizQuestion = document.getElementById('m3QuizQuestion');
+  var quizOptions = document.getElementById('m3QuizOptions');
+  var quizTip = document.getElementById('m3QuizTip');
+  var quizCloseBtn = document.getElementById('m3QuizCloseBtn');
+
+  if (!quizModal) return;
+
+  quizChapter.textContent = _m3QuizState.question.chapter || '';
+  quizQuestion.textContent = _m3QuizState.question.question || '';
+  quizOptions.innerHTML = '';
+  quizTip.textContent = '';
+  quizCloseBtn.style.display = 'none';
+
+  _m3QuizState.question.options.forEach(function(opt, idx) {
+    var div = document.createElement('div');
+    div.className = 'm3-quiz-option';
+    div.textContent = String.fromCharCode(65 + idx) + '. ' + opt;
+    div.addEventListener('click', function() { _m3SelectAnswer(idx); });
+    quizOptions.appendChild(div);
+  });
+
+  quizModal.classList.add('show');
+}
+
+function _m3SelectAnswer(index) {
+  _m3QuizState.attempts++;
+  var quizOptions = document.getElementById('m3QuizOptions');
+  var quizTip = document.getElementById('m3QuizTip');
+  var quizCloseBtn = document.getElementById('m3QuizCloseBtn');
+  var opts = quizOptions.querySelectorAll('.m3-quiz-option');
+  var correct = _m3QuizState.question.answer;
+
+  opts.forEach(function(o) { o.classList.add('disabled'); });
+
+  if (index === correct) {
+    opts[index].classList.add('correct');
+    var reward = 0;
+    if (_m3QuizState.attempts === 1) { reward = 2; quizTip.textContent = '回答正确！获得 ' + reward + ' 次道具'; }
+    else if (_m3QuizState.attempts === 2) { reward = 1; quizTip.textContent = '回答正确！获得 ' + reward + ' 次道具'; }
+    else { reward = 0; quizTip.textContent = '回答正确，但超过2次作答，无法获得道具'; }
+
+    if (_m3CurrentStudent) {
+      var qs = ensureMatch3State(_m3CurrentStudent);
+      qs.match3Tools[_m3QuizState.tool] += reward;
+      if (typeof saveClassData === 'function') saveClassData();
+    }
+    quizCloseBtn.style.display = 'block';
+    _m3UpdateToolUI();
+  } else {
+    opts[index].classList.add('wrong');
+    if (_m3QuizState.attempts >= 4) {
+      quizTip.textContent = '4次作答均错误，无法获得道具';
+      quizCloseBtn.style.display = 'block';
+    } else {
+      quizTip.textContent = '回答错误，再试一次（第' + _m3QuizState.attempts + '/4次）';
+      opts.forEach(function(o) { o.classList.remove('disabled'); });
+    }
+  }
+}
+
 // ===== 通关/失败结果 =====
 function _m3ShowResult(success) {
   if (!_m3CurrentStudent) return;
@@ -435,11 +673,9 @@ function _m3ShowResult(success) {
   var elapsed = Math.round((Date.now() - _m3StartTime) / 1000);
 
   if (success) {
-    // 计算得分：消除块数 + 时间奖励
     var timeBonus = Math.max(0, 120 - elapsed);
     var levelScore = _m3BlocksCleared * 10 + timeBonus;
 
-    // 金币奖励 2-5 随机
     var coinReward = 0;
     var alreadyEarnedCoins = prev && prev.coinsEarned > 0;
     var isFirstClear = !prev || !prev.cleared;
@@ -452,7 +688,6 @@ function _m3ShowResult(success) {
       _m3CurrentStudent.coins += coinReward;
     }
 
-    // 更新最佳分数
     var prevBest = prev ? (prev.bestScore || 0) : 0;
     if (levelScore > prevBest) {
       qs.match3Levels[levelKey] = {
@@ -472,7 +707,6 @@ function _m3ShowResult(success) {
 
     recalcMatch3TotalScore(_m3CurrentStudent);
 
-    // 记录操作日志
     var msg = '消消乐第' + _m3CurrentLevel + '关通关，得分' + levelScore + '，用时' + elapsed + '秒';
     if (isFirstClear && coinReward > 0) msg += '，获' + coinReward + '金币';
     msg += '，总分:' + qs.match3TotalScore;
@@ -480,7 +714,6 @@ function _m3ShowResult(success) {
       recordAction(_m3CurrentStudent.id, _m3CurrentStudent.name, '宠物消消乐', msg, isFirstClear ? coinReward : 0, 0, null);
     }
 
-    // 显示结果
     var html = '<div style="text-align:center;padding:30px;">';
     html += '<div style="font-size:48px;">🎉</div>';
     html += '<div style="font-size:20px;font-weight:700;margin:12px 0;">第 ' + _m3CurrentLevel + ' 关通关！</div>';
@@ -494,10 +727,8 @@ function _m3ShowResult(success) {
     html += '</div></div>';
     _m3Container.innerHTML = html;
 
-    // 保存数据
     if (typeof saveClassData === 'function') saveClassData();
   } else {
-    // 失败
     var html2 = '<div style="text-align:center;padding:30px;">';
     html2 += '<div style="font-size:48px;">😢</div>';
     html2 += '<div style="font-size:20px;font-weight:700;margin:12px 0;">第 ' + _m3CurrentLevel + ' 关失败</div>';
@@ -510,26 +741,19 @@ function _m3ShowResult(success) {
   }
 }
 
-// ===== 工具函数 =====
-window.m3Shuffle = function() {
-  if (!_m3GameActive) return;
-  _m3Tiles.forEach(function(tile) {
-    tile.x = Math.random() * 280 + 10;
-    tile.y = Math.random() * 340 + 10;
-    var elem = document.getElementById(tile.id);
-    if (elem) { elem.style.left = tile.x + 'px'; elem.style.top = tile.y + 'px'; }
-  });
-  _m3UpdateBlocked();
-};
+// 注入道具和弹窗样式
+(function() {
+  var style = document.createElement('style');
+  style.textContent = '.m3-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;transition:transform 0.1s;min-width:72px;box-shadow:0 4px 0 #e0a000;}.m3-tool-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #e0a000;}.m3-tool-btn .icon{font-size:24px;line-height:1;}.m3-tool-btn .text{font-size:13px;font-weight:900;color:#8b5a2b;}.m3-tool-btn .count{position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;}.m3-tool-btn.disabled{opacity:0.6;background:#d0d0d0;border-color:#999;box-shadow:0 4px 0 #777;cursor:not-allowed;}.m3-quiz-modal{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;padding:20px;}.m3-quiz-modal.show{opacity:1;pointer-events:all;}.m3-quiz-content{background:#fff;padding:24px;border-radius:20px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,0.3);}.m3-quiz-chapter{font-size:13px;color:#888;margin-bottom:8px;}.m3-quiz-question{font-size:17px;font-weight:bold;color:#333;line-height:1.6;margin-bottom:16px;}.m3-quiz-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}.m3-quiz-option{padding:12px 16px;border:2px solid #e8e8e8;border-radius:12px;cursor:pointer;font-size:15px;color:#333;transition:all 0.2s;}.m3-quiz-option:hover{border-color:#52c41a;background:#f6ffed;}.m3-quiz-option.correct{border-color:#52c41a;background:#f6ffed;color:#389e0d;}.m3-quiz-option.wrong{border-color:#ff4757;background:#fff1f0;color:#cf1322;}.m3-quiz-option.disabled{pointer-events:none;}.m3-quiz-tip{text-align:center;font-size:14px;color:#666;margin-bottom:12px;min-height:20px;}.m3-quiz-close-btn{width:100%;background:#52c41a;color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #389e0d;}';
+  document.head.appendChild(style);
+})();
 
-window.m3Undo = function() {
-  if (!_m3GameActive || _m3MoveHistory.length === 0) return;
-  _m3Selected = _m3MoveHistory.pop();
-  // 重新渲染
-  var gameArea = document.getElementById('m3GameArea');
-  if (gameArea) _m3RenderTiles(gameArea);
-  _m3UpdateBlocked();
-  _m3UpdateDisplay();
-};
+// 关闭弹窗按钮事件
+document.addEventListener('click', function(e) {
+  if (e.target.id === 'm3QuizCloseBtn') {
+    var modal = document.getElementById('m3QuizModal');
+    if (modal) modal.classList.remove('show');
+  }
+});
 
 })();
