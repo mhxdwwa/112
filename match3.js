@@ -1,4 +1,4 @@
-// match3.js v19 — 宠物消消乐
+// match3.js v20 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -885,6 +885,7 @@ function _m3ShowResult(success) {
     '}',
 
     /* === 游戏模式激活时隐藏非游戏元素 === */
+    '.m3-game-active{height:100vh;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;overflow:hidden;}',
     '.m3-game-active>.quiz-tabs{display:none !important;}',
     '.m3-game-active>.paw-deco{display:none !important;}',
     '.m3-game-active>.page-title{display:none !important;}',
