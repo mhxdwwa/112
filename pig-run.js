@@ -843,9 +843,8 @@
       currentQuiz: null,
       answerAttempts: 0,
       totalPigCount: 0,
-      // 50关后道具限制追踪（每种道具使用次数计数）
-      levelToolsUsed: { remove: 0, shuffle: 0, rotate: 0 },
-      levelTotalUsed: 0
+      // 50关后道具限制追踪（每局游戏会话，跨关卡累计）
+      sessionToolsUsed: { remove: 0, shuffle: 0, rotate: 0 }
     };
 
     var board = document.getElementById('pigGameBoard');
@@ -982,8 +981,7 @@
         if (gState.level >= 50) {
           var cost = 2;
           gState.tools.remove -= cost;
-          gState.levelToolsUsed.remove++;
-          gState.levelTotalUsed++;
+          gState.sessionToolsUsed.remove++;
           if (qs.pigRunTools) qs.pigRunTools.remove = gState.tools.remove;
           if (typeof saveClassData === 'function') saveClassData();
         }
@@ -997,8 +995,7 @@
         if (gState.level >= 50) {
           var cost = 2;
           gState.tools.rotate -= cost;
-          gState.levelToolsUsed.rotate++;
-          gState.levelTotalUsed++;
+          gState.sessionToolsUsed.rotate++;
           if (qs.pigRunTools) qs.pigRunTools.rotate = gState.tools.rotate;
           if (typeof saveClassData === 'function') saveClassData();
         }
@@ -1115,19 +1112,14 @@
       var cost = level >= 50 ? 2 : 1;
       var toolValue = gState.tools[toolName];
       
-      // 50关后：检查道具限制
+      // 50关后：检查道具限制（每局游戏会话，每种道具限制次数）
       if (level >= 50) {
-        // 检查该道具本局使用次数是否已达上限
-        var maxPerTool = level >= 100 ? 2 : 3;
-        if (gState.levelToolsUsed[toolName] >= maxPerTool) {
-          alert('本局该道具已使用' + maxPerTool + '次，无法再次使用');
-          return;
-        }
+        // 每种道具的限制：50-99关=4次，100+关=3次
+        var maxPerTool = level >= 100 ? 3 : 4;
         
-        // 检查本局总使用次数限制
-        var maxUses = level >= 100 ? 2 : 3;
-        if (gState.levelTotalUsed >= maxUses) {
-          alert('本局道具使用次数已达上限（' + maxUses + '次）');
+        // 检查该道具本局是否已达上限
+        if (gState.sessionToolsUsed[toolName] >= maxPerTool) {
+          alert('本局该道具使用次数已达上限（' + maxPerTool + '次）');
           return;
         }
         
@@ -1142,8 +1134,7 @@
         if (toolName === 'shuffle') {
           // shuffle立即使用，扣除道具值
           gState.tools[toolName] -= cost;
-          gState.levelToolsUsed[toolName]++;
-          gState.levelTotalUsed++;
+          gState.sessionToolsUsed[toolName]++;
           if (qs.pigRunTools) qs.pigRunTools[toolName] = gState.tools[toolName];
           if (typeof saveClassData === 'function') saveClassData();
           doShuffle();
@@ -1292,9 +1283,7 @@
       gState.level++;
       winModal.classList.remove('show');
       // 道具不重置，保持当前数量（持久化存储）
-      // 重置本局道具使用追踪（50关后生效）
-      gState.levelToolsUsed = { remove: 0, shuffle: 0, rotate: 0 };
-      gState.levelTotalUsed = 0;
+      // 道具使用次数跨关卡累计（每局游戏会话限制），不重置
       gState.timeSeconds = 0;
       timeDisplay.textContent = '00:00';
       startTimer();
@@ -1323,13 +1312,12 @@
     function updateToolUI() {
       var level = gState.level;
       var cost = level >= 50 ? 2 : 1;
-      var maxUses = level >= 100 ? 2 : (level >= 50 ? 3 : 999);
-      var maxPerTool = level >= 100 ? 2 : (level >= 50 ? 3 : 999);
+      var maxPerTool = level >= 100 ? 3 : (level >= 50 ? 4 : 999);
       
-      // 计算每个道具的状态
-      var removeAvailable = gState.tools.remove >= cost && gState.levelToolsUsed.remove < maxPerTool && gState.levelTotalUsed < maxUses;
-      var shuffleAvailable = gState.tools.shuffle >= cost && gState.levelToolsUsed.shuffle < maxPerTool && gState.levelTotalUsed < maxUses;
-      var rotateAvailable = gState.tools.rotate >= cost && gState.levelToolsUsed.rotate < maxPerTool && gState.levelTotalUsed < maxUses;
+      // 计算每个道具的状态（50关后按每种道具的限制次数）
+      var removeAvailable = gState.tools.remove >= cost && gState.sessionToolsUsed.remove < maxPerTool;
+      var shuffleAvailable = gState.tools.shuffle >= cost && gState.sessionToolsUsed.shuffle < maxPerTool;
+      var rotateAvailable = gState.tools.rotate >= cost && gState.sessionToolsUsed.rotate < maxPerTool;
       
       // 显示道具数量
       removeCnt.textContent = gState.tools.remove;
