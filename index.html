@@ -28,14 +28,47 @@
   <div style="font-size:16px;font-weight:700;color:#666;margin-top:12px;">正在加载数据...</div>
 </div>
 <style>@keyframes dalBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}</style>
+<style>
+@keyframes rankScroll {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+#rankAnnouncementBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background: linear-gradient(135deg, #ff6b9d, #c06c84);
+  z-index: 99998;
+  display: none;
+  align-items: center;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+#rankAnnouncementBanner.show {
+  display: flex;
+}
+.rank-scroll-label {
+  color: #fff;
+  font-weight: bold;
+  font-size: 14px;
+  padding: 0 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rank-scroll-text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: rankScroll 12s linear;
+}
+</style>
 <!-- 排行榜滚动公告 -->
-<div id="rankAnnouncementBanner" style="position:fixed;top:0;left:0;width:100%;height:40px;background:linear-gradient(135deg,#ff6b9d,#c06c84);z-index:99998;display:none;align-items:center;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
-  <div style="display:flex;align-items:center;width:100%;height:100%;padding:0 12px;">
-    <span style="color:#fff;font-weight:bold;font-size:14px;margin-right:12px;white-space:nowrap;">🏆 排行榜公告</span>
-    <div style="flex:1;overflow:hidden;position:relative;">
-      <div id="rankAnnouncementText" style="color:#fff;font-size:14px;font-weight:600;white-space:nowrap;position:absolute;"></div>
-    </div>
-  </div>
+<div id="rankAnnouncementBanner">
+  <span class="rank-scroll-label">🏆 公告</span>
+  <span id="rankAnnouncementText" class="rank-scroll-text"></span>
 </div>
 <script>
 // v45: Hide loading overlay — called by dal.js cache render OR Supabase load
@@ -168,7 +201,7 @@ setTimeout(function() { window._hideDalLoading(); }, 10000);
 <script defer src="quiz-bank.js?v=1"></script>
   <script defer src="quiz.js?v=17"></script>
   <script defer src="pig-run.js?v=28"></script>
-  <script defer src="app.js?v=59"></script>
+  <script defer src="app.js?v=60"></script>
 <script>
 // ===== 云端模式：禁用本地文件保存机制 =====
 // 数据完全走 Supabase 云端，不再需要文件授权

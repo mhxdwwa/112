@@ -10403,7 +10403,6 @@ window._escapedPetIds = new Set();
   
   var _announcementShown = false;
   var _announcementQueue = [];
-  var _announcementTimer = null;
   
   // 获取排行榜前三名
   function getTopThree(type) {
@@ -10459,22 +10458,25 @@ window._escapedPetIds = new Set();
       return;
     }
     
-    banner.style.display = 'flex';
+    // 显示横幅
+    banner.classList.add('show');
+    
+    // 设置文本
     textEl.textContent = text;
-    textEl.style.left = '100%';
     
-    // 计算滚动时间（根据文本长度）
-    var duration = Math.max(8, text.length * 0.3);
-    textEl.style.transition = 'left ' + duration + 's linear';
+    // 计算滚动时间（根据文本长度，每秒约8个字符）
+    var duration = Math.max(8, text.length / 8);
+    textEl.style.animationDuration = duration + 's';
     
-    setTimeout(function() {
-      textEl.style.left = '-' + textEl.offsetWidth + 'px';
-    }, 50);
+    // 重启动画
+    textEl.style.animation = 'none';
+    textEl.offsetHeight; // 触发重排
+    textEl.style.animation = '';
     
-    // 滚动完成后回调
+    // 动画完成后回调
     setTimeout(function() {
       if (callback) callback();
-    }, duration * 1000 + 500);
+    }, duration * 1000 + 200);
   }
   
   // 显示下一条公告
@@ -10482,14 +10484,14 @@ window._escapedPetIds = new Set();
     if (_announcementQueue.length === 0) {
       // 所有公告显示完毕，隐藏横幅
       var banner = document.getElementById('rankAnnouncementBanner');
-      if (banner) banner.style.display = 'none';
+      if (banner) banner.classList.remove('show');
       _announcementShown = true;
       return;
     }
     
     var text = _announcementQueue.shift();
     showAnnouncement(text, function() {
-      setTimeout(showNextAnnouncement, 500);
+      setTimeout(showNextAnnouncement, 300);
     });
   }
   
@@ -10540,7 +10542,7 @@ window._escapedPetIds = new Set();
     _announcementShown = false;
     _announcementQueue = [];
     var banner = document.getElementById('rankAnnouncementBanner');
-    if (banner) banner.style.display = 'none';
+    if (banner) banner.classList.remove('show');
   };
 })();
 // ========== 排行榜滚动公告系统结束 ==========
