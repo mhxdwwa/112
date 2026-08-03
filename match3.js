@@ -1,4 +1,4 @@
-// match3.js v9 — 宠物消消乐
+// match3.js v10 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -642,14 +642,9 @@ function _m3UpdateToolUI() {
   if (!_m3CurrentStudent) return;
   var qs = ensureMatch3State(_m3CurrentStudent);
   var tools = qs.match3Tools || { shuffle: 1, undo: 1 };
-  var level = _m3CurrentLevel;
-  var cost = level >= 50 ? 2 : 1;
 
-  // 50关后每种道具限制：50-99关=4次，100+关=3次
-  var maxPerTool = level >= 100 ? 3 : (level >= 50 ? 4 : 999);
-
-  var shuffleAvailable = level < 50 ? (tools.shuffle > 0) : (tools.shuffle >= cost && _m3SessionToolsUsed.shuffle < maxPerTool);
-  var undoAvailable = level < 50 ? (tools.undo > 0) : (tools.undo >= cost && _m3SessionToolsUsed.undo < maxPerTool);
+  var shuffleAvailable = tools.shuffle > 0;
+  var undoAvailable = tools.undo > 0;
 
   var shuffleCnt = document.getElementById('m3ShuffleCount');
   var undoCnt = document.getElementById('m3UndoCount');
@@ -671,47 +666,21 @@ function _m3OnToolClick(toolName) {
   if (!_m3CurrentStudent) return;
   var qs = ensureMatch3State(_m3CurrentStudent);
   var tools = qs.match3Tools;
-  var level = _m3CurrentLevel;
-  var cost = level >= 50 ? 2 : 1;
   var toolValue = tools[toolName];
 
-  if (level >= 50) {
-    var maxPerTool = level >= 100 ? 3 : 4;
-    if (_m3SessionToolsUsed[toolName] >= maxPerTool) {
-      alert('本局该道具使用次数已达上限（' + maxPerTool + '次）');
-      return;
-    }
-    if (toolValue < cost) {
-      alert('使用道具需消耗' + cost + '点道具值，请答题获取道具值。');
-      _m3OpenQuiz(toolName);
-      return;
-    }
-    // 可以使用
+  if (toolValue > 0) {
+    // 有道具可用，消耗1次并执行
+    tools[toolName] -= 1;
+    if (typeof saveClassData === 'function') saveClassData();
     if (toolName === 'shuffle') {
-      tools.shuffle -= cost;
-      _m3SessionToolsUsed.shuffle++;
-      if (typeof saveClassData === 'function') saveClassData();
       _m3DoShuffle();
-      _m3UpdateToolUI();
     } else if (toolName === 'undo') {
-      tools.undo -= cost;
-      _m3SessionToolsUsed.undo++;
-      if (typeof saveClassData === 'function') saveClassData();
       _m3DoUndo();
-      _m3UpdateToolUI();
     }
+    _m3UpdateToolUI();
   } else {
-    // 50关前
-    if (toolValue > 0) {
-      if (toolName === 'shuffle') {
-        _m3DoShuffle();
-      } else if (toolName === 'undo') {
-        _m3DoUndo();
-      }
-      _m3UpdateToolUI();
-    } else {
-      _m3OpenQuiz(toolName);
-    }
+    // 道具为0，需答题获取
+    _m3OpenQuiz(toolName);
   }
 }
 
