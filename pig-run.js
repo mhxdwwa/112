@@ -9,9 +9,9 @@
     document.querySelectorAll('.quiz-tab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.quiz-tab-content').forEach(function(c) { c.classList.remove('active'); });
     var tabs = document.querySelectorAll('.quiz-tab');
-    var idx = tabName === 'daily' ? 0 : 1;
+    var idx = tabName === 'daily' ? 0 : tabName === 'pigrun' ? 1 : 2;
     if (tabs[idx]) tabs[idx].classList.add('active');
-    var contentId = tabName === 'daily' ? 'quizDailyContent' : 'quizPigRunContent';
+    var contentId = tabName === 'daily' ? 'quizDailyContent' : tabName === 'pigrun' ? 'quizPigRunContent' : 'quizMatch3Content';
     var content = document.getElementById(contentId);
     if (content) content.classList.add('active');
     
@@ -21,11 +21,16 @@
     // Reset selection state so modal shows again each tab switch
     window._teacherPlayingAsStudent = null;
     window._pigRunModalShown = false;
+    window._match3ModalShown = false;
     if (typeof window._resetQuizModalFlag === 'function') window._resetQuizModalFlag();
     
     if (tabName === 'pigrun') {
       setTimeout(function() { 
         renderPigRunPage(); 
+      }, 100);
+    } else if (tabName === 'match3') {
+      setTimeout(function() { 
+        renderMatch3Page(); 
       }, 100);
     } else if (tabName === 'daily') {
       // 切换到每日一练时停止小猪快跑背景音乐

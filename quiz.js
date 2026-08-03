@@ -669,7 +669,7 @@
 
   function showSelectStudentModal(activityType) {
     var students = getCurrentClassStudents();
-    var activityName = activityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
+    var activityName = activityType === 'dailyQuiz' ? '每日一练' : activityType === 'match3' ? '宠物消消乐' : '小猪快跑';
     _pendingStudentId = null;
     _pendingActivityType = activityType;
     _renderStudentListModal(students, activityName, null);
@@ -731,7 +731,7 @@
   window.onStudentClickInModal = function(studentId) {
     var students = getCurrentClassStudents();
     _pendingStudentId = parseInt(studentId);
-    var activityName = _pendingActivityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
+    var activityName = _pendingActivityType === 'dailyQuiz' ? '每日一练' : _pendingActivityType === 'match3' ? '宠物消消乐' : '小猪快跑';
     // 重新渲染弹窗，高亮选中学生并显示开始按钮
     _renderStudentListModal(students, activityName, studentId);
   };
@@ -745,6 +745,7 @@
     // Mark modal as shown so render functions show game instead of modal
     _quizModalShown = true;
     window._pigRunModalShown = true;
+    window._match3ModalShown = true;
     // 关闭弹窗
     closeSelectStudentModal();
     // 显示提示
@@ -758,6 +759,8 @@
       renderQuizPage();
     } else if (activityType === 'pigrun' && typeof renderPigRunPage === 'function') {
       renderPigRunPage();
+    } else if (activityType === 'match3' && typeof renderMatch3Page === 'function') {
+      renderMatch3Page();
     }
     _pendingStudentId = null;
     _pendingActivityType = null;
@@ -782,8 +785,8 @@
   window.renderTeacherSelectView = renderTeacherSelectView;
 
   function renderTeacherPlaceholder(activityType) {
-    var activityName = activityType === 'dailyQuiz' ? '每日一练' : '小猪快跑';
-    var icon = activityType === 'dailyQuiz' ? '🏛️' : '🐷';
+    var activityName = activityType === 'dailyQuiz' ? '每日一练' : activityType === 'match3' ? '宠物消消乐' : '小猪快跑';
+    var icon = activityType === 'dailyQuiz' ? '🏛️' : activityType === 'match3' ? '🧩' : '🐷';
     var html = '<div style="max-width:500px;margin:0 auto;padding:40px;text-align:center;">';
     html += '<div style="font-size:60px;margin-bottom:16px;">' + icon + '</div>';
     html += '<div style="font-size:18px;font-weight:700;margin-bottom:20px;">' + activityName + '</div>';

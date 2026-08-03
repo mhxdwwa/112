@@ -777,13 +777,13 @@ function revertToLog(logId){
   showNotification('撤销成功', revertDetail, 'success');
 }
 function _historyActionIcon(type){
-  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','小猪快跑':'🐷','取金阁':'📝'};
+  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','小猪快跑':'🐷','取金阁':'📝','宠物消消乐':'🧩'};
   return icons[type]||'📝';
 }
 function _historyActionColor(type){
   if(type==='惩罚致死'||type==='饿死') return '#ff4444';
   if(type.includes('惩罚')||type==='PK失败') return '#e07050';
-  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡'||type==='每日打卡'||type==='小猪快跑'||type==='取金阁') return '#4a9e4a';
+  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡'||type==='每日打卡'||type==='小猪快跑'||type==='取金阁'||type==='宠物消消乐') return '#4a9e4a';
   if(type==='PK平局') return '#8888aa';
   if(type==='复活') return '#9b59b6';
   if(type==='商店购买') return '#8e44ad';
@@ -2486,18 +2486,19 @@ function renderClassTopThree(){
     fullListEl.innerHTML=listHtml;
   }
 }
-// ========== 排行榜三分类标签切换 ==========
+// ========== 排行榜四分类标签切换 ==========
 function switchRankTab(tabName) {
   document.querySelectorAll('.rank-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.rank-tab-content').forEach(c => c.classList.remove('active'));
   const tabs = document.querySelectorAll('.rank-tab');
-  const idx = tabName === 'growth' ? 0 : tabName === 'quiz' ? 1 : 2;
+  const idx = tabName === 'growth' ? 0 : tabName === 'quiz' ? 1 : tabName === 'pigrun' ? 2 : 3;
   if (tabs[idx]) tabs[idx].classList.add('active');
-  const contentId = tabName === 'growth' ? 'rankGrowthContent' : tabName === 'quiz' ? 'rankQuizContent' : 'rankPigRunContent';
+  const contentId = tabName === 'growth' ? 'rankGrowthContent' : tabName === 'quiz' ? 'rankQuizContent' : tabName === 'pigrun' ? 'rankPigRunContent' : 'rankMatch3Content';
   const content = document.getElementById(contentId);
   if (content) content.classList.add('active');
   if (tabName === 'quiz') renderQuizRanking();
   if (tabName === 'pigrun') renderPigRunRanking();
+  if (tabName === 'match3') renderMatch3Ranking();
 }
 window.switchRankTab = switchRankTab;
 
@@ -2725,7 +2726,86 @@ function renderPigRunRanking() {
 }
 window.renderPigRunRanking = renderPigRunRanking;
 
-function switchPage(pageId){if(pageId!=='quiz-page'&&typeof window._stopPigRunBGM==='function'){window._stopPigRunBGM();}document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';if(pageId!=='quiz-page'&&!isStudentView&&typeof window._resetQuizModalFlag==='function'){window._resetQuizModalFlag();}else if(pageId==='quiz-page'&&!isStudentView){if(typeof window._resetQuizModalFlag==='function')window._resetQuizModalFlag();window._pigRunModalShown=false;window._teacherPlayingAsStudent=null;}var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{requestAnimationFrame(()=>{if(pageId==='honor-board-page'){renderClassTopThree();var art=document.querySelector('.rank-tab.active');if(art&&art.textContent.includes('\u6bcf\u65e5'))renderQuizRanking();else if(art&&art.textContent.includes('\u5c0f\u732a'))renderPigRunRanking();}else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();var aqt=document.querySelector('.quiz-tab.active');if(aqt&&aqt.textContent.includes('\u5c0f\u732a')){if(typeof renderPigRunPage==='function')renderPigRunPage();}}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
+// ========== 宠物消消乐排行榜 ==========
+function renderMatch3Ranking() {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur) return;
+  const topThreeEl = document.getElementById('match3TopThree');
+  const fullListEl = document.getElementById('fullMatch3RankList');
+  const emptyHint = document.getElementById('match3RankEmptyHint');
+  const statsBar = document.getElementById('rankMatch3StatsBar');
+
+  const allList = cur.students.map(s => {
+    var qs = s.quizState || {};
+    var match3Levels = qs.match3Levels || {};
+    var totalScore = qs.match3TotalScore || 0;
+    var clearedCount = Object.keys(match3Levels).filter(k => match3Levels[k] && match3Levels[k].cleared).length;
+    var maxLevel = 0;
+    Object.keys(match3Levels).forEach(k => {
+      var lv = parseInt(k);
+      if (match3Levels[k] && match3Levels[k].cleared && lv > maxLevel) maxLevel = lv;
+    });
+    return { name: s.name, totalScore: totalScore, clearedLevels: clearedCount, maxLevel: maxLevel, student: s };
+  }).filter(x => x.totalScore > 0 || x.clearedLevels > 0).sort((a, b) => b.totalScore - a.totalScore);
+
+  if (allList.length === 0) {
+    if (topThreeEl) topThreeEl.innerHTML = '';
+    if (fullListEl) fullListEl.innerHTML = '';
+    if (statsBar) statsBar.innerHTML = '';
+    if (emptyHint) emptyHint.style.display = 'block';
+    return;
+  }
+  if (emptyHint) emptyHint.style.display = 'none';
+
+  const maxScore = allList[0]?.totalScore || 1;
+  const totalStudents = cur.students.length;
+  const totalScoreAll = allList.reduce((s, x) => s + x.totalScore, 0);
+
+  if (statsBar) {
+    statsBar.innerHTML = '<div class="rank-stats-banner"><div class="rank-stat-chip"><div class="chip-num">' + totalStudents + '</div><div class="chip-label">班级人数</div></div><div class="rank-stat-chip"><div class="chip-num">' + allList.length + '</div><div class="chip-label">上榜人数</div></div><div class="rank-stat-chip"><div class="chip-num">' + totalScoreAll + '</div><div class="chip-label">全班总分</div></div></div>';
+  }
+
+  function getMatch3RankTitle(idx, total) {
+    if (idx === 0) return { text: '消消乐王者', cls: 'champion' };
+    if (idx === 1) return { text: '消消乐达人', cls: 'elite' };
+    if (idx === 2) return { text: '消消乐能手', cls: 'brave' };
+    if (idx < Math.ceil(total * 0.3)) return { text: '消消乐新星', cls: 'rising' };
+    return { text: '消消乐学员', cls: 'starter' };
+  }
+
+  const top3 = allList.slice(0, 3);
+  const podiumOrder = [1, 0, 2];
+  let podiumHtml = '<div class="podium-section">';
+  podiumOrder.forEach(pi => {
+    const item = top3[pi];
+    if (!item) return;
+    const cls = ['gold', 'silver', 'bronze'][pi];
+    const crown = pi === 0 ? '<div class="podium-crown">👑</div>' : '';
+    const medalNum = pi + 1;
+    const activePet = getActivePet(item.student);
+    const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:36px;">🧩</span>';
+    podiumHtml += '<div class="podium-slot ' + cls + '"><div class="podium-avatar-wrap">' + crown + '<div class="podium-avatar">' + petAvatar + '<div class="podium-medal">' + medalNum + '</div></div></div><div class="podium-name">' + esc(item.name) + '</div><div class="podium-pet-name">第' + item.maxLevel + '关 · ' + item.totalScore + '分</div><div class="podium-pillar"><div class="podium-rank-num">' + medalNum + '</div><div class="podium-growth-val">' + item.totalScore + '分 · ' + item.clearedLevels + '关</div></div></div>';
+  });
+  podiumHtml += '</div><div class="podium-base"></div>';
+  if (topThreeEl) topThreeEl.innerHTML = podiumHtml;
+
+  if (fullListEl) {
+    let listHtml = '<div class="full-rank-section"><div class="full-rank-title">📊 全班排行</div><div class="rank-list">';
+    allList.forEach((item, idx) => {
+      const topCls = idx === 0 ? 'top1' : idx === 1 ? 'top2' : idx === 2 ? 'top3' : '';
+      const pct = Math.round((item.totalScore / maxScore) * 100);
+      const title = getMatch3RankTitle(idx, allList.length);
+      const activePet = getActivePet(item.student);
+      const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:22px;">🧩</span>';
+      listHtml += '<div class="rank-row ' + topCls + '"><div class="rank-num">' + (idx + 1) + '</div><div class="rank-row-avatar">' + petAvatar + '</div><div class="rank-row-info"><div class="rank-row-name">' + esc(item.name) + ' <span class="rank-title-badge ' + title.cls + '">' + title.text + '</span></div><div class="rank-row-pet">第' + item.maxLevel + '关 · 通关' + item.clearedLevels + '关 · 总分 ' + item.totalScore + '分</div><div class="rank-progress-wrap"><div class="rank-progress-bar"><div class="rank-progress-fill" style="width:' + pct + '%;background:linear-gradient(90deg,#764ba2,#667eea);"></div></div><div class="rank-growth-num">' + item.totalScore + '分</div></div></div></div>';
+    });
+    listHtml += '</div></div>';
+    fullListEl.innerHTML = listHtml;
+  }
+}
+window.renderMatch3Ranking = renderMatch3Ranking;
+
+function switchPage(pageId){if(pageId!=='quiz-page'&&typeof window._stopPigRunBGM==='function'){window._stopPigRunBGM();}document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';if(pageId!=='quiz-page'&&!isStudentView&&typeof window._resetQuizModalFlag==='function'){window._resetQuizModalFlag();}else if(pageId==='quiz-page'&&!isStudentView){if(typeof window._resetQuizModalFlag==='function')window._resetQuizModalFlag();window._pigRunModalShown=false;window._match3ModalShown=false;window._teacherPlayingAsStudent=null;}var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{requestAnimationFrame(()=>{if(pageId==='honor-board-page'){renderClassTopThree();var art=document.querySelector('.rank-tab.active');if(art&&art.textContent.includes('\u6bcf\u65e5'))renderQuizRanking();else if(art&&art.textContent.includes('\u5c0f\u732a'))renderPigRunRanking();else if(art&&art.textContent.includes('\u6d88\u6d88\u4e50'))renderMatch3Ranking();}else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();var aqt=document.querySelector('.quiz-tab.active');if(aqt&&aqt.textContent.includes('\u5c0f\u732a')){if(typeof renderPigRunPage==='function')renderPigRunPage();}else if(aqt&&aqt.textContent.includes('\u6d88\u6d88\u4e50')){if(typeof renderMatch3Page==='function')renderMatch3Page();}}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
@@ -10437,6 +10517,11 @@ window._escapedPetIds = new Set();
         var qs = item.student.quizState || {};
         item.value = qs.pigRunTotalScore || 0;
       });
+    } else if (type === 'match3') {
+      allStudents.forEach(function(item) {
+        var qs = item.student.quizState || {};
+        item.value = qs.match3TotalScore || 0;
+      });
     }
 
     allStudents.sort(function(a, b) { return b.value - a.value; });
@@ -10500,6 +10585,13 @@ window._escapedPetIds = new Set();
       var t3 = '🐷 小猪快跑前三名：';
       pigrunTop.forEach(function(item, idx) { t3 += (idx + 1) + '.' + item.name + ' '; });
       _announcementQueue.push(t3);
+    }
+
+    var match3Top = getTopThree('match3');
+    if (match3Top.length > 0) {
+      var t4 = '🧩 宠物消消乐前三名：';
+      match3Top.forEach(function(item, idx) { t4 += (idx + 1) + '.' + item.name + ' '; });
+      _announcementQueue.push(t4);
     }
 
     if (_announcementQueue.length > 0) {
