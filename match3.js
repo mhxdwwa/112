@@ -1,4 +1,4 @@
-// match3.js v10 — 宠物消消乐
+// match3.js v11 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -384,6 +384,7 @@ function _m3InitLevel(level) {
 
   // 创建多层方块 — 9:16 竖屏游戏框架
   var qs = ensureMatch3State(_m3CurrentStudent);
+  var tools = qs.match3Tools || { shuffle: 1, undo: 1 };
   var contentHeight = (config.layers - 1) * 22 + TILE_SIZE + 40;
 
   var html = '<div class="m3-game-frame">';
@@ -408,8 +409,8 @@ function _m3InitLevel(level) {
   }
   html += '</div>';
   html += '<div class="m3-tools-col">';
-  html += '<div class="m3-tool-btn" id="m3ShuffleTool" style="padding:3px 8px;min-width:50px;border-radius:8px;"><span class="icon" id="m3ShuffleIcon" style="font-size:16px;">🔀</span><span class="count" id="m3ShuffleCount" style="top:-5px;right:-5px;width:16px;height:16px;font-size:10px;">1</span></div>';
-  html += '<div class="m3-tool-btn" id="m3UndoTool" style="padding:3px 8px;min-width:50px;border-radius:8px;"><span class="icon" id="m3UndoIcon" style="font-size:16px;">↩️</span><span class="count" id="m3UndoCount" style="top:-5px;right:-5px;width:16px;height:16px;font-size:10px;">1</span></div>';
+  html += '<div class="m3-tool-btn" id="m3ShuffleTool" style="padding:3px 8px;min-width:50px;border-radius:8px;"><span class="icon" id="m3ShuffleIcon" style="font-size:16px;">' + (tools.shuffle > 0 ? '🔀' : '📝') + '</span><span class="count" id="m3ShuffleCount" style="top:-5px;right:-5px;width:16px;height:16px;font-size:10px;">' + tools.shuffle + '</span></div>';
+  html += '<div class="m3-tool-btn" id="m3UndoTool" style="padding:3px 8px;min-width:50px;border-radius:8px;"><span class="icon" id="m3UndoIcon" style="font-size:16px;">' + (tools.undo > 0 ? '↩️' : '📝') + '</span><span class="count" id="m3UndoCount" style="top:-5px;right:-5px;width:16px;height:16px;font-size:10px;">' + tools.undo + '</span></div>';
   html += '</div>';
   html += '</div>';
 
@@ -1027,7 +1028,50 @@ function _m3ShowResult(success) {
     '.m3-quiz-option.wrong{border-color:#ff4757;background:#fff1f0;color:#cf1322;}',
     '.m3-quiz-option.disabled{pointer-events:none;}',
     '.m3-quiz-tip{text-align:center;font-size:14px;color:#666;margin-bottom:12px;min-height:20px;}',
-    '.m3-quiz-close-btn{width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #4a3d8c;}'
+    '.m3-quiz-close-btn{width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #4a3d8c;}',
+
+    /* === 电脑端适配 === */
+    '@media (min-width: 768px) {',
+    '  .m3-game-frame {',
+    '    max-width: 480px;',
+    '    min-height: 600px;',
+    '    max-height: 80vh;',
+    '  }',
+    '  .m3-top-bar {',
+    '    padding: 8px 12px;',
+    '  }',
+    '  .m3-level-label {',
+    '    font-size: 16px;',
+    '  }',
+    '  .m3-time-display {',
+    '    font-size: 15px;',
+    '    padding: 3px 10px;',
+    '  }',
+    '  .m3-score-label {',
+    '    font-size: 14px;',
+    '  }',
+    '  .m3-btn-icon {',
+    '    width: 36px;',
+    '    height: 36px;',
+    '    font-size: 14px;',
+    '  }',
+    '  .m3-slot {',
+    '    width: 48px !important;',
+    '    height: 48px !important;',
+    '  }',
+    '  .m3-tool-btn {',
+    '    min-width: 60px;',
+    '    padding: 6px 12px;',
+    '  }',
+    '  .m3-tool-btn .icon {',
+    '    font-size: 20px;',
+    '  }',
+    '  .m3-tool-btn .count {',
+    '    width: 20px !important;',
+    '    height: 20px !important;',
+    '    font-size: 12px !important;',
+    '  }',
+    '}'
   ].join('');
   document.head.appendChild(style);
 })();
