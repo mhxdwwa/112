@@ -1356,7 +1356,7 @@ function classDragEnd(e){this.classList.remove('dragging');classDragIdx=null;doc
 function classDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';if(+this.dataset.classIdx!==classDragIdx)this.classList.add('drag-over');}
 function classDragLeave(e){this.classList.remove('drag-over');}
 function classDrop(e){e.preventDefault();this.classList.remove('drag-over');const toIdx=+this.dataset.classIdx;if(classDragIdx===null||classDragIdx===toIdx)return;const moved=classesData.splice(classDragIdx,1)[0];classesData.splice(toIdx,0,moved);saveClassData();renderClassList();}
-function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');}
+function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');if(typeof showRankAnnouncement==='function'){setTimeout(function(){showRankAnnouncement(id);},800);}}
 function createClass(){const n=prompt('班级名称');if(!n)return;
   // 检查数据库是否已存在同名班级（跨所有教师）
   if(typeof db!=='undefined'&&db){
@@ -10400,146 +10400,119 @@ window._escapedPetIds = new Set();
 // ========== 排行榜滚动公告系统 ==========
 (function() {
   'use strict';
-  
-  var _announcementShown = false;
+
+  // 记录已播报的班级 {classId: true}，每次登录每个班级只播报一次
+  var _announcedClassIds = {};
   var _announcementQueue = [];
-  
-  // 获取排行榜前三名
+
+  // 获取当前班级的排行榜前三名
   function getTopThree(type) {
     if (!classesData || !classesData.length) return [];
-    
+
+    // 仅取当前班级的学生
+    var currentClass = null;
+    for (var i = 0; i < classesData.length; i++) {
+      if (classesData[i].id === currentClassId) { currentClass = classesData[i]; break; }
+    }
+    if (!currentClass || !currentClass.students) return [];
+
     var allStudents = [];
-    classesData.forEach(function(cls) {
-      if (!cls.students) return;
-      cls.students.forEach(function(stu) {
-        allStudents.push({
-          name: stu.name,
-          classId: cls.id,
-          student: stu
-        });
-      });
+    currentClass.students.forEach(function(stu) {
+      allStudents.push({ name: stu.name, student: stu });
     });
-    
+    if (allStudents.length === 0) return [];
+
     if (type === 'growth') {
-      // 宠物成长值排行
       allStudents.forEach(function(item) {
         var totalGrowth = 0;
         if (item.student.pets && item.student.pets.length) {
-          item.student.pets.forEach(function(p) {
-            totalGrowth += (p.growth || 0);
-          });
+          item.student.pets.forEach(function(p) { totalGrowth += (p.growth || 0); });
         }
         item.value = totalGrowth;
       });
     } else if (type === 'quiz') {
-      // 每日一练排行（按总金币）
-      allStudents.forEach(function(item) {
-        item.value = item.student.coins || 0;
-      });
+      allStudents.forEach(function(item) { item.value = item.student.coins || 0; });
     } else if (type === 'pigrun') {
-      // 小猪快跑排行（按总分）
       allStudents.forEach(function(item) {
         var qs = item.student.quizState || {};
         item.value = qs.pigRunTotalScore || 0;
       });
     }
-    
-    // 排序并取前三名
+
     allStudents.sort(function(a, b) { return b.value - a.value; });
     return allStudents.slice(0, 3);
   }
-  
+
   // 滚动显示一条公告
   function showAnnouncement(text, callback) {
     var banner = document.getElementById('rankAnnouncementBanner');
     var textEl = document.getElementById('rankAnnouncementText');
-    if (!banner || !textEl) {
-      if (callback) callback();
-      return;
-    }
-    
-    // 显示横幅
+    if (!banner || !textEl) { if (callback) callback(); return; }
+
     banner.classList.add('show');
-    
-    // 设置文本
     textEl.textContent = text;
-    
-    // 计算滚动时间（根据文本长度，每秒约8个字符）
     var duration = Math.max(8, text.length / 8);
     textEl.style.animationDuration = duration + 's';
-    
-    // 重启动画
     textEl.style.animation = 'none';
-    textEl.offsetHeight; // 触发重排
+    textEl.offsetHeight;
     textEl.style.animation = '';
-    
-    // 动画完成后回调
-    setTimeout(function() {
-      if (callback) callback();
-    }, duration * 1000 + 200);
+    setTimeout(function() { if (callback) callback(); }, duration * 1000 + 200);
   }
-  
+
   // 显示下一条公告
-  function showNextAnnouncement() {
+  function showNextAnnouncement(announceClassId) {
     if (_announcementQueue.length === 0) {
-      // 所有公告显示完毕，隐藏横幅
       var banner = document.getElementById('rankAnnouncementBanner');
       if (banner) banner.classList.remove('show');
-      _announcementShown = true;
+      _announcedClassIds[announceClassId] = true;
       return;
     }
-    
     var text = _announcementQueue.shift();
     showAnnouncement(text, function() {
-      setTimeout(showNextAnnouncement, 300);
+      setTimeout(function() { showNextAnnouncement(announceClassId); }, 300);
     });
   }
-  
-  // 启动排行榜公告
-  window.showRankAnnouncement = function() {
-    if (_announcementShown) return;
+
+  // 启动排行榜公告（指定班级）
+  window.showRankAnnouncement = function(targetClassId) {
+    var classId = targetClassId || currentClassId;
+    if (_announcedClassIds[classId]) return;  // 该班级本次登录已播报
     if (!classesData || !classesData.length) return;
-    
+
     _announcementQueue = [];
-    
-    // 宠物成长值前三名
+
     var growthTop = getTopThree('growth');
     if (growthTop.length > 0) {
-      var growthText = '🐾 宠物成长值前三名：';
-      growthTop.forEach(function(item, idx) {
-        growthText += (idx + 1) + '.' + item.name + ' ';
-      });
-      _announcementQueue.push(growthText);
+      var t = '🐾 宠物成长值前三名：';
+      growthTop.forEach(function(item, idx) { t += (idx + 1) + '.' + item.name + ' '; });
+      _announcementQueue.push(t);
     }
-    
-    // 每日一练前三名
+
     var quizTop = getTopThree('quiz');
     if (quizTop.length > 0) {
-      var quizText = '📝 每日一练前三名：';
-      quizTop.forEach(function(item, idx) {
-        quizText += (idx + 1) + '.' + item.name + ' ';
-      });
-      _announcementQueue.push(quizText);
+      var t2 = '📝 每日一练前三名：';
+      quizTop.forEach(function(item, idx) { t2 += (idx + 1) + '.' + item.name + ' '; });
+      _announcementQueue.push(t2);
     }
-    
-    // 小猪快跑前三名
+
     var pigrunTop = getTopThree('pigrun');
     if (pigrunTop.length > 0) {
-      var pigrunText = '🐷 小猪快跑前三名：';
-      pigrunTop.forEach(function(item, idx) {
-        pigrunText += (idx + 1) + '.' + item.name + ' ';
-      });
-      _announcementQueue.push(pigrunText);
+      var t3 = '🐷 小猪快跑前三名：';
+      pigrunTop.forEach(function(item, idx) { t3 += (idx + 1) + '.' + item.name + ' '; });
+      _announcementQueue.push(t3);
     }
-    
+
     if (_announcementQueue.length > 0) {
-      showNextAnnouncement();
+      showNextAnnouncement(classId);
+    } else {
+      // 没有数据也标记为已播报，避免重复触发
+      _announcedClassIds[classId] = true;
     }
   };
-  
+
   // 重置公告状态（用于测试）
   window.resetRankAnnouncement = function() {
-    _announcementShown = false;
+    _announcedClassIds = {};
     _announcementQueue = [];
     var banner = document.getElementById('rankAnnouncementBanner');
     if (banner) banner.classList.remove('show');
