@@ -1,4 +1,4 @@
-// match3.js v20 — 宠物消消乐
+// match3.js v21 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -397,6 +397,7 @@ function _m3InitLevel(level) {
   html += '<div class="m3-level-label">第<span id="m3LevelNum">' + level + '</span>关</div>';
   html += '<div class="m3-time-display" id="m3TimeDisplay">00:00</div>';
   html += '<div class="m3-score-label">💰<span id="m3Score">0</span></div>';
+  html += '<button class="m3-btn-icon" id="m3HomeBtn" style="width:28px;height:28px;font-size:14px;">🏠</button>';
   html += '<button class="m3-btn-icon" id="m3SoundBtn" style="width:28px;height:28px;font-size:12px;">🔇</button>';
   html += '</div>';
 
@@ -614,12 +615,19 @@ function _m3UpdateDisplay() {
 function _m3InitTopBarEvents() {
   var pauseBtn = document.getElementById('m3PauseBtn');
   var soundBtn = document.getElementById('m3SoundBtn');
+  var homeBtn = document.getElementById('m3HomeBtn');
   var resumeBtn = document.getElementById('m3ResumeBtn');
   var quitBtn = document.getElementById('m3QuitBtn');
   if (pauseBtn) pauseBtn.addEventListener('click', _m3TogglePause);
   if (soundBtn) soundBtn.addEventListener('click', function() {
     var bgmOn = _m3ToggleBGM();
     soundBtn.textContent = bgmOn ? '🔊' : '🔇';
+  });
+  if (homeBtn) homeBtn.addEventListener('click', function() {
+    _m3StopTimer();
+    _m3StopBGM();
+    _m3Paused = false;
+    renderMatch3Page();
   });
   if (resumeBtn) resumeBtn.addEventListener('click', _m3TogglePause);
   if (quitBtn) quitBtn.addEventListener('click', function() {
@@ -1060,6 +1068,9 @@ function _m3ShowResult(success) {
     '    width: 36px;',
     '    height: 36px;',
     '    font-size: 14px;',
+    '  }',
+    '  #m3HomeBtn {',
+    '    font-size: 16px !important;',
     '  }',
     '  .m3-slot {',
     '    width: 52px !important;',
