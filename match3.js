@@ -1,4 +1,4 @@
-// match3.js v8 — 宠物消消乐
+// match3.js v9 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -196,11 +196,22 @@ function _m3GetLevelConfig(level) {
   return { layers: totalLayers, layerSizes: layerSizes, typesToUse: TILE_TYPES.slice(0, availableTypes) };
 }
 
+// ===== 游戏模式：隐藏非游戏UI，聚焦游戏画面 =====
+function _m3EnterGameMode() {
+  var quizPage = document.getElementById('quiz-page');
+  if (quizPage) quizPage.classList.add('m3-game-active');
+}
+function _m3ExitGameMode() {
+  var quizPage = document.getElementById('quiz-page');
+  if (quizPage) quizPage.classList.remove('m3-game-active');
+}
+
 // ===== 渲染关卡选择 =====
 function renderMatch3Page() {
   var container = document.getElementById('match3Content');
   if (!container) return;
   _m3Container = container;
+  _m3ExitGameMode();
   var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
 
   if (!isStudentView) {
@@ -337,6 +348,7 @@ window.startMatch3Level = function(level) {
 
 function _m3InitLevel(level) {
   if (!_m3Container) return;
+  _m3EnterGameMode();
   _m3Tiles = [];
   _m3Selected = [];
   _m3MoveHistory = [];
@@ -370,43 +382,39 @@ function _m3InitLevel(level) {
   }
   tileTypes.sort(function() { return Math.random() - 0.5; });
 
-  // 创建多层方块
+  // 创建多层方块 — 9:16 竖屏游戏框架
   var qs = ensureMatch3State(_m3CurrentStudent);
-  // 游戏区域高度：根据层数动态计算，让游戏区占满可用空间
   var contentHeight = (config.layers - 1) * 22 + TILE_SIZE + 40;
-  var gameAreaHeight = Math.min(Math.max(contentHeight, 260), 480);
 
-  var html = '<div class="m3-game-wrap" style="position:relative;display:flex;flex-direction:column;height:' + (gameAreaHeight + 140) + 'px;">';
+  var html = '<div class="m3-game-frame">';
 
-  // 顶栏：精简为一行，只保留核心功能
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;margin:0 8px 6px 8px;">';
-  html += '<button class="m3-btn-icon" id="m3PauseBtn" style="width:30px;height:30px;font-size:13px;">⏸</button>';
-  html += '<div style="color:#fff;font-weight:700;font-size:15px;">第<span id="m3LevelNum">' + level + '</span>关</div>';
-  html += '<div style="color:#fff;font-weight:600;font-size:14px;background:rgba(255,255,255,0.2);padding:3px 8px;border-radius:6px;" id="m3TimeDisplay">00:00</div>';
-  html += '<div style="color:#ffe082;font-size:13px;font-weight:600;">💰<span id="m3Score">0</span></div>';
-  html += '<button class="m3-btn-icon" id="m3SoundBtn" style="width:30px;height:30px;font-size:13px;">🔊</button>';
+  // 顶栏：极简一行
+  html += '<div class="m3-top-bar">';
+  html += '<button class="m3-btn-icon" id="m3PauseBtn" style="width:28px;height:28px;font-size:12px;">⏸</button>';
+  html += '<div class="m3-level-label">第<span id="m3LevelNum">' + level + '</span>关</div>';
+  html += '<div class="m3-time-display" id="m3TimeDisplay">00:00</div>';
+  html += '<div class="m3-score-label">💰<span id="m3Score">0</span></div>';
+  html += '<button class="m3-btn-icon" id="m3SoundBtn" style="width:28px;height:28px;font-size:12px;">🔊</button>';
   html += '</div>';
 
   // 游戏区：占主要空间，可滚动
-  html += '<div id="m3GameArea" style="position:relative;width:100%;flex:1;margin:0 auto;background:linear-gradient(180deg,#f8f6ff,#ede8ff);border-radius:10px;overflow:auto;min-height:200px;"></div>';
+  html += '<div id="m3GameArea" style="position:relative;width:100%;flex:1;margin:0 auto;background:linear-gradient(180deg,#f8f6ff,#ede8ff);border-radius:8px;overflow:auto;min-height:200px;"></div>';
 
-  // 底部：槽位 + 道具 合为一行
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;gap:8px;margin-top:6px;">';
-  // 槽位栏
-  html += '<div id="m3SlotBar" style="display:flex;gap:4px;align-items:center;justify-content:center;background:rgba(255,255,255,0.95);border-radius:10px;padding:6px 8px;min-height:50px;flex:1;">';
+  // 底部：槽位 + 道具 合为一行，紧凑
+  html += '<div class="m3-bottom-bar">';
+  html += '<div id="m3SlotBar" class="m3-slot-bar">';
   for (var s = 0; s < MAX_SLOTS; s++) {
-    html += '<div class="m3-slot" style="width:40px;height:40px;border:2px dashed #ccc;border-radius:7px;display:flex;align-items:center;justify-content:center;"></div>';
+    html += '<div class="m3-slot" style="width:38px;height:38px;border:2px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;"></div>';
   }
   html += '</div>';
-  // 道具按钮（紧凑）
-  html += '<div style="display:flex;flex-direction:column;gap:5px;">';
-  html += '<div class="m3-tool-btn" id="m3ShuffleTool" style="padding:4px 10px;min-width:58px;border-radius:10px;"><span class="icon" id="m3ShuffleIcon" style="font-size:18px;">🔀</span><span class="count" id="m3ShuffleCount" style="top:-6px;right:-6px;width:18px;height:18px;font-size:11px;">1</span></div>';
-  html += '<div class="m3-tool-btn" id="m3UndoTool" style="padding:4px 10px;min-width:58px;border-radius:10px;"><span class="icon" id="m3UndoIcon" style="font-size:18px;">↩️</span><span class="count" id="m3UndoCount" style="top:-6px;right:-6px;width:18px;height:18px;font-size:11px;">1</span></div>';
+  html += '<div class="m3-tools-col">';
+  html += '<div class="m3-tool-btn" id="m3ShuffleTool" style="padding:3px 8px;min-width:50px;border-radius:8px;"><span class="icon" id="m3ShuffleIcon" style="font-size:16px;">🔀</span><span class="count" id="m3ShuffleCount" style="top:-5px;right:-5px;width:16px;height:16px;font-size:10px;">1</span></div>';
+  html += '<div class="m3-tool-btn" id="m3UndoTool" style="padding:3px 8px;min-width:50px;border-radius:8px;"><span class="icon" id="m3UndoIcon" style="font-size:16px;">↩️</span><span class="count" id="m3UndoCount" style="top:-5px;right:-5px;width:16px;height:16px;font-size:10px;">1</span></div>';
   html += '</div>';
   html += '</div>';
 
-  // 剩余提示（小字）
-  html += '<div style="text-align:center;font-size:11px;color:#aaa;margin-top:2px;">剩余: <span id="m3Remaining">' + tileTypes.length + '</span></div>';
+  // 剩余提示
+  html += '<div style="text-align:center;font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;">剩余: <span id="m3Remaining">' + tileTypes.length + '</span></div>';
 
   // 答题弹窗（道具用尽时获取道具）
   html += '<div class="m3-quiz-modal" id="m3QuizModal">';
@@ -424,7 +432,7 @@ function _m3InitLevel(level) {
   html += '<button class="m3-pause-btn secondary" onclick="startMatch3Level(' + level + ')" style="font-size:16px;padding:10px 30px;">🔄 重新开始</button>';
   html += '<button class="m3-pause-btn secondary" id="m3QuitBtn">🏠 返回关卡选择</button>';
   html += '</div>';
-  html += '</div>'; // close m3-game-wrap
+  html += '</div>'; // close m3-game-frame
 
   _m3Container.innerHTML = html;
 
@@ -882,10 +890,176 @@ function _m3ShowResult(success) {
   }
 }
 
-// 注入道具、弹窗、顶栏、暂停遮罩样式
+// 注入道具、弹窗、顶栏、暂停遮罩、9:16游戏框架样式
 (function() {
   var style = document.createElement('style');
-  style.textContent = '.m3-top-bar{position:relative;width:100%;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:4px;background:rgba(102,126,234,0.15);border-radius:12px;}.m3-top-left-group{display:flex;align-items:center;gap:4px;}.m3-top-right-group{display:flex;gap:4px;}.m3-btn-icon{width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.95);border:2px solid #667eea;font-size:14px;cursor:pointer;box-shadow:0 2px 0 #4a5dbd;display:flex;align-items:center;justify-content:center;flex-shrink:0;}.m3-btn-icon:active{transform:translateY(2px);box-shadow:0 1px 0 #4a5dbd;}.m3-time-display{background:rgba(255,255,255,0.95);padding:4px 8px;border-radius:8px;font-weight:bold;color:#4a3d8c;font-size:14px;border:2px solid #667eea;box-shadow:0 2px 0 #4a5dbd;min-width:50px;text-align:center;}.m3-coin-display{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.95);padding:4px 10px;border-radius:12px;font-weight:bold;color:#d4760a;font-size:14px;border:2px solid #667eea;box-shadow:0 2px 0 #4a5dbd;}.m3-score-display{display:flex;align-items:center;gap:3px;background:rgba(255,255,255,0.95);padding:4px 8px;border-radius:8px;font-weight:bold;color:#b8860b;font-size:13px;border:2px solid #667eea;box-shadow:0 2px 0 #4a5dbd;}.m3-level-title{font-size:18px;font-weight:900;color:#4a3d8c;}.m3-pause-mask{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:150;opacity:0;pointer-events:none;transition:opacity 0.3s ease;}.m3-pause-mask.show{opacity:1;pointer-events:all;}.m3-pause-title{font-size:36px;font-weight:900;color:#fff;margin-bottom:30px;letter-spacing:4px;}.m3-pause-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:14px 40px;border-radius:30px;font-size:20px;cursor:pointer;font-weight:bold;box-shadow:0 4px 0 #4a3d8c;margin-bottom:16px;transition:transform 0.1s;}.m3-pause-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #4a3d8c;}.m3-pause-btn.secondary{background:#fff;color:#333;box-shadow:0 4px 0 #ccc;}.m3-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#ffe066;border:3px solid #ffb800;border-radius:14px;padding:6px 12px;cursor:pointer;transition:transform 0.1s;min-width:72px;box-shadow:0 4px 0 #e0a000;}.m3-tool-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #e0a000;}.m3-tool-btn .icon{font-size:24px;line-height:1;}.m3-tool-btn .text{font-size:13px;font-weight:900;color:#8b5a2b;}.m3-tool-btn .count{position:absolute;top:-8px;right:-8px;background:#ff4757;color:white;font-size:13px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid #fff;}.m3-tool-btn.disabled{opacity:0.6;background:#d0d0d0;border-color:#999;box-shadow:0 4px 0 #777;cursor:not-allowed;}.m3-quiz-modal{position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s ease;padding:20px;}.m3-quiz-modal.show{opacity:1;pointer-events:all;}.m3-quiz-content{background:#fff;padding:24px;border-radius:20px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,0.3);}.m3-quiz-chapter{font-size:13px;color:#888;margin-bottom:8px;}.m3-quiz-question{font-size:17px;font-weight:bold;color:#333;line-height:1.6;margin-bottom:16px;}.m3-quiz-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}.m3-quiz-option{padding:12px 16px;border:2px solid #e8e8e8;border-radius:12px;cursor:pointer;font-size:15px;color:#333;transition:all 0.2s;}.m3-quiz-option:hover{border-color:#667eea;background:#f0f2ff;}.m3-quiz-option.correct{border-color:#52c41a;background:#f6ffed;color:#389e0d;}.m3-quiz-option.wrong{border-color:#ff4757;background:#fff1f0;color:#cf1322;}.m3-quiz-option.disabled{pointer-events:none;}.m3-quiz-tip{text-align:center;font-size:14px;color:#666;margin-bottom:12px;min-height:20px;}.m3-quiz-close-btn{width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #4a3d8c;}';
+  style.textContent = [
+    /* === 9:16 游戏框架 === */
+    '.m3-game-frame{',
+    '  position:relative;',
+    '  display:flex;',
+    '  flex-direction:column;',
+    '  width:100%;',
+    '  max-width:390px;',
+    '  margin:0 auto;',
+    '  min-height:calc(100vh - 160px);',
+    '  max-height:calc(100vw * 16 / 9);',
+    '  aspect-ratio:9/16;',
+    '  background:linear-gradient(180deg,#2d1b69 0%,#1a0f3d 100%);',
+    '  border-radius:16px;',
+    '  overflow:hidden;',
+    '  box-shadow:0 8px 32px rgba(45,27,105,0.4);',
+    '  padding:6px;',
+    '}',
+
+    /* === 游戏模式激活时隐藏非游戏元素 === */
+    '.m3-game-active>.quiz-tabs{display:none !important;}',
+    '.m3-game-active>.paw-deco{display:none !important;}',
+    '.m3-game-active>.page-title{display:none !important;}',
+    '.m3-game-active>#quizDailyContent,',
+    '.m3-game-active>#quizPigRunContent{display:none !important;}',
+    '.m3-game-active>#quizMatch3Content{',
+    '  position:fixed;',
+    '  top:0;left:0;right:0;bottom:0;',
+    '  z-index:999;',
+    '  background:linear-gradient(180deg,#1a0a3e,#0d0520);',
+    '  display:flex;',
+    '  align-items:center;',
+    '  justify-content:center;',
+    '  padding:10px;',
+    '  overflow:auto;',
+    '}',
+
+    /* === 顶栏 === */
+    '.m3-top-bar{',
+    '  display:flex;',
+    '  align-items:center;',
+    '  justify-content:space-between;',
+    '  padding:5px 8px;',
+    '  background:linear-gradient(135deg,#667eea,#764ba2);',
+    '  border-radius:8px;',
+    '  margin-bottom:5px;',
+    '  flex-shrink:0;',
+    '}',
+    '.m3-level-label{color:#fff;font-weight:700;font-size:14px;}',
+    '.m3-score-label{color:#ffe082;font-size:12px;font-weight:600;}',
+    '.m3-time-display{',
+    '  background:rgba(255,255,255,0.2);',
+    '  padding:2px 7px;',
+    '  border-radius:5px;',
+    '  color:#fff;',
+    '  font-weight:600;',
+    '  font-size:13px;',
+    '  min-width:44px;',
+    '  text-align:center;',
+    '}',
+
+    /* === 底部栏 === */
+    '.m3-bottom-bar{',
+    '  display:flex;',
+    '  align-items:center;',
+    '  justify-content:space-between;',
+    '  padding:6px 8px;',
+    '  gap:6px;',
+    '  margin-top:5px;',
+    '  flex-shrink:0;',
+    '}',
+    '.m3-slot-bar{',
+    '  display:flex;',
+    '  gap:3px;',
+    '  align-items:center;',
+    '  justify-content:center;',
+    '  background:rgba(255,255,255,0.95);',
+    '  border-radius:8px;',
+    '  padding:5px 6px;',
+    '  min-height:48px;',
+    '  flex:1;',
+    '}',
+    '.m3-tools-col{',
+    '  display:flex;',
+    '  flex-direction:column;',
+    '  gap:4px;',
+    '}',
+
+    /* === 通用按钮 === */
+    '.m3-btn-icon{',
+    '  width:28px;height:28px;',
+    '  border-radius:6px;',
+    '  background:rgba(255,255,255,0.95);',
+    '  border:2px solid #667eea;',
+    '  font-size:12px;',
+    '  cursor:pointer;',
+    '  box-shadow:0 2px 0 #4a5dbd;',
+    '  display:flex;align-items:center;justify-content:center;',
+    '  flex-shrink:0;',
+    '}',
+    '.m3-btn-icon:active{transform:translateY(2px);box-shadow:0 1px 0 #4a5dbd;}',
+
+    /* === 道具按钮 === */
+    '.m3-tool-btn{',
+    '  position:relative;',
+    '  display:flex;flex-direction:column;align-items:center;gap:2px;',
+    '  background:#ffe066;border:3px solid #ffb800;',
+    '  border-radius:14px;padding:6px 12px;',
+    '  cursor:pointer;transition:transform 0.1s;',
+    '  min-width:72px;box-shadow:0 4px 0 #e0a000;',
+    '}',
+    '.m3-tool-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #e0a000;}',
+    '.m3-tool-btn .icon{font-size:24px;line-height:1;}',
+    '.m3-tool-btn .text{font-size:13px;font-weight:900;color:#8b5a2b;}',
+    '.m3-tool-btn .count{',
+    '  position:absolute;top:-8px;right:-8px;',
+    '  background:#ff4757;color:white;font-size:13px;',
+    '  width:22px;height:22px;border-radius:50%;',
+    '  display:flex;align-items:center;justify-content:center;',
+    '  font-weight:bold;border:2px solid #fff;',
+    '}',
+    '.m3-tool-btn.disabled{opacity:0.6;background:#d0d0d0;border-color:#999;box-shadow:0 4px 0 #777;cursor:not-allowed;}',
+
+    /* === 暂停遮罩 === */
+    '.m3-pause-mask{',
+    '  position:absolute;inset:0;',
+    '  background:rgba(0,0,0,0.6);',
+    '  display:flex;flex-direction:column;align-items:center;justify-content:center;',
+    '  z-index:150;opacity:0;pointer-events:none;',
+    '  transition:opacity 0.3s ease;',
+    '}',
+    '.m3-pause-mask.show{opacity:1;pointer-events:all;}',
+    '.m3-pause-title{font-size:36px;font-weight:900;color:#fff;margin-bottom:30px;letter-spacing:4px;}',
+    '.m3-pause-btn{',
+    '  background:linear-gradient(135deg,#667eea,#764ba2);',
+    '  color:white;border:none;padding:14px 40px;border-radius:30px;',
+    '  font-size:20px;cursor:pointer;font-weight:bold;',
+    '  box-shadow:0 4px 0 #4a3d8c;margin-bottom:16px;transition:transform 0.1s;',
+    '}',
+    '.m3-pause-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #4a3d8c;}',
+    '.m3-pause-btn.secondary{background:#fff;color:#333;box-shadow:0 4px 0 #ccc;}',
+
+    /* === 答题弹窗 === */
+    '.m3-quiz-modal{',
+    '  position:absolute;inset:0;',
+    '  background:rgba(0,0,0,0.6);',
+    '  display:flex;align-items:center;justify-content:center;',
+    '  z-index:200;opacity:0;pointer-events:none;',
+    '  transition:opacity 0.3s ease;padding:20px;',
+    '}',
+    '.m3-quiz-modal.show{opacity:1;pointer-events:all;}',
+    '.m3-quiz-content{',
+    '  background:#fff;padding:24px;border-radius:20px;',
+    '  width:100%;max-width:380px;',
+    '  box-shadow:0 12px 40px rgba(0,0,0,0.3);',
+    '}',
+    '.m3-quiz-chapter{font-size:13px;color:#888;margin-bottom:8px;}',
+    '.m3-quiz-question{font-size:17px;font-weight:bold;color:#333;line-height:1.6;margin-bottom:16px;}',
+    '.m3-quiz-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}',
+    '.m3-quiz-option{padding:12px 16px;border:2px solid #e8e8e8;border-radius:12px;cursor:pointer;font-size:15px;color:#333;transition:all 0.2s;}',
+    '.m3-quiz-option:hover{border-color:#667eea;background:#f0f2ff;}',
+    '.m3-quiz-option.correct{border-color:#52c41a;background:#f6ffed;color:#389e0d;}',
+    '.m3-quiz-option.wrong{border-color:#ff4757;background:#fff1f0;color:#cf1322;}',
+    '.m3-quiz-option.disabled{pointer-events:none;}',
+    '.m3-quiz-tip{text-align:center;font-size:14px;color:#666;margin-bottom:12px;min-height:20px;}',
+    '.m3-quiz-close-btn{width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:12px;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 3px 0 #4a3d8c;}'
+  ].join('');
   document.head.appendChild(style);
 })();
 
