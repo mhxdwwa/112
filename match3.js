@@ -242,11 +242,13 @@ function renderMatch3LevelSelect(container, student) {
   // 计算已通关数和最高通关关卡
   var clearedCount = 0;
   var maxClearedLevel = 0;
+  var totalCoins = 0;
   Object.keys(levels).forEach(function(k) {
     if (levels[k] && levels[k].cleared) {
       clearedCount++;
       if (parseInt(k) > maxClearedLevel) maxClearedLevel = parseInt(k);
     }
+    totalCoins += (levels[k] && levels[k].coinsEarned) || 0;
   });
 
   // 下一关 = maxClearedLevel + 1（第一关始终可玩）
@@ -255,7 +257,11 @@ function renderMatch3LevelSelect(container, student) {
   var html = '<div style="text-align:center;padding:15px;">';
   html += '<div style="font-size:36px;">🧩</div>';
   html += '<div style="font-size:18px;font-weight:700;margin:8px 0;">宠物消消乐</div>';
-  html += '<div style="font-size:13px;color:#888;">已通关 ' + clearedCount + ' 关 · 总分 ' + totalScore + '</div>';
+  html += '<div style="display:flex;justify-content:center;gap:20px;margin-top:8px;">';
+  html += '<div style="text-align:center;"><div style="font-size:18px;font-weight:700;color:#667eea;">' + clearedCount + '</div><div style="font-size:11px;color:#888;">已通关</div></div>';
+  html += '<div style="text-align:center;"><div style="font-size:18px;font-weight:700;color:#d4a017;">' + totalScore + '</div><div style="font-size:11px;color:#888;">总分</div></div>';
+  html += '<div style="text-align:center;"><div style="font-size:18px;font-weight:700;color:#f5a623;">' + totalCoins + '</div><div style="font-size:11px;color:#888;">累计金币</div></div>';
+  html += '</div>';
   html += '</div>';
 
   // 关卡网格（无限关卡，显示到 maxClearedLevel + 10）
@@ -270,9 +276,11 @@ function renderMatch3LevelSelect(container, student) {
 
     if (cleared) {
       // 已通关 - 绿色
+      var lvCoins = (lv && lv.coinsEarned) || 0;
       html += '<div onclick="startMatch3Level(' + i + ')" style="background:linear-gradient(135deg,#52c41a,#389e0d);border:2px solid #389e0d;border-radius:10px;padding:8px 4px;text-align:center;cursor:pointer;transition:all 0.2s;">';
       html += '<div style="font-size:14px;font-weight:700;color:#fff;">第' + i + '关</div>';
       html += '<div style="font-size:10px;color:#fff;margin-top:2px;">' + score + '分</div>';
+      html += '<div style="font-size:10px;color:#ffe082;margin-top:1px;">💰' + lvCoins + '</div>';
       html += '</div>';
     } else if (unlocked && isNext) {
       // 当前可玩关卡 - 高亮橙色
@@ -294,6 +302,12 @@ function renderMatch3LevelSelect(container, student) {
     }
   }
   html += '</div>';
+
+  // 游戏规则
+  html += '<div style="margin:12px 10px;padding:12px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;text-align:left;">';
+  html += '<div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">📖 游戏规则</div>';
+  html += '<div style="font-size:12px;color:#888;line-height:1.8;">';
+  html += '1. 选择三个相同图案的方块消除<br>2. 消除所有方块即可通关<br>3. 通关时间越短，得分越高<br>4. 首次通关获得2-5金币奖励<br>5. 可重复挑战已通关关卡提高分数，但不再获得金币</div></div>';
 
   container.innerHTML = html;
 }
