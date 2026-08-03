@@ -1,4 +1,4 @@
-// match3.js v1 — 宠物消消乐
+// match3.js v2 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -28,6 +28,26 @@ var _m3AudioCtx = null;
 var _m3Container = null;
 var _m3CurrentStudent = null;
 var _m3GameActive = false;
+
+// ===== 获取当前学生 =====
+function getCurrentStudent() {
+  var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  if (isStudentView) {
+    var myStudentId = parseInt(currentUser.studentId);
+    var myClassId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
+    if (!myStudentId || !myClassId) return null;
+    var cur = classesData.find(function(c) { return c.id === myClassId || c.id.toString() === myClassId.toString(); });
+    if (!cur) return null;
+    return cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
+  } else {
+    if (!window._teacherPlayingAsStudent) return null;
+    var cid = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
+    if (!cid || !classesData) return null;
+    var cls = classesData.find(function(c) { return c.id === cid || c.id.toString() === cid.toString(); });
+    if (!cls) return null;
+    return cls.students.find(function(s) { return s.id.toString() === window._teacherPlayingAsStudent.toString(); });
+  }
+}
 
 // ===== 状态管理 =====
 function ensureMatch3State(student) {
