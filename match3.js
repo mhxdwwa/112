@@ -1,4 +1,4 @@
-// match3.js v18 — 宠物消消乐
+// match3.js v19 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -1035,11 +1035,11 @@ function _m3ShowResult(success) {
     /* === 电脑端适配 === */
     '@media (min-width: 768px) {',
     '  .m3-game-frame {',
-    '    max-width: 480px;',
-    '    width: 480px;',
-    '    min-height: 600px;',
-    '    max-height: 80vh;',
-    '    height: 80vh;',
+    '    max-width: 600px;',
+    '    width: 600px;',
+    '    min-height: 700px;',
+    '    max-height: 85vh;',
+    '    height: 85vh;',
     '    aspect-ratio: auto;',
     '  }',
     '  .m3-top-bar {',
