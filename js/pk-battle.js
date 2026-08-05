@@ -242,15 +242,15 @@ function probePKMonsterImages() {
     }
     // 左侧池：无补零格式 1.webp ~ 24.webp
     for(let i = 1; i <= 50; i++) {
-      tryLeft(`战斗兽宠文件夹/${i}.webp`);
+      tryLeft(_oss(`战斗兽宠文件夹/${i}.webp`));
     }
     // 右侧池：所有以0开头的数字图片（01~09, 010~019, 020~024等）
     for(let i = 1; i <= 9; i++) {
-      tryRight(`战斗兽宠文件夹/0${i}.webp`);
+      tryRight(_oss(`战斗兽宠文件夹/0${i}.webp`));
     }
     for(let i = 10; i <= 50; i++) {
       const padded3 = String(i).padStart(3, '0');
-      tryRight(`战斗兽宠文件夹/${padded3}.webp`);
+      tryRight(_oss(`战斗兽宠文件夹/${padded3}.webp`));
     }
     setTimeout(finish, 5000);
   });
@@ -273,7 +273,7 @@ function probeJhBossImages() {
       img.src = path;
     }
     const jhBossNames = ['天山剑魔','幽冥鬼母','毒手药王','血刀老祖','铁面判官'];
-    jhBossNames.forEach(name => tryPath(`战斗兽宠文件夹/${name}.webp`));
+    jhBossNames.forEach(name => tryPath(_oss(`战斗兽宠文件夹/${name}.webp`)));
     setTimeout(finish, 5000);
   });
 }
@@ -953,7 +953,6 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-
 // ========== 课堂PK系统（图片导入+手写答题版）==========
 let classPKState = {
   selectedStudents: [],
@@ -975,7 +974,7 @@ function probeClassPKRobotImages() {
     for(let i = 1; i <= 50; i++) {
       pending++;
       const img = new Image();
-      const path = `战斗机器人/${i}.webp`;
+      const path = _oss(`战斗机器人/${i}.webp`);
       img.onload = () => { _classPKRobotCache.push(path); done(); };
       img.onerror = () => { done(); };
       img.src = path;
@@ -2198,9 +2197,6 @@ function getPetImageSrc(petName, level) {
   return _img(`${cfg.id}/${level}.webp`);
 }
 
-
-// ========== PK Challenge System (recovered from pre-split app.js) ==========
-
 function _startPKChallengePolling() {
   _stopPKChallengePolling();
   var pollStart = Date.now();
@@ -2220,7 +2216,6 @@ function _startPKChallengePolling() {
   }, 5000); // v53: 5s interval (was 2s) — reduces 150 queries/challenge to 60
 }
 
-
 function _stopPKChallengePolling() {
   if (_pkChallengePollTimer) {
     clearInterval(_pkChallengePollTimer);
@@ -2228,6 +2223,7 @@ function _stopPKChallengePolling() {
   }
 }
 
+// Helper: count pending challenges I sent today (not yet accepted/declined)
 function _countMyPendingPKChallenges() {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   if (!isStudentView) return { total: 0, targets: {} };
@@ -2256,14 +2252,12 @@ function _countMyPendingPKChallenges() {
 }
 
 // Helper: check if I already have a pending/in-progress PK battle (only check isFighting flag)
-
 function _hasActivePKBattle() {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   if (!isStudentView) return false;
   // Only block if currently fighting - allow re-invite after battle completes
   return pkState.isFighting;
 }
-
 
 function selectPKOpponent(studentId) {
   if(pkState.isFighting) return;
@@ -2295,7 +2289,6 @@ function selectPKOpponent(studentId) {
   }
   renderPKPage();
 }
-
 
 function sendPKChallenge() {
   if (pkState.players.length !== 2) return;
@@ -2382,7 +2375,6 @@ function sendPKChallenge() {
 }
 
 // v12: Show modal for student to select opponent and send challenge
-
 function showStudentPKChallengeModal() {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   if (!isStudentView) return;
@@ -2470,7 +2462,7 @@ function showStudentPKChallengeModal() {
   showModal('⚔️ 发起PK挑战', html, [{text:'取消', class:'btn-secondary', onclick:'closeModal()'}], true);
 }
 
-
+// v12: Select opponent and immediately send challenge
 function selectStudentPKOpponentAndSend(opponentId) {
   const myStudentId = parseInt(currentUser.studentId);
   const cur = classesData.find(c=>c.id===currentClassId);
@@ -2509,7 +2501,6 @@ function selectStudentPKOpponentAndSend(opponentId) {
   closeModal();
   sendPKChallenge();
 }
-
 
 function _getPendingPKChallengeForMe() {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
@@ -2551,7 +2542,7 @@ function _checkPendingPKChallenge() {
   return false;
 }
 
-
+// Check for pending PK challenges and update the badge on the PK tab
 function _updatePKInviteBadge() {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   const pkNavItem = document.getElementById('pk-nav-item');
@@ -2581,6 +2572,24 @@ function _updatePKInviteBadge() {
   }
 }
 
+// Handle PK tab click - show pending challenge if exists
+function handlePKTabClick() {
+  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+  
+  if (isStudentView) {
+    const challenge = _getPendingPKChallengeForMe();
+    if (challenge) {
+      if (_pkChallengeState._lastShownChallengeId !== challenge.id) {
+        _pkChallengeState._lastShownChallengeId = challenge.id;
+        _showPKChallengeDialog(challenge);
+      }
+      return;
+    }
+  }
+  
+  // No pending challenge, switch to PK page normally
+  switchPage('pk-page');
+}
 
 function _showPKChallengeDialog(challenge) {
   const cur = classesData.find(c => c.id === currentClassId);
@@ -2626,7 +2635,6 @@ function _showPKChallengeDialog(challenge) {
   
   document.body.appendChild(overlay);
 }
-
 
 function acceptPKChallenge(challengeLogId) {
   // Remove overlay
@@ -2722,7 +2730,6 @@ function acceptPKChallenge(challengeLogId) {
 }
 
 // Check for accepted PK challenges (for the challenger to start battle)
-
 function _checkAcceptedPKChallenge() {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   if (!isStudentView) return false;
@@ -2792,7 +2799,6 @@ function _checkAcceptedPKChallenge() {
   return false;
 }
 
-
 function declinePKChallenge(challengeLogId) {
   // Remove overlay
   const overlay = document.querySelector('.pk-challenge-overlay');
@@ -2818,27 +2824,6 @@ function declinePKChallenge(challengeLogId) {
   renderPKPage();
 }
 
-function renderJianghuPage() {
-  const container = document.getElementById('jhPageContent');
-  if(!container) return;
-  if(!currentClassId) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;">请先在【宠物管理】页面选择一个班级</div>';
-    return;
-  }
-  const cur = classesData.find(c=>c.id===currentClassId);
-  if(!cur || cur.students.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;">班级中暂无学生</div>';
-    return;
-  }
-  const validStudents = cur.students.filter(s => {
-    const p = getActivePet(s);
-    return p && !p.isDead;
-  });
-  let html = renderJianghuColumn(cur, validStudents);
-  container.innerHTML = html;
-}
-
-
 function selectPKPlayer(studentId) {
   if(pkState.isFighting) return;
   const cur = classesData.find(c=>c.id===currentClassId);
@@ -2860,7 +2845,6 @@ function selectPKPlayer(studentId) {
   }
   renderPKPage();
 }
-
 
 function resetPKSelection() {
   pkState = { players: [], isFighting: false, _battleCompleted: false };
@@ -2977,20 +2961,5 @@ function spawnThemeParticles(arena, skillType) {
   }
 }
 
-// 技能音效
-function handlePKTabClick() {
-  const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
-  
-  if (isStudentView) {
-    const challenge = _getPendingPKChallengeForMe();
-    if (challenge) {
-      _showPKChallengeDialog(challenge);
-      return;
-    }
-  }
-  
-  // No pending challenge, switch to PK page normally
-  switchPage('pk-page');
-}
 
 // ========== 萌萌江湖行系统 ==========
