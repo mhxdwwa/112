@@ -1,5 +1,5 @@
 /**
- * dal.js v69 — Robust Data Access Layer with Smart Merge
+ * dal.js v68 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -28,22 +28,17 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 30000; // v80: Deprecated - polling replaced with event-driven sync
-var _lastInteractionSync = 0; // v80: Track last sync time for debounce
-var _INTERACTION_DEBOUNCE_MS = 2000; // v80: 2s debounce for interaction-triggered syncs
+var _refreshInterval = 120000; // v54: Fallback polling 2min (was 30s). Only active when Realtime is down.
 var _lastRefreshTime = 0;
 var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '66.0';
+var _DAL_VERSION = '67.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
-// v71: Track class IDs deleted by user via deleteClass(). Prevents Realtime/smart-refresh
-// from re-adding the class before Supabase delete completes. Cleaned up after Supabase confirms deletion.
-var _userDeletedClassIds = [];
 
 /* ===== v45: localStorage Cache for Instant First Paint ===== */
 var _CACHE_KEY = '_dal_cache_v2';
@@ -107,7 +102,8 @@ function _loadFromCache() {
 
 /* ===== v54: Bandwidth Optimization ===== */
 // Classes table columns to select in load/refresh queries.
-// Excludes operation_logs_json (legacy, no longer used). Logs are in operation_logs table.
+// Excludes operation_logs_json (2MB+) which is loaded separately by _loadOperationLogs().
+// This single change saves ~2-5MB per refresh cycle.
 var _CLASS_COLS = 'id, name, teacher_id, created_at';
 
 /* ===== Snapshot System (v7.0) ===== */
@@ -135,34 +131,19 @@ function _capPetGrowth(pet) {
 var _refreshDebounceTimer = null;
 var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
-var _OWN_WRITE_IGNORE_MS = 3000; // v70: Ignore Realtime events for 3s after our own write (was 10s — too aggressive, blocked legitimate updates from other devices)
+var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after our own write (was 30s)
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
 // Coalesces multiple events within 3s into a single refresh.
 var _realtimeCoalesceTimer = null;
-var _realtimeEventsPending = 0; // v70: track events arriving during coalesce window
 function _debouncedRealtimeRefresh(source) {
-  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (1.5s)');
-  if (_realtimeCoalesceTimer) {
-    // v70: Don't drop the event — mark that more events arrived during the wait
-    _realtimeEventsPending++;
-    return;
-  }
+  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (3s)');
+  if (_realtimeCoalesceTimer) return; // already scheduled, skip
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
     _immediateRefreshFromSupabase();
-    // v70: If events arrived during the wait, schedule another refresh
-    if (_realtimeEventsPending > 0) {
-      var pendingCount = _realtimeEventsPending;
-      _realtimeEventsPending = 0;
-      console.log('[DAL] v70 ' + pendingCount + ' events pending — scheduling follow-up refresh');
-      _realtimeCoalesceTimer = setTimeout(function() {
-        _realtimeCoalesceTimer = null;
-        _immediateRefreshFromSupabase();
-      }, 1500);
-    }
-  }, 1500);
+  }, 3000);
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
@@ -208,7 +189,9 @@ function _findPetInSnapshot(petId) {
 function _smartRefreshFromSupabase() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   
-  // v70: Use 3s own-write protection (was 10s). Smart merge handles stale echoes safely.
+  // v30: Use full _OWN_WRITE_IGNORE_MS protection (was 2s, too short for mobile).
+  // On mobile, Realtime echo of our own write can arrive 3-5s after the upsert.
+  // The old 2s protection expired before the echo arrived, causing stale data overwrite.
   if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
     console.log('[DAL] Smart refresh skipped — own write echo (' + 
       Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
@@ -269,23 +252,6 @@ function _smartRefreshFromSupabase() {
     var classes = isStudent ? [classesR.data] : (classesR.data || []);
     var allStudents = studentsR.data || [];
     var allPets = petsR.data || [];
-
-    // v71: Filter out classes that user has deleted locally but haven't been deleted from
-    // Supabase yet. Without this, Realtime events can fetch the class from Supabase and
-    // the merge logic can re-add it to classesData, causing the "delete doesn't work" bug.
-    if (_userDeletedClassIds.length > 0 && !isStudent) {
-      classes = classes.filter(function(c) {
-        return _userDeletedClassIds.indexOf(c.id) === -1;
-      });
-      // Also filter students/pets for deleted classes
-      var deletedClassIdsSet = {};
-      _userDeletedClassIds.forEach(function(id) { deletedClassIdsSet[id] = true; });
-      allStudents = allStudents.filter(function(s) { return !deletedClassIdsSet[s.class_id]; });
-      allPets = allPets.filter(function(p) {
-        // Keep only pets whose students are not in deleted classes
-        return allStudents.some(function(s) { return s.id === p.student_id; });
-      });
-    }
 
     // Filter to relevant students/pets
     if (!isStudent) {
@@ -860,18 +826,31 @@ function _loadCustomActions() {
   }).catch(function(e) { console.warn('[DAL] custom_actions load error:', e); });
 }
 
-/* ===== Operation Logs: operation_logs table architecture (v69) =====
+/* ===== Operation Logs: classes.operation_logs_json architecture (v29) =====
  *
- * v69: All logs stored in operation_logs table (individual rows, atomic INSERTs).
- * No more JSON blob (classes.operation_logs_json) — all blob logs migrated to table.
- * No race conditions: each device INSERTs independently, no read-modify-write.
+ * v29: Logs are stored as JSON in the classes table — same sync channel as student data.
+ * No more operation_logs table (had FK constraints that broke on mobile).
+ * Uses upsert (same pattern as student coins) — proven reliable.
+ * Max 5000 logs per class — oldest are trimmed automatically.
+ * v68: Logs older than 7 days are automatically removed (keep max 5000).
  *
- * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → operation_logs INSERT
- * READ:  init/refresh → _loadOperationLogs() → operation_logs SELECT (single source of truth)
- * REALTIME: operation_logs channel → _refreshLogsOnly() on any INSERT/UPDATE
+ * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → classes.upsert
+ * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
  */
 
 var _OP_LOGS_MAX_PER_CLASS = 5000;
+var _OP_LOGS_RETENTION_DAYS = 7; // v68: Keep only last 7 days
+
+// v68: Filter logs to keep only those within retention period
+function _filterLogsByRetention(logs) {
+  var cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - _OP_LOGS_RETENTION_DAYS);
+  var cutoffTimestamp = cutoffDate.toISOString();
+  
+  return logs.filter(function(log) {
+    return log.timestamp && log.timestamp >= cutoffTimestamp;
+  });
+}
 
 // Get class IDs for this user
 function _getOpLogClassIds() {
@@ -887,96 +866,7 @@ function _getOpLogClassIds() {
   }
 }
 
-// v69: Load operation logs from operation_logs table ONLY (single source of truth).
-// All blob logs have been migrated to the table — no longer reading from classes.operation_logs_json.
-// Local unsynced logs (negative IDs) are preserved and merged with server logs.
-// v69: Query EACH CLASS INDIVIDUALLY — Supabase has a hard 1000-row limit per query.
-// Using .in('class_id', [2,3,4]) returns max 1000 rows TOTAL across all classes,
-// which means some classes get 0 rows. Per-class queries ensure every class gets its data.
-var _OP_LOGS_COLS = 'id, class_id, student_id, student_name, action_type, details, coin_delta, exp_delta, pet_id, extra, reverted, created_at';
-var _OP_LOGS_PAGE = 1000; // Supabase max rows per query
-
-function _rowToLog(row) {
-  var extra = row.extra || {};
-  // v71: Ensure created_at is treated as UTC. Supabase may return timestamps
-  // without timezone indicator (e.g. "2026-07-18T23:08:00.000") which the browser
-  // interprets as LOCAL time, causing e.g. 7:08 AM UTC+8 to display as "23:08".
-  // Append 'Z' if no timezone info is present so new Date() correctly interprets it as UTC.
-  var rawTs = row.created_at || '';
-  var fixedTs = rawTs;
-  if (rawTs && !rawTs.endsWith('Z') && !rawTs.includes('+') && !rawTs.match(/-\d{2}:\d{2}$/)) {
-    fixedTs = rawTs + 'Z';
-  }
-  var log = {
-    id: row.id,
-    timestamp: fixedTs,
-    classId: row.class_id,
-    studentId: row.student_id,
-    studentName: row.student_name || '',
-    actionType: row.action_type || '',
-    details: row.details || '',
-    coinDelta: parseInt(row.coin_delta) || 0,
-    expDelta: parseInt(row.exp_delta) || 0,
-    petId: row.pet_id || null,
-    extra: (extra.pkChallenge || extra.pkAccept || extra.shopItemId || extra.causedDeath || extra.starvation || extra.prevGrowth !== undefined) ? extra : (extra.fullSnapshot ? null : extra),
-    snapshot: row.snapshot || null,
-    fullSnapshot: extra.fullSnapshot || null,
-    reverted: !!row.reverted,
-    _synced: true,
-    _fromSupabase: true
-  };
-  if (log.extra && log.extra.fullSnapshot) {
-    var cleanExtra = {};
-    Object.keys(log.extra).forEach(function(k) {
-      if (k !== 'fullSnapshot') cleanExtra[k] = log.extra[k];
-    });
-    log.extra = Object.keys(cleanExtra).length > 0 ? cleanExtra : null;
-  }
-  return log;
-}
-
-// Fetch ALL logs for a single class, paginating in chunks of _OP_LOGS_PAGE
-function _fetchAllLogsForClass(classId) {
-  var allRows = [];
-  function fetchPage(offset) {
-    return db.from('operation_logs')
-      .select(_OP_LOGS_COLS)
-      .eq('class_id', classId)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + _OP_LOGS_PAGE - 1)
-      .then(function(r) {
-        if (r.error) {
-          console.error('[DAL] v69 query error for class', classId, 'offset', offset + ':', r.error.message);
-          return allRows;
-        }
-        var rows = r.data || [];
-        allRows = allRows.concat(rows);
-        if (rows.length >= _OP_LOGS_PAGE) {
-          // Might be more pages — fetch next
-          return fetchPage(offset + _OP_LOGS_PAGE);
-        }
-        return allRows;
-      });
-  }
-  return fetchPage(0);
-}
-
-// v75: Fetch a single log's snapshot on demand (to avoid loading all snapshots on every refresh)
-function _fetchLogSnapshot(logId) {
-  if (!db) return Promise.resolve(null);
-  return db.from('operation_logs')
-    .select('snapshot')
-    .eq('id', logId)
-    .single()
-    .then(function(r) {
-      if (r.error) {
-        console.warn('[DAL] _fetchLogSnapshot error:', r.error.message);
-        return null;
-      }
-      return (r.data && r.data.snapshot) || null;
-    });
-}
-
+// v29: Load operation logs from classes.operation_logs_json
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
@@ -989,56 +879,67 @@ function _loadOperationLogs() {
 
   return _getOpLogClassIds().then(function(classIds) {
     if (!classIds || classIds.length === 0) {
-      console.warn('[DAL] v69 _loadOperationLogs: no classIds');
+      console.warn('[DAL] v29 _loadOperationLogs: no classIds');
       return;
     }
-    console.log('[DAL] v69 Loading operation logs for class_ids:', classIds);
+    console.log('[DAL] v29 Loading operation logs from classes table for class_ids:', classIds);
 
-    // v69: Query each class INDIVIDUALLY with pagination to bypass 1000-row hard limit
-    var perClassQueries = classIds.map(function(cid) {
-      return _fetchAllLogsForClass(cid);
+    // v29: Read from classes.operation_logs_json — same channel as student data
+    return db.from('classes').select('id, operation_logs_json').in('id', classIds);
+  }).then(function(r) {
+    if (!r) return;
+    if (r.error) {
+      console.error('[DAL] v29 classes query FAILED:', r.error.message);
+      return;
+    }
+
+    // Parse operation_logs_json from each class
+    var allLogs = [];
+    (r.data || []).forEach(function(cls) {
+      if (!cls.operation_logs_json) return;
+      try {
+        var logs = JSON.parse(cls.operation_logs_json);
+        if (Array.isArray(logs)) {
+          // v68: Filter out logs older than retention period
+          logs = _filterLogsByRetention(logs);
+          logs.forEach(function(l) {
+            l._synced = true;
+            l._fromSupabase = true;
+            if (!l.classId) l.classId = cls.id;
+            allLogs.push(l);
+          });
+        }
+      } catch(e) {
+        console.warn('[DAL] v29 Failed to parse operation_logs_json for class', cls.id, e);
+      }
     });
 
-    return Promise.all(perClassQueries).then(function(perClassResults) {
-      var serverLogs = [];
-      perClassResults.forEach(function(rows, idx) {
-        rows.forEach(function(row) {
-          serverLogs.push(_rowToLog(row));
-        });
-        console.log('[DAL] v69 Class', classIds[idx] + ':', rows.length, 'logs loaded');
-      });
-      console.log('[DAL] v69 Total from table:', serverLogs.length, 'logs');
-
-      // Preserve any local unsynced logs (negative IDs, not yet in table)
-      var localUnsynced = window.operationLogs.filter(function(l) {
-        return !l._synced;
-      });
-
-      // v69: Content-based dedup — remove local unsynced logs that duplicate server logs
-      var serverContentKeys = {};
-      serverLogs.forEach(function(l) {
-        var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
-        serverContentKeys[key] = true;
-      });
-
-      var dedupedLocal = localUnsynced.filter(function(l) {
-        if (l.id > 0) return false; // positive ID = already in table
-        var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
-        if (serverContentKeys[key]) return false;
-        return true;
-      });
-
-      window.operationLogs = serverLogs.concat(dedupedLocal);
-      window.operationLogs.sort(function(a, b) {
-        return (b.timestamp || '').localeCompare(a.timestamp || '');
-      });
-
-      // Backup to localStorage
-      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-      console.log('[DAL] v69 Final: ' + serverLogs.length + ' server + ' + dedupedLocal.length + ' local unsynced = ' + window.operationLogs.length + ' total');
+    // Preserve any local unsynced logs (new logs with negative ID, OR modified logs with positive ID)
+    var localUnsynced = window.operationLogs.filter(function(l) {
+      return !l._synced;
     });
+
+    // v34: Deduplicate — if local unsynced log has same ID as a server log, local wins (it's newer)
+    var serverLogIds = {};
+    allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+    var dedupedServer = allLogs.filter(function(l) {
+      // Remove server log if local has a newer unsynced version
+      for (var i = 0; i < localUnsynced.length; i++) {
+        if (localUnsynced[i].id === l.id) return false;
+      }
+      return true;
+    });
+
+    window.operationLogs = dedupedServer.concat(localUnsynced);
+    window.operationLogs.sort(function(a, b) {
+      return (b.timestamp || '').localeCompare(a.timestamp || '');
+    });
+
+    // Backup to localStorage
+    try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+    console.log('[DAL] v29 Loaded ' + allLogs.length + ' logs from Supabase, ' + localUnsynced.length + ' local unsynced kept');
   }).catch(function(e) {
-    console.warn('[DAL] v69 _loadOperationLogs error:', e);
+    console.warn('[DAL] v29 _loadOperationLogs error:', e);
   });
 }
 
@@ -1047,30 +948,136 @@ function _loadOperationLogs() {
 var _writingLogsToSupabase = false;
 var _pendingLogWrites = 0;
 
-// v69: Removed _verifyLogWrite — was dead code from v65 (JSON blob approach).
-// With operation_logs table using atomic INSERTs, no verification is needed.
+// v65: Verify that our logs weren't overwritten by another device's concurrent write.
+// If our logs are missing, re-read from Supabase, re-merge, and re-write.
+// Retries up to 3 times with increasing delays.
+function _verifyLogWrite(classId, writtenLogIds, retryCount) {
+  if (retryCount >= 3 || !writtenLogIds || writtenLogIds.length === 0) {
+    return Promise.resolve();
+  }
+  // Wait 500ms to let any concurrent writes settle
+  return new Promise(function(resolve) {
+    setTimeout(resolve, 500 + retryCount * 500);
+  }).then(function() {
+    return db.from('classes').select('id, operation_logs_json').eq('id', classId).single();
+  }).then(function(r) {
+    if (r.error || !r.data) {
+      console.warn('[DAL] v65 Verify read failed for class', classId + ':', r.error ? r.error.message : 'no data');
+      return;
+    }
+    var serverLogs = [];
+    try {
+      serverLogs = r.data.operation_logs_json ? JSON.parse(r.data.operation_logs_json) : [];
+    } catch(e) { serverLogs = []; }
+    
+    // Check which of our logs are missing
+    var serverLogIds = {};
+    serverLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+    var missingIds = writtenLogIds.filter(function(id) { return !serverLogIds[id]; });
+    
+    if (missingIds.length === 0) {
+      console.log('[DAL] v65 Verify OK: all', writtenLogIds.length, 'logs present for class', classId);
+      return;
+    }
+    
+    console.warn('[DAL] v65 CONFLICT DETECTED! ' + missingIds.length + '/' + writtenLogIds.length + 
+      ' logs overwritten by another device for class', classId, '(retry ' + retryCount + ')');
+    
+    // Re-merge: take server logs + add our missing logs
+    var merged = serverLogs.slice();
+    var mergedById = {};
+    merged.forEach(function(l, idx) { mergedById[l.id] = idx; });
+    
+    // Find our missing logs from window.operationLogs
+    var addedCount = 0;
+    missingIds.forEach(function(missingId) {
+      for (var i = 0; i < window.operationLogs.length; i++) {
+        if (window.operationLogs[i].id === missingId) {
+          var l = window.operationLogs[i];
+          var mergedLog = {
+            id: l.id,
+            timestamp: l.timestamp || new Date().toISOString(),
+            classId: classId,
+            studentId: l.studentId,
+            studentName: l.studentName || '',
+            actionType: l.actionType || '',
+            details: l.details || '',
+            coinDelta: parseInt(l.coinDelta) || 0,
+            expDelta: parseInt(l.expDelta) || 0,
+            petId: l.petId || null,
+            extra: l.extra || null,
+            snapshot: l.snapshot || null,
+            fullSnapshot: l.fullSnapshot || null,
+            reverted: !!l.reverted,
+            _synced: true,
+            _fromSupabase: true
+          };
+          if (mergedById[l.id] !== undefined) {
+            merged[mergedById[l.id]] = mergedLog;
+          } else {
+            merged.push(mergedLog);
+            mergedById[l.id] = merged.length - 1;
+            addedCount++;
+          }
+          break;
+        }
+      }
+    });
+    
+    if (addedCount === 0) {
+      console.log('[DAL] v65 No missing logs found locally, skipping re-write');
+      return;
+    }
+    
+    // Sort and cap
+    merged.sort(function(a, b) {
+      return (b.timestamp || '').localeCompare(a.timestamp || '');
+    });
+    
+    // v68: Filter out logs older than retention period
+    merged = _filterLogsByRetention(merged);
+    
+    if (merged.length > _OP_LOGS_MAX_PER_CLASS) {
+      merged = merged.slice(0, _OP_LOGS_MAX_PER_CLASS);
+    }
+    
+    console.log('[DAL] v65 Re-merging: added', addedCount, 'missing logs, total:', merged.length);
+    
+    // Re-write
+    return db.from('classes').update({
+      operation_logs_json: JSON.stringify(merged)
+    }).eq('id', classId).then(function(ur) {
+      if (ur.error) {
+        console.error('[DAL] v65 Re-write failed:', ur.error.message);
+      } else {
+        console.log('[DAL] v65 Re-write OK:', merged.length, 'logs for class', classId);
+        _lastOwnWriteTime = Date.now();
+        // Verify again to make sure our re-write wasn't overwritten
+        return _verifyLogWrite(classId, writtenLogIds, retryCount + 1);
+      }
+    });
+  });
+}
 
-// v69: Write unsynced logs to Supabase using INSERT into operation_logs table (atomic, no race condition).
-// Old approach (v29-v66): read-modify-write on classes.operation_logs_json JSON blob.
-// Two devices writing concurrently would overwrite each other's logs.
-// New approach: each log is an individual INSERT row — completely independent, no conflicts.
+// v29: Write unsynced logs to classes.operation_logs_json — same channel as student data.
+// Uses upsert (proven reliable on mobile). Max 5000 logs per class, oldest trimmed.
 function _writeUnsyncedLogsToSupabase() {
   if (_writingLogsToSupabase) {
-    console.log('[DAL] v67 Write already in progress, queueing...');
+    console.log('[DAL] v29 Write already in progress, queueing...');
     _pendingLogWrites++;
     return Promise.resolve();
   }
 
   if (!db || !currentUser) {
-    console.warn('[DAL] v67 Cannot write logs: db or currentUser not ready');
+    console.warn('[DAL] v29 Cannot write logs: db or currentUser not ready');
     return Promise.resolve();
   }
   if (typeof window.operationLogs === 'undefined' || !Array.isArray(window.operationLogs)) {
-    console.warn('[DAL] v67 Cannot write logs: window.operationLogs invalid');
+    console.warn('[DAL] v29 Cannot write logs: window.operationLogs invalid');
     return Promise.resolve();
   }
 
-  // Collect unsynced logs
+  // Collect unsynced logs: new logs (negative ID) OR modified logs (marked _synced=false after being true)
   var unsynced = [];
   for (var i = 0; i < window.operationLogs.length; i++) {
     if (!window.operationLogs[i]._synced) {
@@ -1082,7 +1089,7 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
-  console.log('[DAL] v67 Writing ' + unsynced.length + ' unsynced logs via INSERT to operation_logs table');
+  console.log('[DAL] v29 Writing ' + unsynced.length + ' unsynced logs to classes table');
 
   // Determine fallback classId
   var defaultClassId = null;
@@ -1095,7 +1102,7 @@ function _writeUnsyncedLogsToSupabase() {
   }
 
   if (!defaultClassId) {
-    console.error('[DAL] v67 Cannot write logs - classId is null!');
+    console.error('[DAL] v29 Cannot write logs - classId is null!');
     return Promise.resolve();
   }
 
@@ -1113,171 +1120,159 @@ function _writeUnsyncedLogsToSupabase() {
 
   var classIds = Object.keys(logsByClass).map(Number);
 
-  // v67: First, verify which classIds actually exist in Supabase (FK constraint)
-  return db.from('classes').select('id').in('id', classIds).then(function(r) {
+  // Step 1: Read existing logs from Supabase for affected classes
+  return db.from('classes').select('id, operation_logs_json').in('id', classIds).then(function(r) {
     if (r.error) {
-      console.error('[DAL] v67 Failed to check class existence:', r.error.message);
+      console.error('[DAL] v29 Failed to read existing logs:', r.error.message);
       _writingLogsToSupabase = false;
       setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
       return;
     }
 
-    var validClassIds = {};
-    (r.data || []).forEach(function(cls) { validClassIds[cls.id] = true; });
-
-    var skippedClassIds = classIds.filter(function(cid) { return !validClassIds[cid]; });
-    if (skippedClassIds.length > 0) {
-      console.log('[DAL] v67 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
-    }
-
-    var validCids = classIds.filter(function(cid) { return validClassIds[cid]; });
-    if (validCids.length === 0) {
-      console.log('[DAL] v67 No valid classes to write logs to, skipping');
-      _writingLogsToSupabase = false;
-      return;
-    }
-
-    // v67: INSERT or UPDATE each log individually in operation_logs table
-    // Each operation is atomic — no race condition between devices
-    // - New logs (negative ID): INSERT → get auto-generated ID
-    // - Modified logs (positive ID, previously synced): UPDATE existing row
-    var writePromises = [];
-
-    validCids.forEach(function(cid) {
-      var logs = logsByClass[cid] || [];
-      logs.forEach(function(entry) {
-        var l = entry.log;
-
-        // Build the extra JSONB field — include fullSnapshot if present
-        var extraPayload = l.extra || null;
-        if (l.fullSnapshot) {
-          extraPayload = extraPayload ? Object.assign({}, extraPayload) : {};
-          extraPayload.fullSnapshot = l.fullSnapshot;
-        }
-
-        // Build payload matching operation_logs table columns
-        var payload = {
-          class_id: cid,
-          student_id: (l.studentId && l.studentId > 0 && l.studentId === Math.floor(l.studentId)) ? l.studentId : null,
-          student_name: l.studentName || '',
-          action_type: l.actionType || '',
-          details: l.details || '',
-          coin_delta: parseInt(l.coinDelta) || 0,
-          exp_delta: parseInt(l.expDelta) || 0,
-          pet_id: l.petId || null,
-          extra: extraPayload,
-          snapshot: l.snapshot || null,
-          reverted: !!l.reverted
-        };
-
-        // v67: If log has a positive ID, it was previously synced — UPDATE instead of INSERT
-        var isUpdate = (l.id > 0 && l._fromSupabase);
-
-        if (isUpdate) {
-          // UPDATE existing row (e.g., PK challenge status change)
-          writePromises.push(
-            db.from('operation_logs').update(payload).eq('id', l.id).then(function(ur) {
-              if (ur.error) {
-                // FK constraint on student_id? Retry without student_id
-                if (ur.error.code === '23503' && payload.student_id) {
-                  console.warn('[DAL] v67 FK violation on update for student_id', payload.student_id, '— retrying without');
-                  payload.student_id = null;
-                  return db.from('operation_logs').update(payload).eq('id', l.id).then(function(ur2) {
-                    if (ur2.error) {
-                      console.error('[DAL] v67 Update retry failed:', ur2.error.message);
-                      return { success: false, entry: entry };
-                    }
-                    return { success: true, entry: entry, newId: l.id };
-                  });
-                }
-                console.error('[DAL] v67 Update failed for log', l.id + ':', ur.error.message);
-                return { success: false, entry: entry };
-              }
-              return { success: true, entry: entry, newId: l.id };
-            })
-          );
-        } else {
-          // INSERT new log with return=representation to get the auto-generated ID
-          writePromises.push(
-            db.from('operation_logs').insert([payload]).select('id').then(function(ir) {
-              if (ir.error) {
-                // FK constraint on student_id? Retry without student_id
-                if (ir.error.code === '23503' && payload.student_id) {
-                  console.warn('[DAL] v67 FK violation for student_id', payload.student_id, '— retrying without');
-                  payload.student_id = null;
-                  return db.from('operation_logs').insert([payload]).select('id').then(function(ir2) {
-                    if (ir2.error) {
-                      console.error('[DAL] v67 Insert retry failed:', ir2.error.message);
-                      return { success: false, entry: entry };
-                    }
-                    if (ir2.data && ir2.data[0]) {
-                      return { success: true, entry: entry, newId: ir2.data[0].id };
-                    }
-                    return { success: false, entry: entry };
-                  });
-                }
-                console.error('[DAL] v67 Insert failed for class', cid + ':', ir.error.message);
-                return { success: false, entry: entry };
-              }
-              if (ir.data && ir.data[0]) {
-                return { success: true, entry: entry, newId: ir.data[0].id };
-              }
-              return { success: false, entry: entry };
-            })
-          );
-        }
-      });
-    });
-
-    return Promise.all(writePromises);
-  }).then(function(results) {
-    _writingLogsToSupabase = false;
-
-    if (!results) {
-      // No valid classes — already handled
-      return;
-    }
-
-    var successCount = 0;
-    var failCount = 0;
-
-    results.forEach(function(result) {
-      if (!result) return;
-      if (result.success) {
-        var idx = result.entry.index;
-        if (idx >= 0 && idx < window.operationLogs.length) {
-          // Update local log with real Supabase ID (for new inserts) and mark as synced
-          if (result.newId && result.newId > 0) {
-            window.operationLogs[idx].id = result.newId;
-          }
-          window.operationLogs[idx]._synced = true;
-          window.operationLogs[idx]._fromSupabase = true;
-        }
-        successCount++;
-      } else {
-        // Mark as unsynced so it retries next time
-        var idx = result.entry.index;
-        if (idx >= 0 && idx < window.operationLogs.length) {
-          window.operationLogs[idx]._synced = false;
-        }
-        failCount++;
+    // Parse existing logs from Supabase
+    var existingByClass = {};
+    (r.data || []).forEach(function(cls) {
+      try {
+        existingByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
+      } catch(e) {
+        existingByClass[cls.id] = [];
       }
     });
+
+    // Step 2: Merge — add new logs to existing, UPDATE modified logs, mark as synced
+    // v62: Filter out classes that don't exist in Supabase yet (e.g., new classes with string IDs)
+    // These logs will be written after the class is synced and gets a valid ID
+    var validClassIds = classIds.filter(function(cid) {
+      return existingByClass[cid] !== undefined;
+    });
+    var skippedClassIds = classIds.filter(function(cid) {
+      return existingByClass[cid] === undefined;
+    });
+    if (skippedClassIds.length > 0) {
+      console.log('[DAL] v62 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
+    }
+
+    // v64: If no valid classes, skip the re-read and resolve immediately
+    if (validClassIds.length === 0) {
+      console.log('[DAL] v64 No valid classes to write logs to, skipping');
+      return Promise.resolve();
+    }
+    
+    // v64: Re-read existing logs from Supabase RIGHT BEFORE writing.
+    // This is critical to prevent the race condition where two devices read the same
+    // data, each adds their new log, and the last writer overwrites the other's log.
+    // By re-reading immediately before writing, we get the latest data from other devices.
+    return db.from('classes').select('id, operation_logs_json').in('id', validClassIds).then(function(freshR) {
+      if (freshR.error) {
+        console.error('[DAL] v64 Failed to re-read logs before write:', freshR.error.message);
+        // Fall back to initial read data
+        freshR = { data: [] };
+      }
+      var freshByClass = {};
+      (freshR.data || []).forEach(function(cls) {
+        try {
+          freshByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
+        } catch(e) { freshByClass[cls.id] = []; }
+      });
+
+      var upsertPromises = validClassIds.map(function(cid) {
+        // v64: Use FRESH data from Supabase (not stale initial read)
+        var existing = freshByClass[cid] || [];
+        var newLogs = logsByClass[cid] || [];
+
+        // Build index of existing logs by ID for deduplication
+        var existingById = {};
+        existing.forEach(function(l, idx) { existingById[l.id] = idx; });
+
+        newLogs.forEach(function(entry) {
+          var l = entry.log;
+          var merged = {
+            id: l.id,
+            timestamp: l.timestamp || new Date().toISOString(),
+            classId: cid,
+            studentId: l.studentId,
+            studentName: l.studentName || '',
+            actionType: l.actionType || '',
+            details: l.details || '',
+            coinDelta: parseInt(l.coinDelta) || 0,
+            expDelta: parseInt(l.expDelta) || 0,
+            petId: l.petId || null,
+            extra: l.extra || null,
+            snapshot: l.snapshot || null,
+            fullSnapshot: l.fullSnapshot || null,
+            reverted: !!l.reverted,
+            _synced: true,
+            _fromSupabase: true
+          };
+
+          // v34: If log with same ID already exists (modified log), REPLACE it instead of duplicating
+          if (existingById[l.id] !== undefined) {
+            existing[existingById[l.id]] = merged;
+          } else {
+            existing.push(merged);
+            existingById[l.id] = existing.length - 1;
+          }
+
+          // Mark local log as synced
+          if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+            window.operationLogs[entry.index]._synced = true;
+            window.operationLogs[entry.index]._fromSupabase = true;
+          }
+        });
+
+        // Sort by timestamp descending, cap at max
+        existing.sort(function(a, b) {
+          return (b.timestamp || '').localeCompare(a.timestamp || '');
+        });
+        
+        // v68: Filter out logs older than retention period
+        existing = _filterLogsByRetention(existing);
+        
+        // Cap at max
+        if (existing.length > _OP_LOGS_MAX_PER_CLASS) {
+          existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
+        }
+
+        // v28: Use update (not upsert) to only modify operation_logs_json.
+        // v65: Track the log IDs we wrote for verification
+        var writtenLogIds = newLogs.map(function(entry) { return entry.log.id; });
+        return db.from('classes').update({
+          operation_logs_json: JSON.stringify(existing)
+        }).eq('id', cid).then(function(ur) {
+          if (ur.error) {
+            console.error('[DAL] v29 Upsert FAILED for class', cid + ':', ur.error.message);
+            // Mark logs as unsynced again so they retry
+            (logsByClass[cid] || []).forEach(function(entry) {
+              if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+                window.operationLogs[entry.index]._synced = false;
+              }
+            });
+          } else {
+            console.log('[DAL] v65 Upserted ' + existing.length + ' logs for class', cid);
+            // v64: Update own write time to prevent unnecessary realtime refresh
+            _lastOwnWriteTime = Date.now();
+            // v65: Verify our logs weren't overwritten by another device
+            return _verifyLogWrite(cid, writtenLogIds, 0);
+          }
+        });
+      });
+
+      return Promise.all(upsertPromises);
+    });
+  }).then(function() {
+    _writingLogsToSupabase = false;
 
     // Persist to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
 
-    console.log('[DAL] v67 Write complete: ' + successCount + '/' + unsynced.length + ' logs inserted successfully' +
-      (failCount > 0 ? ', ' + failCount + ' failed (will retry)' : ''));
-
-    // v67: Update own write time to prevent unnecessary realtime refresh
-    if (successCount > 0) {
-      _lastOwnWriteTime = Date.now();
-    }
+    var syncedCount = unsynced.filter(function(entry) {
+      return window.operationLogs[entry.index] && window.operationLogs[entry.index]._synced;
+    }).length;
+    console.log('[DAL] v29 Write complete: ' + syncedCount + '/' + unsynced.length + ' logs synced');
 
     // Retry if some failed
-    if (failCount > 0) {
-      console.warn('[DAL] v67 ' + failCount + ' logs failed, retry in 5s');
+    if (syncedCount < unsynced.length) {
+      console.warn('[DAL] v29 ' + (unsynced.length - syncedCount) + ' logs still unsynced, retry in 5s');
       setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
     }
 
@@ -1288,7 +1283,7 @@ function _writeUnsyncedLogsToSupabase() {
     }
   }).catch(function(err) {
     _writingLogsToSupabase = false;
-    console.error('[DAL] v67 CRITICAL: write exception:', err.message);
+    console.error('[DAL] v29 CRITICAL: write exception:', err.message);
     setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
   });
 }
@@ -1395,84 +1390,6 @@ window._forceSyncLogs = function() {
   }
 };
 
-// v70: Comprehensive diagnostic — shows log counts per class, time ranges, and gaps
-window._diagnoseHistory = function() {
-  if (!db || !currentUser) return 'DB or user not ready';
-  console.log('=== History Diagnostic v70 ===');
-  
-  var isTeacher = currentUser.type === 'teacher';
-  var classIds = [];
-  
-  var getClassIdsPromise = isTeacher
-    ? db.from('classes').select('id, name').eq('teacher_id', currentUser.id)
-    : Promise.resolve({ data: [{ id: parseInt(localStorage.getItem('classId')), name: 'My Class' }] });
-  
-  return getClassIdsPromise.then(function(r) {
-    if (!r.data || r.data.length === 0) {
-      console.log('No classes found');
-      return 'No classes found';
-    }
-    classIds = r.data.map(function(c) { return c.id; });
-    var classNames = {};
-    r.data.forEach(function(c) { classNames[c.id] = c.name; });
-    console.log('Classes:', classIds.map(function(id) { return id + ' (' + classNames[id] + ')'; }).join(', '));
-    
-    // Query log counts and time ranges per class
-    return Promise.all(classIds.map(function(cid) {
-      return db.from('operation_logs')
-        .select('id, created_at, action_type')
-        .eq('class_id', cid)
-        .order('created_at', { ascending: true })
-        .then(function(r) {
-          if (r.error) {
-            console.error('Class', cid, 'query failed:', r.error.message);
-            return { classId: cid, name: classNames[cid], count: 0, error: r.error.message };
-          }
-          var logs = r.data || [];
-          var first = logs[0];
-          var last = logs[logs.length - 1];
-          console.log('\nClass', cid, '(' + classNames[cid] + '):');
-          console.log('  Total logs:', logs.length);
-          if (first) console.log('  First log:', first.created_at, '(' + first.action_type + ')');
-          if (last) console.log('  Last log:', last.created_at, '(' + last.action_type + ')');
-          return { classId: cid, name: classNames[cid], count: logs.length, first: first ? first.created_at : null, last: last ? last.created_at : null };
-        });
-    }));
-  }).then(function(results) {
-    if (!results) return;
-    console.log('\n=== Summary ===');
-    console.table(results);
-    
-    // Check local unsynced logs
-    var localUnsynced = (window.operationLogs || []).filter(function(l) { return !l._synced; });
-    console.log('\nLocal unsynced logs:', localUnsynced.length);
-    if (localUnsynced.length > 0) {
-      var byClass = {};
-      localUnsynced.forEach(function(l) {
-        var cid = l.classId || 'null';
-        if (!byClass[cid]) byClass[cid] = 0;
-        byClass[cid]++;
-      });
-      console.log('Unsynced by class:', byClass);
-    }
-    
-    return 'Check browser console for details';
-  });
-};
-
-// v70: Force reload ALL logs from Supabase (bypass cache)
-window._forceReloadHistory = function() {
-  console.log('[v70] Force reloading all logs from Supabase...');
-  return _loadOperationLogs().then(function() {
-    console.log('[v70] Reload complete. Total logs:', (window.operationLogs || []).length);
-    if (typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
-    return 'Reloaded ' + (window.operationLogs || []).length + ' logs';
-  }).catch(function(e) {
-    console.error('[v70] Reload failed:', e);
-    return 'Reload failed: ' + e.message;
-  });
-};
-
 /* ===== Main Load Entry ===== */
 function loadFromSupabase() {
   if (currentUser && currentUser.type === 'student') {
@@ -1534,47 +1451,6 @@ function _syncTeacherToSupabase() {
             cls.id = newId;
             classIdMap[oldId] = newId;
             console.log('[DAL] v48 New class "' + cls.name + '" → DB ID ' + newId + ' (was ' + oldId + ')');
-            // v71: IMMEDIATELY update _userDeletedClassIds here (not in Phase 1b).
-            // This prevents a race condition where a Realtime event triggers
-            // _smartRefreshFromSupabase() between INSERT and Phase 1b, re-adding
-            // the class to classesData before _userDeletedClassIds is updated.
-            if (typeof _userDeletedClassIds !== 'undefined') {
-              var _delIdx = _userDeletedClassIds.indexOf(oldId);
-              if (_delIdx !== -1) {
-                _userDeletedClassIds[_delIdx] = newId;
-                console.log('[DAL] v71 Immediate _userDeletedClassIds update: ' + oldId + ' → ' + newId);
-              }
-            }
-            // v72: CRITICAL FIX — detect user deletion during INSERT (race condition).
-            // If user created class → INSERT started → user deleted class before INSERT resolved,
-            // the class now exists in Supabase but is NOT in current classesData.
-            // Without this fix, Phase 6 might re-upsert the class (if it captured the old classesData
-            // before deletion), or the Realtime event could re-add it from Supabase.
-            // Solution: Immediately delete the class from Supabase and mark for Phase 6 cleanup.
-            var _inCurrentClassesData = false;
-            for (var _ci = 0; _ci < classesData.length; _ci++) {
-              if (classesData[_ci].id == newId || classesData[_ci].id === newId) {
-                _inCurrentClassesData = true;
-                break;
-              }
-            }
-            if (!_inCurrentClassesData) {
-              console.log('[DAL] v72 Class ' + cls.name + ' (DB ID ' + newId + ') was deleted by user during INSERT — deleting from Supabase immediately');
-              // Update currentClassIdSet so Phase 6 knows this class is gone
-              currentClassIdSet[newId] = false;
-              // Track for Phase 6 backup cleanup
-              if (_syncDeletedClassIds.indexOf(newId) === -1) {
-                _syncDeletedClassIds.push(newId);
-              }
-              // Immediately delete from Supabase to prevent Realtime re-adding it
-              db.from('classes').delete().eq('id', newId).eq('teacher_id', currentUser.id).then(function(delR) {
-                if (delR.error) {
-                  console.warn('[DAL] v72 Immediate delete failed for class ' + newId + ':', delR.error);
-                } else {
-                  console.log('[DAL] v72 Class ' + newId + ' deleted from Supabase immediately');
-                }
-              });
-            }
           }
         })
       );
@@ -1626,22 +1502,6 @@ function _syncTeacherToSupabase() {
             l.classId = classIdMap[String(oldId)];
           } else if (classIdMap[parseInt(oldId)]) {
             l.classId = classIdMap[parseInt(oldId)];
-          }
-        });
-      }
-
-      // v71: Update _userDeletedClassIds when class IDs are remapped
-      // This fixes the "create class → immediately delete" bug where:
-      // 1. Class created with string ID "1721..."
-      // 2. Sync inserts to Supabase, gets INT4 ID 42
-      // 3. User deletes class, _userDeletedClassIds has "1721..."
-      // 4. Phase 6 checks if 42 is in _userDeletedClassIds → NO → class not deleted!
-      if (typeof _userDeletedClassIds !== 'undefined' && _userDeletedClassIds.length > 0) {
-        oldKeys.forEach(function(oldId) {
-          var idx = _userDeletedClassIds.indexOf(oldId);
-          if (idx !== -1) {
-            _userDeletedClassIds[idx] = classIdMap[oldId];
-            console.log('[DAL] v71 Updated _userDeletedClassIds: ' + oldId + ' → ' + classIdMap[oldId]);
           }
         });
       }
@@ -1978,13 +1838,7 @@ function _syncTeacherToSupabase() {
             return db.from('classes').delete().in('id', toDelete);
           }).then(function(cr) {
             if (cr.error) console.error('[DAL] v54 class delete error:', cr.error);
-            else {
-              console.log('[DAL] v54 Deleted', toDelete.length, ' classes from Supabase');
-              // v71: Clean up _userDeletedClassIds — remove IDs that were successfully deleted
-              _userDeletedClassIds = _userDeletedClassIds.filter(function(id) {
-                return toDelete.indexOf(id) === -1;
-              });
-            }
+            else console.log('[DAL] v54 Deleted', toDelete.length, ' classes from Supabase');
           });
         });
       }
@@ -2400,7 +2254,7 @@ function _immediateRefreshFromSupabase() {
   // Reset retry count on successful attempt
   _immediateRefreshRetryCount = 0;
   
-  // Skip own writes (ignore our own changes for 3s, v70: was 10s)
+  // Skip own writes (ignore our own changes for 30s)
   if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
     console.log('[DAL] Immediate refresh skipped — own write echo (' + 
       Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
@@ -2425,10 +2279,10 @@ function _doSmartRefresh() {
     if (typeof renderClassList === 'function') renderClassList();
     // scheduleAllRenders already includes PK + Jianghu renders, no need to call them again
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    // v70: Debounce history modal refresh (max once per 1s, was 3s — too slow)
+    // v53: Debounce history modal refresh to avoid flickering (max once per 3s)
     if (typeof refreshHistoryModalIfOpen === 'function') {
       clearTimeout(window._historyRefreshDebounce);
-      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
+      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 3000);
     }
     
     // For students: check for accepted PK challenges and update invite badge
@@ -2453,102 +2307,16 @@ function _doSmartRefresh() {
   });
 }
 
-// v70: 刷新操作日志 + 拉取最新学生数据 + 触发主UI刷新
+// 仅刷新操作日志（不触发UI重建，避免频繁闪烁）
 function _refreshLogsOnly() {
-  // v71: Skip if this is an echo of our own write (within 5s window).
-  // Without this, a purchase on device A triggers:
-  //   1. In-memory data updated + renderHomePetGrid() → shows new item
-  //   2. _writeUnsyncedLogsToSupabase() → INSERT into operation_logs
-  //   3. Realtime echo → _refreshLogsOnly() → fetches stale student data from Supabase
-  //   4. Stale data overwrites fresh in-memory data → item disappears!
-  // The 5s window is longer than _OWN_WRITE_IGNORE_MS (3s) because student data sync
-  // (_syncToSupabase) may take longer than the log write.
-  if (_lastOwnWriteTime && Date.now() - _lastOwnWriteTime < 5000) {
-    console.log('[DAL] v71 _refreshLogsOnly skipped — own write echo (' +
-      Math.round((5000 - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
-    // Still reload logs (they're local-safe) but don't overwrite student data
-    _loadOperationLogs().then(function() {
-      if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-      if (typeof refreshHistoryModalIfOpen === 'function') {
-        clearTimeout(window._historyRefreshDebounce);
-        window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
-      }
-    });
-    return;
-  }
-
-  console.log('[DAL] v70 Refreshing logs + student data + UI rebuild...');
-
-  // Step 1: Fetch fresh student data from Supabase (coins, shopItems, equippedItems)
-  // This ensures purchases/operations from other devices are reflected in classesData
-  var _studentDataPromise;
-  if (!db || !currentUser || !currentUser.id) {
-    _studentDataPromise = Promise.resolve();
-  } else {
-    var isStudent = currentUser.type === 'student';
-    var studentId = isStudent ? parseInt(localStorage.getItem('studentId')) : null;
-    var classId = isStudent ? parseInt(localStorage.getItem('classId')) : null;
-
-    if (isStudent && (!studentId || !classId)) {
-      _studentDataPromise = Promise.resolve();
-    } else {
-      var query;
-      if (isStudent) {
-        query = db.from('students')
-          .select('id, coins, shop_items, equipped_items, active_pet_id')
-          .eq('class_id', classId);
-      } else {
-        // Teacher: get all students in teacher's classes
-        var teacherClassIds = (classesData || []).map(function(c) { return c.id; });
-        if (teacherClassIds.length === 0) {
-          query = Promise.resolve({ data: [], error: null });
-        } else {
-          query = db.from('students')
-            .select('id, coins, shop_items, equipped_items, active_pet_id')
-            .in('class_id', teacherClassIds);
-        }
-      }
-
-      _studentDataPromise = Promise.resolve(query).then(function(r) {
-        if (!r || r.error || !r.data) return;
-        var freshMap = {};
-        r.data.forEach(function(s) {
-          freshMap[s.id] = {
-            coins: s.coins || 0,
-            shopItems: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
-            equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
-            activePetId: s.active_pet_id || null
-          };
-        });
-        // Merge into classesData
-        (classesData || []).forEach(function(cls) {
-          (cls.students || []).forEach(function(stu) {
-            var fresh = freshMap[stu.id];
-            if (!fresh) return;
-            stu.coins = fresh.coins;
-            stu.shopItems = fresh.shopItems;
-            stu.equippedItems = fresh.equippedItems;
-            if (fresh.activePetId !== null) stu.activePetId = fresh.activePetId;
-          });
-        });
-        console.log('[DAL] v70 Student data refreshed from Supabase:', r.data.length, 'students');
-      }).catch(function(e) {
-        console.warn('[DAL] v70 Student data fetch failed:', e);
-      });
-    }
-  }
-
-  // Step 2: Load operation logs + rebuild UI after student data is fresh
-  Promise.all([_studentDataPromise, _loadOperationLogs()]).then(function() {
+  console.log('[DAL] Refreshing logs only (no UI rebuild)...');
+  _loadOperationLogs().then(function() {
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    // v70: 刷新历史弹窗内容（如果打开的话）
+    // 只在历史弹窗打开时刷新弹窗内容
     if (typeof refreshHistoryModalIfOpen === 'function') {
       clearTimeout(window._historyRefreshDebounce);
-      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
+      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 2000);
     }
-    // v70: 触发主UI重建 — 确保其他设备的操作（如购买特效）立即反映在宠物卡片上
-    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    if (typeof renderClassList === 'function') renderClassList();
     // 学生端：检查PK挑战（PK挑战记录在operation_logs中）
     if (currentUser && currentUser.type === 'student') {
       if (typeof _checkAcceptedPKChallenge === 'function') {
@@ -2559,128 +2327,8 @@ function _refreshLogsOnly() {
       }
     }
   }).catch(function(e) {
-    console.warn('[DAL] v70 Logs+data refresh error:', e);
+    console.warn('[DAL] Logs-only refresh error:', e);
   });
-}
-
-/* ===== v80: Incremental Realtime Sync ===== */
-// Instead of full refresh on every Realtime event, update only the changed row.
-// This reduces each sync from ~500KB to ~2-3KB.
-
-function _applyStudentIncrementalUpdate(payload) {
-  if (!payload || !payload.new || !classesData) return false;
-  // Skip own write echo
-  if (_lastOwnWriteTime && Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
-    console.log('[DAL] v80 Student incremental update skipped — own write echo');
-    return true;
-  }
-  // Skip if local save is pending (protect unsaved local changes)
-  if (_pendingLocalSave) {
-    console.log('[DAL] v80 Student incremental update skipped — local save pending');
-    return false; // Return false to trigger full refresh later
-  }
-
-  var row = payload.new;
-  var studentId = row.id;
-  var classId = row.class_id;
-
-  // Find the class in classesData
-  var cls = null;
-  for (var i = 0; i < classesData.length; i++) {
-    if (classesData[i].id === classId) { cls = classesData[i]; break; }
-  }
-  if (!cls) {
-    console.log('[DAL] v80 Student incremental update: class', classId, 'not found locally — falling back to full refresh');
-    return false;
-  }
-
-  // Find the student in the class
-  var student = null;
-  for (var j = 0; j < cls.students.length; j++) {
-    if (cls.students[j].id === studentId) { student = cls.students[j]; break; }
-  }
-  if (!student) {
-    console.log('[DAL] v80 Student incremental update: student', studentId, 'not found locally — falling back to full refresh');
-    return false;
-  }
-
-  // Update student fields (snake_case → camelCase)
-  student.name = row.name || student.name;
-  student.coins = row.coins !== undefined ? row.coins : student.coins;
-  student.lastCheckinDate = row.last_checkin_date || null;
-  student.lastJianghuDate = row.last_jianghu_date || null;
-  student.lastPkDate = row.last_pk_date || null;
-  student.activePetId = row.active_pet_id || null;
-  student.pkCountToday = row.pk_count_today || 0;
-  student.password = row.password || student.password;
-  // JSON fields — clone to avoid reference issues
-  student.shopItems = row.shop_items ? (typeof row.shop_items === 'string' ? JSON.parse(row.shop_items) : JSON.parse(JSON.stringify(row.shop_items))) : [];
-  student.equippedItems = row.equipped_items ? (typeof row.equipped_items === 'string' ? JSON.parse(row.equipped_items) : JSON.parse(JSON.stringify(row.equipped_items))) : {};
-  student.quizState = row.quiz_state ? (typeof row.quiz_state === 'string' ? JSON.parse(row.quiz_state) : JSON.parse(JSON.stringify(row.quiz_state))) : null;
-
-  console.log('[DAL] v80 Student', studentId, 'incremental update applied (coins=' + student.coins + ')');
-  return true;
-}
-
-function _applyPetIncrementalUpdate(payload) {
-  if (!payload || !payload.new || !classesData) return false;
-  // Skip own write echo
-  if (_lastOwnWriteTime && Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
-    console.log('[DAL] v80 Pet incremental update skipped — own write echo');
-    return true;
-  }
-  // Skip if local save is pending
-  if (_pendingLocalSave) {
-    console.log('[DAL] v80 Pet incremental update skipped — local save pending');
-    return false;
-  }
-
-  var row = payload.new;
-  var petId = row.id;
-  var studentId = row.student_id;
-
-  // Find the student who owns this pet (search all classes)
-  var student = null;
-  for (var i = 0; i < classesData.length; i++) {
-    for (var j = 0; j < classesData[i].students.length; j++) {
-      if (classesData[i].students[j].id === studentId) {
-        student = classesData[i].students[j];
-        break;
-      }
-    }
-    if (student) break;
-  }
-  if (!student) {
-    console.log('[DAL] v80 Pet incremental update: student', studentId, 'not found locally — falling back to full refresh');
-    return false;
-  }
-
-  // Find the pet in the student's pets array
-  var pet = null;
-  if (student.pets) {
-    for (var k = 0; k < student.pets.length; k++) {
-      if (student.pets[k].id === petId) { pet = student.pets[k]; break; }
-    }
-  }
-  if (!pet) {
-    console.log('[DAL] v80 Pet incremental update: pet', petId, 'not found locally — falling back to full refresh');
-    return false;
-  }
-
-  // Update pet fields (snake_case → camelCase)
-  pet.name = row.name || pet.name;
-  pet.nickname = row.nickname || pet.nickname;
-  pet.level = row.level !== undefined ? row.level : pet.level;
-  pet.growth = row.growth !== undefined ? row.growth : pet.growth;
-  pet.isDead = !!row.is_dead;
-  pet.lastFeedDate = row.last_feed_date || null;
-  pet.todayFeedCount = row.today_feed_count || 0;
-  pet.lastPlayDate = row.last_play_date || null;
-  pet.todayPlayCount = row.today_play_count || 0;
-  pet.penaltyStreak = row.penalty_streak || 0;
-
-  console.log('[DAL] v80 Pet', petId, 'incremental update applied (growth=' + pet.growth + ', level=' + pet.level + ')');
-  return true;
 }
 
 function _setupRealtimeSubscriptions() {
@@ -2692,7 +2340,7 @@ function _setupRealtimeSubscriptions() {
 
   var channelsCreated = 0;
   var channelsConfirmed = 0;
-  var totalChannels = 4;
+  var totalChannels = 3;
   var realtimeTimeout = null;
 
   function _onChannelConfirmed() {
@@ -2708,11 +2356,19 @@ function _setupRealtimeSubscriptions() {
 
   try {
     // Subscribe to classes table — coalesced refresh on change
-    // v69: operation_logs are in a separate table now. Classes channel only handles
-    // class data changes (name, teacher_id, etc.)
+    // Note: operation_logs are stored in classes.operation_logs_json (v29),
+    // so classes table changes include both class data and log updates
     var classChannel = db.channel('dal-classes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function() {
-        _debouncedRealtimeRefresh('classes');
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
+        // 检查是否只有 operation_logs_json 变化（通过比较列）
+        // 如果只有日志变化，使用轻量级刷新（不重建UI）
+        if (payload.columns && payload.columns.length === 1 && payload.columns[0].name === 'operation_logs_json') {
+          console.log('[DAL] Classes channel: logs-only change, using lightweight refresh');
+          _refreshLogsOnly();
+        } else {
+          // 其他 classes 变化（班级名称等），触发完整刷新
+          _debouncedRealtimeRefresh('classes');
+        }
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
@@ -2724,23 +2380,10 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(classChannel);
     channelsCreated++;
 
-    // v80: Subscribe to students table — incremental update (only ~2KB instead of ~500KB)
+    // Subscribe to students table — coalesced refresh on change
     var studentChannel = db.channel('dal-students')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
-        var success = _applyStudentIncrementalUpdate(payload);
-        if (success) {
-          // Incremental update succeeded — re-render UI
-          if (typeof renderClassList === 'function') renderClassList();
-          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-          if (typeof refreshHistoryModalIfOpen === 'function') {
-            clearTimeout(window._historyRefreshDebounce);
-            window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 1000);
-          }
-        } else {
-          // Incremental update failed (student not found, local save pending, etc.) — fall back to full refresh
-          console.log('[DAL] v80 Student incremental update failed — falling back to full refresh');
-          _debouncedRealtimeRefresh('students');
-        }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function() {
+        _debouncedRealtimeRefresh('students');
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
@@ -2748,40 +2391,15 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(studentChannel);
     channelsCreated++;
 
-    // v80: Subscribe to pets table — incremental update (only ~1KB instead of ~500KB)
+    // Subscribe to pets table — coalesced refresh on change
     var petChannel = db.channel('dal-pets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
-        var success = _applyPetIncrementalUpdate(payload);
-        if (success) {
-          // Incremental update succeeded — re-render UI
-          if (typeof renderClassList === 'function') renderClassList();
-          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-        } else {
-          // Incremental update failed — fall back to full refresh
-          console.log('[DAL] v80 Pet incremental update failed — falling back to full refresh');
-          _debouncedRealtimeRefresh('pets:' + payload.eventType);
-        }
+        _debouncedRealtimeRefresh('pets:' + payload.eventType);
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
       });
     _realtimeChannels.push(petChannel);
-    channelsCreated++;
-
-    // v67: Subscribe to operation_logs table — lightweight refresh on new log entries
-    // This replaces the old approach where logs were stored in classes.operation_logs_json
-    var opLogsChannel = db.channel('dal-oplogs')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function() {
-        console.log('[DAL] v67 operation_logs change detected — lightweight refresh');
-        _refreshLogsOnly();
-      })
-      .subscribe(function(status) {
-        if (status === 'SUBSCRIBED') _onChannelConfirmed();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[DAL] OpLogs channel status:', status);
-        }
-      });
-    _realtimeChannels.push(opLogsChannel);
     channelsCreated++;
 
     console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels) — waiting for confirmation...');
@@ -2799,36 +2417,26 @@ function _setupRealtimeSubscriptions() {
   }
 }
 
-// v80: Event-driven sync - triggered by user interaction when Realtime is down
+// v54: Start fallback polling only when Realtime is not working
 function _startFallbackPolling() {
-  if (_refreshTimer) return; // Already set up
-  console.log('[DAL] v80 Event-driven sync started (replaces polling)');
-  _refreshTimer = true; // Just a flag to indicate setup is done
-  
-  // Add event listeners for user interactions
-  var syncOnInteraction = function() {
-    // Skip if Realtime is active
-    if (_realtimeActive) return;
-    // Debounce: skip if synced recently
-    if (Date.now() - _lastInteractionSync < _INTERACTION_DEBOUNCE_MS) return;
-    _lastInteractionSync = Date.now();
-    console.log('[DAL] v80 User interaction detected — syncing data');
+  if (_refreshTimer) return; // Already running
+  console.log('[DAL] Fallback polling started (every ' + (_refreshInterval / 1000) + 's)');
+  _refreshTimer = setInterval(function() {
+    // Skip if Realtime has since become active
+    if (_realtimeActive) {
+      _stopFallbackPolling();
+      return;
+    }
     _refreshFromSupabase();
-  };
-  
-  // Listen for user interactions
-  document.addEventListener('click', syncOnInteraction, { passive: true });
-  document.addEventListener('focus', syncOnInteraction, { passive: true, capture: true });
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) syncOnInteraction();
-  });
+  }, _refreshInterval);
 }
 
-// v80: Stop event-driven sync (when Realtime becomes active)
+// v54: Stop fallback polling
 function _stopFallbackPolling() {
   if (_refreshTimer) {
+    clearInterval(_refreshTimer);
     _refreshTimer = null;
-    console.log('[DAL] v80 Event-driven sync stopped (Realtime is active)');
+    console.log('[DAL] Fallback polling stopped (Realtime is active)');
   }
 }
 
@@ -3322,7 +2930,7 @@ function _initDALCore() {
   console.log('[DAL] Initializing v' + _DAL_VERSION + ' for ' + currentUser.type + ': ' + (currentUser.email || currentUser.studentName));
 
   // Clean up truly stale localStorage keys only.
-  var staleKeys = ['classPetData', '_dalDeletedClassIds', '_dalIdMap', '_dal_unsyncedFlag', 'deletedClasses', 'logArchives'];
+  var staleKeys = ['classPetData', '_dalDeletedClassIds', '_dalIdMap', '_dal_unsyncedFlag', 'deletedClasses'];
   staleKeys.forEach(function(key) {
     try { localStorage.removeItem(key); } catch(e) {}
   });
@@ -3407,17 +3015,6 @@ function _initDALCore() {
 }
 
 function _postInitSetup() {
-  // v70: Immediately write any unsynced logs from localStorage to Supabase.
-  // This recovers logs that were created but never synced (e.g., due to old bug
-  // where log writes depended on data sync completing first).
-  if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
-    var unsyncedCount = window.operationLogs.filter(function(l) { return !l._synced && l.id < 0; }).length;
-    if (unsyncedCount > 0) {
-      console.log('[DAL] v70 Post-init: found ' + unsyncedCount + ' unsynced logs in localStorage — syncing now');
-      _writeUnsyncedLogsToSupabase();
-    }
-  }
-
   // Periodic PK badge check for students (every 10 seconds)
   if (currentUser.type === 'student' && typeof _updatePKInviteBadge === 'function') {
     setInterval(_updatePKInviteBadge, 10000);
@@ -3435,123 +3032,13 @@ function _postInitSetup() {
       }).catch(function() {});
     }, 3000);
   }
-}
-
-/* ===== Class Backups: Supabase-backed backup/restore/clear (v74) ===== */
-// Table: class_backups (id, class_id, teacher_id, name, snapshot_data, created_at)
-
-/**
- * Fetch all backups for a class, ordered by created_at DESC (newest first).
- * Returns array of {id, class_id, teacher_id, name, snapshot_data, created_at}
- */
-function fetchClassBackups(classId) {
-  if (!classId || !db) return Promise.resolve([]);
-  return db.from('class_backups')
-    .select('id, class_id, teacher_id, name, snapshot_data, created_at')
-    .eq('class_id', classId)
-    .order('created_at', { ascending: false })
-    .then(function(r) {
-      if (r.error) {
-        console.warn('[DAL] fetchClassBackups error:', r.error.message);
-        return [];
-      }
-      return r.data || [];
-    });
-}
-
-/**
- * Create a new backup for a class.
- * @param {number|string} classId
- * @param {string} name - backup display name
- * @param {object} snapshotData - full class data (classesData entry) to store
- * @returns {Promise<object|null>} the inserted row or null
- */
-function insertClassBackup(classId, name, snapshotData) {
-  if (!classId || !db) return Promise.resolve(null);
-  var teacherId = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.id || currentUser.studentId || '') : '';
-  var payload = {
-    class_id: classId,
-    teacher_id: teacherId,
-    name: name || '备份',
-    snapshot_data: snapshotData
-  };
-  return db.from('class_backups').insert([payload]).select('id, class_id, teacher_id, name, snapshot_data, created_at').then(function(r) {
-    if (r.error) {
-      console.warn('[DAL] insertClassBackup error:', r.error.message);
-      return null;
+  
+  // 排行榜滚动公告：数据加载完成后显示
+  setTimeout(function() {
+    if (typeof showRankAnnouncement === 'function') {
+      showRankAnnouncement();
     }
-    return r.data && r.data[0] ? r.data[0] : null;
-  });
-}
-
-/**
- * Rename a backup.
- * @param {number} backupId
- * @param {string} newName
- * @returns {Promise<boolean>}
- */
-function updateClassBackupName(backupId, newName) {
-  if (!backupId || !db) return Promise.resolve(false);
-  return db.from('class_backups').update({ name: newName }).eq('id', backupId).then(function(r) {
-    if (r.error) {
-      console.warn('[DAL] updateClassBackupName error:', r.error.message);
-      return false;
-    }
-    return true;
-  });
-}
-
-/**
- * Delete a single backup.
- * @param {number} backupId
- * @returns {Promise<boolean>}
- */
-function deleteClassBackup(backupId) {
-  if (!backupId || !db) return Promise.resolve(false);
-  return db.from('class_backups').delete().eq('id', backupId).then(function(r) {
-    if (r.error) {
-      console.warn('[DAL] deleteClassBackup error:', r.error.message);
-      return false;
-    }
-    return true;
-  });
-}
-
-/**
- * Delete ALL backups for a class (used by "清空" feature).
- * @param {number|string} classId
- * @returns {Promise<boolean>}
- */
-function deleteAllClassBackups(classId) {
-  if (!classId || !db) return Promise.resolve(false);
-  return db.from('class_backups').delete().eq('class_id', classId).then(function(r) {
-    if (r.error) {
-      console.warn('[DAL] deleteAllClassBackups error:', r.error.message);
-      return false;
-    }
-    console.log('[DAL] deleteAllClassBackups: deleted', r.data ? r.data.length : 0, 'backups for class', classId);
-    return true;
-  });
-}
-
-/**
- * Fetch a single backup by ID (used for restore).
- * @param {number} backupId
- * @returns {Promise<object|null>}
- */
-function fetchClassBackupById(backupId) {
-  if (!backupId || !db) return Promise.resolve(null);
-  return db.from('class_backups')
-    .select('id, class_id, teacher_id, name, snapshot_data, created_at')
-    .eq('id', backupId)
-    .single()
-    .then(function(r) {
-      if (r.error) {
-        console.warn('[DAL] fetchClassBackupById error:', r.error.message);
-        return null;
-      }
-      return r.data;
-    });
+  }, 2000);
 }
 
 // Keep initDAL as an alias for backward compatibility
