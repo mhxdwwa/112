@@ -1,4 +1,4 @@
-// match3.js v21 — 宠物消消乐
+// match3.js v22 — 宠物消消乐
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -530,7 +530,7 @@ window.m3SelectTile = function(tileId) {
   if (_m3Selected.length >= MAX_SLOTS) return;
 
   _m3SoundClick();
-  _m3MoveHistory.push(_m3Selected.slice());
+  _m3MoveHistory.push({ selected: _m3Selected.slice(), tiles: _m3Tiles.map(function(t) { return { id: t.id, type: t.type, layer: t.layer, x: t.x, y: t.y, blocked: t.blocked }; }) });
 
   _m3Selected.push(tile);
   _m3Tiles = _m3Tiles.filter(function(t) { return t.id !== tileId; });
@@ -708,7 +708,9 @@ function _m3DoShuffle() {
 
 function _m3DoUndo() {
   if (!_m3GameActive || _m3MoveHistory.length === 0) return;
-  _m3Selected = _m3MoveHistory.pop();
+  var snapshot = _m3MoveHistory.pop();
+  _m3Selected = snapshot.selected;
+  _m3Tiles = snapshot.tiles;
   var gameArea = document.getElementById('m3GameArea');
   if (gameArea) _m3RenderTiles(gameArea);
   _m3UpdateBlocked();
