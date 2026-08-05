@@ -888,66 +888,157 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     <span>共 <strong>${total}</strong> 条记录${revertedCount>0?`，<span style="color:#cc8800;">${revertedCount} 条已撤销</span>`:''}${!isCurrentMonth?' · <span style="color:#aaa;">归档记录</span>':''}</span>
     <label style="cursor:pointer;"><input type="checkbox" id="historyShowReverted" onchange="toggleRevertedVisibility(this.checked)" checked> 显示已撤销</label>
   </div>`;
-  html += '<div id="historyLogList" style="max-height:400px;overflow:auto;">';
-  // v12: Show newest logs first (remove .reverse())
-  classLogs.forEach(log=>{
-    const time = new Date(log.timestamp);
-    const timeStr = time.toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}) + ' ' + time.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    const icon = _historyActionIcon(log.actionType);
-    const color = _historyActionColor(log.actionType);
-    const isReverted = log.reverted;
-    const snap = log.snapshot;
-    let coinLine = '';
-    if(log.coinDelta !== 0){
-      const sign = log.coinDelta > 0 ? '+' : '';
-      coinLine = `<span style="color:${log.coinDelta>0?'#4a9e4a':'#cc5544'};font-weight:600;">💰${sign}${log.coinDelta}</span>`;
-      if(snap) coinLine += `<span style="color:#aaa;margin-left:4px;">(${snap.coinsBefore}→${snap.coinsAfter})</span>`;
-    }
-    let expLine = '';
-    if(log.expDelta !== 0){
-      const sign = log.expDelta > 0 ? '+' : '';
-      expLine = `<span style="color:${log.expDelta>0?'#4a9e4a':'#cc5544'};font-weight:600;margin-left:8px;">🌱${sign}${log.expDelta}</span>`;
-      if(snap) expLine += `<span style="color:#aaa;margin-left:4px;">(${snap.growthBefore}→${snap.growthAfter})</span>`;
-    }
-    let petInfo = '';
-    if(snap && snap.petNick){
-      petInfo = `<span style="background:#fff0e8;padding:1px 8px;border-radius:8px;font-size:11px;margin-left:6px;">🐾 ${esc(snap.petNick)} Lv.${snap.petLevel}${snap.stageName?' · '+esc(snap.stageName):''}</span>`;
-    }
-    let extraInfo = '';
-    if(log.extra){
-      if(log.extra.causedDeath) extraInfo += '<span style="color:#ff3333;font-weight:700;margin-left:6px;">⚠️ 宠物死亡！</span>';
-      if(log.extra.pkType === 'win') extraInfo += `<span style="margin-left:6px;font-size:12px;">🎯 对手: ${esc(log.extra.opponentName)}（金币${log.extra.opponentCoinDelta}，成长${log.extra.opponentGrowthDelta>=0?'+':''}${log.extra.opponentGrowthDelta}）</span>`;
-      if(log.extra.pkType === 'lose') extraInfo += `<span style="margin-left:6px;font-size:12px;">🎯 胜者: ${esc(log.extra.opponentName)}</span>`;
-      if(log.extra.pkType === 'draw') extraInfo += `<span style="margin-left:6px;font-size:12px;">🤝 对手: ${esc(log.extra.opponentName)}</span>`;
-    }
-    if(snap && snap.isDead && !log.extra?.causedDeath) extraInfo += '<span style="color:#999;margin-left:6px;font-size:11px;">（宠物已死亡）</span>';
-    if(snap && snap.penaltyStreak >= 2 && !log.extra?.causedDeath) extraInfo += `<span style="color:#ee6633;margin-left:6px;font-size:11px;">⚠ 连续惩罚${snap.penaltyStreak}次</span>`;
-    const opacity = isReverted ? 'opacity:0.45;' : '';
-    const revertedBadge = isReverted ? '<span style="background:#ffcc00;color:#665500;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">已撤销</span>' : '';
-    let btnHtml = '';
-    // Only teachers can revoke operations; students cannot
-    if(!isReverted && isCurrentMonth && !isStudentView){
-      btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog(${log.id});closeModal();}">撤销</button>`;
-      // v46: Show "恢复到此" button for all logs with snapshot
-      if(snap && (snap.coinsAfter !== undefined || snap.quizStateSnapshot)) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry(${log.id})">恢复到此</button>` + btnHtml;
-    }
-    html += `<div class="history-log-item ${isReverted?'history-reverted':''}" style="${opacity}border-left:3px solid ${color};padding-left:14px;">
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span class="history-log-time">${timeStr}</span>
-          <span style="font-size:14px;">${icon}</span>
-          <strong style="color:${color};">${esc(log.studentName)}</strong>
-          <span style="color:#998;font-size:13px;">· ${esc(log.actionType)}</span>
-          ${revertedBadge}${petInfo}
-        </div>
-        <div style="font-size:13px;margin-top:3px;color:#665;">${esc(log.details)}</div>
-        <div style="font-size:12px;margin-top:2px;">${coinLine}${expLine}${extraInfo}</div>
-      </div>
-      ${btnHtml}
-    </div>`;
+  
+  // v68: Group logs by date for lazy loading
+  const logsByDate = {};
+  classLogs.forEach(log => {
+    const dateKey = log.timestamp.slice(0, 10); // YYYY-MM-DD
+    if (!logsByDate[dateKey]) logsByDate[dateKey] = [];
+    logsByDate[dateKey].push(log);
   });
+  
+  // Sort dates descending
+  const sortedDates = Object.keys(logsByDate).sort().reverse();
+  
+  html += '<div id="historyLogList" style="max-height:400px;overflow:auto;">';
+  
+  sortedDates.forEach((dateKey, idx) => {
+    const dateLogs = logsByDate[dateKey];
+    const date = new Date(dateKey);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    let dateLabel = date.toLocaleDateString('zh-CN', {month: 'long', day: 'numeric', weekday: 'long'});
+    if (dateKey === today.toISOString().slice(0, 10)) dateLabel = '今天';
+    else if (dateKey === yesterday.toISOString().slice(0, 10)) dateLabel = '昨天';
+    
+    // Only expand today by default
+    const isExpanded = idx === 0;
+    const logCount = dateLogs.length;
+    
+    html += `<div class="history-date-group" style="margin-bottom:12px;">`;
+    html += `<div class="history-date-header" onclick="toggleDateGroup('${dateKey}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:linear-gradient(135deg,#f8f4ff,#f0e8ff);border-radius:10px;cursor:pointer;user-select:none;border:1px solid #e8d8f0;">`;
+    html += `<span class="history-date-arrow" id="arrow-${dateKey}" style="transition:transform 0.2s;${isExpanded ? 'transform:rotate(90deg);' : ''}">▶</span>`;
+    html += `<strong style="color:#6b4db0;font-size:14px;">${dateLabel}</strong>`;
+    html += `<span style="background:#e8d8f0;color:#6b4db0;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600;">${logCount} 条</span>`;
+    html += `</div>`;
+    
+    html += `<div class="history-date-content" id="content-${dateKey}" style="display:${isExpanded ? 'block' : 'none'};margin-top:8px;">`;
+    if (isExpanded) {
+      dateLogs.forEach(log => {
+        html += _buildHistoryLogItem(log, isCurrentMonth, isStudentView);
+      });
+    } else {
+      html += `<div style="text-align:center;padding:12px;color:#aaa;font-size:12px;">点击展开查看 ${logCount} 条记录</div>`;
+    }
+    html += `</div>`;
+    html += `</div>`;
+  });
+  
   html += '</div>';
   return html;
+}
+
+// v68: Toggle date group expansion
+function toggleDateGroup(dateKey) {
+  const content = document.getElementById('content-' + dateKey);
+  const arrow = document.getElementById('arrow-' + dateKey);
+  if (!content) return;
+  
+  const isHidden = content.style.display === 'none';
+  if (isHidden) {
+    content.style.display = 'block';
+    if (arrow) arrow.style.transform = 'rotate(90deg)';
+    
+    // Lazy load: if content is placeholder, render actual logs
+    if (content.children.length === 1 && content.children[0].textContent.includes('点击展开')) {
+      const curClass = classesData.find(c => c.id === currentClassId);
+      const activeMonth = _currentHistoryMonth;
+      const allLogs = getAllLogsForMonth(activeMonth);
+      const dateLogs = allLogs.filter(log => {
+        if (log.timestamp.slice(0, 10) !== dateKey) return false;
+        if(log.classId) { if(log.classId.toString() !== (currentClassId || '').toString()) return false; }
+        else if(curClass) { if(!curClass.students.some(s=>s.id.toString()===log.studentId.toString())) return false; }
+        else return false;
+        if(_historyFilterEnabled && _historyFilterStudentId) {
+          if(log.studentId.toString() !== _historyFilterStudentId.toString()) return false;
+        }
+        return true;
+      });
+      
+      const curMonth = _getCurrentMonth();
+      const isCurrentMonth = (activeMonth === curMonth);
+      const isStudentView = _isStudentHistoryView;
+      
+      let html = '';
+      dateLogs.forEach(log => {
+        html += _buildHistoryLogItem(log, isCurrentMonth, isStudentView);
+      });
+      content.innerHTML = html;
+    }
+  } else {
+    content.style.display = 'none';
+    if (arrow) arrow.style.transform = 'rotate(0deg)';
+  }
+}
+
+// v68: Build single log item HTML (extracted for reuse)
+function _buildHistoryLogItem(log, isCurrentMonth, isStudentView) {
+  const time = new Date(log.timestamp);
+  const timeStr = time.toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}) + ' ' + time.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const icon = _historyActionIcon(log.actionType);
+  const color = _historyActionColor(log.actionType);
+  const isReverted = log.reverted;
+  const snap = log.snapshot;
+  let coinLine = '';
+  if(log.coinDelta !== 0){
+    const sign = log.coinDelta > 0 ? '+' : '';
+    coinLine = `<span style="color:${log.coinDelta>0?'#4a9e4a':'#cc5544'};font-weight:600;">💰${sign}${log.coinDelta}</span>`;
+    if(snap) coinLine += `<span style="color:#aaa;margin-left:4px;">(${snap.coinsBefore}→${snap.coinsAfter})</span>`;
+  }
+  let expLine = '';
+  if(log.expDelta !== 0){
+    const sign = log.expDelta > 0 ? '+' : '';
+    expLine = `<span style="color:${log.expDelta>0?'#4a9e4a':'#cc5544'};font-weight:600;margin-left:8px;">🌱${sign}${log.expDelta}</span>`;
+    if(snap) expLine += `<span style="color:#aaa;margin-left:4px;">(${snap.growthBefore}→${snap.growthAfter})</span>`;
+  }
+  let petInfo = '';
+  if(snap && snap.petNick){
+    petInfo = `<span style="background:#fff0e8;padding:1px 8px;border-radius:8px;font-size:11px;margin-left:6px;">🐾 ${esc(snap.petNick)} Lv.${snap.petLevel}${snap.stageName?' · '+esc(snap.stageName):''}</span>`;
+  }
+  let extraInfo = '';
+  if(log.extra){
+    if(log.extra.causedDeath) extraInfo += '<span style="color:#ff3333;font-weight:700;margin-left:6px;">⚠️ 宠物死亡！</span>';
+    if(log.extra.pkType === 'win') extraInfo += `<span style="margin-left:6px;font-size:12px;">🎯 对手: ${esc(log.extra.opponentName)}（金币${log.extra.opponentCoinDelta}，成长${log.extra.opponentGrowthDelta>=0?'+':''}${log.extra.opponentGrowthDelta}）</span>`;
+    if(log.extra.pkType === 'lose') extraInfo += `<span style="margin-left:6px;font-size:12px;">🎯 胜者: ${esc(log.extra.opponentName)}</span>`;
+    if(log.extra.pkType === 'draw') extraInfo += `<span style="margin-left:6px;font-size:12px;">🤝 对手: ${esc(log.extra.opponentName)}</span>`;
+  }
+  if(snap && snap.isDead && !log.extra?.causedDeath) extraInfo += '<span style="color:#999;margin-left:6px;font-size:11px;">（宠物已死亡）</span>';
+  if(snap && snap.penaltyStreak >= 2 && !log.extra?.causedDeath) extraInfo += `<span style="color:#ee6633;margin-left:6px;font-size:11px;">⚠ 连续惩罚${snap.penaltyStreak}次</span>`;
+  const opacity = isReverted ? 'opacity:0.45;' : '';
+  const revertedBadge = isReverted ? '<span style="background:#ffcc00;color:#665500;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">已撤销</span>' : '';
+  let btnHtml = '';
+  // Only teachers can revoke operations; students cannot
+  if(!isReverted && isCurrentMonth && !isStudentView){
+    btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog(${log.id});closeModal();}">撤销</button>`;
+    // v46: Show "恢复到此" button for all logs with snapshot
+    if(snap && (snap.coinsAfter !== undefined || snap.quizStateSnapshot)) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry(${log.id})">恢复到此</button>` + btnHtml;
+  }
+  return `<div class="history-log-item ${isReverted?'history-reverted':''}" style="${opacity}border-left:3px solid ${color};padding-left:14px;margin-bottom:8px;">
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span class="history-log-time">${timeStr}</span>
+        <span style="font-size:14px;">${icon}</span>
+        <strong style="color:${color};">${esc(log.studentName)}</strong>
+        <span style="color:#998;font-size:13px;">· ${esc(log.actionType)}</span>
+        ${revertedBadge}${petInfo}
+      </div>
+      <div style="font-size:13px;margin-top:3px;color:#665;">${esc(log.details)}</div>
+      <div style="font-size:12px;margin-top:2px;">${coinLine}${expLine}${extraInfo}</div>
+    </div>
+    ${btnHtml}
+  </div>`;
 }
 function toggleRevertedVisibility(show){
   document.querySelectorAll('.history-reverted').forEach(el=>{

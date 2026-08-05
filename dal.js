@@ -1,5 +1,5 @@
 /**
- * dal.js v65 — Robust Data Access Layer with Smart Merge
+ * dal.js v68 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -832,12 +832,25 @@ function _loadCustomActions() {
  * No more operation_logs table (had FK constraints that broke on mobile).
  * Uses upsert (same pattern as student coins) — proven reliable.
  * Max 5000 logs per class — oldest are trimmed automatically.
+ * v68: Logs older than 7 days are automatically removed (keep max 5000).
  *
  * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → classes.upsert
  * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
  */
 
 var _OP_LOGS_MAX_PER_CLASS = 5000;
+var _OP_LOGS_RETENTION_DAYS = 7; // v68: Keep only last 7 days
+
+// v68: Filter logs to keep only those within retention period
+function _filterLogsByRetention(logs) {
+  var cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - _OP_LOGS_RETENTION_DAYS);
+  var cutoffTimestamp = cutoffDate.toISOString();
+  
+  return logs.filter(function(log) {
+    return log.timestamp && log.timestamp >= cutoffTimestamp;
+  });
+}
 
 // Get class IDs for this user
 function _getOpLogClassIds() {
@@ -887,6 +900,8 @@ function _loadOperationLogs() {
       try {
         var logs = JSON.parse(cls.operation_logs_json);
         if (Array.isArray(logs)) {
+          // v68: Filter out logs older than retention period
+          logs = _filterLogsByRetention(logs);
           logs.forEach(function(l) {
             l._synced = true;
             l._fromSupabase = true;
@@ -1018,6 +1033,10 @@ function _verifyLogWrite(classId, writtenLogIds, retryCount) {
     merged.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
+    
+    // v68: Filter out logs older than retention period
+    merged = _filterLogsByRetention(merged);
+    
     if (merged.length > _OP_LOGS_MAX_PER_CLASS) {
       merged = merged.slice(0, _OP_LOGS_MAX_PER_CLASS);
     }
@@ -1205,6 +1224,11 @@ function _writeUnsyncedLogsToSupabase() {
         existing.sort(function(a, b) {
           return (b.timestamp || '').localeCompare(a.timestamp || '');
         });
+        
+        // v68: Filter out logs older than retention period
+        existing = _filterLogsByRetention(existing);
+        
+        // Cap at max
         if (existing.length > _OP_LOGS_MAX_PER_CLASS) {
           existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
         }
