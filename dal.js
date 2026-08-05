@@ -1,5 +1,5 @@
 /**
- * dal.js v76 — Robust Data Access Layer with Smart Merge
+ * dal.js v69 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -872,7 +872,6 @@ function _loadCustomActions() {
  */
 
 var _OP_LOGS_MAX_PER_CLASS = 5000;
-var _OP_LOGS_RETENTION_DAYS = 7; // Only load logs from the last 7 days to reduce Supabase bandwidth
 
 // Get class IDs for this user
 function _getOpLogClassIds() {
@@ -936,23 +935,18 @@ function _rowToLog(row) {
   return log;
 }
 
-// Fetch logs for a single class within retention period, paginating in chunks of _OP_LOGS_PAGE
-// v76: Added 7-day retention filter to reduce Supabase bandwidth
+// Fetch ALL logs for a single class, paginating in chunks of _OP_LOGS_PAGE
 function _fetchAllLogsForClass(classId) {
   var allRows = [];
-  var cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - _OP_LOGS_RETENTION_DAYS);
-  var cutoffISO = cutoffDate.toISOString();
   function fetchPage(offset) {
     return db.from('operation_logs')
       .select(_OP_LOGS_COLS)
       .eq('class_id', classId)
-      .gte('created_at', cutoffISO)
       .order('created_at', { ascending: false })
       .range(offset, offset + _OP_LOGS_PAGE - 1)
       .then(function(r) {
         if (r.error) {
-          console.error('[DAL] v76 query error for class', classId, 'offset', offset + ':', r.error.message);
+          console.error('[DAL] v69 query error for class', classId, 'offset', offset + ':', r.error.message);
           return allRows;
         }
         var rows = r.data || [];
@@ -995,10 +989,10 @@ function _loadOperationLogs() {
 
   return _getOpLogClassIds().then(function(classIds) {
     if (!classIds || classIds.length === 0) {
-      console.warn('[DAL] v76 _loadOperationLogs: no classIds');
+      console.warn('[DAL] v69 _loadOperationLogs: no classIds');
       return;
     }
-    console.log('[DAL] v76 Loading operation logs for class_ids:', classIds);
+    console.log('[DAL] v69 Loading operation logs for class_ids:', classIds);
 
     // v69: Query each class INDIVIDUALLY with pagination to bypass 1000-row hard limit
     var perClassQueries = classIds.map(function(cid) {
@@ -1011,20 +1005,13 @@ function _loadOperationLogs() {
         rows.forEach(function(row) {
           serverLogs.push(_rowToLog(row));
         });
-        console.log('[DAL] v76 Class', classIds[idx] + ':', rows.length, 'logs loaded');
+        console.log('[DAL] v69 Class', classIds[idx] + ':', rows.length, 'logs loaded');
       });
-      console.log('[DAL] v76 Total from table:', serverLogs.length, 'logs');
+      console.log('[DAL] v69 Total from table:', serverLogs.length, 'logs');
 
       // Preserve any local unsynced logs (negative IDs, not yet in table)
-      // v76: Also filter local unsynced logs by retention period
-      var cutoffTs = new Date();
-      cutoffTs.setDate(cutoffTs.getDate() - _OP_LOGS_RETENTION_DAYS);
-      var cutoffISO = cutoffTs.toISOString();
       var localUnsynced = window.operationLogs.filter(function(l) {
-        if (l._synced) return false;
-        // Keep unsynced logs only if they're within retention period
-        if (l.timestamp && l.timestamp < cutoffISO) return false;
-        return true;
+        return !l._synced;
       });
 
       // v69: Content-based dedup — remove local unsynced logs that duplicate server logs
@@ -1048,10 +1035,10 @@ function _loadOperationLogs() {
 
       // Backup to localStorage
       try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-      console.log('[DAL] v76 Final: ' + serverLogs.length + ' server + ' + dedupedLocal.length + ' local unsynced = ' + window.operationLogs.length + ' total');
+      console.log('[DAL] v69 Final: ' + serverLogs.length + ' server + ' + dedupedLocal.length + ' local unsynced = ' + window.operationLogs.length + ' total');
     });
   }).catch(function(e) {
-    console.warn('[DAL] v76 _loadOperationLogs error:', e);
+    console.warn('[DAL] v69 _loadOperationLogs error:', e);
   });
 }
 
