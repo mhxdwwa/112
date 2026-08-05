@@ -1,5 +1,5 @@
 // 小猪快跑 - 集成到取金阁
-// v31 - BGM初始静音，点击喇叭后才加载播放
+// v32 - 音效延迟加载，首次播放时才下载音频文件
 
 (function() {
   'use strict';
@@ -530,20 +530,25 @@
     return null;
   }
 
-  // === 音效 ===
+  // === 音效（延迟加载）===
   var audioFiles = {};
+  var audioUrls = {
+    click: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
+    escape: 'https://assets.mixkit.co/active_storage/sfx/1661/1661-preview.mp3',
+    blocked: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',
+    win: 'https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3',
+    pigEscaped: 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/猪逃跑了.mp3',
+    pigCollision: 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/撞到猪了.mp3'
+  };
   function initAudio() {
-    audioFiles = {
-      click: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'),
-      escape: new Audio('https://assets.mixkit.co/active_storage/sfx/1661/1661-preview.mp3'),
-      blocked: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
-      win: new Audio('https://assets.mixkit.co/active_storage/sfx/1666/1666-preview.mp3'),
-      pigEscaped: new Audio('https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/猪逃跑了.mp3'),
-      pigCollision: new Audio('https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/music/撞到猪了.mp3')
-    };
+    // 延迟加载：只记录URL，不创建Audio对象
   }
   function playSound(name, soundEnabled) {
     if (!soundEnabled) return;
+    // 首次播放时才创建Audio对象
+    if (!audioFiles[name] && audioUrls[name]) {
+      audioFiles[name] = new Audio(audioUrls[name]);
+    }
     var audio = audioFiles[name];
     if (!audio) return;
     audio.currentTime = 0;
