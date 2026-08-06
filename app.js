@@ -6744,7 +6744,7 @@ function getTodayCoinGain(studentId) {
   const today = new Date().toDateString();
   let total = 0;
   // v15: Always read from window.operationLogs for cross-script consistency
-  const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡', '取金阁'];
+  const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡', '取金阁', '小猪快跑'];
   var logs = getOpLogs();
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
@@ -6763,7 +6763,7 @@ function hasPKQualificationToday(studentId) {
   const today = new Date().toDateString();
   let total = 0;
   // v15: Always read from window.operationLogs for cross-script consistency
-  const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡', '取金阁'];
+  const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡', '取金阁', '小猪快跑'];
   var logs = getOpLogs();
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];

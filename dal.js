@@ -1,5 +1,5 @@
 /**
- * dal.js v69 — Robust Data Access Layer with Smart Merge
+ * dal.js v70 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1153,9 +1153,11 @@ function _writeUnsyncedLogsToSupabase() {
       console.log('[DAL] v62 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
     }
 
-    // v64: If no valid classes, skip the re-read and resolve immediately
+    // v70: Release lock before early return to prevent permanent block.
+    // Without this, _writingLogsToSupabase stays true and all future writes are skipped.
     if (validClassIds.length === 0) {
-      console.log('[DAL] v64 No valid classes to write logs to, skipping');
+      console.log('[DAL] v70 No valid classes to write logs to, skipping');
+      _writingLogsToSupabase = false;
       return Promise.resolve();
     }
     

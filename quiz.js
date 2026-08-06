@@ -46,20 +46,33 @@
     // This prevents _syncStudentToSupabase from fetching stale Supabase data
     // and overwriting the fresh local quiz_state while the save is in flight.
     window._quizStateLocallyModified = true;
+    // v70: Set protection variables BEFORE the async write to close the race window.
+    // If a Realtime echo arrives between the DB write and the .then() callback,
+    // _lastOwnWriteTime=0 would cause _smartRefreshFromSupabase to proceed with merge,
+    // potentially overwriting our fresh coins with stale server data.
+    // Setting them now ensures the 10s self-write ignore window starts immediately.
+    if (typeof _myBaseCoins !== 'undefined') {
+      window._myBaseCoins = coinsToSave;
+    }
+    if (typeof _lastOwnWriteTime !== 'undefined') {
+      window._lastOwnWriteTime = Date.now();
+    }
     db.from('students').update({
       coins: coinsToSave,
       quiz_state: quizStateJson
     }).eq('id', student.id).then(function(r) {
       if (r.error) {
         console.error('[取金阁] 金币/状态保存失败:', r.error.message);
-        // Don't clear the flag on error — let the next sync retry
+        // v70: On failure, revert the protection so the sync can retry properly
+        if (typeof _myBaseCoins !== 'undefined') {
+          window._myBaseCoins = null;
+        }
+        window._quizStateLocallyModified = false;
+        // Don't clear _lastOwnWriteTime — still want to suppress stale echo briefly
       } else {
         console.log('[取金阁] 金币(' + coinsToSave + ')+状态 已直接保存');
-        // v30: Only update _myBaseCoins after CONFIRMED write
-        if (typeof _myBaseCoins !== 'undefined') {
-          window._myBaseCoins = coinsToSave;
-        }
-        // v30: Set _lastOwnWriteTime to protect against Realtime echo
+        // v70: Re-confirm values after successful write (already set above, but
+        // ensures _lastOwnWriteTime is fresh even if there was a delay)
         if (typeof _lastOwnWriteTime !== 'undefined') {
           window._lastOwnWriteTime = Date.now();
         }
