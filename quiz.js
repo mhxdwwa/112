@@ -133,18 +133,20 @@
         return;
       }
       var newId = result.data && result.data[0] ? result.data[0].id : null;
-      // Mark local log as synced
+      // v73: Update local log ID to the DB-assigned ID, but do NOT mark as _synced.
+      // _writeUnsyncedLogsToSupabase() must still write this log to
+      // classes.operation_logs_json, which is the source _loadOperationLogs() reads from.
+      // If we mark _synced=true here, the log would only exist in the operation_logs
+      // table and never appear in the history UI.
       if (typeof window.operationLogs !== 'undefined') {
         for (var i = 0; i < window.operationLogs.length; i++) {
           if (window.operationLogs[i].id === log.id) {
             if (newId) window.operationLogs[i].id = newId;
-            window.operationLogs[i]._synced = true;
-            window.operationLogs[i]._fromSupabase = true;
             break;
           }
         }
       }
-      console.log('[取金阁] v67 操作日志已直接保存到operation_logs表', newId ? '(ID: ' + newId + ')' : '');
+      console.log('[取金阁] v73 操作日志已备份到operation_logs表', newId ? '(ID: ' + newId + ')' : '');
     }).catch(function(e) {
       console.error('[取金阁] v67 saveQuizLogDirect error:', e);
     });
