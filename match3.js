@@ -208,7 +208,7 @@ function _m3GetLevelConfig(level) {
   var blockThreshold = 0.7 + Math.min(level * 0.005, 0.2);
 
   // v23: 槽位数随关卡减少（旧值固定5）
-  var maxSlots = level <= 20 ? 5 : (level <= 50 ? 4 : 3);
+  var maxSlots = level <= 20 ? 5 : 4;
 
   return {
     layers: totalLayers,
