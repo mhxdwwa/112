@@ -256,14 +256,7 @@
       msg += '，总分:' + qs.pigRunTotalScore;
       recordAction(student.id, student.name, '小猪快跑', msg, coinReward, 0, null);
     }
-    if (typeof saveQuizLogDirect === 'function' && window.operationLogs) {
-      for (var i = window.operationLogs.length - 1; i >= 0; i--) {
-        if (window.operationLogs[i].studentId == student.id && window.operationLogs[i].actionType === '小猪快跑' && !window.operationLogs[i]._synced) {
-          saveQuizLogDirect(window.operationLogs[i]);
-          break;
-        }
-      }
-    }
+    // v74: 不再调用 saveQuizLogDirect()，日志统一由 _writeUnsyncedLogsToSupabase() 写入
     if (typeof triggerRealtimeSync === 'function') triggerRealtimeSync();
 
     return { levelScore: levelScore, coinReward: coinReward, isFirstClear: isFirstClear, totalScore: qs.pigRunTotalScore, prevScore: prevScore, scoreDiff: scoreDiff };
