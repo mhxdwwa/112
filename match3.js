@@ -1,4 +1,4 @@
-// match3.js v22 — 宠物消消乐
+// match3.js v23 — 宠物消消乐（难度曲线优化）
 // CDN: https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/images/
 (function() {
 'use strict';
@@ -15,7 +15,7 @@ var TILE_TYPES = [
   { name: '狐狸', path: CDN_BASE + '%E7%8B%90%E7%8B%B8.png' }
 ];
 var TILE_SIZE = 50;
-var MAX_SLOTS = 5;
+var MAX_SLOTS = 5; // 默认值，会根据关卡动态调整
 
 var _m3Tiles = [];
 var _m3Selected = [];
@@ -28,6 +28,7 @@ var _m3AudioCtx = null;
 var _m3Container = null;
 var _m3CurrentStudent = null;
 var _m3GameActive = false;
+var _m3BlockThreshold = 0.7; // v23: 遮挡阈值，随关卡动态调整
 
 // 道具会话追踪（跨关卡累计，每局游戏会话限制）
 var _m3SessionToolsUsed = { shuffle: 0, undo: 0 };
@@ -187,15 +188,35 @@ function _m3SoundFail() { _m3PlayTone(200, 0.5, 'sawtooth', 0.15); }
 
 // ===== 关卡配置（无限关卡）=====
 function _m3GetLevelConfig(level) {
+  // v23: 难度曲线优化
+  // 层数：7~20层，每3关+1层（取代旧的每2关+1层、13关封顶）
   var baseLayers = 7;
-  var extraLayers = Math.min(Math.floor((level - 1) / 2), 6);
+  var extraLayers = Math.min(Math.floor((level - 1) / 3), 13);
   var totalLayers = baseLayers + extraLayers;
+
+  // 每层尺寸：4~7，每15关+1，交替+1
+  var baseSize = 4 + Math.min(Math.floor((level - 1) / 15), 3);
   var layerSizes = [];
   for (var i = 0; i < totalLayers; i++) {
-    layerSizes.push(4 + (i % 2));
+    layerSizes.push(baseSize + (i % 2));
   }
-  var availableTypes = Math.min(4 + Math.floor((level - 1) / 8), 8);
-  return { layers: totalLayers, layerSizes: layerSizes, typesToUse: TILE_TYPES.slice(0, availableTypes) };
+
+  // 图案种类：4~8种，每5关+1（取代旧的每8关+1）
+  var availableTypes = Math.min(4 + Math.floor((level - 1) / 5), 8);
+
+  // v23: 遮挡阈值随关卡增长，0.7~0.9（旧值固定0.7）
+  var blockThreshold = 0.7 + Math.min(level * 0.005, 0.2);
+
+  // v23: 槽位数随关卡减少（旧值固定5）
+  var maxSlots = level <= 20 ? 5 : (level <= 50 ? 4 : 3);
+
+  return {
+    layers: totalLayers,
+    layerSizes: layerSizes,
+    typesToUse: TILE_TYPES.slice(0, availableTypes),
+    blockThreshold: blockThreshold,
+    maxSlots: maxSlots
+  };
 }
 
 // ===== 游戏模式：隐藏非游戏UI，聚焦游戏画面 =====
@@ -357,6 +378,10 @@ function _m3InitLevel(level) {
 
   var config = _m3GetLevelConfig(level);
 
+  // v23: 设置动态槽位数和遮挡阈值
+  MAX_SLOTS = config.maxSlots;
+  _m3BlockThreshold = config.blockThreshold;
+
   // 计算总位置数
   var actualPositions = 0;
   config.layerSizes.forEach(function(size, layerIdx) {
@@ -497,7 +522,7 @@ function _m3UpdateBlocked() {
       if (other.layer > tile.layer) {
         var dx = Math.abs(other.x - tile.x);
         var dy = Math.abs(other.y - tile.y);
-        if (dx < TILE_SIZE * 0.7 && dy < TILE_SIZE * 0.7) {
+        if (dx < TILE_SIZE * _m3BlockThreshold && dy < TILE_SIZE * _m3BlockThreshold) {
           tile.blocked = true;
         }
       }
