@@ -85,73 +85,6 @@
     });
   }
 
-  // === 直接保存操作日志到 Supabase ===
-  // v67: Uses INSERT into operation_logs table (atomic, no race condition)
-  function saveQuizLogDirect(log) {
-    if (typeof db === 'undefined' || !db) return;
-    var classId = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
-    if (!classId) return;
-    if (typeof classId === 'string') classId = parseInt(classId);
-
-    // Build the extra JSONB field
-    var extraPayload = log.extra || null;
-    if (log.fullSnapshot) {
-      extraPayload = extraPayload ? Object.assign({}, extraPayload) : {};
-      extraPayload.fullSnapshot = log.fullSnapshot;
-    }
-
-    // v67: INSERT directly into operation_logs table (atomic, no race condition)
-    var payload = {
-      class_id: classId,
-      student_id: (log.studentId && log.studentId > 0 && log.studentId === Math.floor(log.studentId)) ? log.studentId : null,
-      student_name: log.studentName || '',
-      action_type: log.actionType || '',
-      details: log.details || '',
-      coin_delta: parseInt(log.coinDelta) || 0,
-      exp_delta: parseInt(log.expDelta) || 0,
-      pet_id: log.petId || null,
-      extra: extraPayload,
-      snapshot: log.snapshot || null,
-      reverted: !!log.reverted
-    };
-
-    db.from('operation_logs').insert([payload]).select('id').then(function(ir) {
-      if (ir.error) {
-        // FK constraint on student_id? Retry without
-        if (ir.error.code === '23503' && payload.student_id) {
-          payload.student_id = null;
-          return db.from('operation_logs').insert([payload]).select('id');
-        }
-        console.error('[取金阁] v67 操作日志INSERT失败:', ir.error.message);
-        return null;
-      }
-      return ir;
-    }).then(function(result) {
-      if (!result) return;
-      if (result.error) {
-        console.error('[取金阁] v67 操作日志INSERT重试失败:', result.error.message);
-        return;
-      }
-      var newId = result.data && result.data[0] ? result.data[0].id : null;
-      // v73: Update local log ID to the DB-assigned ID, but do NOT mark as _synced.
-      // _writeUnsyncedLogsToSupabase() must still write this log to
-      // classes.operation_logs_json, which is the source _loadOperationLogs() reads from.
-      // If we mark _synced=true here, the log would only exist in the operation_logs
-      // table and never appear in the history UI.
-      if (typeof window.operationLogs !== 'undefined') {
-        for (var i = 0; i < window.operationLogs.length; i++) {
-          if (window.operationLogs[i].id === log.id) {
-            if (newId) window.operationLogs[i].id = newId;
-            break;
-          }
-        }
-      }
-      console.log('[取金阁] v73 操作日志已备份到operation_logs表', newId ? '(ID: ' + newId + ')' : '');
-    }).catch(function(e) {
-      console.error('[取金阁] v67 saveQuizLogDirect error:', e);
-    });
-  }
-
   // === 学生答题状态管理 ===
   function getQuizState(student) {
     if (!student.quizState || typeof student.quizState !== 'object') {
@@ -328,9 +261,9 @@
         }
       }
 
-      // 直接保存金币+状态+日志到 Supabase（不依赖 DAL 异步同步）
+      // 直接保存金币+状态到 Supabase（不依赖 DAL 异步同步）
+      // v74: 不再调用 saveQuizLogDirect()，日志统一由 _writeUnsyncedLogsToSupabase() 写入
       saveCoinsAndQuizState(student);
-      if (quizLog) saveQuizLogDirect(quizLog);
 
       return {
         correct: true,
