@@ -8,15 +8,26 @@
   var gameLoaded = false;
   var pendingQuizRequest = false;
 
-  // === 获取当前学生对象 ===
+  // === 获取当前学生对象（支持教师扮演学生） ===
   function getCurrentStudent() {
-    if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'student') return null;
-    if (typeof students === 'undefined' || !students) return null;
-    var sid = parseInt(currentUser.studentId);
-    for (var i = 0; i < students.length; i++) {
-      if (students[i].id === sid) return students[i];
+    var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+    if (isStudentView) {
+      var myStudentId = parseInt(currentUser.studentId);
+      var myClassId = parseInt(localStorage.getItem('classId') || currentUser.classId || 0);
+      if (!myStudentId || !myClassId) return null;
+      if (typeof classesData === 'undefined' || !classesData) return null;
+      var cur = classesData.find(function(c) { return c.id === myClassId || c.id.toString() === myClassId.toString(); });
+      if (!cur) return null;
+      return cur.students.find(function(s) { return s.id.toString() === myStudentId.toString(); });
+    } else {
+      // 教师视图：使用选中的学生
+      if (!window._teacherPlayingAsStudent) return null;
+      var cid = (typeof currentClassId !== 'undefined') ? currentClassId : parseInt(localStorage.getItem('classId'));
+      if (!cid || typeof classesData === 'undefined' || !classesData) return null;
+      var cls = classesData.find(function(c) { return c.id === cid || c.id.toString() === cid.toString(); });
+      if (!cls) return null;
+      return cls.students.find(function(s) { return s.id.toString() === window._teacherPlayingAsStudent.toString(); });
     }
-    return null;
   }
 
   // === 从学生数据中读取快乐跑存档 ===
@@ -114,11 +125,17 @@
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
 
     if (!isStudentView) {
-      // 教师视图
-      container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
-        ? renderTeacherPlaceholder('happyrun')
-        : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🏃</div><div style="font-size:18px;font-weight:700;margin-top:12px;">快乐跑一跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
-      return;
+      // 教师视图：检查是否已选择学生
+      if (window._teacherPlayingAsStudent && window._pigRunModalShown) {
+        // 已选择学生，显示游戏 iframe（与学生视图相同逻辑）
+        // 不 return，继续往下走创建 iframe
+      } else {
+        // 未选择学生，显示占位符
+        container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
+          ? renderTeacherPlaceholder('happyrun')
+          : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🏃</div><div style="font-size:18px;font-weight:700;margin-top:12px;">快乐跑一跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
+        return;
+      }
     }
 
     // 学生视图：创建游戏 iframe

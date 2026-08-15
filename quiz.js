@@ -709,6 +709,8 @@
       renderPigRunPage();
     } else if (activityType === 'match3' && typeof renderMatch3Page === 'function') {
       renderMatch3Page();
+    } else if (activityType === 'happyrun' && typeof renderHappyRunPage === 'function') {
+      renderHappyRunPage();
     }
     _pendingStudentId = null;
     _pendingActivityType = null;
