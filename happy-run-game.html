@@ -186,6 +186,70 @@ let quizAnswered = false;
 let quizDisabledOptions = [];
 let quizAnsweredIdx = -1;
 
+// === 关卡答题复活次数限制 ===
+let quizRevivalsUsedThisLevel = 0; // 当前关卡已使用的复活次数
+
+// 根据关卡获取最大允许复活次数
+function getMaxQuizRevivals(level) {
+    if (level >= 1 && level <= 20) return Infinity; // 1-20关：无限次
+    if (level >= 21 && level <= 50) return 2;       // 21-50关：每关2次
+    return 1;                                        // 51关以后：每关1次
+}
+
+// 检查是否还可以答题复活
+function canQuizRevive() {
+    var maxRevivals = getMaxQuizRevivals(currentLevel);
+    if (maxRevivals === Infinity) return true;
+    return quizRevivalsUsedThisLevel < maxRevivals;
+}
+
+// === 兑换金币系统 ===
+let showExchangeDialog = false;
+let exchangeInputAmount = ''; // 用户输入的要兑换的金币数量
+let exchangeErrorMessage = '';
+
+// 执行兑换操作
+function performExchange() {
+    var goldAmount = parseInt(exchangeInputAmount);
+    
+    if (isNaN(goldAmount) || goldAmount <= 0) {
+        exchangeErrorMessage = '请输入有效的金币数量';
+        return;
+    }
+    
+    var silverNeeded = goldAmount * 100;
+    
+    if (silverNeeded > silverBalance) {
+        exchangeErrorMessage = '银币不足！需要 ' + silverNeeded + ' 银币';
+        return;
+    }
+    
+    // 执行兑换
+    silverBalance -= silverNeeded;
+    petGoldCoins += goldAmount;
+    
+    // 保存进度
+    saveLevelProgress();
+    playSound('powerup');
+    
+    // 关闭弹窗并重置
+    showExchangeDialog = false;
+    exchangeInputAmount = '';
+    exchangeErrorMessage = '';
+    
+    // 通知父页面更新数据
+    parent.postMessage({type:'happyrun-save', data:{
+        maxLevel: maxUnlockedLevel,
+        levelScores: levelHighScores,
+        levelBestCoins: levelBestCoins,
+        totalSilver: totalSilverEarned,
+        silverBalance: silverBalance,
+        petGold: petGoldCoins,
+        ownedChars: ownedCharacters,
+        bossKillBonus: bossKillBonusClaimed
+    }}, '*');
+}
+
 // v70: 复活答题状态持久化 — 防止页面刷新丢失进度
 function saveRevivalState() {
     try {
@@ -396,16 +460,24 @@ function startGame(fromLevel){
     levelTransition=0; state='playing'; paused=false;
     quizRevivalAttempts=0; quizRevivalHeartsEarned=0; quizRevivalFailed=false;
     quizRevivalActive=false; quizDisabledOptions=[];
+    quizRevivalsUsedThisLevel=0; // 重置当前关卡复活次数
     clearRevivalState(); // v70: 开始新游戏时清除复活状态
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
 function goToMainMenu(){ state='mainMenu'; clearRevivalState(); }
 function revivePlayer(){
+    // 检查是否还有复活次数
+    if (!canQuizRevive()) {
+        // 没有复活次数了，直接显示游戏结束
+        return;
+    }
+    
     quizDisabledOptions = [];
     quizRevivalActive = true;
     quizAnswered = false;
     state = 'quizRevival';
+    quizRevivalsUsedThisLevel++; // 增加当前关卡已使用复活次数
     saveRevivalState(); // v70: 保存复活状态
     parent.postMessage({type:'happyrun-quiz-request', data:{
         attempts: quizRevivalAttempts
@@ -4985,26 +5057,95 @@ function drawMainMenu(c){
     c.textAlign='center';
     c.shadowColor='#96c93d';c.shadowBlur=20;
     c.fillStyle='#96c93d';c.font='bold 48px Arial';
-    c.fillText('酷跑冒险',400,65);c.shadowBlur=0;
-    // Character preview
-    drawCharacterPreview(c,selectedCharacter,400,125,1.2);
-    c.fillStyle='#ffcc00';c.font='bold 16px Arial';
-    c.fillText(charNames[selectedCharacter],400,180);
-    // Silver coin info
-    c.fillStyle='#C0C0C0';c.font='bold 14px Arial';
-    c.fillText('总获得银币: '+totalSilverEarned+'   当前余额: '+silverBalance,400,202);
+    c.fillText('酷跑冒险',400,55);c.shadowBlur=0;
+    
+    // === 银币信息展示（顶部） ===
+    c.fillStyle='rgba(0,0,0,0.4)';
+    c.beginPath();c.roundRect(150,68,500,50,10);c.fill();
+    c.fillStyle='#C0C0C0';c.font='bold 15px Arial';
+    c.fillText('总获得银币: '+totalSilverEarned,300,88);
+    c.fillStyle='#FFD700';c.font='bold 15px Arial';
+    c.fillText('现剩余银币: '+silverBalance,520,88);
     c.fillStyle='#FFD700';c.font='bold 13px Arial';
-    c.fillText('🪙 宠物金币: '+petGoldCoins,400,222);
+    c.fillText('🪙 宠物金币: '+petGoldCoins,400,110);
+    
+    // Character preview
+    drawCharacterPreview(c,selectedCharacter,400,155,1.0);
+    c.fillStyle='#ffcc00';c.font='bold 14px Arial';
+    c.fillText(charNames[selectedCharacter],400,195);
+    
     // Buttons
-    const bx=310,bw=180,bh=36;
-    drawBtn(c,bx,235,bw,bh,'开始游戏','#00b09b','#96c93d',17);
-    drawBtn(c,bx,278,bw,bh,'角色商店','#667eea','#764ba2',15);
-    drawBtn(c,bx,318,bw,bh,'选择关卡','#e67e22','#e74c3c',15);
+    const bx=310,bw=180,bh=32;
+    drawBtn(c,bx,205,bw,bh,'开始游戏','#00b09b','#96c93d',16);
+    drawBtn(c,bx,242,bw,bh,'角色商店','#667eea','#764ba2',14);
+    drawBtn(c,bx,279,bw,bh,'选择关卡','#e67e22','#e74c3c',14);
+    drawBtn(c,bx,316,bw,bh,'兑换金币','#f39c12','#e67e22',14);
+    
     // Best
     if(maxUnlockedLevel>1){
-        c.fillStyle='#ffcc00';c.font='13px Arial';
-        c.fillText('已解锁至第 '+maxUnlockedLevel+' 关',400,372);
+        c.fillStyle='#ffcc00';c.font='12px Arial';
+        c.fillText('已解锁至第 '+maxUnlockedLevel+' 关',400,365);
     }
+    c.textAlign='left';
+    
+    // 兑换金币弹窗
+    if(showExchangeDialog){
+        drawExchangeDialog(c);
+    }
+}
+
+function drawExchangeDialog(c){
+    // 半透明背景遮罩
+    c.fillStyle='rgba(0,0,0,0.7)';c.fillRect(0,0,800,400);
+    
+    // 弹窗主体
+    c.fillStyle='#1a1a2e';
+    c.strokeStyle='#f39c12';c.lineWidth=3;
+    c.beginPath();c.roundRect(200,80,400,260,15);c.fill();c.stroke();
+    
+    c.textAlign='center';
+    
+    // 标题
+    c.fillStyle='#f39c12';c.font='bold 24px Arial';
+    c.fillText('兑换金币',400,115);
+    
+    // 汇率说明
+    c.fillStyle='#e0e0ff';c.font='14px Arial';
+    c.fillText('汇率: 100 银币 = 1 金币',400,145);
+    
+    // 当前余额
+    c.fillStyle='#C0C0C0';c.font='bold 14px Arial';
+    c.fillText('当前银币: '+silverBalance,320,175);
+    c.fillStyle='#FFD700';
+    c.fillText('当前金币: '+petGoldCoins,500,175);
+    
+    // 输入框
+    c.fillStyle='#2a2a4e';
+    c.strokeStyle='#667eea';c.lineWidth=2;
+    c.beginPath();c.roundRect(280,190,240,40,8);c.fill();c.stroke();
+    
+    // 输入内容
+    c.fillStyle='#fff';c.font='bold 20px Arial';
+    var displayText = exchangeInputAmount || '输入金币数量';
+    if(!exchangeInputAmount) c.fillStyle='#666';
+    c.fillText(displayText,400,216);
+    
+    // 可兑换提示
+    var maxGoldCanExchange = Math.floor(silverBalance / 100);
+    c.fillStyle='#88ccff';c.font='12px Arial';
+    c.fillText('最多可兑换: '+maxGoldCanExchange+' 金币 (需要 '+(maxGoldCanExchange*100)+' 银币)',400,250);
+    
+    // 错误信息
+    if(exchangeErrorMessage){
+        c.fillStyle='#ff4444';c.font='bold 13px Arial';
+        c.fillText(exchangeErrorMessage,400,270);
+    }
+    
+    // 按钮
+    drawBtn(c,230,285,100,36,'确认兑换','#27ae60','#2ecc71',14);
+    drawBtn(c,350,285,100,36,'全部兑换','#e67e22','#f39c12',14);
+    drawBtn(c,470,285,100,36,'取消','#667eea','#764ba2',14);
+    
     c.textAlign='left';
 }
 
@@ -5183,8 +5324,25 @@ function drawQuizResult(c){
     c.fillStyle='#e0e0ff';c.font='18px Arial';
     c.fillText('第'+quizRevivalAttempts+'次答题未获得爱心，复活失败',400,120);
     
-    // 三个按钮
-    drawBtn(c,100,200,180,42,'继续答题复活','#27ae60','#2ecc71',16);
+    // 显示当前关卡复活次数信息
+    var maxRevivals = getMaxQuizRevivals(currentLevel);
+    c.fillStyle='#88ccff';c.font='14px Arial';
+    if(maxRevivals === Infinity){
+        c.fillText('本关(1-20关)：无限答题复活',400,155);
+    } else {
+        var remaining = maxRevivals - quizRevivalsUsedThisLevel;
+        c.fillText('本关复活次数: '+quizRevivalsUsedThisLevel+'/'+maxRevivals+' (剩余'+remaining+'次)',400,155);
+    }
+    
+    // 三个按钮（如果还有复活次数则显示"继续答题复活"，否则灰色）
+    var canContinue = canQuizRevive();
+    if(canContinue){
+        drawBtn(c,100,200,180,42,'继续答题复活','#27ae60','#2ecc71',16);
+    } else {
+        c.fillStyle='#555';c.beginPath();c.roundRect(100,200,180,42,8);c.fill();
+        c.fillStyle='#888';c.font='bold 14px Arial';
+        c.fillText('复活次数已用完',190,226);
+    }
     drawBtn(c,310,200,180,42,'重新开始','#e67e22','#e74c3c',16);
     drawBtn(c,520,200,180,42,'返回主菜单','#667eea','#764ba2',16);
     
@@ -5213,13 +5371,30 @@ function drawOver(c){
         c.fillStyle='#ffaa00';c.font='13px Arial';
         c.fillText('已答对 '+quizRevivalAttempts+' 次',400,255);
     }
-    // Buttons - always show revive button
-    {
-        var reviveLabel = quizRevivalFailed ? '重新答题复活' : '答题复活';
-        drawBtn(c,130,278,150,42,reviveLabel,'#27ae60','#2ecc71',16);
+    
+    // 显示当前关卡复活次数信息
+    var maxRevivals = getMaxQuizRevivals(currentLevel);
+    c.fillStyle='#88ccff';c.font='12px Arial';
+    if(maxRevivals === Infinity){
+        c.fillText('本关(1-20关)：无限答题复活',400,272);
+    } else {
+        var remaining = maxRevivals - quizRevivalsUsedThisLevel;
+        c.fillText('本关复活次数: '+quizRevivalsUsedThisLevel+'/'+maxRevivals+' (剩余'+remaining+'次)',400,272);
     }
-    drawBtn(c,320,278,150,42,'重新开始','#e67e22','#e74c3c',17);
-    drawBtn(c,510,278,150,42,'返回主菜单','#667eea','#764ba2',17);
+    
+    // Buttons - show revive button only if can revive
+    var canRevive = canQuizRevive();
+    if(canRevive){
+        var reviveLabel = quizRevivalFailed ? '重新答题复活' : '答题复活';
+        drawBtn(c,130,285,150,42,reviveLabel,'#27ae60','#2ecc71',16);
+    } else {
+        // 灰色不可用按钮
+        c.fillStyle='#555';c.beginPath();c.roundRect(130,285,150,42,8);c.fill();
+        c.fillStyle='#888';c.font='bold 16px Arial';
+        c.fillText('复活次数已用完',205,312);
+    }
+    drawBtn(c,320,285,150,42,'重新开始','#e67e22','#e74c3c',17);
+    drawBtn(c,510,285,150,42,'返回主菜单','#667eea','#764ba2',17);
     c.textAlign='left';
 }
 
@@ -8081,9 +8256,40 @@ cvs.addEventListener('click',(e)=>{
         return;
     }
     if(state==='mainMenu'){
-        if(x>=310&&x<=490&&y>=235&&y<=271)startGame();
-        else if(x>=310&&x<=490&&y>=278&&y<=314)state='charShop';
-        else if(x>=310&&x<=490&&y>=318&&y<=354)state='levelSelect';
+        // 如果兑换弹窗打开，处理弹窗内的点击
+        if(showExchangeDialog){
+            // 确认兑换按钮
+            if(x>=230&&x<=330&&y>=285&&y<=321){
+                performExchange();
+            }
+            // 全部兑换按钮
+            else if(x>=350&&x<=450&&y>=285&&y<=321){
+                var maxGold = Math.floor(silverBalance / 100);
+                if(maxGold > 0){
+                    exchangeInputAmount = maxGold.toString();
+                    exchangeErrorMessage = '';
+                } else {
+                    exchangeErrorMessage = '银币不足，无法兑换';
+                }
+            }
+            // 取消按钮
+            else if(x>=470&&x<=570&&y>=285&&y<=321){
+                showExchangeDialog = false;
+                exchangeInputAmount = '';
+                exchangeErrorMessage = '';
+            }
+            return;
+        }
+        // 主菜单按钮
+        if(x>=310&&x<=490&&y>=205&&y<=237)startGame();
+        else if(x>=310&&x<=490&&y>=242&&y<=274)state='charShop';
+        else if(x>=310&&x<=490&&y>=279&&y<=311)state='levelSelect';
+        else if(x>=310&&x<=490&&y>=316&&y<=348){
+            // 打开兑换金币弹窗
+            showExchangeDialog = true;
+            exchangeInputAmount = '';
+            exchangeErrorMessage = '';
+        }
     } else if(state==='charShop'){
         const cardW=100,cardH=130,gapX=12,gapY=8,totalW=cardW*5+gapX*4,startX=400-totalW/2;
         for(let i=0;i<10;i++){
@@ -8121,12 +8327,14 @@ cvs.addEventListener('click',(e)=>{
         }
         if(x>=320&&x<=480&&y>=340&&y<=378)state='mainMenu';
     } else if(state==='over'){
-        if(x>=130&&x<=280&&y>=278&&y<=320){
+        // 检查是否可以复活
+        var canReviveNow = canQuizRevive();
+        if(canReviveNow && x>=130&&x<=280&&y>=285&&y<=327){
             if(quizRevivalFailed){quizRevivalAttempts=0;quizRevivalFailed=false;}
             revivePlayer();
         }
-        else if(x>=320&&x<=470&&y>=278&&y<=320)restartFromLevel();
-        else if(x>=510&&x<=660&&y>=278&&y<=320)goToMainMenu();
+        else if(x>=320&&x<=470&&y>=285&&y<=327)restartFromLevel();
+        else if(x>=510&&x<=660&&y>=285&&y<=327)goToMainMenu();
     } else if(state==='quizRevival'){
         if(quizCurrentQuestion && !quizAnswered){
             for(var qi=0;qi<quizOptions.length;qi++){
@@ -8143,7 +8351,8 @@ cvs.addEventListener('click',(e)=>{
         }
     } else if(state==='quizResult'){
         // 复活失败画面按钮
-        if(x>=100&&x<=280&&y>=200&&y<=242){
+        var canCont = canQuizRevive();
+        if(canCont && x>=100&&x<=280&&y>=200&&y<=242){
             // 继续答题复活：重置次数和失败标记，重新进入答题
             quizRevivalAttempts=0;quizRevivalFailed=false;
             quizRevivalActive=true;quizAnswered=false;
@@ -8228,6 +8437,35 @@ cvs.addEventListener('click',(e)=>{
 
 document.addEventListener('keydown',e=>{
     const k=e.key;
+    
+    // 兑换弹窗键盘输入处理
+    if(showExchangeDialog && state==='mainMenu'){
+        if(k==='Escape'){
+            showExchangeDialog = false;
+            exchangeInputAmount = '';
+            exchangeErrorMessage = '';
+            return;
+        }
+        if(k==='Enter'){
+            performExchange();
+            return;
+        }
+        if(k==='Backspace'){
+            exchangeInputAmount = exchangeInputAmount.slice(0, -1);
+            exchangeErrorMessage = '';
+            return;
+        }
+        if(k>='0' && k<='9'){
+            // 限制输入长度
+            if(exchangeInputAmount.length < 6){
+                exchangeInputAmount += k;
+                exchangeErrorMessage = '';
+            }
+            return;
+        }
+        return; // 弹窗打开时不处理其他按键
+    }
+    
     if(k===' '||k==='ArrowUp'||k==='w'||k==='W'){
         e.preventDefault();
         if(state==='mainMenu')startGame();
@@ -8281,6 +8519,15 @@ document.addEventListener('keyup',e=>{
     }
 });
 
+// === Game Loop ===
+let canRestart=false;
+function gameLoop(){
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+
 setInterval(()=>{if(state==='over')canRestart=true;else canRestart=false;},100);
 
 // Multi-touch support: track each touch independently
@@ -8296,9 +8543,40 @@ cvs.addEventListener('touchstart',e=>{
 
         // Menu screens
         if(state==='mainMenu'){
-            if(gx>=310&&gx<=490&&gy>=235&&gy<=271)startGame();
-            else if(gx>=310&&gx<=490&&gy>=278&&gy<=314)state='charShop';
-            else if(gx>=310&&gx<=490&&gy>=318&&gy<=354)state='levelSelect';
+            // 如果兑换弹窗打开，处理弹窗内的触摸
+            if(showExchangeDialog){
+                // 确认兑换按钮
+                if(gx>=230&&gx<=330&&gy>=285&&gy<=321){
+                    performExchange();
+                }
+                // 全部兑换按钮
+                else if(gx>=350&&gx<=450&&gy>=285&&gy<=321){
+                    var maxGold = Math.floor(silverBalance / 100);
+                    if(maxGold > 0){
+                        exchangeInputAmount = maxGold.toString();
+                        exchangeErrorMessage = '';
+                    } else {
+                        exchangeErrorMessage = '银币不足，无法兑换';
+                    }
+                }
+                // 取消按钮
+                else if(gx>=470&&gx<=570&&gy>=285&&gy<=321){
+                    showExchangeDialog = false;
+                    exchangeInputAmount = '';
+                    exchangeErrorMessage = '';
+                }
+                return;
+            }
+            // 主菜单按钮
+            if(gx>=310&&gx<=490&&gy>=205&&gy<=237)startGame();
+            else if(gx>=310&&gx<=490&&gy>=242&&gy<=274)state='charShop';
+            else if(gx>=310&&gx<=490&&gy>=279&&gy<=311)state='levelSelect';
+            else if(gx>=310&&gx<=490&&gy>=316&&gy<=348){
+                // 打开兑换金币弹窗
+                showExchangeDialog = true;
+                exchangeInputAmount = '';
+                exchangeErrorMessage = '';
+            }
             return;
         }
         if(state==='charShop'){
@@ -8328,12 +8606,13 @@ cvs.addEventListener('touchstart',e=>{
             return;
         }
         if(state==='over'&&canRestart){
-            if(gx>=130&&gx<=280&&gy>=278&&gy<=320){
+            var canReviveTouch = canQuizRevive();
+            if(canReviveTouch && gx>=130&&gx<=280&&gy>=285&&gy<=327){
                 if(quizRevivalFailed){quizRevivalAttempts=0;quizRevivalFailed=false;}
                 revivePlayer();
             }
-            else if(gx>=320&&gx<=470&&gy>=278&&gy<=320)restartFromLevel();
-            else if(gx>=510&&gx<=660&&gy>=278&&gy<=320)goToMainMenu();
+            else if(gx>=320&&gx<=470&&gy>=285&&gy<=327)restartFromLevel();
+            else if(gx>=510&&gx<=660&&gy>=285&&gy<=327)goToMainMenu();
             return;
         }
         if(state==='quizRevival'){
@@ -8354,7 +8633,8 @@ cvs.addEventListener('touchstart',e=>{
         }
         if(state==='quizResult'){
             // 复活失败画面按钮
-            if(gx>=100&&gx<=280&&gy>=200&&gy<=242){
+            var canContTouch = canQuizRevive();
+            if(canContTouch && gx>=100&&gx<=280&&gy>=200&&gy<=242){
                 // 继续答题复活：重置次数和失败标记，重新进入答题
                 quizRevivalAttempts=0;quizRevivalFailed=false;
                 quizRevivalActive=true;quizAnswered=false;
