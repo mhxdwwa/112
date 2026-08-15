@@ -2864,17 +2864,19 @@ function renderHappyRunRanking() {
   const emptyHint = document.getElementById('happyRunRankEmptyHint');
   const statsBar = document.getElementById('rankHappyRunStatsBar');
 
-  const allList = cur.students.map(s => {
+    const allList = cur.students.map(s => {
     var qs = s.quizState || {};
     var happyRunLevels = qs.happyRunLevels || {};
-    var totalScore = qs.happyRunTotalScore || 0;
+    var totalSilver = qs.happyRunTotalSilver || qs.happyRunTotalScore || 0;
     var clearedCount = Object.keys(happyRunLevels).filter(k => happyRunLevels[k] && happyRunLevels[k].cleared).length;
-    var maxLevel = 0;
-    Object.keys(happyRunLevels).forEach(k => {
-      var lv = parseInt(k);
-      if (happyRunLevels[k] && happyRunLevels[k].cleared && lv > maxLevel) maxLevel = lv;
-    });
-    return { name: s.name, totalScore: totalScore, clearedLevels: clearedCount, maxLevel: maxLevel, student: s };
+    var maxLevel = qs.happyRunMaxLevel || 0;
+    if (maxLevel === 0) {
+      Object.keys(happyRunLevels).forEach(k => {
+        var lv = parseInt(k);
+        if (happyRunLevels[k] && happyRunLevels[k].cleared && lv > maxLevel) maxLevel = lv;
+      });
+    }
+    return { name: s.name, totalScore: totalSilver, clearedLevels: clearedCount, maxLevel: maxLevel, student: s };
   }).filter(x => x.totalScore > 0 || x.clearedLevels > 0).sort((a, b) => b.totalScore - a.totalScore);
 
   if (allList.length === 0) {
@@ -2913,7 +2915,7 @@ function renderHappyRunRanking() {
     const medalNum = pi + 1;
     const activePet = getActivePet(item.student);
     const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:36px;">🏃</span>';
-    podiumHtml += '<div class="podium-slot ' + cls + '"><div class="podium-avatar-wrap">' + crown + '<div class="podium-avatar">' + petAvatar + '<div class="podium-medal">' + medalNum + '</div></div></div><div class="podium-name">' + esc(item.name) + '</div><div class="podium-pet-name">第' + item.maxLevel + '关 · ' + item.totalScore + '分</div><div class="podium-pillar"><div class="podium-rank-num">' + medalNum + '</div><div class="podium-growth-val">' + item.totalScore + '分 · ' + item.clearedLevels + '关</div></div></div>';
+    podiumHtml += '<div class="podium-slot ' + cls + '"><div class="podium-avatar-wrap">' + crown + '<div class="podium-avatar">' + petAvatar + '<div class="podium-medal">' + medalNum + '</div></div></div><div class="podium-name">' + esc(item.name) + '</div><div class="podium-pet-name">第' + item.maxLevel + '关 · ' + item.totalScore + '银币</div><div class="podium-pillar"><div class="podium-rank-num">' + medalNum + '</div><div class="podium-growth-val">' + item.totalScore + '银币 · ' + item.clearedLevels + '关</div></div></div>';
   });
   podiumHtml += '</div><div class="podium-base"></div>';
   if (topThreeEl) topThreeEl.innerHTML = podiumHtml;
@@ -2926,7 +2928,7 @@ function renderHappyRunRanking() {
       const title = getHappyRunRankTitle(idx, allList.length);
       const activePet = getActivePet(item.student);
       const petAvatar = activePet ? getPetImage(activePet.name, activePet.level || 1) : '<span style="font-size:22px;">🏃</span>';
-      listHtml += '<div class="rank-row ' + topCls + '"><div class="rank-num">' + (idx + 1) + '</div><div class="rank-row-avatar">' + petAvatar + '</div><div class="rank-row-info"><div class="rank-row-name">' + esc(item.name) + ' <span class="rank-title-badge ' + title.cls + '">' + title.text + '</span></div><div class="rank-row-pet">第' + item.maxLevel + '关 · 通关' + item.clearedLevels + '关 · 总分 ' + item.totalScore + '分</div><div class="rank-progress-wrap"><div class="rank-progress-bar"><div class="rank-progress-fill" style="width:' + pct + '%;background:linear-gradient(90deg,#f093fb,#f5576c);"></div></div><div class="rank-growth-num">' + item.totalScore + '分</div></div></div></div>';
+      listHtml += '<div class="rank-row ' + topCls + '"><div class="rank-num">' + (idx + 1) + '</div><div class="rank-row-avatar">' + petAvatar + '</div><div class="rank-row-info"><div class="rank-row-name">' + esc(item.name) + ' <span class="rank-title-badge ' + title.cls + '">' + title.text + '</span></div><div class="rank-row-pet">第' + item.maxLevel + '关 · 通关' + item.clearedLevels + '关 · 总银币 ' + item.totalScore + '</div><div class="rank-progress-wrap"><div class="rank-progress-bar"><div class="rank-progress-fill" style="width:' + pct + '%;background:linear-gradient(90deg,#f093fb,#f5576c);"></div></div><div class="rank-growth-num">' + item.totalScore + '银币</div></div></div></div>';
     });
     listHtml += '</div></div>';
     fullListEl.innerHTML = listHtml;

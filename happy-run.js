@@ -1,8 +1,110 @@
 // 快乐跑一跑 - 集成到取金阁
-// v1 - 框架占位，待后续添加游戏逻辑
+// v2 - 完整游戏集成，iframe + postMessage 架构
 
 (function() {
   'use strict';
+
+  var gameIframe = null;
+  var gameLoaded = false;
+  var pendingQuizRequest = false;
+
+  // === 获取当前学生对象 ===
+  function getCurrentStudent() {
+    if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'student') return null;
+    if (typeof students === 'undefined' || !students) return null;
+    var sid = parseInt(currentUser.studentId);
+    for (var i = 0; i < students.length; i++) {
+      if (students[i].id === sid) return students[i];
+    }
+    return null;
+  }
+
+  // === 从学生数据中读取快乐跑存档 ===
+  function loadHappyRunData() {
+    var student = getCurrentStudent();
+    if (!student || !student.quizState) return getDefaultData();
+    var qs = student.quizState;
+    return {
+      maxLevel: qs.happyRunMaxLevel || 1,
+      levelScores: qs.happyRunLevels || {},
+      levelBestCoins: qs.happyRunLevelBestCoins || {},
+      totalSilver: qs.happyRunTotalSilver || 0,
+      silverBalance: qs.happyRunSilverBalance || 0,
+      petGold: qs.happyRunPetGold || 0,
+      ownedChars: qs.happyRunOwnedChars || [0],
+      bossKillBonus: qs.happyRunBossKillBonus || {}
+    };
+  }
+
+  function getDefaultData() {
+    return {
+      maxLevel: 1,
+      levelScores: {},
+      levelBestCoins: {},
+      totalSilver: 0,
+      silverBalance: 0,
+      petGold: 0,
+      ownedChars: [0],
+      bossKillBonus: {}
+    };
+  }
+
+  // === 保存快乐跑数据到学生记录 ===
+  function saveHappyRunData(gameData) {
+    var student = getCurrentStudent();
+    if (!student) return;
+    if (!student.quizState) student.quizState = {};
+    var qs = student.quizState;
+
+    qs.happyRunMaxLevel = gameData.maxLevel || 1;
+    qs.happyRunLevels = gameData.levelScores || {};
+    qs.happyRunLevelBestCoins = gameData.levelBestCoins || {};
+    qs.happyRunTotalSilver = gameData.totalSilver || 0;
+    qs.happyRunSilverBalance = gameData.silverBalance || 0;
+    qs.happyRunPetGold = gameData.petGold || 0;
+    qs.happyRunOwnedChars = gameData.ownedChars || [0];
+    qs.happyRunBossKillBonus = gameData.bossKillBonus || {};
+
+    // 更新排行榜用的总分（总银币数）
+    qs.happyRunTotalScore = gameData.totalSilver || 0;
+
+    if (typeof saveCoinsAndQuizState === 'function') {
+      saveCoinsAndQuizState(student);
+    }
+  }
+
+  // === 从题库中随机获取一道题 ===
+  function getRandomQuestion() {
+    if (typeof QUIZ_BANK === 'undefined') return null;
+    try {
+      var allQuestions = [];
+      var chapters = QUIZ_BANK.getChapters ? QUIZ_BANK.getChapters() : null;
+      if (!chapters) {
+        // Try alternative access
+        if (typeof QUIZ_BANK.getAllQuestions === 'function') {
+          allQuestions = QUIZ_BANK.getAllQuestions();
+        }
+      } else {
+        for (var i = 0; i < chapters.length; i++) {
+          if (chapters[i].questions) {
+            allQuestions = allQuestions.concat(chapters[i].questions);
+          }
+        }
+      }
+      if (allQuestions.length === 0) return null;
+      var idx = Math.floor(Math.random() * allQuestions.length);
+      var q = allQuestions[idx];
+      return {
+        question: q.q,
+        options: q.opts,
+        correctIndex: q.ans,
+        explanation: q.exp || ''
+      };
+    } catch(e) {
+      console.error('[快乐跑] 获取题目失败:', e);
+      return null;
+    }
+  }
 
   // === 渲染快乐跑一跑页面 ===
   function renderHappyRunPage() {
@@ -12,16 +114,91 @@
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
 
     if (!isStudentView) {
-      // 教师视图：显示开始和题库按钮
+      // 教师视图
       container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
         ? renderTeacherPlaceholder('happyrun')
         : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🏃</div><div style="font-size:18px;font-weight:700;margin-top:12px;">快乐跑一跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
       return;
     }
 
-    // 学生视图：占位，待添加游戏逻辑
-    container.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🏃</div><div style="font-size:18px;font-weight:700;margin-top:12px;">快乐跑一跑</div><div style="font-size:14px;color:#888;margin-top:8px;">游戏即将上线，敬请期待...</div></div>';
+    // 学生视图：创建游戏 iframe
+    container.innerHTML = '';
+    var wrapper = document.createElement('div');
+    wrapper.style.cssText = 'width:100%;height:100%;min-height:400px;position:relative;background:#000;border-radius:12px;overflow:hidden;';
+
+    gameIframe = document.createElement('iframe');
+    gameIframe.style.cssText = 'width:100%;height:100%;min-height:400px;border:none;';
+    gameIframe.setAttribute('allow', 'autoplay; fullscreen');
+    gameIframe.setAttribute('scrolling', 'no');
+
+    wrapper.appendChild(gameIframe);
+    container.appendChild(wrapper);
+
+    // 加载游戏 HTML
+    gameIframe.src = 'happy-run-game.html';
+
+    // 监听游戏加载完成
+    gameIframe.onload = function() {
+      gameLoaded = true;
+      // 发送初始化数据
+      var data = loadHappyRunData();
+      gameIframe.contentWindow.postMessage({
+        type: 'happyrun-init',
+        data: data
+      }, '*');
+    };
+
+    // 监听来自游戏的消息
+    setupMessageListener();
   }
+
+  // === 设置 postMessage 监听器 ===
+  var messageListenerSetup = false;
+  function setupMessageListener() {
+    if (messageListenerSetup) return;
+    messageListenerSetup = true;
+
+    window.addEventListener('message', function(e) {
+      var d = e.data;
+      if (!d || !d.type) return;
+
+      // 游戏请求保存数据
+      if (d.type === 'happyrun-save') {
+        saveHappyRunData(d.data);
+      }
+
+      // 游戏请求答题
+      if (d.type === 'happyrun-quiz-request') {
+        pendingQuizRequest = true;
+        var question = getRandomQuestion();
+        if (question && gameIframe && gameIframe.contentWindow) {
+          gameIframe.contentWindow.postMessage({
+            type: 'happyrun-quiz-question',
+            data: question
+          }, '*');
+        } else {
+          // 没有题库，直接判对
+          if (gameIframe && gameIframe.contentWindow) {
+            gameIframe.contentWindow.postMessage({
+              type: 'happyrun-quiz-answer',
+              data: { correct: true }
+            }, '*');
+          }
+        }
+      }
+
+      // 游戏提交答案
+      if (d.type === 'happyrun-quiz-select') {
+        // 答案验证已在游戏端处理（通过 correctIndex 对比）
+        // 这里只需要告诉游戏是否正确
+        // 但由于答案在游戏端有 correctIndex，游戏可以自行判断
+        // 所以我们不需要在这里做任何事
+        // 游戏端会在收到 quiz-question 时保存 correctIndex，
+        // 然后在玩家选择时自行判断并调用 handleQuizAnswer
+      }
+    });
+  }
+
   window.renderHappyRunPage = renderHappyRunPage;
 
 })();
