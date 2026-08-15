@@ -139,25 +139,25 @@ function mapTouchToGame(clientX, clientY) {
         return { gx: rx * 800, gy: ry * 400 };
     }
 }
-// Rotate button handler
+// Rotate button handler - sends message to parent to exit fullscreen
 (function(){
     const btn = document.getElementById('rotateBtn');
     btn.addEventListener('click', function(e){
         e.preventDefault();
         e.stopPropagation();
         if (isFullscreenActive) {
-            // In fullscreen: exit fullscreen to restore normal website state
-            exitGameFullscreen();
+            // Tell parent page to exit fullscreen and restore website
+            parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');
         } else {
-            // Not in fullscreen: toggle force-landscape
+            // Not in fullscreen: toggle force-landscape within iframe
             isGameRotated = !isGameRotated;
             const wrapper = document.querySelector('.game-wrapper');
             if(isGameRotated){
                 wrapper.classList.add('force-landscape');
-                btn.innerHTML = '&#x21BA;'; // reverse arrow
+                btn.innerHTML = '&#x21BA;';
             } else {
                 wrapper.classList.remove('force-landscape');
-                btn.innerHTML = '&#x21BB;'; // forward arrow
+                btn.innerHTML = '&#x21BB;';
             }
         }
     });
@@ -168,82 +168,50 @@ function mapTouchToGame(clientX, clientY) {
     });
 })();
 
-// === Fullscreen system for mobile ===
+// === Fullscreen system - controlled by parent page ===
 let isFullscreenActive = false;
 let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
 
-function isMobilePortrait() {
-    return window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
-}
-
-function enterGameFullscreen() {
-    if (!isMobileDevice) return;
-    var el = document.querySelector('.game-wrapper');
-    if (!el) return;
-    // Force landscape class
-    el.classList.add('force-landscape');
-    isGameRotated = true;
-    var rBtn = document.getElementById('rotateBtn');
-    if (rBtn) rBtn.innerHTML = '&#x21BA;';
-    
-    var rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    if (rfs) {
-        rfs.call(el).then(function() {
-            isFullscreenActive = true;
-        }).catch(function(e) {
-            console.warn('Fullscreen failed:', e);
-            // Fallback: just force landscape without fullscreen
-            isFullscreenActive = false;
-        });
+// Listen for fullscreen state changes from parent
+window.addEventListener('message', function(e) {
+    if (!e.data || !e.data.type) return;
+    if (e.data.type === 'happyrun-fullscreen-entered') {
+        isFullscreenActive = true;
+        // Game iframe is now in fullscreen, fill the entire viewport
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.body.style.overflow = 'hidden';
+        document.body.style.background = '#000';
+        var wrapper = document.querySelector('.game-wrapper');
+        if (wrapper) {
+            wrapper.style.width = '100%';
+            wrapper.style.height = '100%';
+        }
+        var cvsContainer = document.querySelector('.game-canvas');
+        if (cvsContainer) {
+            cvsContainer.style.width = '100%';
+            cvsContainer.style.height = '100%';
+            cvsContainer.style.maxWidth = 'none';
+            cvsContainer.style.aspectRatio = 'auto';
+        }
+        var rBtn = document.getElementById('rotateBtn');
+        if (rBtn) rBtn.innerHTML = '&#x21BA;';
     }
-}
-
-function exitGameFullscreen() {
-    var efs = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-    if (efs && (document.fullscreenElement || document.webkitFullscreenElement)) {
-        efs.call(document).catch(function(){});
-    }
-    isFullscreenActive = false;
-    var el = document.querySelector('.game-wrapper');
-    if (el) el.classList.remove('force-landscape');
-    isGameRotated = false;
-    var rBtn = document.getElementById('rotateBtn');
-    if (rBtn) rBtn.innerHTML = '&#x21BB;';
-}
-
-// Listen for fullscreen change
-document.addEventListener('fullscreenchange', onFullscreenChange);
-document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-function onFullscreenChange() {
-    var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    if (!fsEl) {
-        // Exited fullscreen - restore normal state
+    if (e.data.type === 'happyrun-fullscreen-exited') {
         isFullscreenActive = false;
-        var el = document.querySelector('.game-wrapper');
-        if (el) el.classList.remove('force-landscape');
         isGameRotated = false;
+        // Restore original styles
+        var wrapper = document.querySelector('.game-wrapper');
+        if (wrapper) {
+            wrapper.style.cssText = '';
+            wrapper.classList.remove('force-landscape');
+        }
+        var cvsContainer = document.querySelector('.game-canvas');
+        if (cvsContainer) {
+            cvsContainer.style.cssText = '';
+        }
         var rBtn = document.getElementById('rotateBtn');
         if (rBtn) rBtn.innerHTML = '&#x21BB;';
-    }
-}
-
-// Listen for orientation change to exit fullscreen when going portrait
-window.addEventListener('orientationchange', function() {
-    setTimeout(function() {
-        if (isFullscreenActive && !isMobilePortrait() === false) {
-            // If now in portrait while in fullscreen, keep landscape
-        }
-    }, 300);
-});
-
-// Also detect portrait via resize when in fullscreen
-window.addEventListener('resize', function() {
-    if (isFullscreenActive) {
-        var el = document.querySelector('.game-wrapper');
-        if (el && !el.classList.contains('force-landscape')) {
-            el.classList.add('force-landscape');
-            isGameRotated = true;
-        }
     }
 });
 
@@ -555,10 +523,8 @@ for(let i=0;i<8;i++) mtns.push({x:i*130-50,h:50+Math.random()*70});
 function startGame(fromLevel){
     if(state==='playing') return;
     getAudioCtx();
-    // Enter fullscreen on mobile when game starts
-    if (isMobileDevice && !isFullscreenActive) {
-        enterGameFullscreen();
-    }
+    // Notify parent to enter fullscreen on mobile
+    parent.postMessage({ type: 'happyrun-start-game' }, '*');
     P={x:PX,y:GY-PH,vy:0,vx:0,gnd:true,duck:false,af:0,onPlat:-1,onCrate:-1,onPlatH:0,onCrateTop:0,pushX:0,moveLeft:false,moveRight:false,moveUp:false,moveDown:false,shooting:false,facing:1};
     pits=[];ohs=[];plats=[];nails=[];bullets=[];powerups=[];parts=[];coins=[];bats=[];tigers=[];stormClouds=[];skillClones=[];
     fc=0;dist=0;spd=BASE_SPD;nextSpawn=0;gndScr=0;
@@ -581,7 +547,7 @@ function startGame(fromLevel){
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
-function goToMainMenu(){ state='mainMenu'; clearRevivalState(); if(isFullscreenActive) exitGameFullscreen(); }
+function goToMainMenu(){ state='mainMenu'; clearRevivalState(); if(isFullscreenActive) parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*'); }
 function revivePlayer(){
     // 检查是否还有复活次数
     if (!canQuizRevive()) {

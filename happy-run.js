@@ -11,6 +11,10 @@
   var _actionLogTimer = null; // 操作日志防抖定时器
   var _pendingLogChanges = []; // 累积的日志变更
   var _lastLogSnapshot = null; // 上次记录日志时的状态快照
+  var _gameWrapper = null; // 游戏容器引用
+  var _isGameFullscreen = false; // 游戏是否处于全屏模式
+  var _savedBodyStyles = ''; // 保存原始body样式
+  var _hiddenElements = []; // 被隐藏的元素列表
 
   // === 获取当前学生对象（支持教师扮演学生） ===
   function getCurrentStudent() {
@@ -239,6 +243,180 @@
     }
   }
 
+  // === 手机端全屏系统 ===
+  function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
+  }
+
+  function isMobilePortrait() {
+    return window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+  }
+
+  // 进入游戏全屏模式 - 隐藏页面所有UI，让iframe铺满整个视口
+  function enterGameFullscreen() {
+    if (_isGameFullscreen) return;
+    _isGameFullscreen = true;
+
+    // 1. 尝试使用 Fullscreen API（隐藏浏览器地址栏等）
+    var docEl = document.documentElement;
+    var rfs = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+    if (rfs) {
+      rfs.call(docEl).catch(function(e) {
+        console.warn('[快乐跑] Fullscreen API failed:', e);
+      });
+    }
+
+    // 2. 隐藏页面中除游戏wrapper外的所有元素
+    _hiddenElements = [];
+    var body = document.body;
+    var children = body.children;
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      // 不隐藏游戏wrapper和我们的全屏样式元素
+      if (child === _gameWrapper || child.id === '_happyRunFullscreenStyle') continue;
+      if (child.style.display === 'none') {
+        _hiddenElements.push({ el: child, wasHidden: true });
+      } else {
+        _hiddenElements.push({ el: child, wasHidden: false, origDisplay: child.style.display });
+        child.style.display = 'none';
+      }
+    }
+
+    // 3. 设置body样式 - 无滚动、黑色背景
+    _savedBodyStyles = body.style.cssText;
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.width = '100%';
+    body.style.height = '100%';
+    body.style.margin = '0';
+    body.style.padding = '0';
+    body.style.background = '#000';
+    body.style.top = '0';
+    body.style.left = '0';
+
+    // 4. 让wrapper铺满整个视口
+    if (_gameWrapper) {
+      _gameWrapper.setAttribute('data-orig-style', _gameWrapper.style.cssText);
+      _gameWrapper.style.position = 'fixed';
+      _gameWrapper.style.top = '0';
+      _gameWrapper.style.left = '0';
+      _gameWrapper.style.width = '100vw';
+      _gameWrapper.style.height = '100vh';
+      _gameWrapper.style.maxWidth = 'none';
+      _gameWrapper.style.maxHeight = 'none';
+      _gameWrapper.style.margin = '0';
+      _gameWrapper.style.borderRadius = '0';
+      _gameWrapper.style.zIndex = '2147483647';
+      _gameWrapper.style.background = '#000';
+      _gameWrapper.style.boxShadow = 'none';
+
+      // 5. 如果是竖屏，旋转wrapper为横屏
+      if (isMobilePortrait()) {
+        _gameWrapper.style.transform = 'rotate(90deg)';
+        _gameWrapper.style.transformOrigin = 'center center';
+        // 旋转后宽高互换，需要调整
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        _gameWrapper.style.width = vh + 'px';
+        _gameWrapper.style.height = vw + 'px';
+        _gameWrapper.style.left = ((vw - vh) / 2) + 'px';
+        _gameWrapper.style.top = ((vh - vw) / 2) + 'px';
+      } else {
+        _gameWrapper.style.transform = '';
+      }
+    }
+
+    // 6. 通知iframe已进入全屏
+    if (gameIframe && gameIframe.contentWindow) {
+      gameIframe.contentWindow.postMessage({ type: 'happyrun-fullscreen-entered' }, '*');
+    }
+
+    // 7. 监听方向变化 - 如果切回竖屏则退出全屏
+    window.addEventListener('orientationchange', _onOrientationChange);
+    window.addEventListener('resize', _onResizeCheck);
+  }
+
+  // 退出游戏全屏模式 - 恢复页面原始状态
+  function exitGameFullscreen() {
+    if (!_isGameFullscreen) return;
+    _isGameFullscreen = false;
+
+    // 1. 退出 Fullscreen API
+    var efs = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (efs && (document.fullscreenElement || document.webkitFullscreenElement)) {
+      efs.call(document).catch(function(){});
+    }
+
+    // 2. 恢复被隐藏的元素
+    for (var i = 0; i < _hiddenElements.length; i++) {
+      var item = _hiddenElements[i];
+      if (!item.wasHidden) {
+        item.el.style.display = item.origDisplay || '';
+      }
+    }
+    _hiddenElements = [];
+
+    // 3. 恢复body样式
+    if (_gameWrapper) {
+      var origStyle = _gameWrapper.getAttribute('data-orig-style');
+      if (origStyle !== null) {
+        _gameWrapper.style.cssText = origStyle;
+        _gameWrapper.removeAttribute('data-orig-style');
+      }
+    }
+    document.body.style.cssText = _savedBodyStyles || '';
+
+    // 4. 通知iframe已退出全屏
+    if (gameIframe && gameIframe.contentWindow) {
+      gameIframe.contentWindow.postMessage({ type: 'happyrun-fullscreen-exited' }, '*');
+    }
+
+    // 5. 移除监听器
+    window.removeEventListener('orientationchange', _onOrientationChange);
+    window.removeEventListener('resize', _onResizeCheck);
+  }
+
+  function _onOrientationChange() {
+    setTimeout(function() {
+      if (_isGameFullscreen && window.innerWidth > window.innerHeight) {
+        // 切到横屏了，重新调整wrapper
+        if (_gameWrapper) {
+          _gameWrapper.style.transform = '';
+          _gameWrapper.style.width = '100vw';
+          _gameWrapper.style.height = '100vh';
+          _gameWrapper.style.left = '0';
+          _gameWrapper.style.top = '0';
+        }
+      } else if (_isGameFullscreen && window.innerWidth <= window.innerHeight) {
+        // 切回竖屏，退出全屏恢复网页
+        exitGameFullscreen();
+      }
+    }, 300);
+  }
+
+  function _onResizeCheck() {
+    if (_isGameFullscreen && window.innerWidth > window.innerHeight) {
+      // 横屏状态，确保wrapper正确
+      if (_gameWrapper && !_gameWrapper.style.transform) {
+        _gameWrapper.style.width = '100vw';
+        _gameWrapper.style.height = '100vh';
+      }
+    }
+  }
+
+  // 监听Fullscreen API退出事件
+  document.addEventListener('fullscreenchange', function() {
+    if (!document.fullscreenElement && _isGameFullscreen) {
+      // 用户通过系统手势退出了全屏
+      exitGameFullscreen();
+    }
+  });
+  document.addEventListener('webkitfullscreenchange', function() {
+    if (!document.webkitFullscreenElement && _isGameFullscreen) {
+      exitGameFullscreen();
+    }
+  });
+
   // === 渲染快乐跑一跑页面 ===
   function renderHappyRunPage() {
     var container = document.getElementById('happyRunContent');
@@ -278,7 +456,9 @@
     var gameHeight = Math.round(maxGameWidth * 90 / 185); // 按比例计算高度
     
     var wrapper = document.createElement('div');
+    wrapper.id = 'happyRunGameWrapper';
     wrapper.style.cssText = 'width:' + maxGameWidth + 'px;height:' + gameHeight + 'px;margin:0 auto;position:relative;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;';
+    _gameWrapper = wrapper;
     
     // 添加加载提示
     var loadingDiv = document.createElement('div');
@@ -342,6 +522,18 @@
       // 游戏请求保存数据
       if (d.type === 'happyrun-save') {
         saveHappyRunData(d.data);
+      }
+
+      // 游戏开始 - 进入全屏模式（手机端）
+      if (d.type === 'happyrun-start-game') {
+        if (isMobileDevice()) {
+          enterGameFullscreen();
+        }
+      }
+
+      // 游戏请求退出全屏
+      if (d.type === 'happyrun-exit-fullscreen') {
+        exitGameFullscreen();
       }
 
       // 游戏请求答题
