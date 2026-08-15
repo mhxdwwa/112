@@ -71,6 +71,13 @@
             line-height: 1;
         }
         #rotateBtn:active { background: rgba(80,80,80,0.9); }
+        
+        /* 隐藏桌面端的旋转按钮，只在手机端显示 */
+        @media (min-width: 769px) {
+            #rotateBtn {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
