@@ -183,6 +183,7 @@ let quizCurrentQuestion = null;
 let quizOptions = [];
 let quizCorrectIdx = -1;
 let quizAnswered = false;
+let quizWrongUntil = 0;
 
 let currentLevel=1, levelStartDist=0, levelScore=0, totalScore=0, levelTransition=0;
 function getLevelDistance(lv){ return 600+(lv-1)*100; }
@@ -349,18 +350,12 @@ function startGame(fromLevel){
     } else { currentLevel=1;levelStartDist=0;levelScore=0;totalScore=0; }
     levelTransition=0; state='playing'; paused=false;
     quizRevivalAttempts=0; quizRevivalHeartsEarned=0; quizRevivalFailed=false;
-    quizRevivalActive=false;
+    quizRevivalActive=false; quizWrongUntil=0;
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
 function goToMainMenu(){ state='mainMenu'; }
 function revivePlayer(){
-    if(quizRevivalAttempts >= 4) {
-        quizRevivalActive = false;
-        quizRevivalFailed = true;
-        state = 'over';
-        return;
-    }
     quizRevivalActive = true;
     quizAnswered = false;
     state = 'quizRevival';
@@ -372,13 +367,14 @@ function revivePlayer(){
 function handleQuizAnswer(correct) {
     if (!quizRevivalActive || quizAnswered) return;
     quizAnswered = true;
-    quizRevivalAttempts++;
     
     if (correct) {
+        quizRevivalAttempts++;
         var hearts = 0;
         if (quizRevivalAttempts === 1) hearts = 2;
         else if (quizRevivalAttempts === 2) hearts = 1;
         if (hearts > 0) {
+            // 第1次答对+2❤，第2次答对+1❤，直接复活成功
             quizRevivalHeartsEarned += hearts;
             lives = quizRevivalHeartsEarned;
             invincible = INVINCIBLE_TIME + 60;
@@ -391,13 +387,18 @@ function handleQuizAnswer(correct) {
             quizRevivalActive = false;
             state = 'playing';
             return;
+        } else {
+            // 第3/4次答对，复活失败
+            quizRevivalActive = false;
+            quizRevivalFailed = true;
+            state = 'quizResult';
+            return;
         }
     }
-    quizRevivalActive = false;
-    if (quizRevivalAttempts >= 3) {
-        quizRevivalFailed = true;
-    }
-    state = 'quizResult';
+    // 答错：不切换界面，保持在答题界面，短暂反馈后允许再次作答
+    playSound('hit');
+    quizWrongUntil = performance.now() + 600;
+    setTimeout(function(){ quizAnswered = false; }, 600);
 }
 
 let audioCtx=null;
@@ -672,6 +673,7 @@ function die(){
     quizRevivalAttempts = 0;
     quizRevivalHeartsEarned = 0;
     quizRevivalFailed = false;
+    quizWrongUntil = 0;
 }
 
 function s2w(sx){return sx+fc*spd;}
@@ -5051,10 +5053,10 @@ function drawQuizRevival(c){
     c.fillStyle='#00ccff';c.font='bold 32px Arial';
     c.fillText('📝 答题复活',400,45);
     c.fillStyle='#ffcc00';c.font='16px Arial';
-    var attemptText = '第 '+(quizRevivalAttempts+1)+' 次答题';
-    if(quizRevivalAttempts===0) attemptText += ' (答对+2❤)';
-    else if(quizRevivalAttempts===1) attemptText += ' (答对+1❤)';
-    else attemptText += ' (答对也不复活)';
+    var attemptText = '';
+    if(quizRevivalAttempts===0) attemptText = '答对可得 +2❤';
+    else if(quizRevivalAttempts===1) attemptText = '答对可得 +1❤';
+    else attemptText = '答对也不复活';
     c.fillText(attemptText,400,75);
     
     if(quizCurrentQuestion){
@@ -5096,6 +5098,15 @@ function drawQuizRevival(c){
         c.fillStyle='#aaa';c.font='20px Arial';
         c.fillText('正在加载题目...',400,200);
     }
+    
+    // 答错反馈：红色闪烁 + 提示文字
+    if(performance.now() < quizWrongUntil){
+        c.fillStyle='rgba(255,0,0,0.25)';
+        c.fillRect(0,0,800,400);
+        c.fillStyle='#ff4444';c.font='bold 26px Arial';
+        c.fillText('❌ 答错了，再试一次！',400,385);
+    }
+    
     c.textAlign='left';
 }
 
@@ -5103,24 +5114,14 @@ function drawQuizResult(c){
     c.fillStyle='rgba(0,0,20,0.88)';c.fillRect(0,0,800,400);
     c.textAlign='center';
     
-    if(quizRevivalFailed){
-        c.fillStyle='#ff4444';c.font='bold 36px Arial';
-        c.fillText('复活失败',400,80);
-        c.fillStyle='#e0e0ff';c.font='18px Arial';
-        c.fillText('第'+quizRevivalAttempts+'次答题未获得爱心复活失败',400,120);
-    } else if(quizRevivalHeartsEarned > 0){
-        c.fillStyle='#2ecc71';c.font='bold 36px Arial';
-        c.fillText('复活成功!',400,80);
-        c.fillStyle='#ffcc00';c.font='20px Arial';
-        c.fillText('获得 '+quizRevivalHeartsEarned+' 颗爱心',400,120);
-    }
+    // 复活失败画面（第3/4次答对时进入）
+    c.fillStyle='#ff4444';c.font='bold 36px Arial';
+    c.fillText('复活失败',400,80);
+    c.fillStyle='#e0e0ff';c.font='18px Arial';
+    c.fillText('第'+quizRevivalAttempts+'次答题未获得爱心，复活失败',400,120);
     
-    // Three buttons
-    if(quizRevivalFailed){
-        drawBtn(c,100,200,180,42,'重新答题复活','#27ae60','#2ecc71',16);
-    } else {
-        drawBtn(c,100,200,180,42,'继续答题','#27ae60','#2ecc71',16);
-    }
+    // 三个按钮
+    drawBtn(c,100,200,180,42,'继续答题复活','#27ae60','#2ecc71',16);
     drawBtn(c,310,200,180,42,'重新开始','#e67e22','#e74c3c',16);
     drawBtn(c,520,200,180,42,'返回主菜单','#667eea','#764ba2',16);
     
@@ -5147,15 +5148,12 @@ function drawOver(c){
     // Quiz revival attempts info
     if(quizRevivalAttempts > 0){
         c.fillStyle='#ffaa00';c.font='13px Arial';
-        c.fillText('已答题复活 '+quizRevivalAttempts+'/4 次',400,255);
+        c.fillText('已答对 '+quizRevivalAttempts+' 次',400,255);
     }
-    // Buttons - show revive if attempts remain or if quiz revival failed (allow retry)
-    if(quizRevivalAttempts < 4 || quizRevivalFailed){
+    // Buttons - always show revive button
+    {
         var reviveLabel = quizRevivalFailed ? '重新答题复活' : '答题复活';
         drawBtn(c,130,278,150,42,reviveLabel,'#27ae60','#2ecc71',16);
-    } else {
-        c.fillStyle='rgba(100,100,100,0.5)';c.beginPath();c.roundRect(130,278,150,42,8);c.fill();
-        c.fillStyle='#888';c.font='16px Arial';c.fillText('复活次数用尽',205,304);
     }
     drawBtn(c,320,278,150,42,'重新开始','#e67e22','#e74c3c',17);
     drawBtn(c,510,278,150,42,'返回主菜单','#667eea','#764ba2',17);
@@ -8060,14 +8058,14 @@ cvs.addEventListener('click',(e)=>{
         }
         if(x>=320&&x<=480&&y>=340&&y<=378)state='mainMenu';
     } else if(state==='over'){
-        if(x>=130&&x<=280&&y>=278&&y<=320&&(quizRevivalAttempts<4||quizRevivalFailed)){
+        if(x>=130&&x<=280&&y>=278&&y<=320){
             if(quizRevivalFailed){quizRevivalAttempts=0;quizRevivalFailed=false;}
             revivePlayer();
         }
         else if(x>=320&&x<=470&&y>=278&&y<=320)restartFromLevel();
         else if(x>=510&&x<=660&&y>=278&&y<=320)goToMainMenu();
     } else if(state==='quizRevival'){
-        if(quizCurrentQuestion && !quizAnswered){
+        if(quizCurrentQuestion && !quizAnswered && performance.now()>=quizWrongUntil){
             for(var qi=0;qi<quizOptions.length;qi++){
                 var oy=160+qi*52;
                 if(x>=100&&x<=700&&y>=oy&&y<=oy+42){
@@ -8079,15 +8077,13 @@ cvs.addEventListener('click',(e)=>{
             }
         }
     } else if(state==='quizResult'){
+        // 复活失败画面按钮
         if(x>=100&&x<=280&&y>=200&&y<=242){
-            if(quizRevivalFailed){
-                quizRevivalAttempts=0;quizRevivalFailed=false;
-                quizRevivalActive=true;quizAnswered=false;
-                state='quizRevival';
-            } else {
-                quizRevivalActive=true;quizAnswered=false;
-                state='quizRevival';
-            }
+            // 继续答题复活：重置次数和失败标记，重新进入答题
+            quizRevivalAttempts=0;quizRevivalFailed=false;
+            quizRevivalActive=true;quizAnswered=false;
+            state='quizRevival';
+            revivePlayer();
         }
         if(x>=310&&x<=490&&y>=200&&y<=242)restartFromLevel();
         if(x>=520&&x<=700&&y>=200&&y<=242)goToMainMenu();
@@ -8267,7 +8263,7 @@ cvs.addEventListener('touchstart',e=>{
             return;
         }
         if(state==='over'&&canRestart){
-            if(gx>=130&&gx<=280&&gy>=278&&gy<=320&&(quizRevivalAttempts<4||quizRevivalFailed)){
+            if(gx>=130&&gx<=280&&gy>=278&&gy<=320){
                 if(quizRevivalFailed){quizRevivalAttempts=0;quizRevivalFailed=false;}
                 revivePlayer();
             }
@@ -8276,7 +8272,7 @@ cvs.addEventListener('touchstart',e=>{
             return;
         }
         if(state==='quizRevival'){
-            if(quizCurrentQuestion && !quizAnswered){
+            if(quizCurrentQuestion && !quizAnswered && performance.now()>=quizWrongUntil){
                 for(var qi=0;qi<quizOptions.length;qi++){
                     var oy=160+qi*52;
                     if(gx>=100&&gx<=700&&gy>=oy&&gy<=oy+42){
@@ -8289,15 +8285,13 @@ cvs.addEventListener('touchstart',e=>{
             return;
         }
         if(state==='quizResult'){
+            // 复活失败画面按钮
             if(gx>=100&&gx<=280&&gy>=200&&gy<=242){
-                if(quizRevivalFailed){
-                    quizRevivalAttempts=0;quizRevivalFailed=false;
-                    quizRevivalActive=true;quizAnswered=false;
-                    state='quizRevival';
-                } else {
-                    quizRevivalActive=true;quizAnswered=false;
-                    state='quizRevival';
-                }
+                // 继续答题复活：重置次数和失败标记，重新进入答题
+                quizRevivalAttempts=0;quizRevivalFailed=false;
+                quizRevivalActive=true;quizAnswered=false;
+                state='quizRevival';
+                revivePlayer();
             }
             if(gx>=310&&gx<=490&&gy>=200&&gy<=242)restartFromLevel();
             if(gx>=520&&gx<=700&&gy>=200&&gy<=242)goToMainMenu();
