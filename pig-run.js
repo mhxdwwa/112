@@ -1615,18 +1615,19 @@
   }
 
   // === 题库管理界面 ===
-  function openPigRunQuestionManager() {
+  function openPigRunQuestionManager(containerId, activityName) {
     var teacherId = getCurrentTeacherId();
     if (!teacherId) return;
     
-    var container = document.getElementById('pigRunContent');
+    var cid = containerId || 'pigRunContent';
+    var container = document.getElementById(cid);
     if (!container) return;
     
-    renderQuestionManager(container, teacherId);
+    renderQuestionManager(container, teacherId, activityName || '小猪快跑', cid);
   }
   window.openPigRunQuestionManager = openPigRunQuestionManager;
 
-  function renderQuestionManager(container, teacherId) {
+  function renderQuestionManager(container, teacherId, activityName, containerId) {
     injectStyles();
     var questions = (customQuestionBank && customQuestionBank.length > 0) ? customQuestionBank : [];
     
@@ -1637,11 +1638,13 @@
       chapterStats[ch] = (chapterStats[ch] || 0) + 1;
     });
     
+    var displayName = activityName || '小猪快跑';
+    var cId = containerId || 'pigRunContent';
     var html = '<div style="max-width:600px;margin:0 auto;padding:12px;">';
     // Header
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
-    html += '<h2 style="font-size:20px;font-weight:800;color:#389e0d;margin:0;">📚 小猪快跑题库管理</h2>';
-    html += '<button onclick="backToPigRunLevels()" style="background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">← 返回</button>';
+    html += '<h2 style="font-size:20px;font-weight:800;color:#389e0d;margin:0;">📚 ' + displayName + '题库管理</h2>';
+    html += '<button onclick="backToActivityFromQM(\'' + cId + '\')" style="background:#fff;color:#666;border:2px solid #ddd;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">← 返回</button>';
     html += '</div>';
     
     // ★ 学生当前使用的题库状态
@@ -1780,6 +1783,20 @@
     if (!student) { renderPigRunPage(); return; }
     var qs = ensurePigRunState(student);
     renderLevelSelect(container, student, qs);
+  };
+
+  // 从题库管理返回对应活动页面（支持小猪快跑/快乐跑一跑/宠物消消乐）
+  window.backToActivityFromQM = function(containerId) {
+    if (containerId === 'pigRunContent') {
+      window.backToPigRunLevels();
+    } else if (containerId === 'happyRunContent') {
+      if (typeof renderHappyRunPage === 'function') renderHappyRunPage();
+    } else if (containerId === 'quizMatch3Content') {
+      if (typeof renderMatch3Page === 'function') renderMatch3Page();
+    } else {
+      // fallback: re-render pig run
+      window.backToPigRunLevels();
+    }
   };
 
   // 显示/隐藏添加表单

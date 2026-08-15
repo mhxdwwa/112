@@ -125,12 +125,21 @@
     var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
 
     if (!isStudentView) {
-      // 教师视图：检查是否已选择学生
-      if (window._teacherPlayingAsStudent && window._pigRunModalShown) {
-        // 已选择学生，显示游戏 iframe（与学生视图相同逻辑）
-        // 不 return，继续往下走创建 iframe
+      // 教师视图
+      if (window._teacherPlayingAsStudent && (window._pigRunModalShown || window._happyRunModalShown)) {
+        // 教师已选择学生并确认开始 → 进入游戏（继续往下创建 iframe）
+        var student = getCurrentStudent();
+        if (!student) {
+          // 学生数据找不到，重置状态
+          window._teacherPlayingAsStudent = null;
+          window._happyRunModalShown = false;
+          container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
+            ? renderTeacherPlaceholder('happyrun')
+            : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🏃</div><div style="font-size:18px;font-weight:700;margin-top:12px;">快乐跑一跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
+          return;
+        }
       } else {
-        // 未选择学生，显示占位符
+        // 未选择学生，显示占位符（等待点击"开始"触发弹窗）
         container.innerHTML = (typeof renderTeacherPlaceholder === 'function')
           ? renderTeacherPlaceholder('happyrun')
           : '<div style="text-align:center;padding:40px;"><div style="font-size:60px;">🏃</div><div style="font-size:18px;font-weight:700;margin-top:12px;">快乐跑一跑</div><div style="font-size:14px;color:#888;margin-top:8px;">正在选取参赛学生...</div></div>';
@@ -138,7 +147,7 @@
       }
     }
 
-    // 学生视图：创建游戏 iframe
+    // 学生视图 / 教师已确认 → 创建游戏 iframe
     container.innerHTML = '';
     var wrapper = document.createElement('div');
     wrapper.style.cssText = 'width:100%;height:100%;min-height:400px;position:relative;background:#000;border-radius:12px;overflow:hidden;';

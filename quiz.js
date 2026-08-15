@@ -617,7 +617,7 @@
 
   function showSelectStudentModal(activityType) {
     var students = getCurrentClassStudents();
-    var activityName = activityType === 'dailyQuiz' ? '每日一练' : activityType === 'match3' ? '宠物消消乐' : '小猪快跑';
+    var activityName = activityType === 'dailyQuiz' ? '每日一练' : activityType === 'match3' ? '宠物消消乐' : activityType === 'happyrun' ? '快乐跑一跑' : '小猪快跑';
     _pendingStudentId = null;
     _pendingActivityType = activityType;
     _renderStudentListModal(students, activityName, null);
@@ -679,7 +679,7 @@
   window.onStudentClickInModal = function(studentId) {
     var students = getCurrentClassStudents();
     _pendingStudentId = parseInt(studentId);
-    var activityName = _pendingActivityType === 'dailyQuiz' ? '每日一练' : _pendingActivityType === 'match3' ? '宠物消消乐' : '小猪快跑';
+    var activityName = _pendingActivityType === 'dailyQuiz' ? '每日一练' : _pendingActivityType === 'match3' ? '宠物消消乐' : _pendingActivityType === 'happyrun' ? '快乐跑一跑' : '小猪快跑';
     // 重新渲染弹窗，高亮选中学生并显示开始按钮
     _renderStudentListModal(students, activityName, studentId);
   };
@@ -694,6 +694,7 @@
     _quizModalShown = true;
     window._pigRunModalShown = true;
     window._match3ModalShown = true;
+    window._happyRunModalShown = true;
     // 关闭弹窗
     closeSelectStudentModal();
     // 显示提示
@@ -814,11 +815,14 @@
   // === 题库管理入口 ===
   window.openQuizQuestionManager = function(activityType) {
     if (activityType === 'pigrun') {
-      // 小猪快跑题库管理（在 pig-run.js 中定义）
-      if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager();
+      // 小猪快跑题库管理（渲染到 pigRunContent）
+      if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager('pigRunContent', '小猪快跑');
     } else if (activityType === 'happyrun') {
-      // 快乐跑一跑题库管理（共享小猪快跑题库）
-      if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager();
+      // 快乐跑一跑题库管理（共享小猪快跑题库，渲染到 happyRunContent）
+      if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager('happyRunContent', '快乐跑一跑');
+    } else if (activityType === 'match3') {
+      // 宠物消消乐题库管理（共享小猪快跑题库，渲染到 quizMatch3Content）
+      if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager('quizMatch3Content', '宠物消消乐');
     } else {
       // 每日一练题库管理
       openDailyQuizQuestionManager();
