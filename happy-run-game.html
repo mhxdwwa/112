@@ -78,17 +78,17 @@
             margin-top: calc(-50vw) !important;
             margin-left: calc(-50vh) !important;
         }
-        /* Orientation toggle button */
+        /* Orientation toggle button - inside game canvas, below speed display (top-right) */
         #rotateBtn {
-            position: fixed;
+            position: absolute;
             z-index: 10000;
-            bottom: 10px; right: 10px;
-            width: 42px; height: 42px;
+            bottom: 15px; right: 15px;
+            width: 34px; height: 34px;
             border-radius: 50%;
-            background: rgba(0,0,0,0.75);
-            border: 2px solid rgba(255,255,255,0.5);
+            background: rgba(0,0,0,0.55);
+            border: 1.5px solid rgba(255,255,255,0.4);
             color: #fff;
-            font-size: 20px;
+            font-size: 16px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -109,9 +109,11 @@
 </head>
 <body>
     <div class="game-wrapper">
-        <div class="game-canvas"><canvas id="c"></canvas></div>
+        <div class="game-canvas">
+            <canvas id="c"></canvas>
+            <div id="rotateBtn" title="旋转屏幕">&#x21BB;</div>
+        </div>
     </div>
-    <div id="rotateBtn" title="旋转屏幕">&#x21BB;</div>
 <script>
 window.onerror=function(msg){console.error('Game error:',msg);return true;};
 
