@@ -68,6 +68,14 @@
     if (!student.quizState) student.quizState = {};
     var qs = student.quizState;
 
+    // 保存旧状态用于比较（生成操作日志）
+    var oldMaxLevel = qs.happyRunMaxLevel || 1;
+    var oldTotalSilver = qs.happyRunTotalSilver || 0;
+    var oldPetGold = qs.happyRunPetGold || 0;
+    var oldLevelScores = qs.happyRunLevels || {};
+    var oldOwnedChars = qs.happyRunOwnedChars || [0];
+
+    // 更新状态
     qs.happyRunMaxLevel = gameData.maxLevel || 1;
     qs.happyRunLevels = gameData.levelScores || {};
     qs.happyRunLevelBestCoins = gameData.levelBestCoins || {};
@@ -107,6 +115,64 @@
           }
         }
       });
+    }
+
+    // === 记录操作日志（类似小猪快跑） ===
+    if (typeof recordAction === 'function') {
+      var changes = [];
+      var newMaxLevel = gameData.maxLevel || 1;
+      var newTotalSilver = gameData.totalSilver || 0;
+      var newPetGold = gameData.petGold || 0;
+      var newLevelScores = gameData.levelScores || {};
+      var newOwnedChars = gameData.ownedChars || [0];
+
+      // 检测新解锁的关卡
+      if (newMaxLevel > oldMaxLevel) {
+        for (var lv = oldMaxLevel + 1; lv <= newMaxLevel; lv++) {
+          var score = newLevelScores[lv] || 0;
+          changes.push('解锁第' + lv + '关(' + score + '分)');
+        }
+      }
+
+      // 检测刷新的高分
+      Object.keys(newLevelScores).forEach(function(lvKey) {
+        var lv = parseInt(lvKey);
+        var newScore = newLevelScores[lvKey] || 0;
+        var oldScore = oldLevelScores[lvKey] || 0;
+        if (lv <= oldMaxLevel && newScore > oldScore) {
+          changes.push('第' + lv + '关提高' + (newScore - oldScore) + '分');
+        }
+      });
+
+      // 检测银币变化
+      var silverDiff = newTotalSilver - oldTotalSilver;
+      if (silverDiff > 0) {
+        changes.push('+' + silverDiff + '银币');
+      }
+
+      // 检测宠物金币变化
+      var goldDiff = newPetGold - oldPetGold;
+      if (goldDiff > 0) {
+        changes.push('+' + goldDiff + '宠物金币');
+      }
+
+      // 检测新购买的角色
+      if (newOwnedChars.length > oldOwnedChars.length) {
+        var newChars = newOwnedChars.filter(function(c) { return oldOwnedChars.indexOf(c) === -1; });
+        if (newChars.length > 0) {
+          changes.push('解锁' + newChars.length + '个角色');
+        }
+      }
+
+      // 如果有变化，记录操作日志
+      if (changes.length > 0) {
+        var msg = '快乐跑一跑：' + changes.join('，') + '，总分:' + newTotalSilver;
+        recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
+        // 触发实时同步
+        if (typeof triggerRealtimeSync === 'function') {
+          triggerRealtimeSync();
+        }
+      }
     }
   }
 

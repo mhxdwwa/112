@@ -279,7 +279,37 @@ let customActions = [];
 try { customActions = JSON.parse(localStorage.getItem('customActions')) || []; } catch(e) { console.warn('customActions读取失败，已重置:', e.message); localStorage.removeItem('customActions'); }
 const neededPresets = [{id: 'sys_reward_1', name: '完成作业', coins: 10},{id: 'sys_reward_2', name: '课堂发言', coins: 10}];
 neededPresets.forEach(preset => { if (!customActions.some(a => a.id === preset.id)) customActions.push(preset); });
-function safeLSSave(key, data){ try{ localStorage.setItem(key, JSON.stringify(data)); }catch(e){ console.warn('localStorage写入失败('+key+'):', e.message); try{ localStorage.removeItem('logArchives'); localStorage.removeItem('operationLogs'); localStorage.setItem(key, JSON.stringify(data)); }catch(e2){ console.warn('localStorage清理后仍失败，跳过本地缓存'); } } }
+function safeLSSave(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch(e) {
+    console.warn('localStorage写入失败('+key+'):', e.message);
+    // v70: 安全降级策略 — 优先保留操作日志（operationLogs）
+    // 操作日志是历史操作记录的核心数据，绝不能删除
+    // 降级顺序：先删除低优先级缓存，最后才考虑截断日志
+    try {
+      // 1. 先删除低优先级数据
+      localStorage.removeItem('logArchives');
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch(e2) {
+      try {
+        // 2. 如果还不够，尝试截断最旧的操作日志（保留最近100条）
+        // 而不是全部删除
+        if (key !== 'operationLogs' && window.operationLogs && window.operationLogs.length > 100) {
+          var truncatedLogs = window.operationLogs.slice(-100);
+          localStorage.setItem('operationLogs', JSON.stringify(truncatedLogs));
+          window.operationLogs = truncatedLogs;
+          console.warn('localStorage容量不足，已截断操作日志至最近100条');
+          localStorage.setItem(key, JSON.stringify(data));
+        } else {
+          console.warn('localStorage清理后仍失败，跳过本地缓存:', key);
+        }
+      } catch(e3) {
+        console.warn('localStorage完全满溢，无法保存:', key);
+      }
+    }
+  }
+}
 // ===== 安全整数ID生成器 =====
 // 生成负整数ID，明确区分本地临时ID与Supabase自增ID（正整数）
 // 负数ID永远不会被误认为有效的Supabase ID
@@ -578,7 +608,10 @@ function _scheduleDesktopSave(){
 }
 /* ========== 桌面 EXE 模式结束 ========== */
 function recordAction(studentId, studentName, actionType, details, coinDelta, expDelta, petId, extra = null){
-  if(coinDelta === 0 && expDelta === 0 && !extra) return;
+  // v70: 允许特定类型的操作即使没有金币/经验变化也记录日志
+  // 这些类型的操作本身就值得记录（如游戏进度、签到等）
+  var alwaysLogTypes = ['快乐跑一跑', '小猪快跑', '宠物消消乐', '取金阁', '每日打卡', '全班打卡'];
+  if(coinDelta === 0 && expDelta === 0 && !extra && alwaysLogTypes.indexOf(actionType) === -1) return;
   const cur = classesData.find(c=>c.id===currentClassId);
   let snapshot = null;
   if(cur){
@@ -606,7 +639,16 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
           pigRunTotalScore: qs.pigRunTotalScore || 0,
           pigRunTools: qs.pigRunTools ? JSON.parse(JSON.stringify(qs.pigRunTools)) : {},
           totalQuizCoins: qs.totalQuizCoins || 0,
-          todayCoins: qs.todayCoins || 0
+          todayCoins: qs.todayCoins || 0,
+          // v70: 加入快乐跑数据，支持完整恢复
+          happyRunMaxLevel: qs.happyRunMaxLevel || 1,
+          happyRunLevels: qs.happyRunLevels ? JSON.parse(JSON.stringify(qs.happyRunLevels)) : {},
+          happyRunLevelBestCoins: qs.happyRunLevelBestCoins ? JSON.parse(JSON.stringify(qs.happyRunLevelBestCoins)) : {},
+          happyRunTotalSilver: qs.happyRunTotalSilver || 0,
+          happyRunSilverBalance: qs.happyRunSilverBalance || 0,
+          happyRunPetGold: qs.happyRunPetGold || 0,
+          happyRunOwnedChars: qs.happyRunOwnedChars ? JSON.parse(JSON.stringify(qs.happyRunOwnedChars)) : [0],
+          happyRunBossKillBonus: qs.happyRunBossKillBonus ? JSON.parse(JSON.stringify(qs.happyRunBossKillBonus)) : {}
         };
       }
     }
@@ -633,7 +675,7 @@ function restoreToLogEntry(logId){
   if(!student){ showNotification('恢复失败','未找到该学生', 'error'); return; }
   const snap = log.snapshot;
   if(!snap){ showNotification('恢复失败','该日志没有快照数据', 'error'); return; }
-  if(!confirm(`确定将「${log.studentName}」的数据恢复到 ${log.timestamp} 的状态？\n这将覆盖当前的金币、成长值和小猪快跑数据。`)) return;
+  if(!confirm(`确定将「${log.studentName}」的数据恢复到 ${log.timestamp} 的状态？\n这将覆盖当前的金币、成长值、小猪快跑和快乐跑数据。`)) return;
   // 1. Restore coins and pet growth
   if(snap.coinsAfter !== undefined) student.coins = snap.coinsAfter;
   const pet = (student.pets||[]).find(p=>p.id===log.petId) || getActivePet(student);
@@ -653,6 +695,18 @@ function restoreToLogEntry(logId){
     student.quizState.pigRunTools = JSON.parse(JSON.stringify(qsSnap.pigRunTools || {}));
     student.quizState.totalQuizCoins = qsSnap.totalQuizCoins || 0;
     student.quizState.todayCoins = qsSnap.todayCoins || 0;
+    // v70: 恢复快乐跑数据
+    if(qsSnap.happyRunMaxLevel !== undefined) {
+      student.quizState.happyRunMaxLevel = qsSnap.happyRunMaxLevel;
+      student.quizState.happyRunLevels = JSON.parse(JSON.stringify(qsSnap.happyRunLevels || {}));
+      student.quizState.happyRunLevelBestCoins = JSON.parse(JSON.stringify(qsSnap.happyRunLevelBestCoins || {}));
+      student.quizState.happyRunTotalSilver = qsSnap.happyRunTotalSilver || 0;
+      student.quizState.happyRunSilverBalance = qsSnap.happyRunSilverBalance || 0;
+      student.quizState.happyRunPetGold = qsSnap.happyRunPetGold || 0;
+      student.quizState.happyRunOwnedChars = JSON.parse(JSON.stringify(qsSnap.happyRunOwnedChars || [0]));
+      student.quizState.happyRunBossKillBonus = JSON.parse(JSON.stringify(qsSnap.happyRunBossKillBonus || {}));
+      student.quizState.happyRunTotalScore = qsSnap.happyRunTotalSilver || 0;
+    }
   }
   // 3. Save to Supabase
   saveClassData();
@@ -662,8 +716,13 @@ function restoreToLogEntry(logId){
   let detail = `已恢复「${log.studentName}」的数据到 ${new Date(log.timestamp).toLocaleString('zh-CN')}`;
   if(snap.quizStateSnapshot){
     const qsSnap = snap.quizStateSnapshot;
-    const levelCount = Object.keys(qsSnap.pigRunLevels||{}).length;
-    if(levelCount > 0) detail += `\n小猪快跑: ${levelCount}关 / ${qsSnap.pigRunTotalScore}分`;
+    const pigLevelCount = Object.keys(qsSnap.pigRunLevels||{}).length;
+    if(pigLevelCount > 0) detail += `\n小猪快跑: ${pigLevelCount}关 / ${qsSnap.pigRunTotalScore}分`;
+    // v70: 显示快乐跑恢复信息
+    if(qsSnap.happyRunMaxLevel !== undefined && qsSnap.happyRunMaxLevel > 1) {
+      const happyLevelCount = Object.keys(qsSnap.happyRunLevels||{}).length;
+      detail += `\n快乐跑一跑: 最高第${qsSnap.happyRunMaxLevel}关 / ${qsSnap.happyRunTotalSilver}银币`;
+    }
   }
   showNotification('恢复成功', detail, 'success');
 }
@@ -735,13 +794,13 @@ function revertToLog(logId){
   showNotification('撤销成功', revertDetail, 'success');
 }
 function _historyActionIcon(type){
-  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','小猪快跑':'🐷','取金阁':'📝','宠物消消乐':'🧩'};
+  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','小猪快跑':'🐷','取金阁':'📝','宠物消消乐':'🧩','快乐跑一跑':'🏃'};
   return icons[type]||'📝';
 }
 function _historyActionColor(type){
   if(type==='惩罚致死'||type==='饿死') return '#ff4444';
   if(type.includes('惩罚')||type==='PK失败') return '#e07050';
-  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡'||type==='每日打卡'||type==='小猪快跑'||type==='取金阁'||type==='宠物消消乐') return '#4a9e4a';
+  if(type.includes('奖')||type==='PK胜利'||type==='全班打卡'||type==='每日打卡'||type==='小猪快跑'||type==='取金阁'||type==='宠物消消乐'||type==='快乐跑一跑') return '#4a9e4a';
   if(type==='PK平局') return '#8888aa';
   if(type==='复活') return '#9b59b6';
   if(type==='商店购买') return '#8e44ad';

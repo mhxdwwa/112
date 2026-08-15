@@ -907,6 +907,20 @@ function _rowToLog(row) {
   if (rawTs && !rawTs.endsWith('Z') && !rawTs.includes('+') && !rawTs.match(/-\d{2}:\d{2}$/)) {
     fixedTs = rawTs + 'Z';
   }
+  // v70: Preserve all extra fields except fullSnapshot (which is handled separately)
+  // Old logic had a whitelist that could drop unknown fields
+  var extraWithoutFullSnapshot = null;
+  if (extra && typeof extra === 'object') {
+    extraWithoutFullSnapshot = {};
+    var hasOtherFields = false;
+    Object.keys(extra).forEach(function(k) {
+      if (k !== 'fullSnapshot') {
+        extraWithoutFullSnapshot[k] = extra[k];
+        hasOtherFields = true;
+      }
+    });
+    if (!hasOtherFields) extraWithoutFullSnapshot = null;
+  }
   var log = {
     id: row.id,
     timestamp: fixedTs,
@@ -918,20 +932,13 @@ function _rowToLog(row) {
     coinDelta: parseInt(row.coin_delta) || 0,
     expDelta: parseInt(row.exp_delta) || 0,
     petId: row.pet_id || null,
-    extra: (extra.pkChallenge || extra.pkAccept || extra.shopItemId || extra.causedDeath || extra.starvation || extra.prevGrowth !== undefined) ? extra : (extra.fullSnapshot ? null : extra),
+    extra: extraWithoutFullSnapshot,
     snapshot: row.snapshot || null,
     fullSnapshot: extra.fullSnapshot || null,
     reverted: !!row.reverted,
     _synced: true,
     _fromSupabase: true
   };
-  if (log.extra && log.extra.fullSnapshot) {
-    var cleanExtra = {};
-    Object.keys(log.extra).forEach(function(k) {
-      if (k !== 'fullSnapshot') cleanExtra[k] = log.extra[k];
-    });
-    log.extra = Object.keys(cleanExtra).length > 0 ? cleanExtra : null;
-  }
   return log;
 }
 
@@ -1014,16 +1021,28 @@ function _loadOperationLogs() {
         return !l._synced;
       });
 
-      // v69: Content-based dedup — remove local unsynced logs that duplicate server logs
+      // v70: Improved content-based dedup — include more fields to avoid false duplicates
+      // Old key: timestamp + actionType + studentName (could match different operations in same second)
+      // New key: timestamp + actionType + studentName + coinDelta + expDelta + details(first 50 chars)
       var serverContentKeys = {};
       serverLogs.forEach(function(l) {
-        var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
+        var key = (l.timestamp || '').substring(0, 19) + '|'
+          + (l.actionType || '') + '|'
+          + (l.studentName || '') + '|'
+          + (l.coinDelta || 0) + '|'
+          + (l.expDelta || 0) + '|'
+          + (l.details || '').substring(0, 50);
         serverContentKeys[key] = true;
       });
 
       var dedupedLocal = localUnsynced.filter(function(l) {
         if (l.id > 0) return false; // positive ID = already in table
-        var key = (l.timestamp || '').substring(0, 19) + '|' + (l.actionType || '') + '|' + (l.studentName || '');
+        var key = (l.timestamp || '').substring(0, 19) + '|'
+          + (l.actionType || '') + '|'
+          + (l.studentName || '') + '|'
+          + (l.coinDelta || 0) + '|'
+          + (l.expDelta || 0) + '|'
+          + (l.details || '').substring(0, 50);
         if (serverContentKeys[key]) return false;
         return true;
       });
@@ -1156,9 +1175,11 @@ function _writeUnsyncedLogsToSupabase() {
         }
 
         // Build payload matching operation_logs table columns
+        // v70: Fix student_id type handling — use parseInt to handle both string and number types
+        var parsedStudentId = parseInt(l.studentId);
         var payload = {
           class_id: cid,
-          student_id: (l.studentId && l.studentId > 0 && l.studentId === Math.floor(l.studentId)) ? l.studentId : null,
+          student_id: (parsedStudentId > 0 && parsedStudentId === Math.floor(parsedStudentId)) ? parsedStudentId : null,
           student_name: l.studentName || '',
           action_type: l.actionType || '',
           details: l.details || '',

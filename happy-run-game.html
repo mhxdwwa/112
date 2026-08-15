@@ -186,6 +186,50 @@ let quizAnswered = false;
 let quizDisabledOptions = [];
 let quizAnsweredIdx = -1;
 
+// v70: 复活答题状态持久化 — 防止页面刷新丢失进度
+function saveRevivalState() {
+    try {
+        sessionStorage.setItem('happyRunRevivalState', JSON.stringify({
+            quizRevivalActive: quizRevivalActive,
+            quizRevivalAttempts: quizRevivalAttempts,
+            quizRevivalHeartsEarned: quizRevivalHeartsEarned,
+            quizRevivalFailed: quizRevivalFailed,
+            quizCurrentQuestion: quizCurrentQuestion,
+            quizOptions: quizOptions,
+            quizCorrectIdx: quizCorrectIdx,
+            quizDisabledOptions: quizDisabledOptions,
+            lives: lives,
+            currentLevel: currentLevel,
+            state: state
+        }));
+    } catch(e) { console.warn('保存复活状态失败:', e); }
+}
+function loadRevivalState() {
+    try {
+        var saved = sessionStorage.getItem('happyRunRevivalState');
+        if (!saved) return false;
+        var data = JSON.parse(saved);
+        if (data && data.quizRevivalActive) {
+            quizRevivalActive = data.quizRevivalActive;
+            quizRevivalAttempts = data.quizRevivalAttempts || 0;
+            quizRevivalHeartsEarned = data.quizRevivalHeartsEarned || 0;
+            quizRevivalFailed = data.quizRevivalFailed || false;
+            quizCurrentQuestion = data.quizCurrentQuestion;
+            quizOptions = data.quizOptions || [];
+            quizCorrectIdx = data.quizCorrectIdx || -1;
+            quizDisabledOptions = data.quizDisabledOptions || [];
+            lives = data.lives || 0;
+            currentLevel = data.currentLevel || 1;
+            state = data.state || 'quizRevival';
+            return true;
+        }
+    } catch(e) { console.warn('加载复活状态失败:', e); }
+    return false;
+}
+function clearRevivalState() {
+    try { sessionStorage.removeItem('happyRunRevivalState'); } catch(e) {}
+}
+
 let currentLevel=1, levelStartDist=0, levelScore=0, totalScore=0, levelTransition=0;
 function getLevelDistance(lv){ return 600+(lv-1)*100; }
 
@@ -352,15 +396,17 @@ function startGame(fromLevel){
     levelTransition=0; state='playing'; paused=false;
     quizRevivalAttempts=0; quizRevivalHeartsEarned=0; quizRevivalFailed=false;
     quizRevivalActive=false; quizDisabledOptions=[];
+    clearRevivalState(); // v70: 开始新游戏时清除复活状态
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
-function goToMainMenu(){ state='mainMenu'; }
+function goToMainMenu(){ state='mainMenu'; clearRevivalState(); }
 function revivePlayer(){
     quizDisabledOptions = [];
     quizRevivalActive = true;
     quizAnswered = false;
     state = 'quizRevival';
+    saveRevivalState(); // v70: 保存复活状态
     parent.postMessage({type:'happyrun-quiz-request', data:{
         attempts: quizRevivalAttempts
     }}, '*');
@@ -378,6 +424,7 @@ function handleQuizAnswer(correct) {
             quizRevivalActive = false;
             quizRevivalFailed = true;
             state = 'quizResult';
+            clearRevivalState(); // v70: 复活结束，清除状态
             return;
         }
         
@@ -398,16 +445,19 @@ function handleQuizAnswer(correct) {
             playSound('powerup');
             quizRevivalActive = false;
             state = 'playing';
+            clearRevivalState(); // v70: 复活成功，清除状态
         } else {
             // 第3次答对，复活失败
             quizRevivalActive = false;
             quizRevivalFailed = true;
             state = 'quizResult';
+            clearRevivalState(); // v70: 复活结束，清除状态
         }
     } else {
         // 答错：禁用该选项，保持在答题界面
         playSound('hit');
         quizDisabledOptions.push(quizAnsweredIdx);
+        saveRevivalState(); // v70: 保存状态（答错也要保存，防止刷新丢失）
         setTimeout(function(){ quizAnswered = false; }, 300);
     }
 }
@@ -8445,34 +8495,20 @@ cvs.addEventListener('touchcancel',e=>{
 let _lastFrameTs=0;
 const TARGET_FPS=240;
 const TARGET_FRAME_MS=1000/TARGET_FPS;
-(function loop(ts){
-    try{
-        if(!_lastFrameTs){_lastFrameTs=ts;update();draw();requestAnimationFrame(loop);return;}
-        let dt=ts-_lastFrameTs;
-        _lastFrameTs=ts;
-        if(dt>100)dt=100; // cap to prevent spiral of death
-        const steps=Math.max(1,Math.round(dt/TARGET_FRAME_MS));
-        for(let i=0;i<steps;i++) update();
-        draw();
-    }catch(e){console.error('Loop error:',e);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;}
-    requestAnimationFrame(loop);
-})();
-</script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
+
+// v70: 恢复复活答题状态（如果页面刷新前有未完成的复活）
+if (loadRevivalState()) {
+    console.log('已恢复复活答题状态，继续答题...');
+    // 重新请求题目（因为题目数据需要重新从父页面获取）
+    if (quizCurrentQuestion && quizOptions.length > 0) {
+        // 题目数据已恢复，无需重新请求
+    } else {
+        // 题目数据丢失，重新请求
+        parent.postMessage({type:'happyrun-quiz-request', data:{
+            attempts: quizRevivalAttempts
+        }}, '*');
+    }
+}
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1}' crossorigin="anonymous"></script>
 </body>
 </html>
