@@ -122,6 +122,7 @@ setTimeout(function() { window._hideDalLoading(); }, 10000);
     <div class="rank-tab" onclick="playClickSound();switchRankTab('quiz')">📝 每日一练榜</div>
     <div class="rank-tab" onclick="playClickSound();switchRankTab('pigrun')">🐷 小猪快跑榜</div>
     <div class="rank-tab" onclick="playClickSound();switchRankTab('match3')">🧩 消消乐榜</div>
+    <div class="rank-tab" onclick="playClickSound();switchRankTab('happyrun')">🏃 快乐跑榜</div>
   </div>
   <div class="rank-tab-content active" id="rankGrowthContent">
     <div id="rankStatsBar"></div>
@@ -178,6 +179,20 @@ setTimeout(function() { window._hideDalLoading(); }, 10000);
     </div>
     <div id="fullMatch3RankList"></div>
   </div>
+  <div class="rank-tab-content" id="rankHappyRunContent">
+    <div id="rankHappyRunStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>🏃 快乐跑一跑排行榜</h3>
+      <p style="text-align:center;font-size:13px;color:#999;margin:8px 0;">按学生姓名 + 最高关卡 + 累计总分排行</p>
+      <div id="happyRunTopThree"></div>
+      <div id="happyRunRankEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">🏃</div>
+        <div class="empty-text">还没有快乐跑数据哦</div>
+        <div class="empty-sub">快去玩快乐跑一跑，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullHappyRunRankList"></div>
+  </div>
 </div>
 <div class="page" id="quiz-page">
   <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
@@ -187,6 +202,7 @@ setTimeout(function() { window._hideDalLoading(); }, 10000);
     <div class="quiz-tab active" onclick="playClickSound();switchQuizTab('daily')">📝 每日一练</div>
     <div class="quiz-tab" onclick="playClickSound();switchQuizTab('pigrun')">🐷 小猪快跑</div>
     <div class="quiz-tab" onclick="playClickSound();switchQuizTab('match3')">🧩 宠物消消乐</div>
+    <div class="quiz-tab" onclick="playClickSound();switchQuizTab('happyrun')">🏃 快乐跑一跑</div>
   </div>
   <div class="quiz-tab-content active" id="quizDailyContent">
     <div id="quizContent"></div>
@@ -196,6 +212,9 @@ setTimeout(function() { window._hideDalLoading(); }, 10000);
   </div>
   <div class="quiz-tab-content" id="quizMatch3Content">
     <div id="match3Content"></div>
+  </div>
+  <div class="quiz-tab-content" id="quizHappyRunContent">
+    <div id="happyRunContent"></div>
   </div>
 </div>
 <div class="page" id="pk-page">
@@ -228,6 +247,7 @@ setTimeout(function() { window._hideDalLoading(); }, 10000);
   <script defer src="quiz.js?v=18"></script>
   <script defer src="pig-run.js?v=32"></script>
   <script defer src="match3.js?v=22"></script>
+  <script defer src="happy-run.js?v=1"></script>
   <script defer src="app.js?v=69"></script>
 <script>
 // ===== 云端模式：禁用本地文件保存机制 =====

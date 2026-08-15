@@ -11,9 +11,9 @@
     document.querySelectorAll('.quiz-tab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.quiz-tab-content').forEach(function(c) { c.classList.remove('active'); });
     var tabs = document.querySelectorAll('.quiz-tab');
-    var idx = tabName === 'daily' ? 0 : tabName === 'pigrun' ? 1 : 2;
+    var idx = tabName === 'daily' ? 0 : tabName === 'pigrun' ? 1 : tabName === 'match3' ? 2 : 3;
     if (tabs[idx]) tabs[idx].classList.add('active');
-    var contentId = tabName === 'daily' ? 'quizDailyContent' : tabName === 'pigrun' ? 'quizPigRunContent' : 'quizMatch3Content';
+    var contentId = tabName === 'daily' ? 'quizDailyContent' : tabName === 'pigrun' ? 'quizPigRunContent' : tabName === 'match3' ? 'quizMatch3Content' : 'quizHappyRunContent';
     var content = document.getElementById(contentId);
     if (content) content.classList.add('active');
     
@@ -33,6 +33,10 @@
     } else if (tabName === 'match3') {
       setTimeout(function() { 
         renderMatch3Page(); 
+      }, 100);
+    } else if (tabName === 'happyrun') {
+      setTimeout(function() { 
+        if (typeof renderHappyRunPage === 'function') renderHappyRunPage(); 
       }, 100);
     } else if (tabName === 'daily') {
       // 切换到每日一练时停止小猪快跑背景音乐

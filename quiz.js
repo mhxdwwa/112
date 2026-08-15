@@ -733,8 +733,8 @@
   window.renderTeacherSelectView = renderTeacherSelectView;
 
   function renderTeacherPlaceholder(activityType) {
-    var activityName = activityType === 'dailyQuiz' ? '每日一练' : activityType === 'match3' ? '宠物消消乐' : '小猪快跑';
-    var icon = activityType === 'dailyQuiz' ? '🏛️' : activityType === 'match3' ? '🧩' : '🐷';
+    var activityName = activityType === 'dailyQuiz' ? '每日一练' : activityType === 'match3' ? '宠物消消乐' : activityType === 'happyrun' ? '快乐跑一跑' : '小猪快跑';
+    var icon = activityType === 'dailyQuiz' ? '🏛️' : activityType === 'match3' ? '🧩' : activityType === 'happyrun' ? '🏃' : '🐷';
     var html = '<div style="max-width:500px;margin:0 auto;padding:40px;text-align:center;">';
     html += '<div style="font-size:60px;margin-bottom:16px;">' + icon + '</div>';
     html += '<div style="font-size:18px;font-weight:700;margin-bottom:20px;">' + activityName + '</div>';
@@ -813,6 +813,9 @@
   window.openQuizQuestionManager = function(activityType) {
     if (activityType === 'pigrun') {
       // 小猪快跑题库管理（在 pig-run.js 中定义）
+      if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager();
+    } else if (activityType === 'happyrun') {
+      // 快乐跑一跑题库管理（共享小猪快跑题库）
       if (typeof openPigRunQuestionManager === 'function') openPigRunQuestionManager();
     } else {
       // 每日一练题库管理
