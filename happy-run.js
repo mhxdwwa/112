@@ -13,10 +13,8 @@
   var _lastLogSnapshot = null; // 上次记录日志时的状态快照
   var _gameWrapper = null; // 游戏容器引用
   var _isGameFullscreen = false; // 游戏是否处于全屏模式
-  var _savedBodyStyles = ''; // 保存原始body样式
-  var _savedHtmlStyles = ''; // 保存原始html样式
-  var _wrapperOrigParent = null; // wrapper原始父节点
-  var _wrapperOrigNextSibling = null; // wrapper原始下一个兄弟节点
+  var _savedWrapperStyle = ''; // 保存wrapper原始样式
+  var _savedBodyOverflow = ''; // 保存body原始overflow
 
   // === 获取当前学生对象（支持教师扮演学生） ===
   function getCurrentStudent() {
@@ -254,46 +252,34 @@
     return window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
   }
 
-  // 进入游戏全屏模式 - 将wrapper移到body下，铺满整个视口
+  // 进入游戏全屏模式 - 不移动DOM，用position:fixed覆盖整个视口
   function enterGameFullscreen() {
     if (_isGameFullscreen) return;
     if (!_gameWrapper) return;
     _isGameFullscreen = true;
 
-    // 1. 保存wrapper的原始父节点和位置，然后移到body下
-    _wrapperOrigParent = _gameWrapper.parentNode;
-    _wrapperOrigNextSibling = _gameWrapper.nextSibling;
-    document.body.appendChild(_gameWrapper);
+    // 1. 保存wrapper原始样式
+    _savedWrapperStyle = _gameWrapper.style.cssText;
 
-    // 2. 锁定body和html，防止滚动，设置黑色背景
-    _savedBodyStyles = document.body.style.cssText;
-    _savedHtmlStyles = document.documentElement.style.cssText;
+    // 2. 锁定body滚动
+    _savedBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    document.body.style.height = '100%';
-    document.body.style.margin = '0';
-    document.body.style.padding = '0';
-    document.body.style.background = '#000';
-    document.body.style.top = '0';
-    document.body.style.left = '0';
-    document.documentElement.style.overflow = 'hidden';
-    document.documentElement.style.background = '#000';
 
-    // 3. 尝试使用 Fullscreen API（隐藏浏览器地址栏等系统UI）
-    var docEl = document.documentElement;
-    var rfs = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
-    if (rfs) {
-      rfs.call(docEl).catch(function(e) {
-        console.warn('[快乐跑] Fullscreen API failed:', e);
-      });
-    }
+    // 3. 让wrapper用position:fixed覆盖整个视口（不移DOM！）
+    _gameWrapper.style.position = 'fixed';
+    _gameWrapper.style.top = '0';
+    _gameWrapper.style.left = '0';
+    _gameWrapper.style.width = '100vw';
+    _gameWrapper.style.height = '100vh';
+    _gameWrapper.style.zIndex = '2147483647';
+    _gameWrapper.style.background = '#000';
+    _gameWrapper.style.margin = '0';
+    _gameWrapper.style.padding = '0';
+    _gameWrapper.style.borderRadius = '0';
+    _gameWrapper.style.boxShadow = 'none';
+    _gameWrapper.style.overflow = 'hidden';
 
-    // 4. 让wrapper铺满整个视口
-    _gameWrapper.setAttribute('data-orig-style', _gameWrapper.style.cssText);
-    _gameWrapper.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;z-index:2147483647;background:#000;overflow:hidden;margin:0;padding:0;border-radius:0;box-shadow:none;';
-
-    // 5. 如果是竖屏，旋转wrapper为横屏
+    // 4. 如果是竖屏，旋转wrapper为横屏
     if (isMobilePortrait()) {
       var vw = window.innerWidth;
       var vh = window.innerHeight;
@@ -305,59 +291,41 @@
       _gameWrapper.style.top = ((vh - vw) / 2) + 'px';
     }
 
-    // 6. 确保iframe填满wrapper
+    // 5. 确保iframe填满wrapper
     if (gameIframe) {
       gameIframe.style.width = '100%';
       gameIframe.style.height = '100%';
     }
 
-    // 7. 通知iframe已进入全屏
+    // 6. 通知iframe已进入全屏
     if (gameIframe && gameIframe.contentWindow) {
       gameIframe.contentWindow.postMessage({ type: 'happyrun-fullscreen-entered' }, '*');
     }
 
-    // 8. 监听方向变化
+    // 7. 监听方向变化
     window.addEventListener('orientationchange', _onOrientationChange);
     window.addEventListener('resize', _onResizeCheck);
   }
 
-  // 退出游戏全屏模式 - 恢复页面原始状态
+  // 退出游戏全屏模式 - 恢复wrapper原始样式
   function exitGameFullscreen() {
     if (!_isGameFullscreen) return;
     _isGameFullscreen = false;
 
-    // 1. 退出 Fullscreen API
-    var efs = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-    if (efs && (document.fullscreenElement || document.webkitFullscreenElement)) {
-      efs.call(document).catch(function(){});
+    // 1. 恢复wrapper原始样式
+    if (_gameWrapper) {
+      _gameWrapper.style.cssText = _savedWrapperStyle;
     }
 
-    // 2. 将wrapper移回原始父节点
-    if (_gameWrapper && _wrapperOrigParent) {
-      var origStyle = _gameWrapper.getAttribute('data-orig-style');
-      if (origStyle !== null) {
-        _gameWrapper.style.cssText = origStyle;
-        _gameWrapper.removeAttribute('data-orig-style');
-      }
-      if (_wrapperOrigNextSibling) {
-        _wrapperOrigParent.insertBefore(_gameWrapper, _wrapperOrigNextSibling);
-      } else {
-        _wrapperOrigParent.appendChild(_gameWrapper);
-      }
-    }
-    _wrapperOrigParent = null;
-    _wrapperOrigNextSibling = null;
+    // 2. 恢复body滚动
+    document.body.style.overflow = _savedBodyOverflow;
 
-    // 3. 恢复body和html样式
-    document.body.style.cssText = _savedBodyStyles || '';
-    document.documentElement.style.cssText = _savedHtmlStyles || '';
-
-    // 4. 通知iframe已退出全屏
+    // 3. 通知iframe已退出全屏
     if (gameIframe && gameIframe.contentWindow) {
       gameIframe.contentWindow.postMessage({ type: 'happyrun-fullscreen-exited' }, '*');
     }
 
-    // 5. 移除监听器
+    // 4. 移除监听器
     window.removeEventListener('orientationchange', _onOrientationChange);
     window.removeEventListener('resize', _onResizeCheck);
   }
