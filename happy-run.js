@@ -7,6 +7,7 @@
   var gameIframe = null;
   var gameLoaded = false;
   var pendingQuizRequest = false;
+  var cachedQuizQuestion = null; // 缓存当前复活答题的题目，确保多次答同一道题
 
   // === 获取当前学生对象（支持教师扮演学生） ===
   function getCurrentStudent() {
@@ -216,7 +217,12 @@
       // 游戏请求答题
       if (d.type === 'happyrun-quiz-request') {
         pendingQuizRequest = true;
-        var question = getRandomQuestion();
+        // 如果是第一次答题（attempts=0），获取新题目；否则使用缓存的同一道题
+        var attempts = (d.data && d.data.attempts) || 0;
+        if (attempts === 0) {
+          cachedQuizQuestion = getRandomQuestion();
+        }
+        var question = cachedQuizQuestion;
         if (question && gameIframe && gameIframe.contentWindow) {
           gameIframe.contentWindow.postMessage({
             type: 'happyrun-quiz-question',

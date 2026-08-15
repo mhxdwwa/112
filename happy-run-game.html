@@ -387,7 +387,7 @@ function handleQuizAnswer(correct) {
         }
     }
     quizRevivalActive = false;
-    if (quizRevivalAttempts >= 4) {
+    if (quizRevivalAttempts >= 3) {
         quizRevivalFailed = true;
     }
     state = 'quizResult';
@@ -5095,11 +5095,11 @@ function drawQuizResult(c){
     c.fillStyle='rgba(0,0,20,0.88)';c.fillRect(0,0,800,400);
     c.textAlign='center';
     
-    if(quizRevivalFailed || quizRevivalAttempts >= 4){
+    if(quizRevivalFailed){
         c.fillStyle='#ff4444';c.font='bold 36px Arial';
         c.fillText('复活失败',400,80);
         c.fillStyle='#e0e0ff';c.font='18px Arial';
-        c.fillText('已用完所有答题复活机会 (4/4)',400,120);
+        c.fillText('第'+quizRevivalAttempts+'次答题未获得爱心复活失败',400,120);
     } else if(quizRevivalHeartsEarned > 0){
         c.fillStyle='#2ecc71';c.font='bold 36px Arial';
         c.fillText('复活成功!',400,80);
@@ -5108,7 +5108,9 @@ function drawQuizResult(c){
     }
     
     // Three buttons
-    if(quizRevivalAttempts < 4 && !quizRevivalFailed){
+    if(quizRevivalFailed){
+        drawBtn(c,100,200,180,42,'重新答题复活','#27ae60','#2ecc71',16);
+    } else {
         drawBtn(c,100,200,180,42,'继续答题','#27ae60','#2ecc71',16);
     }
     drawBtn(c,310,200,180,42,'重新开始','#e67e22','#e74c3c',16);
@@ -5139,9 +5141,10 @@ function drawOver(c){
         c.fillStyle='#ffaa00';c.font='13px Arial';
         c.fillText('已答题复活 '+quizRevivalAttempts+'/4 次',400,255);
     }
-    // Buttons - show revive only if attempts remain
-    if(quizRevivalAttempts < 4){
-        drawBtn(c,130,278,150,42,'答题复活','#27ae60','#2ecc71',16);
+    // Buttons - show revive if attempts remain or if quiz revival failed (allow retry)
+    if(quizRevivalAttempts < 4 || quizRevivalFailed){
+        var reviveLabel = quizRevivalFailed ? '重新答题复活' : '答题复活';
+        drawBtn(c,130,278,150,42,reviveLabel,'#27ae60','#2ecc71',16);
     } else {
         c.fillStyle='rgba(100,100,100,0.5)';c.beginPath();c.roundRect(130,278,150,42,8);c.fill();
         c.fillStyle='#888';c.font='16px Arial';c.fillText('复活次数用尽',205,304);
@@ -8049,7 +8052,10 @@ cvs.addEventListener('click',(e)=>{
         }
         if(x>=320&&x<=480&&y>=340&&y<=378)state='mainMenu';
     } else if(state==='over'){
-        if(x>=130&&x<=280&&y>=278&&y<=320&&quizRevivalAttempts<4)revivePlayer();
+        if(x>=130&&x<=280&&y>=278&&y<=320&&(quizRevivalAttempts<4||quizRevivalFailed)){
+            if(quizRevivalFailed){quizRevivalAttempts=0;quizRevivalFailed=false;}
+            revivePlayer();
+        }
         else if(x>=320&&x<=470&&y>=278&&y<=320)restartFromLevel();
         else if(x>=510&&x<=660&&y>=278&&y<=320)goToMainMenu();
     } else if(state==='quizRevival'){
@@ -8065,10 +8071,15 @@ cvs.addEventListener('click',(e)=>{
             }
         }
     } else if(state==='quizResult'){
-        if(quizRevivalAttempts<4&&!quizRevivalFailed&&x>=100&&x<=280&&y>=200&&y<=242){
-            quizRevivalActive=true;quizAnswered=false;
-            state='quizRevival';
-            parent.postMessage({type:'happyrun-quiz-request',data:{attempts:quizRevivalAttempts}},'*');
+        if(x>=100&&x<=280&&y>=200&&y<=242){
+            if(quizRevivalFailed){
+                quizRevivalAttempts=0;quizRevivalFailed=false;
+                quizRevivalActive=true;quizAnswered=false;
+                state='quizRevival';
+            } else {
+                quizRevivalActive=true;quizAnswered=false;
+                state='quizRevival';
+            }
         }
         if(x>=310&&x<=490&&y>=200&&y<=242)restartFromLevel();
         if(x>=520&&x<=700&&y>=200&&y<=242)goToMainMenu();
@@ -8248,7 +8259,10 @@ cvs.addEventListener('touchstart',e=>{
             return;
         }
         if(state==='over'&&canRestart){
-            if(gx>=130&&gx<=280&&gy>=278&&gy<=320&&quizRevivalAttempts<4)revivePlayer();
+            if(gx>=130&&gx<=280&&gy>=278&&gy<=320&&(quizRevivalAttempts<4||quizRevivalFailed)){
+                if(quizRevivalFailed){quizRevivalAttempts=0;quizRevivalFailed=false;}
+                revivePlayer();
+            }
             else if(gx>=320&&gx<=470&&gy>=278&&gy<=320)restartFromLevel();
             else if(gx>=510&&gx<=660&&gy>=278&&gy<=320)goToMainMenu();
             return;
@@ -8267,10 +8281,15 @@ cvs.addEventListener('touchstart',e=>{
             return;
         }
         if(state==='quizResult'){
-            if(quizRevivalAttempts<4&&!quizRevivalFailed&&gx>=100&&gx<=280&&gy>=200&&gy<=242){
-                quizRevivalActive=true;quizAnswered=false;
-                state='quizRevival';
-                parent.postMessage({type:'happyrun-quiz-request',data:{attempts:quizRevivalAttempts}},'*');
+            if(gx>=100&&gx<=280&&gy>=200&&gy<=242){
+                if(quizRevivalFailed){
+                    quizRevivalAttempts=0;quizRevivalFailed=false;
+                    quizRevivalActive=true;quizAnswered=false;
+                    state='quizRevival';
+                } else {
+                    quizRevivalActive=true;quizAnswered=false;
+                    state='quizRevival';
+                }
             }
             if(gx>=310&&gx<=490&&gy>=200&&gy<=242)restartFromLevel();
             if(gx>=520&&gx<=700&&gy>=200&&gy<=242)goToMainMenu();
