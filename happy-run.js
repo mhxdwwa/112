@@ -8,6 +8,9 @@
   var gameLoaded = false;
   var pendingQuizRequest = false;
   var cachedQuizQuestion = null; // 缓存当前复活答题的题目，确保多次答同一道题
+  var _actionLogTimer = null; // 操作日志防抖定时器
+  var _pendingLogChanges = []; // 累积的日志变更
+  var _lastLogSnapshot = null; // 上次记录日志时的状态快照
 
   // === 获取当前学生对象（支持教师扮演学生） ===
   function getCurrentStudent() {
@@ -117,7 +120,7 @@
       });
     }
 
-    // === 记录操作日志（类似小猪快跑） ===
+    // === 记录操作日志（防抖合并，每个关卡只记录一条） ===
     if (typeof recordAction === 'function') {
       var changes = [];
       var newMaxLevel = gameData.maxLevel || 1;
@@ -126,9 +129,16 @@
       var newLevelScores = gameData.levelScores || {};
       var newOwnedChars = gameData.ownedChars || [0];
 
+      // Use the last logged snapshot as baseline (or old state if first time)
+      var baselineMaxLevel = _lastLogSnapshot ? _lastLogSnapshot.maxLevel : oldMaxLevel;
+      var baselineTotalSilver = _lastLogSnapshot ? _lastLogSnapshot.totalSilver : oldTotalSilver;
+      var baselinePetGold = _lastLogSnapshot ? _lastLogSnapshot.petGold : oldPetGold;
+      var baselineLevelScores = _lastLogSnapshot ? _lastLogSnapshot.levelScores : oldLevelScores;
+      var baselineOwnedChars = _lastLogSnapshot ? _lastLogSnapshot.ownedChars : oldOwnedChars;
+
       // 检测新解锁的关卡
-      if (newMaxLevel > oldMaxLevel) {
-        for (var lv = oldMaxLevel + 1; lv <= newMaxLevel; lv++) {
+      if (newMaxLevel > baselineMaxLevel) {
+        for (var lv = baselineMaxLevel + 1; lv <= newMaxLevel; lv++) {
           var score = newLevelScores[lv] || 0;
           changes.push('解锁第' + lv + '关(' + score + '分)');
         }
@@ -138,40 +148,60 @@
       Object.keys(newLevelScores).forEach(function(lvKey) {
         var lv = parseInt(lvKey);
         var newScore = newLevelScores[lvKey] || 0;
-        var oldScore = oldLevelScores[lvKey] || 0;
-        if (lv <= oldMaxLevel && newScore > oldScore) {
+        var oldScore = (baselineLevelScores[lvKey]) || 0;
+        if (lv <= baselineMaxLevel && newScore > oldScore) {
           changes.push('第' + lv + '关提高' + (newScore - oldScore) + '分');
         }
       });
 
       // 检测银币变化
-      var silverDiff = newTotalSilver - oldTotalSilver;
+      var silverDiff = newTotalSilver - baselineTotalSilver;
       if (silverDiff > 0) {
         changes.push('+' + silverDiff + '银币');
       }
 
       // 检测宠物金币变化
-      var goldDiff = newPetGold - oldPetGold;
+      var goldDiff = newPetGold - baselinePetGold;
       if (goldDiff > 0) {
         changes.push('+' + goldDiff + '宠物金币');
       }
 
       // 检测新购买的角色
-      if (newOwnedChars.length > oldOwnedChars.length) {
-        var newChars = newOwnedChars.filter(function(c) { return oldOwnedChars.indexOf(c) === -1; });
+      if (newOwnedChars.length > baselineOwnedChars.length) {
+        var newChars = newOwnedChars.filter(function(c) { return baselineOwnedChars.indexOf(c) === -1; });
         if (newChars.length > 0) {
           changes.push('解锁' + newChars.length + '个角色');
         }
       }
 
-      // 如果有变化，记录操作日志
+      // 如果有变化，累积到待记录队列并更新快照
       if (changes.length > 0) {
-        var msg = '快乐跑一跑：' + changes.join('，') + '，总分:' + newTotalSilver;
-        recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
-        // 触发实时同步
-        if (typeof triggerRealtimeSync === 'function') {
-          triggerRealtimeSync();
-        }
+        _pendingLogChanges = _pendingLogChanges.concat(changes);
+        // Update snapshot to current state
+        _lastLogSnapshot = {
+          maxLevel: newMaxLevel,
+          totalSilver: newTotalSilver,
+          petGold: newPetGold,
+          levelScores: JSON.parse(JSON.stringify(newLevelScores)),
+          ownedChars: newOwnedChars.slice()
+        };
+        
+        // Debounce: wait 1 second before flushing to log
+        // This merges multiple rapid saves into a single log entry
+        if (_actionLogTimer) clearTimeout(_actionLogTimer);
+        _actionLogTimer = setTimeout(function() {
+          if (_pendingLogChanges.length > 0) {
+            var student = getCurrentStudent();
+            if (student) {
+              var msg = '快乐跑一跑：' + _pendingLogChanges.join('，') + '，总分:' + (gameData.totalSilver || 0);
+              recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
+              if (typeof triggerRealtimeSync === 'function') {
+                triggerRealtimeSync();
+              }
+            }
+            _pendingLogChanges = [];
+          }
+        }, 1000);
       }
     }
   }

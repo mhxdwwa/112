@@ -51,6 +51,33 @@
             margin-top: calc(-50vw) !important;
             margin-left: calc(-50vh) !important;
         }
+        /* Fullscreen mode: fill entire screen, absolute top layer */
+        .game-wrapper:fullscreen, .game-wrapper:-webkit-full-screen {
+            width: 100vw !important; height: 100vh !important;
+            position: fixed !important; top: 0 !important; left: 0 !important;
+            z-index: 2147483647 !important;
+            background: #000 !important;
+        }
+        .game-wrapper:fullscreen .game-canvas,
+        .game-wrapper:-webkit-full-screen .game-canvas {
+            width: 100% !important; height: 100% !important;
+            max-width: none !important; aspect-ratio: auto !important;
+            transform: none !important; position: relative !important;
+            top: auto !important; left: auto !important;
+            margin: 0 !important;
+        }
+        /* Fullscreen + portrait: rotate to landscape */
+        .game-wrapper:fullscreen.force-landscape .game-canvas,
+        .game-wrapper:-webkit-full-screen.force-landscape .game-canvas {
+            width: 100vh !important; height: 100vw !important;
+            max-width: none !important; aspect-ratio: auto !important;
+            transform: rotate(90deg) !important;
+            transform-origin: center center;
+            position: absolute !important;
+            top: 50% !important; left: 50% !important;
+            margin-top: calc(-50vw) !important;
+            margin-left: calc(-50vh) !important;
+        }
         /* Orientation toggle button */
         #rotateBtn {
             position: fixed;
@@ -106,7 +133,7 @@ function mapTouchToGame(clientX, clientY) {
     const ry = (clientY - rect.top) / rect.height;
     if (isDisplayRotated()) {
         // CSS rotate(90deg): visual X comes from canvas Y, visual Y from canvas (width-X)
-        // Mapping: gameX = ry * 800, gameY = (1 - rx) * 400
+        // In fullscreen with rotation, the visual dimensions are swapped
         return { gx: ry * 800, gy: (1 - rx) * 400 };
     } else {
         return { gx: rx * 800, gy: ry * 400 };
@@ -118,14 +145,20 @@ function mapTouchToGame(clientX, clientY) {
     btn.addEventListener('click', function(e){
         e.preventDefault();
         e.stopPropagation();
-        isGameRotated = !isGameRotated;
-        const wrapper = document.querySelector('.game-wrapper');
-        if(isGameRotated){
-            wrapper.classList.add('force-landscape');
-            btn.innerHTML = '&#x21BA;'; // reverse arrow
+        if (isFullscreenActive) {
+            // In fullscreen: exit fullscreen to restore normal website state
+            exitGameFullscreen();
         } else {
-            wrapper.classList.remove('force-landscape');
-            btn.innerHTML = '&#x21BB;'; // forward arrow
+            // Not in fullscreen: toggle force-landscape
+            isGameRotated = !isGameRotated;
+            const wrapper = document.querySelector('.game-wrapper');
+            if(isGameRotated){
+                wrapper.classList.add('force-landscape');
+                btn.innerHTML = '&#x21BA;'; // reverse arrow
+            } else {
+                wrapper.classList.remove('force-landscape');
+                btn.innerHTML = '&#x21BB;'; // forward arrow
+            }
         }
     });
     btn.addEventListener('touchstart', function(e){
@@ -134,6 +167,85 @@ function mapTouchToGame(clientX, clientY) {
         btn.click();
     });
 })();
+
+// === Fullscreen system for mobile ===
+let isFullscreenActive = false;
+let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
+
+function isMobilePortrait() {
+    return window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+}
+
+function enterGameFullscreen() {
+    if (!isMobileDevice) return;
+    var el = document.querySelector('.game-wrapper');
+    if (!el) return;
+    // Force landscape class
+    el.classList.add('force-landscape');
+    isGameRotated = true;
+    var rBtn = document.getElementById('rotateBtn');
+    if (rBtn) rBtn.innerHTML = '&#x21BA;';
+    
+    var rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (rfs) {
+        rfs.call(el).then(function() {
+            isFullscreenActive = true;
+        }).catch(function(e) {
+            console.warn('Fullscreen failed:', e);
+            // Fallback: just force landscape without fullscreen
+            isFullscreenActive = false;
+        });
+    }
+}
+
+function exitGameFullscreen() {
+    var efs = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (efs && (document.fullscreenElement || document.webkitFullscreenElement)) {
+        efs.call(document).catch(function(){});
+    }
+    isFullscreenActive = false;
+    var el = document.querySelector('.game-wrapper');
+    if (el) el.classList.remove('force-landscape');
+    isGameRotated = false;
+    var rBtn = document.getElementById('rotateBtn');
+    if (rBtn) rBtn.innerHTML = '&#x21BB;';
+}
+
+// Listen for fullscreen change
+document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+function onFullscreenChange() {
+    var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) {
+        // Exited fullscreen - restore normal state
+        isFullscreenActive = false;
+        var el = document.querySelector('.game-wrapper');
+        if (el) el.classList.remove('force-landscape');
+        isGameRotated = false;
+        var rBtn = document.getElementById('rotateBtn');
+        if (rBtn) rBtn.innerHTML = '&#x21BB;';
+    }
+}
+
+// Listen for orientation change to exit fullscreen when going portrait
+window.addEventListener('orientationchange', function() {
+    setTimeout(function() {
+        if (isFullscreenActive && !isMobilePortrait() === false) {
+            // If now in portrait while in fullscreen, keep landscape
+        }
+    }, 300);
+});
+
+// Also detect portrait via resize when in fullscreen
+window.addEventListener('resize', function() {
+    if (isFullscreenActive) {
+        var el = document.querySelector('.game-wrapper');
+        if (el && !el.classList.contains('force-landscape')) {
+            el.classList.add('force-landscape');
+            isGameRotated = true;
+        }
+    }
+});
 
 const cvs = document.getElementById('c');
 const ctx = cvs.getContext('2d');
@@ -443,6 +555,10 @@ for(let i=0;i<8;i++) mtns.push({x:i*130-50,h:50+Math.random()*70});
 function startGame(fromLevel){
     if(state==='playing') return;
     getAudioCtx();
+    // Enter fullscreen on mobile when game starts
+    if (isMobileDevice && !isFullscreenActive) {
+        enterGameFullscreen();
+    }
     P={x:PX,y:GY-PH,vy:0,vx:0,gnd:true,duck:false,af:0,onPlat:-1,onCrate:-1,onPlatH:0,onCrateTop:0,pushX:0,moveLeft:false,moveRight:false,moveUp:false,moveDown:false,shooting:false,facing:1};
     pits=[];ohs=[];plats=[];nails=[];bullets=[];powerups=[];parts=[];coins=[];bats=[];tigers=[];stormClouds=[];skillClones=[];
     fc=0;dist=0;spd=BASE_SPD;nextSpawn=0;gndScr=0;
@@ -465,7 +581,7 @@ function startGame(fromLevel){
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
-function goToMainMenu(){ state='mainMenu'; clearRevivalState(); }
+function goToMainMenu(){ state='mainMenu'; clearRevivalState(); if(isFullscreenActive) exitGameFullscreen(); }
 function revivePlayer(){
     // 检查是否还有复活次数
     if (!canQuizRevive()) {
@@ -776,7 +892,7 @@ function die(){
         // Boss fight defeat - go to defeat reward phase
         lives=1;
         bossDefeated=false;
-        calcLevelScore();
+        // Don't calcLevelScore on death - no coin/score recording
         if(currentLevel>maxUnlockedLevel) maxUnlockedLevel=currentLevel;
         saveLevelProgress();
         playSound('die');
@@ -799,7 +915,7 @@ function die(){
     }
     state='over';
     if(currentLevel>maxUnlockedLevel) maxUnlockedLevel=currentLevel;
-    calcLevelScore();
+    // Don't calcLevelScore on death - no coin/score recording for failed levels
     saveLevelProgress();
     playSound('die');
     mkParts(PX-P.pushX+PW/2,Math.min(P.y+PH/2,GY),20,'#ff4444');
@@ -1820,11 +1936,11 @@ function updateBossFight(){
         if(bossHP <= 0 && boss) {
             bossDefeated = true;
             calcLevelScore();
-            if(currentLevel >= maxUnlockedLevel){ maxUnlockedLevel = currentLevel + 1; saveLevelProgress(); }
+            if(currentLevel >= maxUnlockedLevel){ maxUnlockedLevel = currentLevel + 1; }
             var bossGoldReward = 2;
             petGoldCoins += bossGoldReward;
             bossKillBonusClaimed[currentLevel] = true;
-            saveLevelProgress();
+            saveLevelProgress(); // Single save after all state updates
             playSound('powerup');
             bossBullets=[]; bossBombs=[]; bossLaser=null; weaponProjectile=null;
             bossObstacles=[];
@@ -2244,13 +2360,12 @@ function updateBossFight(){
                 calcLevelScore();
                 if(currentLevel >= maxUnlockedLevel){
                     maxUnlockedLevel = currentLevel + 1;
-                    saveLevelProgress();
                 }
                 // Award pet gold coins for boss kill
                 var bossGoldReward2 = 2;
                 petGoldCoins += bossGoldReward2;
                 bossKillBonusClaimed[currentLevel] = true;
-                saveLevelProgress();
+                saveLevelProgress(); // Single save after all state updates
                 playSound('powerup');
                 // Clear boss fight elements
                 bossBullets=[];
@@ -8519,9 +8634,34 @@ document.addEventListener('keyup',e=>{
     }
 });
 
-// === Game Loop ===
-function gameLoop(){
-    update();
+// === Game Loop with 240Hz fixed timestep ===
+// All devices run at exactly 240 logic updates per second regardless of display refresh rate.
+// Lower Hz devices (60Hz, 120Hz) will run multiple updates per frame to compensate.
+const TARGET_FPS = 240;
+const TARGET_FRAME_MS = 1000 / TARGET_FPS; // ~4.167ms per logic tick
+let _lastFrameTs = 0;
+let _accumulator = 0;
+let _maxAccumulator = TARGET_FRAME_MS * 10; // Cap to prevent spiral of death (10 frames)
+
+function gameLoop(timestamp) {
+    if (_lastFrameTs === 0) {
+        _lastFrameTs = timestamp;
+    }
+    var delta = timestamp - _lastFrameTs;
+    _lastFrameTs = timestamp;
+    
+    // Clamp delta to prevent spiral of death on tab switch etc.
+    if (delta > _maxAccumulator) delta = _maxAccumulator;
+    
+    _accumulator += delta;
+    
+    // Run fixed timestep updates
+    while (_accumulator >= TARGET_FRAME_MS) {
+        update();
+        _accumulator -= TARGET_FRAME_MS;
+    }
+    
+    // Draw once per animation frame
     draw();
     requestAnimationFrame(gameLoop);
 }
@@ -8769,11 +8909,6 @@ cvs.addEventListener('touchcancel',e=>{
     }
     if(Object.keys(activeTouches).length===0)P.duck=false;
 },{passive:false});
-
-// Refresh rate compensation: run multiple logic updates per frame to match 240Hz experience
-let _lastFrameTs=0;
-const TARGET_FPS=240;
-const TARGET_FRAME_MS=1000/TARGET_FPS;
 
 // v70: 恢复复活答题状态（如果页面刷新前有未完成的复活）
 if (loadRevivalState()) {
