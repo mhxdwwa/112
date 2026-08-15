@@ -5515,7 +5515,7 @@ function probeClassPKRobotImages() {
     if(_classPKRobotProbed) { resolve(); return; }
     let pending = 0;
     const done = () => { pending--; if(pending <= 0) { _classPKRobotProbed = true; resolve(); } };
-    for(let i = 1; i <= 50; i++) {
+    for(let i = 1; i <= 13; i++) {
       pending++;
       const img = new Image();
       const path = `战斗机器人/${i}.webp`;
