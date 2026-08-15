@@ -3040,6 +3040,22 @@ function _blockIfNotMine(studentId, actionName) {
   return false;
 }
 
+// v75: Show teacher-only buttons when user is confirmed teacher
+// Complements the CSS default (display:none) — buttons only appear after auth+DAL confirm teacher role
+function applyTeacherVisibility() {
+  if (!currentUser || currentUser.type !== 'teacher') return;
+  var teacherOnlySelectors = [
+    '.class-actions',
+    '.data-mgmt-btn',
+  ];
+  teacherOnlySelectors.forEach(function(sel) {
+    document.querySelectorAll(sel).forEach(function(el) {
+      el.classList.add('teacher-visible');
+    });
+  });
+  console.log('[DAL] v75 Teacher buttons visible for:', currentUser.id);
+}
+
 function applyStudentRestrictions() {
   if (!currentUser || currentUser.type !== 'student') return;
   console.log('[DAL] Applying student restrictions for:', currentUser.studentName);
@@ -3366,6 +3382,7 @@ function _initDALCore() {
     _setupRealtimeSubscriptions();
     _setupPageLifecycle();
     applyStudentRestrictions();
+    applyTeacherVisibility();
 
     var cloudEl = document.getElementById('cloudSyncStatus');
     if (cloudEl) {
@@ -3395,6 +3412,7 @@ function _initDALCore() {
       if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
       wrapSaveFunctions();
       applyStudentRestrictions();
+      applyTeacherVisibility();
       _dalReady = true;
     }
 
