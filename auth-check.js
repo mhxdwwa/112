@@ -93,6 +93,50 @@ async function checkLogin() {
       currentUser.studentName = localStorage.getItem('studentName');
       currentUser.classId = localStorage.getItem('classId');
       currentUser.className = localStorage.getItem('className');
+      
+      // v73: Student login hardening — verify student exists in DB
+      // This prevents localStorage tampering (e.g., manually setting userType=student with fake IDs)
+      if (db && currentUser.studentId && currentUser.classId) {
+        try {
+          var verifyResult = await db.from('students')
+            .select('id, name, class_id')
+            .eq('id', parseInt(currentUser.studentId))
+            .eq('class_id', parseInt(currentUser.classId))
+            .single();
+          
+          if (verifyResult.error || !verifyResult.data) {
+            console.warn('[Auth] Student verification failed — invalid studentId/classId in localStorage');
+            // Clear invalid data and redirect to login
+            localStorage.removeItem('userType');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('studentId');
+            localStorage.removeItem('studentName');
+            localStorage.removeItem('classId');
+            localStorage.removeItem('className');
+            window.location.href = 'login.html';
+            return;
+          }
+          
+          // Verify the student name matches
+          if (verifyResult.data.name !== currentUser.studentName) {
+            console.warn('[Auth] Student name mismatch in localStorage');
+            localStorage.removeItem('userType');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('studentId');
+            localStorage.removeItem('studentName');
+            localStorage.removeItem('classId');
+            localStorage.removeItem('className');
+            window.location.href = 'login.html';
+            return;
+          }
+          
+          console.log('[Auth] Student verified:', currentUser.studentName);
+        } catch (e) {
+          console.error('[Auth] Student verification error:', e);
+          // On network error, allow login but log warning
+          // This prevents locking out students when Supabase is temporarily unavailable
+        }
+      }
     }
   }
 }
