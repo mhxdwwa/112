@@ -149,11 +149,17 @@
 
     // 学生视图 / 教师已确认 → 创建游戏 iframe
     container.innerHTML = '';
+    
+    // 计算最佳尺寸：游戏需要横向 185:90 比例，适配容器宽度
+    var containerWidth = container.offsetWidth || window.innerWidth * 0.9;
+    var maxGameWidth = Math.min(containerWidth, 1200); // 限制最大宽度
+    var gameHeight = Math.round(maxGameWidth * 90 / 185); // 按比例计算高度
+    
     var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'width:100%;height:100%;min-height:400px;position:relative;background:#000;border-radius:12px;overflow:hidden;';
+    wrapper.style.cssText = 'width:' + maxGameWidth + 'px;height:' + gameHeight + 'px;margin:0 auto;position:relative;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
 
     gameIframe = document.createElement('iframe');
-    gameIframe.style.cssText = 'width:100%;height:100%;min-height:400px;border:none;';
+    gameIframe.style.cssText = 'width:100%;height:100%;border:none;';
     gameIframe.setAttribute('allow', 'autoplay; fullscreen');
     gameIframe.setAttribute('scrolling', 'no');
 
@@ -176,6 +182,20 @@
 
     // 监听来自游戏的消息
     setupMessageListener();
+    
+    // 窗口大小变化时重新计算游戏尺寸
+    var resizeTimer;
+    window.addEventListener('resize', function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() {
+        if (wrapper && wrapper.parentNode) {
+          var newWidth = Math.min(container.offsetWidth || window.innerWidth * 0.9, 1200);
+          var newHeight = Math.round(newWidth * 90 / 185);
+          wrapper.style.width = newWidth + 'px';
+          wrapper.style.height = newHeight + 'px';
+        }
+      }, 150);
+    });
   }
 
   // === 设置 postMessage 监听器 ===
