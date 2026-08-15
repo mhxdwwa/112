@@ -157,10 +157,16 @@
     var gameHeight = Math.round(maxGameWidth * 90 / 185); // 按比例计算高度
     
     var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'width:' + maxGameWidth + 'px;height:' + gameHeight + 'px;margin:0 auto;position:relative;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    wrapper.style.cssText = 'width:' + maxGameWidth + 'px;height:' + gameHeight + 'px;margin:0 auto;position:relative;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;';
+    
+    // 添加加载提示
+    var loadingDiv = document.createElement('div');
+    loadingDiv.style.cssText = 'text-align:center;color:#fff;';
+    loadingDiv.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">🎮</div><div style="font-size:18px;font-weight:bold;">游戏加载中...</div>';
+    wrapper.appendChild(loadingDiv);
 
     gameIframe = document.createElement('iframe');
-    gameIframe.style.cssText = 'width:100%;height:100%;border:none;';
+    gameIframe.style.cssText = 'width:100%;height:100%;border:none;opacity:0;transition:opacity 0.3s;';
     gameIframe.setAttribute('allow', 'autoplay; fullscreen');
     gameIframe.setAttribute('scrolling', 'no');
 
@@ -173,6 +179,9 @@
     // 监听游戏加载完成
     gameIframe.onload = function() {
       gameLoaded = true;
+      // 隐藏加载提示，显示游戏
+      if(loadingDiv) loadingDiv.style.display = 'none';
+      gameIframe.style.opacity = '1';
       // 发送初始化数据
       var data = loadHappyRunData();
       gameIframe.contentWindow.postMessage({

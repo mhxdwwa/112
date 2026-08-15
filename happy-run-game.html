@@ -183,7 +183,8 @@ let quizCurrentQuestion = null;
 let quizOptions = [];
 let quizCorrectIdx = -1;
 let quizAnswered = false;
-let quizWrongUntil = 0;
+let quizDisabledOptions = [];
+let quizAnsweredIdx = -1;
 
 let currentLevel=1, levelStartDist=0, levelScore=0, totalScore=0, levelTransition=0;
 function getLevelDistance(lv){ return 600+(lv-1)*100; }
@@ -350,12 +351,13 @@ function startGame(fromLevel){
     } else { currentLevel=1;levelStartDist=0;levelScore=0;totalScore=0; }
     levelTransition=0; state='playing'; paused=false;
     quizRevivalAttempts=0; quizRevivalHeartsEarned=0; quizRevivalFailed=false;
-    quizRevivalActive=false; quizWrongUntil=0;
+    quizRevivalActive=false; quizDisabledOptions=[];
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
 function goToMainMenu(){ state='mainMenu'; }
 function revivePlayer(){
+    quizDisabledOptions = [];
     quizRevivalActive = true;
     quizAnswered = false;
     state = 'quizRevival';
@@ -370,11 +372,21 @@ function handleQuizAnswer(correct) {
     
     if (correct) {
         quizRevivalAttempts++;
+        
+        // 答错3次后，即使答对也复活失败
+        if (quizDisabledOptions.length >= 3) {
+            quizRevivalActive = false;
+            quizRevivalFailed = true;
+            state = 'quizResult';
+            return;
+        }
+        
         var hearts = 0;
         if (quizRevivalAttempts === 1) hearts = 2;
         else if (quizRevivalAttempts === 2) hearts = 1;
+        
         if (hearts > 0) {
-            // 第1次答对+2❤，第2次答对+1❤，直接复活成功
+            // 答对复活成功
             quizRevivalHeartsEarned += hearts;
             lives = quizRevivalHeartsEarned;
             invincible = INVINCIBLE_TIME + 60;
@@ -386,19 +398,18 @@ function handleQuizAnswer(correct) {
             playSound('powerup');
             quizRevivalActive = false;
             state = 'playing';
-            return;
         } else {
-            // 第3/4次答对，复活失败
+            // 第3次答对，复活失败
             quizRevivalActive = false;
             quizRevivalFailed = true;
             state = 'quizResult';
-            return;
         }
+    } else {
+        // 答错：禁用该选项，保持在答题界面
+        playSound('hit');
+        quizDisabledOptions.push(quizAnsweredIdx);
+        setTimeout(function(){ quizAnswered = false; }, 300);
     }
-    // 答错：不切换界面，保持在答题界面，短暂反馈后允许再次作答
-    playSound('hit');
-    quizWrongUntil = performance.now() + 600;
-    setTimeout(function(){ quizAnswered = false; }, 600);
 }
 
 let audioCtx=null;
@@ -673,7 +684,7 @@ function die(){
     quizRevivalAttempts = 0;
     quizRevivalHeartsEarned = 0;
     quizRevivalFailed = false;
-    quizWrongUntil = 0;
+    quizDisabledOptions = [];
 }
 
 function s2w(sx){return sx+fc*spd;}
@@ -5052,12 +5063,15 @@ function drawQuizRevival(c){
     // Title
     c.fillStyle='#00ccff';c.font='bold 32px Arial';
     c.fillText('📝 答题复活',400,45);
+    
+    // Dynamic hint based on wrong count
     c.fillStyle='#ffcc00';c.font='16px Arial';
-    var attemptText = '';
-    if(quizRevivalAttempts===0) attemptText = '答对可得 +2❤';
-    else if(quizRevivalAttempts===1) attemptText = '答对可得 +1❤';
-    else attemptText = '答对也不复活';
-    c.fillText(attemptText,400,75);
+    var wrongCount = quizDisabledOptions.length;
+    var hintText = '';
+    if(wrongCount === 0) hintText = '答对可得 +2❤';
+    else if(wrongCount === 1) hintText = '答对可得 +1❤';
+    else hintText = '已答错'+wrongCount+'次，无法获得爱心但需继续作答';
+    c.fillText(hintText,400,75);
     
     if(quizCurrentQuestion){
         // Question text
@@ -5087,24 +5101,23 @@ function drawQuizRevival(c){
         // Options as buttons
         for(var i=0;i<quizOptions.length;i++){
             var oy = 160 + i*52;
-            var isSelected = false;
-            drawBtn(c, 100, oy, 600, 42, quizOptions[i], '#2c3e50', '#34495e', 16);
-            // Option letter
-            c.fillStyle='#ffcc00';c.font='bold 16px Arial';
-            c.fillText(String.fromCharCode(65+i)+'.', 120, oy+28);
+            var isDisabled = quizDisabledOptions.indexOf(i) !== -1;
+            if(isDisabled){
+                // Gray out disabled option
+                c.fillStyle='#555';c.beginPath();c.roundRect(100,oy,600,42,8);c.fill();
+                c.fillStyle='#888';c.font='16px Arial';
+                c.fillText(quizOptions[i], 400, oy+28);
+            } else {
+                drawBtn(c, 100, oy, 600, 42, quizOptions[i], '#2c3e50', '#34495e', 16);
+                // Option letter
+                c.fillStyle='#ffcc00';c.font='bold 16px Arial';
+                c.fillText(String.fromCharCode(65+i)+'.', 120, oy+28);
+            }
         }
     } else {
         // Waiting for question
         c.fillStyle='#aaa';c.font='20px Arial';
         c.fillText('正在加载题目...',400,200);
-    }
-    
-    // 答错反馈：红色闪烁 + 提示文字
-    if(performance.now() < quizWrongUntil){
-        c.fillStyle='rgba(255,0,0,0.25)';
-        c.fillRect(0,0,800,400);
-        c.fillStyle='#ff4444';c.font='bold 26px Arial';
-        c.fillText('❌ 答错了，再试一次！',400,385);
     }
     
     c.textAlign='left';
@@ -8065,11 +8078,13 @@ cvs.addEventListener('click',(e)=>{
         else if(x>=320&&x<=470&&y>=278&&y<=320)restartFromLevel();
         else if(x>=510&&x<=660&&y>=278&&y<=320)goToMainMenu();
     } else if(state==='quizRevival'){
-        if(quizCurrentQuestion && !quizAnswered && performance.now()>=quizWrongUntil){
+        if(quizCurrentQuestion && !quizAnswered){
             for(var qi=0;qi<quizOptions.length;qi++){
                 var oy=160+qi*52;
                 if(x>=100&&x<=700&&y>=oy&&y<=oy+42){
-                    // Check answer locally
+                    // Check if option is disabled
+                    if(quizDisabledOptions.indexOf(qi) !== -1) break;
+                    quizAnsweredIdx = qi;
                     var isCorrect = (qi === quizCorrectIdx);
                     handleQuizAnswer(isCorrect);
                     break;
@@ -8272,10 +8287,13 @@ cvs.addEventListener('touchstart',e=>{
             return;
         }
         if(state==='quizRevival'){
-            if(quizCurrentQuestion && !quizAnswered && performance.now()>=quizWrongUntil){
+            if(quizCurrentQuestion && !quizAnswered){
                 for(var qi=0;qi<quizOptions.length;qi++){
                     var oy=160+qi*52;
                     if(gx>=100&&gx<=700&&gy>=oy&&gy<=oy+42){
+                        // Check if option is disabled
+                        if(quizDisabledOptions.indexOf(qi) !== -1) break;
+                        quizAnsweredIdx = qi;
                         var isCorrect = (qi === quizCorrectIdx);
                         handleQuizAnswer(isCorrect);
                         break;

@@ -2,9 +2,6 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com" crossorigin>
@@ -18,8 +15,11 @@
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
- <link rel="preload" as="script" href="auth-check.js?v=20">
-  <script defer src="auth-check.js?v=20"></script>
+<link rel="preload" as="script" href="auth-check.js?v=20">
+<script defer src="auth-check.js?v=20"></script>
+<!-- 预加载游戏资源 -->
+<link rel="prefetch" href="happy-run-game.html">
+<link rel="prefetch" href="happy-run.js">
 </head>
 <body>
 <!-- Loading overlay - v45: lightweight, non-blocking, hidden as soon as cache renders -->
@@ -83,8 +83,8 @@ window._hideDalLoading = function() {
   var ov = document.getElementById('dalLoadingOverlay');
   if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.remove(); }, 300); }
 };
-// Safety timeout: if DAL doesn't load in 10s, hide overlay anyway (reduced from 15s)
-setTimeout(function() { window._hideDalLoading(); }, 10000);
+// Safety timeout: if DAL doesn't load in 5s, hide overlay anyway (reduced from 10s)
+setTimeout(function() { window._hideDalLoading(); }, 5000);
 </script>
 <!-- 可爱浮动装饰 -->
 <div class="deco-corner deco-corner-tl">🐾</div>

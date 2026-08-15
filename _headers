@@ -1,4 +1,13 @@
 # Cloudflare Pages cache configuration
+/
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/happy-run-game.html
+  Cache-Control: public, max-age=86400
+
 /images/*
   Cache-Control: public, max-age=31536000
 
