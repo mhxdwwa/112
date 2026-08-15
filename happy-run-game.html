@@ -2200,7 +2200,8 @@ function updateTransitionRoom(){
         // Level complete, start next level
         currentLevel++;
         levelStartDist = dist;
-        fc = 0;
+        fc = 301; // Set past the 300-frame safe zone so obstacles spawn immediately
+        nextSpawn = 0;
         spd = BASE_SPD;
         state = 'playing';
         P.x = 120;
