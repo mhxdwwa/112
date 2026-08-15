@@ -80,8 +80,33 @@
     // 更新排行榜用的总分（总银币数）
     qs.happyRunTotalScore = gameData.totalSilver || 0;
 
+    // 保存到本地存储（确保 classesData 变更被持久化到 localStorage）
+    if (typeof saveClassData === 'function') {
+      saveClassData();
+    }
+
+    // 保存到 Supabase
     if (typeof saveCoinsAndQuizState === 'function') {
       saveCoinsAndQuizState(student);
+    } else if (typeof db !== 'undefined' && db) {
+      // 标记 quizState 为本地修改，防止 Realtime 事件覆盖
+      window._quizStateLocallyModified = true;
+      db.from('students').update({
+        coins: student.coins,
+        quiz_state: JSON.stringify(qs)
+      }).eq('id', student.id).then(function(r) {
+        if (r.error) {
+          console.error('[快乐跑] 保存失败:', r.error.message);
+        } else {
+          // 保存成功后更新快照，防止 Realtime echo 覆盖
+          if (typeof _lastOwnWriteTime !== 'undefined') {
+            window._lastOwnWriteTime = Date.now();
+          }
+          if (typeof _takeSnapshot === 'function') {
+            _takeSnapshot();
+          }
+        }
+      });
     }
   }
 
