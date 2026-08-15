@@ -2995,7 +2995,7 @@ function renderHappyRunRanking() {
 }
 window.renderHappyRunRanking = renderHappyRunRanking;
 
-function switchPage(pageId){if(pageId!=='quiz-page'&&typeof window._stopPigRunBGM==='function'){window._stopPigRunBGM();}if(pageId!=='quiz-page'&&typeof window._stopMatch3BGM==='function'){window._stopMatch3BGM();}document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';if(pageId!=='quiz-page'&&!isStudentView&&typeof window._resetQuizModalFlag==='function'){window._resetQuizModalFlag();}else if(pageId==='quiz-page'&&!isStudentView){if(typeof window._resetQuizModalFlag==='function')window._resetQuizModalFlag();window._pigRunModalShown=false;window._match3ModalShown=false;window._teacherPlayingAsStudent=null;}var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{requestAnimationFrame(()=>{if(pageId==='honor-board-page'){renderClassTopThree();var art=document.querySelector('.rank-tab.active');if(art&&art.textContent.includes('\u6bcf\u65e5'))renderQuizRanking();else if(art&&art.textContent.includes('\u5c0f\u732a'))renderPigRunRanking();else if(art&&art.textContent.includes('\u6d88\u6d88\u4e50'))renderMatch3Ranking();else if(art&&art.textContent.includes('\u5feb\u4e50\u8dd1'))renderHappyRunRanking();}else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();var aqt=document.querySelector('.quiz-tab.active');if(aqt&&aqt.textContent.includes('\u5c0f\u732a')){if(typeof renderPigRunPage==='function')renderPigRunPage();}else if(aqt&&aqt.textContent.includes('\u6d88\u6d88\u4e50')){if(typeof renderMatch3Page==='function')renderMatch3Page();}else if(aqt&&aqt.textContent.includes('\u5feb\u4e50\u8dd1')){if(typeof renderHappyRunPage==='function')renderHappyRunPage();}}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}}
+function switchPage(pageId){if(pageId!=='quiz-page'&&typeof window._stopPigRunBGM==='function'){window._stopPigRunBGM();}if(pageId!=='quiz-page'&&typeof window._stopMatch3BGM==='function'){window._stopMatch3BGM();}document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';if(pageId!=='quiz-page'&&!isStudentView&&typeof window._resetQuizModalFlag==='function'){window._resetQuizModalFlag();}else if(pageId==='quiz-page'&&!isStudentView){if(typeof window._resetQuizModalFlag==='function')window._resetQuizModalFlag();window._pigRunModalShown=false;window._match3ModalShown=false;window._teacherPlayingAsStudent=null;}var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{requestAnimationFrame(()=>{if(pageId==='honor-board-page'){renderClassTopThree();var art=document.querySelector('.rank-tab.active');if(art&&art.textContent.includes('\u6bcf\u65e5'))renderQuizRanking();else if(art&&art.textContent.includes('\u5c0f\u732a'))renderPigRunRanking();else if(art&&art.textContent.includes('\u6d88\u6d88\u4e50'))renderMatch3Ranking();else if(art&&art.textContent.includes('\u5feb\u4e50\u8dd1'))renderHappyRunRanking();}else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();var aqt=document.querySelector('.quiz-tab.active');if(aqt&&aqt.textContent.includes('\u5c0f\u732a')){if(typeof renderPigRunPage==='function')renderPigRunPage();}else if(aqt&&aqt.textContent.includes('\u6d88\u6d88\u4e50')){if(typeof renderMatch3Page==='function')renderMatch3Page();}else if(aqt&&aqt.textContent.includes('\u5feb\u4e50\u8dd1')){if(typeof renderHappyRunPage==='function')renderHappyRunPage();}}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}else if(pageId==='library-page'){if(typeof renderLibraryPage==='function')renderLibraryPage();}});}}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
@@ -10711,6 +10711,11 @@ window._escapedPetIds = new Set();
         var qs = item.student.quizState || {};
         item.value = qs.match3TotalScore || 0;
       });
+    } else if (type === 'happyrun') {
+      allStudents.forEach(function(item) {
+        var qs = item.student.quizState || {};
+        item.value = qs.happyRunTotalSilver || qs.happyRunTotalScore || 0;
+      });
     }
 
     allStudents.sort(function(a, b) { return b.value - a.value; });
@@ -10808,6 +10813,13 @@ window._escapedPetIds = new Set();
       _announcementQueue.push(t4);
     }
 
+    var happyrunTop = getTopThree('happyrun');
+    if (happyrunTop.length > 0) {
+      var t5 = '🏃 快乐跑前三名：';
+      happyrunTop.forEach(function(item, idx) { t5 += (idx + 1) + '.' + item.name + ' '; });
+      _announcementQueue.push(t5);
+    }
+
     if (_announcementQueue.length > 0) {
       showNextAnnouncement(classId);
     } else {
@@ -10827,3 +10839,89 @@ window._escapedPetIds = new Set();
   };
 })();
 // ========== 排行榜滚动公告系统结束 ==========
+
+// ========== 图书馆系统 ==========
+(function() {
+  'use strict';
+
+  // 书籍列表配置 - 从GitHub仓库books文件夹加载PDF
+  var BOOKS_REPO = 'https://mhxdwwa.github.io/112/books';
+  
+  // 渲染图书馆页面
+  window.renderLibraryPage = function() {
+    var container = document.getElementById('libraryContent');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:48px;margin-bottom:20px;">📚</div><div style="color:#666;font-size:16px;">正在加载书籍列表...</div></div>';
+    
+    // 尝试从GitHub API获取books文件夹内容
+    fetch('https://api.github.com/repos/mhxdwwa/112/contents/books')
+      .then(function(res) { return res.json(); })
+      .then(function(files) {
+        if (!Array.isArray(files)) {
+          showEmptyLibrary();
+          return;
+        }
+        
+        var pdfFiles = files.filter(function(f) { 
+          return f.name.toLowerCase().endsWith('.pdf'); 
+        });
+        
+        if (pdfFiles.length === 0) {
+          showEmptyLibrary();
+          return;
+        }
+        
+        renderBookGrid(pdfFiles);
+      })
+      .catch(function(err) {
+        console.error('加载书籍失败:', err);
+        showEmptyLibrary();
+      });
+  };
+  
+  function showEmptyLibrary() {
+    var container = document.getElementById('libraryContent');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;">' +
+      '<div style="font-size:64px;margin-bottom:20px;">📖</div>' +
+      '<div style="color:#999;font-size:18px;margin-bottom:10px;">图书馆暂时空置</div>' +
+      '<div style="color:#bbb;font-size:14px;">请稍后再来，或者联系老师添加书籍</div>' +
+      '</div>';
+  }
+  
+  function renderBookGrid(pdfFiles) {
+    var container = document.getElementById('libraryContent');
+    if (!container) return;
+    
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px;padding:10px;">';
+    
+    pdfFiles.forEach(function(file) {
+      var bookName = file.name.replace('.pdf', '');
+      var bookUrl = BOOKS_REPO + '/' + encodeURIComponent(file.name);
+      var coverUrl = BOOKS_REPO + '/covers/' + encodeURIComponent(bookName) + '.jpg';
+      
+      html += '<div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08);transition:transform 0.2s,box-shadow 0.2s;cursor:pointer;" ' +
+        'onmouseenter="this.style.transform=\'translateY(-4px)\';this.style.boxShadow=\'0 8px 20px rgba(0,0,0,0.12)\'" ' +
+        'onmouseleave="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.08)\'" ' +
+        'onclick="window.open(\'' + bookUrl + '\',\'_blank\')">' +
+        '<div style="width:100%;height:240px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">' +
+        '<img src="' + coverUrl + '" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+        '<div style="display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:20px;">' +
+        '<div style="font-size:48px;margin-bottom:10px;">📕</div>' +
+        '<div style="font-size:14px;font-weight:600;line-height:1.4;">' + bookName + '</div>' +
+        '</div>' +
+        '</div>' +
+        '<div style="padding:12px;text-align:center;">' +
+        '<div style="font-size:14px;font-weight:600;color:#333;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + bookName + '</div>' +
+        '<div style="font-size:12px;color:#999;margin-top:4px;">PDF文档</div>' +
+        '</div>' +
+        '</div>';
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+  }
+})();
+// ========== 图书馆系统结束 ==========
