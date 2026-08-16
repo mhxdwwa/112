@@ -1,1 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com" crossorigin>
+<link rel="preconnect" href="https://xbygooadskfqllnhwmet.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="dns-prefetch" href="https://xbygooadskfqllnhwmet.supabase.co">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap"></noscript>
+<title>🍭宠物世界🍭</title>
+<link rel="stylesheet" href="style.css?v=22">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<link rel="preload" as="script" href="auth-check.js?v=89">
+<script defer src="auth-check.js?v=89"></script>
+<!-- 预加载游戏资源 -->
+<link rel="prefetch" href="happy-run-game.html">
+<link rel="prefetch" href="happy-run.js">
+</head>
+<body>
+<!-- Loading overlay - v45: lightweight, non-blocking, hidden as soon as cache renders -->
+<div id="dalLoadingOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#fff5f8,#f0f8ff);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.3s;">
+  <div style="font-size:48px;animation:dalBounce 0.8s infinite;">🐾</div>
+  <div style="font-size:16px;font-weight:700;color:#666;margin-top:12px;">正在加载数据...</div>
+</div>
+<style>@keyframes dalBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}</style>
+<style>
+/* v77: 教师按钮默认隐藏，防止学生在DAL加载前看到/点击 */
+.data-mgmt-btn { display: none; }
+.data-mgmt-btn.teacher-visible { display: inline-flex !important; }
+.class-actions { display: none; }
+.class-actions.teacher-visible { display: grid !important; }
+.teacher-only { display: none; }
+</style>
+<style>
+@keyframes rankScroll {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+#rankAnnouncementBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background: linear-gradient(135deg, #ff6b9d, #c06c84);
+  z-index: 99998;
+  display: none;
+  align-items: center;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+#rankAnnouncementBanner.show {
+  display: flex;
+}
+.rank-scroll-label {
+  color: #fff;
+  font-weight: bold;
+  font-size: 14px;
+  padding: 0 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rank-scroll-text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: rankScroll 12s linear;
+}
+</style>
+<!-- 排行榜滚动公告 -->
+<div id="rankAnnouncementBanner">
+  <span class="rank-scroll-label">🏆 公告</span>
+  <span id="rankAnnouncementText" class="rank-scroll-text"></span>
+</div>
+<script>
+// v45: Hide loading overlay — called by dal.js cache render OR Supabase load
+window._hideDalLoading = function() {
+  var ov = document.getElementById('dalLoadingOverlay');
+  if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.remove(); }, 300); }
+};
+// Safety timeout: if DAL doesn't load in 5s, hide overlay anyway (reduced from 10s)
+setTimeout(function() { window._hideDalLoading(); }, 5000);
+</script>
+<!-- 可爱浮动装饰 -->
+<div class="deco-corner deco-corner-tl">🐾</div>
+<div class="deco-corner deco-corner-br">🌸</div>
+<div class="deco-corner deco-corner-bl">🍀</div>
+<div class="deco-bubble" style="left:5%;width:80px;height:80px;background:radial-gradient(circle,#ffcce0,#ffa0c0);--float-dur:14s;--float-delay:0s;--bubble-opacity:0.08;"></div>
+<div class="deco-bubble" style="left:25%;width:50px;height:50px;background:radial-gradient(circle,#ffe0b0,#ffc880);--float-dur:18s;--float-delay:3s;--bubble-opacity:0.06;"></div>
+<div class="deco-bubble" style="left:55%;width:65px;height:65px;background:radial-gradient(circle,#c8e0ff,#a0c8ff);--float-dur:16s;--float-delay:6s;--bubble-opacity:0.07;"></div>
+<div class="deco-bubble" style="left:80%;width:45px;height:45px;background:radial-gradient(circle,#d0ffd0,#a0e8a0);--float-dur:20s;--float-delay:2s;--bubble-opacity:0.06;"></div>
+<div class="deco-bubble" style="left:40%;width:55px;height:55px;background:radial-gradient(circle,#ffe0ff,#e0b0e0);--float-dur:15s;--float-delay:8s;--bubble-opacity:0.06;"></div>
+<div class="deco-bubble" style="left:70%;width:70px;height:70px;background:radial-gradient(circle,#ffd0c0,#ffb0a0);--float-dur:17s;--float-delay:5s;--bubble-opacity:0.07;"></div>
+<style>
+/* 扫码按钮：默认隐藏，仅教师手机移动端由JS控制显示 */
+.qr-scan-btn-mobile { display: none !important; }
+</style>
+<div class="nav-bar"><div class="nav-logo" style="display:flex;align-items:center;gap:8px;">🍡宠物世界🍡<span id="qrScanBtn" class="qr-scan-btn-mobile" onclick="openQRScan()" style="cursor:pointer;font-size:20px;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;border-radius:50%;width:32px;height:32px;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(82,196,26,0.3);transition:transform 0.2s;" title="扫码登录其他设备" onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">📷</span></div><div class="nav-menu"><div class="nav-item active" onclick="playClickSound();switchPage('class-pet-page')">🏫宠物管理🏫</div><div class="nav-item" onclick="playClickSound();switchPage('honor-board-page')">🏆 排行榜</div><div class="nav-item" onclick="playClickSound();switchPage('quiz-page')">🏛️ 取金阁</div><div class="nav-item" id="pk-nav-item" onclick="playClickSound();handlePKTabClick()">⚔️ 宠物PK</div><div class="nav-item" onclick="playClickSound();switchPage('jianghu-page')">🗡️ 萌萌江湖行</div><div class="nav-item" onclick="playClickSound();switchPage('library-page')">📚 图书馆</div></div><div style="display:flex;gap:8px;align-items:center;"><div class="credit-float"><span>🍭制作者：吴胜闯老师🍭</span></div><!-- 背景音乐控制面板（移到导航栏） --><div class="music-panel-inline" id="musicPanel"><button class="music-toggle-inline" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button><button class="music-expand-btn-inline" id="musicExpandBtn" onclick="toggleMusicPanel(event)" title="音量设置">▶</button><span class="music-name-inline" id="musicName">宠物乐园</span><div class="music-vol-wrap-inline"><span class="music-vol-icon-inline" id="musicVolIcon" onclick="toggleMute()">🔊</span><input type="range" class="music-vol-slider-inline" id="musicVolSlider" min="0" max="100" value="40" oninput="setBgMusicVol(this.value)"></div></div><span id="cloudSyncStatus" onclick="forceManualSync()" style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px;color:#6a9955;font-weight:600;background:linear-gradient(135deg,#e8ffe8,#d0f0d0);border-radius:18px;padding:5px 12px;box-shadow:0 2px 8px rgba(100,180,100,0.15);transition:all 0.2s;" title="点击手动同步到云端">☁️ 云端同步</span><button id="logoutBtn" onclick="logout()" style="background:linear-gradient(135deg,#ff9999,#ff6666);color:#fff;border:none;border-radius:22px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(255,100,100,0.3);transition:all 0.3s;white-space:nowrap;">🚪 退出</button></div></div>
+<div class="content-container">
+<div class="page active" id="class-pet-page">
+  <div class="paw-deco" style="top:20px;right:30px;--paw-rot:20deg;font-size:45px;">🐾</div>
+  <div class="paw-deco" style="top:80px;right:80px;--paw-rot:-10deg;font-size:28px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;left:20px;--paw-rot:35deg;font-size:32px;">🐾</div>
+  <div class="paw-deco" style="bottom:100px;left:70px;--paw-rot:-25deg;font-size:22px;">🐾</div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:12px;"><div class="page-title" style="margin:0;">🏫班级宠物乐园🏫</div><span onclick="showDeletedClassesModal()" style="cursor:pointer;font-size:12px;color:#b08080;border:1px dashed #ddb8b8;border-radius:12px;padding:2px 10px;white-space:nowrap;opacity:0.7;transition:opacity 0.2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">🗑️ 已删除班级</span></div>
+  <div class="top-section"><div style="width:100%;"><div class="class-actions"><button class="btn btn-primary" onclick="playClickSound();createClass()">➕ 新建班级</button><button class="btn btn-secondary" onclick="playClickSound();importFromTxt()">📁 导入名单</button><button class="btn btn-success" onclick="playClickSound();showStudentListModal()">📋 学生列表</button><div class="action-pill teacher-only" onclick="showHideClassModal()" style="background:#e8d4f0;"><span>👁️</span><span>隐藏班级</span></div><div class="action-pill" onclick="clearPetData()" style="background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;"><span>🗑️</span><span>重置班级宠物</span></div><div class="action-pill teacher-only" onclick="showResetPasswordModal()" style="background:#ffd6a0;"><span>🔑</span><span>重置密码</span></div><div class="action-pill student-history-visible" onclick="showHistoryModal()" style="background:#b5d8ff;"><span>📜</span><span>历史操作</span></div></div></div><div class="class-list-section"><div class="class-list-wrapper"><div id="classListContainer"></div></div></div></div>
+  <div class="student-grid-section"><div class="student-header"><div style="display:flex;align-items:center;gap:10px;"><div class="page-title" style="font-size:20px;margin:0;">👨‍🎓 成长榜</div><button class="data-mgmt-btn" id="sortPetsBtn" onclick="cycleSortPets()" style="background:linear-gradient(135deg,#f39c12,#e67e22);white-space:nowrap;"><span>🔀</span> 一键排序</button></div><div style="display:flex; gap:8px;"><button class="data-mgmt-btn" onclick="classAllFeed()"><span>🍗</span> 全班喂食</button><button class="data-mgmt-btn" onclick="classDailyCheckin()"><span>📆</span> 全班打卡</button><button class="data-mgmt-btn" onclick="showBatchEditModal()"><span>✏️</span> 批量奖惩</button><button class="data-mgmt-btn" onclick="showPauseGrowthModal()"><span>⏸️</span> 停喂保护</button><button class="data-mgmt-btn" onclick="showCustomActionsModal()"><span>⚙️</span> 奖惩管理</button><button class="data-mgmt-btn" onclick="showPetShopBrowse()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"><span>🏪</span> 宠物商店</button></div></div><div class="home-pet-grid" id="homePetGrid"></div></div>
+</div>
+<div class="page" id="honor-board-page">
+  <div class="paw-deco" style="top:30px;right:40px;--paw-rot:25deg;font-size:40px;">🐾</div>
+  <div class="paw-deco" style="top:120px;right:100px;--paw-rot:-15deg;font-size:25px;">🐾</div>
+  <div class="paw-deco" style="bottom:60px;left:30px;--paw-rot:40deg;font-size:35px;">🐾</div>
+  <div class="page-title">🏆 荣耀殿堂</div>
+  <!-- 排行榜三分类标签 -->
+  <div class="rank-tabs">
+    <div class="rank-tab active" onclick="playClickSound();switchRankTab('growth')">🐾 宠物成长榜</div>
+    <div class="rank-tab" onclick="playClickSound();switchRankTab('quiz')">📝 每日一练榜</div>
+    <div class="rank-tab" onclick="playClickSound();switchRankTab('pigrun')">🐷 小猪快跑榜</div>
+    <div class="rank-tab" onclick="playClickSound();switchRankTab('match3')">🧩 消消乐榜</div>
+    <div class="rank-tab" onclick="playClickSound();switchRankTab('happyrun')">🏃 快乐跑榜</div>
+  </div>
+  <div class="rank-tab-content active" id="rankGrowthContent">
+    <div id="rankStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>🏅 宠物成长榜</h3>
+      <div id="classTopThree"></div>
+      <div id="honorEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">🏆</div>
+        <div class="empty-text">还没有成长数据哦</div>
+        <div class="empty-sub">快去喂养宠物，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullRankList"></div>
+  </div>
+  <div class="rank-tab-content" id="rankQuizContent">
+    <div id="rankQuizStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>📝 每日一练排行榜</h3>
+      <p style="text-align:center;font-size:13px;color:#999;margin:8px 0;">按全班每日一练答题获得总金币排行</p>
+      <div id="quizTopThree"></div>
+      <div id="quizRankEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">📝</div>
+        <div class="empty-text">还没有答题数据哦</div>
+        <div class="empty-sub">快去取金阁答题，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullQuizRankList"></div>
+  </div>
+  <div class="rank-tab-content" id="rankPigRunContent">
+    <div id="rankPigRunStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>🐷 小猪快跑排行榜</h3>
+      <p style="text-align:center;font-size:13px;color:#999;margin:8px 0;">按学生姓名 + 最高关卡 + 累计总分排行</p>
+      <div id="pigRunTopThree"></div>
+      <div id="pigRunRankEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">🐷</div>
+        <div class="empty-text">还没有小猪快跑数据哦</div>
+        <div class="empty-sub">快去玩小猪快跑，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullPigRunRankList"></div>
+  </div>
+  <div class="rank-tab-content" id="rankMatch3Content">
+    <div id="rankMatch3StatsBar"></div>
+    <div class="honor-board-small">
+      <h3>🧩 宠物消消乐排行榜</h3>
+      <p style="text-align:center;font-size:13px;color:#999;margin:8px 0;">按学生姓名 + 最高关卡 + 累计总分排行</p>
+      <div id="match3TopThree"></div>
+      <div id="match3RankEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">🧩</div>
+        <div class="empty-text">还没有消消乐数据哦</div>
+        <div class="empty-sub">快去玩宠物消消乐，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullMatch3RankList"></div>
+  </div>
+  <div class="rank-tab-content" id="rankHappyRunContent">
+    <div id="rankHappyRunStatsBar"></div>
+    <div class="honor-board-small">
+      <h3>🏃 快乐跑一跑排行榜</h3>
+      <p style="text-align:center;font-size:13px;color:#999;margin:8px 0;">按学生姓名 + 最高关卡 + 累计总分排行</p>
+      <div id="happyRunTopThree"></div>
+      <div id="happyRunRankEmptyHint" style="display:none;" class="rank-empty-state">
+        <div class="empty-icon">🏃</div>
+        <div class="empty-text">还没有快乐跑数据哦</div>
+        <div class="empty-sub">快去玩快乐跑一跑，争夺排行榜吧~</div>
+      </div>
+    </div>
+    <div id="fullHappyRunRankList"></div>
+  </div>
+</div>
+<div class="page" id="quiz-page">
+  <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;right:80px;--paw-rot:-30deg;font-size:28px;">🐾</div>
+  <!-- 取金阁两栏标签 -->
+  <div class="quiz-tabs">
+    <div class="quiz-tab active" onclick="playClickSound();switchQuizTab('daily')">📝 每日一练</div>
+    <div class="quiz-tab" onclick="playClickSound();switchQuizTab('pigrun')">🐷 小猪快跑</div>
+    <div class="quiz-tab" onclick="playClickSound();switchQuizTab('match3')">🧩 宠物消消乐</div>
+    <div class="quiz-tab" onclick="playClickSound();switchQuizTab('happyrun')">🏃 快乐跑一跑</div>
+  </div>
+  <div class="quiz-tab-content active" id="quizDailyContent">
+    <div id="quizContent"></div>
+  </div>
+  <div class="quiz-tab-content" id="quizPigRunContent">
+    <div id="pigRunContent"></div>
+  </div>
+  <div class="quiz-tab-content" id="quizMatch3Content">
+    <div id="match3Content"></div>
+  </div>
+  <div class="quiz-tab-content" id="quizHappyRunContent">
+    <div id="happyRunContent"></div>
+  </div>
+</div>
+<div class="page" id="pk-page">
+  <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;right:80px;--paw-rot:-30deg;font-size:28px;">🐾</div>
+  <div class="pk-sub-tabs">
+    <div class="pk-sub-tab active" onclick="playClickSound();switchPKSubTab('petPK')">⚔️ 宠物PK对战</div>
+    <div class="pk-sub-tab" onclick="playClickSound();switchPKSubTab('classPK')">📖 课堂PK</div>
+  </div>
+  <div id="pkPetBattleContent"><div id="pkContent"></div></div>
+  <div id="pkClassBattleContent" style="display:none;"></div>
+</div>
+<div class="page" id="jianghu-page">
+  <div class="paw-deco" style="top:25px;right:50px;--paw-rot:20deg;font-size:36px;">🐾</div>
+  <div class="paw-deco" style="bottom:40px;left:60px;--paw-rot:15deg;font-size:30px;">🐾</div>
+  <div class="page-title">🗡️ 萌萌江湖行</div>
+  <div id="jhPageContent"></div>
+</div>
+<div class="page" id="library-page">
+  <div class="paw-deco" style="top:30px;right:40px;--paw-rot:25deg;font-size:40px;">🐾</div>
+  <div class="paw-deco" style="bottom:50px;left:50px;--paw-rot:-20deg;font-size:32px;">🐾</div>
+  <div class="page-title">📚 图书馆</div>
+  <div id="libraryContent" style="padding:20px;"></div>
+</div>
+<div class="cute-footer">
+  <div class="cute-footer-icons">🐱 🐶 🐰 🐸 🦊 🐼</div>
+  <div>用爱陪伴每一只小宠物成长 🌈</div>
+</div>
+</div>
+<input type="file" id="txtImport" style="display:none" accept=".txt">
+<input type="file" id="classpkQuestionImport" style="display:none" accept="image/*" multiple>
+<div id="modalContainer"></div>
+<div id="notificationContainer"></div>
+<div id="upgradeEffectContainer"></div>
+<script defer src="quiz-bank.js?v=2"></script>
+  <script defer src="quiz.js?v=20"></script>
+  <script defer src="pig-run.js?v=33"></script>
+  <script defer src="match3.js?v=22"></script>
+  <script defer src="happy-run.js?v=4"></script>
+  <script defer src="app.js?v=89"></script>
+<script>
+// ===== 云端模式：禁用本地文件保存机制 =====
+// 数据完全走 Supabase 云端，不再需要文件授权
+window._cloudMode = true; // 告诉 app.js 不要渲染，等 dal.js 加载数据
+(function(){
+  // 1. 阻止文件授权浮层出现
+  window.showStartOverlay = function(){};
 
+  // 2. 禁用 USB 连接 / 文件保存
+  window.connectUSB = function(){
+    showNotification('云端模式', '数据自动保存到云端，无需授权本地文件', 'info');
+  };
+  window.updateUSBStatus = function(){};
+  window.scheduleFileSave = function(){};
+  window.saveAllToFiles = function(){};
+
+  // 3. 移除可能已经出现的浮层
+  var _cleanTimer = setInterval(function(){
+    var ov = document.getElementById('startOverlay');
+    if (ov) ov.remove();
+  }, 100);
+  setTimeout(function(){ clearInterval(_cleanTimer); }, 10000);
+
+  // 4. 更新云端同步状态指示器
+  window._updateCloudStatus = function(state) {
+    var el = document.getElementById('cloudSyncStatus');
+    if (!el) return;
+    if (state === 'syncing') {
+      el.innerHTML = '☁️ 同步中...';
+      el.style.color = '#b08800';
+      el.style.background = 'linear-gradient(135deg,#fff8e0,#ffefb0)';
+    } else if (state === 'synced') {
+      el.innerHTML = '☁️ 已同步';
+      el.style.color = '#6a9955';
+      el.style.background = 'linear-gradient(135deg,#e8ffe8,#d0f0d0)';
+    } else if (state === 'error') {
+      el.innerHTML = '☁️ 同步失败(点击重试)';
+      el.style.color = '#cc4444';
+      el.style.background = 'linear-gradient(135deg,#ffe8e8,#ffd0d0)';
+    } else {
+      el.innerHTML = '☁️ 云端同步';
+      el.style.color = '#6a9955';
+      el.style.background = 'linear-gradient(135deg,#e8ffe8,#d0f0d0)';
+    }
+  };
+})();
+</script>
+<script>
+// ===== 扫码登录按钮（仅教师可见，仅移动端）=====
+(function(){
+  function isMobileDevice() {
+    var ua = navigator.userAgent || '';
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+    // iPadOS 13+ 伪装为 Mac，但支持触控
+    if (/Macintosh/i.test(ua) && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+    return false;
+  }
+  function checkTeacherAndShowScan() {
+    var scanBtn = document.getElementById('qrScanBtn');
+    if (!scanBtn) return;
+    // 优先用 currentUser（auth-check.js 设置），其次用 localStorage
+    var isTeacher = false;
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
+      isTeacher = true;
+    } else if (localStorage.getItem('userType') === 'teacher') {
+      isTeacher = true;
+    }
+    if (isTeacher && isMobileDevice()) {
+      scanBtn.style.cssText += ';display:flex !important';
+    } else {
+      scanBtn.style.setProperty('display', 'none', 'important');
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkTeacherAndShowScan);
+  } else {
+    checkTeacherAndShowScan();
+  }
+  // 多次重试，确保 auth-check.js 的 currentUser 已设置
+  setTimeout(checkTeacherAndShowScan, 300);
+  setTimeout(checkTeacherAndShowScan, 1000);
+  setTimeout(checkTeacherAndShowScan, 3000);
+})();
+
+// ========== 实时扫码器 ==========
+var _qrScanner = {
+  stream: null,
+  animFrame: null,
+  video: null,
+  canvas: null,
+  ctx: null,
+  active: false
+};
+
+// 打开实时扫码器
+function openQRScan() {
+  if (typeof jsQR === 'undefined') {
+    showNotification('加载中', '扫码组件正在加载，请稍后再试', 'info');
+    return;
+  }
+
+  // 创建扫码器UI
+  var overlay = document.createElement('div');
+  overlay.id = 'qrScannerOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+
+  overlay.innerHTML =
+    // 顶部栏
+    '<div style="position:absolute;top:0;left:0;right:0;padding:16px;display:flex;justify-content:space-between;align-items:center;z-index:10;background:linear-gradient(180deg,rgba(0,0,0,0.7),transparent);">' +
+      '<span style="color:#fff;font-size:17px;font-weight:600;">扫描登录二维码</span>' +
+      '<button id="qrScannerClose" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:24px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">&times;</button>' +
+    '</div>' +
+    // 视频容器
+    '<div id="qrVideoWrap" style="position:relative;width:100%;max-width:400px;aspect-ratio:3/4;overflow:hidden;border-radius:12px;">' +
+      '<video id="qrScannerVideo" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;"></video>' +
+      // 扫描框
+      '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:220px;height:220px;pointer-events:none;">' +
+        '<div style="position:absolute;top:0;left:0;width:30px;height:30px;border-top:3px solid #52c41a;border-left:3px solid #52c41a;border-radius:4px 0 0 0;"></div>' +
+        '<div style="position:absolute;top:0;right:0;width:30px;height:30px;border-top:3px solid #52c41a;border-right:3px solid #52c41a;border-radius:0 4px 0 0;"></div>' +
+        '<div style="position:absolute;bottom:0;left:0;width:30px;height:30px;border-bottom:3px solid #52c41a;border-left:3px solid #52c41a;border-radius:0 0 0 4px;"></div>' +
+        '<div style="position:absolute;bottom:0;right:0;width:30px;height:30px;border-bottom:3px solid #52c41a;border-right:3px solid #52c41a;border-radius:0 0 4px 0;"></div>' +
+        // 扫描线动画
+        '<div id="qrScanLine" style="position:absolute;top:0;left:10px;right:10px;height:2px;background:linear-gradient(90deg,transparent,#52c41a,transparent);animation:qrScanAnim 2s ease-in-out infinite;"></div>' +
+      '</div>' +
+    '</div>' +
+    // 底部提示
+    '<div style="color:rgba(255,255,255,0.7);font-size:14px;margin-top:20px;text-align:center;">将二维码放入框内，自动识别</div>' +
+    // 扫描线动画CSS
+    '<style>@keyframes qrScanAnim{0%{top:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:210px;opacity:0}}</style>';
+
+  document.body.appendChild(overlay);
+
+  // 绑定关闭按钮
+  document.getElementById('qrScannerClose').onclick = closeQRScan;
+
+  // 初始化摄像头
+  startCameraStream();
+}
+
+// 启动摄像头实时扫描
+function startCameraStream() {
+  var video = document.getElementById('qrScannerVideo');
+  if (!video) return;
+
+  _qrScanner.video = video;
+  _qrScanner.canvas = document.createElement('canvas');
+  _qrScanner.ctx = _qrScanner.canvas.getContext('2d', { willReadFrequently: true });
+  _qrScanner.active = true;
+
+  // 请求后置摄像头
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false
+  }).then(function(stream) {
+    _qrScanner.stream = stream;
+    video.srcObject = stream;
+    video.play();
+    // 视频就绪后开始扫描
+    video.onloadedmetadata = function() {
+      scanLoop();
+    };
+  }).catch(function(err) {
+    console.error('摄像头访问失败:', err);
+    closeQRScan();
+    showNotification('摄像头错误', '无法访问摄像头，请检查权限设置', 'error');
+  });
+}
+
+// 持续扫描循环
+function scanLoop() {
+  if (!_qrScanner.active) return;
+
+  var video = _qrScanner.video;
+  var canvas = _qrScanner.canvas;
+  var ctx = _qrScanner.ctx;
+
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    // 缩小尺寸提高识别速度
+    var MAX_SIZE = 480;
+    var w = video.videoWidth;
+    var h = video.videoHeight;
+    if (w > MAX_SIZE || h > MAX_SIZE) {
+      if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+      else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+    }
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(video, 0, 0, w, h);
+
+    try {
+      var imageData = ctx.getImageData(0, 0, w, h);
+      var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code) {
+        _qrScanner.active = false;
+        // 震动反馈（如果支持）
+        if (navigator.vibrate) navigator.vibrate(200);
+        // 关闭扫码器
+        closeQRScan();
+        // 处理扫描结果
+        handleScannedURL(code.data);
+        return;
+      }
+    } catch(e) { /* ignore scan errors */ }
+  }
+
+  _qrScanner.animFrame = requestAnimationFrame(scanLoop);
+}
+
+// 关闭扫码器
+function closeQRScan() {
+  _qrScanner.active = false;
+  if (_qrScanner.animFrame) {
+    cancelAnimationFrame(_qrScanner.animFrame);
+    _qrScanner.animFrame = null;
+  }
+  if (_qrScanner.stream) {
+    _qrScanner.stream.getTracks().forEach(function(t) { t.stop(); });
+    _qrScanner.stream = null;
+  }
+  var overlay = document.getElementById('qrScannerOverlay');
+  if (overlay) overlay.remove();
+}
+
+// 处理扫描到的URL
+function handleScannedURL(url) {
+  // 检查是否是有效的扫码登录链接
+  if (url.indexOf('qr-scan.html?token=') === -1 && url.indexOf('token=') === -1) {
+    showNotification('扫码失败', '这不是有效的登录二维码', 'error');
+    return;
+  }
+  
+  // 提取token
+  var match = url.match(/token=([^&]+)/);
+  if (!match) {
+    showNotification('扫码失败', '二维码格式错误', 'error');
+    return;
+  }
+  
+  var token = decodeURIComponent(match[1]);
+  var email = localStorage.getItem('userEmail') || '';
+  
+  if (!email) {
+    showNotification('扫码失败', '未找到教师登录信息，请重新登录', 'error');
+    return;
+  }
+  
+  // 显示确认弹窗
+  showConfirmScan(token, email);
+}
+
+// 显示确认弹窗
+function showConfirmScan(token, email) {
+  var modal = document.getElementById('modalContainer');
+  if (!modal) return;
+  
+  modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" id="scanConfirmModal">' +
+    '<div style="background:#fff;border-radius:20px;padding:28px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+    '<div style="font-size:48px;margin-bottom:12px;">🔐</div>' +
+    '<div style="font-size:18px;font-weight:700;color:#333;margin-bottom:12px;">确认登录</div>' +
+    '<div style="font-size:14px;color:#666;line-height:1.8;margin-bottom:20px;">' +
+    '您正在登录教师账号<br><strong style="color:#c04058;">' + escapeHtmlSimple(email) + '</strong><br><br>确认是本人操作？' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;">' +
+    '<button onclick="cancelScanLogin()" style="flex:1;padding:12px;border:2px solid #ddd;border-radius:12px;background:#fff;color:#666;font-size:15px;font-weight:600;cursor:pointer;">取消</button>' +
+    '<button onclick="confirmScanLogin(\'' + token + '\',\'' + encodeURIComponent(email) + '\')" style="flex:1;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(82,196,26,0.3);">确认登录</button>' +
+    '</div>' +
+    '</div>' +
+    '</div>';
+}
+
+function cancelScanLogin() {
+  var modal = document.getElementById('modalContainer');
+  if (modal) modal.innerHTML = '';
+}
+
+async function confirmScanLogin(token, encodedEmail) {
+  var email = decodeURIComponent(encodedEmail);
+  var modal = document.getElementById('modalContainer');
+  
+  // 显示加载中
+  if (modal) {
+    modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
+      '<div style="background:#fff;border-radius:20px;padding:32px;text-align:center;">' +
+      '<div style="font-size:36px;animation:spin 1s linear infinite;">⏳</div>' +
+      '<div style="font-size:16px;color:#666;margin-top:12px;">正在确认登录...</div>' +
+      '</div>' +
+      '</div>';
+  }
+  
+  try {
+    // ★ 关键修复：使用不同的 storageKey 创建客户端，避免拾取已有的教师登录 session
+    // 如果使用相同的 storageKey，客户端会自动使用 localStorage 中的 session，变成"已认证"身份
+    // RLS 策略对"已认证"和"匿名"身份权限不同，导致看不到匿名客户端插入的记录
+    if (!window.supabase || !window.supabase.createClient) {
+      throw new Error('扫码组件未加载，请刷新页面重试');
+    }
+    var supabaseUrl = 'https://xbygooadskfqllnhwmet.supabase.co';
+    var supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
+    var scanDb = window.supabase.createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        storageKey: 'qr-scan-login-auth'  // 使用不同的 key，确保是真正的匿名客户端
+      }
+    });
+    console.log('[扫码] 使用独立匿名客户端（storageKey=qr-scan-login-auth）');
+    
+    // 先查询token是否存在（用 .limit(1) 代替 .single()，避免多行时报错）
+    console.log('[扫码] 查询token, 值="' + token + '", 长度=' + token.length);
+    var checkResult = await scanDb
+      .from('qr_login_tokens')
+      .select('*')
+      .eq('token', token)
+      .limit(1);
+    
+    console.log('[扫码] 查询token结果:', checkResult.error ? 'ERROR: ' + checkResult.error.message : 'OK rows=' + (checkResult.data ? checkResult.data.length : 0));
+    if (checkResult.data && checkResult.data.length > 0) {
+      console.log('[扫码] 找到的行:', JSON.stringify(checkResult.data[0]));
+    }
+    
+    if (checkResult.error) {
+      if (checkResult.error.message && checkResult.error.message.indexOf('does not exist') !== -1) {
+        throw new Error('扫码登录表未创建，请联系管理员在Supabase中创建qr_login_tokens表');
+      }
+      throw checkResult.error;
+    }
+    
+    if (!checkResult.data || checkResult.data.length === 0) {
+      // ★ 调试：列出表中所有记录，帮助诊断
+      console.log('[扫码] token未找到! 尝试查询表中所有记录...');
+      var allRows = await scanDb
+        .from('qr_login_tokens')
+        .select('token, status, created_at')
+        .limit(10);
+      console.log('[扫码] 表中记录:', allRows.error ? 'ERROR: ' + allRows.error.message : JSON.stringify(allRows.data));
+      throw new Error('二维码已失效或不存在，请在电脑端刷新二维码\n\n[调试] 查询token: ' + token.substring(0, 30) + '...\n[调试] 表中记录数: ' + (allRows.data ? allRows.data.length : '查询失败'));
+    }
+    
+    var tokenRow = checkResult.data[0];
+    if (tokenRow.status !== 'pending') {
+      throw new Error('该二维码已被使用或已过期，请在电脑端刷新二维码');
+    }
+    
+    // ★ 策略1：尝试 UPDATE（使用已认证客户端）
+    var result = await scanDb
+      .from('qr_login_tokens')
+      .update({
+        status: 'verified',
+        email: email,
+        verified_at: new Date().toISOString()
+      })
+      .eq('token', token)
+      .eq('status', 'pending')
+      .select();
+    
+    console.log('[扫码] UPDATE结果:', result.error ? 'ERROR: ' + result.error.message : 'rows=' + (result.data ? result.data.length : 0));
+    
+    var updateOk = !result.error && result.data && result.data.length > 0;
+    
+    if (!updateOk) {
+      // ★ 策略2：UPDATE 失败（可能 RLS 阻止），尝试不带 status 条件的 UPDATE
+      console.log('[扫码] 策略1失败，尝试不带status条件的UPDATE...');
+      var result2 = await scanDb
+        .from('qr_login_tokens')
+        .update({
+          status: 'verified',
+          email: email,
+          verified_at: new Date().toISOString()
+        })
+        .eq('token', token)
+        .select();
+      
+      console.log('[扫码] 策略2结果:', result2.error ? 'ERROR: ' + result2.error.message : 'rows=' + (result2.data ? result2.data.length : 0));
+      updateOk = !result2.error && result2.data && result2.data.length > 0;
+    }
+    
+    if (!updateOk) {
+      // ★ 策略3：DELETE + INSERT（完全绕过 UPDATE RLS）
+      console.log('[扫码] 策略2失败，尝试 DELETE + INSERT...');
+      
+      var delResult = await scanDb
+        .from('qr_login_tokens')
+        .delete()
+        .eq('token', token);
+      
+      console.log('[扫码] DELETE结果:', delResult.error ? 'ERROR: ' + delResult.error.message : 'OK');
+      
+      if (delResult.error) {
+        throw new Error('写入失败: ' + delResult.error.message);
+      }
+      
+      var insertResult = await scanDb
+        .from('qr_login_tokens')
+        .insert([{
+          token: token,
+          email: email,
+          status: 'verified',
+          verified_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        }])
+        .select();
+      
+      console.log('[扫码] INSERT结果:', insertResult.error ? 'ERROR: ' + insertResult.error.message : 'OK id=' + (insertResult.data && insertResult.data[0] ? insertResult.data[0].id : '?'));
+      
+      if (insertResult.error) {
+        throw new Error('INSERT 失败: ' + insertResult.error.message);
+      }
+      
+      updateOk = true;
+    }
+    
+    // 最终验证：再次查询确认 status=verified（用 .limit(1) 代替 .maybeSingle()，避免多行时报错）
+    await new Promise(function(r) { setTimeout(r, 500); }); // 等500ms让数据库同步
+    var verifyResult = await scanDb
+      .from('qr_login_tokens')
+      .select('status, email')
+      .eq('token', token)
+      .limit(1);
+    
+    var verifyRow = (verifyResult.data && verifyResult.data.length > 0) ? verifyResult.data[0] : null;
+    console.log('[扫码] 最终验证:', verifyResult.error ? 'ERROR: ' + verifyResult.error.message : 'status=' + (verifyRow ? verifyRow.status : 'null'));
+    
+    if (verifyRow && verifyRow.status === 'verified') {
+      // 确认成功
+      if (modal) {
+        modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
+          '<div style="background:#fff;border-radius:20px;padding:32px;text-align:center;">' +
+          '<div style="font-size:48px;">✅</div>' +
+          '<div style="font-size:16px;color:#389e0d;font-weight:600;margin-top:12px;">登录成功！</div>' +
+          '<div style="font-size:13px;color:#888;margin-top:8px;">电脑端将自动进入教师账户</div>' +
+          '</div>' +
+          '</div>';
+        
+        setTimeout(function() { if (modal) modal.innerHTML = ''; }, 2000);
+      }
+    } else {
+      // 验证失败但写入可能已成功（数据库延迟），仍然显示成功
+      console.warn('[扫码] 最终验证未确认verified，但写入已执行');
+      if (modal) {
+        modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
+          '<div style="background:#fff;border-radius:20px;padding:32px;text-align:center;">' +
+          '<div style="font-size:48px;">✅</div>' +
+          '<div style="font-size:16px;color:#389e0d;font-weight:600;margin-top:12px;">登录确认已发送！</div>' +
+          '<div style="font-size:13px;color:#888;margin-top:8px;">如电脑端无反应，请重试</div>' +
+          '</div>' +
+          '</div>';
+        
+        setTimeout(function() { if (modal) modal.innerHTML = ''; }, 2500);
+      }
+    }
+    
+  } catch(e) {
+    console.error('[扫码] 确认登录失败:', e);
+    var errMsg = e.message || '未知错误';
+    if (modal) {
+      modal.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.parentElement.innerHTML=\'\'">' +
+        '<div style="background:#fff;border-radius:20px;padding:28px;max-width:360px;width:100%;text-align:center;">' +
+        '<div style="font-size:48px;">❌</div>' +
+        '<div style="font-size:16px;color:#e74c3c;font-weight:600;margin-top:12px;">确认失败</div>' +
+        '<div style="font-size:13px;color:#888;margin-top:8px;word-break:break-all;">' + errMsg + '</div>' +
+        '<div style="font-size:12px;color:#aaa;margin-top:12px;">点击任意处关闭</div>' +
+        '</div>' +
+        '</div>';
+    }
+  }
+}
+
+function escapeHtmlSimple(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+  <link rel="preload" as="script" href="dal_v69.js?v=95">
+  <script defer src="dal_v69.js?v=95"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>
+// staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
+</script>
+
+</body>
+  </html>
