@@ -1,5 +1,5 @@
 /**
- * dal.js v75 — Robust Data Access Layer with Smart Merge
+ * dal.js v77 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1657,8 +1657,6 @@ function _syncTeacherToSupabase() {
               return db.from('students').update({ quiz_state: qs }).eq('id', stu.id).then(function(qr) {
                 if (qr.error) console.warn('[DAL] teacher quiz_state save failed:', qr.error.message);
               });
-            }
-          });
             }
           });
         });
