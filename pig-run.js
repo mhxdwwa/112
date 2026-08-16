@@ -119,7 +119,7 @@
     
     // 保存数据
     if (typeof saveClassData === 'function') {
-      saveClassData();
+      saveClassData('level');
     }
     
     // 同步到 Supabase
@@ -225,7 +225,7 @@
 
     // 保存到本地存储（确保道具数量等变更被持久化）
     if (typeof saveClassData === 'function') {
-      saveClassData();
+      saveClassData('level');
     }
 
     // 保存到 Supabase

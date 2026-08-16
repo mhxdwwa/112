@@ -150,6 +150,124 @@ function _debouncedRealtimeRefresh(source) {
   }, 3000);
 }
 
+/* ===== BroadcastChannel 定向增量刷新 (v96) ===== */
+// 用于跨标签页即时通知数据变化，避免全量拉取
+var _broadcastChannel = null;
+var _broadcastDebounceTimer = null;
+var _BROADCAST_DEBOUNCE_MS = 200; // 200ms 内多次广播合并为一次渲染
+
+function _initBroadcastChannel() {
+  try {
+    if (typeof BroadcastChannel === 'undefined') {
+      console.log('[DAL] BroadcastChannel not supported in this browser');
+      return;
+    }
+    _broadcastChannel = new BroadcastChannel('pet-world-changes');
+    _broadcastChannel.onmessage = function(event) {
+      _handleBroadcastChange(event.data);
+    };
+    console.log('[DAL] v96 BroadcastChannel initialized');
+  } catch(e) {
+    console.warn('[DAL] BroadcastChannel init failed:', e.message);
+  }
+}
+
+// 发送变更通知 —— 只发"改了什么类型"，不发完整数据
+function _broadcastChange(changeType, detail) {
+  if (!_broadcastChannel) return;
+  try {
+    var myId = null;
+    if (typeof currentUser !== 'undefined' && currentUser) {
+      myId = currentUser.studentId || currentUser.id;
+    }
+    _broadcastChannel.postMessage({
+      type: changeType,
+      studentId: myId,
+      classId: (typeof currentClassId !== 'undefined') ? currentClassId : null,
+      detail: detail || {},
+      ts: Date.now()
+    });
+  } catch(e) {
+    // 广播失败不影响主流程
+  }
+}
+
+// 接收变更通知 —— 定向刷新对应UI区域，不拉全量数据
+function _handleBroadcastChange(msg) {
+  if (!msg || !msg.type) return;
+
+  // 忽略自己发的消息（自己保存的数据本地已经是最新的）
+  var myId = null;
+  if (typeof currentUser !== 'undefined' && currentUser) {
+    myId = currentUser.studentId || currentUser.id;
+  }
+  if (msg.studentId && myId && msg.studentId.toString() === myId.toString()) return;
+
+  console.log('[DAL] v96 📡 Broadcast received:', msg.type, msg.detail);
+
+  // 使用 debounce 合并短时间内的多次广播
+  if (_broadcastDebounceTimer) clearTimeout(_broadcastDebounceTimer);
+  _broadcastDebounceTimer = setTimeout(function() {
+    _broadcastDebounceTimer = null;
+    _dispatchBroadcastRender(msg);
+  }, _BROADCAST_DEBOUNCE_MS);
+}
+
+// 根据变更类型决定刷新哪些UI区域
+function _dispatchBroadcastRender(msg) {
+  // 检查 scheduleRender 是否可用
+  if (typeof scheduleRender !== 'function') {
+    // 降级：全量刷新
+    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    return;
+  }
+
+  // 渲染标志位常量（与 app.js 中定义一致）
+  var _RF_GRID = 1, _RF_TOP3 = 2, _RF_PK = 4, _RF_CLASSLIST = 8, _RF_JH = 16;
+
+  switch (msg.type) {
+    case 'pet':
+      // 宠物信息变化（喂食、玩耍、领养等）→ 刷新宠物网格 + 排行榜
+      scheduleRender(_RF_GRID | _RF_TOP3);
+      break;
+
+    case 'coins':
+      // 金币变化（奖励、惩罚、购物等）→ 刷新宠物网格（金币显示在卡片上）+ 排行榜
+      scheduleRender(_RF_GRID | _RF_TOP3);
+      break;
+
+    case 'level':
+    case 'quiz':
+      // 关卡/答题数据变化（快乐跑、小猪快跑等游戏）→ 刷新排行榜
+      scheduleRender(_RF_GRID | _RF_TOP3);
+      break;
+
+    case 'leaderboard':
+      // 排行榜专用变化 → 只刷新排行榜
+      scheduleRender(_RF_TOP3);
+      break;
+
+    case 'pk':
+      // PK数据变化
+      scheduleRender(_RF_PK);
+      break;
+
+    case 'jianghu':
+      // 江湖行数据变化
+      scheduleRender(_RF_JH);
+      break;
+
+    case 'class':
+      // 班级结构变化（增删学生、改班级名等）
+      scheduleRender(_RF_CLASSLIST | _RF_GRID | _RF_TOP3);
+      break;
+
+    default:
+      // 未知类型 → 全量刷新（安全兜底）
+      if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+  }
+}
+
 /* ===== Snapshot Helpers (v7.0) ===== */
 function _takeSnapshot() {
   if (!classesData || !Array.isArray(classesData)) return;
@@ -2346,6 +2464,8 @@ function _setupRealtimeSubscriptions() {
   if (!db || !db.channel) {
     // No Realtime support — start polling immediately
     _startFallbackPolling();
+    // v96: 即使没有 Realtime，也初始化 BroadcastChannel（跨标签页通知仍然有效）
+    _initBroadcastChannel();
     return;
   }
 
@@ -2395,11 +2515,35 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(classChannel);
     channelsCreated++;
 
-    // Subscribe to students table — coalesced refresh on change
+    // Subscribe to students table — v96: targeted refresh based on changed columns
     var studentChannel = db.channel('dal-students-' + _clientId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function() {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        _debouncedRealtimeRefresh('students');
+        // v96: 根据变化的列做定向刷新，减少不必要的全量刷新
+        var columns = payload.columns || [];
+        var hasCoins = false, hasQuizState = false, hasOther = false;
+        for (var i = 0; i < columns.length; i++) {
+          var colName = columns[i].name;
+          if (colName === 'coins') hasCoins = true;
+          else if (colName === 'quiz_state') hasQuizState = true;
+          else if (colName !== 'id' && colName !== 'updated_at') hasOther = true;
+        }
+        if (hasOther) {
+          // 有非 coins/quiz_state 的列变化 → 走全量刷新（安全兜底）
+          _debouncedRealtimeRefresh('students');
+        } else if (hasCoins || hasQuizState) {
+          // 只有 coins 或 quiz_state 变化 → 定向刷新排行榜和宠物网格
+          console.log('[DAL] v96 Students: targeted refresh (coins=' + hasCoins + ', quiz=' + hasQuizState + ')');
+          if (typeof scheduleRender === 'function') {
+            // _RF_GRID=1, _RF_TOP3=2
+            scheduleRender(1 | 2);
+          } else {
+            _debouncedRealtimeRefresh('students:targeted');
+          }
+        } else {
+          // 不确定 → 全量刷新
+          _debouncedRealtimeRefresh('students');
+        }
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
@@ -2407,11 +2551,18 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(studentChannel);
     channelsCreated++;
 
-    // Subscribe to pets table — coalesced refresh on change
+    // Subscribe to pets table — v96: targeted refresh for pet changes
     var petChannel = db.channel('dal-pets-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        _debouncedRealtimeRefresh('pets:' + payload.eventType);
+        // v96: 宠物表变化 → 定向刷新宠物网格和排行榜
+        console.log('[DAL] v96 Pets: targeted refresh (' + payload.eventType + ')');
+        if (typeof scheduleRender === 'function') {
+          // _RF_GRID=1, _RF_TOP3=2
+          scheduleRender(1 | 2);
+        } else {
+          _debouncedRealtimeRefresh('pets:' + payload.eventType);
+        }
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
@@ -2432,6 +2583,9 @@ function _setupRealtimeSubscriptions() {
     // v95: Always start safety-net polling — even when Realtime is active.
     _realtimeLastEventTime = Date.now();
     _startSafetyNetPolling();
+
+    // v96: 初始化 BroadcastChannel 用于跨标签页即时通知
+    _initBroadcastChannel();
   } catch (e) {
     console.warn('[DAL] Realtime setup failed, using polling fallback:', e);
     _startFallbackPolling();
@@ -2509,6 +2663,11 @@ function _cleanupRealtime() {
   _realtimeActive = false;
   _stopFallbackPolling();
   _stopSafetyNetPolling(); // v95
+  // v96: 关闭 BroadcastChannel
+  if (_broadcastChannel) {
+    try { _broadcastChannel.close(); } catch(e) {}
+    _broadcastChannel = null;
+  }
 }
 
 /* ===== Lifecycle ===== */

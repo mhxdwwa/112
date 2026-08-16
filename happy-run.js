@@ -97,7 +97,7 @@
 
     // 保存到本地存储（确保 classesData 变更被持久化到 localStorage）
     if (typeof saveClassData === 'function') {
-      saveClassData();
+      saveClassData('level', { level: gameData.maxLevel, silver: gameData.totalSilver });
     }
 
     // 保存到 Supabase
