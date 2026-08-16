@@ -37,6 +37,8 @@ var _maxRetries = 3;
 var _lastSyncFailed = false;
 var _DAL_VERSION = '88.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
+var _petSyncResults = {}; // v91: Module-level so both _syncStudentToSupabase and _syncToSupabase can access
+var _teacherBaseCoins = {}; // v91: Per-student baseline coins for teacher delta sync (studentId → coins)
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
 
@@ -370,12 +372,16 @@ function _smartRefreshFromSupabase() {
             if (freshStu.coins !== snapCoins && localStu.coins === snapCoins) {
               // Server changed, local didn't → apply
               localStu.coins = freshStu.coins;
+              // v91: Update teacher baseline so next sync computes correct delta
+              _teacherBaseCoins[localStu.id] = freshStu.coins;
               changesApplied++;
             }
             // If local changed too → keep local (we'll sync it soon)
           } else if (freshStu.coins !== localStu.coins) {
             // No snapshot — trust server value
             localStu.coins = freshStu.coins;
+            // v91: Update teacher baseline
+            _teacherBaseCoins[localStu.id] = freshStu.coins;
             changesApplied++;
           }
         }
@@ -685,6 +691,15 @@ function _loadTeacherFromSupabase() {
 
     var newClassesData = _buildTeacherClasses(classes, students, pets);
     classesData = newClassesData;
+
+    // v91: Initialize _teacherBaseCoins for delta-based coin sync.
+    // Records the server's coin values at load time so teacher sync can compute
+    // deltas (teacher rewards) instead of blindly overwriting student spending.
+    newClassesData.forEach(function(cls) {
+      cls.students.forEach(function(stu) {
+        _teacherBaseCoins[stu.id] = stu.coins || 0;
+      });
+    });
 
     console.log('[DAL] Loaded ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
     newClassesData.forEach(function(c) {
@@ -1781,57 +1796,99 @@ function _syncTeacherToSupabase() {
 
     // Wait for all pets, then update ALL students with correct active_pet_id
     return Promise.all(allPetPromises).then(function() {
-        // v43: No need to fetch shop_items from DB — using .update() instead of .upsert()
-        // means student-owned fields (shop_items, equipped_items) are never touched.
-        var studentUpsertPromises = studentsToUpsert.map(function(stu) {
-          var payload = {
-            id: stu.id,
-            name: stu.name,
-            class_id: (classesData.find(function(c) { return c.students.indexOf(stu) >= 0; }) || {}).id || null,
-            coins: stu.coins || 0,
-            last_checkin_date: stu.lastCheckinDate || null,
-            last_jianghu_date: stu.lastJianghuDate || null,
-            last_pk_date: stu.lastPkDate || null,
-            active_pet_id: stu.activePetId || null,
-            pk_count_today: stu.pkCountToday || 0,
-            // v43: REMOVED shop_items and equipped_items — teacher NEVER writes these.
-            // Using .update() (not .upsert()) so only specified fields are modified.
-            // This eliminates ALL race conditions with student shop purchases.
-            password: stu.password || ''
-          };
-          // v43: Use .update() instead of .upsert() to avoid overwriting student-owned
-          // fields (shop_items, equipped_items). .update() only touches listed fields.
-          return db.from('students').update(payload).eq('id', stu.id).then(function(r) {
-            if (r.error) {
-              console.error('[DAL] student update error:', r.error);
-              // v43 fallback: if update fails (e.g., student doesn't exist), try insert
-              var insertPayload = Object.assign({}, payload);
-              delete insertPayload.id;
-              insertPayload.shop_items = '[]';
-              insertPayload.equipped_items = '{}';
-              return db.from('students').insert([Object.assign({ id: stu.id }, insertPayload)]).then(function(insR) {
-                if (insR.error) {
-                  console.error('[DAL] student insert fallback error:', insR.error.message);
-                  // Ultimate fallback: save coins only
-                  return db.from('students').update({ coins: stu.coins || 0 }).eq('id', stu.id).then(function(fr) {
-                    if (fr.error) console.error('[DAL] teacher coins fallback error:', fr.error.message);
-                  });
-                }
-                console.log('[DAL] Student "' + stu.name + '" inserted via fallback (ID: ' + stu.id + ')');
-              });
+        // v91: Fetch fresh student coins from server BEFORE building update payload.
+        // This enables delta-based coin sync for teachers, preventing the race condition
+        // where the teacher's stale local coins overwrite student spending on the server.
+        // The same delta approach used by _syncStudentToSupabase is now applied here.
+        var studentIds = studentsToUpsert.map(function(s) { return s.id; });
+        var freshCoinFetch = studentIds.length > 0
+          ? db.from('students').select('id, coins').in('id', studentIds)
+          : Promise.resolve({ data: [], error: null });
+        return freshCoinFetch.then(function(freshR) {
+          var freshCoinMap = {};
+          if (freshR && freshR.data) {
+            freshR.data.forEach(function(s) { freshCoinMap[s.id] = s.coins || 0; });
+          }
+          // v43: No need to fetch shop_items from DB — using .update() instead of .upsert()
+          // means student-owned fields (shop_items, equipped_items) are never touched.
+          var studentUpsertPromises = studentsToUpsert.map(function(stu) {
+            // v91: Delta-based coin sync for teacher.
+            // Compute how much the teacher changed coins locally since last sync,
+            // then apply that delta on top of the fresh server value.
+            // This preserves BOTH teacher rewards AND student spending.
+            var freshCoins = freshCoinMap[stu.id];
+            var finalCoins;
+            if (freshCoins !== undefined && _teacherBaseCoins[stu.id] !== undefined) {
+              var teacherCoinDelta = (stu.coins || 0) - _teacherBaseCoins[stu.id];
+              finalCoins = freshCoins + teacherCoinDelta;
+              if (finalCoins < 0) finalCoins = 0;
+            } else {
+              // First sync or no baseline — use local value directly
+              finalCoins = stu.coins || 0;
             }
-          }).then(function() {
-            // v30: Save quiz_state separately after update
-            // v75: Skip if quiz_state was recently saved directly (prevent race condition)
-            if (stu.quizState && !window._quizStateLocallyModified) {
-              var qs = typeof stu.quizState === 'string' ? stu.quizState : JSON.stringify(stu.quizState);
-              return db.from('students').update({ quiz_state: qs }).eq('id', stu.id).then(function(qr) {
-                if (qr.error) console.warn('[DAL] teacher quiz_state save failed:', qr.error.message);
-              });
-            }
+            var payload = {
+              id: stu.id,
+              name: stu.name,
+              class_id: (classesData.find(function(c) { return c.students.indexOf(stu) >= 0; }) || {}).id || null,
+              coins: finalCoins,
+              last_checkin_date: stu.lastCheckinDate || null,
+              last_jianghu_date: stu.lastJianghuDate || null,
+              last_pk_date: stu.lastPkDate || null,
+              active_pet_id: stu.activePetId || null,
+              pk_count_today: stu.pkCountToday || 0,
+              // v43: REMOVED shop_items and equipped_items — teacher NEVER writes these.
+              // Using .update() (not .upsert()) so only specified fields are modified.
+              // This eliminates ALL race conditions with student shop purchases.
+              password: stu.password || ''
+            };
+            // v43: Use .update() instead of .upsert() to avoid overwriting student-owned
+            // fields (shop_items, equipped_items). .update() only touches listed fields.
+            return db.from('students').update(payload).eq('id', stu.id).then(function(r) {
+              if (r.error) {
+                console.error('[DAL] student update error:', r.error);
+                // v43 fallback: if update fails (e.g., student doesn't exist), try insert
+                var insertPayload = Object.assign({}, payload);
+                delete insertPayload.id;
+                insertPayload.shop_items = '[]';
+                insertPayload.equipped_items = '{}';
+                return db.from('students').insert([Object.assign({ id: stu.id }, insertPayload)]).then(function(insR) {
+                  if (insR.error) {
+                    console.error('[DAL] student insert fallback error:', insR.error.message);
+                    // Ultimate fallback: save coins only (use delta-based value)
+                    return db.from('students').update({ coins: finalCoins }).eq('id', stu.id).then(function(fr) {
+                      if (fr.error) console.error('[DAL] teacher coins fallback error:', fr.error.message);
+                    });
+                  }
+                  console.log('[DAL] Student "' + stu.name + '" inserted via fallback (ID: ' + stu.id + ')');
+                });
+              }
+            }).then(function() {
+              // v30: Save quiz_state separately after update
+              // v75: Skip if quiz_state was recently saved directly (prevent race condition)
+              if (stu.quizState && !window._quizStateLocallyModified) {
+                var qs = typeof stu.quizState === 'string' ? stu.quizState : JSON.stringify(stu.quizState);
+                return db.from('students').update({ quiz_state: qs }).eq('id', stu.id).then(function(qr) {
+                  if (qr.error) console.warn('[DAL] teacher quiz_state save failed:', qr.error.message);
+                });
+              }
+            });
+          });
+          return Promise.all(studentUpsertPromises).then(function() {
+            // v91: After successful teacher sync, update _teacherBaseCoins for all synced students.
+            // Use the finalCoins values (delta-based) so next sync computes correct deltas.
+            studentsToUpsert.forEach(function(stu) {
+              var freshCoins = freshCoinMap[stu.id];
+              if (freshCoins !== undefined && _teacherBaseCoins[stu.id] !== undefined) {
+                var teacherCoinDelta = (stu.coins || 0) - _teacherBaseCoins[stu.id];
+                var finalCoins = freshCoins + teacherCoinDelta;
+                if (finalCoins < 0) finalCoins = 0;
+                _teacherBaseCoins[stu.id] = finalCoins;
+              } else {
+                _teacherBaseCoins[stu.id] = stu.coins || 0;
+              }
+            });
           });
         });
-        return Promise.all(studentUpsertPromises);
     }).then(function() {
         // === Phase 3b (v44): Save shop_items and equipped_items for ALL students ===
         // v43 removed these from the teacher update payload to prevent race conditions
@@ -2044,7 +2101,7 @@ function _syncStudentToSupabase() {
   // even if pet updates failed (promises always resolve due to internal error handling).
   // This caused growth to appear saved locally but not on server, leading to data loss on refresh.
   var petPromises = [];
-  var _petSyncResults = {}; // petId → true/false
+  _petSyncResults = {}; // v91: Reset module-level var (declared at top of file)
   if (myStudent.pets && myStudent.pets.length > 0) {
     console.log('[DAL] Syncing ' + myStudent.pets.length + ' pets for student ' + studentId);
     myStudent.pets.forEach(function(pet) {
