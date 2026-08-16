@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '87.0';
+var _DAL_VERSION = '88.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -2117,13 +2117,38 @@ function _syncStudentToSupabase() {
         );
       } else {
         // New pet (local negative ID or no ID) — INSERT without id
+        // v88: Added retry and better error handling.
+        // If insert fails, the pet keeps its negative ID. The student update's
+        // active_pet_id is sanitized to null (Fix 1), preventing cascading failure.
+        // The pet will be retried on the next sync cycle.
         console.log('[DAL] Inserting new pet (' + pet.name + '), local id=' + pet.id);
         var oldLocalId = pet.id;
+        var petNameForError = pet.name;
         petPromises.push(
           db.from('pets').insert([payload]).select().then(function(r) {
             if (r.error) {
-              console.error('[DAL] pet insert error:', r.error);
-              return;
+              console.error('[DAL] v88 pet insert error:', r.error.message || r.error);
+              // Retry once with minimal payload (no optional fields)
+              console.warn('[DAL] v88 Retrying pet insert with minimal payload...');
+              return db.from('pets').insert([{
+                student_id: studentId,
+                name: pet.name,
+                level: 1,
+                growth: 0
+              }]).select().then(function(retryR) {
+                if (retryR.error) {
+                  console.error('[DAL] v88 pet insert retry FAILED:', retryR.error.message);
+                  _showPetSyncError(petNameForError);
+                  return;
+                }
+                if (retryR.data && retryR.data[0]) {
+                  pet.id = retryR.data[0].id;
+                  if (myStudent.activePetId === oldLocalId) {
+                    myStudent.activePetId = pet.id;
+                  }
+                  console.log('[DAL] v88 New pet "' + pet.name + '" got Supabase ID on retry: ' + pet.id);
+                }
+              });
             }
             if (r.data && r.data[0]) {
               pet.id = r.data[0].id;
@@ -2132,6 +2157,19 @@ function _syncStudentToSupabase() {
                 myStudent.activePetId = pet.id;
               }
               console.log('[DAL] New pet "' + pet.name + '" got Supabase ID: ' + pet.id);
+            } else {
+              // v88: Insert succeeded but no data returned — try to find the pet
+              console.warn('[DAL] v88 Pet insert returned no data, searching for pet...');
+              return db.from('pets').select('id').eq('student_id', studentId)
+                .order('id', { ascending: false }).limit(1).then(function(findR) {
+                  if (findR.data && findR.data[0] && findR.data[0].id > 0) {
+                    pet.id = findR.data[0].id;
+                    if (myStudent.activePetId === oldLocalId) {
+                      myStudent.activePetId = pet.id;
+                    }
+                    console.log('[DAL] v88 Found new pet ID via lookup: ' + pet.id);
+                  }
+                });
             }
           })
         );
@@ -2149,7 +2187,8 @@ function _syncStudentToSupabase() {
       if (p.id && p.id > 0) _myBasePets[p.id] = p.growth || 0;
     });
     _lastOwnWriteTime = Date.now(); // v86: Protect pet writes from Realtime echo
-    return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today, quiz_state').eq('id', studentId).single();
+    // v88: Added active_pet_id to select — needed to preserve server value when local activePetId is invalid
+    return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, quiz_state').eq('id', studentId).single();
   }).then(function(freshR) {
     // Compute local delta: how much the student changed locally since last sync
     var localCoinDelta = 0;
@@ -2203,6 +2242,19 @@ function _syncStudentToSupabase() {
       }
     }
     var _studentUpsertOk = false;
+    // v88: Ensure active_pet_id is a valid positive integer.
+    // If the active pet still has a negative local ID (insert failed or hasn't completed),
+    // setting active_pet_id to a negative value causes PostgreSQL to reject the ENTIRE
+    // student UPDATE (INT4 constraint violation), cascading into coins-only fallback
+    // which loses shopItems, equippedItems, and all other fields.
+    // Instead of setting to null (which would deactivate the pet), preserve the server's
+    // current value so the active_pet_id is restored on the next sync after pet insert succeeds.
+    var safeActivePetId = myStudent.activePetId;
+    if (safeActivePetId && (safeActivePetId <= 0 || safeActivePetId !== Math.floor(safeActivePetId))) {
+      console.warn('[DAL] v88 active_pet_id is invalid (' + safeActivePetId + '), preserving server value');
+      // Use the server's current value to avoid overwriting with null/negative
+      safeActivePetId = (freshR && freshR.data && freshR.data.active_pet_id) || null;
+    }
     // v43: Use .update() instead of .upsert().
     // .upsert() failed because the payload didn't include class_id (NOT NULL column),
     // causing the ENTIRE upsert to fail. The fallback only saved coins, losing shop_items.
@@ -2215,7 +2267,7 @@ function _syncStudentToSupabase() {
       last_checkin_date: myStudent.lastCheckinDate || null,
       last_jianghu_date: myStudent.lastJianghuDate || null,
       last_pk_date: finalLastPkDate,
-      active_pet_id: myStudent.activePetId || null,
+      active_pet_id: safeActivePetId || null,
       pk_count_today: finalPkCountToday
     }).eq('id', studentId).then(function(r) {
       if (r.error) {
@@ -2251,6 +2303,11 @@ function _syncStudentToSupabase() {
       var shopItemsJson = JSON.stringify(myStudent.shopItems || []);
       var equippedItemsJson = JSON.stringify(myStudent.equippedItems || {});
       
+      // v88: CRITICAL FIX — the shop_items separate save must NOT overwrite the `ok`
+      // return value. Previously, the shop_items .then() returned the Supabase response
+      // object instead of `ok`, causing _lastStudentSyncOk to be {data:...} instead of true.
+      // This broke _myBaseCoins update (=== true check failed), causing delta calculation
+      // errors on subsequent syncs, leading to coins reverting (操作回溯).
       return db.from('students').update({
         shop_items: shopItemsJson,
         equipped_items: equippedItemsJson
@@ -2276,11 +2333,15 @@ function _syncStudentToSupabase() {
             if (qr.error) {
               console.warn('[DAL] quiz_state separate save failed:', qr.error.message);
             }
-            return ok;
+            return ok; // v88: Always return the original student update success flag
           });
         } else if (ok && window._quizStateLocallyModified) {
           console.log('[DAL] v75 Skipping quiz_state save — recently saved directly by quiz system');
         }
+        return ok; // v88: Always return the original student update success flag
+      }).then(function() {
+        // v88: Ensure we ALWAYS return the student update success flag,
+        // regardless of what the shop_items/quiz_state saves returned.
         return ok;
       });
     });
@@ -2357,7 +2418,11 @@ function _syncToSupabase() {
         }
         if (myStu) {
           _myBaseCoins = myStu.coins;
-          (myStu.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+          // v88: Only track pets with valid DB IDs in _myBasePets.
+          // Pets with negative IDs haven't been synced yet and shouldn't be tracked.
+          (myStu.pets || []).forEach(function(p) {
+            if (p.id && p.id > 0) _myBasePets[p.id] = p.growth || 0;
+          });
         }
       } else {
         console.warn('[DAL] Student sync did not confirm success — _myBaseCoins NOT updated (will retry)');
@@ -2747,12 +2812,17 @@ function _setupPageLifecycle() {
           // so if the mobile browser killed the async save from saveCoinsAndQuizState(),
           // the quiz progress (questions answered, coins earned) was lost — causing
           // the "操作回溯" (operation rollback) where students could re-answer questions.
+          // v88: Sanitize active_pet_id — never write negative IDs to DB
+          var safeActivePetIdBeforeUnload = myStudent.activePetId;
+          if (safeActivePetIdBeforeUnload && (safeActivePetIdBeforeUnload <= 0 || safeActivePetIdBeforeUnload !== Math.floor(safeActivePetIdBeforeUnload))) {
+            safeActivePetIdBeforeUnload = null;
+          }
           var payload = {
             coins: myStudent.coins || 0,
             last_checkin_date: myStudent.lastCheckinDate || null,
             last_jianghu_date: myStudent.lastJianghuDate || null,
             last_pk_date: myStudent.lastPkDate || null,
-            active_pet_id: myStudent.activePetId || null,
+            active_pet_id: safeActivePetIdBeforeUnload || null,
             pk_count_today: myStudent.pkCountToday || 0,
             shop_items: JSON.stringify(myStudent.shopItems || []),
             equipped_items: JSON.stringify(myStudent.equippedItems || {}),
@@ -2772,7 +2842,63 @@ function _setupPageLifecycle() {
           // Also save pets synchronously
           if (myStudent.pets && myStudent.pets.length > 0) {
             myStudent.pets.forEach(function(pet) {
-              if (!pet.id || pet.id <= 0) return; // Skip pets without real DB IDs
+              if (!pet.id || pet.id <= 0) {
+                // v88: For new pets without real DB IDs, do a synchronous INSERT
+                if (pet.id && pet.id < 0) {
+                  try {
+                    var newPetPayload = {
+                      student_id: studentId,
+                      name: pet.name,
+                      nickname: pet.nickname || '',
+                      level: pet.level || 1,
+                      growth: pet.growth || 0,
+                      coins: pet.coins || 0,
+                      is_active: (myStudent.activePetId === pet.id),
+                      is_dead: !!pet.isDead,
+                      last_feed_date: pet.lastFeedDate || null,
+                      last_play_date: pet.lastPlayDate || null,
+                      today_feed_count: pet.todayFeedCount || 0,
+                      today_play_count: pet.todayPlayCount || 0,
+                      penalty_streak: pet.penaltyStreak || 0
+                    };
+                    var petXhr = new XMLHttpRequest();
+                    // Use Prefer=return=representation to get the inserted ID back
+                    petXhr.open('POST', baseUrl + '/pets', false);
+                    petXhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                    petXhr.setRequestHeader('apikey', token);
+                    petXhr.setRequestHeader('Content-Type', 'application/json');
+                    petXhr.setRequestHeader('Prefer', 'return=representation');
+                    petXhr.send(JSON.stringify(newPetPayload));
+                    if (petXhr.status >= 200 && petXhr.status < 300) {
+                      try {
+                        var inserted = JSON.parse(petXhr.responseText);
+                        if (inserted && inserted[0] && inserted[0].id) {
+                          pet.id = inserted[0].id;
+                          // Update active_pet_id if this pet is the active one
+                          if (myStudent.activePetId < 0) {
+                            // Re-save student with the correct active_pet_id
+                            var fixXhr = new XMLHttpRequest();
+                            fixXhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
+                            fixXhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                            fixXhr.setRequestHeader('apikey', token);
+                            fixXhr.setRequestHeader('Content-Type', 'application/json');
+                            fixXhr.setRequestHeader('Prefer', 'return=minimal');
+                            fixXhr.send(JSON.stringify({ active_pet_id: pet.id }));
+                          }
+                          console.log('[DAL] v88 beforeunload: new pet "' + pet.name + '" inserted with ID ' + pet.id);
+                        }
+                      } catch(parseErr) {
+                        console.warn('[DAL] v88 beforeunload: pet insert response parse error');
+                      }
+                    } else {
+                      console.error('[DAL] v88 beforeunload: pet insert failed HTTP ' + petXhr.status);
+                    }
+                  } catch(petErr) {
+                    console.error('[DAL] v88 beforeunload: pet insert exception:', petErr.message);
+                  }
+                }
+                return;
+              }
               var petPayload = {
                 growth: pet.growth || 0,
                 level: pet.level || 1,
