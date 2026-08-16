@@ -11,7 +11,7 @@
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap"></noscript>
 <title>🍭宠物世界🍭</title>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -33,7 +33,7 @@
 .data-mgmt-btn { display: none; }
 .data-mgmt-btn.teacher-visible { display: inline-flex !important; }
 .class-actions { display: none; }
-.class-actions.teacher-visible { display: flex !important; }
+.class-actions.teacher-visible { display: grid !important; }
 .teacher-only { display: none; }
 </style>
 <style>
@@ -109,7 +109,7 @@ setTimeout(function() { window._hideDalLoading(); }, 5000);
   <div class="paw-deco" style="bottom:40px;left:20px;--paw-rot:35deg;font-size:32px;">🐾</div>
   <div class="paw-deco" style="bottom:100px;left:70px;--paw-rot:-25deg;font-size:22px;">🐾</div>
   <div style="display:flex;align-items:center;justify-content:center;gap:12px;"><div class="page-title" style="margin:0;">🏫班级宠物乐园🏫</div><span onclick="showDeletedClassesModal()" style="cursor:pointer;font-size:12px;color:#b08080;border:1px dashed #ddb8b8;border-radius:12px;padding:2px 10px;white-space:nowrap;opacity:0.7;transition:opacity 0.2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">🗑️ 已删除班级</span></div>
-  <div class="top-section"><div style="width:100%;"><div class="class-actions"><button class="btn btn-primary" onclick="playClickSound();createClass()">➕ 新建班级</button><button class="btn btn-secondary" onclick="playClickSound();importFromTxt()">📁 导入名单</button><button class="btn btn-success" onclick="playClickSound();showStudentListModal()">📋 学生列表</button></div></div><div class="class-list-section"><div class="class-list-wrapper"><div id="classListContainer"></div><div class="home-stat teacher-only" onclick="showHideClassModal()" style="cursor:pointer; padding:10px 20px; min-width:auto; background: #e8d4f0;"><div>👁️</div><div>隐藏班级</div></div><div class="home-stat" onclick="clearPetData()" style="cursor:pointer; padding:10px 20px; min-width:auto;"><div>🗑️</div><div>重置班级宠物</div></div><div class="home-stat teacher-only" onclick="showResetPasswordModal()" style="cursor:pointer; padding:10px 20px; min-width:auto; background: #ffd6a0;"><div>🔑</div><div>重置密码</div></div><div class="home-stat student-history-visible" onclick="showHistoryModal()" style="cursor:pointer; padding:10px 20px; min-width:auto; background: #b5d8ff;"><div>📜</div><div>历史操作</div></div></div></div></div>
+  <div class="top-section"><div style="width:100%;"><div class="class-actions"><button class="btn btn-primary" onclick="playClickSound();createClass()">➕ 新建班级</button><button class="btn btn-secondary" onclick="playClickSound();importFromTxt()">📁 导入名单</button><button class="btn btn-success" onclick="playClickSound();showStudentListModal()">📋 学生列表</button><div class="action-pill teacher-only" onclick="showHideClassModal()" style="background:#e8d4f0;"><span>👁️</span><span>隐藏班级</span></div><div class="action-pill" onclick="clearPetData()" style="background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;"><span>🗑️</span><span>重置班级宠物</span></div><div class="action-pill teacher-only" onclick="showResetPasswordModal()" style="background:#ffd6a0;"><span>🔑</span><span>重置密码</span></div><div class="action-pill student-history-visible" onclick="showHistoryModal()" style="background:#b5d8ff;"><span>📜</span><span>历史操作</span></div></div></div><div class="class-list-section"><div class="class-list-wrapper"><div id="classListContainer"></div></div></div></div>
   <div class="student-grid-section"><div class="student-header"><div style="display:flex;align-items:center;gap:10px;"><div class="page-title" style="font-size:20px;margin:0;">👨‍🎓 成长榜</div><button class="data-mgmt-btn" id="sortPetsBtn" onclick="cycleSortPets()" style="background:linear-gradient(135deg,#f39c12,#e67e22);white-space:nowrap;"><span>🔀</span> 一键排序</button></div><div style="display:flex; gap:8px;"><button class="data-mgmt-btn" onclick="classAllFeed()"><span>🍗</span> 全班喂食</button><button class="data-mgmt-btn" onclick="classDailyCheckin()"><span>📆</span> 全班打卡</button><button class="data-mgmt-btn" onclick="showBatchEditModal()"><span>✏️</span> 批量奖惩</button><button class="data-mgmt-btn" onclick="showPauseGrowthModal()"><span>⏸️</span> 停喂保护</button><button class="data-mgmt-btn" onclick="showCustomActionsModal()"><span>⚙️</span> 奖惩管理</button><button class="data-mgmt-btn" onclick="showPetShopBrowse()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"><span>🏪</span> 宠物商店</button></div></div><div class="home-pet-grid" id="homePetGrid"></div></div>
 </div>
 <div class="page" id="honor-board-page">
