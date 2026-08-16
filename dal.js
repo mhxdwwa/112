@@ -28,14 +28,14 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 120000; // v54: Fallback polling 2min (was 30s). Only active when Realtime is down.
+var _refreshInterval = 30000; // v96: Fallback polling 30s (was 120s/2min). Only active when Realtime is down.
 var _lastRefreshTime = 0;
 var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
 var _realtimeLastEventTime = 0; // v95: Track last Realtime event arrival for liveness detection
 var _safetyNetTimer = null; // v95: Safety-net poll that runs even when Realtime is "active"
-var _SAFETY_NET_INTERVAL = 15000; // v95: 15s safety-net poll interval
-var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, mark as dead
+var _SAFETY_NET_INTERVAL = 8000; // v95: 8s safety-net poll interval (was 15s, reduced for faster sync)
+var _REALTIME_LIVENESS_TIMEOUT = 30000; // v95: If no Realtime event for 30s, mark as dead (was 45s)
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
@@ -133,21 +133,21 @@ function _capPetGrowth(pet) {
 
 /* ===== Debounce & Self-Write Protection (v7.0) ===== */
 var _refreshDebounceTimer = null;
-var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
+var _REFRESH_DEBOUNCE_MS = 800; // v14: 0.8s debounce for Realtime events (was 1.5s, reduced for faster sync)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
-var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after our own write (was 30s)
+var _OWN_WRITE_IGNORE_MS = 3000; // v14: Ignore Realtime events for 3s after our own write (was 10s, reduced for faster cross-device sync)
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
-// Coalesces multiple events within 3s into a single refresh.
+// Coalesces multiple events within 1s into a single refresh.
 var _realtimeCoalesceTimer = null;
 function _debouncedRealtimeRefresh(source) {
-  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (3s)');
+  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (1s)');
   if (_realtimeCoalesceTimer) return; // already scheduled, skip
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
     _immediateRefreshFromSupabase();
-  }, 3000);
+  }, 1000);
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
@@ -2264,7 +2264,8 @@ function _immediateRefreshFromSupabase() {
   // Reset retry count on successful attempt
   _immediateRefreshRetryCount = 0;
   
-  // Skip own writes (ignore our own changes for 30s)
+  // v96: Reduced own-write protection from 10s to 3s for faster cross-device sync
+  // Skip own writes (ignore our own changes for 3s)
   if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
     console.log('[DAL] Immediate refresh skipped — own write echo (' + 
       Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
@@ -2348,6 +2349,9 @@ function _setupRealtimeSubscriptions() {
     return;
   }
 
+  // 生成唯一客户端ID，避免多客户端通道名称冲突
+  var _clientId = 'c' + Math.random().toString(36).substr(2, 6);
+  
   var channelsCreated = 0;
   var channelsConfirmed = 0;
   var totalChannels = 3;
@@ -2358,7 +2362,7 @@ function _setupRealtimeSubscriptions() {
     if (channelsConfirmed >= 1 && !_realtimeActive) {
       // At least one channel confirmed — Realtime is working
       _realtimeActive = true;
-      console.log('[DAL] ⚡ Realtime confirmed active (' + channelsConfirmed + '/' + totalChannels + ' channels) — polling disabled');
+      console.log('[DAL] ⚡ Realtime confirmed active (' + channelsConfirmed + '/' + totalChannels + ' channels) — polling disabled, client=' + _clientId);
       // Stop any fallback polling that may have started
       _stopFallbackPolling();
     }
@@ -2368,7 +2372,7 @@ function _setupRealtimeSubscriptions() {
     // Subscribe to classes table — coalesced refresh on change
     // Note: operation_logs are stored in classes.operation_logs_json (v29),
     // so classes table changes include both class data and log updates
-    var classChannel = db.channel('dal-classes')
+    var classChannel = db.channel('dal-classes-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
         // 检查是否只有 operation_logs_json 变化（通过比较列）
@@ -2392,7 +2396,7 @@ function _setupRealtimeSubscriptions() {
     channelsCreated++;
 
     // Subscribe to students table — coalesced refresh on change
-    var studentChannel = db.channel('dal-students')
+    var studentChannel = db.channel('dal-students-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function() {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
         _debouncedRealtimeRefresh('students');
@@ -2404,7 +2408,7 @@ function _setupRealtimeSubscriptions() {
     channelsCreated++;
 
     // Subscribe to pets table — coalesced refresh on change
-    var petChannel = db.channel('dal-pets')
+    var petChannel = db.channel('dal-pets-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
         _debouncedRealtimeRefresh('pets:' + payload.eventType);
@@ -2415,7 +2419,7 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(petChannel);
     channelsCreated++;
 
-    console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels) — waiting for confirmation...');
+    console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels, client=' + _clientId + ') — waiting for confirmation...');
 
     // v54: If no channel confirms within 10s, start fallback polling
     realtimeTimeout = setTimeout(function() {
@@ -2483,7 +2487,9 @@ function _safetyNetTick() {
     _refreshFromSupabase();
     return;
   }
-  if (_realtimeActive && !_dalSyncing && !_pendingLocalSave) {
+  // v96: Safety net should always refresh to catch missed Realtime events
+  // _smartRefreshFromSupabase() handles local vs server change merging safely
+  if (_realtimeActive && !_dalSyncing) {
     _refreshFromSupabase();
   }
 }
