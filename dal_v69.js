@@ -1,5 +1,5 @@
 /**
- * dal.js v78 — Robust Data Access Layer with Smart Merge
+ * dal.js v79 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -914,30 +914,45 @@ function _loadOperationLogs() {
       }
     });
 
-    // Preserve any local unsynced logs (new logs with negative ID, OR modified logs with positive ID)
-    var localUnsynced = window.operationLogs.filter(function(l) {
-      return !l._synced;
-    });
-
-    // v34: Deduplicate — if local unsynced log has same ID as a server log, local wins (it's newer)
+    // v78: PRESERVE local logs that aren't on server (prevents data loss from concurrent writes)
+    // Instead of replacing all logs with server data, we merge and keep local-only logs
     var serverLogIds = {};
     allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
-    var dedupedServer = allLogs.filter(function(l) {
-      // Remove server log if local has a newer unsynced version
-      for (var i = 0; i < localUnsynced.length; i++) {
-        if (localUnsynced[i].id === l.id) return false;
-      }
-      return true;
+    
+    // Keep local logs that aren't on server (they might have been lost due to concurrent write)
+    var localOnly = window.operationLogs.filter(function(l) {
+      return !serverLogIds[l.id];
     });
-
-    window.operationLogs = dedupedServer.concat(localUnsynced);
+    
+    // v78: Re-mark local-only logs as unsynced so they get re-written to server
+    // This fixes the case where logs were marked synced but got lost from server
+    localOnly.forEach(function(l) {
+      if (l._synced) {
+        console.log('[DAL] v78 Re-marking lost log as unsynced:', l.id, l.actionType);
+        l._synced = false;
+      }
+    });
+    
+    // Deduplicate server logs (server wins for same ID)
+    var dedupedServer = allLogs;
+    
+    // Merge: server logs + local-only logs (preserves potentially lost data)
+    window.operationLogs = dedupedServer.concat(localOnly);
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
 
     // Backup to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v29 Loaded ' + allLogs.length + ' logs from Supabase, ' + localUnsynced.length + ' local unsynced kept');
+    console.log('[DAL] v78 Loaded ' + allLogs.length + ' logs from Supabase, preserved ' + localOnly.length + ' local-only logs');
+    
+    // v78: If we have local-only logs that were lost from server, re-sync them
+    if (localOnly.length > 0) {
+      setTimeout(function() {
+        console.log('[DAL] v78 Re-syncing ' + localOnly.length + ' lost logs to server...');
+        _writeUnsyncedLogsToSupabase();
+      }, 2000);
+    }
   }).catch(function(e) {
     console.warn('[DAL] v29 _loadOperationLogs error:', e);
   });
@@ -1216,7 +1231,8 @@ function _writeUnsyncedLogsToSupabase() {
             existingById[l.id] = existing.length - 1;
           }
 
-          // Mark local log as synced
+          // v78: Mark as synced after successful write
+          // The _loadOperationLogs will verify they exist on server
           if (entry.index >= 0 && entry.index < window.operationLogs.length) {
             window.operationLogs[entry.index]._synced = true;
             window.operationLogs[entry.index]._fromSupabase = true;
