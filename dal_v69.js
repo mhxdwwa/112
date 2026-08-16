@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '86.0';
+var _DAL_VERSION = '87.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -132,6 +132,21 @@ var _refreshDebounceTimer = null;
 var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
 var _OWN_WRITE_IGNORE_MS = 15000; // v86: Ignore Realtime events for 15s after our own write (was 10s — too short for mobile)
+var _petSyncErrorShown = false;   // v87: Prevent spamming error notifications
+
+// v87: Show user-visible notification when pet data fails to sync
+function _showPetSyncError(petName) {
+  if (_petSyncErrorShown) return;
+  _petSyncErrorShown = true;
+  setTimeout(function() { _petSyncErrorShown = false; }, 30000); // Reset after 30s
+  var msg = '宠物「' + (petName || '') + '」数据同步失败，请检查网络后刷新页面。如持续出现请联系管理员。';
+  if (typeof _showNotification === 'function') {
+    _showNotification('数据同步异常', msg, 'error');
+  } else if (typeof showNotification === 'function') {
+    showNotification('数据同步异常', msg, 'error');
+  }
+  console.error('[DAL] v87 PET SYNC FAILURE: ' + msg);
+}
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
@@ -2044,30 +2059,59 @@ function _syncStudentToSupabase() {
         penalty_streak: pet.penaltyStreak || 0
       };
       if (pet.id && pet.id > 0 && pet.id === Math.floor(pet.id)) {
-        // v86: Existing pet — use .update() instead of .upsert() to avoid RLS/NOT NULL issues.
-        // .upsert() requires both INSERT and UPDATE permissions; students may only have UPDATE.
-        // Also added retry with minimal payload on failure.
+        // v87: Existing pet — use .update() instead of .upsert() to avoid RLS/NOT NULL issues.
+        // Added 3-tier retry: full payload → minimal payload → XHR fallback.
+        // Added user-visible notification on total failure.
         var petId = pet.id;
-        console.log('[DAL] v86 Updating pet ' + petId + ' (' + pet.name + ', growth=' + (pet.growth||0) + ')');
+        var petName = pet.name;
+        var petGrowth = pet.growth || 0;
+        console.log('[DAL] v87 Updating pet ' + petId + ' (' + petName + ', growth=' + petGrowth + ')');
         petPromises.push(
           db.from('pets').update(payload).eq('id', petId).then(function(r) {
             if (r.error) {
-              console.error('[DAL] v86 pet update error:', r.error.message);
-              // v86: Retry with minimal payload (just growth + level) if full update fails
-              console.warn('[DAL] v86 Retrying pet ' + petId + ' with minimal payload...');
+              console.error('[DAL] v87 pet update error:', r.error.message);
+              // Retry 1: minimal payload (just growth + level)
+              console.warn('[DAL] v87 Retrying pet ' + petId + ' with minimal payload...');
               return db.from('pets').update({
-                growth: pet.growth || 0,
+                growth: petGrowth,
                 level: pet.level || 1,
                 is_dead: !!pet.isDead
               }).eq('id', petId).then(function(retryR) {
                 if (retryR.error) {
-                  console.error('[DAL] v86 pet minimal retry FAILED:', retryR.error.message);
+                  console.error('[DAL] v87 minimal retry FAILED:', retryR.error.message);
+                  // Retry 2: XHR synchronous fallback (bypasses JS client RLS issues)
+                  console.warn('[DAL] v87 Trying XHR fallback for pet ' + petId);
+                  try {
+                    var token = '';
+                    try { token = JSON.parse(localStorage.getItem('sb-xbygooadskfqllnhwmet-auth-token') || '{}').access_token || ''; } catch(e) {}
+                    if (token) {
+                      var xhr = new XMLHttpRequest();
+                      var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+                      xhr.open('PATCH', baseUrl + '/pets?id=eq.' + petId, false);
+                      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                      xhr.setRequestHeader('apikey', token);
+                      xhr.setRequestHeader('Content-Type', 'application/json');
+                      xhr.setRequestHeader('Prefer', 'return=minimal');
+                      xhr.send(JSON.stringify({ growth: petGrowth, level: pet.level || 1 }));
+                      if (xhr.status >= 200 && xhr.status < 300) {
+                        console.log('[DAL] v87 XHR fallback succeeded for pet ' + petId);
+                      } else {
+                        console.error('[DAL] v87 XHR fallback FAILED: HTTP ' + xhr.status);
+                        _showPetSyncError(petName);
+                      }
+                    } else {
+                      _showPetSyncError(petName);
+                    }
+                  } catch(xhrErr) {
+                    console.error('[DAL] v87 XHR fallback exception:', xhrErr.message);
+                    _showPetSyncError(petName);
+                  }
                 } else {
-                  console.log('[DAL] v86 pet ' + petId + ' minimal retry succeeded (growth=' + (pet.growth||0) + ')');
+                  console.log('[DAL] v87 pet ' + petId + ' minimal retry succeeded (growth=' + petGrowth + ')');
                 }
               });
             } else {
-              console.log('[DAL] v86 pet ' + petId + ' updated OK (growth=' + (pet.growth||0) + ')');
+              console.log('[DAL] v87 pet ' + petId + ' updated OK (growth=' + petGrowth + ')');
             }
           })
         );
