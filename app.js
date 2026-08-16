@@ -1457,7 +1457,7 @@ function saveDeletedClasses(){safeLSSave('deletedClasses', deletedClasses); sche
 function showDeletedClassesModal(){if(deletedClasses.length===0){showModal('🗑️ 已删除班级','<div style="text-align:center;padding:20px;">暂无已删除的班级</div>',[{text:'关闭',onclick:'closeModal()'}],false);return;}let html='<div style="max-height:400px;overflow:auto;">';[...deletedClasses].reverse().forEach((cls,i)=>{const time=new Date(cls.deletedAt).toLocaleString();const stuCount=cls.students?cls.students.length:0;const petCount=cls.students?cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0):0;html+=`<div class="history-log-item"><div><div class="history-log-time">${time} 删除</div><div><strong>${esc(cls.name)}</strong></div><div style="font-size:12px;">👨‍🎓 ${stuCount}名学生 · 🐕 ${petCount}只宠物</div></div><div style="display:flex;gap:6px;"><button class="btn btn-primary" style="padding:6px 12px;" onclick="restoreClass('${cls.id}');closeModal();">恢复</button><button class="btn btn-danger" style="padding:6px 12px;" onclick="permanentDeleteClass('${cls.id}');closeModal();">彻底删除</button></div></div>`;});html+='</div>';showModal('🗑️ 已删除班级',html,[{text:'关闭',onclick:'closeModal()'}],true);}
 function restoreClass(id){const idx=deletedClasses.findIndex(c=>c.id===id);if(idx===-1){showNotification('恢复失败','未找到该班级数据','error');return;}const cls=deletedClasses[idx];const restored={id:cls.id,name:cls.name,students:JSON.parse(JSON.stringify(cls.students))};if(classesData.find(c=>c.id===restored.id)){restored.id=Date.now().toString();}classesData.push(restored);deletedClasses.splice(idx,1);saveClassData();saveDeletedClasses();currentClassId=restored.id;renderClassList();scheduleAllRenders();showNotification('恢复成功',`班级【${cls.name}】已恢复`,'success');}
 function permanentDeleteClass(id){if(!confirm('彻底删除后将无法恢复，确定？'))return;const idx=deletedClasses.findIndex(c=>c.id===id);if(idx!==-1){const name=deletedClasses[idx].name;deletedClasses.splice(idx,1);saveDeletedClasses();showNotification('已彻底删除',`班级【${name}】已永久删除`,'info');showDeletedClassesModal();if(typeof db!=='undefined'&&db&&typeof currentUser!=='undefined'&&currentUser){(async()=>{try{var targetId=null;if(typeof _isValidInt4Id==='function'&&_isValidInt4Id(id)){targetId=id;}else{var r=await db.from('classes').select('id').eq('teacher_id',currentUser.id).eq('name',name).limit(1);if(r.data&&r.data.length>0){targetId=r.data[0].id;}}if(targetId){const stuR=await db.from('students').select('id').eq('class_id',targetId);const studentIds=(stuR.data||[]).map(s=>s.id);if(studentIds.length>0){await db.from('pets').delete().in('student_id',studentIds);await db.from('students').delete().in('id',studentIds);}await db.from('custom_actions').delete().eq('class_id',targetId);await db.from('classes').delete().eq('id',targetId);console.log('[DAL] permanentDeleteClass: Supabase cleanup complete for class',targetId,'(requested id:',id,')');}else{console.warn('[DAL] permanentDeleteClass: class not found in Supabase by id or name:',id,name);}}catch(e){console.warn('[DAL] permanentDeleteClass: Supabase cleanup failed:',e);}})();}}}
-function renderClassList(){ const c=document.getElementById('classListContainer'); if(!c){console.warn('[DAL] renderClassList: classListContainer not found');return;} if(classesData.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">暂无班级，点击新建</div>';return;} c.innerHTML=''; classesData.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);});}
+function renderClassList(){ const c=document.getElementById('classListContainer'); if(!c){console.warn('[DAL] renderClassList: classListContainer not found');return;} const hiddenIds=getHiddenClassIds(); const visibleClasses=classesData.filter(cls=>!hiddenIds.includes(String(cls.id))); if(visibleClasses.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">'+(classesData.length===0?'暂无班级，点击新建':'所有班级已隐藏<br><span style="font-size:12px;color:#999;">点击"隐藏班级"可显示</span>')+'</div>';return;} c.innerHTML=''; visibleClasses.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);});}
 let classDragIdx=null;
 function classDragStart(e){classDragIdx=+this.dataset.classIdx;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';}
 function classDragEnd(e){this.classList.remove('dragging');classDragIdx=null;document.querySelectorAll('.class-card.drag-over').forEach(el=>el.classList.remove('drag-over'));}
@@ -1465,6 +1465,77 @@ function classDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';if
 function classDragLeave(e){this.classList.remove('drag-over');}
 function classDrop(e){e.preventDefault();this.classList.remove('drag-over');const toIdx=+this.dataset.classIdx;if(classDragIdx===null||classDragIdx===toIdx)return;const moved=classesData.splice(classDragIdx,1)[0];classesData.splice(toIdx,0,moved);saveClassData();renderClassList();}
 function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');if(typeof showRankAnnouncement==='function'){setTimeout(function(){showRankAnnouncement(id);},800);}}
+// === v81: 隐藏/显示班级功能（教师专用）===
+function getHiddenClassIds(){
+  try { return JSON.parse(localStorage.getItem('hiddenClassIds')) || []; } catch(e) { return []; }
+}
+function saveHiddenClassIds(ids){
+  try { localStorage.setItem('hiddenClassIds', JSON.stringify(ids)); } catch(e) {}
+}
+function showHideClassModal(){
+  if(!currentUser || currentUser.type !== 'teacher'){ showNotification('无权限','仅教师可操作','warning'); return; }
+  if(!classesData || classesData.length === 0){ showNotification('暂无班级','请先创建班级','info'); return; }
+  const hiddenIds = getHiddenClassIds();
+  let html = '<div style="max-height:400px;overflow-y:auto;padding:10px 0;">';
+  classesData.forEach(cls => {
+    const isHidden = hiddenIds.includes(String(cls.id));
+    const statusText = isHidden ? '<span style="color:#999;font-size:12px;margin-left:8px;">(已隐藏)</span>' : '<span style="color:#4a9e4a;font-size:12px;margin-left:8px;">(可见)</span>';
+    html += `<label style="display:flex;align-items:center;gap:12px;padding:12px 16px;margin:6px 0;background:${isHidden?'#f5f5f5':'#fff'};border-radius:10px;cursor:pointer;transition:background 0.2s;border:1px solid ${isHidden?'#ddd':'#e8e8e8'};">
+      <input type="checkbox" class="hide-class-checkbox" data-class-id="${cls.id}" ${isHidden?'checked':''} style="width:20px;height:20px;cursor:pointer;">
+      <span style="flex:1;font-size:15px;font-weight:500;">${esc(cls.name)}</span>
+      ${statusText}
+    </label>`;
+  });
+  html += '</div>';
+  html += '<div style="display:flex;gap:10px;margin-top:16px;justify-content:center;">';
+  html += '<button class="btn btn-secondary" onclick="hideSelectedClasses()" style="background:linear-gradient(135deg,#95a5a6,#7f8c8d);">👁️ 隐藏选中</button>';
+  html += '<button class="btn btn-success" onclick="showSelectedClasses()">✅ 显示选中</button>';
+  html += '<button class="btn btn-secondary" onclick="closeModal()">取消</button>';
+  html += '</div>';
+  showModal('👁️ 隐藏/显示班级', html, [], false);
+}
+function hideSelectedClasses(){
+  const checkboxes = document.querySelectorAll('.hide-class-checkbox:checked');
+  if(checkboxes.length === 0){ showNotification('未选择','请先选择要隐藏的班级','info'); return; }
+  const hiddenIds = getHiddenClassIds();
+  let hideCount = 0;
+  checkboxes.forEach(cb => {
+    const classId = String(cb.dataset.classId);
+    if(!hiddenIds.includes(classId)){
+      hiddenIds.push(classId);
+      hideCount++;
+    }
+  });
+  saveHiddenClassIds(hiddenIds);
+  if(hiddenIds.includes(String(currentClassId))){
+    const visibleClass = classesData.find(c => !hiddenIds.includes(String(c.id)));
+    if(visibleClass) currentClassId = visibleClass.id;
+    else currentClassId = null;
+  }
+  renderClassList();
+  scheduleAllRenders();
+  closeModal();
+  showNotification('隐藏成功', `已隐藏 ${hideCount} 个班级`, 'success');
+}
+function showSelectedClasses(){
+  const checkboxes = document.querySelectorAll('.hide-class-checkbox:checked');
+  if(checkboxes.length === 0){ showNotification('未选择','请先选择要显示的班级','info'); return; }
+  const hiddenIds = getHiddenClassIds();
+  let showCount = 0;
+  checkboxes.forEach(cb => {
+    const classId = String(cb.dataset.classId);
+    const idx = hiddenIds.indexOf(classId);
+    if(idx !== -1){
+      hiddenIds.splice(idx, 1);
+      showCount++;
+    }
+  });
+  saveHiddenClassIds(hiddenIds);
+  renderClassList();
+  scheduleAllRenders();
+  closeModal();
+  showNotification('显示成功', `已显示 ${showCount} 个班级`, 'success');
+}
 function createClass(){const n=prompt('班级名称');if(!n)return;
   // 检查数据库是否已存在同名班级（跨所有教师）
   if(typeof db!=='undefined'&&db){
