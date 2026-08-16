@@ -29,11 +29,12 @@
 </div>
 <style>@keyframes dalBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}</style>
 <style>
-/* v75: 教师按钮默认隐藏，防止学生在DAL加载前看到/点击 */
-.data-mgmt-btn { display: none !important; }
+/* v77: 教师按钮默认隐藏，防止学生在DAL加载前看到/点击 */
+.data-mgmt-btn { display: none; }
 .data-mgmt-btn.teacher-visible { display: inline-flex !important; }
-.class-actions { display: none !important; }
+.class-actions { display: none; }
 .class-actions.teacher-visible { display: flex !important; }
+.teacher-only { display: none; }
 </style>
 <style>
 @keyframes rankScroll {
@@ -725,8 +726,8 @@ function escapeHtmlSimple(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
-  <link rel="preload" as="script" href="dal_v69.js?v=77">
-  <script defer src="dal_v69.js?v=77"></script>
+  <link rel="preload" as="script" href="dal_v69.js?v=78">
+  <script defer src="dal_v69.js?v=78"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用

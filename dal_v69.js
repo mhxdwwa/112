@@ -1,5 +1,5 @@
 /**
- * dal.js v77 — Robust Data Access Layer with Smart Merge
+ * dal.js v78 — Robust Data Access Layer with Smart Merge
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -2670,7 +2670,26 @@ function _blockIfNotMine(studentId, actionName) {
 }
 
 function applyStudentRestrictions() {
-  if (!currentUser || currentUser.type !== 'student') return;
+  if (!currentUser) return;
+  
+  // v77: Show teacher-only elements for teachers by adding teacher-visible class
+  if (currentUser.type === 'teacher') {
+    console.log('[DAL] Showing teacher buttons for:', currentUser.email);
+    // Add teacher-visible class to show elements (CSS handles the display)
+    document.querySelectorAll('.data-mgmt-btn').forEach(function(el) {
+      el.classList.add('teacher-visible');
+    });
+    document.querySelectorAll('.class-actions').forEach(function(el) {
+      el.classList.add('teacher-visible');
+    });
+    // Show teacher-only home stats
+    document.querySelectorAll('.teacher-only').forEach(function(el) {
+      el.style.display = '';
+    });
+    return;
+  }
+  
+  if (currentUser.type !== 'student') return;
   console.log('[DAL] Applying student restrictions for:', currentUser.studentName);
 
   // Hide teacher-only UI elements
