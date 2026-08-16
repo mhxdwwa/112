@@ -28,14 +28,14 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 30000; // v96: Fallback polling 30s (was 120s/2min). Only active when Realtime is down.
+var _refreshInterval = 120000; // v54: Fallback polling 2min (was 30s). Only active when Realtime is down.
 var _lastRefreshTime = 0;
 var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
 var _realtimeLastEventTime = 0; // v95: Track last Realtime event arrival for liveness detection
 var _safetyNetTimer = null; // v95: Safety-net poll that runs even when Realtime is "active"
-var _SAFETY_NET_INTERVAL = 20000; // v96: 20s safety-net poll interval (balance between responsiveness and bandwidth)
-var _REALTIME_LIVENESS_TIMEOUT = 60000; // v96: If no Realtime event for 60s, mark as dead
+var _SAFETY_NET_INTERVAL = 15000; // v95: 15s safety-net poll interval
+var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, mark as dead
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
@@ -133,21 +133,21 @@ function _capPetGrowth(pet) {
 
 /* ===== Debounce & Self-Write Protection (v7.0) ===== */
 var _refreshDebounceTimer = null;
-var _REFRESH_DEBOUNCE_MS = 800; // v14: 0.8s debounce for Realtime events (was 1.5s, reduced for faster sync)
+var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
-var _OWN_WRITE_IGNORE_MS = 3000; // v14: Ignore Realtime events for 3s after our own write (was 10s, reduced for faster cross-device sync)
+var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after our own write (was 30s)
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
-// Coalesces multiple events within 1s into a single refresh.
+// Coalesces multiple events within 3s into a single refresh.
 var _realtimeCoalesceTimer = null;
 function _debouncedRealtimeRefresh(source) {
-  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (1s)');
+  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (3s)');
   if (_realtimeCoalesceTimer) return; // already scheduled, skip
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
     _immediateRefreshFromSupabase();
-  }, 1000);
+  }, 3000);
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
