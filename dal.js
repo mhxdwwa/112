@@ -2437,12 +2437,9 @@ function _doSmartRefresh() {
 
 // v97: 定向刷新 —— 先从 Supabase 拉取最新数据合并到 classesData，再定向渲染指定UI区域
 // 修复 v96 的关键 bug：之前直接 scheduleRender() 但内存中的 classesData 是旧的
+// v97b: 去掉 _dalSyncing 检查，有变化就立即执行，不等不跳
 function _doTargetedRefresh(renderMask) {
-  if (_dalSyncing) {
-    console.log('[DAL] Targeted refresh skipped - sync in progress');
-    return;
-  }
-  // _smartRefreshFromSupabase 内部已有 own-write 保护
+  // _smartRefreshFromSupabase 是读操作，跟 _syncToSupabase 的写操作不冲突
   _smartRefreshFromSupabase().then(function() {
     // 同步操作日志（保持历史记录最新）
     return _loadOperationLogs();
@@ -2453,6 +2450,10 @@ function _doTargetedRefresh(renderMask) {
       scheduleRender(renderMask);
     } else if (typeof scheduleAllRenders === 'function') {
       scheduleAllRenders();
+    }
+    // v97b: 如果学生详情弹窗开着，刷新它（显示金币、成长值等）
+    if (typeof refreshCurrentStudentModal === 'function' && typeof currentModalStudentId !== 'undefined' && currentModalStudentId) {
+      try { refreshCurrentStudentModal(); } catch(e) {}
     }
     // 如果历史弹窗开着，刷新它
     if (typeof refreshHistoryModalIfOpen === 'function') {
