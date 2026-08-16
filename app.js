@@ -10891,11 +10891,12 @@ window._escapedPetIds = new Set();
     books.forEach(function(book) {
       var bookUrl = BOOKS_REPO + '/' + encodeURIComponent(book.file);
       var coverUrl = BOOKS_REPO + '/covers/' + encodeURIComponent(book.name) + '.jpg';
+      // PDF查看器链接 - 点击书籍在线查看而非下载
       var viewerUrl = 'pdf-viewer.html?url=' + encodeURIComponent(bookUrl) + '&name=' + encodeURIComponent(book.name);
       
       html += '<div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08);transition:transform 0.2s,box-shadow 0.2s;">' +
         '<div style="width:100%;height:240px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;cursor:pointer;" ' +
-        'onclick="window.open(\'' + viewerUrl + '\',\'_blank\')">' +
+        'onclick="window.location.href=\'' + viewerUrl + '\'">' +
         '<img src="' + coverUrl + '" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
         '<div style="display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:20px;">' +
         '<div style="font-size:48px;margin-bottom:10px;">📕</div>' +
@@ -10906,7 +10907,7 @@ window._escapedPetIds = new Set();
         '<div style="font-size:14px;font-weight:600;color:#333;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + book.name + '</div>' +
         '<div style="font-size:11px;color:#999;margin-top:4px;">' + book.size + '</div>' +
         '<div style="display:flex;gap:8px;margin-top:8px;justify-content:center;">' +
-        '<a href="' + viewerUrl + '" target="_blank" style="font-size:12px;color:#667eea;text-decoration:none;padding:4px 10px;background:#f0f4ff;border-radius:12px;">查看</a>' +
+        '<a href="' + viewerUrl + '" style="font-size:12px;color:#667eea;text-decoration:none;padding:4px 10px;background:#f0f4ff;border-radius:12px;">查看</a>' +
         '<a href="' + bookUrl + '" download style="font-size:12px;color:#764ba2;text-decoration:none;padding:4px 10px;background:#f8f0ff;border-radius:12px;">下载</a>' +
         '</div>' +
         '</div>' +
@@ -10918,3 +10919,4 @@ window._escapedPetIds = new Set();
   }
 })();
 // ========== 图书馆系统结束 ==========
+
