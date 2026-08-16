@@ -1556,7 +1556,7 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
     won ? coinResult : coinResult, growthGain, pet.id,
     { jhType: won ? 'win' : 'lose', bossName: boss.name, investCoins: investCoins });
 
-  saveClassData();
+  saveClassData('jianghu');
   renderHomePetGrid();
   renderClassTopThree();
   renderPKPage();
