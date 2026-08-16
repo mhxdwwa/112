@@ -2039,7 +2039,12 @@ function _syncStudentToSupabase() {
   if (!myStudent) return Promise.resolve();
 
   // Step 1: Sync pets FIRST (new pets need real IDs before student upsert)
+  // v90: Track per-pet sync success — only update _myBasePets for confirmed pets.
+  // Previously, _myBasePets was updated unconditionally after Promise.all resolved,
+  // even if pet updates failed (promises always resolve due to internal error handling).
+  // This caused growth to appear saved locally but not on server, leading to data loss on refresh.
   var petPromises = [];
+  var _petSyncResults = {}; // petId → true/false
   if (myStudent.pets && myStudent.pets.length > 0) {
     console.log('[DAL] Syncing ' + myStudent.pets.length + ' pets for student ' + studentId);
     myStudent.pets.forEach(function(pet) {
@@ -2062,6 +2067,7 @@ function _syncStudentToSupabase() {
         // v87: Existing pet — use .update() instead of .upsert() to avoid RLS/NOT NULL issues.
         // Added 3-tier retry: full payload → minimal payload → XHR fallback.
         // Added user-visible notification on total failure.
+        // v90: Returns {petId, success} for tracking.
         var petId = pet.id;
         var petName = pet.name;
         var petGrowth = pet.growth || 0;
@@ -2095,23 +2101,35 @@ function _syncStudentToSupabase() {
                       xhr.send(JSON.stringify({ growth: petGrowth, level: pet.level || 1 }));
                       if (xhr.status >= 200 && xhr.status < 300) {
                         console.log('[DAL] v87 XHR fallback succeeded for pet ' + petId);
+                        _petSyncResults[petId] = true;
+                        return { petId: petId, success: true };
                       } else {
                         console.error('[DAL] v87 XHR fallback FAILED: HTTP ' + xhr.status);
+                        _petSyncResults[petId] = false;
                         _showPetSyncError(petName);
+                        return { petId: petId, success: false };
                       }
                     } else {
+                      _petSyncResults[petId] = false;
                       _showPetSyncError(petName);
+                      return { petId: petId, success: false };
                     }
                   } catch(xhrErr) {
                     console.error('[DAL] v87 XHR fallback exception:', xhrErr.message);
+                    _petSyncResults[petId] = false;
                     _showPetSyncError(petName);
+                    return { petId: petId, success: false };
                   }
                 } else {
                   console.log('[DAL] v87 pet ' + petId + ' minimal retry succeeded (growth=' + petGrowth + ')');
+                  _petSyncResults[petId] = true;
+                  return { petId: petId, success: true };
                 }
               });
             } else {
               console.log('[DAL] v87 pet ' + petId + ' updated OK (growth=' + petGrowth + ')');
+              _petSyncResults[petId] = true;
+              return { petId: petId, success: true };
             }
           })
         );
@@ -2121,6 +2139,7 @@ function _syncStudentToSupabase() {
         // If insert fails, the pet keeps its negative ID. The student update's
         // active_pet_id is sanitized to null (Fix 1), preventing cascading failure.
         // The pet will be retried on the next sync cycle.
+        // v90: Returns {petId, success} for tracking.
         console.log('[DAL] Inserting new pet (' + pet.name + '), local id=' + pet.id);
         var oldLocalId = pet.id;
         var petNameForError = pet.name;
@@ -2139,7 +2158,7 @@ function _syncStudentToSupabase() {
                 if (retryR.error) {
                   console.error('[DAL] v88 pet insert retry FAILED:', retryR.error.message);
                   _showPetSyncError(petNameForError);
-                  return;
+                  return { petId: oldLocalId, success: false };
                 }
                 if (retryR.data && retryR.data[0]) {
                   pet.id = retryR.data[0].id;
@@ -2147,7 +2166,11 @@ function _syncStudentToSupabase() {
                     myStudent.activePetId = pet.id;
                   }
                   console.log('[DAL] v88 New pet "' + pet.name + '" got Supabase ID on retry: ' + pet.id);
+                  _petSyncResults[pet.id] = true;
+                  return { petId: pet.id, success: true };
                 }
+                _petSyncResults[oldLocalId] = false;
+                return { petId: oldLocalId, success: false };
               });
             }
             if (r.data && r.data[0]) {
@@ -2157,6 +2180,8 @@ function _syncStudentToSupabase() {
                 myStudent.activePetId = pet.id;
               }
               console.log('[DAL] New pet "' + pet.name + '" got Supabase ID: ' + pet.id);
+              _petSyncResults[pet.id] = true;
+              return { petId: pet.id, success: true };
             } else {
               // v88: Insert succeeded but no data returned — try to find the pet
               console.warn('[DAL] v88 Pet insert returned no data, searching for pet...');
@@ -2168,7 +2193,11 @@ function _syncStudentToSupabase() {
                       myStudent.activePetId = pet.id;
                     }
                     console.log('[DAL] v88 Found new pet ID via lookup: ' + pet.id);
+                    _petSyncResults[pet.id] = true;
+                    return { petId: pet.id, success: true };
                   }
+                  _petSyncResults[oldLocalId] = false;
+                  return { petId: oldLocalId, success: false };
                 });
             }
           })
@@ -2179,13 +2208,31 @@ function _syncStudentToSupabase() {
 
   // Step 2: Fetch fresh student data to avoid overwriting teacher changes (e.g., coins)
   return Promise.all(petPromises).then(function() {
-    // v86: Update _myBasePets IMMEDIATELY after pet sync completes.
-    // Previously, _myBasePets was only updated after the student update succeeded.
-    // If the student update failed (e.g., network error), _myBasePets would be stale,
-    // causing the next smart refresh to overwrite local pet growth with stale server data.
+    // v90: CRITICAL FIX — Only update _myBasePets for pets that were CONFIRMED synced.
+    // Previously (v86), _myBasePets was updated unconditionally after Promise.all resolved,
+    // even if pet updates failed. This caused the system to believe growth was saved when it wasn't.
+    // On refresh, the server would have old growth values, and smart refresh would overwrite
+    // local changes with stale server data, causing "操作回溯" (data reversion).
+    // Now we only update _myBasePets for pets with _petSyncResults[petId] === true.
+    var petSyncFailed = false;
     (myStudent.pets || []).forEach(function(p) {
-      if (p.id && p.id > 0) _myBasePets[p.id] = p.growth || 0;
+      if (p.id && p.id > 0) {
+        if (_petSyncResults[p.id] === true) {
+          // Pet sync confirmed — update baseline
+          _myBasePets[p.id] = p.growth || 0;
+        } else if (_petSyncResults[p.id] === false) {
+          // Pet sync explicitly failed — don't update baseline
+          petSyncFailed = true;
+          console.warn('[DAL] v90 Pet ' + p.id + ' sync FAILED — growth ' + (p.growth||0) + ' NOT saved to _myBasePets');
+        } else {
+          // Pet not in results (e.g., new pet with negative ID) — don't update baseline
+          console.log('[DAL] v90 Pet ' + p.id + ' not in sync results — skipping _myBasePets update');
+        }
+      }
     });
+    if (petSyncFailed) {
+      console.warn('[DAL] v90 Some pet syncs failed — will retry on next sync cycle');
+    }
     _lastOwnWriteTime = Date.now(); // v86: Protect pet writes from Realtime echo
     // v88: Added active_pet_id to select — needed to preserve server value when local activePetId is invalid
     return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, quiz_state').eq('id', studentId).single();
@@ -2284,14 +2331,20 @@ function _syncStudentToSupabase() {
           console.log('[DAL] FALLBACK: coins saved via .update() — ' + finalCoins);
           _myBaseCoins = finalCoins;
           _lastOwnWriteTime = Date.now();
-          (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+          // v90: Only update _myBasePets for confirmed pet syncs
+          (myStudent.pets || []).forEach(function(p) {
+            if (p.id && p.id > 0 && _petSyncResults[p.id] === true) _myBasePets[p.id] = p.growth || 0;
+          });
           return true;
         });
       } else {
         _studentUpsertOk = true;
         _myBaseCoins = finalCoins;
         _lastOwnWriteTime = Date.now();
-        (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+        // v90: Only update _myBasePets for confirmed pet syncs
+        (myStudent.pets || []).forEach(function(p) {
+          if (p.id && p.id > 0 && _petSyncResults[p.id] === true) _myBasePets[p.id] = p.growth || 0;
+        });
         myStudent.pkCountToday = finalPkCountToday;
         myStudent.lastPkDate = finalLastPkDate;
       }
@@ -2422,10 +2475,11 @@ function _syncToSupabase() {
         }
         if (myStu) {
           _myBaseCoins = myStu.coins;
-          // v88: Only track pets with valid DB IDs in _myBasePets.
-          // Pets with negative IDs haven't been synced yet and shouldn't be tracked.
+          // v90: Only track pets with valid DB IDs AND confirmed sync success in _myBasePets.
+          // Previously (v88), all pets with valid IDs were tracked, even if their sync failed.
+          // This caused growth to appear saved locally but not on server, leading to data loss.
           (myStu.pets || []).forEach(function(p) {
-            if (p.id && p.id > 0) _myBasePets[p.id] = p.growth || 0;
+            if (p.id && p.id > 0 && _petSyncResults[p.id] === true) _myBasePets[p.id] = p.growth || 0;
           });
         }
       } else {
