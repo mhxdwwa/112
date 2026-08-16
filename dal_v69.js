@@ -28,17 +28,14 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 15000; // v93: Fallback polling 15s (was 2min). Only active when Realtime is down.
+var _refreshInterval = 120000; // v94: Restored 2min fallback polling. Realtime now works via SQL (students/pets tables added to publication).
 var _lastRefreshTime = 0;
 var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
-var _lastRealtimeEventTime = 0; // v93: Track when last Realtime event arrived (for health check)
-var _realtimeHealthTimer = null; // v93: Timer for Realtime health check
-var _REALTIME_HEALTH_CHECK_MS = 30000; // v93: If no Realtime event in 30s, assume broken → fast polling
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '88.0';
+var _DAL_VERSION = '89.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _petSyncResults = {}; // v91: Module-level so both _syncStudentToSupabase and _syncToSupabase can access
 var _teacherBaseCoins = {}; // v91: Per-student baseline coins for teacher delta sync (studentId → coins)
@@ -159,7 +156,6 @@ function _showPetSyncError(petName) {
 var _realtimeCoalesceTimer = null;
 function _debouncedRealtimeRefresh(source) {
   console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (500ms)');
-  _lastRealtimeEventTime = Date.now(); // v93: Track last event time for health check
   if (_realtimeCoalesceTimer) return; // already scheduled, skip
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
@@ -167,33 +163,9 @@ function _debouncedRealtimeRefresh(source) {
   }, 500);
 }
 
-/* ===== v93: Realtime Health Check ===== */
-// If Realtime claims to be active but no events arrive for 30s, assume it's broken
-// and start fast polling as fallback. This handles the case where Supabase Realtime
-// channels are subscribed but tables aren't enabled for replication.
-function _startRealtimeHealthCheck() {
-  if (_realtimeHealthTimer) return;
-  _realtimeHealthTimer = setInterval(function() {
-    if (!_realtimeActive) {
-      // Realtime not active — stop health check
-      _stopRealtimeHealthCheck();
-      return;
-    }
-    var timeSinceLastEvent = Date.now() - _lastRealtimeEventTime;
-    if (_lastRealtimeEventTime > 0 && timeSinceLastEvent > _REALTIME_HEALTH_CHECK_MS) {
-      console.warn('[DAL] v93 Realtime health check: no events for ' + Math.round(timeSinceLastEvent / 1000) + 's — assuming broken, starting fast polling');
-      _realtimeActive = false; // Disable Realtime flag
-      _startFallbackPolling(); // Start fast polling
-    }
-  }, 10000); // Check every 10s
-}
-
-function _stopRealtimeHealthCheck() {
-  if (_realtimeHealthTimer) {
-    clearInterval(_realtimeHealthTimer);
-    _realtimeHealthTimer = null;
-  }
-}
+/* ===== v94: Removed Realtime Health Check ===== */
+// Realtime now works correctly after adding students/pets tables to supabase_realtime publication via SQL.
+// No need for health check or fast polling fallback.
 
 /* ===== Snapshot Helpers (v7.0) ===== */
 function _takeSnapshot() {
@@ -2818,12 +2790,9 @@ function _setupRealtimeSubscriptions() {
     if (channelsConfirmed >= 1 && !_realtimeActive) {
       // At least one channel confirmed — Realtime is working
       _realtimeActive = true;
-      _lastRealtimeEventTime = Date.now(); // v93: Initialize event time
       console.log('[DAL] ⚡ Realtime confirmed active (' + channelsConfirmed + '/' + totalChannels + ' channels) — polling disabled');
       // Stop any fallback polling that may have started
       _stopFallbackPolling();
-      // v93: Start health check to detect broken Realtime
-      _startRealtimeHealthCheck();
     }
   }
 
@@ -2934,7 +2903,6 @@ function _checkRealtimeHealth() {
   // If all channels failed, mark Realtime as inactive and start polling
   if (_realtimeActive && _realtimeChannels.length === 0) {
     _realtimeActive = false;
-    _stopRealtimeHealthCheck(); // v93: Stop health check
     _startFallbackPolling();
   }
 }
@@ -2945,7 +2913,6 @@ function _cleanupRealtime() {
   });
   _realtimeChannels = [];
   _realtimeActive = false;
-  _stopRealtimeHealthCheck(); // v93: Stop health check
   _stopFallbackPolling();
 }
 
