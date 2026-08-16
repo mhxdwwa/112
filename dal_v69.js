@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '85.0';
+var _DAL_VERSION = '86.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -131,7 +131,7 @@ function _capPetGrowth(pet) {
 var _refreshDebounceTimer = null;
 var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
-var _OWN_WRITE_IGNORE_MS = 10000; // v14: Ignore Realtime events for 10s after our own write (was 30s)
+var _OWN_WRITE_IGNORE_MS = 15000; // v86: Ignore Realtime events for 15s after our own write (was 10s — too short for mobile)
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
@@ -2044,12 +2044,31 @@ function _syncStudentToSupabase() {
         penalty_streak: pet.penaltyStreak || 0
       };
       if (pet.id && pet.id > 0 && pet.id === Math.floor(pet.id)) {
-        // Existing pet with valid Supabase ID — upsert
-        payload.id = pet.id;
-        console.log('[DAL] Updating pet ' + pet.id + ' (' + pet.name + ')');
+        // v86: Existing pet — use .update() instead of .upsert() to avoid RLS/NOT NULL issues.
+        // .upsert() requires both INSERT and UPDATE permissions; students may only have UPDATE.
+        // Also added retry with minimal payload on failure.
+        var petId = pet.id;
+        console.log('[DAL] v86 Updating pet ' + petId + ' (' + pet.name + ', growth=' + (pet.growth||0) + ')');
         petPromises.push(
-          db.from('pets').upsert([payload]).then(function(r) {
-            if (r.error) console.error('[DAL] pet upsert error:', r.error);
+          db.from('pets').update(payload).eq('id', petId).then(function(r) {
+            if (r.error) {
+              console.error('[DAL] v86 pet update error:', r.error.message);
+              // v86: Retry with minimal payload (just growth + level) if full update fails
+              console.warn('[DAL] v86 Retrying pet ' + petId + ' with minimal payload...');
+              return db.from('pets').update({
+                growth: pet.growth || 0,
+                level: pet.level || 1,
+                is_dead: !!pet.isDead
+              }).eq('id', petId).then(function(retryR) {
+                if (retryR.error) {
+                  console.error('[DAL] v86 pet minimal retry FAILED:', retryR.error.message);
+                } else {
+                  console.log('[DAL] v86 pet ' + petId + ' minimal retry succeeded (growth=' + (pet.growth||0) + ')');
+                }
+              });
+            } else {
+              console.log('[DAL] v86 pet ' + petId + ' updated OK (growth=' + (pet.growth||0) + ')');
+            }
           })
         );
       } else {
@@ -2078,6 +2097,14 @@ function _syncStudentToSupabase() {
 
   // Step 2: Fetch fresh student data to avoid overwriting teacher changes (e.g., coins)
   return Promise.all(petPromises).then(function() {
+    // v86: Update _myBasePets IMMEDIATELY after pet sync completes.
+    // Previously, _myBasePets was only updated after the student update succeeded.
+    // If the student update failed (e.g., network error), _myBasePets would be stale,
+    // causing the next smart refresh to overwrite local pet growth with stale server data.
+    (myStudent.pets || []).forEach(function(p) {
+      if (p.id && p.id > 0) _myBasePets[p.id] = p.growth || 0;
+    });
+    _lastOwnWriteTime = Date.now(); // v86: Protect pet writes from Realtime echo
     return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today, quiz_state').eq('id', studentId).single();
   }).then(function(freshR) {
     // Compute local delta: how much the student changed locally since last sync
