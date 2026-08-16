@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '75.0';
+var _DAL_VERSION = '80.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -838,8 +838,8 @@ function _loadCustomActions() {
  * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
  */
 
-var _OP_LOGS_MAX_PER_CLASS = 5000;
-var _OP_LOGS_RETENTION_DAYS = 7; // v68: Keep only last 7 days
+var _OP_LOGS_MAX_PER_CLASS = 2000;
+var _OP_LOGS_RETENTION_DAYS = 3; // v80: Keep only last 3 days (reduced from 7)
 
 // v68: Filter logs to keep only those within retention period
 function _filterLogsByRetention(logs) {
@@ -968,6 +968,18 @@ var _pendingLogWrites = 0;
 // Retries up to 3 times with increasing delays.
 function _verifyLogWrite(classId, writtenLogIds, retryCount) {
   if (retryCount >= 3 || !writtenLogIds || writtenLogIds.length === 0) {
+    // v80: Risk 2 fix — if verification gives up, mark logs as unsynced so they retry later
+    if (writtenLogIds && writtenLogIds.length > 0) {
+      console.warn('[DAL] v80 Verify gave up after ' + retryCount + ' retries for class', classId + ', marking logs unsynced for recovery');
+      writtenLogIds.forEach(function(logId) {
+        for (var i = 0; i < window.operationLogs.length; i++) {
+          if (window.operationLogs[i].id === logId) {
+            window.operationLogs[i]._synced = false;
+            break;
+          }
+        }
+      });
+    }
     return Promise.resolve();
   }
   // Wait 500ms to let any concurrent writes settle
@@ -1040,7 +1052,16 @@ function _verifyLogWrite(classId, writtenLogIds, retryCount) {
     });
     
     if (addedCount === 0) {
-      console.log('[DAL] v65 No missing logs found locally, skipping re-write');
+      // v80: Mark missing logs as unsynced so they can be retried on next load
+      console.warn('[DAL] v80 No missing logs found locally for class', classId + ', marking as unsynced for recovery');
+      missingIds.forEach(function(missingId) {
+        for (var i = 0; i < window.operationLogs.length; i++) {
+          if (window.operationLogs[i].id === missingId) {
+            window.operationLogs[i]._synced = false;
+            break;
+          }
+        }
+      });
       return;
     }
     
@@ -1231,12 +1252,8 @@ function _writeUnsyncedLogsToSupabase() {
             existingById[l.id] = existing.length - 1;
           }
 
-          // v78: Mark as synced after successful write
-          // The _loadOperationLogs will verify they exist on server
-          if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-            window.operationLogs[entry.index]._synced = true;
-            window.operationLogs[entry.index]._fromSupabase = true;
-          }
+          // v80: REMOVED premature _synced=true marking (was Risk 1).
+          // Now marked in write success callback below instead.
         });
 
         // Sort by timestamp descending, cap at max
@@ -1269,6 +1286,13 @@ function _writeUnsyncedLogsToSupabase() {
             });
           } else {
             console.log('[DAL] v65 Upserted ' + existing.length + ' logs for class', cid);
+            // v80: Mark as synced AFTER successful write (was previously done before write — Risk 1 fix)
+            (logsByClass[cid] || []).forEach(function(entry) {
+              if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+                window.operationLogs[entry.index]._synced = true;
+                window.operationLogs[entry.index]._fromSupabase = true;
+              }
+            });
             // v64: Update own write time to prevent unnecessary realtime refresh
             _lastOwnWriteTime = Date.now();
             // v65: Verify our logs weren't overwritten by another device
@@ -2576,6 +2600,19 @@ function _setupPageLifecycle() {
           xhr2.send();
           console.log('[DAL] v54 beforeunload: teacher sync_ping sent');
         }
+
+        // v80: Risk 4 fix — backup unsynced operation logs to localStorage on page close
+        if (window.operationLogs && window.operationLogs.length > 0) {
+          var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
+          if (unsyncedLogs.length > 0) {
+            try {
+              localStorage.setItem('_dal_v80_unsyncedLogs', JSON.stringify(unsyncedLogs));
+              console.log('[DAL] v80 beforeunload: backed up ' + unsyncedLogs.length + ' unsynced logs');
+            } catch(e) {
+              console.warn('[DAL] v80 beforeunload: log backup failed:', e.message);
+            }
+          }
+        }
       } catch(e) {
         console.warn('[DAL] v54 beforeunload sync failed:', e.message);
       }
@@ -3013,6 +3050,32 @@ function _initDALCore() {
       window.operationLogs = cached.operationLogs;
     }
     console.log('[DAL] Cache pre-loaded into memory');
+  }
+
+  // v80: Risk 4 fix — restore unsynced logs backed up by beforeunload
+  try {
+    var backedUpLogs = localStorage.getItem('_dal_v80_unsyncedLogs');
+    if (backedUpLogs) {
+      var parsed = JSON.parse(backedUpLogs);
+      if (parsed && parsed.length > 0 && window.operationLogs) {
+        var existingIds = {};
+        window.operationLogs.forEach(function(l) { existingIds[l.id] = true; });
+        var restored = 0;
+        parsed.forEach(function(l) {
+          if (!existingIds[l.id]) {
+            l._synced = false;
+            window.operationLogs.push(l);
+            restored++;
+          }
+        });
+        if (restored > 0) {
+          console.log('[DAL] v80 Restored ' + restored + ' unsynced logs from beforeunload backup');
+        }
+      }
+      localStorage.removeItem('_dal_v80_unsyncedLogs');
+    }
+  } catch(e) {
+    console.warn('[DAL] v80 Log restore failed:', e.message);
   }
 
   // Full load from Supabase (single source of truth)
