@@ -10700,7 +10700,10 @@ window._escapedPetIds = new Set();
         item.value = totalGrowth;
       });
     } else if (type === 'quiz') {
-      allStudents.forEach(function(item) { item.value = item.student.coins || 0; });
+      allStudents.forEach(function(item) {
+        var qs = item.student.quizState || {};
+        item.value = qs.totalQuizCoins || 0;
+      });
     } else if (type === 'pigrun') {
       allStudents.forEach(function(item) {
         var qs = item.student.quizState || {};
