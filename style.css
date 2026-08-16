@@ -63,11 +63,12 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
 .btn-success{background:linear-gradient(135deg, #f5a054 0%, #e8904a 100%);color:#fff;border:1px solid rgba(255,255,255,0.3);}
 .btn:active{transform:scale(0.92) !important;}
 .top-section{display:flex;gap:25px;flex-wrap:wrap;margin-bottom:30px;align-items:flex-start;flex-direction:column;}
-.class-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;width:100%;margin-bottom:15px;}
+.class-actions{display:grid;grid-template-columns:repeat(7,auto);gap:10px;width:100%;margin-bottom:15px;justify-content:start;}
+.class-actions .btn{padding:8px 14px;border-radius:24px;font-size:13px;font-weight:600;box-shadow:0 3px 10px rgba(0,0,0,0.08);}
 /* v82: Pill-shaped action buttons (horizontal icon+text) */
-.action-pill{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:24px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.1);transition:all 0.3s cubic-bezier(.4,0,.2,1);border:1px solid rgba(255,255,255,0.3);white-space:nowrap;user-select:none;}
+.action-pill{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:24px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 3px 10px rgba(0,0,0,0.08);transition:all 0.3s cubic-bezier(.4,0,.2,1);border:1px solid rgba(255,255,255,0.3);white-space:nowrap;user-select:none;}
 .action-pill:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 8px 20px rgba(0,0,0,0.15);}
-.action-pill span:first-child{font-size:16px;flex-shrink:0;}
+.action-pill span:first-child{font-size:15px;flex-shrink:0;}
 .class-list-section{margin-bottom:25px;width:100%;}
 .class-list-wrapper{display:flex;gap:15px;align-items:flex-start;flex-wrap:wrap;}
 .student-grid-section{margin-top:25px;position:relative;}
