@@ -1699,8 +1699,11 @@ function _countEquippedEffects(student) {
 }
 
 function _getPetGrowth(student) {
-  const pet = getActivePet(student);
-  return pet ? (pet.growth || 0) : 0;
+  // v81: 按总成长值排序（所有宠物成长值之和），而不是仅看当前激活宠物
+  if (!student.pets || student.pets.length === 0) return 0;
+  var total = 0;
+  student.pets.forEach(function(p) { total += (p.growth || 0); });
+  return total;
 }
 
 function _hasPet(student) {
@@ -1818,9 +1821,10 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
     _sortBtn.style.display = _isTeacher() ? '' : 'none';
   }
   // 控制重置密码按钮可见性（仅教师可见，包括移动端）
+  // v81: 必须设置明确的display值，否则CSS .teacher-only { display:none } 会覆盖
   var _resetPwdBtn = document.querySelector('.teacher-only');
   if (_resetPwdBtn) {
-    _resetPwdBtn.style.display = _isTeacher() ? '' : 'none';
+    _resetPwdBtn.style.display = _isTeacher() ? 'flex' : 'none';
   }
   if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
   const cur=classesData.find(c=>c.id===currentClassId);
