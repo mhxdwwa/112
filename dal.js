@@ -214,58 +214,57 @@ function _handleBroadcastChange(msg) {
 }
 
 // 根据变更类型决定刷新哪些UI区域
+// v97: 改为先拉取数据再定向渲染，修复数据不同步问题
 function _dispatchBroadcastRender(msg) {
-  // 检查 scheduleRender 是否可用
-  if (typeof scheduleRender !== 'function') {
-    // 降级：全量刷新
-    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-    return;
-  }
-
   // 渲染标志位常量（与 app.js 中定义一致）
   var _RF_GRID = 1, _RF_TOP3 = 2, _RF_PK = 4, _RF_CLASSLIST = 8, _RF_JH = 16;
+  var renderMask = 0;
 
   switch (msg.type) {
     case 'pet':
       // 宠物信息变化（喂食、玩耍、领养等）→ 刷新宠物网格 + 排行榜
-      scheduleRender(_RF_GRID | _RF_TOP3);
+      renderMask = _RF_GRID | _RF_TOP3;
       break;
 
     case 'coins':
       // 金币变化（奖励、惩罚、购物等）→ 刷新宠物网格（金币显示在卡片上）+ 排行榜
-      scheduleRender(_RF_GRID | _RF_TOP3);
+      renderMask = _RF_GRID | _RF_TOP3;
       break;
 
     case 'level':
     case 'quiz':
       // 关卡/答题数据变化（快乐跑、小猪快跑等游戏）→ 刷新排行榜
-      scheduleRender(_RF_GRID | _RF_TOP3);
+      renderMask = _RF_GRID | _RF_TOP3;
       break;
 
     case 'leaderboard':
       // 排行榜专用变化 → 只刷新排行榜
-      scheduleRender(_RF_TOP3);
+      renderMask = _RF_TOP3;
       break;
 
     case 'pk':
       // PK数据变化
-      scheduleRender(_RF_PK);
+      renderMask = _RF_PK;
       break;
 
     case 'jianghu':
       // 江湖行数据变化
-      scheduleRender(_RF_JH);
+      renderMask = _RF_JH;
       break;
 
     case 'class':
       // 班级结构变化（增删学生、改班级名等）
-      scheduleRender(_RF_CLASSLIST | _RF_GRID | _RF_TOP3);
+      renderMask = _RF_CLASSLIST | _RF_GRID | _RF_TOP3;
       break;
 
     default:
       // 未知类型 → 全量刷新（安全兜底）
       if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+      return;
   }
+
+  // v97: 先从 Supabase 拉取最新数据，再定向渲染
+  _doTargetedRefresh(renderMask);
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
@@ -2436,6 +2435,37 @@ function _doSmartRefresh() {
   });
 }
 
+// v97: 定向刷新 —— 先从 Supabase 拉取最新数据合并到 classesData，再定向渲染指定UI区域
+// 修复 v96 的关键 bug：之前直接 scheduleRender() 但内存中的 classesData 是旧的
+function _doTargetedRefresh(renderMask) {
+  if (_dalSyncing) {
+    console.log('[DAL] Targeted refresh skipped - sync in progress');
+    return;
+  }
+  // _smartRefreshFromSupabase 内部已有 own-write 保护
+  _smartRefreshFromSupabase().then(function() {
+    // 同步操作日志（保持历史记录最新）
+    return _loadOperationLogs();
+  }).then(function() {
+    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+    // 定向渲染（不是 scheduleAllRenders，只刷新变化的区域）
+    if (typeof scheduleRender === 'function') {
+      scheduleRender(renderMask);
+    } else if (typeof scheduleAllRenders === 'function') {
+      scheduleAllRenders();
+    }
+    // 如果历史弹窗开着，刷新它
+    if (typeof refreshHistoryModalIfOpen === 'function') {
+      clearTimeout(window._historyRefreshDebounce);
+      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 2000);
+    }
+  }).catch(function(e) {
+    console.error('[DAL] Targeted refresh error:', e);
+    // 出错时降级为全量刷新
+    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+  });
+}
+
 // 仅刷新操作日志（不触发UI重建，避免频繁闪烁）
 function _refreshLogsOnly() {
   console.log('[DAL] Refreshing logs only (no UI rebuild)...');
@@ -2532,14 +2562,9 @@ function _setupRealtimeSubscriptions() {
           // 有非 coins/quiz_state 的列变化 → 走全量刷新（安全兜底）
           _debouncedRealtimeRefresh('students');
         } else if (hasCoins || hasQuizState) {
-          // 只有 coins 或 quiz_state 变化 → 定向刷新排行榜和宠物网格
-          console.log('[DAL] v96 Students: targeted refresh (coins=' + hasCoins + ', quiz=' + hasQuizState + ')');
-          if (typeof scheduleRender === 'function') {
-            // _RF_GRID=1, _RF_TOP3=2
-            scheduleRender(1 | 2);
-          } else {
-            _debouncedRealtimeRefresh('students:targeted');
-          }
+          // v97: 先从 Supabase 拉取最新数据，再定向刷新排行榜和宠物网格
+          console.log('[DAL] v97 Students: targeted refresh (coins=' + hasCoins + ', quiz=' + hasQuizState + ')');
+          _doTargetedRefresh(1 | 2); // _RF_GRID=1, _RF_TOP3=2
         } else {
           // 不确定 → 全量刷新
           _debouncedRealtimeRefresh('students');
@@ -2555,14 +2580,9 @@ function _setupRealtimeSubscriptions() {
     var petChannel = db.channel('dal-pets-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v96: 宠物表变化 → 定向刷新宠物网格和排行榜
-        console.log('[DAL] v96 Pets: targeted refresh (' + payload.eventType + ')');
-        if (typeof scheduleRender === 'function') {
-          // _RF_GRID=1, _RF_TOP3=2
-          scheduleRender(1 | 2);
-        } else {
-          _debouncedRealtimeRefresh('pets:' + payload.eventType);
-        }
+        // v97: 先从 Supabase 拉取最新数据，再定向刷新宠物网格和排行榜
+        console.log('[DAL] v97 Pets: targeted refresh (' + payload.eventType + ')');
+        _doTargetedRefresh(1 | 2); // _RF_GRID=1, _RF_TOP3=2
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
