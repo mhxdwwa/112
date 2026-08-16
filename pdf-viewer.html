@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>PDF 查看器</title>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#525659;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -48,14 +47,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#525659;font-family:
 </div>
 <div id="pdf-container"></div>
 
-<script type="module">
-import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs';
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
-
-const params = new URLSearchParams(window.location.search);
-const pdfUrl = params.get('url');
-const bookName = params.get('name') || 'PDF 文档';
+var params = new URLSearchParams(window.location.search);
+var pdfUrl = params.get('url');
+var bookName = params.get('name') || 'PDF 文档';
 
 document.getElementById('book-title').textContent = bookName;
 document.title = bookName + ' - PDF 查看器';
@@ -63,107 +61,125 @@ document.title = bookName + ' - PDF 查看器';
 window._pdfUrl = pdfUrl;
 window._bookName = bookName;
 
-if (!pdfUrl) { showError(); }
-else { loadPDF(pdfUrl); }
+if (!pdfUrl) {
+  showError();
+} else {
+  loadPDF(pdfUrl);
+}
 
-async function loadPDF(url) {
-  const loading = document.getElementById('loading-overlay');
-  const progressFill = document.getElementById('progress-fill');
-  const loadingText = document.getElementById('loading-text');
-  const container = document.getElementById('pdf-container');
+function loadPDF(url) {
+  var loading = document.getElementById('loading-overlay');
+  var progressFill = document.getElementById('progress-fill');
+  var loadingText = document.getElementById('loading-text');
+  var container = document.getElementById('pdf-container');
 
-  try {
-    loadingText.textContent = '正在下载文档...';
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  loadingText.textContent = '正在下载文档...';
 
-    const contentLength = resp.headers.get('content-length');
-    const total = contentLength ? parseInt(contentLength) : 0;
-    const reader = resp.body.getReader();
-    const chunks = [];
-    let received = 0;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      if (total > 0) {
-        const pct = Math.round(received / total * 50);
-        progressFill.style.width = pct + '%';
-        loadingText.textContent = '正在下载文档... ' + Math.round(received/1024) + 'KB / ' + Math.round(total/1024) + 'KB';
-      }
-    }
-
-    const blob = new Blob(chunks, { type: 'application/pdf' });
-    const arrayBuffer = await blob.arrayBuffer();
-
-    loadingText.textContent = '正在渲染文档...';
-    progressFill.style.width = '50%';
-
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const totalPages = pdf.numPages;
-
-    loadingText.textContent = '共 ' + totalPages + ' 页，正在渲染...';
-
-    // Calculate canvas width based on screen
-    const containerWidth = container.clientWidth - 20;
-    const scale = Math.min(containerWidth / 612, 2); // 612 = default PDF width in points
-
-    for (let i = 1; i <= totalPages; i++) {
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: scale });
-
-      const wrap = document.createElement('div');
-      wrap.className = 'pdf-page-wrap';
-      wrap.style.width = viewport.width + 'px';
-
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      canvas.style.width = viewport.width + 'px';
-      canvas.style.height = viewport.height + 'px';
-
-      wrap.appendChild(canvas);
-      container.appendChild(wrap);
-
-      const ctx = canvas.getContext('2d');
-      await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
-      const pct = 50 + Math.round(i / totalPages * 50);
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.responseType = 'arraybuffer';
+  xhr.onprogress = function(e) {
+    if (e.lengthComputable) {
+      var pct = Math.round(e.loaded / e.total * 50);
       progressFill.style.width = pct + '%';
-      document.getElementById('page-info').textContent = i + ' / ' + totalPages;
+      loadingText.textContent = '正在下载... ' + Math.round(e.loaded/1024) + 'KB / ' + Math.round(e.total/1024) + 'KB';
     }
+  };
 
-    loading.classList.add('hidden');
-  } catch (err) {
-    console.error('PDF load error:', err);
+  xhr.onload = function() {
+    if (xhr.status === 200 || xhr.status === 0) {
+      loadingText.textContent = '正在渲染文档...';
+      progressFill.style.width = '50%';
+      renderPDF(xhr.response);
+    } else {
+      loading.classList.add('hidden');
+      showError();
+    }
+  };
+
+  xhr.onerror = function() {
     loading.classList.add('hidden');
     showError();
-  }
+  };
+
+  xhr.send();
+}
+
+function renderPDF(data) {
+  var loading = document.getElementById('loading-overlay');
+  var progressFill = document.getElementById('progress-fill');
+  var loadingText = document.getElementById('loading-text');
+  var container = document.getElementById('pdf-container');
+
+  pdfjsLib.getDocument({ data: data }).promise.then(function(pdf) {
+    var totalPages = pdf.numPages;
+    loadingText.textContent = '共 ' + totalPages + ' 页，正在渲染...';
+
+    var containerWidth = container.clientWidth - 20;
+    var scale = Math.min(containerWidth / 612, 2);
+
+    var currentPage = 0;
+
+    function renderNextPage(pageNum) {
+      if (pageNum > totalPages) {
+        loading.classList.add('hidden');
+        return;
+      }
+
+      pdf.getPage(pageNum).then(function(page) {
+        var viewport = page.getViewport({ scale: scale });
+
+        var wrap = document.createElement('div');
+        wrap.className = 'pdf-page-wrap';
+        wrap.style.width = viewport.width + 'px';
+
+        var canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+
+        wrap.appendChild(canvas);
+        container.appendChild(wrap);
+
+        var ctx = canvas.getContext('2d');
+        page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function() {
+          var pct = 50 + Math.round(pageNum / totalPages * 50);
+          progressFill.style.width = pct + '%';
+          document.getElementById('page-info').textContent = pageNum + ' / ' + totalPages;
+          renderNextPage(pageNum + 1);
+        });
+      });
+    }
+
+    renderNextPage(1);
+  }).catch(function(err) {
+    console.error('PDF render error:', err);
+    loading.classList.add('hidden');
+    showError();
+  });
 }
 
 function showError() {
   document.getElementById('loading-overlay').classList.add('hidden');
-  const errDiv = document.getElementById('error-msg');
+  var errDiv = document.getElementById('error-msg');
   errDiv.style.display = 'flex';
-  const dlBtn = document.getElementById('error-dl-btn');
+  var dlBtn = document.getElementById('error-dl-btn');
   if (pdfUrl) {
     dlBtn.href = pdfUrl;
     dlBtn.download = bookName + '.pdf';
   }
 }
-window.showError = showError;
 
-window.goBack = function() {
+function goBack() {
   if (document.referrer && document.referrer.indexOf(window.location.origin) === 0) {
     window.history.back();
   } else {
     window.close();
   }
-};
+}
 
-window.downloadPDF = function() {
+function downloadPDF() {
   if (window._pdfUrl) {
     var a = document.createElement('a');
     a.href = window._pdfUrl;
@@ -172,7 +188,7 @@ window.downloadPDF = function() {
     a.click();
     document.body.removeChild(a);
   }
-};
+}
 </script>
 </body>
 </html>
