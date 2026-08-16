@@ -35,7 +35,7 @@ var _realtimeChannels = [];
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '81.0';
+var _DAL_VERSION = '85.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -867,6 +867,8 @@ function _getOpLogClassIds() {
 }
 
 // v29: Load operation logs from classes.operation_logs_json
+// v85: Also load from student_operation_logs table (student-written logs).
+//      Merge both sources so teachers and students see the complete history.
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   if (!db) {
@@ -882,50 +884,89 @@ function _loadOperationLogs() {
       console.warn('[DAL] v29 _loadOperationLogs: no classIds');
       return;
     }
-    console.log('[DAL] v29 Loading operation logs from classes table for class_ids:', classIds);
+    console.log('[DAL] v85 Loading operation logs from classes + student_operation_logs for class_ids:', classIds);
 
-    // v29: Read from classes.operation_logs_json — same channel as student data
-    return db.from('classes').select('id, operation_logs_json').in('id', classIds);
-  }).then(function(r) {
-    if (!r) return;
-    if (r.error) {
-      console.error('[DAL] v29 classes query FAILED:', r.error.message);
-      return;
+    // v85: Load from BOTH sources in parallel
+    var teacherLogsPromise = db.from('classes').select('id, operation_logs_json').in('id', classIds);
+    var studentLogsPromise = db.from('student_operation_logs').select('class_id, logs_json').in('class_id', classIds);
+
+    return Promise.all([teacherLogsPromise, studentLogsPromise]);
+  }).then(function(results) {
+    if (!results) return;
+    var teacherR = results[0];
+    var studentR = results[1];
+
+    // Parse teacher logs from classes.operation_logs_json
+    var allLogs = [];
+    if (teacherR && !teacherR.error) {
+      (teacherR.data || []).forEach(function(cls) {
+        if (!cls.operation_logs_json) return;
+        try {
+          var logs = JSON.parse(cls.operation_logs_json);
+          if (Array.isArray(logs)) {
+            logs = _filterLogsByRetention(logs);
+            logs.forEach(function(l) {
+              l._synced = true;
+              l._fromSupabase = true;
+              if (!l.classId) l.classId = cls.id;
+              allLogs.push(l);
+            });
+          }
+        } catch(e) {
+          console.warn('[DAL] v29 Failed to parse operation_logs_json for class', cls.id, e);
+        }
+      });
+    } else if (teacherR && teacherR.error) {
+      console.error('[DAL] v85 Teacher logs query FAILED:', teacherR.error.message);
     }
 
-    // Parse operation_logs_json from each class
-    var allLogs = [];
-    (r.data || []).forEach(function(cls) {
-      if (!cls.operation_logs_json) return;
-      try {
-        var logs = JSON.parse(cls.operation_logs_json);
-        if (Array.isArray(logs)) {
-          // v68: Filter out logs older than retention period
-          logs = _filterLogsByRetention(logs);
-          logs.forEach(function(l) {
-            l._synced = true;
-            l._fromSupabase = true;
-            if (!l.classId) l.classId = cls.id;
-            allLogs.push(l);
-          });
+    // v85: Parse student logs from student_operation_logs
+    var studentLogsCount = 0;
+    if (studentR && !studentR.error) {
+      (studentR.data || []).forEach(function(row) {
+        if (!row.logs_json) return;
+        try {
+          var logs = typeof row.logs_json === 'string' ? JSON.parse(row.logs_json) : row.logs_json;
+          if (Array.isArray(logs)) {
+            logs = _filterLogsByRetention(logs);
+            logs.forEach(function(l) {
+              l._synced = true;
+              l._fromSupabase = true;
+              l._writtenByStudent = true;
+              if (!l.classId) l.classId = row.class_id;
+              allLogs.push(l);
+            });
+            studentLogsCount += logs.length;
+          }
+        } catch(e) {
+          console.warn('[DAL] v85 Failed to parse student_operation_logs for class', row.class_id, e);
         }
-      } catch(e) {
-        console.warn('[DAL] v29 Failed to parse operation_logs_json for class', cls.id, e);
+      });
+    } else if (studentR && studentR.error) {
+      // Table might not exist yet — log warning but don't fail
+      console.warn('[DAL] v85 student_operation_logs query failed (table may not exist yet):', studentR.error.message);
+    }
+
+    // Deduplicate: if same log ID exists in both teacher and student sources, keep one
+    var seenIds = {};
+    var dedupedLogs = [];
+    allLogs.forEach(function(l) {
+      if (!seenIds[l.id]) {
+        seenIds[l.id] = true;
+        dedupedLogs.push(l);
       }
     });
+    allLogs = dedupedLogs;
 
     // v78: PRESERVE local logs that aren't on server (prevents data loss from concurrent writes)
-    // Instead of replacing all logs with server data, we merge and keep local-only logs
     var serverLogIds = {};
     allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
     
-    // Keep local logs that aren't on server (they might have been lost due to concurrent write)
     var localOnly = window.operationLogs.filter(function(l) {
       return !serverLogIds[l.id];
     });
     
     // v78: Re-mark local-only logs as unsynced so they get re-written to server
-    // This fixes the case where logs were marked synced but got lost from server
     localOnly.forEach(function(l) {
       if (l._synced) {
         console.log('[DAL] v78 Re-marking lost log as unsynced:', l.id, l.actionType);
@@ -933,18 +974,15 @@ function _loadOperationLogs() {
       }
     });
     
-    // Deduplicate server logs (server wins for same ID)
-    var dedupedServer = allLogs;
-    
-    // Merge: server logs + local-only logs (preserves potentially lost data)
-    window.operationLogs = dedupedServer.concat(localOnly);
+    // Merge: server logs + local-only logs
+    window.operationLogs = allLogs.concat(localOnly);
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
 
     // Backup to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v78 Loaded ' + allLogs.length + ' logs from Supabase, preserved ' + localOnly.length + ' local-only logs');
+    console.log('[DAL] v85 Loaded ' + (allLogs.length - studentLogsCount) + ' teacher logs + ' + studentLogsCount + ' student logs from Supabase, preserved ' + localOnly.length + ' local-only logs');
     
     // v78: If we have local-only logs that were lost from server, re-sync them
     if (localOnly.length > 0) {
@@ -954,7 +992,7 @@ function _loadOperationLogs() {
       }, 2000);
     }
   }).catch(function(e) {
-    console.warn('[DAL] v29 _loadOperationLogs error:', e);
+    console.warn('[DAL] v85 _loadOperationLogs error:', e);
   });
 }
 
@@ -1096,7 +1134,12 @@ function _verifyLogWrite(classId, writtenLogIds, retryCount) {
   });
 }
 
-// v29: Write unsynced logs to classes.operation_logs_json — same channel as student data.
+// v29: Write unsynced logs to Supabase.
+// v85: SPLIT write path — teacher logs → classes.operation_logs_json (UPDATE),
+//      student logs → student_operation_logs (UPSERT).
+//      Students cannot UPDATE the classes table due to RLS, which caused all
+//      student operation logs to silently fail and never persist to the server.
+//      The new student_operation_logs table has permissive RLS so students can write.
 // Uses upsert (proven reliable on mobile). Max 5000 logs per class, oldest trimmed.
 function _writeUnsyncedLogsToSupabase() {
   if (_writingLogsToSupabase) {
@@ -1126,7 +1169,7 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
-  console.log('[DAL] v29 Writing ' + unsynced.length + ' unsynced logs to classes table');
+  console.log('[DAL] v85 Writing ' + unsynced.length + ' unsynced logs');
 
   // Determine fallback classId
   var defaultClassId = null;
@@ -1145,6 +1188,18 @@ function _writeUnsyncedLogsToSupabase() {
 
   _writingLogsToSupabase = true;
 
+  // v85: Split unsynced logs into teacher-written and student-written.
+  // If current user is student, ALL their unsynced logs go to student_operation_logs.
+  // If current user is teacher, ALL their unsynced logs go to classes.operation_logs_json.
+  // This avoids needing a _writtenByStudent flag on each log.
+  var teacherUnsynced = [];
+  var studentUnsynced = [];
+  if (currentUser.type === 'student') {
+    studentUnsynced = unsynced;
+  } else {
+    teacherUnsynced = unsynced;
+  }
+
   // Group unsynced logs by classId
   var logsByClass = {};
   unsynced.forEach(function(entry) {
@@ -1157,152 +1212,213 @@ function _writeUnsyncedLogsToSupabase() {
 
   var classIds = Object.keys(logsByClass).map(Number);
 
-  // Step 1: Read existing logs from Supabase for affected classes
-  return db.from('classes').select('id, operation_logs_json').in('id', classIds).then(function(r) {
-    if (r.error) {
-      console.error('[DAL] v29 Failed to read existing logs:', r.error.message);
-      _writingLogsToSupabase = false;
-      setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
-      return;
-    }
+  // Helper: build merged log object for DB storage
+  function _buildMergedLog(l, cid) {
+    return {
+      id: l.id,
+      timestamp: l.timestamp || new Date().toISOString(),
+      classId: cid,
+      studentId: l.studentId,
+      studentName: l.studentName || '',
+      actionType: l.actionType || '',
+      details: l.details || '',
+      coinDelta: parseInt(l.coinDelta) || 0,
+      expDelta: parseInt(l.expDelta) || 0,
+      petId: l.petId || null,
+      extra: l.extra || null,
+      snapshot: l.snapshot || null,
+      fullSnapshot: l.fullSnapshot || null,
+      reverted: !!l.reverted,
+      _synced: true,
+      _fromSupabase: true
+    };
+  }
 
-    // Parse existing logs from Supabase
-    var existingByClass = {};
-    (r.data || []).forEach(function(cls) {
-      try {
-        existingByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
-      } catch(e) {
-        existingByClass[cls.id] = [];
+  // Helper: mark logs as synced after successful write
+  function _markLogsSynced(cid, logsArr) {
+    (logsArr || []).forEach(function(entry) {
+      if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+        window.operationLogs[entry.index]._synced = true;
+        window.operationLogs[entry.index]._fromSupabase = true;
       }
     });
+  }
 
-    // Step 2: Merge — add new logs to existing, UPDATE modified logs, mark as synced
-    // v62: Filter out classes that don't exist in Supabase yet (e.g., new classes with string IDs)
-    // These logs will be written after the class is synced and gets a valid ID
-    var validClassIds = classIds.filter(function(cid) {
-      return existingByClass[cid] !== undefined;
-    });
-    var skippedClassIds = classIds.filter(function(cid) {
-      return existingByClass[cid] === undefined;
-    });
-    if (skippedClassIds.length > 0) {
-      console.log('[DAL] v62 Skipping', skippedClassIds.length, 'classes not yet in Supabase:', skippedClassIds);
-    }
-
-    // v70: Release lock before early return to prevent permanent block.
-    // Without this, _writingLogsToSupabase stays true and all future writes are skipped.
-    if (validClassIds.length === 0) {
-      console.log('[DAL] v70 No valid classes to write logs to, skipping');
-      _writingLogsToSupabase = false;
-      return Promise.resolve();
-    }
-    
-    // v64: Re-read existing logs from Supabase RIGHT BEFORE writing.
-    // This is critical to prevent the race condition where two devices read the same
-    // data, each adds their new log, and the last writer overwrites the other's log.
-    // By re-reading immediately before writing, we get the latest data from other devices.
-    return db.from('classes').select('id, operation_logs_json').in('id', validClassIds).then(function(freshR) {
-      if (freshR.error) {
-        console.error('[DAL] v64 Failed to re-read logs before write:', freshR.error.message);
-        // Fall back to initial read data
-        freshR = { data: [] };
+  // Helper: mark logs as unsynced after failed write
+  function _markLogsUnsynced(cid, logsArr) {
+    (logsArr || []).forEach(function(entry) {
+      if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+        window.operationLogs[entry.index]._synced = false;
       }
-      var freshByClass = {};
-      (freshR.data || []).forEach(function(cls) {
+    });
+  }
+
+  // === TEACHER PATH: Write to classes.operation_logs_json (existing logic) ===
+  function _writeTeacherLogs() {
+    if (teacherUnsynced.length === 0) return Promise.resolve();
+
+    var teacherLogsByClass = {};
+    teacherUnsynced.forEach(function(entry) {
+      var cid = entry.log.classId || defaultClassId;
+      if (typeof cid === 'string') cid = parseInt(cid);
+      if (!teacherLogsByClass[cid]) teacherLogsByClass[cid] = [];
+      teacherLogsByClass[cid].push(entry);
+    });
+    var teacherClassIds = Object.keys(teacherLogsByClass).map(Number);
+
+    console.log('[DAL] v85 Writing ' + teacherUnsynced.length + ' teacher logs to classes table');
+
+    return db.from('classes').select('id, operation_logs_json').in('id', teacherClassIds).then(function(r) {
+      if (r.error) {
+        console.error('[DAL] v85 Failed to read existing teacher logs:', r.error.message);
+        _markLogsUnsynced(null, teacherUnsynced);
+        return;
+      }
+      var existingByClass = {};
+      (r.data || []).forEach(function(cls) {
         try {
-          freshByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
-        } catch(e) { freshByClass[cls.id] = []; }
+          existingByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
+        } catch(e) { existingByClass[cls.id] = []; }
       });
 
-      var upsertPromises = validClassIds.map(function(cid) {
-        // v64: Use FRESH data from Supabase (not stale initial read)
-        var existing = freshByClass[cid] || [];
-        var newLogs = logsByClass[cid] || [];
+      var validClassIds = teacherClassIds.filter(function(cid) { return existingByClass[cid] !== undefined; });
+      if (validClassIds.length === 0) return;
 
-        // Build index of existing logs by ID for deduplication
+      // Re-read right before write to prevent race conditions
+      return db.from('classes').select('id, operation_logs_json').in('id', validClassIds).then(function(freshR) {
+        if (freshR.error) freshR = { data: [] };
+        var freshByClass = {};
+        (freshR.data || []).forEach(function(cls) {
+          try {
+            freshByClass[cls.id] = cls.operation_logs_json ? JSON.parse(cls.operation_logs_json) : [];
+          } catch(e) { freshByClass[cls.id] = []; }
+        });
+
+        var promises = validClassIds.map(function(cid) {
+          var existing = freshByClass[cid] || [];
+          var newLogs = teacherLogsByClass[cid] || [];
+          var existingById = {};
+          existing.forEach(function(l, idx) { existingById[l.id] = idx; });
+
+          newLogs.forEach(function(entry) {
+            var merged = _buildMergedLog(entry.log, cid);
+            if (existingById[merged.id] !== undefined) {
+              existing[existingById[merged.id]] = merged;
+            } else {
+              existing.push(merged);
+              existingById[merged.id] = existing.length - 1;
+            }
+          });
+
+          existing.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+          if (existing.length > _OP_LOGS_MAX_PER_CLASS) existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
+
+          var writtenLogIds = newLogs.map(function(entry) { return entry.log.id; });
+          return db.from('classes').update({
+            operation_logs_json: JSON.stringify(existing)
+          }).eq('id', cid).then(function(ur) {
+            if (ur.error) {
+              console.error('[DAL] v85 Teacher log write FAILED for class', cid + ':', ur.error.message);
+              _markLogsUnsynced(cid, newLogs);
+            } else {
+              console.log('[DAL] v85 Teacher logs written for class', cid, '(' + existing.length + ' total)');
+              _markLogsSynced(cid, newLogs);
+              _lastOwnWriteTime = Date.now();
+              return _verifyLogWrite(cid, writtenLogIds, 0);
+            }
+          });
+        });
+        return Promise.all(promises);
+      });
+    });
+  }
+
+  // === STUDENT PATH (v85): Write to student_operation_logs table ===
+  // Students cannot UPDATE the classes table (RLS blocks it).
+  // Instead, we write to a separate student_operation_logs table that students have permission to write.
+  function _writeStudentLogs() {
+    if (studentUnsynced.length === 0) return Promise.resolve();
+
+    var studentLogsByClass = {};
+    studentUnsynced.forEach(function(entry) {
+      var cid = entry.log.classId || defaultClassId;
+      if (typeof cid === 'string') cid = parseInt(cid);
+      if (!studentLogsByClass[cid]) studentLogsByClass[cid] = [];
+      studentLogsByClass[cid].push(entry);
+    });
+    var studentClassIds = Object.keys(studentLogsByClass).map(Number);
+
+    console.log('[DAL] v85 Writing ' + studentUnsynced.length + ' student logs to student_operation_logs table');
+
+    // Read existing student logs from student_operation_logs
+    return db.from('student_operation_logs').select('class_id, logs_json').in('class_id', studentClassIds).then(function(r) {
+      if (r.error) {
+        console.error('[DAL] v85 Failed to read student_operation_logs:', r.error.message);
+        console.warn('[DAL] v85 Table may not exist yet. Please run the SQL setup in Supabase.');
+        _markLogsUnsynced(null, studentUnsynced);
+        return;
+      }
+      var existingByClass = {};
+      (r.data || []).forEach(function(row) {
+        try {
+          existingByClass[row.class_id] = row.logs_json ? (typeof row.logs_json === 'string' ? JSON.parse(row.logs_json) : row.logs_json) : [];
+        } catch(e) { existingByClass[row.class_id] = []; }
+      });
+
+      var promises = studentClassIds.map(function(cid) {
+        var existing = existingByClass[cid] || [];
+        var newLogs = studentLogsByClass[cid] || [];
         var existingById = {};
         existing.forEach(function(l, idx) { existingById[l.id] = idx; });
 
         newLogs.forEach(function(entry) {
-          var l = entry.log;
-          var merged = {
-            id: l.id,
-            timestamp: l.timestamp || new Date().toISOString(),
-            classId: cid,
-            studentId: l.studentId,
-            studentName: l.studentName || '',
-            actionType: l.actionType || '',
-            details: l.details || '',
-            coinDelta: parseInt(l.coinDelta) || 0,
-            expDelta: parseInt(l.expDelta) || 0,
-            petId: l.petId || null,
-            extra: l.extra || null,
-            snapshot: l.snapshot || null,
-            fullSnapshot: l.fullSnapshot || null,
-            reverted: !!l.reverted,
-            _synced: true,
-            _fromSupabase: true
-          };
-
-          // v34: If log with same ID already exists (modified log), REPLACE it instead of duplicating
-          if (existingById[l.id] !== undefined) {
-            existing[existingById[l.id]] = merged;
+          var merged = _buildMergedLog(entry.log, cid);
+          merged._writtenByStudent = true;
+          if (existingById[merged.id] !== undefined) {
+            existing[existingById[merged.id]] = merged;
           } else {
             existing.push(merged);
-            existingById[l.id] = existing.length - 1;
+            existingById[merged.id] = existing.length - 1;
           }
-
-          // v80: REMOVED premature _synced=true marking (was Risk 1).
-          // Now marked in write success callback below instead.
         });
 
-        // Sort by timestamp descending, cap at max
-        existing.sort(function(a, b) {
-          return (b.timestamp || '').localeCompare(a.timestamp || '');
-        });
-        
-        // v68: Retention filter removed from write path — filtering at write time
-        // permanently deletes old logs from DB, causing data loss on concurrent writes.
-        // Retention is now only applied at load/display time (line ~904).
-        
-        // Cap at max
-        if (existing.length > _OP_LOGS_MAX_PER_CLASS) {
-          existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
-        }
+        existing.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+        if (existing.length > _OP_LOGS_MAX_PER_CLASS) existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
 
-        // v28: Use update (not upsert) to only modify operation_logs_json.
-        // v65: Track the log IDs we wrote for verification
-        var writtenLogIds = newLogs.map(function(entry) { return entry.log.id; });
-        return db.from('classes').update({
-          operation_logs_json: JSON.stringify(existing)
-        }).eq('id', cid).then(function(ur) {
+        // Upsert into student_operation_logs
+        return db.from('student_operation_logs').upsert([{
+          class_id: cid,
+          logs_json: JSON.stringify(existing)
+        }]).then(function(ur) {
           if (ur.error) {
-            console.error('[DAL] v29 Upsert FAILED for class', cid + ':', ur.error.message);
-            // Mark logs as unsynced again so they retry
-            (logsByClass[cid] || []).forEach(function(entry) {
-              if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-                window.operationLogs[entry.index]._synced = false;
-              }
-            });
+            console.error('[DAL] v85 Student log write FAILED for class', cid + ':', ur.error.message);
+            _markLogsUnsynced(cid, newLogs);
           } else {
-            console.log('[DAL] v65 Upserted ' + existing.length + ' logs for class', cid);
-            // v80: Mark as synced AFTER successful write (was previously done before write — Risk 1 fix)
-            (logsByClass[cid] || []).forEach(function(entry) {
-              if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-                window.operationLogs[entry.index]._synced = true;
-                window.operationLogs[entry.index]._fromSupabase = true;
-              }
-            });
-            // v64: Update own write time to prevent unnecessary realtime refresh
+            console.log('[DAL] v85 Student logs written for class', cid, '(' + existing.length + ' total)');
+            _markLogsSynced(cid, newLogs);
             _lastOwnWriteTime = Date.now();
-            // v65: Verify our logs weren't overwritten by another device
-            return _verifyLogWrite(cid, writtenLogIds, 0);
           }
         });
       });
-
-      return Promise.all(upsertPromises);
+      return Promise.all(promises);
     });
+  }
+
+  // Execute both write paths
+  var allClassIds = classIds;
+  // Step 1: Verify classes exist (for teacher path)
+  return db.from('classes').select('id').in('id', allClassIds).then(function(r) {
+    if (r.error) {
+      console.error('[DAL] v85 Failed to verify classes:', r.error.message);
+      _writingLogsToSupabase = false;
+      setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+      return;
+    }
+    // Run both write paths in parallel
+    return Promise.all([
+      _writeTeacherLogs(),
+      _writeStudentLogs()
+    ]);
   }).then(function() {
     _writingLogsToSupabase = false;
 
@@ -2391,7 +2507,7 @@ function _setupRealtimeSubscriptions() {
 
   var channelsCreated = 0;
   var channelsConfirmed = 0;
-  var totalChannels = 3;
+  var totalChannels = 4; // v85: Added student_operation_logs channel
   var realtimeTimeout = null;
 
   function _onChannelConfirmed() {
@@ -2451,6 +2567,22 @@ function _setupRealtimeSubscriptions() {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
       });
     _realtimeChannels.push(petChannel);
+    channelsCreated++;
+
+    // v85: Subscribe to student_operation_logs — lightweight log refresh when students write
+    var studentLogsChannel = db.channel('dal-student-logs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_operation_logs' }, function() {
+        console.log('[DAL] v85 student_operation_logs changed, refreshing logs');
+        _refreshLogsOnly();
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') _onChannelConfirmed();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Non-critical — don't affect Realtime health
+          console.warn('[DAL] v85 student_operation_logs channel status:', status);
+        }
+      });
+    _realtimeChannels.push(studentLogsChannel);
     channelsCreated++;
 
     console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels) — waiting for confirmation...');
