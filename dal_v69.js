@@ -28,10 +28,13 @@ var _dalReady = false;
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
-var _refreshInterval = 120000; // v54: Fallback polling 2min (was 30s). Only active when Realtime is down.
+var _refreshInterval = 15000; // v93: Fallback polling 15s (was 2min). Only active when Realtime is down.
 var _lastRefreshTime = 0;
 var _realtimeActive = false; // v54: True when at least one Realtime channel is connected
 var _realtimeChannels = [];
+var _lastRealtimeEventTime = 0; // v93: Track when last Realtime event arrived (for health check)
+var _realtimeHealthTimer = null; // v93: Timer for Realtime health check
+var _REALTIME_HEALTH_CHECK_MS = 30000; // v93: If no Realtime event in 30s, assume broken → fast polling
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
@@ -152,15 +155,44 @@ function _showPetSyncError(petName) {
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
-// Coalesces multiple events within 3s into a single refresh.
+// Coalesces multiple events within 500ms into a single refresh.
 var _realtimeCoalesceTimer = null;
 function _debouncedRealtimeRefresh(source) {
   console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (500ms)');
+  _lastRealtimeEventTime = Date.now(); // v93: Track last event time for health check
   if (_realtimeCoalesceTimer) return; // already scheduled, skip
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
     _immediateRefreshFromSupabase();
   }, 500);
+}
+
+/* ===== v93: Realtime Health Check ===== */
+// If Realtime claims to be active but no events arrive for 30s, assume it's broken
+// and start fast polling as fallback. This handles the case where Supabase Realtime
+// channels are subscribed but tables aren't enabled for replication.
+function _startRealtimeHealthCheck() {
+  if (_realtimeHealthTimer) return;
+  _realtimeHealthTimer = setInterval(function() {
+    if (!_realtimeActive) {
+      // Realtime not active — stop health check
+      _stopRealtimeHealthCheck();
+      return;
+    }
+    var timeSinceLastEvent = Date.now() - _lastRealtimeEventTime;
+    if (_lastRealtimeEventTime > 0 && timeSinceLastEvent > _REALTIME_HEALTH_CHECK_MS) {
+      console.warn('[DAL] v93 Realtime health check: no events for ' + Math.round(timeSinceLastEvent / 1000) + 's — assuming broken, starting fast polling');
+      _realtimeActive = false; // Disable Realtime flag
+      _startFallbackPolling(); // Start fast polling
+    }
+  }, 10000); // Check every 10s
+}
+
+function _stopRealtimeHealthCheck() {
+  if (_realtimeHealthTimer) {
+    clearInterval(_realtimeHealthTimer);
+    _realtimeHealthTimer = null;
+  }
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
@@ -1812,25 +1844,33 @@ function _syncTeacherToSupabase() {
           // v43: No need to fetch shop_items from DB — using .update() instead of .upsert()
           // means student-owned fields (shop_items, equipped_items) are never touched.
           var studentUpsertPromises = studentsToUpsert.map(function(stu) {
-            // v91: Delta-based coin sync for teacher.
-            // Compute how much the teacher changed coins locally since last sync,
-            // then apply that delta on top of the fresh server value.
-            // This preserves BOTH teacher rewards AND student spending.
+            // v93: Skip coin write when teacher hasn't changed coins locally.
+            // This prevents the race condition where teacher's periodic sync
+            // overwrites student spending on the server.
             var freshCoins = freshCoinMap[stu.id];
             var finalCoins;
+            var teacherChangedCoins = false;
             if (freshCoins !== undefined && _teacherBaseCoins[stu.id] !== undefined) {
               var teacherCoinDelta = (stu.coins || 0) - _teacherBaseCoins[stu.id];
-              finalCoins = freshCoins + teacherCoinDelta;
-              if (finalCoins < 0) finalCoins = 0;
+              if (teacherCoinDelta !== 0) {
+                // Teacher actually changed coins (gave reward or penalty) — apply delta
+                finalCoins = freshCoins + teacherCoinDelta;
+                if (finalCoins < 0) finalCoins = 0;
+                teacherChangedCoins = true;
+              } else {
+                // Teacher didn't change coins — skip coin write to avoid race condition
+                finalCoins = undefined; // Signal to skip coin write
+                teacherChangedCoins = false;
+              }
             } else {
               // First sync or no baseline — use local value directly
               finalCoins = stu.coins || 0;
+              teacherChangedCoins = true;
             }
             var payload = {
               id: stu.id,
               name: stu.name,
               class_id: (classesData.find(function(c) { return c.students.indexOf(stu) >= 0; }) || {}).id || null,
-              coins: finalCoins,
               last_checkin_date: stu.lastCheckinDate || null,
               last_jianghu_date: stu.lastJianghuDate || null,
               last_pk_date: stu.lastPkDate || null,
@@ -1841,6 +1881,10 @@ function _syncTeacherToSupabase() {
               // This eliminates ALL race conditions with student shop purchases.
               password: stu.password || ''
             };
+            // v93: Only include coins in payload when teacher actually changed them
+            if (teacherChangedCoins && finalCoins !== undefined) {
+              payload.coins = finalCoins;
+            }
             // v43: Use .update() instead of .upsert() to avoid overwriting student-owned
             // fields (shop_items, equipped_items). .update() only touches listed fields.
             return db.from('students').update(payload).eq('id', stu.id).then(function(r) {
@@ -1874,15 +1918,23 @@ function _syncTeacherToSupabase() {
             });
           });
           return Promise.all(studentUpsertPromises).then(function() {
-            // v91: After successful teacher sync, update _teacherBaseCoins for all synced students.
-            // Use the finalCoins values (delta-based) so next sync computes correct deltas.
+            // v93: After successful teacher sync, update _teacherBaseCoins for all synced students.
+            // When teacher didn't change coins, use the fresh server value (not local),
+            // so next sync correctly detects teacher changes and doesn't overwrite student spending.
             studentsToUpsert.forEach(function(stu) {
               var freshCoins = freshCoinMap[stu.id];
               if (freshCoins !== undefined && _teacherBaseCoins[stu.id] !== undefined) {
                 var teacherCoinDelta = (stu.coins || 0) - _teacherBaseCoins[stu.id];
-                var finalCoins = freshCoins + teacherCoinDelta;
-                if (finalCoins < 0) finalCoins = 0;
-                _teacherBaseCoins[stu.id] = finalCoins;
+                if (teacherCoinDelta !== 0) {
+                  // Teacher changed coins — use delta-based value
+                  var finalCoins = freshCoins + teacherCoinDelta;
+                  if (finalCoins < 0) finalCoins = 0;
+                  _teacherBaseCoins[stu.id] = finalCoins;
+                } else {
+                  // Teacher didn't change coins — use fresh server value
+                  // This ensures next sync detects teacher changes correctly
+                  _teacherBaseCoins[stu.id] = freshCoins;
+                }
               } else {
                 _teacherBaseCoins[stu.id] = stu.coins || 0;
               }
@@ -2766,9 +2818,12 @@ function _setupRealtimeSubscriptions() {
     if (channelsConfirmed >= 1 && !_realtimeActive) {
       // At least one channel confirmed — Realtime is working
       _realtimeActive = true;
+      _lastRealtimeEventTime = Date.now(); // v93: Initialize event time
       console.log('[DAL] ⚡ Realtime confirmed active (' + channelsConfirmed + '/' + totalChannels + ' channels) — polling disabled');
       // Stop any fallback polling that may have started
       _stopFallbackPolling();
+      // v93: Start health check to detect broken Realtime
+      _startRealtimeHealthCheck();
     }
   }
 
@@ -2879,6 +2934,7 @@ function _checkRealtimeHealth() {
   // If all channels failed, mark Realtime as inactive and start polling
   if (_realtimeActive && _realtimeChannels.length === 0) {
     _realtimeActive = false;
+    _stopRealtimeHealthCheck(); // v93: Stop health check
     _startFallbackPolling();
   }
 }
@@ -2889,6 +2945,7 @@ function _cleanupRealtime() {
   });
   _realtimeChannels = [];
   _realtimeActive = false;
+  _stopRealtimeHealthCheck(); // v93: Stop health check
   _stopFallbackPolling();
 }
 
