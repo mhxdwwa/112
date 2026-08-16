@@ -2372,6 +2372,10 @@ function _syncToSupabase() {
     // The sync has persisted the local quiz_state to Supabase, so smart refresh
     // can safely merge quiz_state changes from the server again.
     window._quizStateLocallyModified = false;
+    // v89: Reset retry counter on success — previously it was never reset,
+    // so after 3 cumulative failures the app would permanently stop syncing.
+    _syncRetryCount = 0;
+    _lastSyncFailed = false;
     _updateCloudStatus('synced');
     // v45: Update cache after successful sync
     _saveToCache();
@@ -2921,13 +2925,35 @@ function _setupPageLifecycle() {
             console.log('[DAL] v54 beforeunload: ' + myStudent.pets.length + ' pets saved synchronously');
           }
         } else {
-          // Teacher: just send sync_ping (teacher data is more complex, rely on async sync)
+          // Teacher: send sync_ping and attempt synchronous data save
           var xhr2 = new XMLHttpRequest();
           xhr2.open('POST', baseUrl + '/rpc/sync_ping', false);
           xhr2.setRequestHeader('Authorization', 'Bearer ' + token);
           xhr2.setRequestHeader('apikey', token);
           xhr2.send();
           console.log('[DAL] v54 beforeunload: teacher sync_ping sent');
+          // v89: Teacher synchronous save — send class data via PUT to prevent data loss
+          // when teacher closes tab immediately after making changes
+          if (classesData && classesData.length > 0) {
+            try {
+              var teacherId = localStorage.getItem('userId');
+              if (teacherId) {
+                var classesPayload = JSON.stringify(classesData.map(function(c) {
+                  return { id: c.id, name: c.name, students: c.students, deleted_students: c.deleted_students || [] };
+                }));
+                var xhr3 = new XMLHttpRequest();
+                xhr3.open('PUT', baseUrl + '/classes?id=teacher_id=eq.' + teacherId, false);
+                xhr3.setRequestHeader('Authorization', 'Bearer ' + token);
+                xhr3.setRequestHeader('apikey', token);
+                xhr3.setRequestHeader('Content-Type', 'application/json');
+                xhr3.setRequestHeader('Prefer', 'return=minimal');
+                xhr3.send(classesPayload);
+                console.log('[DAL] v89 beforeunload: teacher class data saved synchronously');
+              }
+            } catch(e) {
+              console.warn('[DAL] v89 beforeunload: teacher sync save failed:', e.message);
+            }
+          }
         }
 
         // v80: Risk 4 fix — backup unsynced operation logs to localStorage on page close

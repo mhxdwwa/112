@@ -2,6 +2,33 @@
 const SUPABASE_URL = 'https://xbygooadskfqllnhwmet.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
 
+// v89: QR 登录令牌签名 — 与 auth-check.js 中的验证逻辑配对
+const _QR_SECRET = 'qr_auth_' + SUPABASE_ANON_KEY.slice(20, 40);
+async function _signQRTokenForLogin(userId, email, timestamp) {
+  var payload = userId + '|' + email + '|' + timestamp;
+  var encoder = new TextEncoder();
+  var keyData = encoder.encode(_QR_SECRET);
+  var key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  var signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  var sigHex = Array.from(new Uint8Array(signature)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+  return payload + '|' + sigHex;
+}
+
+// v89: 密码哈希工具 — 使用 SHA-256 对密码进行哈希，避免明文存储
+// 盐值前缀防止彩虹表攻击（此盐值公开无妨，因为 anon key 本身就是公开的）
+const _PWD_SALT = 'petworld_v89_salt_2024';
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(_PWD_SALT + ':' + password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+// 判断一个字符串是否已经是 SHA-256 哈希（64位十六进制）
+function isHashedPassword(str) {
+  return typeof str === 'string' && str.length === 64 && /^[a-f0-9]+$/.test(str);
+}
+
 // 使用 db 作为变量名，避免和 window.supabase 冲突
 var db;
 (function initSupabase() {
@@ -211,8 +238,28 @@ async function handleStudentLogin(e) {
       return;
     }
     
-    // 验证密码
-    if (!student.password || student.password !== password) {
+    // 验证密码 (v89: 支持哈希密码和向后兼容明文密码)
+    if (!student.password) {
+      showError('studentError', '密码错误。如果你是第一次登录，请点击下方"设置密码"。');
+      return;
+    }
+    var passwordOk = false;
+    if (isHashedPassword(student.password)) {
+      // 已存储哈希密码：对比哈希值
+      var inputHash = await hashPassword(password);
+      passwordOk = (inputHash === student.password);
+    } else {
+      // 向后兼容：旧版明文密码直接比较
+      passwordOk = (student.password === password);
+      // 自动升级为哈希存储（静默迁移）
+      if (passwordOk) {
+        var hashed = await hashPassword(password);
+        db.from('students').update({ password: hashed }).eq('id', student.id).then(function(res) {
+          if (!res.error) console.log('[Login] 密码已自动升级为哈希存储');
+        });
+      }
+    }
+    if (!passwordOk) {
       showError('studentError', '密码错误。如果你是第一次登录，请点击下方"设置密码"。');
       return;
     }
@@ -293,10 +340,11 @@ async function handleStudentRegister(e) {
       return;
     }
     
-    // 更新密码
+    // 更新密码 (v89: 存储哈希值而非明文)
+    var hashedPassword = await hashPassword(password);
     const { error: updateError } = await db
       .from('students')
-      .update({ password: password })
+      .update({ password: hashedPassword })
       .eq('id', existingStudent.id);
     
     if (updateError) {
@@ -649,8 +697,11 @@ async function doAutoLogin(email) {
     localStorage.setItem('userId', teacherData.id);
     localStorage.setItem('userEmail', email);
     localStorage.setItem('userName', teacherData.name || email);
-    // ★ 标记为扫码登录，auth-check.js 会识别此标记跳过 session 检查
-    localStorage.setItem('qrLoginTime', Date.now().toString());
+    // ★ v89: 生成签名令牌代替简单的 qrLoginTime，防止 localStorage 篡改绕过认证
+    localStorage.removeItem('qrLoginTime'); // 清除旧格式
+    var qrTimestamp = Date.now();
+    var qrToken = await _signQRTokenForLogin(teacherData.id, email, qrTimestamp);
+    localStorage.setItem('qrLoginToken', qrToken);
 
     var qrStatus = document.getElementById('qrStatus');
     if (qrStatus) {

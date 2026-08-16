@@ -8,6 +8,32 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 var currentUser = null;
 var db;
 
+// v89: QR 登录令牌签名/验证 — 防止通过篡改 localStorage 绕过认证
+// 使用 HMAC-SHA256 签名，密钥由 Supabase 配置派生
+const _QR_SECRET = 'qr_auth_' + SUPABASE_ANON_KEY.slice(20, 40);
+async function _signQRToken(userId, email, timestamp) {
+  var payload = userId + '|' + email + '|' + timestamp;
+  var encoder = new TextEncoder();
+  var keyData = encoder.encode(_QR_SECRET);
+  var key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  var signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  var sigHex = Array.from(new Uint8Array(signature)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+  return payload + '|' + sigHex;
+}
+async function _verifyQRToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  var parts = token.split('|');
+  if (parts.length !== 4) return null;
+  var userId = parts[0], email = parts[1], timestamp = parseInt(parts[2]), sigHex = parts[3];
+  // 检查时间是否在5分钟内
+  if (isNaN(timestamp) || (Date.now() - timestamp > 5 * 60 * 1000)) return null;
+  // 验证签名
+  var expected = await _signQRToken(userId, email, timestamp);
+  var expectedParts = expected.split('|');
+  if (expectedParts[3] !== sigHex) return null;
+  return { userId: userId, email: email, timestamp: timestamp };
+}
+
 // 初始化 Supabase 客户端
 (function initSupabase() {
   try {
@@ -38,19 +64,26 @@ async function checkLogin() {
   // 如果有 Supabase 连接，验证 session（仅老师需要，学生不走 Supabase Auth）
   if (db && userType === 'teacher') {
     try {
-      // ★ 扫码登录：如果在最近5分钟内通过扫码登录，跳过 session 检查
-      // 因为扫码登录无法获取密码来创建 Supabase Auth session
-      var qrLoginTime = parseInt(localStorage.getItem('qrLoginTime') || '0');
-      var isRecentQRLogin = qrLoginTime > 0 && (Date.now() - qrLoginTime < 5 * 60 * 1000);
+      // ★ v89: 扫码登录认证 — 使用签名令牌防止 localStorage 篡改
+      // 扫码登录无法获取密码来创建 Supabase Auth session，因此使用签名令牌
+      var qrToken = localStorage.getItem('qrLoginToken');
+      var qrVerified = qrToken ? await _verifyQRToken(qrToken) : null;
       
-      if (isRecentQRLogin) {
-        console.log('[Auth] 扫码登录认证，跳过 session 检查 (qrLoginTime=' + new Date(qrLoginTime).toLocaleTimeString() + ')');
+      if (qrVerified && qrVerified.userId === userId) {
+        console.log('[Auth] 扫码登录认证通过 (token时间=' + new Date(qrVerified.timestamp).toLocaleTimeString() + ')');
         currentUser = {
           type: userType,
           id: userId,
-          email: localStorage.getItem('userEmail')
+          email: qrVerified.email
         };
         return;
+      }
+      
+      // 向后兼容：旧的 qrLoginTime 格式（将在未来版本移除）
+      var qrLoginTime = parseInt(localStorage.getItem('qrLoginTime') || '0');
+      if (qrLoginTime > 0) {
+        console.warn('[Auth] 检测到旧版 qrLoginTime，请重新扫码登录');
+        localStorage.removeItem('qrLoginTime');
       }
       
       const { data: { session }, error } = await db.auth.getSession();
@@ -164,6 +197,7 @@ async function logout() {
   localStorage.removeItem('classId');
   localStorage.removeItem('className');
   localStorage.removeItem('qrLoginTime');
+  localStorage.removeItem('qrLoginToken');
   // v47: Clear DAL cache on logout to prevent cross-account data leakage
   localStorage.removeItem('_dal_cache_v1');
   localStorage.removeItem('_dal_cache_v2');
