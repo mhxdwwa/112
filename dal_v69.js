@@ -131,7 +131,7 @@ function _capPetGrowth(pet) {
 
 /* ===== Debounce & Self-Write Protection (v7.0) ===== */
 var _refreshDebounceTimer = null;
-var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
+var _REFRESH_DEBOUNCE_MS = 300; // v92: 300ms debounce for Realtime events (was 1.5s)
 var _lastOwnWriteTime = 0;       // Timestamp of our last successful sync
 var _OWN_WRITE_IGNORE_MS = 15000; // v86: Ignore Realtime events for 15s after our own write (was 10s — too short for mobile)
 var _petSyncErrorShown = false;   // v87: Prevent spamming error notifications
@@ -155,12 +155,12 @@ function _showPetSyncError(petName) {
 // Coalesces multiple events within 3s into a single refresh.
 var _realtimeCoalesceTimer = null;
 function _debouncedRealtimeRefresh(source) {
-  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (3s)');
+  console.log('[DAL] 🔔 Realtime event from [' + source + '] — coalesced (500ms)');
   if (_realtimeCoalesceTimer) return; // already scheduled, skip
   _realtimeCoalesceTimer = setTimeout(function() {
     _realtimeCoalesceTimer = null;
     _immediateRefreshFromSupabase();
-  }, 3000);
+  }, 500);
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
