@@ -2487,9 +2487,7 @@ function _safetyNetTick() {
     _refreshFromSupabase();
     return;
   }
-  // v96: Safety net should always refresh to catch missed Realtime events
-  // _smartRefreshFromSupabase() handles local vs server change merging safely
-  if (_realtimeActive && !_dalSyncing) {
+  if (_realtimeActive && !_dalSyncing && !_pendingLocalSave) {
     _refreshFromSupabase();
   }
 }
