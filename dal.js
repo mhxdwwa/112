@@ -2435,23 +2435,25 @@ function _doSmartRefresh() {
   });
 }
 
-// v97: 定向刷新 —— 先从 Supabase 拉取最新数据合并到 classesData，再定向渲染指定UI区域
-// 修复 v96 的关键 bug：之前直接 scheduleRender() 但内存中的 classesData 是旧的
-// v97b: 去掉 _dalSyncing 检查，有变化就立即执行，不等不跳
+// v97: 定向刷新 —— 直接从 Supabase 拉取完整数据替换 classesData，再定向渲染
+// v98: 不再使用 _smartRefreshFromSupabase()（它有多个静默跳过条件，导致数据不更新）
+//      改为直接调用 loadFromSupabase() 拉取完整数据，确保数据一定是最新的
 function _doTargetedRefresh(renderMask) {
-  // _smartRefreshFromSupabase 是读操作，跟 _syncToSupabase 的写操作不冲突
-  _smartRefreshFromSupabase().then(function() {
-    // 同步操作日志（保持历史记录最新）
+  console.log('[DAL] v98 Targeted refresh: fetching fresh data from Supabase');
+  loadFromSupabase().then(function() {
+    // loadFromSupabase() 已经替换了 classesData，现在同步操作日志
     return _loadOperationLogs();
   }).then(function() {
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    // 定向渲染（不是 scheduleAllRenders，只刷新变化的区域）
+    // 更新 snapshot（反映最新数据）
+    _takeSnapshot();
+    // 定向渲染
     if (typeof scheduleRender === 'function') {
       scheduleRender(renderMask);
     } else if (typeof scheduleAllRenders === 'function') {
       scheduleAllRenders();
     }
-    // v97b: 如果学生详情弹窗开着，刷新它（显示金币、成长值等）
+    // 如果学生详情弹窗开着，刷新它
     if (typeof refreshCurrentStudentModal === 'function' && typeof currentModalStudentId !== 'undefined' && currentModalStudentId) {
       try { refreshCurrentStudentModal(); } catch(e) {}
     }
@@ -2460,9 +2462,9 @@ function _doTargetedRefresh(renderMask) {
       clearTimeout(window._historyRefreshDebounce);
       window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 2000);
     }
+    console.log('[DAL] v98 Targeted refresh complete');
   }).catch(function(e) {
     console.error('[DAL] Targeted refresh error:', e);
-    // 出错时降级为全量刷新
     if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
   });
 }
