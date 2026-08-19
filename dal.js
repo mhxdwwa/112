@@ -356,16 +356,15 @@ function _findPetInSnapshot(petId) {
 function _smartRefreshFromSupabase() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   
-  // v30: Use full _OWN_WRITE_IGNORE_MS protection (was 2s, too short for mobile).
-  // On mobile, Realtime echo of our own write can arrive 3-5s after the upsert.
-  // The old 2s protection expired before the echo arrived, causing stale data overwrite.
-  if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
-    console.log('[DAL] Smart refresh skipped — own write echo (' + 
-      Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
-    return Promise.resolve();
-  }
+  // v102: Removed global _OWN_WRITE_IGNORE_MS protection from here.
+  // Echo protection is now handled per-row:
+  // - Student side: student ID match in _applyRealtimeUpdate
+  // - Teacher side: _recentlyWrittenRows in _applyRealtimeUpdate
+  // This function is only called for full refresh (visibilitychange safety net
+  // or fallback polling when Realtime is down), so it should NOT be blocked
+  // by own-write protection.
 
-  console.log('[DAL] Smart refresh starting...');
+  console.log('[DAL] v102 Smart refresh starting...');
   var isStudent = currentUser.type === 'student';
   var studentId = isStudent ? parseInt(localStorage.getItem('studentId')) : null;
   var classId = isStudent ? parseInt(localStorage.getItem('classId')) : null;
@@ -2411,7 +2410,9 @@ function _refreshFromSupabase() {
   }, _REFRESH_DEBOUNCE_MS);
 }
 
-// Immediate refresh — called by Realtime events (no debounce, instant push)
+// Immediate refresh — called by visibilitychange safety net (no debounce, instant push)
+// v102: Removed global _OWN_WRITE_IGNORE_MS check. Echo protection is now handled
+// per-row by _recentlyWrittenRows (teacher) and student ID match (student) in _applyRealtimeUpdate.
 var _immediateRefreshRetryCount = 0;
 var _IMMEDIATE_REFRESH_MAX_RETRIES = 10;
 function _immediateRefreshFromSupabase() {
@@ -2433,15 +2434,12 @@ function _immediateRefreshFromSupabase() {
   // Reset retry count on successful attempt
   _immediateRefreshRetryCount = 0;
   
-  // v96: Reduced own-write protection from 10s to 3s for faster cross-device sync
-  // Skip own writes (ignore our own changes for 3s)
-  if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
-    console.log('[DAL] Immediate refresh skipped — own write echo (' + 
-      Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
-    return;
-  }
+  // v102: No global own-write protection here. Echo protection is handled
+  // in _applyRealtimeUpdate (student ID match / _recentlyWrittenRows).
+  // This function is only called by visibilitychange safety net, which
+  // needs to do a full refresh to catch any missed Realtime updates.
   
-  console.log('[DAL] ⚡ Realtime event → immediate refresh');
+  console.log('[DAL] v102 ⚡ Immediate refresh (visibilitychange safety net)');
   _lastRefreshTime = Date.now();
   _doSmartRefresh();
 }
@@ -2741,11 +2739,15 @@ function _setupRealtimeSubscriptions() {
         // 检查是否只有 operation_logs_json 变化（通过比较列）
         // 如果只有日志变化，使用轻量级刷新（不重建UI）
         if (payload.columns && payload.columns.length === 1 && payload.columns[0].name === 'operation_logs_json') {
-          console.log('[DAL] Classes channel: logs-only change, using lightweight refresh');
+          console.log('[DAL] v102 Classes channel: logs-only change, using lightweight refresh');
           _refreshLogsOnly();
         } else {
-          // 其他 classes 变化（班级名称等），触发完整刷新
-          _debouncedRealtimeRefresh('classes');
+          // v102: classes 表变化（班级名称等）不影响学生/宠物数据
+          // 只刷新班级列表 UI，不查询数据库
+          console.log('[DAL] v102 Classes channel: class metadata change, refreshing class list UI only');
+          if (typeof renderClassList === 'function') {
+            renderClassList();
+          }
         }
       })
       .subscribe(function(status) {
@@ -2857,7 +2859,15 @@ function _safetyNetTick() {
     _refreshFromSupabase();
     return;
   }
-  if (_realtimeActive && !_dalSyncing && !_pendingLocalSave) {
+  // v102: When Realtime is active and healthy, do NOT do full database queries.
+  // Realtime handles all updates via _applyRealtimeUpdate (zero DB queries).
+  // Only check liveness — the timeout above will catch silent failures.
+  if (_realtimeActive) {
+    // Realtime is working fine, no need to poll
+    return;
+  }
+  // Fallback: Realtime is not active, do debounced refresh
+  if (!_dalSyncing && !_pendingLocalSave) {
     _refreshFromSupabase();
   }
 }
