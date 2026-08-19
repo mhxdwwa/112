@@ -2455,6 +2455,7 @@ function _doTargetedRefresh(renderMask) {
 }
 
 // v100: 直接用 Realtime payload 更新内存数据，零数据库查询，立即生效
+// v101: 加回数据保护机制，防止自己的写操作被 Realtime 回传覆盖
 function _applyRealtimeUpdate(table, payload) {
   if (!payload || !payload.new) {
     console.log('[DAL] v100 Realtime payload missing, skipping');
@@ -2467,6 +2468,19 @@ function _applyRealtimeUpdate(table, payload) {
   if (!studentId) {
     console.log('[DAL] v100 No student ID in payload, skipping');
     return;
+  }
+  
+  // v101: 检查是否是自己的 Realtime 回传（10秒内忽略）
+  var isStudent = currentUser && currentUser.type === 'student';
+  var myStudentId = isStudent ? parseInt(localStorage.getItem('studentId')) : null;
+  
+  if (isStudent && myStudentId && studentId == myStudentId) {
+    // 这是自己的 Realtime 回传
+    if (Date.now() - _lastOwnWriteTime < _OWN_WRITE_IGNORE_MS) {
+      console.log('[DAL] v101 Skipping own write echo (' + 
+        Math.round((_OWN_WRITE_IGNORE_MS - (Date.now() - _lastOwnWriteTime)) / 1000) + 's remaining)');
+      return;
+    }
   }
   
   // 在 classesData 中找到对应的学生
@@ -2493,20 +2507,37 @@ function _applyRealtimeUpdate(table, payload) {
   
   // 根据表类型更新对应字段
   if (table === 'students') {
-    // 更新学生字段
-    if (newData.coins !== undefined) targetStudent.coins = newData.coins;
+    // v101: 对于当前登录的学生，用 _myBaseCoins 保护
+    if (isStudent && studentId == myStudentId) {
+      // 只更新教师或其他人修改的字段（coins 用 _myBaseCoins 保护）
+      if (newData.coins !== undefined && _myBaseCoins !== null) {
+        // 只有当 Supabase 的值和 _myBaseCoins 不同时才更新（说明是教师修改）
+        if (newData.coins !== _myBaseCoins) {
+          targetStudent.coins = newData.coins;
+          _myBaseCoins = newData.coins;
+        }
+      }
+    } else {
+      // 其他学生的数据直接更新
+      if (newData.coins !== undefined) targetStudent.coins = newData.coins;
+    }
+    
+    // 其他字段直接更新
     if (newData.last_checkin_date !== undefined) targetStudent.lastCheckinDate = newData.last_checkin_date;
     if (newData.last_jianghu_date !== undefined) targetStudent.lastJianghuDate = newData.last_jianghu_date;
     if (newData.last_pk_date !== undefined) targetStudent.lastPkDate = newData.last_pk_date;
     if (newData.active_pet_id !== undefined) targetStudent.activePetId = newData.active_pet_id;
     if (newData.pk_count_today !== undefined) targetStudent.pkCountToday = newData.pk_count_today;
-    if (newData.quiz_state !== undefined) {
+    
+    // v101: quiz_state 保护
+    if (newData.quiz_state !== undefined && !window._quizStateLocallyModified) {
       try {
         targetStudent.quizState = typeof newData.quiz_state === 'string' ? JSON.parse(newData.quiz_state) : newData.quiz_state;
       } catch(e) {
         console.warn('[DAL] v100 Failed to parse quiz_state:', e);
       }
     }
+    
     if (newData.shop_items !== undefined) {
       try {
         targetStudent.shopItems = typeof newData.shop_items === 'string' ? JSON.parse(newData.shop_items) : (newData.shop_items || []);
@@ -2530,19 +2561,40 @@ function _applyRealtimeUpdate(table, payload) {
     }
     
     if (targetPet) {
-      // 更新现有宠物
-      if (newData.name !== undefined) targetPet.name = newData.name;
-      if (newData.nickname !== undefined) targetPet.nickname = newData.nickname;
-      if (newData.level !== undefined) targetPet.level = newData.level;
-      if (newData.growth !== undefined) targetPet.growth = newData.growth;
-      if (newData.coins !== undefined) targetPet.coins = newData.coins;
-      if (newData.is_active !== undefined) targetPet.isActive = !!newData.is_active;
-      if (newData.is_dead !== undefined) targetPet.isDead = !!newData.is_dead;
-      if (newData.last_feed_date !== undefined) targetPet.lastFeedDate = newData.last_feed_date;
-      if (newData.last_play_date !== undefined) targetPet.lastPlayDate = newData.last_play_date;
-      if (newData.today_feed_count !== undefined) targetPet.todayFeedCount = newData.today_feed_count;
-      if (newData.today_play_count !== undefined) targetPet.todayPlayCount = newData.today_play_count;
-      if (newData.penalty_streak !== undefined) targetPet.penaltyStreak = newData.penalty_streak;
+      // v101: 对于当前登录学生的宠物，用 _myBasePets 保护 growth
+      if (isStudent && studentId == myStudentId && _myBasePets[petId] !== undefined) {
+        // 只更新教师或其他人修改的字段（growth 用 _myBasePets 保护）
+        if (newData.growth !== undefined && newData.growth !== _myBasePets[petId]) {
+          targetPet.growth = newData.growth;
+          _myBasePets[petId] = newData.growth;
+        }
+        // 其他字段直接更新
+        if (newData.name !== undefined) targetPet.name = newData.name;
+        if (newData.nickname !== undefined) targetPet.nickname = newData.nickname;
+        if (newData.level !== undefined) targetPet.level = newData.level;
+        if (newData.coins !== undefined) targetPet.coins = newData.coins;
+        if (newData.is_active !== undefined) targetPet.isActive = !!newData.is_active;
+        if (newData.is_dead !== undefined) targetPet.isDead = !!newData.is_dead;
+        if (newData.last_feed_date !== undefined) targetPet.lastFeedDate = newData.last_feed_date;
+        if (newData.last_play_date !== undefined) targetPet.lastPlayDate = newData.last_play_date;
+        if (newData.today_feed_count !== undefined) targetPet.todayFeedCount = newData.today_feed_count;
+        if (newData.today_play_count !== undefined) targetPet.todayPlayCount = newData.today_play_count;
+        if (newData.penalty_streak !== undefined) targetPet.penaltyStreak = newData.penalty_streak;
+      } else {
+        // 其他学生的宠物直接更新
+        if (newData.name !== undefined) targetPet.name = newData.name;
+        if (newData.nickname !== undefined) targetPet.nickname = newData.nickname;
+        if (newData.level !== undefined) targetPet.level = newData.level;
+        if (newData.growth !== undefined) targetPet.growth = newData.growth;
+        if (newData.coins !== undefined) targetPet.coins = newData.coins;
+        if (newData.is_active !== undefined) targetPet.isActive = !!newData.is_active;
+        if (newData.is_dead !== undefined) targetPet.isDead = !!newData.is_dead;
+        if (newData.last_feed_date !== undefined) targetPet.lastFeedDate = newData.last_feed_date;
+        if (newData.last_play_date !== undefined) targetPet.lastPlayDate = newData.last_play_date;
+        if (newData.today_feed_count !== undefined) targetPet.todayFeedCount = newData.today_feed_count;
+        if (newData.today_play_count !== undefined) targetPet.todayPlayCount = newData.today_play_count;
+        if (newData.penalty_streak !== undefined) targetPet.penaltyStreak = newData.penalty_streak;
+      }
     } else {
       // 新宠物，添加到列表
       targetStudent.pets.push({
@@ -2560,6 +2612,10 @@ function _applyRealtimeUpdate(table, payload) {
         todayPlayCount: newData.today_play_count || 0,
         penaltyStreak: newData.penalty_streak || 0
       });
+      // v101: 如果是当前登录学生的新宠物，初始化 _myBasePets
+      if (isStudent && studentId == myStudentId) {
+        _myBasePets[newData.id] = newData.growth || 0;
+      }
     }
   }
   
