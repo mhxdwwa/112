@@ -1,5 +1,5 @@
 /**
- * dal.js v102 — Robust Data Access Layer with Stable Realtime Sync
+ * dal.js v103 — Robust Data Access Layer with Stable Realtime Sync
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -30,6 +30,7 @@
 
 /* ===== State ===== */
 var _dalReady = false;
+var _dalInitialLoadComplete = false; // v103: Prevents refresh during initial load
 var _dalSyncing = false;
 var _dalSyncQueued = false;
 var _refreshTimer = null;
@@ -2392,6 +2393,11 @@ function checkStudentLogAccess() {
 /* ===== Realtime ===== */
 // Debounced smart refresh — called by polling fallback
 function _refreshFromSupabase() {
+  // v103: Don't refresh during initial load
+  if (!_dalInitialLoadComplete) {
+    console.log('[DAL] v103 Refresh skipped — initial load not complete');
+    return;
+  }
   // Don't refresh while syncing
   if (_dalSyncing) {
     console.log('[DAL] Refresh skipped - sync in progress');
@@ -2416,6 +2422,11 @@ function _refreshFromSupabase() {
 var _immediateRefreshRetryCount = 0;
 var _IMMEDIATE_REFRESH_MAX_RETRIES = 10;
 function _immediateRefreshFromSupabase() {
+  // v103: Don't refresh during initial load
+  if (!_dalInitialLoadComplete) {
+    console.log('[DAL] v103 Immediate refresh skipped — initial load not complete');
+    return;
+  }
   // Don't refresh while syncing
   if (_dalSyncing) {
     // v46: Limit retries to prevent unbounded timer chain
@@ -2444,12 +2455,27 @@ function _immediateRefreshFromSupabase() {
   _doSmartRefresh();
 }
 
+// v103: Refresh lock — prevent concurrent smart refreshes that cause duplicate queries
+var _smartRefreshInProgress = false;
+var _smartRefreshPending = false;
+
 function _doSmartRefresh() {
+  // v103: If a refresh is already in progress, skip this one.
+  // The in-progress refresh will pick up the latest data.
+  if (_smartRefreshInProgress) {
+    if (!_smartRefreshPending) {
+      _smartRefreshPending = true;
+      console.log('[DAL] v103 Smart refresh already in progress — queued one follow-up');
+    }
+    return;
+  }
+  _smartRefreshInProgress = true;
   console.log('[DAL] Starting smart refresh...');
   _smartRefreshFromSupabase().then(function() {
     // Also reload operation logs from Supabase to keep history up to date
     return _loadOperationLogs();
   }).then(function() {
+    _smartRefreshInProgress = false;
     // v15: Ensure app.js alias is synced after loading logs
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
     
@@ -2480,8 +2506,21 @@ function _doSmartRefresh() {
     }
     
     console.log('[DAL] Smart refresh complete');
+    
+    // v103: If a refresh was queued while we were running, do one more
+    if (_smartRefreshPending) {
+      _smartRefreshPending = false;
+      console.log('[DAL] v103 Running queued follow-up refresh');
+      setTimeout(_doSmartRefresh, 500);
+    }
   }).catch(function(e) {
+    _smartRefreshInProgress = false;
     console.error('[DAL] Smart refresh error:', e);
+    // v103: Still run queued refresh on error
+    if (_smartRefreshPending) {
+      _smartRefreshPending = false;
+      setTimeout(_doSmartRefresh, 2000);
+    }
   });
 }
 
@@ -3401,6 +3440,9 @@ function _initDALCore() {
 
   // Full load from Supabase (single source of truth)
   loadFromSupabase().then(function() {
+    // v103: Mark initial load complete — now allow refresh functions to run
+    _dalInitialLoadComplete = true;
+    
     // Re-render the app with fresh data
     if (typeof init === 'function') init();
     if (typeof renderClassList === 'function') renderClassList();

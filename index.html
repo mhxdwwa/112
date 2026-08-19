@@ -15,11 +15,8 @@
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-<link rel="preload" as="script" href="auth-check.js?v=89">
 <script defer src="auth-check.js?v=89"></script>
-<!-- 预加载游戏资源 -->
-<link rel="prefetch" href="happy-run-game.html">
-<link rel="prefetch" href="happy-run.js">
+<!-- v103: 移除 prefetch — 游戏 JS 已改为按需加载，不再预取 -->
 </head>
 <body>
 <!-- Loading overlay - v45: lightweight, non-blocking, hidden as soon as cache renders -->
@@ -726,8 +723,8 @@ function escapeHtmlSimple(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
-  <link rel="preload" as="script" href="dal_v69.js?v=95">
-  <script defer src="dal_v69.js?v=95"></script>
+  <link rel="preload" as="script" href="dal.js?v=103">
+  <script defer src="dal.js?v=103"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
