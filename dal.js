@@ -214,7 +214,7 @@ function _handleBroadcastChange(msg) {
 }
 
 // 根据变更类型决定刷新哪些UI区域
-// v97: 改为先拉取数据再定向渲染，修复数据不同步问题
+// v100: BroadcastChannel 数据已在内存中，直接定向渲染，不查询数据库
 function _dispatchBroadcastRender(msg) {
   // 渲染标志位常量（与 app.js 中定义一致）
   var _RF_GRID = 1, _RF_TOP3 = 2, _RF_PK = 4, _RF_CLASSLIST = 8, _RF_JH = 16;
@@ -263,8 +263,17 @@ function _dispatchBroadcastRender(msg) {
       return;
   }
 
-  // v97: 先从 Supabase 拉取最新数据，再定向渲染
-  _doTargetedRefresh(renderMask);
+  // v100: 直接定向渲染，数据已在内存中
+  if (typeof scheduleRender === 'function') {
+    scheduleRender(renderMask);
+  } else if (typeof scheduleAllRenders === 'function') {
+    scheduleAllRenders();
+  }
+  
+  // 如果学生详情弹窗开着，刷新它
+  if (typeof refreshCurrentStudentModal === 'function' && typeof currentModalStudentId !== 'undefined' && currentModalStudentId) {
+    try { refreshCurrentStudentModal(); } catch(e) {}
+  }
 }
 
 /* ===== Snapshot Helpers (v7.0) ===== */
@@ -2438,35 +2447,138 @@ function _doSmartRefresh() {
 // v97: 定向刷新 —— 直接从 Supabase 拉取完整数据替换 classesData，再定向渲染
 // v98: 不再使用 _smartRefreshFromSupabase()（它有多个静默跳过条件，导致数据不更新）
 //      改为直接调用 loadFromSupabase() 拉取完整数据，确保数据一定是最新的
+// v99: 添加 debounce，合并短时间内的多次 Realtime 事件，避免流量爆炸
+// v100: 直接用 payload.new 更新内存数据，不查询数据库，立即更新变化的那个学生
 function _doTargetedRefresh(renderMask) {
-  console.log('[DAL] v98 Targeted refresh: fetching fresh data from Supabase');
-  loadFromSupabase().then(function() {
-    // loadFromSupabase() 已经替换了 classesData，现在同步操作日志
-    return _loadOperationLogs();
-  }).then(function() {
-    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    // 更新 snapshot（反映最新数据）
-    _takeSnapshot();
-    // 定向渲染
-    if (typeof scheduleRender === 'function') {
-      scheduleRender(renderMask);
-    } else if (typeof scheduleAllRenders === 'function') {
-      scheduleAllRenders();
+  // v100: 这个方法不再使用，改为 _applyRealtimeUpdate
+  console.warn('[DAL] _doTargetedRefresh is deprecated, use _applyRealtimeUpdate instead');
+}
+
+// v100: 直接用 Realtime payload 更新内存数据，零数据库查询，立即生效
+function _applyRealtimeUpdate(table, payload) {
+  if (!payload || !payload.new) {
+    console.log('[DAL] v100 Realtime payload missing, skipping');
+    return;
+  }
+  
+  var newData = payload.new;
+  var studentId = newData.id || (newData.student_id && newData.student_id);
+  
+  if (!studentId) {
+    console.log('[DAL] v100 No student ID in payload, skipping');
+    return;
+  }
+  
+  // 在 classesData 中找到对应的学生
+  var targetStudent = null;
+  var targetClass = null;
+  for (var i = 0; i < classesData.length; i++) {
+    var cls = classesData[i];
+    for (var j = 0; j < cls.students.length; j++) {
+      if (cls.students[j].id == studentId) {
+        targetStudent = cls.students[j];
+        targetClass = cls;
+        break;
+      }
     }
-    // 如果学生详情弹窗开着，刷新它
-    if (typeof refreshCurrentStudentModal === 'function' && typeof currentModalStudentId !== 'undefined' && currentModalStudentId) {
-      try { refreshCurrentStudentModal(); } catch(e) {}
+    if (targetStudent) break;
+  }
+  
+  if (!targetStudent) {
+    console.log('[DAL] v100 Student not found in classesData:', studentId);
+    return;
+  }
+  
+  console.log('[DAL] v100 Applying realtime update for student:', targetStudent.name, 'table:', table);
+  
+  // 根据表类型更新对应字段
+  if (table === 'students') {
+    // 更新学生字段
+    if (newData.coins !== undefined) targetStudent.coins = newData.coins;
+    if (newData.last_checkin_date !== undefined) targetStudent.lastCheckinDate = newData.last_checkin_date;
+    if (newData.last_jianghu_date !== undefined) targetStudent.lastJianghuDate = newData.last_jianghu_date;
+    if (newData.last_pk_date !== undefined) targetStudent.lastPkDate = newData.last_pk_date;
+    if (newData.active_pet_id !== undefined) targetStudent.activePetId = newData.active_pet_id;
+    if (newData.pk_count_today !== undefined) targetStudent.pkCountToday = newData.pk_count_today;
+    if (newData.quiz_state !== undefined) {
+      try {
+        targetStudent.quizState = typeof newData.quiz_state === 'string' ? JSON.parse(newData.quiz_state) : newData.quiz_state;
+      } catch(e) {
+        console.warn('[DAL] v100 Failed to parse quiz_state:', e);
+      }
     }
-    // 如果历史弹窗开着，刷新它
-    if (typeof refreshHistoryModalIfOpen === 'function') {
-      clearTimeout(window._historyRefreshDebounce);
-      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 2000);
+    if (newData.shop_items !== undefined) {
+      try {
+        targetStudent.shopItems = typeof newData.shop_items === 'string' ? JSON.parse(newData.shop_items) : (newData.shop_items || []);
+      } catch(e) {}
     }
-    console.log('[DAL] v98 Targeted refresh complete');
-  }).catch(function(e) {
-    console.error('[DAL] Targeted refresh error:', e);
-    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
-  });
+    if (newData.equipped_items !== undefined) {
+      try {
+        targetStudent.equippedItems = typeof newData.equipped_items === 'string' ? JSON.parse(newData.equipped_items) : (newData.equipped_items || {});
+      } catch(e) {}
+    }
+  } else if (table === 'pets') {
+    // 更新宠物字段
+    if (!targetStudent.pets) targetStudent.pets = [];
+    var petId = newData.id;
+    var targetPet = null;
+    for (var k = 0; k < targetStudent.pets.length; k++) {
+      if (targetStudent.pets[k].id == petId) {
+        targetPet = targetStudent.pets[k];
+        break;
+      }
+    }
+    
+    if (targetPet) {
+      // 更新现有宠物
+      if (newData.name !== undefined) targetPet.name = newData.name;
+      if (newData.nickname !== undefined) targetPet.nickname = newData.nickname;
+      if (newData.level !== undefined) targetPet.level = newData.level;
+      if (newData.growth !== undefined) targetPet.growth = newData.growth;
+      if (newData.coins !== undefined) targetPet.coins = newData.coins;
+      if (newData.is_active !== undefined) targetPet.isActive = !!newData.is_active;
+      if (newData.is_dead !== undefined) targetPet.isDead = !!newData.is_dead;
+      if (newData.last_feed_date !== undefined) targetPet.lastFeedDate = newData.last_feed_date;
+      if (newData.last_play_date !== undefined) targetPet.lastPlayDate = newData.last_play_date;
+      if (newData.today_feed_count !== undefined) targetPet.todayFeedCount = newData.today_feed_count;
+      if (newData.today_play_count !== undefined) targetPet.todayPlayCount = newData.today_play_count;
+      if (newData.penalty_streak !== undefined) targetPet.penaltyStreak = newData.penalty_streak;
+    } else {
+      // 新宠物，添加到列表
+      targetStudent.pets.push({
+        id: newData.id,
+        name: newData.name || '',
+        nickname: newData.nickname || '',
+        level: newData.level || 1,
+        growth: newData.growth || 0,
+        coins: newData.coins || 0,
+        isActive: !!newData.is_active,
+        isDead: !!newData.is_dead,
+        lastFeedDate: newData.last_feed_date || null,
+        lastPlayDate: newData.last_play_date || null,
+        todayFeedCount: newData.today_feed_count || 0,
+        todayPlayCount: newData.today_play_count || 0,
+        penaltyStreak: newData.penalty_streak || 0
+      });
+    }
+  }
+  
+  // 更新 snapshot（反映最新数据）
+  _takeSnapshot();
+  
+  // 定向渲染：宠物网格 + 排行榜
+  if (typeof scheduleRender === 'function') {
+    scheduleRender(1 | 2); // _RF_GRID=1, _RF_TOP3=2
+  } else if (typeof scheduleAllRenders === 'function') {
+    scheduleAllRenders();
+  }
+  
+  // 如果学生详情弹窗开着，刷新它
+  if (typeof refreshCurrentStudentModal === 'function' && typeof currentModalStudentId !== 'undefined' && currentModalStudentId) {
+    try { refreshCurrentStudentModal(); } catch(e) {}
+  }
+  
+  console.log('[DAL] v100 Realtime update applied for student:', targetStudent.name);
 }
 
 // 仅刷新操作日志（不触发UI重建，避免频繁闪烁）
@@ -2548,30 +2660,13 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(classChannel);
     channelsCreated++;
 
-    // Subscribe to students table — v96: targeted refresh based on changed columns
+    // Subscribe to students table — v100: 直接用 payload.new 更新内存数据
     var studentChannel = db.channel('dal-students-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v96: 根据变化的列做定向刷新，减少不必要的全量刷新
-        var columns = payload.columns || [];
-        var hasCoins = false, hasQuizState = false, hasOther = false;
-        for (var i = 0; i < columns.length; i++) {
-          var colName = columns[i].name;
-          if (colName === 'coins') hasCoins = true;
-          else if (colName === 'quiz_state') hasQuizState = true;
-          else if (colName !== 'id' && colName !== 'updated_at') hasOther = true;
-        }
-        if (hasOther) {
-          // 有非 coins/quiz_state 的列变化 → 走全量刷新（安全兜底）
-          _debouncedRealtimeRefresh('students');
-        } else if (hasCoins || hasQuizState) {
-          // v97: 先从 Supabase 拉取最新数据，再定向刷新排行榜和宠物网格
-          console.log('[DAL] v97 Students: targeted refresh (coins=' + hasCoins + ', quiz=' + hasQuizState + ')');
-          _doTargetedRefresh(1 | 2); // _RF_GRID=1, _RF_TOP3=2
-        } else {
-          // 不确定 → 全量刷新
-          _debouncedRealtimeRefresh('students');
-        }
+        // v100: 直接用 payload.new 更新内存数据，零数据库查询，立即生效
+        console.log('[DAL] v100 Students: realtime update, applying directly to memory');
+        _applyRealtimeUpdate('students', payload);
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
@@ -2579,13 +2674,13 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(studentChannel);
     channelsCreated++;
 
-    // Subscribe to pets table — v96: targeted refresh for pet changes
+    // Subscribe to pets table — v100: 直接用 payload.new 更新内存数据
     var petChannel = db.channel('dal-pets-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v97: 先从 Supabase 拉取最新数据，再定向刷新宠物网格和排行榜
-        console.log('[DAL] v97 Pets: targeted refresh (' + payload.eventType + ')');
-        _doTargetedRefresh(1 | 2); // _RF_GRID=1, _RF_TOP3=2
+        // v100: 直接用 payload.new 更新内存数据，零数据库查询，立即生效
+        console.log('[DAL] v100 Pets: realtime update (' + payload.eventType + '), applying directly to memory');
+        _applyRealtimeUpdate('pets', payload);
       })
       .subscribe(function(status) {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
