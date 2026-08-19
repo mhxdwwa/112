@@ -374,20 +374,46 @@ function saveLogs(){safeLSSave('operationLogs', window.operationLogs); scheduleF
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
   var logs = getOpLogs();
-  var matched = logs.filter(function(l) { return _getLogMonth(l) === month; });
+  // v104: Apply retention filter at display time (not load time)
+  // This keeps data intact in window.operationLogs while only showing recent logs
+  var retentionDays = (typeof _OP_LOGS_RETENTION_DAYS !== 'undefined') ? _OP_LOGS_RETENTION_DAYS : 3;
+  var cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+  var cutoffTimestamp = cutoffDate.toISOString();
+  
+  var matched = logs.filter(function(l) { 
+    return _getLogMonth(l) === month && l.timestamp && l.timestamp >= cutoffTimestamp;
+  });
   // v25: Also include archived logs — archiveOldLogs() moves old logs to logArchives
   // but the history modal must still show them when the user selects that month
   if (logArchives && logArchives[month]) {
-    matched = matched.concat(logArchives[month]);
+    var archivedFiltered = logArchives[month].filter(function(l) {
+      return l.timestamp && l.timestamp >= cutoffTimestamp;
+    });
+    matched = matched.concat(archivedFiltered);
     matched.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
   }
   return matched;
 }
 function getAvailableMonths(){
   const months=new Set();
+  // v104: Only show months within retention period
+  var retentionDays = (typeof _OP_LOGS_RETENTION_DAYS !== 'undefined') ? _OP_LOGS_RETENTION_DAYS : 3;
+  var cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+  var cutoffTimestamp = cutoffDate.toISOString();
+  
   var logs = getOpLogs();
-  logs.forEach(l=>{const m=_getLogMonth(l);if(m)months.add(m);});
-  Object.keys(logArchives).forEach(m=>months.add(m));
+  logs.forEach(l=>{
+    if(l.timestamp && l.timestamp >= cutoffTimestamp){
+      const m=_getLogMonth(l);if(m)months.add(m);
+    }
+  });
+  Object.keys(logArchives).forEach(m=>{
+    if(logArchives[m] && logArchives[m].some(function(l){ return l.timestamp && l.timestamp >= cutoffTimestamp; })){
+      months.add(m);
+    }
+  });
   return [...months].sort().reverse();
 }
 let _currentHistoryMonth = null;

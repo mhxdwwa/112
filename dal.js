@@ -1067,8 +1067,9 @@ function _loadOperationLogs() {
       try {
         var logs = JSON.parse(cls.operation_logs_json);
         if (Array.isArray(logs)) {
-          // v68: Filter out logs older than retention period
-          logs = _filterLogsByRetention(logs);
+          // v104: Do NOT filter by retention at load time — old logs must stay
+          // in window.operationLogs so they can be written back during merges.
+          // Retention filtering is now only at display time (getAllLogsForMonth).
           logs.forEach(function(l) {
             l._synced = true;
             l._fromSupabase = true;
