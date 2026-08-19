@@ -808,14 +808,14 @@ function _historyActionColor(type){
   return '#886655';
 }
 var _isStudentHistoryView = false; // true when a student is viewing history
-function showHistoryModal(){
+ function showHistoryModal(){
   const curClass = classesData.find(c=>c.id===currentClassId);
   const className = curClass ? curClass.name : '未选择班级';
   // Detect if current user is a student
   _isStudentHistoryView = !!(typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student');
 
-  // v11: First sync local logs to Supabase, then load, then show
-  // This ensures all recent operations (from any account) are visible
+  // v104: Show modal IMMEDIATELY with cached/local data, then refresh in background
+  // This eliminates the 2+ second wait for network calls before showing the modal
   var showFn = function() {
     const months = getAvailableMonths();
     if(months.length===0){
@@ -829,26 +829,27 @@ function showHistoryModal(){
     showModal(`📜 历史操作记录【${className}】`, html, [{text:'关闭',onclick:'closeModal()'}], true);
   };
 
-  // v25: Step 1: Sync local unsynced logs to Supabase first
-  // Use _writeUnsyncedLogsToSupabase (v24 function) instead of deleted _syncOperationLogsToSupabase
+  // v104: Show immediately with existing data (from window.operationLogs loaded at init)
+  showFn();
+
+  // v104: Then sync and refresh in background (non-blocking)
+  // This ensures fresh data is loaded without blocking the UI
   var syncPromise = (typeof _writeUnsyncedLogsToSupabase === 'function')
     ? _writeUnsyncedLogsToSupabase()
     : Promise.resolve();
 
-  // Step 2: Then load fresh logs from Supabase (merges with local)
   syncPromise.then(function() {
     if (typeof _loadOperationLogs === 'function') {
       return _loadOperationLogs();
     }
   }).then(function() {
-    // v15: Ensure alias is synced after loading
+    // v104: Refresh the modal content with fresh data
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    showFn();
+    refreshHistoryModalIfOpen();
   }).catch(function(e) {
-    // v15: Sync alias even on error
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e2) {} }
-    console.warn('[History] Load error, showing with local data:', e);
-    showFn(); // Always show modal, even if Supabase fails
+    console.warn('[History] Background refresh error:', e);
+    refreshHistoryModalIfOpen();
   });
 }
 // v12: Refresh history modal content when it's open and new logs arrive (Realtime)

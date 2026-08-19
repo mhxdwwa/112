@@ -999,14 +999,14 @@ function _loadCustomActions() {
  * No more operation_logs table (had FK constraints that broke on mobile).
  * Uses upsert (same pattern as student coins) — proven reliable.
  * Max 5000 logs per class — oldest are trimmed automatically.
- * v68: Logs older than 7 days are automatically removed (keep max 5000).
+ * v104: Logs older than 3 days are automatically removed (keep max 5000).
  *
  * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → classes.upsert
  * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
  */
 
 var _OP_LOGS_MAX_PER_CLASS = 5000;
-var _OP_LOGS_RETENTION_DAYS = 7; // v68: Keep only last 7 days
+var _OP_LOGS_RETENTION_DAYS = 3; // v104: Keep only last 3 days (reduced from 7 days)
 
 // v68: Filter logs to keep only those within retention period
 function _filterLogsByRetention(logs) {
