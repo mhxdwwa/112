@@ -3128,7 +3128,25 @@ function _blockIfNotMine(studentId, actionName) {
 }
 
 function applyStudentRestrictions() {
-  if (!currentUser || currentUser.type !== 'student') return;
+  if (!currentUser) return;
+  
+  // v103: Show teacher-only elements for teachers by adding teacher-visible class
+  // (This was missing — caused all teacher buttons to be hidden)
+  if (currentUser.type === 'teacher') {
+    console.log('[DAL] v103 Showing teacher buttons for:', currentUser.email);
+    document.querySelectorAll('.data-mgmt-btn').forEach(function(el) {
+      el.classList.add('teacher-visible');
+    });
+    document.querySelectorAll('.class-actions').forEach(function(el) {
+      el.classList.add('teacher-visible');
+    });
+    document.querySelectorAll('.teacher-only').forEach(function(el) {
+      el.style.display = 'flex';
+    });
+    return;
+  }
+  
+  // Student: hide teacher-only UI elements
   console.log('[DAL] Applying student restrictions for:', currentUser.studentName);
 
   // Hide teacher-only UI elements
