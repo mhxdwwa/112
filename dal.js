@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '116.0';
+var _DAL_VERSION = '117.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -2808,10 +2808,16 @@ function _applyRealtimeUpdate(table, payload) {
   }
   
   var newData = payload.new;
-  var studentId = newData.id || (newData.student_id && newData.student_id);
+  // v117: For pets table, newData.id is the PET id, not the student id.
+  // We MUST use student_id to find the owning student in classesData.
+  // Previously, newData.id was used first, which caused pet updates to be
+  // silently dropped because no student matched the pet's ID.
+  var studentId = (table === 'pets')
+    ? newData.student_id
+    : (newData.id || (newData.student_id && newData.student_id));
   
   if (!studentId) {
-    console.log('[DAL] v102 No student ID in payload, skipping');
+    console.log('[DAL] v117 No student ID in payload, skipping (table:', table, ')');
     return;
   }
   
@@ -2827,9 +2833,12 @@ function _applyRealtimeUpdate(table, payload) {
     return;
   }
   
-  if (!isStudent && _isRowRecentlyWritten(table, studentId)) {
-    // 教师端：刚刚写过这个学生的数据，Realtime 回传的是回声
-    console.log('[DAL] v102 Skipping recently written row (teacher):', table, studentId);
+  // v117: For pets table, echo detection uses PET id (matching _markRowWritten('pets', pet.id))
+  // For students table, echo detection uses student id
+  var _echoRowId = (table === 'pets') ? newData.id : studentId;
+  if (!isStudent && _isRowRecentlyWritten(table, _echoRowId)) {
+    // 教师端：刚刚写过这个行的数据，Realtime 回传的是回声
+    console.log('[DAL] v117 Skipping recently written row (teacher):', table, _echoRowId);
     return;
   }
   
