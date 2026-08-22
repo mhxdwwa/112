@@ -1155,11 +1155,15 @@ function _buildHistoryLogItem(log, isCurrentMonth, isStudentView) {
   if(snap && snap.isDead && !log.extra?.causedDeath) extraInfo += '<span style="color:#999;margin-left:6px;font-size:11px;">（宠物已死亡）</span>';
   if(snap && snap.penaltyStreak >= 2 && !log.extra?.causedDeath) extraInfo += `<span style="color:#ee6633;margin-left:6px;font-size:11px;">⚠ 连续惩罚${snap.penaltyStreak}次</span>`;
   const opacity = isReverted ? 'opacity:0.45;' : '';
-  const revertedBadge = isReverted ? '<span style="background:#ffcc00;color:#665500;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">已撤销</span>' : '';
+  const revertedBadge = isReverted ? '<span style="background:#ffcc00;color:#665500;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">已撤销</span>' : (log.extra && log.extra._restored ? '<span style="background:#4caf50;color:#fff;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">已恢复</span>' : '');
   let btnHtml = '';
   // Only teachers can revoke operations; students cannot
   if(!isReverted && isCurrentMonth && !isStudentView){
     btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog(${log.id});closeModal();}">撤销</button>`;
+    // v119: Show "恢复删除宠物" button for "删除宠物" logs (before "恢复到此")
+    if(log.actionType === '删除宠物' && log.extra && log.extra.deletedPetSnapshot && !log.extra._restored){
+      btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#fff3e0;color:#e65100;border-color:#ffcc80;margin-right:6px;" onclick="if(confirm('确定恢复被删除的宠物「${esc(log.extra.deletedPetSnapshot.nickname||log.extra.deletedPetSnapshot.name)}」？将恢复到删除时的状态。')){restoreDeletedPet(${log.id});}">恢复删除宠物</button>` + btnHtml;
+    }
     // v46: Show "恢复到此" button for all logs with snapshot
     if(snap && (snap.coinsAfter !== undefined || snap.quizStateSnapshot)) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry(${log.id})">恢复到此</button>` + btnHtml;
   }
@@ -1788,6 +1792,64 @@ function _deletePetFromSupabase(petId, studentId){
       console.log('[DAL] deletePet Supabase OK: pet', petId, 'student', studentId);
     }
   });
+}
+
+// v119: 恢复被删除的宠物（从历史记录中恢复，不标记为撤销）
+function restoreDeletedPet(logId){
+  var _logs = getOpLogs();
+  const log = _logs.find(l => l.id === logId);
+  if(!log){ showNotification('恢复失败','未找到该操作记录','error'); return; }
+  if(log.actionType !== '删除宠物'){ showNotification('恢复失败','该操作不是删除宠物','error'); return; }
+  if(!log.extra || !log.extra.deletedPetSnapshot){ showNotification('恢复失败','该记录没有宠物快照数据','error'); return; }
+  const curClass = classesData.find(c=>c.id===currentClassId);
+  if(!curClass) return;
+  const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString());
+  if(!student){ showNotification('恢复失败','未找到该学生','error'); return; }
+  const petSnap = log.extra.deletedPetSnapshot;
+  // Check if pet already exists (shouldn't, but safety check)
+  if(student.pets.some(p=>p.id.toString()===petSnap.id.toString())){
+    showNotification('恢复失败','该宠物已存在，无需恢复','warning'); return;
+  }
+  // Restore the pet with its exact state at deletion time
+  const restoredPet = JSON.parse(JSON.stringify(petSnap));
+  student.pets.push(restoredPet);
+  // Restore activePetId if it was the active pet at deletion
+  if(log.extra.wasActivePet){
+    student.activePetId = restoredPet.id;
+  }
+  // Mark the log as restored (but not "reverted" - this is a separate restore action)
+  log.extra._restored = true;
+  // Save data
+  saveClassData('pet');
+  // Re-sync pet to Supabase
+  if(typeof db !== 'undefined' && db){
+    var petData = {
+      id: restoredPet.id,
+      student_id: student.id,
+      name: restoredPet.name,
+      nickname: restoredPet.nickname,
+      level: restoredPet.level,
+      growth: restoredPet.growth||0,
+      is_dead: restoredPet.isDead||false,
+      last_feed_date: restoredPet.lastFeedDate,
+      today_feed_count: restoredPet.todayFeedCount||0,
+      last_play_date: restoredPet.lastPlayDate,
+      today_play_count: restoredPet.todayPlayCount||0,
+      penalty_streak: restoredPet.penaltyStreak||0
+    };
+    if(typeof _markRowWritten === 'function') _markRowWritten('pets', restoredPet.id);
+    db.from('pets').upsert(petData).then(function(r){
+      if(r.error) console.warn('[DAL] restoreDeletedPet Supabase error:', r.error);
+      else console.log('[DAL] restoreDeletedPet Supabase OK: pet', restoredPet.id);
+    });
+  }
+  // Refresh UI
+  scheduleAllRenders();
+  if(currentModalStudentId && currentModalStudentId.toString()===log.studentId.toString()) refreshCurrentStudentModal();
+  // Refresh history modal if open
+  refreshHistoryModalIfOpen();
+  const petName = restoredPet.nickname ? `${restoredPet.nickname}(${restoredPet.name})` : restoredPet.name;
+  showNotification('恢复成功', `已恢复 ${student.name} 的宠物「${petName}」(Lv${restoredPet.level}, 成长值${restoredPet.growth||0})`, 'success');
 }
 
 // === 重置学生密码弹窗（教师专用）===
