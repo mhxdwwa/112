@@ -370,7 +370,19 @@ function triggerRealtimeSync() {
 // out of window.operationLogs into logArchives on every save, causing the visible
 // log count to decrease. Archiving is no longer needed since _loadOperationLogs()
 // loads ALL logs from Supabase and getAllLogsForMonth() includes archived logs.
-function saveLogs(){safeLSSave('operationLogs', window.operationLogs); scheduleFileSave(); triggerRealtimeSync();}
+function saveLogs(){
+  safeLSSave('operationLogs', window.operationLogs);
+  scheduleFileSave();
+  triggerRealtimeSync();
+  // v107: 立即触发日志写入 Supabase，不要等到打开历史弹窗才写入
+  if (typeof _writeUnsyncedLogsToSupabase === 'function') {
+    if (window._logWriteTimer) clearTimeout(window._logWriteTimer);
+    window._logWriteTimer = setTimeout(function() {
+      window._logWriteTimer = null;
+      _writeUnsyncedLogsToSupabase();
+    }, 500); // 500ms 防抖，避免频繁写入
+  }
+}
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}
 function getAllLogsForMonth(month){
   var logs = getOpLogs();
@@ -634,8 +646,7 @@ function _scheduleDesktopSave(){
 }
 /* ========== 桌面 EXE 模式结束 ========== */
 function recordAction(studentId, studentName, actionType, details, coinDelta, expDelta, petId, extra = null){
-  // v106: 只有教师操作才记录到历史操作，学生操作不记录
-  if(!currentUser || currentUser.type !== 'teacher') return;
+  // v107: 所有操作（教师+学生）都记录到历史操作
   // v70: 允许特定类型的操作即使没有金币/经验变化也记录日志
   // 这些类型的操作本身就值得记录（如游戏进度、签到等）
   var alwaysLogTypes = ['快乐跑一跑', '小猪快跑', '宠物消消乐', '取金阁', '每日打卡', '全班打卡'];
@@ -690,7 +701,7 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
   window.operationLogs.push(log);
   saveLogs();
 }
-function recordResetAction(classId, className, fullSnapshot){ if(!currentUser || currentUser.type !== 'teacher') return; const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
+function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
 function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } unequipItem(student, itemId); } }
 function restoreToLogEntry(logId){
