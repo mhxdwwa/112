@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '115.0';
+var _DAL_VERSION = '116.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -3238,6 +3238,105 @@ function _cleanupRealtime() {
   }
 }
 
+// v116: Immediate sync of student + pet data after EACH student action.
+// This is the KEY fix for "pet cards don't update immediately on teacher's screen".
+//
+// Problem: Student action → saveClassData() → async _syncToSupabase() → 4-step async chain.
+// On mobile, the async chain (pets upsert + fetch + student upsert + shop_items update)
+// can take 3-5 seconds. If the page is suspended before completion, data never reaches
+// Supabase → teacher's Realtime never fires → pet cards never update.
+//
+// Solution: After each student action, IMMEDIATELY push critical data (coins + pets)
+// to Supabase via sync XHR. This ensures the data reaches Supabase within ~100ms,
+// triggering teacher's Realtime almost instantly.
+//
+// Throttled to at most once every 2 seconds to avoid excessive blocking.
+var _lastStudentSyncXhrTime = 0;
+var _STUDENT_SYNC_XHR_INTERVAL = 2000; // 2 seconds
+
+function _syncStudentDataImmediate() {
+  if (!currentUser || currentUser.type !== 'student') return;
+
+  var now = Date.now();
+  if (now - _lastStudentSyncXhrTime < _STUDENT_SYNC_XHR_INTERVAL) return; // throttled
+  _lastStudentSyncXhrTime = now;
+
+  var studentId = parseInt(localStorage.getItem('studentId'));
+  if (!studentId) return;
+
+  var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+  if (!anonKey) return;
+
+  // Find my student data
+  var myStudent = null;
+  if (classesData && classesData[0]) {
+    for (var i = 0; i < classesData[0].students.length; i++) {
+      if (classesData[0].students[i].id === studentId) {
+        myStudent = classesData[0].students[i];
+        break;
+      }
+    }
+  }
+  if (!myStudent) return;
+
+  try {
+    var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+
+    // Sync student data (coins, checkin, etc.) — this triggers teacher's Realtime for students table
+    var studentPayload = {
+      coins: myStudent.coins || 0,
+      last_checkin_date: myStudent.lastCheckinDate || null,
+      last_jianghu_date: myStudent.lastJianghuDate || null,
+      last_pk_date: myStudent.lastPkDate || null,
+      active_pet_id: myStudent.activePetId || null,
+      pk_count_today: myStudent.pkCountToday || 0,
+      shop_items: JSON.stringify(myStudent.shopItems || []),
+      equipped_items: JSON.stringify(myStudent.equippedItems || {})
+    };
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+    xhr.setRequestHeader('apikey', anonKey);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Prefer', 'return=minimal');
+    xhr.send(JSON.stringify(studentPayload));
+
+    if (xhr.status >= 200 && xhr.status < 300) {
+      _lastOwnWriteTime = now;
+    }
+
+    // Sync each pet — this triggers teacher's Realtime for pets table
+    if (myStudent.pets && myStudent.pets.length > 0) {
+      myStudent.pets.forEach(function(pet) {
+        if (!pet.id || pet.id <= 0) return;
+        var petPayload = {
+          growth: pet.growth || 0,
+          level: pet.level || 1,
+          coins: pet.coins || 0,
+          is_active: (myStudent.activePetId === pet.id),
+          is_dead: !!pet.isDead,
+          last_feed_date: pet.lastFeedDate || null,
+          last_play_date: pet.lastPlayDate || null,
+          today_feed_count: pet.todayFeedCount || 0,
+          today_play_count: pet.todayPlayCount || 0
+        };
+        try {
+          var petXhr = new XMLHttpRequest();
+          petXhr.open('PATCH', baseUrl + '/pets?id=eq.' + pet.id, false);
+          petXhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+          petXhr.setRequestHeader('apikey', anonKey);
+          petXhr.setRequestHeader('Content-Type', 'application/json');
+          petXhr.setRequestHeader('Prefer', 'return=minimal');
+          petXhr.send(JSON.stringify(petPayload));
+        } catch(e) {}
+      });
+    }
+  } catch(e) {
+    console.warn('[DAL] v116 Immediate sync failed:', e.message);
+  }
+}
+
 // v115: Synchronous write of student data + pet data + operation logs.
 // CRITICAL: Students CANNOT UPDATE classes table (RLS blocks anon key — verified).
 // Students write to students table (confirmed working with anon key).
@@ -3485,6 +3584,14 @@ function wrapSaveFunctions() {
       origSaveClassData.apply(this, arguments);
       _updateCloudStatus('syncing');
       _syncToSupabase();
+      // v116: For students, IMMEDIATELY push data to Supabase via sync XHR.
+      // This ensures teacher's Realtime fires within ~100ms, updating pet cards instantly.
+      // Without this, the async _syncToSupabase() chain (4 steps) can take 3-5s on mobile,
+      // and may be interrupted if the page is suspended before completion.
+      // Throttled to at most once every 2 seconds.
+      if (currentUser && currentUser.type === 'student') {
+        _syncStudentDataImmediate();
+      }
     };
     saveClassData._dalWrapped = true;
   }
