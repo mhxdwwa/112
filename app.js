@@ -374,13 +374,14 @@ function saveLogs(){
   safeLSSave('operationLogs', window.operationLogs);
   scheduleFileSave();
   triggerRealtimeSync();
-  // v107: 立即触发日志写入 Supabase，不要等到打开历史弹窗才写入
+  // v108: 立即触发日志写入 Supabase，不要等到打开历史弹窗才写入
+  // v108: 防抖从500ms减至200ms，减少移动端页面被杀前日志未写入的风险
   if (typeof _writeUnsyncedLogsToSupabase === 'function') {
     if (window._logWriteTimer) clearTimeout(window._logWriteTimer);
     window._logWriteTimer = setTimeout(function() {
       window._logWriteTimer = null;
       _writeUnsyncedLogsToSupabase();
-    }, 500); // 500ms 防抖，避免频繁写入
+    }, 200); // v108: 200ms 防抖（原500ms），移动端页面随时可能被杀
   }
 }
 function saveArchives(){safeLSSave('logArchives', logArchives); scheduleFileSave();}

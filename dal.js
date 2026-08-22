@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '69.0';
+var _DAL_VERSION = '70.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -2487,6 +2487,16 @@ function _doSmartRefresh() {
     // Also reload operation logs from Supabase to keep history up to date
     return _loadOperationLogs();
   }).then(function() {
+    // v108: After loading logs, also write any unsynced ones.
+    // This handles the mobile case where the page was killed before the
+    // debounce timer fired, leaving unsynced logs in localStorage.
+    if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
+      var hasUnsynced = window.operationLogs.some(function(l) { return !l._synced; });
+      if (hasUnsynced && typeof _writeUnsyncedLogsToSupabase === 'function') {
+        console.log('[DAL] v108 Smart refresh: found unsynced logs, writing...');
+        _writeUnsyncedLogsToSupabase();
+      }
+    }
     _smartRefreshInProgress = false;
     // v15: Ensure app.js alias is synced after loading logs
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
@@ -3021,6 +3031,75 @@ function _setupPageLifecycle() {
             });
             console.log('[DAL] v54 beforeunload: ' + myStudent.pets.length + ' pets saved synchronously');
           }
+
+          // v108: Also save unsynced operation logs synchronously before page dies.
+          // This is critical for mobile — without this, logs created just before
+          // page death are stuck in localStorage until the next page load.
+          if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
+            var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
+            if (unsyncedLogs.length > 0) {
+              var classId = parseInt(localStorage.getItem('classId'));
+              if (classId) {
+                try {
+                  // Step 1: Read current logs from Supabase
+                  var readXhr = new XMLHttpRequest();
+                  readXhr.open('GET', baseUrl + '/classes?id=eq.' + classId + '&select=id,operation_logs_json', false);
+                  readXhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                  readXhr.setRequestHeader('apikey', token);
+                  readXhr.send();
+                  var existingLogs = [];
+                  if (readXhr.status === 200) {
+                    try {
+                      var readResult = JSON.parse(readXhr.responseText);
+                      if (readResult && readResult[0] && readResult[0].operation_logs_json) {
+                        existingLogs = JSON.parse(readResult[0].operation_logs_json);
+                      }
+                    } catch(e) {}
+                  }
+                  // Step 2: Merge unsynced logs into existing
+                  var existingById = {};
+                  existingLogs.forEach(function(l, idx) { existingById[l.id] = idx; });
+                  var addedCount = 0;
+                  unsyncedLogs.forEach(function(l) {
+                    var merged = {
+                      id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+                      classId: classId, studentId: l.studentId, studentName: l.studentName || '',
+                      actionType: l.actionType || '', details: l.details || '',
+                      coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+                      petId: l.petId || null, extra: l.extra || null,
+                      snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+                      reverted: !!l.reverted, _synced: true, _fromSupabase: true
+                    };
+                    if (existingById[l.id] !== undefined) {
+                      existingLogs[existingById[l.id]] = merged;
+                    } else {
+                      existingLogs.push(merged);
+                      addedCount++;
+                    }
+                  });
+                  // Sort and cap
+                  existingLogs.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+                  if (existingLogs.length > 3000) existingLogs = existingLogs.slice(0, 3000);
+                  // Step 3: Write back
+                  if (addedCount > 0) {
+                    var writeXhr = new XMLHttpRequest();
+                    writeXhr.open('PATCH', baseUrl + '/classes?id=eq.' + classId, false);
+                    writeXhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                    writeXhr.setRequestHeader('apikey', token);
+                    writeXhr.setRequestHeader('Content-Type', 'application/json');
+                    writeXhr.setRequestHeader('Prefer', 'return=minimal');
+                    writeXhr.send(JSON.stringify({ operation_logs_json: JSON.stringify(existingLogs) }));
+                    console.log('[DAL] v108 beforeunload: wrote ' + addedCount + ' unsynced logs for class', classId);
+                    // Mark as synced so they don't get re-written
+                    unsyncedLogs.forEach(function(l) { l._synced = true; });
+                    try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+                  }
+                } catch(e) {
+                  console.warn('[DAL] v108 beforeunload log save failed:', e.message);
+                }
+              }
+            }
+          }
         } else {
           // Teacher: just send sync_ping (teacher data is more complex, rely on async sync)
           var xhr2 = new XMLHttpRequest();
@@ -3527,6 +3606,22 @@ function _initDALCore() {
 }
 
 function _postInitSetup() {
+  // v108: Retry writing any unsynced operation logs after init.
+  // On mobile, the page may be killed before the 500ms debounce timer fires,
+  // leaving logs in localStorage that were never written to Supabase.
+  // This ensures they get written on the next page load.
+  setTimeout(function() {
+    if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
+      var unsynced = window.operationLogs.filter(function(l) { return !l._synced; });
+      if (unsynced.length > 0) {
+        console.log('[DAL] v108 Found ' + unsynced.length + ' unsynced logs after init, writing now...');
+        if (typeof _writeUnsyncedLogsToSupabase === 'function') {
+          _writeUnsyncedLogsToSupabase();
+        }
+      }
+    }
+  }, 2000);
+
   // Periodic PK badge check for students (every 10 seconds)
   if (currentUser.type === 'student' && typeof _updatePKInviteBadge === 'function') {
     setInterval(_updatePKInviteBadge, 10000);
