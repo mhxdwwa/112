@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '113.0';
+var _DAL_VERSION = '114.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -1118,6 +1118,60 @@ function _loadOperationLogs() {
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
     console.log('[DAL] v105 Loaded ' + allLogs.length + ' logs from Supabase, ' + localOnly.length + ' local-only preserved (' + localUnsynced.length + ' unsynced)');
 
+    // v114: For STUDENTS, also read their own pending_logs_json.
+    // Students write to students.pending_logs_json (they CANNOT write to classes table — RLS blocks).
+    // Without this, students can write logs but never see them in their history view.
+    // The teacher merge moves pending logs into classes.operation_logs_json eventually,
+    // but students need to see their own logs immediately.
+    if (currentUser.type === 'student') {
+      var studentId = parseInt(localStorage.getItem('studentId'));
+      if (studentId) {
+        return db.from('students').select('id, pending_logs_json').eq('id', studentId).then(function(stuR) {
+          if (stuR.error) {
+            if (stuR.error.message && stuR.error.message.indexOf('pending_logs_json') >= 0) {
+              console.log('[DAL] v114 pending_logs_json column not found — skipping');
+              return;
+            }
+            console.warn('[DAL] v114 Failed to read student pending logs:', stuR.error.message);
+            return;
+          }
+          if (!stuR.data || stuR.data.length === 0) return;
+          var stu = stuR.data[0];
+          if (!stu.pending_logs_json || stu.pending_logs_json === '[]' || stu.pending_logs_json === 'null') return;
+          
+          try {
+            var pendingLogs = JSON.parse(stu.pending_logs_json);
+            if (!Array.isArray(pendingLogs) || pendingLogs.length === 0) return;
+            
+            console.log('[DAL] v114 Loaded ' + pendingLogs.length + ' pending logs from students table for student ' + studentId);
+            
+            // Merge pending logs into window.operationLogs (dedup by ID)
+            var existingIds = {};
+            window.operationLogs.forEach(function(l) { existingIds[l.id] = true; });
+            
+            pendingLogs.forEach(function(l) {
+              if (!existingIds[l.id]) {
+                l._synced = true; // They're "synced" to Supabase (in pending_logs_json)
+                l._fromSupabase = true;
+                if (!l.classId) l.classId = parseInt(localStorage.getItem('classId')) || 0;
+                window.operationLogs.push(l);
+                existingIds[l.id] = true;
+              }
+            });
+            
+            window.operationLogs.sort(function(a, b) {
+              return (b.timestamp || '').localeCompare(a.timestamp || '');
+            });
+            
+            try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+            console.log('[DAL] v114 Total logs after merge: ' + window.operationLogs.length);
+          } catch(e) {
+            console.warn('[DAL] v114 Failed to parse student pending logs:', e.message);
+          }
+        });
+      }
+    }
+
     // v111: For teachers, also merge student pending logs into classes.operation_logs_json.
     // Students write to students.pending_logs_json (they can't UPDATE classes due to RLS).
     // The teacher reads those pending logs, merges them into the class, and clears them.
@@ -1434,13 +1488,15 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
-  // v113: STUDENT PATH — Write directly to classes.operation_logs_json using
-  // synchronous XHR. RLS allows anon UPDATE on classes table (verified).
-  // This eliminates the unreliable pending_logs_json → teacher merge pipeline.
-  // Sync XHR ensures the write completes even on mobile browsers that kill pages.
+  // v114: STUDENT PATH — Write to students.pending_logs_json using sync XHR.
+  // CRITICAL: Students CANNOT UPDATE classes table (RLS blocks anon key — verified by direct API test).
+  // Previous versions (v109-v113) tried writing to classes.operation_logs_json — ALL silently failed.
+  // Students write to students.pending_logs_json (confirmed working with anon key).
+  // Teacher-side merge moves these into classes.operation_logs_json.
+  // Student-side _loadOperationLogs() also reads pending_logs_json so students see their own history.
   if (currentUser.type === 'student') {
-    console.log('[DAL] v113 Writing ' + unsynced.length + ' unsynced logs directly to classes table (sync XHR)');
-    _syncWriteStudentLogsToClass();
+    console.log('[DAL] v114 Writing ' + unsynced.length + ' unsynced logs to students.pending_logs_json (sync XHR)');
+    _syncWriteStudentPendingLogs();
     return Promise.resolve();
   }
 
@@ -3158,25 +3214,23 @@ function _cleanupRealtime() {
   }
 }
 
-// v113: Synchronous read-modify-write of student operation logs directly to
-// classes.operation_logs_json. This is the definitive fix for mobile — students
-// write directly to the same table teachers read from, eliminating the unreliable
-// pending_logs_json → teacher merge pipeline.
-// Uses synchronous XHR with anon key to ensure the write completes before the
-// page is killed on mobile browsers.
-function _syncWriteStudentLogsToClass() {
+// v114: Synchronous write of student operation logs to students.pending_logs_json.
+// CRITICAL: Students CANNOT UPDATE classes table (RLS blocks anon key — verified).
+// Students write to students.pending_logs_json (confirmed working with anon key).
+// Uses synchronous XHR to ensure the write completes before mobile browsers kill the page.
+function _syncWriteStudentPendingLogs() {
   if (!currentUser || currentUser.type !== 'student') return false;
   if (typeof window.operationLogs === 'undefined' || !Array.isArray(window.operationLogs)) return false;
 
-  var classId = parseInt(localStorage.getItem('classId'));
-  if (!classId) {
-    console.warn('[DAL] v113 No classId for student log write');
+  var studentId = parseInt(localStorage.getItem('studentId'));
+  if (!studentId) {
+    console.warn('[DAL] v114 No studentId for pending logs write');
     return false;
   }
 
   var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
   if (!anonKey) {
-    console.warn('[DAL] v113 No SUPABASE_ANON_KEY available');
+    console.warn('[DAL] v114 No SUPABASE_ANON_KEY available');
     return false;
   }
 
@@ -3186,36 +3240,12 @@ function _syncWriteStudentLogsToClass() {
   try {
     var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
 
-    // Step 1: Synchronously READ current operation_logs_json from classes table
-    var readXhr = new XMLHttpRequest();
-    readXhr.open('GET', baseUrl + '/classes?id=eq.' + classId + '&select=operation_logs_json', false);
-    readXhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-    readXhr.setRequestHeader('apikey', anonKey);
-    readXhr.send();
-
-    var existing = [];
-    if (readXhr.status >= 200 && readXhr.status < 300) {
-      try {
-        var readData = JSON.parse(readXhr.responseText);
-        if (readData && readData.length > 0 && readData[0].operation_logs_json) {
-          existing = JSON.parse(readData[0].operation_logs_json);
-        }
-      } catch(e) {
-        console.warn('[DAL] v113 Failed to parse existing class logs:', e.message);
-      }
-    } else {
-      console.warn('[DAL] v113 Failed to read existing class logs, status:', readXhr.status);
-    }
-
-    // Step 2: Merge — add/replace unsynced logs into existing
-    var existingById = {};
-    existing.forEach(function(l, idx) { existingById[l.id] = idx; });
-
-    unsyncedLogs.forEach(function(l) {
-      var merged = {
+    // Build payload — just the unsynced logs (teacher merge will handle dedup)
+    var pendingPayload = unsyncedLogs.map(function(l) {
+      return {
         id: l.id,
         timestamp: l.timestamp || new Date().toISOString(),
-        classId: classId,
+        classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
         studentId: l.studentId,
         studentName: l.studentName || '',
         actionType: l.actionType || '',
@@ -3226,86 +3256,11 @@ function _syncWriteStudentLogsToClass() {
         extra: l.extra || null,
         snapshot: l.snapshot || null,
         fullSnapshot: l.fullSnapshot || null,
-        reverted: !!l.reverted,
-        _synced: true,
-        _fromSupabase: true
-      };
-      if (existingById[l.id] !== undefined) {
-        existing[existingById[l.id]] = merged;
-      } else {
-        existing.push(merged);
-        existingById[l.id] = existing.length - 1;
-      }
-    });
-
-    // Sort by timestamp descending, cap at max
-    existing.sort(function(a, b) {
-      return (b.timestamp || '').localeCompare(a.timestamp || '');
-    });
-    if (existing.length > _OP_LOGS_MAX_PER_CLASS) {
-      existing = existing.slice(0, _OP_LOGS_MAX_PER_CLASS);
-    }
-
-    // Step 3: Synchronously WRITE merged logs back to classes table
-    var writeXhr = new XMLHttpRequest();
-    writeXhr.open('PATCH', baseUrl + '/classes?id=eq.' + classId, false);
-    writeXhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-    writeXhr.setRequestHeader('apikey', anonKey);
-    writeXhr.setRequestHeader('Content-Type', 'application/json');
-    writeXhr.setRequestHeader('Prefer', 'return=minimal');
-    writeXhr.send(JSON.stringify({ operation_logs_json: JSON.stringify(existing) }));
-
-    if (writeXhr.status >= 200 && writeXhr.status < 300) {
-      console.log('[DAL] v113 Sync wrote ' + unsyncedLogs.length + ' logs directly to classes.operation_logs_json for class ' + classId);
-      // Mark all unsynced logs as synced
-      unsyncedLogs.forEach(function(l) {
-        l._synced = true;
-        l._fromSupabase = true;
-      });
-      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-      _lastOwnWriteTime = Date.now();
-      return true;
-    } else {
-      console.warn('[DAL] v113 Sync write to classes failed, status:', writeXhr.status, writeXhr.responseText);
-      return false;
-    }
-  } catch(e) {
-    console.warn('[DAL] v113 Sync write failed:', e.message);
-    return false;
-  }
-}
-
-// v112: Synchronous write of student pending logs using anon key.
-// Kept as fallback — v113 _syncWriteStudentLogsToClass is the primary path.
-// This is the critical fix for mobile — async Supabase client calls get killed
-// when the page goes hidden/on mobile browsers. Synchronous XHR blocks until complete.
-function _syncWriteStudentPendingLogs() {
-  if (!currentUser || currentUser.type !== 'student') return;
-  if (typeof window.operationLogs === 'undefined' || !Array.isArray(window.operationLogs)) return;
-  var studentId = parseInt(localStorage.getItem('studentId'));
-  if (!studentId) return;
-
-  var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
-  if (!anonKey) return;
-
-  var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
-  if (unsyncedLogs.length === 0) return;
-
-  try {
-    var pendingPayload = unsyncedLogs.map(function(l) {
-      return {
-        id: l.id, timestamp: l.timestamp || new Date().toISOString(),
-        classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-        studentId: l.studentId, studentName: l.studentName || '',
-        actionType: l.actionType || '', details: l.details || '',
-        coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
-        petId: l.petId || null, extra: l.extra || null,
-        snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
         reverted: !!l.reverted
       };
     });
 
-    var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+    // Synchronous PATCH to students.pending_logs_json
     var xhr = new XMLHttpRequest();
     xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false); // false = synchronous
     xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
@@ -3315,14 +3270,22 @@ function _syncWriteStudentPendingLogs() {
     xhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(pendingPayload) }));
 
     if (xhr.status >= 200 && xhr.status < 300) {
-      console.log('[DAL] v112 Sync wrote ' + pendingPayload.length + ' pending logs for student ' + studentId);
-      unsyncedLogs.forEach(function(l) { l._synced = true; });
+      console.log('[DAL] v114 Sync wrote ' + pendingPayload.length + ' pending logs for student ' + studentId);
+      // Mark all unsynced logs as synced
+      unsyncedLogs.forEach(function(l) {
+        l._synced = true;
+        l._fromSupabase = true;
+      });
       try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+      _lastOwnWriteTime = Date.now();
+      return true;
     } else {
-      console.warn('[DAL] v112 Sync write failed with status', xhr.status);
+      console.warn('[DAL] v114 Sync write failed, status:', xhr.status, xhr.responseText);
+      return false;
     }
   } catch(e) {
-    console.warn('[DAL] v112 Sync write failed:', e.message);
+    console.warn('[DAL] v114 Sync write failed:', e.message);
+    return false;
   }
 }
 
@@ -3410,9 +3373,8 @@ function _setupPageLifecycle() {
             console.log('[DAL] v54 beforeunload: ' + myStudent.pets.length + ' pets saved synchronously');
           }
 
-          // v113: Save unsynced operation logs directly to classes.operation_logs_json
-          // via synchronous XHR. Writes to the same table teachers read from — no merge needed.
-          _syncWriteStudentLogsToClass();
+          // v114: Save unsynced operation logs to students.pending_logs_json via sync XHR.
+          _syncWriteStudentPendingLogs();
         } else {
           // Teacher: needs Supabase Auth token (students already handled above with anon key)
           var teacherToken = '';
@@ -3449,10 +3411,10 @@ function _setupPageLifecycle() {
         var _hiddenUnsynced = window.operationLogs.some(function(l) { return !l._synced; });
         if (_hiddenUnsynced) {
           if (currentUser && currentUser.type === 'student') {
-            // v113: SYNCHRONOUS write directly to classes.operation_logs_json.
-            // No more pending_logs_json indirection — students write where teachers read.
-            console.log('[DAL] v113 Page hidden — synchronous log write to classes table...');
-            _syncWriteStudentLogsToClass();
+            // v114: SYNCHRONOUS write to students.pending_logs_json.
+            // Students CANNOT write to classes table (RLS blocks) — verified by direct API test.
+            console.log('[DAL] v114 Page hidden — synchronous pending logs write...');
+            _syncWriteStudentPendingLogs();
           } else if (typeof _writeUnsyncedLogsToSupabase === 'function') {
             console.log('[DAL] v109 Page hidden with unsynced logs, writing immediately...');
             _writeUnsyncedLogsToSupabase();
