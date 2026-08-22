@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '114.0';
+var _DAL_VERSION = '115.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -3062,6 +3062,30 @@ function _setupRealtimeSubscriptions() {
     var studentChannel = db.channel('dal-students-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
+        // v115: Teacher — if student's pending_logs_json changed, merge IMMEDIATELY.
+        // This eliminates the 30s delay from _safetyNetTick periodic merge.
+        if (currentUser && currentUser.type === 'teacher' && payload && payload.new) {
+          var _plj = payload.new.pending_logs_json;
+          if (_plj && _plj !== '[]' && _plj !== 'null' && _plj !== '') {
+            console.log('[DAL] v115 ⚡ Student pending_logs_json changed via Realtime — immediate merge');
+            var _mergeClassId = payload.new.class_id;
+            if (_mergeClassId) {
+              _mergeStudentPendingLogs([_mergeClassId]).then(function(mergedCount) {
+                if (mergedCount > 0) {
+                  console.log('[DAL] v115 ⚡ Immediate merge: ' + mergedCount + ' logs merged');
+                  // Reload operation logs and refresh history UI
+                  return _loadOperationLogsAfterMerge([_mergeClassId]).then(function() {
+                    if (typeof refreshHistoryModalIfOpen === 'function') {
+                      clearTimeout(window._historyRefreshDebounce);
+                      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 500);
+                    }
+                    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+                  });
+                }
+              });
+            }
+          }
+        }
         // v100: 直接用 payload.new 更新内存数据，零数据库查询，立即生效
         console.log('[DAL] v100 Students: realtime update, applying directly to memory');
         _applyRealtimeUpdate('students', payload);
@@ -3214,63 +3238,98 @@ function _cleanupRealtime() {
   }
 }
 
-// v114: Synchronous write of student operation logs to students.pending_logs_json.
+// v115: Synchronous write of student data + pet data + operation logs.
 // CRITICAL: Students CANNOT UPDATE classes table (RLS blocks anon key — verified).
-// Students write to students.pending_logs_json (confirmed working with anon key).
+// Students write to students table (confirmed working with anon key).
 // Uses synchronous XHR to ensure the write completes before mobile browsers kill the page.
+// v115: Now also syncs student data (coins, checkin, etc.) and pet data in the same call.
+// Previously (v114) only synced pending_logs_json — student/pet data was only synced async,
+// which could be killed on mobile before completing. This caused teacher's Realtime to never
+// fire for student/pet updates, so pet cards and coins never auto-updated on teacher's screen.
 function _syncWriteStudentPendingLogs() {
   if (!currentUser || currentUser.type !== 'student') return false;
-  if (typeof window.operationLogs === 'undefined' || !Array.isArray(window.operationLogs)) return false;
 
   var studentId = parseInt(localStorage.getItem('studentId'));
   if (!studentId) {
-    console.warn('[DAL] v114 No studentId for pending logs write');
+    console.warn('[DAL] v115 No studentId for sync write');
     return false;
   }
 
   var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
   if (!anonKey) {
-    console.warn('[DAL] v114 No SUPABASE_ANON_KEY available');
+    console.warn('[DAL] v115 No SUPABASE_ANON_KEY available');
     return false;
   }
 
-  var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
-  if (unsyncedLogs.length === 0) return true; // nothing to write
+  // Find my student data
+  var myStudent = null;
+  if (classesData && classesData[0]) {
+    for (var i = 0; i < classesData[0].students.length; i++) {
+      if (classesData[0].students[i].id === studentId) {
+        myStudent = classesData[0].students[i];
+        break;
+      }
+    }
+  }
+  if (!myStudent) {
+    console.warn('[DAL] v115 Student data not found in classesData');
+    return false;
+  }
+
+  var unsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
+    ? window.operationLogs.filter(function(l) { return !l._synced; })
+    : [];
 
   try {
     var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
 
-    // Build payload — just the unsynced logs (teacher merge will handle dedup)
-    var pendingPayload = unsyncedLogs.map(function(l) {
-      return {
-        id: l.id,
-        timestamp: l.timestamp || new Date().toISOString(),
-        classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-        studentId: l.studentId,
-        studentName: l.studentName || '',
-        actionType: l.actionType || '',
-        details: l.details || '',
-        coinDelta: parseInt(l.coinDelta) || 0,
-        expDelta: parseInt(l.expDelta) || 0,
-        petId: l.petId || null,
-        extra: l.extra || null,
-        snapshot: l.snapshot || null,
-        fullSnapshot: l.fullSnapshot || null,
-        reverted: !!l.reverted
-      };
-    });
+    // Build combined student payload — data + pending logs in ONE request
+    var studentPayload = {
+      coins: myStudent.coins || 0,
+      last_checkin_date: myStudent.lastCheckinDate || null,
+      last_jianghu_date: myStudent.lastJianghuDate || null,
+      last_pk_date: myStudent.lastPkDate || null,
+      active_pet_id: myStudent.activePetId || null,
+      pk_count_today: myStudent.pkCountToday || 0,
+      shop_items: JSON.stringify(myStudent.shopItems || []),
+      equipped_items: JSON.stringify(myStudent.equippedItems || {})
+    };
 
-    // Synchronous PATCH to students.pending_logs_json
+    // Add pending logs if any
+    if (unsyncedLogs.length > 0) {
+      var pendingPayload = unsyncedLogs.map(function(l) {
+        return {
+          id: l.id,
+          timestamp: l.timestamp || new Date().toISOString(),
+          classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+          studentId: l.studentId,
+          studentName: l.studentName || '',
+          actionType: l.actionType || '',
+          details: l.details || '',
+          coinDelta: parseInt(l.coinDelta) || 0,
+          expDelta: parseInt(l.expDelta) || 0,
+          petId: l.petId || null,
+          extra: l.extra || null,
+          snapshot: l.snapshot || null,
+          fullSnapshot: l.fullSnapshot || null,
+          reverted: !!l.reverted
+        };
+      });
+      studentPayload.pending_logs_json = JSON.stringify(pendingPayload);
+    }
+
+    // Synchronous PATCH to students table — writes data + logs in ONE request
     var xhr = new XMLHttpRequest();
     xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false); // false = synchronous
     xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
     xhr.setRequestHeader('apikey', anonKey);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('Prefer', 'return=minimal');
-    xhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(pendingPayload) }));
+    xhr.send(JSON.stringify(studentPayload));
 
-    if (xhr.status >= 200 && xhr.status < 300) {
-      console.log('[DAL] v114 Sync wrote ' + pendingPayload.length + ' pending logs for student ' + studentId);
+    var studentOk = (xhr.status >= 200 && xhr.status < 300);
+    if (studentOk) {
+      console.log('[DAL] v115 Sync wrote student data' + (unsyncedLogs.length > 0 ? ' + ' + unsyncedLogs.length + ' pending logs' : '') + ' for student ' + studentId);
       // Mark all unsynced logs as synced
       unsyncedLogs.forEach(function(l) {
         l._synced = true;
@@ -3278,13 +3337,45 @@ function _syncWriteStudentPendingLogs() {
       });
       try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
       _lastOwnWriteTime = Date.now();
-      return true;
     } else {
-      console.warn('[DAL] v114 Sync write failed, status:', xhr.status, xhr.responseText);
-      return false;
+      console.warn('[DAL] v115 Student sync write failed, status:', xhr.status, xhr.responseText);
     }
+
+    // Also sync each pet synchronously
+    var petsOk = 0;
+    if (myStudent.pets && myStudent.pets.length > 0) {
+      myStudent.pets.forEach(function(pet) {
+        if (!pet.id || pet.id <= 0) return; // Skip pets without real DB IDs
+        var petPayload = {
+          growth: pet.growth || 0,
+          level: pet.level || 1,
+          coins: pet.coins || 0,
+          is_active: (myStudent.activePetId === pet.id),
+          is_dead: !!pet.isDead,
+          last_feed_date: pet.lastFeedDate || null,
+          last_play_date: pet.lastPlayDate || null,
+          today_feed_count: pet.todayFeedCount || 0,
+          today_play_count: pet.todayPlayCount || 0
+        };
+        try {
+          var petXhr = new XMLHttpRequest();
+          petXhr.open('PATCH', baseUrl + '/pets?id=eq.' + pet.id, false);
+          petXhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+          petXhr.setRequestHeader('apikey', anonKey);
+          petXhr.setRequestHeader('Content-Type', 'application/json');
+          petXhr.setRequestHeader('Prefer', 'return=minimal');
+          petXhr.send(JSON.stringify(petPayload));
+          if (petXhr.status >= 200 && petXhr.status < 300) petsOk++;
+        } catch(e) {}
+      });
+      if (petsOk > 0) {
+        console.log('[DAL] v115 Sync wrote ' + petsOk + '/' + myStudent.pets.length + ' pets synchronously');
+      }
+    }
+
+    return studentOk;
   } catch(e) {
-    console.warn('[DAL] v114 Sync write failed:', e.message);
+    console.warn('[DAL] v115 Sync write failed:', e.message);
     return false;
   }
 }
@@ -3307,73 +3398,8 @@ function _setupPageLifecycle() {
         var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
 
         if (currentUser.type === 'student') {
-          // v112: Students use anon key (they don't have Supabase Auth token).
-          // SUPABASE_ANON_KEY is defined in auth-check.js (loaded before dal.js).
-          var token = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
-          if (!token) return;
-
-          // Student: synchronously save critical data (coins, pet growth, etc.)
-          var studentId = parseInt(localStorage.getItem('studentId'));
-          if (!studentId || !classesData || !classesData[0]) return;
-          
-          var myStudent = null;
-          for (var i = 0; i < classesData[0].students.length; i++) {
-            if (classesData[0].students[i].id === studentId) {
-              myStudent = classesData[0].students[i];
-              break;
-            }
-          }
-          if (!myStudent) return;
-
-          // Build the critical data payload
-          var payload = {
-            coins: myStudent.coins || 0,
-            last_checkin_date: myStudent.lastCheckinDate || null,
-            last_jianghu_date: myStudent.lastJianghuDate || null,
-            last_pk_date: myStudent.lastPkDate || null,
-            active_pet_id: myStudent.activePetId || null,
-            pk_count_today: myStudent.pkCountToday || 0,
-            shop_items: JSON.stringify(myStudent.shopItems || []),
-            equipped_items: JSON.stringify(myStudent.equippedItems || {})
-          };
-
-          // Synchronous PATCH to save student data
-          var xhr = new XMLHttpRequest();
-          xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
-          xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-          xhr.setRequestHeader('apikey', token);
-          xhr.setRequestHeader('Content-Type', 'application/json');
-          xhr.setRequestHeader('Prefer', 'return=minimal');
-          xhr.send(JSON.stringify(payload));
-          console.log('[DAL] v54 beforeunload: student data saved synchronously (coins=' + payload.coins + ')');
-
-          // Also save pets synchronously
-          if (myStudent.pets && myStudent.pets.length > 0) {
-            myStudent.pets.forEach(function(pet) {
-              if (!pet.id || pet.id <= 0) return; // Skip pets without real DB IDs
-              var petPayload = {
-                growth: pet.growth || 0,
-                level: pet.level || 1,
-                coins: pet.coins || 0,
-                is_active: (myStudent.activePetId === pet.id),
-                is_dead: !!pet.isDead,
-                last_feed_date: pet.lastFeedDate || null,
-                last_play_date: pet.lastPlayDate || null,
-                today_feed_count: pet.todayFeedCount || 0,
-                today_play_count: pet.todayPlayCount || 0
-              };
-              var petXhr = new XMLHttpRequest();
-              petXhr.open('PATCH', baseUrl + '/pets?id=eq.' + pet.id, false);
-              petXhr.setRequestHeader('Authorization', 'Bearer ' + token);
-              petXhr.setRequestHeader('apikey', token);
-              petXhr.setRequestHeader('Content-Type', 'application/json');
-              petXhr.setRequestHeader('Prefer', 'return=minimal');
-              petXhr.send(JSON.stringify(petPayload));
-            });
-            console.log('[DAL] v54 beforeunload: ' + myStudent.pets.length + ' pets saved synchronously');
-          }
-
-          // v114: Save unsynced operation logs to students.pending_logs_json via sync XHR.
+          // v115: _syncWriteStudentPendingLogs() now handles ALL student data
+          // (coins, pets, pending logs) in one call. No need for separate XHR calls.
           _syncWriteStudentPendingLogs();
         } else {
           // Teacher: needs Supabase Auth token (students already handled above with anon key)
@@ -3400,22 +3426,26 @@ function _setupPageLifecycle() {
   // Mobile browsers kill the page before async operations complete.
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
-      // Page going hidden — sync if there are unsaved changes
-      if (_pendingLocalSave && !_dalSyncing) {
-        _syncToSupabase();
-      }
-      // v112: Write unsynced operation logs when page goes hidden.
-      // For students: use synchronous XHR (async Supabase client call gets killed on mobile).
-      // For teachers: async call is OK (teacher pages are rarely killed on mobile).
-      if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
-        var _hiddenUnsynced = window.operationLogs.some(function(l) { return !l._synced; });
-        if (_hiddenUnsynced) {
-          if (currentUser && currentUser.type === 'student') {
-            // v114: SYNCHRONOUS write to students.pending_logs_json.
-            // Students CANNOT write to classes table (RLS blocks) — verified by direct API test.
-            console.log('[DAL] v114 Page hidden — synchronous pending logs write...');
-            _syncWriteStudentPendingLogs();
-          } else if (typeof _writeUnsyncedLogsToSupabase === 'function') {
+      // v115: For students, sync ALL data (coins, pets, logs) via sync XHR when page hidden.
+      // Previously (v114) only synced pending_logs_json — student/pet data was only synced async,
+      // which could be killed on mobile. Teacher's Realtime never fired for student/pet updates,
+      // so pet cards and coins never auto-updated on teacher's screen.
+      if (currentUser && currentUser.type === 'student') {
+        var _hasUnsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
+          ? window.operationLogs.some(function(l) { return !l._synced; })
+          : false;
+        if (_pendingLocalSave || _hasUnsyncedLogs) {
+          console.log('[DAL] v115 Page hidden — syncing ALL student data (coins + pets + logs) via sync XHR...');
+          _syncWriteStudentPendingLogs();
+        }
+      } else {
+        // Teacher: async is OK (teacher pages rarely killed on mobile)
+        if (_pendingLocalSave && !_dalSyncing) {
+          _syncToSupabase();
+        }
+        if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
+          var _hiddenUnsynced = window.operationLogs.some(function(l) { return !l._synced; });
+          if (_hiddenUnsynced && typeof _writeUnsyncedLogsToSupabase === 'function') {
             console.log('[DAL] v109 Page hidden with unsynced logs, writing immediately...');
             _writeUnsyncedLogsToSupabase();
           }
