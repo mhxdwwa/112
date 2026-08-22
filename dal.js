@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '72.0';
+var _DAL_VERSION = '111.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -1117,8 +1117,173 @@ function _loadOperationLogs() {
     // Backup to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
     console.log('[DAL] v105 Loaded ' + allLogs.length + ' logs from Supabase, ' + localOnly.length + ' local-only preserved (' + localUnsynced.length + ' unsynced)');
+
+    // v111: For teachers, also merge student pending logs into classes.operation_logs_json.
+    // Students write to students.pending_logs_json (they can't UPDATE classes due to RLS).
+    // The teacher reads those pending logs, merges them into the class, and clears them.
+    if (currentUser.type === 'teacher' && classIds.length > 0) {
+      return _mergeStudentPendingLogs(classIds).then(function(mergedCount) {
+        if (mergedCount > 0) {
+          console.log('[DAL] v111 Merged ' + mergedCount + ' student pending logs');
+          // Re-load after merge to include the newly merged logs
+          return _loadOperationLogsAfterMerge(classIds);
+        }
+      });
+    }
   }).catch(function(e) {
     console.warn('[DAL] v29 _loadOperationLogs error:', e);
+  });
+}
+
+// v111: Read pending_logs_json from all students in the given classes,
+// merge into classes.operation_logs_json, then clear students.pending_logs_json.
+function _mergeStudentPendingLogs(classIds) {
+  if (!classIds || classIds.length === 0) return Promise.resolve(0);
+
+  // Step 1: Read all students with pending logs in these classes
+  return db.from('students')
+    .select('id, class_id, pending_logs_json')
+    .in('class_id', classIds)
+    .not('pending_logs_json', 'is', null)
+    .then(function(stuR) {
+      if (stuR.error) {
+        // Column might not exist yet — silently skip
+        if (stuR.error.message && stuR.error.message.indexOf('pending_logs_json') >= 0) {
+          console.log('[DAL] v111 pending_logs_json column not found — skipping student log merge');
+          return 0;
+        }
+        console.warn('[DAL] v111 Failed to read student pending logs:', stuR.error.message);
+        return 0;
+      }
+      var studentsWithPending = (stuR.data || []).filter(function(s) {
+        return s.pending_logs_json && s.pending_logs_json !== '[]' && s.pending_logs_json !== 'null';
+      });
+      if (studentsWithPending.length === 0) return 0;
+
+      console.log('[DAL] v111 Found ' + studentsWithPending.length + ' students with pending logs');
+
+      // Step 2: Group pending logs by class
+      var pendingByClass = {};
+      var studentsToClear = [];
+      studentsWithPending.forEach(function(s) {
+        try {
+          var pending = JSON.parse(s.pending_logs_json);
+          if (!Array.isArray(pending) || pending.length === 0) return;
+          var cid = s.class_id;
+          if (!pendingByClass[cid]) pendingByClass[cid] = [];
+          pendingByClass[cid] = pendingByClass[cid].concat(pending);
+          studentsToClear.push(s.id);
+        } catch(e) {}
+      });
+
+      if (studentsToClear.length === 0) return 0;
+
+      // Step 3: For each class, read existing logs, merge pending, write back
+      var mergeClassIds = Object.keys(pendingByClass).map(Number);
+      return db.from('classes').select('id, operation_logs_json').in('id', mergeClassIds).then(function(clsR) {
+        if (clsR.error) {
+          console.warn('[DAL] v111 Failed to read class logs for merge:', clsR.error.message);
+          return 0;
+        }
+        var existingByClass = {};
+        (clsR.data || []).forEach(function(c) {
+          try {
+            existingByClass[c.id] = c.operation_logs_json ? JSON.parse(c.operation_logs_json) : [];
+          } catch(e) { existingByClass[c.id] = []; }
+        });
+
+        var updatePromises = mergeClassIds.map(function(cid) {
+          var existing = existingByClass[cid] || [];
+          var pending = pendingByClass[cid] || [];
+          var existingById = {};
+          existing.forEach(function(l, idx) { existingById[l.id] = idx; });
+
+          var addedCount = 0;
+          pending.forEach(function(l) {
+            var merged = {
+              id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+              classId: cid, studentId: l.studentId, studentName: l.studentName || '',
+              actionType: l.actionType || '', details: l.details || '',
+              coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+              petId: l.petId || null, extra: l.extra || null,
+              snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+              reverted: !!l.reverted, _synced: true, _fromSupabase: true
+            };
+            if (existingById[l.id] !== undefined) {
+              existing[existingById[l.id]] = merged;
+            } else {
+              existing.push(merged);
+              existingById[l.id] = existing.length - 1;
+              addedCount++;
+            }
+          });
+
+          if (addedCount === 0) return Promise.resolve(0);
+
+          existing.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+          if (existing.length > 3000) existing = existing.slice(0, 3000);
+
+          return db.from('classes').update({
+            operation_logs_json: JSON.stringify(existing)
+          }).eq('id', cid).then(function(ur) {
+            if (ur.error) {
+              console.warn('[DAL] v111 Failed to merge logs for class', cid + ':', ur.error.message);
+              return 0;
+            }
+            console.log('[DAL] v111 Merged ' + addedCount + ' pending logs into class', cid);
+            return addedCount;
+          });
+        });
+
+        return Promise.all(updatePromises).then(function(results) {
+          var totalMerged = results.reduce(function(sum, n) { return sum + (n || 0); }, 0);
+          // Step 4: Clear pending_logs_json for students whose logs were merged
+          if (totalMerged > 0) {
+            return db.from('students').update({
+              pending_logs_json: null
+            }).in('id', studentsToClear).then(function(clearR) {
+              if (clearR.error) {
+                console.warn('[DAL] v111 Failed to clear pending logs:', clearR.error.message);
+              }
+              return totalMerged;
+            });
+          }
+          return totalMerged;
+        });
+      });
+    });
+}
+
+// v111: Re-load operation logs after merging student pending logs.
+// This ensures the teacher sees the freshly merged logs immediately.
+function _loadOperationLogsAfterMerge(classIds) {
+  return db.from('classes').select('id, operation_logs_json').in('id', classIds).then(function(r) {
+    if (r.error) return;
+    var allLogs = [];
+    (r.data || []).forEach(function(cls) {
+      if (!cls.operation_logs_json) return;
+      try {
+        var logs = JSON.parse(cls.operation_logs_json);
+        if (Array.isArray(logs)) {
+          logs.forEach(function(l) {
+            l._synced = true;
+            l._fromSupabase = true;
+            if (!l.classId) l.classId = cls.id;
+            allLogs.push(l);
+          });
+        }
+      } catch(e) {}
+    });
+    // Preserve local-only logs
+    var serverLogIds = {};
+    allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+    var localOnly = (window.operationLogs || []).filter(function(l) { return !serverLogIds[l.id]; });
+    window.operationLogs = allLogs.concat(localOnly);
+    window.operationLogs.sort(function(a, b) {
+      return (b.timestamp || '').localeCompare(a.timestamp || '');
+    });
+    try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+    console.log('[DAL] v111 Re-loaded ' + allLogs.length + ' logs after merge');
   });
 }
 
@@ -1269,6 +1434,58 @@ function _writeUnsyncedLogsToSupabase() {
     return Promise.resolve();
   }
 
+  // v111: STUDENT PATH — Students cannot UPDATE the classes table (RLS blocks anon users).
+  // Instead, write unsynced logs to students.pending_logs_json (a column students CAN write to).
+  // The teacher's sync process will merge these into classes.operation_logs_json.
+  if (currentUser.type === 'student') {
+    var studentId = parseInt(localStorage.getItem('studentId'));
+    if (!studentId) {
+      console.warn('[DAL] v111 Cannot write student logs: no studentId');
+      return Promise.resolve();
+    }
+    console.log('[DAL] v111 Writing ' + unsynced.length + ' unsynced logs via students table for student ' + studentId);
+    _writingLogsToSupabase = true;
+
+    var pendingPayload = unsynced.map(function(entry) {
+      var l = entry.log;
+      return {
+        id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+        classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+        studentId: l.studentId, studentName: l.studentName || '',
+        actionType: l.actionType || '', details: l.details || '',
+        coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+        petId: l.petId || null, extra: l.extra || null,
+        snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+        reverted: !!l.reverted
+      };
+    });
+
+    return db.from('students').update({
+      pending_logs_json: JSON.stringify(pendingPayload)
+    }).eq('id', studentId).then(function(ur) {
+      _writingLogsToSupabase = false;
+      if (ur.error) {
+        console.error('[DAL] v111 Student log write FAILED:', ur.error.message);
+        // If column doesn't exist yet, show helpful message
+        if (ur.error.message && ur.error.message.indexOf('pending_logs_json') >= 0) {
+          console.warn('[DAL] v111 pending_logs_json column not found — please run SQL migration');
+        }
+        return;
+      }
+      console.log('[DAL] v111 Student wrote ' + pendingPayload.length + ' pending logs to students table');
+      // Mark as synced
+      unsynced.forEach(function(entry) {
+        if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+          window.operationLogs[entry.index]._synced = true;
+          window.operationLogs[entry.index]._fromSupabase = true;
+        }
+      });
+      _lastOwnWriteTime = Date.now();
+      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+    });
+  }
+
+  // === TEACHER PATH (existing logic) ===
   console.log('[DAL] v29 Writing ' + unsynced.length + ' unsynced logs to classes table');
 
   // Determine fallback classId
@@ -3042,75 +3259,40 @@ function _setupPageLifecycle() {
             console.log('[DAL] v54 beforeunload: ' + myStudent.pets.length + ' pets saved synchronously');
           }
 
-          // v108: Also save unsynced operation logs synchronously before page dies.
-          // This is critical for mobile — without this, logs created just before
-          // page death are stuck in localStorage until the next page load.
+          // v111: Save unsynced operation logs via students table (not classes — students can't UPDATE classes due to RLS).
+          // Write to students.pending_logs_json synchronously before page dies.
           if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
             var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
             if (unsyncedLogs.length > 0) {
-              var classId = parseInt(localStorage.getItem('classId'));
-              if (classId) {
-                try {
-                  // Step 1: Read current logs from Supabase
-                  var readXhr = new XMLHttpRequest();
-                  readXhr.open('GET', baseUrl + '/classes?id=eq.' + classId + '&select=id,operation_logs_json', false);
-                  readXhr.setRequestHeader('Authorization', 'Bearer ' + token);
-                  readXhr.setRequestHeader('apikey', token);
-                  readXhr.send();
-                  var existingLogs = [];
-                  if (readXhr.status === 200) {
-                    try {
-                      var readResult = JSON.parse(readXhr.responseText);
-                      if (readResult && readResult[0] && readResult[0].operation_logs_json) {
-                        existingLogs = JSON.parse(readResult[0].operation_logs_json);
-                      }
-                    } catch(e) {}
-                  }
-                  // Step 2: Merge unsynced logs into existing
-                  var existingById = {};
-                  existingLogs.forEach(function(l, idx) { existingById[l.id] = idx; });
-                  var addedCount = 0;
-                  unsyncedLogs.forEach(function(l) {
-                    var merged = {
-                      id: l.id, timestamp: l.timestamp || new Date().toISOString(),
-                      classId: classId, studentId: l.studentId, studentName: l.studentName || '',
-                      actionType: l.actionType || '', details: l.details || '',
-                      coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
-                      petId: l.petId || null, extra: l.extra || null,
-                      snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
-                      reverted: !!l.reverted, _synced: true, _fromSupabase: true
-                    };
-                    if (existingById[l.id] !== undefined) {
-                      existingLogs[existingById[l.id]] = merged;
-                    } else {
-                      existingLogs.push(merged);
-                      addedCount++;
-                    }
-                  });
-                  // Sort and cap
-                  existingLogs.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
-                  if (existingLogs.length > 3000) existingLogs = existingLogs.slice(0, 3000);
-                  // Step 3: Write back
-                  if (addedCount > 0) {
-                    var writeXhr = new XMLHttpRequest();
-                    writeXhr.open('PATCH', baseUrl + '/classes?id=eq.' + classId, false);
-                    writeXhr.setRequestHeader('Authorization', 'Bearer ' + token);
-                    writeXhr.setRequestHeader('apikey', token);
-                    writeXhr.setRequestHeader('Content-Type', 'application/json');
-                    writeXhr.setRequestHeader('Prefer', 'return=minimal');
-                    writeXhr.send(JSON.stringify({ operation_logs_json: JSON.stringify(existingLogs) }));
-                    // v109: Only mark as synced if write actually succeeded
-                    if (writeXhr.status >= 200 && writeXhr.status < 300) {
-                      console.log('[DAL] v109 beforeunload: wrote ' + addedCount + ' unsynced logs for class', classId);
-                      unsyncedLogs.forEach(function(l) { l._synced = true; });
-                      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-                    } else {
-                      console.warn('[DAL] v109 beforeunload: write failed with status', writeXhr.status, '— logs remain unsynced for retry');
-                    }
-                  }
-                } catch(e) {
-                  console.warn('[DAL] v108 beforeunload log save failed:', e.message);
+              try {
+                var pendingPayload = unsyncedLogs.map(function(l) {
+                  return {
+                    id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+                    classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+                    studentId: l.studentId, studentName: l.studentName || '',
+                    actionType: l.actionType || '', details: l.details || '',
+                    coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+                    petId: l.petId || null, extra: l.extra || null,
+                    snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+                    reverted: !!l.reverted
+                  };
+                });
+                var logXhr = new XMLHttpRequest();
+                logXhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
+                logXhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                logXhr.setRequestHeader('apikey', token);
+                logXhr.setRequestHeader('Content-Type', 'application/json');
+                logXhr.setRequestHeader('Prefer', 'return=minimal');
+                logXhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(pendingPayload) }));
+                if (logXhr.status >= 200 && logXhr.status < 300) {
+                  console.log('[DAL] v111 beforeunload: wrote ' + pendingPayload.length + ' pending logs for student ' + studentId);
+                  unsyncedLogs.forEach(function(l) { l._synced = true; });
+                  try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+                } else {
+                  console.warn('[DAL] v111 beforeunload: log write failed with status', logXhr.status);
                 }
+              } catch(e) {
+                console.warn('[DAL] v111 beforeunload log save failed:', e.message);
               }
             }
           }
