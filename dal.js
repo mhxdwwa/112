@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '111.0';
+var _DAL_VERSION = '112.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -3142,6 +3142,26 @@ function _safetyNetTick() {
     _refreshFromSupabase();
     return;
   }
+  // v112: Periodically merge student pending logs (teacher only).
+  // Students write to students.pending_logs_json; teacher merges them into classes.operation_logs_json.
+  // This runs regardless of Realtime status — student logs need to be merged even when Realtime is healthy.
+  if (currentUser && currentUser.type === 'teacher' && typeof _mergeStudentPendingLogs === 'function') {
+    if (!_safetyNetTick._lastMergeTime || Date.now() - _safetyNetTick._lastMergeTime > 30000) {
+      _safetyNetTick._lastMergeTime = Date.now();
+      _getOpLogClassIds().then(function(classIds) {
+        if (classIds && classIds.length > 0) {
+          _mergeStudentPendingLogs(classIds).then(function(mergedCount) {
+            if (mergedCount > 0) {
+              console.log('[DAL] v112 Periodic merge: ' + mergedCount + ' student pending logs merged');
+              // Re-load operation logs to include the newly merged ones
+              return _loadOperationLogsAfterMerge(classIds);
+            }
+          });
+        }
+      });
+    }
+  }
+
   // v102: When Realtime is active and healthy, do NOT do full database queries.
   // Realtime handles all updates via _applyRealtimeUpdate (zero DB queries).
   // Only check liveness — the timeout above will catch silent failures.
@@ -3179,9 +3199,62 @@ function _cleanupRealtime() {
   }
 }
 
+// v112: Synchronous write of student pending logs using anon key.
+// This is the critical fix for mobile — async Supabase client calls get killed
+// when the page goes hidden/on mobile browsers. Synchronous XHR blocks until complete.
+function _syncWriteStudentPendingLogs() {
+  if (!currentUser || currentUser.type !== 'student') return;
+  if (typeof window.operationLogs === 'undefined' || !Array.isArray(window.operationLogs)) return;
+  var studentId = parseInt(localStorage.getItem('studentId'));
+  if (!studentId) return;
+
+  var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+  if (!anonKey) return;
+
+  var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
+  if (unsyncedLogs.length === 0) return;
+
+  try {
+    var pendingPayload = unsyncedLogs.map(function(l) {
+      return {
+        id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+        classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+        studentId: l.studentId, studentName: l.studentName || '',
+        actionType: l.actionType || '', details: l.details || '',
+        coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+        petId: l.petId || null, extra: l.extra || null,
+        snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+        reverted: !!l.reverted
+      };
+    });
+
+    var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+    var xhr = new XMLHttpRequest();
+    xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false); // false = synchronous
+    xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+    xhr.setRequestHeader('apikey', anonKey);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Prefer', 'return=minimal');
+    xhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(pendingPayload) }));
+
+    if (xhr.status >= 200 && xhr.status < 300) {
+      console.log('[DAL] v112 Sync wrote ' + pendingPayload.length + ' pending logs for student ' + studentId);
+      unsyncedLogs.forEach(function(l) { l._synced = true; });
+      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+    } else {
+      console.warn('[DAL] v112 Sync write failed with status', xhr.status);
+    }
+  } catch(e) {
+    console.warn('[DAL] v112 Sync write failed:', e.message);
+  }
+}
+
 /* ===== Lifecycle ===== */
 function _setupPageLifecycle() {
   // v54: Robust beforeunload — actually save data synchronously instead of just pinging
+  // v112: Fix student synchronous save — students don't have Supabase Auth token,
+  // so we use SUPABASE_ANON_KEY (public anon key) directly for student writes.
+  // Previously, `if (!token) return;` caused ALL student saves to be silently skipped.
   window.addEventListener('beforeunload', function() {
     // v109: Also check for unsynced operation logs — saveLogs() doesn't set _pendingLocalSave
     var hasUnsyncedLogs = false;
@@ -3191,13 +3264,14 @@ function _setupPageLifecycle() {
     // If there are unsaved local changes OR unsynced operation logs, try to save them synchronously
     if ((_pendingLocalSave || hasUnsyncedLogs) && currentUser) {
       try {
-        var token = '';
-        try { token = JSON.parse(localStorage.getItem('sb-xbygooadskfqllnhwmet-auth-token') || '{}').access_token || ''; } catch(e) {}
-        if (!token) return;
-
         var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
 
         if (currentUser.type === 'student') {
+          // v112: Students use anon key (they don't have Supabase Auth token).
+          // SUPABASE_ANON_KEY is defined in auth-check.js (loaded before dal.js).
+          var token = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+          if (!token) return;
+
           // Student: synchronously save critical data (coins, pet growth, etc.)
           var studentId = parseInt(localStorage.getItem('studentId'));
           if (!studentId || !classesData || !classesData[0]) return;
@@ -3259,49 +3333,19 @@ function _setupPageLifecycle() {
             console.log('[DAL] v54 beforeunload: ' + myStudent.pets.length + ' pets saved synchronously');
           }
 
-          // v111: Save unsynced operation logs via students table (not classes — students can't UPDATE classes due to RLS).
-          // Write to students.pending_logs_json synchronously before page dies.
-          if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
-            var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
-            if (unsyncedLogs.length > 0) {
-              try {
-                var pendingPayload = unsyncedLogs.map(function(l) {
-                  return {
-                    id: l.id, timestamp: l.timestamp || new Date().toISOString(),
-                    classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-                    studentId: l.studentId, studentName: l.studentName || '',
-                    actionType: l.actionType || '', details: l.details || '',
-                    coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
-                    petId: l.petId || null, extra: l.extra || null,
-                    snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
-                    reverted: !!l.reverted
-                  };
-                });
-                var logXhr = new XMLHttpRequest();
-                logXhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
-                logXhr.setRequestHeader('Authorization', 'Bearer ' + token);
-                logXhr.setRequestHeader('apikey', token);
-                logXhr.setRequestHeader('Content-Type', 'application/json');
-                logXhr.setRequestHeader('Prefer', 'return=minimal');
-                logXhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(pendingPayload) }));
-                if (logXhr.status >= 200 && logXhr.status < 300) {
-                  console.log('[DAL] v111 beforeunload: wrote ' + pendingPayload.length + ' pending logs for student ' + studentId);
-                  unsyncedLogs.forEach(function(l) { l._synced = true; });
-                  try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-                } else {
-                  console.warn('[DAL] v111 beforeunload: log write failed with status', logXhr.status);
-                }
-              } catch(e) {
-                console.warn('[DAL] v111 beforeunload log save failed:', e.message);
-              }
-            }
-          }
+          // v112: Save unsynced operation logs via synchronous XHR with anon key.
+          // Reuses the same helper as visibilitychange — no more duplicated code.
+          _syncWriteStudentPendingLogs();
         } else {
+          // Teacher: needs Supabase Auth token (students already handled above with anon key)
+          var teacherToken = '';
+          try { teacherToken = JSON.parse(localStorage.getItem('sb-xbygooadskfqllnhwmet-auth-token') || '{}').access_token || ''; } catch(e) {}
+          if (!teacherToken) return;
           // Teacher: just send sync_ping (teacher data is more complex, rely on async sync)
           var xhr2 = new XMLHttpRequest();
           xhr2.open('POST', baseUrl + '/rpc/sync_ping', false);
-          xhr2.setRequestHeader('Authorization', 'Bearer ' + token);
-          xhr2.setRequestHeader('apikey', token);
+          xhr2.setRequestHeader('Authorization', 'Bearer ' + teacherToken);
+          xhr2.setRequestHeader('apikey', teacherToken);
           xhr2.send();
           console.log('[DAL] v54 beforeunload: teacher sync_ping sent');
         }
@@ -3313,19 +3357,28 @@ function _setupPageLifecycle() {
 
   // Sync on visibility change — v54: also handle page hidden with proper wait
   // v102: Enhanced — use immediate refresh (no debounce) as safety net for missed Realtime updates
+  // v112: For students, use SYNCHRONOUS XHR with anon key instead of async Supabase client.
+  // Mobile browsers kill the page before async operations complete.
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
       // Page going hidden — sync if there are unsaved changes
       if (_pendingLocalSave && !_dalSyncing) {
         _syncToSupabase();
       }
-      // v109: Also write unsynced operation logs when page goes hidden
-      // This is critical for mobile — the page may be killed shortly after going hidden
+      // v112: Write unsynced operation logs when page goes hidden.
+      // For students: use synchronous XHR (async Supabase client call gets killed on mobile).
+      // For teachers: async call is OK (teacher pages are rarely killed on mobile).
       if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
         var _hiddenUnsynced = window.operationLogs.some(function(l) { return !l._synced; });
-        if (_hiddenUnsynced && typeof _writeUnsyncedLogsToSupabase === 'function') {
-          console.log('[DAL] v109 Page hidden with unsynced logs, writing immediately...');
-          _writeUnsyncedLogsToSupabase();
+        if (_hiddenUnsynced) {
+          if (currentUser && currentUser.type === 'student') {
+            // v112: SYNCHRONOUS write for students — this is the critical fix for mobile.
+            console.log('[DAL] v112 Page hidden — synchronous log write for student...');
+            _syncWriteStudentPendingLogs();
+          } else if (typeof _writeUnsyncedLogsToSupabase === 'function') {
+            console.log('[DAL] v109 Page hidden with unsynced logs, writing immediately...');
+            _writeUnsyncedLogsToSupabase();
+          }
         }
       }
     } else {
