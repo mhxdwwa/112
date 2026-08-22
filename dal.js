@@ -1,5 +1,5 @@
 /**
- * dal.js v103 — Robust Data Access Layer with Stable Realtime Sync
+ * dal.js v105 — Fix log loss race condition + cap at 3000 entries
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1005,7 +1005,7 @@ function _loadCustomActions() {
  * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
  */
 
-var _OP_LOGS_MAX_PER_CLASS = 5000;
+var _OP_LOGS_MAX_PER_CLASS = 3000; // v105: Reduced from 5000 to 3000
 var _OP_LOGS_RETENTION_DAYS = 3; // v104: Keep only last 3 days (reduced from 7 days)
 
 // v68: Filter logs to keep only those within retention period
@@ -1082,14 +1082,25 @@ function _loadOperationLogs() {
       }
     });
 
-    // Preserve any local unsynced logs (new logs with negative ID, OR modified logs with positive ID)
-    var localUnsynced = window.operationLogs.filter(function(l) {
-      return !l._synced;
+    // v105: Preserve ALL local logs that aren't on the server (fixes race condition)
+    // Previously only kept logs with _synced=false, but logs marked _synced=true
+    // before write confirmation could be lost if Realtime triggered a reload.
+    var serverLogIds = {};
+    allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+    
+    var localOnly = [];
+    var localUnsynced = [];
+    (window.operationLogs || []).forEach(function(l) {
+      if (!serverLogIds[l.id]) {
+        // Local log not on server — preserve it regardless of _synced status
+        localOnly.push(l);
+      }
+      if (!l._synced) {
+        localUnsynced.push(l);
+      }
     });
 
     // v34: Deduplicate — if local unsynced log has same ID as a server log, local wins (it's newer)
-    var serverLogIds = {};
-    allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
     var dedupedServer = allLogs.filter(function(l) {
       // Remove server log if local has a newer unsynced version
       for (var i = 0; i < localUnsynced.length; i++) {
@@ -1098,14 +1109,14 @@ function _loadOperationLogs() {
       return true;
     });
 
-    window.operationLogs = dedupedServer.concat(localUnsynced);
+    window.operationLogs = dedupedServer.concat(localOnly);
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
 
     // Backup to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v29 Loaded ' + allLogs.length + ' logs from Supabase, ' + localUnsynced.length + ' local unsynced kept');
+    console.log('[DAL] v105 Loaded ' + allLogs.length + ' logs from Supabase, ' + localOnly.length + ' local-only preserved (' + localUnsynced.length + ' unsynced)');
   }).catch(function(e) {
     console.warn('[DAL] v29 _loadOperationLogs error:', e);
   });
