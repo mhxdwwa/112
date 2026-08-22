@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '117.0';
+var _DAL_VERSION = '118.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -3313,36 +3313,46 @@ function _syncStudentDataImmediate() {
 
     if (xhr.status >= 200 && xhr.status < 300) {
       _lastOwnWriteTime = now;
+      // v118: Update _myBaseCoins immediately after sync XHR succeeds.
+      // Without this, the async _syncStudentToSupabase() fetches the value we just wrote,
+      // then applies localCoinDelta = (local - _myBaseCoins) on top of it, double-counting
+      // the change. This caused coins to flicker on teacher's screen (e.g. 5200 → 5150 → 5200).
+      _myBaseCoins = myStudent.coins;
     }
 
-    // Sync each pet — this triggers teacher's Realtime for pets table
+    // v118: Sync pets via async XHR (non-blocking) — student coins already synced above.
+    // Also update _myBasePets to prevent async chain double-counting (same fix as coins).
     if (myStudent.pets && myStudent.pets.length > 0) {
-      myStudent.pets.forEach(function(pet) {
-        if (!pet.id || pet.id <= 0) return;
-        var petPayload = {
-          growth: pet.growth || 0,
-          level: pet.level || 1,
-          coins: pet.coins || 0,
-          is_active: (myStudent.activePetId === pet.id),
-          is_dead: !!pet.isDead,
-          last_feed_date: pet.lastFeedDate || null,
-          last_play_date: pet.lastPlayDate || null,
-          today_feed_count: pet.todayFeedCount || 0,
-          today_play_count: pet.todayPlayCount || 0
-        };
-        try {
-          var petXhr = new XMLHttpRequest();
-          petXhr.open('PATCH', baseUrl + '/pets?id=eq.' + pet.id, false);
-          petXhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-          petXhr.setRequestHeader('apikey', anonKey);
-          petXhr.setRequestHeader('Content-Type', 'application/json');
-          petXhr.setRequestHeader('Prefer', 'return=minimal');
-          petXhr.send(JSON.stringify(petPayload));
-        } catch(e) {}
-      });
+      var validPets = myStudent.pets.filter(function(p) { return p.id && p.id > 0; });
+      if (validPets.length > 0) {
+        validPets.forEach(function(pet) {
+          var petPayload = {
+            growth: pet.growth || 0,
+            level: pet.level || 1,
+            coins: pet.coins || 0,
+            is_active: (myStudent.activePetId === pet.id),
+            is_dead: !!pet.isDead,
+            last_feed_date: pet.lastFeedDate || null,
+            last_play_date: pet.lastPlayDate || null,
+            today_feed_count: pet.todayFeedCount || 0,
+            today_play_count: pet.todayPlayCount || 0
+          };
+          try {
+            var petXhr = new XMLHttpRequest();
+            petXhr.open('PATCH', baseUrl + '/pets?id=eq.' + pet.id, true);
+            petXhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+            petXhr.setRequestHeader('apikey', anonKey);
+            petXhr.setRequestHeader('Content-Type', 'application/json');
+            petXhr.setRequestHeader('Prefer', 'return=minimal');
+            petXhr.send(JSON.stringify(petPayload));
+          } catch(e) {}
+        });
+        // v118: Update _myBasePets immediately to prevent async chain double-counting
+        validPets.forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
+      }
     }
   } catch(e) {
-    console.warn('[DAL] v116 Immediate sync failed:', e.message);
+    console.warn('[DAL] v118 Immediate sync failed:', e.message);
   }
 }
 
