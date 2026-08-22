@@ -828,6 +828,34 @@ function revertToLog(logId){
     showNotification('撤销成功', `已撤销 ${log.studentName} 的PK平局记录`, 'success');
     return;
   }
+  // v119: 删除宠物撤销 — 恢复被删除的宠物
+  if(log.actionType === '删除宠物' && log.extra && log.extra.deletedPetSnapshot){
+    const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString());
+    if(!student){ showNotification('撤销失败','未找到该学生','error'); return; }
+    const restoredPet = JSON.parse(JSON.stringify(log.extra.deletedPetSnapshot));
+    // Check if pet already exists (shouldn't, but safety check)
+    if(student.pets.some(p=>p.id.toString()===restoredPet.id.toString())){
+      showNotification('撤销失败','该宠物已存在','warning'); return;
+    }
+    student.pets.push(restoredPet);
+    // Restore activePetId if it was the active pet
+    if(log.extra.wasActivePet){
+      student.activePetId = restoredPet.id;
+    }
+    log.reverted = true;
+    saveClassData('pet'); saveLogs();
+    // Re-sync pet to Supabase
+    if(typeof db !== 'undefined' && db){
+      var petForSync = restoredPet;
+      var petData = { id: petForSync.id, student_id: student.id, name: petForSync.name, nickname: petForSync.nickname, level: petForSync.level, growth: petForSync.growth||0, is_dead: petForSync.isDead||false, last_feed_date: petForSync.lastFeedDate, today_feed_count: petForSync.todayFeedCount||0, last_play_date: petForSync.lastPlayDate, today_play_count: petForSync.todayPlayCount||0, penalty_streak: petForSync.penaltyStreak||0 };
+      if(typeof _markRowWritten === 'function') _markRowWritten('pets', petForSync.id);
+      db.from('pets').upsert(petData).then(function(r){ if(r.error) console.warn('[DAL] restorePet Supabase error:', r.error); });
+    }
+    scheduleAllRenders();
+    if(currentModalStudentId && currentModalStudentId.toString()===log.studentId.toString()) refreshCurrentStudentModal();
+    showNotification('撤销成功', `已恢复 ${log.studentName} 的宠物「${restoredPet.nickname||restoredPet.name}」`, 'success');
+    return;
+  }
   // 普通记录：仅撤销该条操作，不影响其他记录
   _revertStudentLog(curClass, log);
   log.reverted = true;
@@ -843,7 +871,7 @@ function revertToLog(logId){
   showNotification('撤销成功', revertDetail, 'success');
 }
 function _historyActionIcon(type){
-  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','小猪快跑':'🐷','取金阁':'📝','宠物消消乐':'🧩','快乐跑一跑':'🏃'};
+  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','删除宠物':'🐾🗑️','小猪快跑':'🐷','取金阁':'📝','宠物消消乐':'🧩','快乐跑一跑':'🏃'};
   return icons[type]||'📝';
 }
 function _historyActionColor(type){
@@ -854,6 +882,7 @@ function _historyActionColor(type){
   if(type==='复活') return '#9b59b6';
   if(type==='商店购买') return '#8e44ad';
   if(type==='重置班级宠物') return '#cc6633';
+  if(type==='删除宠物') return '#c0392b';
   return '#886655';
 }
 var _isStudentHistoryView = false; // true when a student is viewing history
@@ -1619,6 +1648,147 @@ function classDailyCheckin(){ if(typeof currentUser!=='undefined'&&currentUser&&
 function classAllFeed(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再喂食','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let fedCount=0,skipDead=0,skipCoins=0,skipMax=0,skipNoPet=0,skipFed=0; const upgrades=[]; cur.students.forEach(s=>{const pet=getGrowablePet(s); if(!pet && (!s.pets||s.pets.length===0)){skipNoPet++;return;} if(!pet && s.pets.every(p=>p.level>=9)){skipMax++;return;} if(!pet && s.pets.every(p=>p.isDead)){skipDead++;return;} if(!pet){skipMax++;return;} if(_hasFedToday(pet)){skipFed++;return;} if(s.coins<5){skipCoins++;return;} let gain=2; pet.growth+=gain; s.coins-=5; pet.lastFeedDate=new Date().toISOString(); const upResult=updatePetLevel(s, pet.id, gain, true); if(upResult) upgrades.push(upResult); recordAction(s.id, s.name, '全班喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id); fedCount++;}); if(fedCount===0){let reason=''; if(skipFed>0)reason+=`${skipFed}人今天已喂食 `; if(skipDead>0)reason+=`${skipDead}人宠物已死亡 `; if(skipCoins>0)reason+=`${skipCoins}人金币不足 `; if(skipMax>0)reason+=`${skipMax}人全部满级 `; if(skipNoPet>0)reason+=`${skipNoPet}人未领养宠物`; showNotification('无法喂食',reason||'没有可喂食的宠物','info');return;} saveClassData('pet'); scheduleAllRenders(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${fedCount}只宠物喂食成功，每只+2成长值，-5金币`; if(skipFed+skipDead+skipCoins+skipMax+skipNoPet>0){let skips=[]; if(skipFed>0)skips.push(`${skipFed}人今天已喂食`); if(skipDead>0)skips.push(`${skipDead}人宠物已死亡`); if(skipCoins>0)skips.push(`${skipCoins}人金币不足`); if(skipMax>0)skips.push(`${skipMax}人全部满级`); if(skipNoPet>0)skips.push(`${skipNoPet}人未领养宠物`); msg+=`（跳过：${skips.join('、')}）`;} showNotification('全班喂食',msg,'success'); showBatchUpgradeNotice(upgrades); }
 function showBatchUpgradeNotice(upgrades){ if(!upgrades||upgrades.length===0) return; const INTERVAL=4500; const MAX_INDIVIDUAL=3; function showOne(idx){ if(idx>=upgrades.length) return; const u=upgrades[idx]; showUpgradeEffect(u.petRealName, u.newLevel, u.cfgId, u.petName, u.oldLevel, u.studentName); setTimeout(()=>{ showNotification('🎉 宠物升级',`恭喜 ${u.studentName} 同学的 ${u.petName} 进化为${u.stageName}！`,'success'); },300); if(idx+1<upgrades.length){ setTimeout(()=>{ const container=document.getElementById('upgradeEffectContainer'); if(container){const overlays=container.querySelectorAll('.upgrade-overlay'); overlays.forEach(o=>o.remove());} showOne(idx+1); }, INTERVAL); } } if(upgrades.length<=MAX_INDIVIDUAL){ if(upgrades.length>1){ showNotification('🎉 升级预告',`本次共有 ${upgrades.length} 位同学的宠物升级，逐一展示！`,'success'); setTimeout(()=>showOne(0), 800); } else { showOne(0); } } else { showBatchUpgradeBoard(upgrades); } } function showBatchUpgradeBoard(upgrades){ const container=document.getElementById('upgradeEffectContainer'); const overlay=document.createElement('div'); overlay.className='upgrade-overlay'; overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);animation:fadeIn 0.5s ease;'; const listHtml=upgrades.map((u,i)=>{ const cfg=PET_CONFIG[Object.keys(PET_CONFIG).find(k=>PET_CONFIG[k].id===u.cfgId)]; const emoji=cfg?cfg.emoji:'🐾'; const imgSrc=_img(`${u.cfgId}/${u.newLevel}.webp`); return `<div style="display:flex;align-items:center;gap:12px;padding:10px 18px;background:rgba(255,255,255,0.08);border-radius:14px;border:1px solid rgba(255,255,255,0.15);animation:fadeIn 0.5s ease ${i*0.08}s both;"><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ffe0b2,#ffcc80);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;"><img src="${imgSrc}" style="width:40px;height:40px;object-fit:contain;" onerror="this.onerror=null;this.parentNode.innerHTML='<span style=\\'font-size:28px;\\'>${emoji}</span>';"></div><div style="flex:1;min-width:0;"><div style="font-size:16px;font-weight:700;color:#fff;">${esc(u.studentName)}</div><div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">${esc(u.petName)} → ${esc(u.stageName)}</div></div><div style="font-size:22px;">🎉</div></div>`; }).join(''); overlay.innerHTML=` <div style="background:linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:28px;padding:35px 30px;max-width:520px;width:90%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.1);position:relative;overflow:hidden;"> <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#e8637a,#f5a054,#ffd700,#e8637a);background-size:200% 100%;animation:shimmer 2s linear infinite;"></div> <div style="text-align:center;margin-bottom:20px;"> <div style="font-size:36px;margin-bottom:6px;">🏆✨🎊</div> <div style="font-size:24px;font-weight:800;color:#ffd700;text-shadow:0 0 20px rgba(255,215,0,0.4);">集体进化大成功！</div> <div style="font-size:15px;color:rgba(255,255,255,0.7);margin-top:6px;">恭喜以下 <strong style="color:#ff9800;font-size:18px;">${upgrades.length}</strong> 位同学的宠物升级</div> </div> <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:5px;min-height:0;"> ${listHtml} </div> <div style="text-align:center;margin-top:18px;padding-top:15px;border-top:1px solid rgba(255,255,255,0.1);"> <button onclick="this.closest('.upgrade-overlay').remove();" style="padding:10px 36px;border:none;border-radius:20px;background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 15px rgba(232,99,122,0.4);transition:transform 0.2s;">太棒了！为他们鼓掌 👏</button> </div> </div>`; container.appendChild(overlay); overlay.addEventListener('click',(e)=>{if(e.target===overlay)overlay.remove();}); setTimeout(()=>{if(overlay.parentNode)overlay.remove();},15000); playUpgradeSound(); }
 function clearPetData(){ if(!currentClassId) return; if(!confirm('重置所有宠物数据？')) return; const cur = classesData.find(c=>c.id===currentClassId); if(!cur) return; const snapshot = JSON.parse(JSON.stringify(cur.students)); cur.students.forEach(s=>{ s.pets = []; s.coins = 50; s.lastCheckinDate = null; s.activePetId = null; s.pkCountToday = 0; s.lastPkDate = null; }); saveClassData(); recordResetAction(cur.id, cur.name, snapshot); scheduleAllRenders(); if(currentModalStudentId) closeModal(); showNotification('重置完成','宠物数据已清空','success'); }
+
+// === v119: 删除宠物功能（教师专用）===
+var _deletePetSelectedStudentId = null;
+function showDeletePetModal(){
+  if(!currentUser || currentUser.type !== 'teacher'){ showNotification('无权限','仅教师可操作','warning'); return; }
+  if(!currentClassId){ showNotification('请先选择班级','','info'); return; }
+  const curClass = classesData.find(c=>c.id===currentClassId);
+  if(!curClass){ showNotification('班级不存在','','error'); return; }
+  // Filter students who have pets
+  const studentsWithPets = curClass.students.filter(s => s.pets && s.pets.length > 0);
+  if(studentsWithPets.length === 0){ showNotification('暂无宠物','当前班级没有学生拥有宠物','info'); return; }
+  _deletePetSelectedStudentId = null;
+  _renderDeletePetStudentList(studentsWithPets, curClass.name);
+}
+function _renderDeletePetStudentList(studentsWithPets, className){
+  let html = '<div style="margin-bottom:12px;text-align:center;color:#888;font-size:13px;">第一步：选择学生</div>';
+  html += '<div style="max-height:350px;overflow-y:auto;padding:5px 0;">';
+  studentsWithPets.forEach(s => {
+    const aliveCount = s.pets.filter(p => !p.isDead).length;
+    const deadCount = s.pets.filter(p => p.isDead).length;
+    let petSummary = s.pets.map(p => {
+      const cfg = PET_CONFIG[p.name];
+      const emoji = cfg ? cfg.emoji : '🐾';
+      return `${emoji}${p.nickname||p.name}(Lv${p.level}${p.isDead?' 💀':''})`;
+    }).join('、');
+    html += `<div onclick="_deletePetSelectStudent('${s.id}')" style="display:flex;align-items:center;gap:10px;padding:12px 14px;margin:6px 0;background:#fff;border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid #f0f0f0;" onmouseenter="this.style.borderColor='#e8637a';this.style.background='#fff8f8'" onmouseleave="this.style.borderColor='#f0f0f0';this.style.background='#fff'">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#b5d8ff,#8ec5fc);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${esc(s.name.charAt(0))}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:15px;font-weight:600;color:#333;">${esc(s.name)}</div>
+        <div style="font-size:12px;color:#999;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${petSummary}</div>
+      </div>
+      <div style="font-size:12px;color:#aaa;flex-shrink:0;">${s.pets.length}只宠物</div>
+    </div>`;
+  });
+  html += '</div>';
+  showModal('🐾 删除宠物 — ' + esc(className), html, [{text:'取消',onclick:'closeModal()'}], false);
+}
+function _deletePetSelectStudent(studentId){
+  _deletePetSelectedStudentId = studentId;
+  const curClass = classesData.find(c=>c.id===currentClassId);
+  if(!curClass) return;
+  const student = curClass.students.find(s=>s.id.toString()===studentId.toString());
+  if(!student || !student.pets || student.pets.length===0) return;
+  _renderDeletePetPetList(student, curClass.name);
+}
+function _renderDeletePetPetList(student, className){
+  let html = '<div style="margin-bottom:8px;text-align:center;">';
+  html += `<div style="font-size:14px;color:#666;">学生：<strong>${esc(student.name)}</strong></div>`;
+  html += '<div style="margin-top:8px;font-size:13px;color:#888;">第二步：选择要删除的宠物</div>';
+  html += '</div>';
+  html += '<div style="max-height:300px;overflow-y:auto;padding:5px 0;">';
+  student.pets.forEach(p => {
+    const cfg = PET_CONFIG[p.name];
+    const emoji = cfg ? cfg.emoji : '🐾';
+    const stageName = cfg ? (cfg.stages.find(s=>s.stage===p.level)?.stageName || '阶段'+p.level) : 'Lv'+p.level;
+    const isActive = student.activePetId && Number(student.activePetId) === Number(p.id);
+    const statusBadge = p.isDead ? '<span style="background:#ffcccc;color:#c00;padding:1px 6px;border-radius:8px;font-size:11px;margin-left:4px;">已死亡</span>' : '';
+    const activeBadge = isActive ? '<span style="background:#d4edda;color:#155724;padding:1px 6px;border-radius:8px;font-size:11px;margin-left:4px;">活跃中</span>' : '';
+    html += `<div onclick="confirmDeletePet('${student.id}','${p.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin:6px 0;background:#fff;border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid #f0f0f0;" onmouseenter="this.style.borderColor='#e8637a';this.style.background='#fff5f5'" onmouseleave="this.style.borderColor='#f0f0f0';this.style.background='#fff'">
+      <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#ffe0b2,#ffcc80);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;">${getPetImage(p.name, p.level)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:15px;font-weight:600;color:#333;">${esc(p.nickname||p.name)}${statusBadge}${activeBadge}</div>
+        <div style="font-size:12px;color:#999;margin-top:2px;">${esc(p.name)} · ${stageName} · 成长值 ${p.growth||0}</div>
+      </div>
+      <div style="font-size:18px;color:#e8637a;flex-shrink:0;">🗑️</div>
+    </div>`;
+  });
+  html += '</div>';
+  html += '<div style="text-align:center;margin-top:10px;"><button class="btn btn-secondary" onclick="_deletePetSelectStudent(\''+student.id+'\')" style="font-size:13px;">← 返回选择学生</button></div>';
+  showModal('🐾 删除宠物 — ' + esc(className), html, [{text:'取消',onclick:'closeModal()'}], false);
+}
+function confirmDeletePet(studentId, petId){
+  const curClass = classesData.find(c=>c.id===currentClassId);
+  if(!curClass) return;
+  const student = curClass.students.find(s=>s.id.toString()===studentId.toString());
+  if(!student) return;
+  const pet = student.pets.find(p=>p.id.toString()===petId.toString());
+  if(!pet) return;
+  const petDisplayName = pet.nickname ? `${pet.nickname}(${pet.name})` : pet.name;
+  if(!confirm(`确定删除 ${student.name} 的宠物「${petDisplayName}」吗？\n\n此操作可通过历史操作撤销。`)) return;
+  // Record the action before deletion (for undo)
+  const petSnapshot = JSON.parse(JSON.stringify(pet));
+  const wasActive = student.activePetId && Number(student.activePetId) === Number(pet.id);
+  const log = {
+    id: _genLocalId(),
+    timestamp: new Date().toISOString(),
+    classId: currentClassId,
+    studentId: student.id,
+    studentName: student.name,
+    actionType: '删除宠物',
+    details: `删除 ${student.name} 的宠物「${petDisplayName}」(Lv${pet.level}, 成长值${pet.growth||0})`,
+    coinDelta: 0,
+    expDelta: 0,
+    petId: pet.id,
+    extra: {
+      deletedPetSnapshot: petSnapshot,
+      wasActivePet: wasActive,
+      prevActivePetId: student.activePetId
+    },
+    snapshot: {
+      coinsBefore: student.coins,
+      coinsAfter: student.coins
+    },
+    reverted: false,
+    _synced: false
+  };
+  // Remove the pet from student's pets array
+  student.pets = student.pets.filter(p => p.id.toString() !== petId.toString());
+  // Update activePetId if needed
+  if(wasActive){
+    if(student.pets.length > 0){
+      student.activePetId = student.pets[0].id;
+    } else {
+      student.activePetId = null;
+    }
+  }
+  // Save data
+  saveClassData('pet');
+  // Record to history
+  window.operationLogs.push(log);
+  saveLogs();
+  // Delete from Supabase
+  _deletePetFromSupabase(pet.id, student.id);
+  // Refresh UI
+  scheduleAllRenders();
+  if(currentModalStudentId && currentModalStudentId.toString()===studentId.toString()) refreshCurrentStudentModal();
+  closeModal();
+  showNotification('删除成功', `已删除 ${student.name} 的宠物「${petDisplayName}」`, 'success');
+}
+function _deletePetFromSupabase(petId, studentId){
+  if(typeof db === 'undefined' || !db) return;
+  // Mark as echo to avoid realtime re-adding
+  if(typeof _markRowWritten === 'function') _markRowWritten('pets', petId);
+  db.from('pets').delete().eq('id', petId).then(function(result){
+    if(result.error){
+      console.warn('[DAL] deletePet Supabase error:', result.error);
+    } else {
+      console.log('[DAL] deletePet Supabase OK: pet', petId, 'student', studentId);
+    }
+  });
+}
 
 // === 重置学生密码弹窗（教师专用）===
 var _resetPwdSelectedStudentId = null;
