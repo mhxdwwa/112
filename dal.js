@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '70.0';
+var _DAL_VERSION = '71.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -1395,11 +1395,9 @@ function _writeUnsyncedLogsToSupabase() {
             existingById[l.id] = existing.length - 1;
           }
 
-          // Mark local log as synced
-          if (entry.index >= 0 && entry.index < window.operationLogs.length) {
-            window.operationLogs[entry.index]._synced = true;
-            window.operationLogs[entry.index]._fromSupabase = true;
-          }
+          // v109: Do NOT mark as synced here — wait until DB write succeeds.
+          // On mobile, the page may be killed before the write completes,
+          // leaving logs marked _synced=true but never actually in Supabase.
         });
 
         // Sort by timestamp descending, cap at max
@@ -1432,6 +1430,13 @@ function _writeUnsyncedLogsToSupabase() {
             });
           } else {
             console.log('[DAL] v65 Upserted ' + existing.length + ' logs for class', cid);
+            // v109: NOW mark local logs as synced (after DB write succeeded)
+            (logsByClass[cid] || []).forEach(function(entry) {
+              if (entry.index >= 0 && entry.index < window.operationLogs.length) {
+                window.operationLogs[entry.index]._synced = true;
+                window.operationLogs[entry.index]._fromSupabase = true;
+              }
+            });
             // v64: Update own write time to prevent unnecessary realtime refresh
             _lastOwnWriteTime = Date.now();
             // v65: Verify our logs weren't overwritten by another device
@@ -3089,10 +3094,14 @@ function _setupPageLifecycle() {
                     writeXhr.setRequestHeader('Content-Type', 'application/json');
                     writeXhr.setRequestHeader('Prefer', 'return=minimal');
                     writeXhr.send(JSON.stringify({ operation_logs_json: JSON.stringify(existingLogs) }));
-                    console.log('[DAL] v108 beforeunload: wrote ' + addedCount + ' unsynced logs for class', classId);
-                    // Mark as synced so they don't get re-written
-                    unsyncedLogs.forEach(function(l) { l._synced = true; });
-                    try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+                    // v109: Only mark as synced if write actually succeeded
+                    if (writeXhr.status >= 200 && writeXhr.status < 300) {
+                      console.log('[DAL] v109 beforeunload: wrote ' + addedCount + ' unsynced logs for class', classId);
+                      unsyncedLogs.forEach(function(l) { l._synced = true; });
+                      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+                    } else {
+                      console.warn('[DAL] v109 beforeunload: write failed with status', writeXhr.status, '— logs remain unsynced for retry');
+                    }
                   }
                 } catch(e) {
                   console.warn('[DAL] v108 beforeunload log save failed:', e.message);
