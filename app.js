@@ -1778,7 +1778,19 @@ function confirmDeletePet(studentId, petId){
   // Refresh UI
   scheduleAllRenders();
   if(currentModalStudentId && currentModalStudentId.toString()===studentId.toString()) refreshCurrentStudentModal();
-  closeModal();
+  // Go back to pet list or student list if no pets remain
+  if(student.pets.length > 0){
+    _renderDeletePetPetList(student, curClass.name);
+  } else {
+    const studentsWithPets = curClass.students.filter(s => s.pets && s.pets.length > 0);
+    if(studentsWithPets.length > 0){
+      _renderDeletePetStudentList(studentsWithPets, curClass.name);
+    } else {
+      closeModal();
+      showNotification('删除成功', `已删除 ${student.name} 的宠物「${petDisplayName}」，当前班级已无宠物`, 'success');
+      return;
+    }
+  }
   showNotification('删除成功', `已删除 ${student.name} 的宠物「${petDisplayName}」`, 'success');
 }
 function _deletePetFromSupabase(petId, studentId){
