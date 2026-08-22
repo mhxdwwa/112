@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '71.0';
+var _DAL_VERSION = '72.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -2966,8 +2966,13 @@ function _cleanupRealtime() {
 function _setupPageLifecycle() {
   // v54: Robust beforeunload — actually save data synchronously instead of just pinging
   window.addEventListener('beforeunload', function() {
-    // If there are unsaved local changes, try to save them synchronously
-    if (_pendingLocalSave && currentUser) {
+    // v109: Also check for unsynced operation logs — saveLogs() doesn't set _pendingLocalSave
+    var hasUnsyncedLogs = false;
+    if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
+      hasUnsyncedLogs = window.operationLogs.some(function(l) { return !l._synced; });
+    }
+    // If there are unsaved local changes OR unsynced operation logs, try to save them synchronously
+    if ((_pendingLocalSave || hasUnsyncedLogs) && currentUser) {
       try {
         var token = '';
         try { token = JSON.parse(localStorage.getItem('sb-xbygooadskfqllnhwmet-auth-token') || '{}').access_token || ''; } catch(e) {}
@@ -3131,6 +3136,15 @@ function _setupPageLifecycle() {
       // Page going hidden — sync if there are unsaved changes
       if (_pendingLocalSave && !_dalSyncing) {
         _syncToSupabase();
+      }
+      // v109: Also write unsynced operation logs when page goes hidden
+      // This is critical for mobile — the page may be killed shortly after going hidden
+      if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
+        var _hiddenUnsynced = window.operationLogs.some(function(l) { return !l._synced; });
+        if (_hiddenUnsynced && typeof _writeUnsyncedLogsToSupabase === 'function') {
+          console.log('[DAL] v109 Page hidden with unsynced logs, writing immediately...');
+          _writeUnsyncedLogsToSupabase();
+        }
       }
     } else {
       // Page becoming visible — do a full refresh to catch any missed Realtime updates
@@ -3615,21 +3629,26 @@ function _initDALCore() {
 }
 
 function _postInitSetup() {
-  // v108: Retry writing any unsynced operation logs after init.
-  // On mobile, the page may be killed before the 500ms debounce timer fires,
+  // v109: Retry writing any unsynced operation logs after init.
+  // On mobile, the page may be killed before the debounce timer fires,
   // leaving logs in localStorage that were never written to Supabase.
-  // This ensures they get written on the next page load.
-  setTimeout(function() {
+  // Retry at 1s, 5s, 15s, then every 30s as a safety net.
+  var _retryWriteUnsynced = function() {
     if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
       var unsynced = window.operationLogs.filter(function(l) { return !l._synced; });
       if (unsynced.length > 0) {
-        console.log('[DAL] v108 Found ' + unsynced.length + ' unsynced logs after init, writing now...');
+        console.log('[DAL] v109 Found ' + unsynced.length + ' unsynced logs, writing now...');
         if (typeof _writeUnsyncedLogsToSupabase === 'function') {
           _writeUnsyncedLogsToSupabase();
         }
       }
     }
-  }, 2000);
+  };
+  setTimeout(_retryWriteUnsynced, 1000);
+  setTimeout(_retryWriteUnsynced, 5000);
+  setTimeout(_retryWriteUnsynced, 15000);
+  // 持续安全网：每30秒检查一次未同步日志
+  setInterval(_retryWriteUnsynced, 30000);
 
   // Periodic PK badge check for students (every 10 seconds)
   if (currentUser.type === 'student' && typeof _updatePKInviteBadge === 'function') {
