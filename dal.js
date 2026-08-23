@@ -45,7 +45,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '126.0';
+var _DAL_VERSION = '128.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -1943,6 +1943,12 @@ function _syncTeacherToSupabase() {
           pk_count_today: stu.pkCountToday || 0,
           password: stu.password || ''
         };
+        // v126: Include quiz_state in insert payload for new students to prevent
+        // race condition where Realtime refresh overwrites local quizState with
+        // empty server data before the separate quizState write completes.
+        if (stu.quizState) {
+          payload.quiz_state = typeof stu.quizState === 'string' ? stu.quizState : JSON.stringify(stu.quizState);
+        }
 
         if (typeof _isValidInt4Id === 'function' && _isValidInt4Id(stu.id)) {
           existingStudents.push({ payload: Object.assign({ id: stu.id }, payload), stuRef: stu });
