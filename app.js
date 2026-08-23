@@ -2437,27 +2437,7 @@ function createClass(){const n=prompt('班级名称');if(!n)return;
     saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
   }
 }
-// v127: 等待当前同步完成
-function _waitForSyncComplete(){
-  return new Promise(function(resolve){
-    if(typeof _dalSyncing === 'undefined' || !_dalSyncing){
-      resolve();
-      return;
-    }
-    var checkInterval = setInterval(function(){
-      if(!_dalSyncing){
-        clearInterval(checkInterval);
-        resolve();
-      }
-    }, 100);
-    // 最多等待 5 秒
-    setTimeout(function(){
-      clearInterval(checkInterval);
-      resolve();
-    }, 5000);
-  });
-}
-// v127: 删除班级 — 等待同步完成后再删除，确保一次性成功
+// v127: 删除班级 — 直接从 Supabase 删除，不等待同步
 function deleteClass(id){
   if(!confirm('确定删除该班级？删除后可在"已删除班级"中恢复')) return;
   var cls = classesData.find(function(c){return c.id===id||c.id==id;});
@@ -2472,12 +2452,11 @@ function deleteClass(id){
   }
   // 先暂停同步
   _pauseSync = true;
-  showNotification('正在删除', '正在从云端删除班级数据...', 'info');
-  // 等待当前同步完成，然后再删除
-  _waitForSyncComplete().then(function(){
-    // 先从 Supabase 彻底删除
-    return _supabaseDeleteClass(clsIdForSync, clsName);
-  }).then(function(){
+  showNotification('正在删除', '正在从云端删除...', 'info');
+  console.log('[v127] deleteClass: starting for class', clsName || id);
+  // 直接从 Supabase 删除
+  _supabaseDeleteClass(clsIdForSync, clsName).then(function(){
+    console.log('[v127] deleteClass: Supabase delete complete');
     // Supabase 清理完成后，再改本地数据
     classesData = classesData.filter(function(c){return c.id!==id && c.id!=id;});
     if(currentClassId===id || currentClassId==id) currentClassId = classesData[0]?.id || null;
@@ -2492,7 +2471,7 @@ function deleteClass(id){
     showNotification('班级已删除', '可在"已删除班级"中恢复', 'info');
   }).catch(function(err){
     _pauseSync = false;
-    console.warn('[v127] deleteClass failed:', err);
+    console.error('[v127] deleteClass failed:', err);
     // 即使 Supabase 失败，仍然删除本地数据
     classesData = classesData.filter(function(c){return c.id!==id && c.id!=id;});
     if(currentClassId===id || currentClassId==id) currentClassId = classesData[0]?.id || null;
@@ -2556,22 +2535,31 @@ document.getElementById('txtImport').addEventListener('change',function(e){if(!c
 function classDailyCheckin(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再打卡','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let checkedCount=0; let skipNoPet=0; cur.students.forEach(s=>{if(!s.pets||s.pets.length===0){skipNoPet++;return;} if(_hasCheckedInToday(s)){return;} s.coins+=10;s.lastCheckinDate=new Date().toISOString();recordAction(s.id, s.name, '全班打卡', '+10金币', 10, 0, null);checkedCount++;}); if(checkedCount===0){let reason='全班同学今天都已经打过卡了'; if(skipNoPet>0) reason+=`（${skipNoPet}人未领养宠物，不参与打卡）`; showNotification('今日已打卡',reason,'info');return;} saveClassData('coins'); renderHomePetGrid(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${checkedCount}人打卡成功，每人+10金币`; if(skipNoPet>0) msg+=`（${skipNoPet}人未领养宠物，已跳过）`; showNotification('全班打卡',msg,'success'); }
 function classAllFeed(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再喂食','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let fedCount=0,skipDead=0,skipCoins=0,skipMax=0,skipNoPet=0,skipFed=0; const upgrades=[]; cur.students.forEach(s=>{const pet=getGrowablePet(s); if(!pet && (!s.pets||s.pets.length===0)){skipNoPet++;return;} if(!pet && s.pets.every(p=>p.level>=9)){skipMax++;return;} if(!pet && s.pets.every(p=>p.isDead)){skipDead++;return;} if(!pet){skipMax++;return;} if(_hasFedToday(pet)){skipFed++;return;} if(s.coins<5){skipCoins++;return;} let gain=2; pet.growth+=gain; s.coins-=5; pet.lastFeedDate=new Date().toISOString(); const upResult=updatePetLevel(s, pet.id, gain, true); if(upResult) upgrades.push(upResult); recordAction(s.id, s.name, '全班喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id); fedCount++;}); if(fedCount===0){let reason=''; if(skipFed>0)reason+=`${skipFed}人今天已喂食 `; if(skipDead>0)reason+=`${skipDead}人宠物已死亡 `; if(skipCoins>0)reason+=`${skipCoins}人金币不足 `; if(skipMax>0)reason+=`${skipMax}人全部满级 `; if(skipNoPet>0)reason+=`${skipNoPet}人未领养宠物`; showNotification('无法喂食',reason||'没有可喂食的宠物','info');return;} saveClassData('pet'); scheduleAllRenders(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${fedCount}只宠物喂食成功，每只+2成长值，-5金币`; if(skipFed+skipDead+skipCoins+skipMax+skipNoPet>0){let skips=[]; if(skipFed>0)skips.push(`${skipFed}人今天已喂食`); if(skipDead>0)skips.push(`${skipDead}人宠物已死亡`); if(skipCoins>0)skips.push(`${skipCoins}人金币不足`); if(skipMax>0)skips.push(`${skipMax}人全部满级`); if(skipNoPet>0)skips.push(`${skipNoPet}人未领养宠物`); msg+=`（跳过：${skips.join('、')}）`;} showNotification('全班喂食',msg,'success'); showBatchUpgradeNotice(upgrades); }
 function showBatchUpgradeNotice(upgrades){ if(!upgrades||upgrades.length===0) return; const INTERVAL=4500; const MAX_INDIVIDUAL=3; function showOne(idx){ if(idx>=upgrades.length) return; const u=upgrades[idx]; showUpgradeEffect(u.petRealName, u.newLevel, u.cfgId, u.petName, u.oldLevel, u.studentName); setTimeout(()=>{ showNotification('🎉 宠物升级',`恭喜 ${u.studentName} 同学的 ${u.petName} 进化为${u.stageName}！`,'success'); },300); if(idx+1<upgrades.length){ setTimeout(()=>{ const container=document.getElementById('upgradeEffectContainer'); if(container){const overlays=container.querySelectorAll('.upgrade-overlay'); overlays.forEach(o=>o.remove());} showOne(idx+1); }, INTERVAL); } } if(upgrades.length<=MAX_INDIVIDUAL){ if(upgrades.length>1){ showNotification('🎉 升级预告',`本次共有 ${upgrades.length} 位同学的宠物升级，逐一展示！`,'success'); setTimeout(()=>showOne(0), 800); } else { showOne(0); } } else { showBatchUpgradeBoard(upgrades); } } function showBatchUpgradeBoard(upgrades){ const container=document.getElementById('upgradeEffectContainer'); const overlay=document.createElement('div'); overlay.className='upgrade-overlay'; overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);animation:fadeIn 0.5s ease;'; const listHtml=upgrades.map((u,i)=>{ const cfg=PET_CONFIG[Object.keys(PET_CONFIG).find(k=>PET_CONFIG[k].id===u.cfgId)]; const emoji=cfg?cfg.emoji:'🐾'; const imgSrc=_img(`${u.cfgId}/${u.newLevel}.webp`); return `<div style="display:flex;align-items:center;gap:12px;padding:10px 18px;background:rgba(255,255,255,0.08);border-radius:14px;border:1px solid rgba(255,255,255,0.15);animation:fadeIn 0.5s ease ${i*0.08}s both;"><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ffe0b2,#ffcc80);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;"><img src="${imgSrc}" style="width:40px;height:40px;object-fit:contain;" onerror="this.onerror=null;this.parentNode.innerHTML='<span style=\\'font-size:28px;\\'>${emoji}</span>';"></div><div style="flex:1;min-width:0;"><div style="font-size:16px;font-weight:700;color:#fff;">${esc(u.studentName)}</div><div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">${esc(u.petName)} → ${esc(u.stageName)}</div></div><div style="font-size:22px;">🎉</div></div>`; }).join(''); overlay.innerHTML=` <div style="background:linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:28px;padding:35px 30px;max-width:520px;width:90%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.1);position:relative;overflow:hidden;"> <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#e8637a,#f5a054,#ffd700,#e8637a);background-size:200% 100%;animation:shimmer 2s linear infinite;"></div> <div style="text-align:center;margin-bottom:20px;"> <div style="font-size:36px;margin-bottom:6px;">🏆✨🎊</div> <div style="font-size:24px;font-weight:800;color:#ffd700;text-shadow:0 0 20px rgba(255,215,0,0.4);">集体进化大成功！</div> <div style="font-size:15px;color:rgba(255,255,255,0.7);margin-top:6px;">恭喜以下 <strong style="color:#ff9800;font-size:18px;">${upgrades.length}</strong> 位同学的宠物升级</div> </div> <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:5px;min-height:0;"> ${listHtml} </div> <div style="text-align:center;margin-top:18px;padding-top:15px;border-top:1px solid rgba(255,255,255,0.1);"> <button onclick="this.closest('.upgrade-overlay').remove();" style="padding:10px 36px;border:none;border-radius:20px;background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 15px rgba(232,99,122,0.4);transition:transform 0.2s;">太棒了！为他们鼓掌 👏</button> </div> </div>`; container.appendChild(overlay); overlay.addEventListener('click',(e)=>{if(e.target===overlay)overlay.remove();}); setTimeout(()=>{if(overlay.parentNode)overlay.remove();},15000); playUpgradeSound(); }
-// v127: 重置班级宠物 — 等待同步完成后再删除，确保一次性成功
+// v127: 重置班级宠物 — 直接从 Supabase 删除，不等待同步
 function clearPetData(){
-  if(!currentClassId) return;
+  if(!currentClassId){
+    console.warn('[v127] clearPetData: no currentClassId');
+    showNotification('请先选择班级', '', 'warning');
+    return;
+  }
   if(!confirm('确定重置当前班级所有宠物数据？\n所有宠物、宠物特效、宠物姓名都将被彻底清除，学生金币恢复为50。\n\n此操作不可撤销！')) return;
   var cur = classesData.find(function(c){return c.id===currentClassId;});
-  if(!cur) return;
+  if(!cur){
+    console.warn('[v127] clearPetData: class not found for id', currentClassId);
+    showNotification('班级不存在', '', 'error');
+    return;
+  }
   var snapshot = JSON.parse(JSON.stringify(cur.students));
   var className = cur.name;
   // 先暂停同步
   _pauseSync = true;
   showNotification('正在重置', '正在从云端删除宠物数据...', 'info');
-  // 等待当前同步完成，然后再删除
-  _waitForSyncComplete().then(function(){
-    // 先从 Supabase 彻底删除宠物数据
-    return _supabaseClearPets(cur);
-  }).then(function(){
+  console.log('[v127] clearPetData: starting for class', className, 'id:', cur.id);
+  console.log('[v127] clearPetData: db exists?', typeof db !== 'undefined' && !!db);
+  console.log('[v127] clearPetData: currentUser exists?', typeof currentUser !== 'undefined' && !!currentUser);
+  // 直接从 Supabase 删除
+  _supabaseClearPets(cur).then(function(){
+    console.log('[v127] clearPetData: Supabase clear complete');
     // Supabase 清理完成后，再清本地数据
     cur.students.forEach(function(s){
       s.pets = [];
@@ -2590,50 +2578,79 @@ function clearPetData(){
     showNotification('重置完成', '班级【' + className + '】宠物数据已彻底清空', 'success');
   }).catch(function(err){
     _pauseSync = false;
-    console.warn('[v127] clearPetData failed:', err);
+    console.error('[v127] clearPetData failed:', err);
     showNotification('重置失败', '云端清理失败: ' + (err.message || err), 'error');
   });
 }
 // v127: 从 Supabase 彻底删除班级所有宠物数据
 function _supabaseClearPets(cls){
-  if(typeof db === 'undefined' || !db || typeof currentUser === 'undefined' || !currentUser){
-    console.log('[v127] _supabaseClearPets: no Supabase connection, skipping');
-    return Promise.resolve(); // 无 Supabase 连接，跳过
+  if(typeof db === 'undefined' || !db){
+    console.warn('[v127] _supabaseClearPets: db not available');
+    return Promise.resolve();
+  }
+  if(typeof currentUser === 'undefined' || !currentUser){
+    console.warn('[v127] _supabaseClearPets: currentUser not available');
+    return Promise.resolve();
   }
   return (async function(){
     var classId = cls.id;
+    console.log('[v127] _supabaseClearPets: classId=', classId, 'className=', cls.name);
     // 获取 Supabase 中的班级 ID
     var targetId = null;
     if(typeof _isValidInt4Id === 'function' && _isValidInt4Id(classId)){
       targetId = classId;
+      console.log('[v127] _supabaseClearPets: using direct classId', targetId);
     } else {
+      console.log('[v127] _supabaseClearPets: classId is not valid INT4, searching by name...');
       var r = await db.from('classes').select('id').eq('teacher_id', currentUser.id).eq('name', cls.name).limit(1);
-      if(r.data && r.data.length > 0) targetId = r.data[0].id;
-      else console.log('[v127] _supabaseClearPets: class not found by name:', cls.name);
+      if(r.error){
+        console.error('[v127] _supabaseClearPets: classes query error:', r.error);
+        throw new Error('查询班级失败: ' + r.error.message);
+      }
+      if(r.data && r.data.length > 0){
+        targetId = r.data[0].id;
+        console.log('[v127] _supabaseClearPets: found class in Supabase with id', targetId);
+      } else {
+        console.warn('[v127] _supabaseClearPets: class not found in Supabase by name:', cls.name);
+        throw new Error('班级在云端未找到，可能尚未同步');
+      }
     }
     if(!targetId){
-      console.log('[v127] _supabaseClearPets: no targetId, skipping Supabase delete');
-      return;
+      console.warn('[v127] _supabaseClearPets: no targetId resolved');
+      throw new Error('无法确定班级 ID');
     }
     console.log('[v127] _supabaseClearPets: clearing pets for class', targetId);
     // 获取该班级所有学生 ID
     var stuR = await db.from('students').select('id').eq('class_id', targetId);
+    if(stuR.error){
+      console.error('[v127] _supabaseClearPets: students query error:', stuR.error);
+      throw new Error('查询学生失败: ' + stuR.error.message);
+    }
     var studentIds = (stuR.data || []).map(function(s){ return s.id; });
     console.log('[v127] _supabaseClearPets: found', studentIds.length, 'students');
     if(studentIds.length > 0){
       // 删除所有宠物
       var petDel = await db.from('pets').delete().in('student_id', studentIds);
-      if(petDel.error) console.warn('[v127] pets delete error:', petDel.error);
-      else console.log('[v127] deleted all pets');
-      // 重置学生金币为50，清除其他宠物相关字段
+      if(petDel.error){
+        console.error('[v127] _supabaseClearPets: pets delete error:', petDel.error);
+        throw new Error('删除宠物失败: ' + petDel.error.message);
+      }
+      console.log('[v127] _supabaseClearPets: deleted', studentIds.length, 'students\' pets');
+      // 重置学生金币为 50
       var stuUpdate = await db.from('students').update({ coins: 50 }).eq('class_id', targetId);
-      if(stuUpdate.error) console.warn('[v127] students reset error:', stuUpdate.error);
-      else console.log('[v127] reset students coins to 50');
+      if(stuUpdate.error){
+        console.error('[v127] _supabaseClearPets: students update error:', stuUpdate.error);
+        throw new Error('重置金币失败: ' + stuUpdate.error.message);
+      }
+      console.log('[v127] _supabaseClearPets: reset students coins to 50');
     }
-    // 清除该班级的 custom_actions（宠物相关操作记录）
+    // 清除该班级的 custom_actions
     var caDel = await db.from('custom_actions').delete().eq('class_id', targetId);
-    if(caDel.error) console.warn('[v127] custom_actions delete error:', caDel.error);
-    else console.log('[v127] deleted custom_actions');
+    if(caDel.error){
+      console.error('[v127] _supabaseClearPets: custom_actions delete error:', caDel.error);
+      throw new Error('删除操作记录失败: ' + caDel.error.message);
+    }
+    console.log('[v127] _supabaseClearPets: deleted custom_actions');
     console.log('[v127] _supabaseClearPets: done for class', targetId);
   })();
 }
@@ -4352,6 +4369,11 @@ window.renderHappyRunRanking = renderHappyRunRanking;
 function switchPage(pageId){if(pageId!=='quiz-page'&&typeof window._stopPigRunBGM==='function'){window._stopPigRunBGM();}if(pageId!=='quiz-page'&&typeof window._stopMatch3BGM==='function'){window._stopMatch3BGM();}document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(pageId).classList.add('active');var isStudentView=typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student';if(pageId!=='quiz-page'&&!isStudentView&&typeof window._resetQuizModalFlag==='function'){window._resetQuizModalFlag();}else if(pageId==='quiz-page'&&!isStudentView){if(typeof window._resetQuizModalFlag==='function')window._resetQuizModalFlag();window._pigRunModalShown=false;window._match3ModalShown=false;window._teacherPlayingAsStudent=null;}var needsLogReload=isStudentView&&(pageId==='pk-page'||pageId==='jianghu-page');if(needsLogReload&&typeof _loadOperationLogs==='function'){_loadOperationLogs().then(function(){if(typeof _syncOpLogsAlias==='function'){try{_syncOpLogsAlias();}catch(e){}}requestAnimationFrame(()=>{if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}});}).catch(function(e){console.warn('[switchPage] Log reload failed:',e);requestAnimationFrame(()=>{if(pageId==='pk-page')renderPKPage();else if(pageId==='jianghu-page')renderJianghuPage();});});}else{requestAnimationFrame(()=>{if(pageId==='honor-board-page'){renderClassTopThree();var art=document.querySelector('.rank-tab.active');if(art&&art.textContent.includes('\u6bcf\u65e5'))renderQuizRanking();else if(art&&art.textContent.includes('\u5c0f\u732a'))renderPigRunRanking();else if(art&&art.textContent.includes('\u6d88\u6d88\u4e50'))renderMatch3Ranking();else if(art&&art.textContent.includes('\u5feb\u4e50\u8dd1'))renderHappyRunRanking();}else if(pageId==='quiz-page'){if(typeof renderQuizPage==='function')renderQuizPage();var aqt=document.querySelector('.quiz-tab.active');if(aqt&&aqt.textContent.includes('\u5c0f\u732a')){if(typeof renderPigRunPage==='function')renderPigRunPage();}else if(aqt&&aqt.textContent.includes('\u6d88\u6d88\u4e50')){if(typeof renderMatch3Page==='function')renderMatch3Page();}else if(aqt&&aqt.textContent.includes('\u5feb\u4e50\u8dd1')){if(typeof renderHappyRunPage==='function')renderHappyRunPage();}}else if(pageId==='pk-page'){renderPKPage();var sa=document.getElementById('classpk-start-area');if(sa)sa.classList.remove('visible');probePKMonsterImages();}else if(pageId==='jianghu-page'){renderJianghuPage();probeJhBossImages();}else if(pageId==='library-page'){if(typeof renderLibraryPage==='function')renderLibraryPage();}});}}
 function init(){renderClassList();if(classesData.length&&!currentClassId)currentClassId=classesData[0].id;scheduleAllRenders();/* v127: 初始化审批状态按钮（仅学生可见） */if(typeof _initSnackStatusButton==='function')_initSnackStatusButton();/* 延迟非关键页面的初始渲染 */requestAnimationFrame(()=>{renderJianghuPage();probeClassPKRobotImages();});}
 window.onload=async function(){
+  /* ---- v127: 立即隐藏教师端的审批状态按钮 ---- */
+  if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type!=='student'){
+    var btn=document.getElementById('snackStatusBtn');
+    if(btn)btn.style.display='none';
+  }
   /* ---- 云端模式：不渲染，等 dal.js 加载数据后调用 init() ---- */
   if(window._cloudMode){
     return;
