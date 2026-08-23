@@ -331,7 +331,7 @@ function _renderSnackShopStudentSelect(curClass) {
   html += '</div>';
   
   // Description
-  html += '<div style="font-size:13px;color:#888;margin-bottom:14px;">点击学生姓名选中，然后点击「兑换零食」按钮。也可以点击「管理零食」自定义零食种类。</div>';
+  html += '<div style="font-size:13px;color:#888;margin-bottom:14px;">点击下方学生姓名选中后，即可点击「兑换零食」。点击「管理零食」可自定义零食种类。</div>';
   
   // Student list
   html += '<div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-height:0;overflow-y:auto;border:1.5px solid rgba(255,210,200,0.6);border-radius:18px;padding:12px;margin-bottom:14px;background:#fffaf5;align-content:flex-start;">';
@@ -351,23 +351,27 @@ function _renderSnackShopStudentSelect(curClass) {
   });
   html += '</div>';
   
-  // Bottom action area
-  html += '<div id="snackShopActionWrap" style="margin-bottom:10px;text-align:center;' + (_snackShopSelectedStudentId ? '' : 'display:none;') + '">';
+  // Bottom action area — always visible
+  html += '<div id="snackShopActionWrap" style="margin-bottom:10px;text-align:center;">';
   if (_snackShopSelectedStudentId) {
     var selStudent = curClass.students.find(function(s) { return s.id.toString() === _snackShopSelectedStudentId.toString(); });
     if (selStudent) {
       html += '<div style="font-size:13px;color:#555;margin-bottom:8px;">已选中：<strong style="color:#d4760a;">' + esc(selStudent.name) + '</strong></div>';
     }
-    html += '<div style="display:flex;gap:10px;justify-content:center;">';
-    html += '<button onclick="confirmSnackShopStudent()" style="background:linear-gradient(135deg,#ff6b9d,#c06c84);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(255,107,157,0.4);transition:all 0.2s;flex:1;max-width:200px;" onmouseenter="this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.transform=\'scale(1)\'">🍭 兑换零食</button>';
-    html += '<button onclick="showSnackManageModal()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;flex:1;max-width:200px;">⚙️ 管理零食</button>';
-    html += '<button onclick="cancelSnackShopSelection()" style="background:#f0f0f0;color:#666;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;flex:1;max-width:200px;">取消</button>';
-    html += '</div>';
   } else {
-    html += '<div style="display:flex;gap:10px;justify-content:center;">';
-    html += '<button onclick="showSnackManageModal()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;">⚙️ 管理零食</button>';
-    html += '</div>';
+    html += '<div style="font-size:13px;color:#999;margin-bottom:8px;">请先在上方点击选择一名学生，再进行兑换零食</div>';
   }
+  html += '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">';
+  if (_snackShopSelectedStudentId) {
+    html += '<button onclick="confirmSnackShopStudent()" style="background:linear-gradient(135deg,#ff6b9d,#c06c84);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(255,107,157,0.4);transition:all 0.2s;flex:1;max-width:200px;" onmouseenter="this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.transform=\'scale(1)\'">🍭 兑换零食</button>';
+  } else {
+    html += '<button disabled style="background:#ccc;color:#999;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:not-allowed;flex:1;max-width:200px;opacity:0.7;">🍭 兑换零食</button>';
+  }
+  html += '<button onclick="showSnackManageModal()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;flex:1;max-width:200px;">⚙️ 管理零食</button>';
+  if (_snackShopSelectedStudentId) {
+    html += '<button onclick="cancelSnackShopSelection()" style="background:#f0f0f0;color:#666;border:none;border-radius:14px;padding:13px 24px;font-size:15px;font-weight:700;cursor:pointer;flex:0;max-width:120px;">取消选择</button>';
+  }
+  html += '</div>';
   html += '</div>';
   
   // Close button
