@@ -2169,8 +2169,12 @@ function _syncTeacherToSupabase() {
         });
         if (toDelete.length > 0) {
           console.log('[DAL] Deleting', toDelete.length, 'students from Supabase that were removed locally:', toDelete);
-          // First delete their pets
-          return db.from('pets').delete().in('student_id', toDelete).then(function(pr) {
+          // First delete their operation_logs (to avoid FK constraint errors)
+          return db.from('operation_logs').delete().in('student_id', toDelete).then(function(lr) {
+            if (lr.error) console.error('[DAL] operation_logs delete error:', lr.error);
+            // Then delete their pets
+            return db.from('pets').delete().in('student_id', toDelete);
+          }).then(function(pr) {
             if (pr.error) console.error('[DAL] pet delete error:', pr.error);
             // Then delete the students
             return db.from('students').delete().in('id', toDelete);
@@ -2245,8 +2249,12 @@ function _syncTeacherToSupabase() {
           var studentIds = (stuR.data || []).map(function(s) { return s.id; });
           var chain = Promise.resolve();
           if (studentIds.length > 0) {
-            // Delete pets first
+            // Delete operation_logs first (to avoid FK constraint errors)
             chain = chain.then(function() {
+              return db.from('operation_logs').delete().in('student_id', studentIds);
+            }).then(function(lr) {
+              if (lr.error) console.error('[DAL] v54 operation_logs delete error:', lr.error);
+              // Delete pets
               return db.from('pets').delete().in('student_id', studentIds);
             }).then(function(pr) {
               if (pr.error) console.error('[DAL] v54 pet delete error:', pr.error);
