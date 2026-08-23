@@ -2437,56 +2437,56 @@ function createClass(){const n=prompt('班级名称');if(!n)return;
     saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
   }
 }
-// v128: 删除班级 — 先从本地移除（让 dal.js v59 机制生效），再异步清理 Supabase
+// v130: 删除班级 — 先等同步完成，再从本地+Supabase同时删除，防止数据复活
 function deleteClass(id){
   if(!confirm('确定删除该班级？删除后可在"已删除班级"中恢复')) return;
   var cls = classesData.find(function(c){return c.id===id||c.id==id;});
   var clsName = cls ? cls.name : '';
-  var clsIdForSync = cls ? cls.id : id;
-  var clsStudents = cls ? JSON.parse(JSON.stringify(cls.students)) : [];
   // 保存快照到已删除班级
   if(cls){
-    var snapshot = {id:cls.id, name:cls.name, students:clsStudents, deletedAt:new Date().toISOString()};
+    var snapshot = {id:cls.id, name:cls.name, students:JSON.parse(JSON.stringify(cls.students)), deletedAt:new Date().toISOString()};
     deletedClasses.push(snapshot);
     if(deletedClasses.length > 20) deletedClasses.shift();
     saveDeletedClasses();
   }
-  // v130: 暂停同步 → 等同步跑完 → 删本地 → 删 Supabase → 恢复同步
-  // 不能直接后台调 _supabaseDeleteClass，会和正在跑的同步竞态导致数据复活
+  showNotification('正在删除...', '等待数据同步完成', 'info');
+  // v130: 暂停新同步 + 等待正在进行的同步完成，然后再删除
   _pauseSync = true;
-  var _doDelete = function(){
+  var _waitAndDelete = function(){
     if(typeof _dalSyncing !== 'undefined' && _dalSyncing){
-      setTimeout(_doDelete, 300);
+      setTimeout(_waitAndDelete, 300);
       return;
     }
-    // 同步已停止，安全操作
+    // 同步已完成，现在安全地从本地移除
     classesData = classesData.filter(function(c){return c.id!==id && c.id!=id;});
     if(currentClassId===id || currentClassId==id) currentClassId = classesData[0]?.id || null;
     if(typeof customActions !== 'undefined'){
       customActions = customActions.filter(function(a){return a.class_id!=id;});
     }
-    // 保存干净数据到 localStorage（_pauseSync 期间不会触发同步）
+    // 保存干净数据（_pauseSync=true 期间不会触发同步）
     safeLSSave('classPetData', classesData);
     scheduleFileSave();
     renderClassList();
     scheduleAllRenders();
-    showNotification('班级已删除', '可在"已删除班级"中恢复', 'info');
-    // 直接从 Supabase 删除（此时没有同步在跑，不会被覆盖）
+    // 直接从 Supabase 删除（此时没有同步在跑，不会把旧数据传回去）
     if(typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
-      _supabaseDeleteClass(clsIdForSync, clsName).then(function(){
+      _supabaseDeleteClass(id, clsName).then(function(){
         _pauseSync = false;
         saveClassData();
+        showNotification('班级已删除', '可在"已删除班级"中恢复', 'info');
       }).catch(function(err){
         _pauseSync = false;
         saveClassData();
         console.warn('[v130] _supabaseDeleteClass error:', err);
+        showNotification('班级已删除', '本地已删除，云端清理失败请重试', 'warning');
       });
     } else {
       _pauseSync = false;
       saveClassData();
+      showNotification('班级已删除', '可在"已删除班级"中恢复', 'info');
     }
   };
-  _doDelete();
+  _waitAndDelete();
 }
 // v127: 从 Supabase 彻底删除班级及其所有关联数据
 function _supabaseDeleteClass(classId, className){
@@ -2668,6 +2668,102 @@ function _supabaseClearPets(cls){
     }
     console.log('[v127] _supabaseClearPets: deleted custom_actions');
     console.log('[v127] _supabaseClearPets: done for class', targetId);
+  })();
+}
+
+// v130: 从 Supabase 删除单个学生及其宠物数据
+function _supabaseDeleteStudent(studentId, student){
+  if(typeof db === 'undefined' || !db){
+    console.warn('[v130] _supabaseDeleteStudent: db not available');
+    return Promise.resolve();
+  }
+  if(typeof currentUser === 'undefined' || !currentUser){
+    console.warn('[v130] _supabaseDeleteStudent: currentUser not available');
+    return Promise.resolve();
+  }
+  return (async function(){
+    console.log('[v130] _supabaseDeleteStudent: studentId=', studentId, 'name=', student.name);
+    // 只处理有效的 Supabase ID（正整数）
+    if(!studentId || studentId <= 0 || studentId !== Math.floor(Number(studentId))){
+      console.log('[v130] _supabaseDeleteStudent: not a valid Supabase ID, skipping');
+      return;
+    }
+    // 删除该学生的宠物
+    if(student.pets && student.pets.length > 0){
+      var petDel = await db.from('pets').delete().eq('student_id', studentId);
+      if(petDel.error){
+        console.warn('[v130] pets delete error:', petDel.error);
+      } else {
+        console.log('[v130] deleted', student.pets.length, 'pets for student', studentId);
+      }
+    }
+    // 删除学生本身
+    var stuDel = await db.from('students').delete().eq('id', studentId);
+    if(stuDel.error){
+      console.warn('[v130] student delete error:', stuDel.error);
+      throw new Error('删除学生失败: ' + stuDel.error.message);
+    }
+    console.log('[v130] _supabaseDeleteStudent: done for student', studentId);
+  })();
+}
+// v130: 从 Supabase 清空班级所有学生及宠物数据
+function _supabaseClearStudents(cls){
+  if(typeof db === 'undefined' || !db){
+    console.warn('[v130] _supabaseClearStudents: db not available');
+    return Promise.resolve();
+  }
+  if(typeof currentUser === 'undefined' || !currentUser){
+    console.warn('[v130] _supabaseClearStudents: currentUser not available');
+    return Promise.resolve();
+  }
+  return (async function(){
+    var classId = cls.id;
+    console.log('[v130] _supabaseClearStudents: classId=', classId, 'className=', cls.name);
+    // 获取 Supabase 中的班级 ID
+    var targetId = null;
+    if(typeof _isValidInt4Id === 'function' && _isValidInt4Id(classId)){
+      targetId = classId;
+    } else {
+      var r = await db.from('classes').select('id').eq('teacher_id', currentUser.id).eq('name', cls.name).limit(1);
+      if(r.error){
+        console.error('[v130] _supabaseClearStudents: classes query error:', r.error);
+        throw new Error('查询班级失败: ' + r.error.message);
+      }
+      if(r.data && r.data.length > 0){
+        targetId = r.data[0].id;
+      } else {
+        console.warn('[v130] _supabaseClearStudents: class not found in Supabase:', cls.name);
+        return; // 班级还没同步到 Supabase，无需清理
+      }
+    }
+    if(!targetId){
+      console.warn('[v130] _supabaseClearStudents: no targetId resolved');
+      return;
+    }
+    console.log('[v130] _supabaseClearStudents: clearing students for class', targetId);
+    // 获取该班级所有学生 ID
+    var stuR = await db.from('students').select('id').eq('class_id', targetId);
+    if(stuR.error){
+      console.error('[v130] _supabaseClearStudents: students query error:', stuR.error);
+      throw new Error('查询学生失败: ' + stuR.error.message);
+    }
+    var studentIds = (stuR.data || []).map(function(s){ return s.id; });
+    console.log('[v130] _supabaseClearStudents: found', studentIds.length, 'students');
+    if(studentIds.length > 0){
+      // 删除所有宠物
+      var petDel = await db.from('pets').delete().in('student_id', studentIds);
+      if(petDel.error){
+        console.error('[v130] _supabaseClearStudents: pets delete error:', petDel.error);
+      }
+      // 删除所有学生
+      var stuDel = await db.from('students').delete().in('id', studentIds);
+      if(stuDel.error){
+        console.error('[v130] _supabaseClearStudents: students delete error:', stuDel.error);
+        throw new Error('删除学生失败: ' + stuDel.error.message);
+      }
+      console.log('[v130] _supabaseClearStudents: deleted', studentIds.length, 'students and their pets');
+    }
+    console.log('[v130] _supabaseClearStudents: done for class', targetId);
   })();
 }
 
@@ -3877,87 +3973,80 @@ function deleteCustomAction(id){if(confirm('删除操作')){customActions=custom
 function showStudentListModal(){if(!currentClassId)return;const cur=classesData.find(c=>c.id===currentClassId);let html='<div style="max-height:400px;overflow:auto;">';cur.students.forEach(s=>{html+=`<div class="student-list-item"><span>${esc(s.name)}</span><div><span class="edit-icon" style="cursor:pointer;" onclick="editStudentName('${s.id}')">✏️</span><span class="delete-icon" style="cursor:pointer;margin-left:10px;" onclick="deleteStudentById('${s.id}')">🗑️</span></div></div>`;});html+='</div>';showModal('学生列表',html,[{text:'增加学生',class:'btn-primary',onclick:'addSingleStudent()'},{text:'关闭',class:'btn-secondary',onclick:'closeModal()'},{text:'清空所有',class:'btn-danger',onclick:'clearAllStudents()'}]);}
 function addSingleStudent(){const name=prompt('学生姓名');if(!name)return;const cur=classesData.find(c=>c.id===currentClassId);if(cur.students.find(s=>s.name===name.trim())){showNotification('已存在','','error');return;}cur.students.push({id:_genLocalId(),name:name.trim(),coins:50,pets:[],lastCheckinDate:null,activePetId:null,pkCountToday:0,lastPkDate:null});saveClassData();closeModal();showStudentListModal();scheduleAllRenders();}
 function editStudentName(id){const cur=classesData.find(c=>c.id===currentClassId);const stu=cur.students.find(s=>s.id.toString()===id.toString());if(!stu)return;const newName=prompt('新名字',stu.name);if(newName)stu.name=newName.trim();saveClassData();closeModal();showStudentListModal();renderHomePetGrid();}
+// v130: 删除学生 — 先等同步完成，再从本地+Supabase同时删除，防止数据复活
 function deleteStudentById(id){
   if(!confirm('删除学生')) return;
-  var cur = classesData.find(function(c){return c.id===currentClassId||c.id==currentClassId;});
-  if(!cur) return;
-  var stu = cur.students.find(function(s){return s.id.toString()===id.toString();});
-  var stuId = stu ? stu.id : null;
-  var hasSupabaseId = stuId && stuId > 0 && stuId === Math.floor(stuId);
-  // v130: 暂停同步 → 等同步跑完 → 删本地 → 删 Supabase → 恢复同步
+  var cur = classesData.find(c=>c.id===currentClassId);
+  var deletedStudent = cur.students.find(s=>s.id.toString()===id.toString());
+  showNotification('正在删除...', '等待数据同步完成', 'info');
   _pauseSync = true;
-  var _doDelete = function(){
+  var _waitAndDelete = function(){
     if(typeof _dalSyncing !== 'undefined' && _dalSyncing){
-      setTimeout(_doDelete, 300);
+      setTimeout(_waitAndDelete, 300);
       return;
     }
-    // 同步已停止，安全删除本地
-    cur.students = cur.students.filter(function(s){return s.id.toString()!==id.toString();});
+    // 同步已完成，安全地从本地移除
+    cur.students = cur.students.filter(s=>s.id.toString()!==id.toString());
     safeLSSave('classPetData', classesData);
     scheduleFileSave();
     closeModal();
     showStudentListModal();
     scheduleAllRenders();
     if(currentModalStudentId && currentModalStudentId===id) closeModal();
-    // 直接从 Supabase 删除学生及其宠物（此时没有同步在跑，不会被覆盖）
-    if(hasSupabaseId && typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
-      (async function(){
-        try {
-          // 先删宠物，再删学生（避免外键约束问题）
-          await db.from('pets').delete().eq('student_id', stuId);
-          await db.from('students').delete().eq('id', stuId);
-          console.log('[v130] deleted student', stuId, 'from Supabase');
-        } catch(e){
-          console.warn('[v130] Supabase student delete error:', e);
-        }
+    // 直接从 Supabase 删除该学生及其宠物
+    if(typeof db !== 'undefined' && db && deletedStudent){
+      _supabaseDeleteStudent(id, deletedStudent).then(function(){
         _pauseSync = false;
         saveClassData();
-      })();
+      }).catch(function(err){
+        _pauseSync = false;
+        saveClassData();
+        console.warn('[v130] _supabaseDeleteStudent error:', err);
+      });
     } else {
       _pauseSync = false;
       saveClassData();
     }
   };
-  _doDelete();
+  _waitAndDelete();
 }
+// v130: 清空所有学生 — 先等同步完成，再从本地+Supabase同时删除，防止数据复活
 function clearAllStudents(){
   if(!confirm('清空所有学生？')) return;
-  var cur = classesData.find(function(c){return c.id===currentClassId||c.id==currentClassId;});
-  if(!cur) return;
-  // 收集所有 Supabase 学生 ID
-  var supabaseStudentIds = cur.students.filter(function(s){return s.id && s.id > 0 && s.id === Math.floor(s.id);}).map(function(s){return s.id;});
-  // v130: 暂停同步 → 等同步跑完 → 清本地 → 删 Supabase → 恢复同步
+  var cur = classesData.find(c=>c.id===currentClassId);
+  showNotification('正在清空...', '等待数据同步完成', 'info');
   _pauseSync = true;
-  var _doClear = function(){
+  var _waitAndClear = function(){
     if(typeof _dalSyncing !== 'undefined' && _dalSyncing){
-      setTimeout(_doClear, 300);
+      setTimeout(_waitAndClear, 300);
       return;
     }
+    // 同步已完成，安全地从本地移除
     cur.students = [];
     safeLSSave('classPetData', classesData);
     scheduleFileSave();
     closeModal();
     scheduleAllRenders();
     if(currentModalStudentId) closeModal();
-    // 直接从 Supabase 删除所有学生及其宠物
-    if(supabaseStudentIds.length > 0 && typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
-      (async function(){
-        try {
-          await db.from('pets').delete().in('student_id', supabaseStudentIds);
-          await db.from('students').delete().in('id', supabaseStudentIds);
-          console.log('[v130] cleared', supabaseStudentIds.length, 'students from Supabase');
-        } catch(e){
-          console.warn('[v130] Supabase clear students error:', e);
-        }
+    // 直接从 Supabase 删除该班级所有学生及宠物
+    if(typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
+      _supabaseClearStudents(cur).then(function(){
         _pauseSync = false;
         saveClassData();
-      })();
+        showNotification('已清空', '所有学生已删除', 'success');
+      }).catch(function(err){
+        _pauseSync = false;
+        saveClassData();
+        console.warn('[v130] _supabaseClearStudents error:', err);
+        showNotification('本地已清空', '云端清理失败请重试', 'warning');
+      });
     } else {
       _pauseSync = false;
       saveClassData();
+      showNotification('已清空', '所有学生已删除', 'success');
     }
   };
-  _doClear();
+  _waitAndClear();
 }
 function renderClassTopThree(){
   const container=document.getElementById('classTopThree');
