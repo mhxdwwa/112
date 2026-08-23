@@ -260,6 +260,324 @@ Object.keys(PET_CONFIG_BASE).forEach(name=>{ PET_CONFIG[name] = {...PET_CONFIG_B
 // ========== 宠物配置已固定为84只 ==========
 // 如需新增宠物，在上方 PET_CONFIG_BASE 中添加对应条目，并上传 images/数字/1.webp 图片
 console.log('[宠物系统] 已加载 ' + Object.keys(PET_CONFIG).length + ' 只宠物配置（固定）');
+
+// ========== v120: 零食铺系统 ==========
+const SNACK_CONFIG = [
+  { id: 'milk_tea', name: '奶茶', emoji: '🧋', flavors: ['珍珠奶茶', '椰果奶茶', '红豆奶茶', '芋泥奶茶', '原味奶茶'] },
+  { id: 'cola', name: '可乐', emoji: '🥤', flavors: ['经典原味', '零度无糖', '香草味', '樱桃味'] },
+  { id: 'chips', name: '薯片', emoji: '🍟', flavors: ['原味', '番茄味', '烧烤味', '黄瓜味', '香辣味'] },
+  { id: 'sprite', name: '雪碧', emoji: '🍋', flavors: ['经典柠檬', '无糖雪碧', '薄荷味'] },
+  { id: 'fanta', name: '芬达', emoji: '🍊', flavors: ['橙味', '葡萄味', '苹果味', '草莓味'] },
+  { id: 'candy', name: '糖果', emoji: '🍬', flavors: ['水果糖', '牛奶糖', '薄荷糖', '棒棒糖'] },
+  { id: 'chocolate', name: '巧克力', emoji: '🍫', flavors: ['黑巧克力', '牛奶巧克力', '白巧克力', '榛子巧克力'] },
+  { id: 'ice_cream', name: '冰淇淋', emoji: '🍦', flavors: ['香草味', '巧克力味', '草莓味', '抹茶味', '芒果味'] },
+  { id: 'cookie', name: '饼干', emoji: '🍪', flavors: ['曲奇饼干', '巧克力饼干', '苏打饼干', '夹心饼干'] },
+  { id: 'cake', name: '蛋糕', emoji: '🍰', flavors: ['奶油蛋糕', '巧克力蛋糕', '草莓蛋糕', '芝士蛋糕'] },
+  { id: 'donut', name: '甜甜圈', emoji: '🍩', flavors: ['糖霜甜甜圈', '巧克力甜甜圈', '草莓甜甜圈'] },
+  { id: 'popcorn', name: '爆米花', emoji: '🍿', flavors: ['焦糖味', '奶油味', '巧克力味', '咸味'] },
+  { id: 'juice', name: '果汁', emoji: '🧃', flavors: ['橙汁', '苹果汁', '葡萄汁', '西瓜汁', '芒果汁'] },
+  { id: 'bread', name: '面包', emoji: '🍞', flavors: ['吐司面包', '菠萝包', '奶油面包', '肉松面包'] },
+  { id: 'pizza', name: '披萨', emoji: '🍕', flavors: ['芝士披萨', '培根披萨', '海鲜披萨', '蔬菜披萨'] },
+  { id: 'hamburger', name: '汉堡', emoji: '🍔', flavors: ['牛肉汉堡', '鸡腿汉堡', '鱼排汉堡', '素食汉堡'] },
+  { id: 'hotdog', name: '热狗', emoji: '🌭', flavors: ['经典热狗', '芝士热狗', '辣味热狗'] },
+  { id: 'sandwich', name: '三明治', emoji: '🥪', flavors: ['火腿三明治', '鸡蛋三明治', '金枪鱼三明治'] },
+  { id: 'sushi', name: '寿司', emoji: '🍣', flavors: ['三文鱼寿司', '金枪鱼寿司', '鳗鱼寿司', '卷寿司'] },
+  { id: 'noodles', name: '方便面', emoji: '🍜', flavors: ['红烧牛肉面', '酸菜牛肉面', '海鲜面', '炸酱面'] }
+];
+var _pendingSnackRequest = null;
+
+function showSnackShopModal() {
+  let html = '<div style="max-height:60vh;overflow-y:auto;padding:10px 0;">';
+  html += '<div style="text-align:center;margin-bottom:15px;color:#666;font-size:14px;">选择你想要的零食吧！</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">';
+  SNACK_CONFIG.forEach(snack => {
+    html += `<div onclick="selectSnack('${snack.id}')" style="display:flex;flex-direction:column;align-items:center;padding:12px 8px;background:linear-gradient(135deg,#fff5f8,#f0f8ff);border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;" onmouseenter="this.style.borderColor='#ff6b9d';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform='translateY(0)'">
+      <div style="font-size:36px;margin-bottom:6px;">${snack.emoji}</div>
+      <div style="font-size:13px;font-weight:600;color:#333;">${snack.name}</div>
+    </div>`;
+  });
+  html += '</div></div>';
+  showModal('🍭 零食铺', html, [{text:'关闭',onclick:'closeModal()'}], false);
+}
+
+function selectSnack(snackId) {
+  const snack = SNACK_CONFIG.find(s => s.id === snackId);
+  if (!snack) return;
+  _pendingSnackRequest = { snackId: snack.id, snackName: snack.name, snackEmoji: snack.emoji };
+  let html = '<div style="text-align:center;margin-bottom:15px;">';
+  html += `<div style="font-size:48px;margin-bottom:8px;">${snack.emoji}</div>`;
+  html += `<div style="font-size:18px;font-weight:700;color:#333;">${snack.name}</div>`;
+  html += '<div style="margin-top:12px;color:#666;font-size:14px;">选择口味：</div>';
+  html += '</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+  snack.flavors.forEach(flavor => {
+    html += `<div onclick="selectSnackFlavor('${flavor}')" style="padding:14px 18px;background:#fff;border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid #f0f0f0;text-align:center;font-size:15px;font-weight:600;color:#333;" onmouseenter="this.style.borderColor='#ff6b9d';this.style.background='#fff5f8'" onmouseleave="this.style.borderColor='#f0f0f0';this.style.background='#fff'">${flavor}</div>`;
+  });
+  html += '</div>';
+  showModal(`🍭 ${snack.name} - 选择口味`, html, [
+    {text:'返回',onclick:'showSnackShopModal()'},
+    {text:'取消',onclick:'closeModal()'}
+  ], false);
+}
+
+function selectSnackFlavor(flavor) {
+  if (!_pendingSnackRequest) return;
+  _pendingSnackRequest.flavor = flavor;
+  let html = '<div style="text-align:center;padding:20px 0;">';
+  html += `<div style="font-size:56px;margin-bottom:12px;">${_pendingSnackRequest.snackEmoji}</div>`;
+  html += `<div style="font-size:18px;font-weight:700;color:#333;margin-bottom:8px;">${_pendingSnackRequest.snackName}</div>`;
+  html += `<div style="font-size:16px;color:#666;margin-bottom:20px;">口味：${flavor}</div>`;
+  html += '<div style="background:#fff3e0;padding:12px;border-radius:10px;margin:15px 0;">';
+  html += '<div style="font-size:13px;color:#e65100;font-weight:600;margin-bottom:6px;">📋 兑换说明</div>';
+  html += '<div style="font-size:13px;color:#666;line-height:1.6;">提交后，教师将收到兑换请求通知。<br>教师同意后即可兑换成功。</div>';
+  html += '</div>';
+  html += '</div>';
+  showModal('🍭 确认兑换', html, [
+    {text:'返回',onclick:`selectSnack('${_pendingSnackRequest.snackId}')`},
+    {text:'取消',onclick:'closeModal()'},
+    {text:'提交兑换',onclick:'submitSnackRequest()',style:'background:linear-gradient(135deg,#ff6b9d,#c06c84);'}
+  ], false);
+}
+
+function submitSnackRequest() {
+  if (!_pendingSnackRequest) return;
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) { showNotification('错误', '请先选择班级', 'error'); return; }
+  
+  // Get current student
+  let student = null;
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+    student = curClass.students.find(s => s.id.toString() === currentUser.studentId.toString());
+  }
+  if (!student) { showNotification('错误', '未找到学生信息', 'error'); return; }
+  
+  // Initialize snackRequests array if not exists
+  if (!student.snackRequests) student.snackRequests = [];
+  
+  // Create request
+  const request = {
+    id: _genLocalId(),
+    timestamp: new Date().toISOString(),
+    snackId: _pendingSnackRequest.snackId,
+    snackName: _pendingSnackRequest.snackName,
+    snackEmoji: _pendingSnackRequest.snackEmoji,
+    flavor: _pendingSnackRequest.flavor,
+    studentId: student.id,
+    studentName: student.name,
+    status: 'pending', // pending, approved, rejected
+    approvedAt: null,
+    rejectedAt: null
+  };
+  
+  student.snackRequests.push(request);
+  saveClassData();
+  
+  // Record to history
+  const log = {
+    id: _genLocalId(),
+    timestamp: new Date().toISOString(),
+    classId: currentClassId,
+    studentId: student.id,
+    studentName: student.name,
+    actionType: '零食兑换',
+    details: `申请兑换 ${_pendingSnackRequest.snackEmoji} ${_pendingSnackRequest.snackName}（${_pendingSnackRequest.flavor}）`,
+    coinDelta: 0,
+    expDelta: 0,
+    petId: null,
+    extra: {
+      snackRequestId: request.id,
+      snackName: _pendingSnackRequest.snackName,
+      snackEmoji: _pendingSnackRequest.snackEmoji,
+      flavor: _pendingSnackRequest.flavor,
+      status: 'pending'
+    },
+    snapshot: null,
+    reverted: false,
+    _synced: false
+  };
+  window.operationLogs.push(log);
+  saveLogs();
+  
+  _pendingSnackRequest = null;
+  closeModal();
+  showNotification('提交成功', '兑换请求已提交，等待教师审批', 'success');
+}
+
+// 教师端：显示零食兑换请求
+function showSnackRequestsModal() {
+  if (!currentUser || currentUser.type !== 'teacher') {
+    showNotification('无权限', '仅教师可查看', 'warning');
+    return;
+  }
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) { showNotification('错误', '请先选择班级', 'error'); return; }
+  
+  // Collect all pending requests
+  const allRequests = [];
+  curClass.students.forEach(student => {
+    if (student.snackRequests) {
+      student.snackRequests.forEach(req => {
+        allRequests.push({ ...req, studentName: student.name });
+      });
+    }
+  });
+  
+  // Sort by timestamp (newest first)
+  allRequests.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  const pendingRequests = allRequests.filter(r => r.status === 'pending');
+  const processedRequests = allRequests.filter(r => r.status !== 'pending').slice(0, 20);
+  
+  let html = '<div style="max-height:60vh;overflow-y:auto;padding:10px 0;">';
+  
+  // Pending requests
+  if (pendingRequests.length > 0) {
+    html += '<div style="font-size:15px;font-weight:700;color:#e65100;margin-bottom:12px;padding:0 10px;">⏳ 待审批 (' + pendingRequests.length + ')</div>';
+    pendingRequests.forEach(req => {
+      const time = new Date(req.timestamp).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      html += `<div style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:10px;background:linear-gradient(135deg,#fff8e1,#fff3e0);border-radius:12px;border:2px solid #ffe0b2;">
+        <div style="font-size:36px;">${req.snackEmoji}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:#333;">${esc(req.studentName)}</div>
+          <div style="font-size:13px;color:#666;margin-top:2px;">${esc(req.snackName)} · ${esc(req.flavor)}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px;">${time}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="approveSnackRequest(${req.id})" style="padding:8px 14px;background:#4caf50;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">同意</button>
+          <button onclick="rejectSnackRequest(${req.id})" style="padding:8px 14px;background:#f44336;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">拒绝</button>
+        </div>
+      </div>`;
+    });
+  } else {
+    html += '<div style="text-align:center;padding:30px;color:#999;">暂无待审批请求</div>';
+  }
+  
+  // Processed requests (recent)
+  if (processedRequests.length > 0) {
+    html += '<div style="font-size:14px;font-weight:600;color:#666;margin:20px 10px 10px;padding-top:15px;border-top:1px solid #eee;">📋 最近处理</div>';
+    processedRequests.forEach(req => {
+      const time = new Date(req.approvedAt || req.rejectedAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      const statusBadge = req.status === 'approved' 
+        ? '<span style="background:#4caf50;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;">已同意</span>'
+        : '<span style="background:#f44336;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;">已拒绝</span>';
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;background:#f9f9f9;border-radius:10px;opacity:0.7;">
+        <div style="font-size:24px;">${req.snackEmoji}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;color:#333;">${esc(req.studentName)} · ${esc(req.snackName)} · ${esc(req.flavor)}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px;">${time}</div>
+        </div>
+        ${statusBadge}
+      </div>`;
+    });
+  }
+  
+  html += '</div>';
+  showModal('🍭 零食兑换审批', html, [{text:'关闭',onclick:'closeModal()'}], false);
+}
+
+function approveSnackRequest(requestId) {
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) return;
+  
+  let request = null;
+  let student = null;
+  
+  for (const s of curClass.students) {
+    if (s.snackRequests) {
+      const req = s.snackRequests.find(r => r.id === requestId);
+      if (req) {
+        request = req;
+        student = s;
+        break;
+      }
+    }
+  }
+  
+  if (!request || !student) {
+    showNotification('错误', '未找到该请求', 'error');
+    return;
+  }
+  
+  if (request.status !== 'pending') {
+    showNotification('提示', '该请求已处理', 'info');
+    return;
+  }
+  
+  request.status = 'approved';
+  request.approvedAt = new Date().toISOString();
+  
+  // Update history log
+  const logs = window.operationLogs || [];
+  const log = logs.find(l => l.extra && l.extra.snackRequestId === requestId);
+  if (log) {
+    log.extra.status = 'approved';
+    log.extra.approvedAt = request.approvedAt;
+    saveLogs();
+  }
+  
+  saveClassData();
+  showSnackRequestsModal(); // Refresh modal
+  showNotification('兑换成功', `已同意 ${student.name} 的 ${request.snackEmoji} ${request.snackName} 兑换`, 'success');
+}
+
+function rejectSnackRequest(requestId) {
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) return;
+  
+  let request = null;
+  let student = null;
+  
+  for (const s of curClass.students) {
+    if (s.snackRequests) {
+      const req = s.snackRequests.find(r => r.id === requestId);
+      if (req) {
+        request = req;
+        student = s;
+        break;
+      }
+    }
+  }
+  
+  if (!request || !student) {
+    showNotification('错误', '未找到该请求', 'error');
+    return;
+  }
+  
+  if (request.status !== 'pending') {
+    showNotification('提示', '该请求已处理', 'info');
+    return;
+  }
+  
+  request.status = 'rejected';
+  request.rejectedAt = new Date().toISOString();
+  
+  // Update history log
+  const logs = window.operationLogs || [];
+  const log = logs.find(l => l.extra && l.extra.snackRequestId === requestId);
+  if (log) {
+    log.extra.status = 'rejected';
+    log.extra.rejectedAt = request.rejectedAt;
+    saveLogs();
+  }
+  
+  saveClassData();
+  showSnackRequestsModal(); // Refresh modal
+  showNotification('已拒绝', `已拒绝 ${student.name} 的 ${request.snackEmoji} ${request.snackName} 兑换`, 'info');
+}
+
+// 获取待审批零食请求数量（用于教师通知）
+function getPendingSnackRequestCount() {
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) return 0;
+  let count = 0;
+  curClass.students.forEach(student => {
+    if (student.snackRequests) {
+      count += student.snackRequests.filter(r => r.status === 'pending').length;
+    }
+  });
+  return count;
+}
+
 /* ========== U盘/本地文件存储系统（变量提前声明） ========== */
 let _dirHandle = null;
 let _dataDirHandle = null;
@@ -871,7 +1189,7 @@ function revertToLog(logId){
   showNotification('撤销成功', revertDetail, 'success');
 }
 function _historyActionIcon(type){
-  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','删除宠物':'🐾🗑️','小猪快跑':'🐷','取金阁':'📝','宠物消消乐':'🧩','快乐跑一跑':'🏃'};
+  const icons = {'喂食':'🍖','玩耍':'🎾','散步':'🚶','逛街':'🛍️','复活':'💖','奖惩':'🏅','惩罚致死':'💀','饿死':'💀','商店购买':'🏪','PK胜利':'⚔️🏆','PK失败':'⚔️💔','PK平局':'⚔️🤝','全班打卡':'📋','每日打卡':'📋','全班喂食':'🍖👥','批量奖惩':'📦','重置班级宠物':'🔄','删除宠物':'🐾🗑️','零食兑换':'🍭','小猪快跑':'🐷','取金阁':'📝','宠物消消乐':'🧩','快乐跑一跑':'🏃'};
   return icons[type]||'📝';
 }
 function _historyActionColor(type){
@@ -883,6 +1201,7 @@ function _historyActionColor(type){
   if(type==='商店购买') return '#8e44ad';
   if(type==='重置班级宠物') return '#cc6633';
   if(type==='删除宠物') return '#c0392b';
+  if(type==='零食兑换') return '#ff6b9d';
   return '#886655';
 }
 var _isStudentHistoryView = false; // true when a student is viewing history
@@ -1540,7 +1859,8 @@ function saveDeletedClasses(){safeLSSave('deletedClasses', deletedClasses); sche
 function showDeletedClassesModal(){if(deletedClasses.length===0){showModal('🗑️ 已删除班级','<div style="text-align:center;padding:20px;">暂无已删除的班级</div>',[{text:'关闭',onclick:'closeModal()'}],false);return;}let html='<div style="max-height:400px;overflow:auto;">';[...deletedClasses].reverse().forEach((cls,i)=>{const time=new Date(cls.deletedAt).toLocaleString();const stuCount=cls.students?cls.students.length:0;const petCount=cls.students?cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0):0;html+=`<div class="history-log-item"><div><div class="history-log-time">${time} 删除</div><div><strong>${esc(cls.name)}</strong></div><div style="font-size:12px;">👨‍🎓 ${stuCount}名学生 · 🐕 ${petCount}只宠物</div></div><div style="display:flex;gap:6px;"><button class="btn btn-primary" style="padding:6px 12px;" onclick="restoreClass('${cls.id}');closeModal();">恢复</button><button class="btn btn-danger" style="padding:6px 12px;" onclick="permanentDeleteClass('${cls.id}');closeModal();">彻底删除</button></div></div>`;});html+='</div>';showModal('🗑️ 已删除班级',html,[{text:'关闭',onclick:'closeModal()'}],true);}
 function restoreClass(id){const idx=deletedClasses.findIndex(c=>c.id===id);if(idx===-1){showNotification('恢复失败','未找到该班级数据','error');return;}const cls=deletedClasses[idx];const restored={id:cls.id,name:cls.name,students:JSON.parse(JSON.stringify(cls.students))};if(classesData.find(c=>c.id===restored.id)){restored.id=Date.now().toString();}classesData.push(restored);deletedClasses.splice(idx,1);saveClassData();saveDeletedClasses();currentClassId=restored.id;renderClassList();scheduleAllRenders();showNotification('恢复成功',`班级【${cls.name}】已恢复`,'success');}
 function permanentDeleteClass(id){if(!confirm('彻底删除后将无法恢复，确定？'))return;const idx=deletedClasses.findIndex(c=>c.id===id);if(idx!==-1){const name=deletedClasses[idx].name;deletedClasses.splice(idx,1);saveDeletedClasses();showNotification('已彻底删除',`班级【${name}】已永久删除`,'info');showDeletedClassesModal();if(typeof db!=='undefined'&&db&&typeof currentUser!=='undefined'&&currentUser){(async()=>{try{var targetId=null;if(typeof _isValidInt4Id==='function'&&_isValidInt4Id(id)){targetId=id;}else{var r=await db.from('classes').select('id').eq('teacher_id',currentUser.id).eq('name',name).limit(1);if(r.data&&r.data.length>0){targetId=r.data[0].id;}}if(targetId){const stuR=await db.from('students').select('id').eq('class_id',targetId);const studentIds=(stuR.data||[]).map(s=>s.id);if(studentIds.length>0){await db.from('pets').delete().in('student_id',studentIds);await db.from('students').delete().in('id',studentIds);}await db.from('custom_actions').delete().eq('class_id',targetId);await db.from('classes').delete().eq('id',targetId);console.log('[DAL] permanentDeleteClass: Supabase cleanup complete for class',targetId,'(requested id:',id,')');}else{console.warn('[DAL] permanentDeleteClass: class not found in Supabase by id or name:',id,name);}}catch(e){console.warn('[DAL] permanentDeleteClass: Supabase cleanup failed:',e);}})();}}}
-function renderClassList(){ const c=document.getElementById('classListContainer'); if(!c){console.warn('[DAL] renderClassList: classListContainer not found');return;} const hiddenIds=getHiddenClassIds(); const visibleClasses=classesData.filter(cls=>!hiddenIds.includes(String(cls.id))); if(visibleClasses.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">'+(classesData.length===0?'暂无班级，点击新建':'所有班级已隐藏<br><span style="font-size:12px;color:#999;">点击"隐藏班级"可显示</span>')+'</div>';return;} c.innerHTML=''; visibleClasses.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);});}
+function renderClassList(){ const c=document.getElementById('classListContainer'); if(!c){console.warn('[DAL] renderClassList: classListContainer not found');return;} const hiddenIds=getHiddenClassIds(); const visibleClasses=classesData.filter(cls=>!hiddenIds.includes(String(cls.id))); if(visibleClasses.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">'+(classesData.length===0?'暂无班级，点击新建':'所有班级已隐藏<br><span style="font-size:12px;color:#999;">点击"隐藏班级"可显示</span>')+'</div>';return;} c.innerHTML=''; visibleClasses.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);}); _updateSnackRequestBadge();}
+function _updateSnackRequestBadge(){const badge=document.getElementById('snackRequestBadge');if(!badge)return;const count=getPendingSnackRequestCount();if(count>0){badge.style.display='inline-block';badge.textContent=count;}else{badge.style.display='none';}}
 let classDragIdx=null;
 function classDragStart(e){classDragIdx=+this.dataset.classIdx;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';}
 function classDragEnd(e){this.classList.remove('dragging');classDragIdx=null;document.querySelectorAll('.class-card.drag-over').forEach(el=>el.classList.remove('drag-over'));}
