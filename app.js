@@ -666,6 +666,7 @@ function approveSnackRequest(requestId) {
   }
   
   saveClassData();
+  _updateSnackRequestBadge(); // 立即更新徽章
   showSnackRequestsModal(); // Refresh modal
   showNotification('兑换成功', `已同意 ${student.name} 的 ${request.snackEmoji} ${request.snackName} 兑换`, 'success');
 }
@@ -711,6 +712,7 @@ function rejectSnackRequest(requestId) {
   }
   
   saveClassData();
+  _updateSnackRequestBadge(); // 立即更新徽章
   showSnackRequestsModal(); // Refresh modal
   showNotification('已拒绝', `已拒绝 ${student.name} 的 ${request.snackEmoji} ${request.snackName} 兑换`, 'info');
 }
@@ -726,6 +728,138 @@ function getPendingSnackRequestCount() {
     }
   });
   return count;
+}
+
+// ========== v125: 学生端零食审批状态查询 ==========
+var _snackStatusLastReadTime = 0; // 上次查看审批状态的时间戳
+
+// 显示学生自己的零食审批状态
+function showSnackStatusModal() {
+  if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'student') {
+    showNotification('提示', '仅学生可查看审批状态', 'info');
+    return;
+  }
+  
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) { showNotification('错误', '请先选择班级', 'error'); return; }
+  
+  // 找到当前学生
+  const student = curClass.students.find(s => s.id.toString() === currentUser.studentId.toString());
+  if (!student) { showNotification('错误', '未找到学生信息', 'error'); return; }
+  
+  // 标记为已读
+  _snackStatusLastReadTime = Date.now();
+  _updateSnackStatusBadge();
+  
+  const requests = student.snackRequests || [];
+  
+  let html = '<div style="max-height:60vh;overflow-y:auto;padding:10px 0;">';
+  
+  if (requests.length === 0) {
+    html += '<div style="text-align:center;padding:40px;color:#999;">';
+    html += '<div style="font-size:48px;margin-bottom:12px;">📋</div>';
+    html += '<div>暂无零食兑换记录</div>';
+    html += '</div>';
+  } else {
+    // 按时间倒序排列
+    const sortedRequests = [...requests].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    sortedRequests.forEach(req => {
+      const time = new Date(req.timestamp).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      let statusHtml = '';
+      let statusBg = '';
+      
+      if (req.status === 'pending') {
+        statusHtml = '<span style="background:#ff9800;color:#fff;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;">⏳ 未审核</span>';
+        statusBg = 'linear-gradient(135deg,#fff8e1,#fff3e0)';
+      } else if (req.status === 'approved') {
+        const approvedTime = req.approvedAt ? new Date(req.approvedAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+        statusHtml = '<span style="background:#4caf50;color:#fff;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;">✓ 已通过</span>';
+        statusBg = 'linear-gradient(135deg,#e8f5e9,#c8e6c9)';
+        if (approvedTime) {
+          statusHtml += '<div style="font-size:11px;color:#666;margin-top:4px;">审批时间：' + approvedTime + '</div>';
+        }
+      } else if (req.status === 'rejected') {
+        const rejectedTime = req.rejectedAt ? new Date(req.rejectedAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+        statusHtml = '<span style="background:#f44336;color:#fff;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;">✗ 未通过</span>';
+        statusBg = 'linear-gradient(135deg,#ffebee,#ffcdd2)';
+        if (rejectedTime) {
+          statusHtml += '<div style="font-size:11px;color:#666;margin-top:4px;">审批时间：' + rejectedTime + '</div>';
+        }
+      }
+      
+      html += `<div style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:10px;background:${statusBg};border-radius:12px;border:2px solid rgba(0,0,0,0.05);">`;
+      html += `<div style="font-size:36px;">${req.snackEmoji}</div>`;
+      html += `<div style="flex:1;min-width:0;">`;
+      html += `<div style="font-size:14px;font-weight:600;color:#333;">${esc(req.snackName)}</div>`;
+      html += `<div style="font-size:13px;color:#666;margin-top:2px;">${esc(req.flavor)}</div>`;
+      html += `<div style="font-size:11px;color:#999;margin-top:2px;">申请时间：${time}</div>`;
+      html += `</div>`;
+      html += `<div style="text-align:right;">${statusHtml}</div>`;
+      html += `</div>`;
+    });
+  }
+  
+  html += '</div>';
+  showModal('📋 零食审批状态', html, [{text:'关闭',onclick:'closeModal()'}], false);
+}
+
+// 更新学生端审批状态按钮的红点提示
+function _updateSnackStatusBadge() {
+  const badge = document.getElementById('snackStatusBadge');
+  if (!badge) return;
+  
+  // 仅学生账户显示
+  if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'student') {
+    badge.style.display = 'none';
+    return;
+  }
+  
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) {
+    badge.style.display = 'none';
+    return;
+  }
+  
+  const student = curClass.students.find(s => s.id.toString() === currentUser.studentId.toString());
+  if (!student || !student.snackRequests) {
+    badge.style.display = 'none';
+    return;
+  }
+  
+  // 统计未读的通知数量（状态从 pending 变为 approved/rejected 且时间晚于上次查看时间）
+  let unreadCount = 0;
+  student.snackRequests.forEach(req => {
+    if (req.status === 'approved' || req.status === 'rejected') {
+      const statusTime = req.status === 'approved' ? req.approvedAt : req.rejectedAt;
+      if (statusTime) {
+        const statusTimestamp = new Date(statusTime).getTime();
+        if (statusTimestamp > _snackStatusLastReadTime) {
+          unreadCount++;
+        }
+      }
+    }
+  });
+  
+  if (unreadCount > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = unreadCount;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// 初始化学生端审批状态按钮显示
+function _initSnackStatusButton() {
+  const btn = document.getElementById('snackStatusBtn');
+  if (!btn) return;
+  
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+    btn.style.display = 'inline-flex';
+    _updateSnackStatusBadge();
+  } else {
+    btn.style.display = 'none';
+  }
 }
 
 // ========== 零食管理功能（教师端）==========
@@ -2167,7 +2301,7 @@ function classDragEnd(e){this.classList.remove('dragging');classDragIdx=null;doc
 function classDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';if(+this.dataset.classIdx!==classDragIdx)this.classList.add('drag-over');}
 function classDragLeave(e){this.classList.remove('drag-over');}
 function classDrop(e){e.preventDefault();this.classList.remove('drag-over');const toIdx=+this.dataset.classIdx;if(classDragIdx===null||classDragIdx===toIdx)return;const moved=classesData.splice(classDragIdx,1)[0];classesData.splice(toIdx,0,moved);saveClassData();renderClassList();}
-function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');if(typeof showRankAnnouncement==='function'){setTimeout(function(){showRankAnnouncement(id);},800);}}
+function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');if(typeof showRankAnnouncement==='function'){setTimeout(function(){showRankAnnouncement(id);},800);}if(typeof _updateSnackStatusBadge==='function'){setTimeout(_updateSnackStatusBadge,100);}}
 // === v81: 隐藏/显示班级功能（教师专用）===
 function getHiddenClassIds(){
   try { return JSON.parse(localStorage.getItem('hiddenClassIds')) || []; } catch(e) { return []; }
