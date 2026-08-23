@@ -78,7 +78,7 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
 .data-mgmt-btn{background:linear-gradient(135deg, #e8637a 0%, #f5a054 100%);color:#fff;border:none;border-radius:20px;padding:10px 22px;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 6px 16px rgba(220,80,80,0.25);transition:all 0.3s cubic-bezier(.4,0,.2,1);}
 .data-mgmt-btn:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 12px 24px rgba(251,181,181,0.4);}
 #snackShopBtn{display:inline-flex !important;visibility:visible !important;opacity:1 !important;}
-#snackStatusBtn{display:inline-flex !important;visibility:visible !important;opacity:1 !important;}
+/* v128: removed !important override — JS controls visibility per user type */
 .home-pet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px;justify-content:center;contain:layout style;}
 @keyframes petFloat{
   0%,100%{transform:translateY(0)}

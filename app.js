@@ -1112,6 +1112,29 @@ function archiveOldLogs(){
 let _syncDebounceTimer = null;
 // v127: 同步暂停标志 — 用于重置宠物/删除班级等关键操作期间防止竞态
 var _pauseSync = false;
+// v128: 等待正在进行的同步完成，防止竞态条件导致数据复活
+function _waitForSyncComplete(){
+  return new Promise(function(resolve){
+    if(typeof _dalSyncing === 'undefined' || !_dalSyncing){
+      resolve();
+      return;
+    }
+    console.log('[v128] _waitForSyncComplete: sync in progress, waiting...');
+    var checkInterval = setInterval(function(){
+      if(!_dalSyncing){
+        clearInterval(checkInterval);
+        console.log('[v128] _waitForSyncComplete: sync complete, proceeding');
+        resolve();
+      }
+    }, 100);
+    // 最多等待 8 秒，超时后仍然继续（避免永久阻塞）
+    setTimeout(function(){
+      clearInterval(checkInterval);
+      console.warn('[v128] _waitForSyncComplete: timeout, proceeding anyway');
+      resolve();
+    }, 8000);
+  });
+}
 function triggerRealtimeSync() {
   if (typeof _syncToSupabase !== 'function') return;
   if (_pauseSync) return; // v127: 关键操作期间暂停同步
@@ -2452,10 +2475,14 @@ function deleteClass(id){
   }
   // 先暂停同步
   _pauseSync = true;
-  showNotification('正在删除', '正在从云端删除...', 'info');
-  console.log('[v127] deleteClass: starting for class', clsName || id);
-  // 直接从 Supabase 删除
-  _supabaseDeleteClass(clsIdForSync, clsName).then(function(){
+  showNotification('正在删除', '正在等待同步完成...', 'info');
+  console.log('[v128] deleteClass: starting for class', clsName || id);
+  // v128: 先等待正在进行的同步完成，再清理 Supabase
+  _waitForSyncComplete().then(function(){
+    console.log('[v128] deleteClass: sync complete, now deleting from Supabase...');
+    showNotification('正在删除', '正在从云端删除...', 'info');
+    return _supabaseDeleteClass(clsIdForSync, clsName);
+  }).then(function(){
     console.log('[v127] deleteClass: Supabase delete complete');
     // Supabase 清理完成后，再改本地数据
     classesData = classesData.filter(function(c){return c.id!==id && c.id!=id;});
@@ -2553,12 +2580,16 @@ function clearPetData(){
   var className = cur.name;
   // 先暂停同步
   _pauseSync = true;
-  showNotification('正在重置', '正在从云端删除宠物数据...', 'info');
-  console.log('[v127] clearPetData: starting for class', className, 'id:', cur.id);
-  console.log('[v127] clearPetData: db exists?', typeof db !== 'undefined' && !!db);
-  console.log('[v127] clearPetData: currentUser exists?', typeof currentUser !== 'undefined' && !!currentUser);
-  // 直接从 Supabase 删除
-  _supabaseClearPets(cur).then(function(){
+  showNotification('正在重置', '正在等待同步完成...', 'info');
+  console.log('[v128] clearPetData: starting for class', className, 'id:', cur.id);
+  console.log('[v128] clearPetData: db exists?', typeof db !== 'undefined' && !!db);
+  console.log('[v128] clearPetData: currentUser exists?', typeof currentUser !== 'undefined' && !!currentUser);
+  // v128: 先等待正在进行的同步完成，再清理 Supabase
+  _waitForSyncComplete().then(function(){
+    console.log('[v128] clearPetData: sync complete, now clearing Supabase...');
+    showNotification('正在重置', '正在从云端删除宠物数据...', 'info');
+    return _supabaseClearPets(cur);
+  }).then(function(){
     console.log('[v127] clearPetData: Supabase clear complete');
     // Supabase 清理完成后，再清本地数据
     cur.students.forEach(function(s){
