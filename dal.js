@@ -1944,7 +1944,7 @@ function _syncTeacherToSupabase() {
           password: stu.password || ''
         };
 
-        if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
+        if (typeof _isValidInt4Id === 'function' && _isValidInt4Id(stu.id)) {
           existingStudents.push({ payload: Object.assign({ id: stu.id }, payload), stuRef: stu });
         } else {
           newStudents.push({ payload: payload, stuRef: stu });
@@ -2146,11 +2146,11 @@ function _syncTeacherToSupabase() {
     });
   }).then(function() {
     // === Phase 4: Delete students that were removed locally ===
-    // Build set of local student IDs (only positive/Supabase IDs)
+    // Build set of local student IDs (only valid INT4 IDs)
     var localStudentIds = {};
     classesData.forEach(function(cls) {
       cls.students.forEach(function(stu) {
-        if (stu.id && stu.id > 0 && stu.id === Math.floor(stu.id)) {
+        if (typeof _isValidInt4Id === 'function' && _isValidInt4Id(stu.id)) {
           localStudentIds[stu.id] = true;
         }
       });
