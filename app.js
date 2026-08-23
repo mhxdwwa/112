@@ -262,7 +262,7 @@ Object.keys(PET_CONFIG_BASE).forEach(name=>{ PET_CONFIG[name] = {...PET_CONFIG_B
 console.log('[宠物系统] 已加载 ' + Object.keys(PET_CONFIG).length + ' 只宠物配置（固定）');
 
 // ========== v120: 零食铺系统 ==========
-const SNACK_CONFIG = [
+const DEFAULT_SNACK_CONFIG = [
   { id: 'milk_tea', name: '奶茶', emoji: '🧋', flavors: ['珍珠奶茶', '椰果奶茶', '红豆奶茶', '芋泥奶茶', '原味奶茶'] },
   { id: 'cola', name: '可乐', emoji: '🥤', flavors: ['经典原味', '零度无糖', '香草味', '樱桃味'] },
   { id: 'chips', name: '薯片', emoji: '🍟', flavors: ['原味', '番茄味', '烧烤味', '黄瓜味', '香辣味'] },
@@ -285,23 +285,162 @@ const SNACK_CONFIG = [
   { id: 'noodles', name: '方便面', emoji: '🍜', flavors: ['红烧牛肉面', '酸菜牛肉面', '海鲜面', '炸酱面'] }
 ];
 var _pendingSnackRequest = null;
+var _snackShopSelectedStudentId = null;
+
+// 获取当前班级的零食配置（支持自定义）
+function getCurrentSnackConfig() {
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (curClass && curClass.customSnacks && curClass.customSnacks.length > 0) {
+    return curClass.customSnacks;
+  }
+  return DEFAULT_SNACK_CONFIG;
+}
+
+// 保存自定义零食配置到当前班级
+function saveCustomSnacks(snacks) {
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) return;
+  curClass.customSnacks = snacks;
+  saveClassData();
+}
 
 function showSnackShopModal() {
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (!curClass) { showNotification('错误', '请先选择班级', 'error'); return; }
+  
+  // 教师账户：先选择学生
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
+    _snackShopSelectedStudentId = null;
+    _renderSnackShopStudentSelect(curClass);
+    return;
+  }
+  
+  // 学生账户：直接显示零食
+  _showSnackShopSnackGrid();
+}
+
+// 教师端：选择学生界面（类似重置密码）
+function _renderSnackShopStudentSelect(curClass) {
+  let html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" id="snackShopModal">';
+  html += '<div style="background:#fff;border-radius:20px;padding:24px;width:1100px;max-width:95vw;height:650px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.3);">';
+  
+  // Header
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+  html += '<div style="font-size:18px;font-weight:700;">🍭 零食铺 - 选择学生</div>';
+  html += '<button onclick="closeSnackShopModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;">×</button>';
+  html += '</div>';
+  
+  // Description
+  html += '<div style="font-size:13px;color:#888;margin-bottom:14px;">点击学生姓名选中，然后点击「兑换零食」按钮。也可以点击「管理零食」自定义零食种类。</div>';
+  
+  // Student list
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-height:0;overflow-y:auto;border:1.5px solid rgba(255,210,200,0.6);border-radius:18px;padding:12px;margin-bottom:14px;background:#fffaf5;align-content:flex-start;">';
+  curClass.students.forEach(function(stu) {
+    var isSelected = _snackShopSelectedStudentId && _snackShopSelectedStudentId.toString() === stu.id.toString();
+    var bgColor = isSelected ? '#e8ffe8' : '#fff';
+    var borderColor = isSelected ? '#52c41a' : '#ffe2d6';
+    html += '<div onclick="onSnackShopStudentClick(' + stu.id + ')" id="snackShopStu_' + stu.id + '" style="display:flex;align-items:center;padding:5px 10px;border:1.5px solid ' + borderColor + ';border-radius:12px;gap:6px;background:' + bgColor + ';font-size:14px;white-space:nowrap;cursor:pointer;transition:all 0.15s;">';
+    if (isSelected) {
+      html += '<span style="width:16px;height:16px;border-radius:50%;background:#52c41a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;flex-shrink:0;">✓</span>';
+    } else {
+      html += '<span style="width:16px;height:16px;border-radius:50%;border:1.5px solid #ddd;flex-shrink:0;"></span>';
+    }
+    html += '<span style="font-weight:600;">' + esc(stu.name || '未命名') + '</span>';
+    html += '<span style="font-size:12px;color:#999;">💰' + (stu.coins || 0) + '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  
+  // Bottom action area
+  html += '<div id="snackShopActionWrap" style="margin-bottom:10px;text-align:center;' + (_snackShopSelectedStudentId ? '' : 'display:none;') + '">';
+  if (_snackShopSelectedStudentId) {
+    var selStudent = curClass.students.find(function(s) { return s.id.toString() === _snackShopSelectedStudentId.toString(); });
+    if (selStudent) {
+      html += '<div style="font-size:13px;color:#555;margin-bottom:8px;">已选中：<strong style="color:#d4760a;">' + esc(selStudent.name) + '</strong></div>';
+    }
+    html += '<div style="display:flex;gap:10px;justify-content:center;">';
+    html += '<button onclick="confirmSnackShopStudent()" style="background:linear-gradient(135deg,#ff6b9d,#c06c84);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(255,107,157,0.4);transition:all 0.2s;flex:1;max-width:200px;" onmouseenter="this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.transform=\'scale(1)\'">🍭 兑换零食</button>';
+    html += '<button onclick="showSnackManageModal()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;flex:1;max-width:200px;">⚙️ 管理零食</button>';
+    html += '<button onclick="cancelSnackShopSelection()" style="background:#f0f0f0;color:#666;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;flex:1;max-width:200px;">取消</button>';
+    html += '</div>';
+  } else {
+    html += '<div style="display:flex;gap:10px;justify-content:center;">';
+    html += '<button onclick="showSnackManageModal()" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;border:none;border-radius:14px;padding:13px 36px;font-size:17px;font-weight:700;cursor:pointer;">⚙️ 管理零食</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+  
+  // Close button
+  html += '<div style="text-align:center;">';
+  html += '<button onclick="closeSnackShopModal()" style="background:#f0f0f0;color:#666;border:none;border-radius:12px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;">关闭</button>';
+  html += '</div>';
+  html += '</div></div>';
+  
+  var container = document.getElementById('modalContainer');
+  if (container) container.innerHTML = html;
+}
+
+window.onSnackShopStudentClick = function(studentId) {
+  _snackShopSelectedStudentId = parseInt(studentId);
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (curClass) _renderSnackShopStudentSelect(curClass);
+};
+
+window.cancelSnackShopSelection = function() {
+  _snackShopSelectedStudentId = null;
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (curClass) _renderSnackShopStudentSelect(curClass);
+};
+
+window.closeSnackShopModal = function() {
+  var container = document.getElementById('modalContainer');
+  if (container) container.innerHTML = '';
+  _snackShopSelectedStudentId = null;
+};
+
+window.confirmSnackShopStudent = function() {
+  if (!_snackShopSelectedStudentId) return;
+  _showSnackShopSnackGrid();
+};
+
+// 显示零食选择网格
+function _showSnackShopSnackGrid() {
+  const snacks = getCurrentSnackConfig();
   let html = '<div style="max-height:60vh;overflow-y:auto;padding:10px 0;">';
+  
+  // 显示当前为哪个学生兑换（教师端）
+  if (_snackShopSelectedStudentId) {
+    const curClass = classesData.find(c => c.id === currentClassId);
+    if (curClass) {
+      const student = curClass.students.find(s => s.id.toString() === _snackShopSelectedStudentId.toString());
+      if (student) {
+        html += '<div style="text-align:center;margin-bottom:12px;padding:8px 16px;background:#e8f5e9;border-radius:10px;">';
+        html += '<span style="font-size:13px;color:#2e7d32;">为 <strong>' + esc(student.name) + '</strong> 兑换零食</span>';
+        html += '</div>';
+      }
+    }
+  }
+  
   html += '<div style="text-align:center;margin-bottom:15px;color:#666;font-size:14px;">选择你想要的零食吧！</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">';
-  SNACK_CONFIG.forEach(snack => {
+  snacks.forEach(snack => {
     html += `<div onclick="selectSnack('${snack.id}')" style="display:flex;flex-direction:column;align-items:center;padding:12px 8px;background:linear-gradient(135deg,#fff5f8,#f0f8ff);border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;" onmouseenter="this.style.borderColor='#ff6b9d';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform='translateY(0)'">
       <div style="font-size:36px;margin-bottom:6px;">${snack.emoji}</div>
       <div style="font-size:13px;font-weight:600;color:#333;">${snack.name}</div>
     </div>`;
   });
   html += '</div></div>';
-  showModal('🍭 零食铺', html, [{text:'关闭',onclick:'closeModal()'}], false);
+  
+  const buttons = [{text:'关闭',onclick:'closeModal()'}];
+  if (_snackShopSelectedStudentId) {
+    buttons.unshift({text:'← 返回选择学生',onclick:'showSnackShopModal()'});
+  }
+  showModal('🍭 零食铺', html, buttons, false);
 }
 
 function selectSnack(snackId) {
-  const snack = SNACK_CONFIG.find(s => s.id === snackId);
+  const snacks = getCurrentSnackConfig();
+  const snack = snacks.find(s => s.id === snackId);
   if (!snack) return;
   _pendingSnackRequest = { snackId: snack.id, snackName: snack.name, snackEmoji: snack.emoji };
   let html = '<div style="text-align:center;margin-bottom:15px;">';
@@ -315,7 +454,7 @@ function selectSnack(snackId) {
   });
   html += '</div>';
   showModal(`🍭 ${snack.name} - 选择口味`, html, [
-    {text:'返回',onclick:'showSnackShopModal()'},
+    {text:'返回',onclick:'_showSnackShopSnackGrid()'},
     {text:'取消',onclick:'closeModal()'}
   ], false);
 }
@@ -344,9 +483,13 @@ function submitSnackRequest() {
   const curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) { showNotification('错误', '请先选择班级', 'error'); return; }
   
-  // Get current student
+  // Get student
   let student = null;
-  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+  if (_snackShopSelectedStudentId) {
+    // 教师端：使用选中的学生
+    student = curClass.students.find(s => s.id.toString() === _snackShopSelectedStudentId.toString());
+  } else if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+    // 学生端：使用当前登录的学生
     student = curClass.students.find(s => s.id.toString() === currentUser.studentId.toString());
   }
   if (!student) { showNotification('错误', '未找到学生信息', 'error'); return; }
@@ -576,6 +719,153 @@ function getPendingSnackRequestCount() {
     }
   });
   return count;
+}
+
+// ========== 零食管理功能（教师端）==========
+function showSnackManageModal() {
+  if (!currentUser || currentUser.type !== 'teacher') {
+    showNotification('无权限', '仅教师可管理零食', 'warning');
+    return;
+  }
+  const snacks = getCurrentSnackConfig();
+  let html = '<div style="max-height:60vh;overflow-y:auto;padding:10px 0;">';
+  html += '<div style="text-align:center;margin-bottom:15px;color:#666;font-size:14px;">管理零食种类（仅对当前班级生效）</div>';
+  
+  // 零食列表
+  html += '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:15px;">';
+  snacks.forEach((snack, index) => {
+    html += `<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #eee;">
+      <div style="font-size:32px;">${snack.emoji}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;color:#333;">${esc(snack.name)}</div>
+        <div style="font-size:12px;color:#999;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(snack.flavors.join('、'))}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="editSnack(${index})" style="padding:6px 12px;background:#2196f3;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">编辑</button>
+        <button onclick="deleteSnack(${index})" style="padding:6px 12px;background:#f44336;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">删除</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  
+  // 添加按钮
+  html += '<div style="text-align:center;">';
+  html += '<button onclick="addNewSnack()" style="padding:12px 24px;background:linear-gradient(135deg,#4caf50,#45a049);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">+ 添加新零食</button>';
+  html += '</div>';
+  
+  // 恢复默认按钮
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (curClass && curClass.customSnacks && curClass.customSnacks.length > 0) {
+    html += '<div style="text-align:center;margin-top:10px;">';
+    html += '<button onclick="resetToDefaultSnacks()" style="padding:8px 16px;background:#ff9800;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer;">恢复默认零食</button>';
+    html += '</div>';
+  }
+  
+  html += '</div>';
+  showModal('⚙️ 零食管理', html, [
+    {text:'返回',onclick:'showSnackShopModal()'},
+    {text:'关闭',onclick:'closeModal()'}
+  ], false);
+}
+
+function addNewSnack() {
+  showSnackEditModal(null, -1);
+}
+
+function editSnack(index) {
+  const snacks = getCurrentSnackConfig();
+  if (index < 0 || index >= snacks.length) return;
+  showSnackEditModal(snacks[index], index);
+}
+
+function deleteSnack(index) {
+  const snacks = getCurrentSnackConfig();
+  if (index < 0 || index >= snacks.length) return;
+  const snack = snacks[index];
+  if (!confirm(`确定删除零食「${snack.name}」吗？`)) return;
+  snacks.splice(index, 1);
+  saveCustomSnacks(snacks);
+  showSnackManageModal();
+  showNotification('删除成功', `已删除零食「${snack.name}」`, 'success');
+}
+
+function resetToDefaultSnacks() {
+  if (!confirm('确定恢复默认零食吗？自定义零食将被清除。')) return;
+  const curClass = classesData.find(c => c.id === currentClassId);
+  if (curClass) {
+    delete curClass.customSnacks;
+    saveClassData();
+  }
+  showSnackManageModal();
+  showNotification('恢复成功', '已恢复默认零食', 'success');
+}
+
+function showSnackEditModal(snack, index) {
+  const isNew = index === -1;
+  const name = snack ? snack.name : '';
+  const emoji = snack ? snack.emoji : '🍬';
+  const flavors = snack ? snack.flavors.join('、') : '';
+  
+  let html = '<div style="padding:10px 0;">';
+  html += '<div style="margin-bottom:15px;">';
+  html += '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">零食名称</label>';
+  html += `<input type="text" id="snackEditName" value="${esc(name)}" placeholder="例如：奶茶" style="width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:10px;font-size:14px;box-sizing:border-box;">`;
+  html += '</div>';
+  
+  html += '<div style="margin-bottom:15px;">';
+  html += '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">封面图标（Emoji）</label>';
+  html += `<input type="text" id="snackEditEmoji" value="${esc(emoji)}" placeholder="例如：🧋" style="width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:10px;font-size:24px;text-align:center;box-sizing:border-box;">`;
+  html += '<div style="font-size:11px;color:#999;margin-top:4px;">常用：🧋🥤🍟🍫🍪🍦🍩🍿🍕🍔🌭🍣🍜</div>';
+  html += '</div>';
+  
+  html += '<div style="margin-bottom:15px;">';
+  html += '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">口味（用中文顿号"、"分隔）</label>';
+  html += `<textarea id="snackEditFlavors" rows="3" placeholder="例如：珍珠奶茶、椰果奶茶、红豆奶茶" style="width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:10px;font-size:14px;resize:vertical;box-sizing:border-box;">${esc(flavors)}</textarea>`;
+  html += '</div>';
+  html += '</div>';
+  
+  showModal(isNew ? '➕ 添加新零食' : '✏️ 编辑零食', html, [
+    {text:'取消',onclick:'showSnackManageModal()'},
+    {text:'保存',onclick:`saveSnackEdit(${index})`,style:'background:linear-gradient(135deg,#4caf50,#45a049);'}
+  ], false);
+}
+
+function saveSnackEdit(index) {
+  const nameEl = document.getElementById('snackEditName');
+  const emojiEl = document.getElementById('snackEditEmoji');
+  const flavorsEl = document.getElementById('snackEditFlavors');
+  
+  if (!nameEl || !emojiEl || !flavorsEl) return;
+  
+  const name = nameEl.value.trim();
+  const emoji = emojiEl.value.trim();
+  const flavorsText = flavorsEl.value.trim();
+  
+  if (!name) { showNotification('错误', '请输入零食名称', 'error'); return; }
+  if (!emoji) { showNotification('错误', '请输入封面图标', 'error'); return; }
+  if (!flavorsText) { showNotification('错误', '请至少输入一种口味', 'error'); return; }
+  
+  const flavors = flavorsText.split(/[、,，]/).map(f => f.trim()).filter(f => f.length > 0);
+  if (flavors.length === 0) { showNotification('错误', '请至少输入一种口味', 'error'); return; }
+  
+  const snacks = getCurrentSnackConfig();
+  const isNew = index === -1;
+  
+  if (isNew) {
+    // 生成新ID
+    const id = 'custom_' + Date.now();
+    snacks.push({ id, name, emoji, flavors });
+  } else {
+    // 编辑现有
+    if (index < 0 || index >= snacks.length) return;
+    snacks[index].name = name;
+    snacks[index].emoji = emoji;
+    snacks[index].flavors = flavors;
+  }
+  
+  saveCustomSnacks(snacks);
+  showSnackManageModal();
+  showNotification(isNew ? '添加成功' : '保存成功', `零食「${name}」已${isNew ? '添加' : '更新'}`, 'success');
 }
 
 /* ========== U盘/本地文件存储系统（变量提前声明） ========== */
