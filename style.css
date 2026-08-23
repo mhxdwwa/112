@@ -63,7 +63,8 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
 .btn-success{background:linear-gradient(135deg, #f5a054 0%, #e8904a 100%);color:#fff;border:1px solid rgba(255,255,255,0.3);}
 .btn:active{transform:scale(0.92) !important;}
 .top-section{display:flex;gap:25px;flex-wrap:wrap;margin-bottom:30px;align-items:flex-start;flex-direction:column;}
-.class-actions{display:grid;grid-template-columns:repeat(9,auto);gap:10px;width:100%;margin-bottom:15px;justify-content:start;}
+.class-actions{display:flex;flex-wrap:nowrap;gap:10px;width:100%;margin-bottom:15px;align-items:center;overflow-x:auto;padding-bottom:4px;}
+.class-actions .btn,.class-actions .action-pill{flex-shrink:0;}
 .class-actions .btn{padding:8px 14px;border-radius:24px;font-size:13px;font-weight:600;box-shadow:0 3px 10px rgba(0,0,0,0.08);}
 /* v82: Pill-shaped action buttons (horizontal icon+text) */
 .action-pill{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:24px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 3px 10px rgba(0,0,0,0.08);transition:all 0.3s cubic-bezier(.4,0,.2,1);border:1px solid rgba(255,255,255,0.3);white-space:nowrap;user-select:none;}
@@ -76,6 +77,7 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
 .student-header .page-title{margin:0;font-size:20px;}
 .data-mgmt-btn{background:linear-gradient(135deg, #e8637a 0%, #f5a054 100%);color:#fff;border:none;border-radius:20px;padding:10px 22px;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 6px 16px rgba(220,80,80,0.25);transition:all 0.3s cubic-bezier(.4,0,.2,1);}
 .data-mgmt-btn:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 12px 24px rgba(251,181,181,0.4);}
+#snackShopBtn{display:inline-flex !important;visibility:visible !important;opacity:1 !important;}
 .home-pet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px;justify-content:center;contain:layout style;}
 @keyframes petFloat{
   0%,100%{transform:translateY(0)}
@@ -854,9 +856,6 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
   }
   .page-title{
     font-size:20px;
-  }
-  .class-actions{
-    grid-template-columns:repeat(2,1fr);
   }
   .home-pet-grid{
     justify-content:center;

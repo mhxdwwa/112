@@ -400,6 +400,9 @@ window.closeSnackShopModal = function() {
 
 window.confirmSnackShopStudent = function() {
   if (!_snackShopSelectedStudentId) return;
+  // Clear the custom student selection overlay before showing snack grid
+  var container = document.getElementById('modalContainer');
+  if (container) container.innerHTML = '';
   _showSnackShopSnackGrid();
 };
 
@@ -727,6 +730,9 @@ function showSnackManageModal() {
     showNotification('无权限', '仅教师可管理零食', 'warning');
     return;
   }
+  // Clear any custom overlay (e.g. student selection) before showing manage modal
+  var container = document.getElementById('modalContainer');
+  if (container) container.innerHTML = '';
   const snacks = getCurrentSnackConfig();
   let html = '<div style="max-height:60vh;overflow-y:auto;padding:10px 0;">';
   html += '<div style="text-align:center;margin-bottom:15px;color:#666;font-size:14px;">管理零食种类（仅对当前班级生效）</div>';
