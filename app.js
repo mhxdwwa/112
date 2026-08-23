@@ -1112,29 +1112,6 @@ function archiveOldLogs(){
 let _syncDebounceTimer = null;
 // v127: 同步暂停标志 — 用于重置宠物/删除班级等关键操作期间防止竞态
 var _pauseSync = false;
-// v128: 等待正在进行的同步完成，防止竞态条件导致数据复活
-function _waitForSyncComplete(){
-  return new Promise(function(resolve){
-    if(typeof _dalSyncing === 'undefined' || !_dalSyncing){
-      resolve();
-      return;
-    }
-    console.log('[v128] _waitForSyncComplete: sync in progress, waiting...');
-    var checkInterval = setInterval(function(){
-      if(!_dalSyncing){
-        clearInterval(checkInterval);
-        console.log('[v128] _waitForSyncComplete: sync complete, proceeding');
-        resolve();
-      }
-    }, 100);
-    // 最多等待 8 秒，超时后仍然继续（避免永久阻塞）
-    setTimeout(function(){
-      clearInterval(checkInterval);
-      console.warn('[v128] _waitForSyncComplete: timeout, proceeding anyway');
-      resolve();
-    }, 8000);
-  });
-}
 function triggerRealtimeSync() {
   if (typeof _syncToSupabase !== 'function') return;
   if (_pauseSync) return; // v127: 关键操作期间暂停同步
@@ -2460,7 +2437,7 @@ function createClass(){const n=prompt('班级名称');if(!n)return;
     saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
   }
 }
-// v127: 删除班级 — 直接从 Supabase 删除，不等待同步
+// v128: 删除班级 — 先从本地移除（让 dal.js v59 机制生效），再异步清理 Supabase
 function deleteClass(id){
   if(!confirm('确定删除该班级？删除后可在"已删除班级"中恢复')) return;
   var cls = classesData.find(function(c){return c.id===id||c.id==id;});
@@ -2473,43 +2450,24 @@ function deleteClass(id){
     if(deletedClasses.length > 20) deletedClasses.shift();
     saveDeletedClasses();
   }
-  // 先暂停同步
-  _pauseSync = true;
-  showNotification('正在删除', '正在等待同步完成...', 'info');
-  console.log('[v128] deleteClass: starting for class', clsName || id);
-  // v128: 先等待正在进行的同步完成，再清理 Supabase
-  _waitForSyncComplete().then(function(){
-    console.log('[v128] deleteClass: sync complete, now deleting from Supabase...');
-    showNotification('正在删除', '正在从云端删除...', 'info');
-    return _supabaseDeleteClass(clsIdForSync, clsName);
-  }).then(function(){
-    console.log('[v127] deleteClass: Supabase delete complete');
-    // Supabase 清理完成后，再改本地数据
-    classesData = classesData.filter(function(c){return c.id!==id && c.id!=id;});
-    if(currentClassId===id || currentClassId==id) currentClassId = classesData[0]?.id || null;
-    if(typeof customActions !== 'undefined'){
-      customActions = customActions.filter(function(a){return a.class_id!=id;});
-    }
-    // 恢复同步，然后保存
-    _pauseSync = false;
-    saveClassData();
-    renderClassList();
-    scheduleAllRenders();
-    showNotification('班级已删除', '可在"已删除班级"中恢复', 'info');
-  }).catch(function(err){
-    _pauseSync = false;
-    console.error('[v127] deleteClass failed:', err);
-    // 即使 Supabase 失败，仍然删除本地数据
-    classesData = classesData.filter(function(c){return c.id!==id && c.id!=id;});
-    if(currentClassId===id || currentClassId==id) currentClassId = classesData[0]?.id || null;
-    if(typeof customActions !== 'undefined'){
-      customActions = customActions.filter(function(a){return a.class_id!=id;});
-    }
-    saveClassData();
-    renderClassList();
-    scheduleAllRenders();
-    showNotification('班级已删除(本地)', '云端删除失败: ' + (err.message||''), 'error');
-  });
+  // 第一步：先从本地移除班级（同步操作）
+  // dal.js 的 v59 机制会在同步时检测到班级不在 classesData 中，跳过上传并在 Phase 6 清理 Supabase
+  classesData = classesData.filter(function(c){return c.id!==id && c.id!=id;});
+  if(currentClassId===id || currentClassId==id) currentClassId = classesData[0]?.id || null;
+  if(typeof customActions !== 'undefined'){
+    customActions = customActions.filter(function(a){return a.class_id!=id;});
+  }
+  // 第二步：保存并触发同步（上传干净状态，v59 Phase 6 会删除 Supabase 中的班级）
+  saveClassData();
+  renderClassList();
+  scheduleAllRenders();
+  showNotification('班级已删除', '可在"已删除班级"中恢复', 'info');
+  // 第三步：异步额外清理 Supabase（处理正在进行的同步可能遗漏的情况）
+  if(typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
+    _supabaseDeleteClass(clsIdForSync, clsName).catch(function(err){
+      console.warn('[v128] _supabaseDeleteClass background error:', err);
+    });
+  }
 }
 // v127: 从 Supabase 彻底删除班级及其所有关联数据
 function _supabaseDeleteClass(classId, className){
@@ -2562,56 +2520,44 @@ document.getElementById('txtImport').addEventListener('change',function(e){if(!c
 function classDailyCheckin(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再打卡','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let checkedCount=0; let skipNoPet=0; cur.students.forEach(s=>{if(!s.pets||s.pets.length===0){skipNoPet++;return;} if(_hasCheckedInToday(s)){return;} s.coins+=10;s.lastCheckinDate=new Date().toISOString();recordAction(s.id, s.name, '全班打卡', '+10金币', 10, 0, null);checkedCount++;}); if(checkedCount===0){let reason='全班同学今天都已经打过卡了'; if(skipNoPet>0) reason+=`（${skipNoPet}人未领养宠物，不参与打卡）`; showNotification('今日已打卡',reason,'info');return;} saveClassData('coins'); renderHomePetGrid(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${checkedCount}人打卡成功，每人+10金币`; if(skipNoPet>0) msg+=`（${skipNoPet}人未领养宠物，已跳过）`; showNotification('全班打卡',msg,'success'); }
 function classAllFeed(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再喂食','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let fedCount=0,skipDead=0,skipCoins=0,skipMax=0,skipNoPet=0,skipFed=0; const upgrades=[]; cur.students.forEach(s=>{const pet=getGrowablePet(s); if(!pet && (!s.pets||s.pets.length===0)){skipNoPet++;return;} if(!pet && s.pets.every(p=>p.level>=9)){skipMax++;return;} if(!pet && s.pets.every(p=>p.isDead)){skipDead++;return;} if(!pet){skipMax++;return;} if(_hasFedToday(pet)){skipFed++;return;} if(s.coins<5){skipCoins++;return;} let gain=2; pet.growth+=gain; s.coins-=5; pet.lastFeedDate=new Date().toISOString(); const upResult=updatePetLevel(s, pet.id, gain, true); if(upResult) upgrades.push(upResult); recordAction(s.id, s.name, '全班喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id); fedCount++;}); if(fedCount===0){let reason=''; if(skipFed>0)reason+=`${skipFed}人今天已喂食 `; if(skipDead>0)reason+=`${skipDead}人宠物已死亡 `; if(skipCoins>0)reason+=`${skipCoins}人金币不足 `; if(skipMax>0)reason+=`${skipMax}人全部满级 `; if(skipNoPet>0)reason+=`${skipNoPet}人未领养宠物`; showNotification('无法喂食',reason||'没有可喂食的宠物','info');return;} saveClassData('pet'); scheduleAllRenders(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${fedCount}只宠物喂食成功，每只+2成长值，-5金币`; if(skipFed+skipDead+skipCoins+skipMax+skipNoPet>0){let skips=[]; if(skipFed>0)skips.push(`${skipFed}人今天已喂食`); if(skipDead>0)skips.push(`${skipDead}人宠物已死亡`); if(skipCoins>0)skips.push(`${skipCoins}人金币不足`); if(skipMax>0)skips.push(`${skipMax}人全部满级`); if(skipNoPet>0)skips.push(`${skipNoPet}人未领养宠物`); msg+=`（跳过：${skips.join('、')}）`;} showNotification('全班喂食',msg,'success'); showBatchUpgradeNotice(upgrades); }
 function showBatchUpgradeNotice(upgrades){ if(!upgrades||upgrades.length===0) return; const INTERVAL=4500; const MAX_INDIVIDUAL=3; function showOne(idx){ if(idx>=upgrades.length) return; const u=upgrades[idx]; showUpgradeEffect(u.petRealName, u.newLevel, u.cfgId, u.petName, u.oldLevel, u.studentName); setTimeout(()=>{ showNotification('🎉 宠物升级',`恭喜 ${u.studentName} 同学的 ${u.petName} 进化为${u.stageName}！`,'success'); },300); if(idx+1<upgrades.length){ setTimeout(()=>{ const container=document.getElementById('upgradeEffectContainer'); if(container){const overlays=container.querySelectorAll('.upgrade-overlay'); overlays.forEach(o=>o.remove());} showOne(idx+1); }, INTERVAL); } } if(upgrades.length<=MAX_INDIVIDUAL){ if(upgrades.length>1){ showNotification('🎉 升级预告',`本次共有 ${upgrades.length} 位同学的宠物升级，逐一展示！`,'success'); setTimeout(()=>showOne(0), 800); } else { showOne(0); } } else { showBatchUpgradeBoard(upgrades); } } function showBatchUpgradeBoard(upgrades){ const container=document.getElementById('upgradeEffectContainer'); const overlay=document.createElement('div'); overlay.className='upgrade-overlay'; overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);animation:fadeIn 0.5s ease;'; const listHtml=upgrades.map((u,i)=>{ const cfg=PET_CONFIG[Object.keys(PET_CONFIG).find(k=>PET_CONFIG[k].id===u.cfgId)]; const emoji=cfg?cfg.emoji:'🐾'; const imgSrc=_img(`${u.cfgId}/${u.newLevel}.webp`); return `<div style="display:flex;align-items:center;gap:12px;padding:10px 18px;background:rgba(255,255,255,0.08);border-radius:14px;border:1px solid rgba(255,255,255,0.15);animation:fadeIn 0.5s ease ${i*0.08}s both;"><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ffe0b2,#ffcc80);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;"><img src="${imgSrc}" style="width:40px;height:40px;object-fit:contain;" onerror="this.onerror=null;this.parentNode.innerHTML='<span style=\\'font-size:28px;\\'>${emoji}</span>';"></div><div style="flex:1;min-width:0;"><div style="font-size:16px;font-weight:700;color:#fff;">${esc(u.studentName)}</div><div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">${esc(u.petName)} → ${esc(u.stageName)}</div></div><div style="font-size:22px;">🎉</div></div>`; }).join(''); overlay.innerHTML=` <div style="background:linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:28px;padding:35px 30px;max-width:520px;width:90%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.1);position:relative;overflow:hidden;"> <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#e8637a,#f5a054,#ffd700,#e8637a);background-size:200% 100%;animation:shimmer 2s linear infinite;"></div> <div style="text-align:center;margin-bottom:20px;"> <div style="font-size:36px;margin-bottom:6px;">🏆✨🎊</div> <div style="font-size:24px;font-weight:800;color:#ffd700;text-shadow:0 0 20px rgba(255,215,0,0.4);">集体进化大成功！</div> <div style="font-size:15px;color:rgba(255,255,255,0.7);margin-top:6px;">恭喜以下 <strong style="color:#ff9800;font-size:18px;">${upgrades.length}</strong> 位同学的宠物升级</div> </div> <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:5px;min-height:0;"> ${listHtml} </div> <div style="text-align:center;margin-top:18px;padding-top:15px;border-top:1px solid rgba(255,255,255,0.1);"> <button onclick="this.closest('.upgrade-overlay').remove();" style="padding:10px 36px;border:none;border-radius:20px;background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 15px rgba(232,99,122,0.4);transition:transform 0.2s;">太棒了！为他们鼓掌 👏</button> </div> </div>`; container.appendChild(overlay); overlay.addEventListener('click',(e)=>{if(e.target===overlay)overlay.remove();}); setTimeout(()=>{if(overlay.parentNode)overlay.remove();},15000); playUpgradeSound(); }
-// v127: 重置班级宠物 — 直接从 Supabase 删除，不等待同步
+// v128: 重置班级宠物 — 先同步清除本地数据（让同步管道读到空数据），再异步清理 Supabase
 function clearPetData(){
   if(!currentClassId){
-    console.warn('[v127] clearPetData: no currentClassId');
     showNotification('请先选择班级', '', 'warning');
     return;
   }
   if(!confirm('确定重置当前班级所有宠物数据？\n所有宠物、宠物特效、宠物姓名都将被彻底清除，学生金币恢复为50。\n\n此操作不可撤销！')) return;
   var cur = classesData.find(function(c){return c.id===currentClassId;});
   if(!cur){
-    console.warn('[v127] clearPetData: class not found for id', currentClassId);
     showNotification('班级不存在', '', 'error');
     return;
   }
   var snapshot = JSON.parse(JSON.stringify(cur.students));
   var className = cur.name;
-  // 先暂停同步
-  _pauseSync = true;
-  showNotification('正在重置', '正在等待同步完成...', 'info');
-  console.log('[v128] clearPetData: starting for class', className, 'id:', cur.id);
-  console.log('[v128] clearPetData: db exists?', typeof db !== 'undefined' && !!db);
-  console.log('[v128] clearPetData: currentUser exists?', typeof currentUser !== 'undefined' && !!currentUser);
-  // v128: 先等待正在进行的同步完成，再清理 Supabase
-  _waitForSyncComplete().then(function(){
-    console.log('[v128] clearPetData: sync complete, now clearing Supabase...');
-    showNotification('正在重置', '正在从云端删除宠物数据...', 'info');
-    return _supabaseClearPets(cur);
-  }).then(function(){
-    console.log('[v127] clearPetData: Supabase clear complete');
-    // Supabase 清理完成后，再清本地数据
-    cur.students.forEach(function(s){
-      s.pets = [];
-      s.coins = 50;
-      s.lastCheckinDate = null;
-      s.activePetId = null;
-      s.pkCountToday = 0;
-      s.lastPkDate = null;
-    });
-    // 恢复同步，然后保存并触发同步（此时本地数据已干净）
-    _pauseSync = false;
-    saveClassData();
-    recordResetAction(cur.id, cur.name, snapshot);
-    scheduleAllRenders();
-    if(currentModalStudentId) closeModal();
-    showNotification('重置完成', '班级【' + className + '】宠物数据已彻底清空', 'success');
-  }).catch(function(err){
-    _pauseSync = false;
-    console.error('[v127] clearPetData failed:', err);
-    showNotification('重置失败', '云端清理失败: ' + (err.message || err), 'error');
+  // 第一步：先同步清除本地宠物数据
+  // dal.js 同步管道 Phase 3 直接读取 classesData 当前状态，
+  // 清除后 stu.pets.length === 0，同步管道不会上传任何宠物
+  cur.students.forEach(function(s){
+    s.pets = [];
+    s.coins = 50;
+    s.lastCheckinDate = null;
+    s.activePetId = null;
+    s.pkCountToday = 0;
+    s.lastPkDate = null;
   });
+  // 第二步：保存并触发同步（上传干净状态到 Supabase）
+  saveClassData();
+  recordResetAction(cur.id, cur.name, snapshot);
+  scheduleAllRenders();
+  if(currentModalStudentId) closeModal();
+  showNotification('重置完成', '班级【' + className + '】宠物数据已彻底清空', 'success');
+  // 第三步：异步删除 Supabase 中可能残留的旧宠物行
+  // （同步管道只 upsert 不 delete，需要显式删除旧行防止下次加载时复活）
+  if(typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
+    _supabaseClearPets(cur).catch(function(err){
+      console.warn('[v128] _supabaseClearPets background error:', err);
+    });
+  }
 }
 // v127: 从 Supabase 彻底删除班级所有宠物数据
 function _supabaseClearPets(cls){
