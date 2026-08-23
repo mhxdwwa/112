@@ -2462,12 +2462,8 @@ function deleteClass(id){
   renderClassList();
   scheduleAllRenders();
   showNotification('班级已删除', '可在"已删除班级"中恢复', 'info');
-  // 第三步：异步额外清理 Supabase（处理正在进行的同步可能遗漏的情况）
-  if(typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
-    _supabaseDeleteClass(clsIdForSync, clsName).catch(function(err){
-      console.warn('[v128] _supabaseDeleteClass background error:', err);
-    });
-  }
+  // v129: 不再后台调用 _supabaseDeleteClass — 它会和 dal.js 同步管道竞态，
+  // 导致数据复活。完全依赖 dal.js Phase 6 的清理机制（按正确顺序删除）。
 }
 // v127: 从 Supabase 彻底删除班级及其所有关联数据
 function _supabaseDeleteClass(classId, className){
@@ -2534,30 +2530,50 @@ function clearPetData(){
   }
   var snapshot = JSON.parse(JSON.stringify(cur.students));
   var className = cur.name;
-  // 第一步：先同步清除本地宠物数据
-  // dal.js 同步管道 Phase 3 直接读取 classesData 当前状态，
-  // 清除后 stu.pets.length === 0，同步管道不会上传任何宠物
-  cur.students.forEach(function(s){
-    s.pets = [];
-    s.coins = 50;
-    s.lastCheckinDate = null;
-    s.activePetId = null;
-    s.pkCountToday = 0;
-    s.lastPkDate = null;
-  });
-  // 第二步：保存并触发同步（上传干净状态到 Supabase）
-  saveClassData();
-  recordResetAction(cur.id, cur.name, snapshot);
-  scheduleAllRenders();
-  if(currentModalStudentId) closeModal();
-  showNotification('重置完成', '班级【' + className + '】宠物数据已彻底清空', 'success');
-  // 第三步：异步删除 Supabase 中可能残留的旧宠物行
-  // （同步管道只 upsert 不 delete，需要显式删除旧行防止下次加载时复活）
-  if(typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
-    _supabaseClearPets(cur).catch(function(err){
-      console.warn('[v128] _supabaseClearPets background error:', err);
+  showNotification('正在重置...', '等待数据同步完成', 'info');
+  // v129: 正确顺序 — 必须等同步跑完再操作，否则同步会把旧数据重新上传回去
+  // 步骤1: 暂停新同步 + 等待正在进行的同步完成
+  _pauseSync = true;
+  var _waitAndClear = function(){
+    if(typeof _dalSyncing !== 'undefined' && _dalSyncing){
+      setTimeout(_waitAndClear, 300);
+      return;
+    }
+    // 步骤2: 同步已完成，清除本地数据
+    cur.students.forEach(function(s){
+      s.pets = [];
+      s.coins = 50;
+      s.lastCheckinDate = null;
+      s.activePetId = null;
+      s.pkCountToday = 0;
+      s.lastPkDate = null;
     });
-  }
+    // 步骤3: 保存干净数据（_pauseSync=true 期间不会触发同步）
+    safeLSSave('classPetData', classesData);
+    scheduleFileSave();
+    recordResetAction(cur.id, cur.name, snapshot);
+    scheduleAllRenders();
+    if(currentModalStudentId) closeModal();
+    // 步骤4: 删除 Supabase 旧宠物行（此时没有同步在跑，不会把旧数据传回去）
+    if(typeof db !== 'undefined' && db && typeof currentUser !== 'undefined' && currentUser){
+      _supabaseClearPets(cur).then(function(){
+        // 步骤5: 恢复同步，触发上传干净状态
+        _pauseSync = false;
+        saveClassData();
+        showNotification('重置完成', '班级【' + className + '】宠物数据已彻底清空', 'success');
+      }).catch(function(err){
+        _pauseSync = false;
+        saveClassData();
+        console.warn('[v129] _supabaseClearPets error:', err);
+        showNotification('重置完成', '本地已清空，云端清理失败请重试', 'warning');
+      });
+    } else {
+      _pauseSync = false;
+      saveClassData();
+      showNotification('重置完成', '班级【' + className + '】宠物数据已清空', 'success');
+    }
+  };
+  _waitAndClear();
 }
 // v127: 从 Supabase 彻底删除班级所有宠物数据
 function _supabaseClearPets(cls){
