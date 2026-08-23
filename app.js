@@ -2527,7 +2527,7 @@ function clearPetData(){
     return;
   }
   if(!confirm('确定重置当前班级所有宠物数据？\n所有宠物、宠物特效、宠物姓名都将被彻底清除，学生金币恢复为50。\n\n此操作不可撤销！')) return;
-  var cur = classesData.find(function(c){return c.id===currentClassId;});
+  var cur = classesData.find(function(c){return c.id===currentClassId||c.id==currentClassId;});
   if(!cur){
     showNotification('班级不存在', '', 'error');
     return;
