@@ -1,5 +1,5 @@
 /**
- * dal.js v119 — Fix student coins double-counting + pending logs race condition
+ * dal.js v120 — Fix student coins double-counting + eliminate pending logs race condition
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1296,52 +1296,23 @@ function _mergeStudentPendingLogs(classIds) {
 
         return Promise.all(updatePromises).then(function(results) {
           var totalMerged = results.reduce(function(sum, n) { return sum + (n || 0); }, 0);
-          // v119: Step 4 — Re-read pending_logs_json and only remove merged log IDs.
-          // Previously, this set pending_logs_json to null, which caused a race condition:
-          // if a student wrote new logs between the initial read (Step 1) and this clear,
-          // the new logs were lost. Now we re-read and only remove the specific log IDs
-          // that were merged, preserving any new logs written in the meantime.
+          // v120: Step 4 — DO NOT clear students.pending_logs_json.
+          //
+          // Why: The student's _syncWriteStudentPendingLogs() REPLACES pending_logs_json
+          // with only the current unsynced logs on every call. So after the student's next
+          // action, the old pending logs are naturally overwritten with new content.
+          //
+          // Previous approaches (v111 set to null, v119 re-read-and-filter) had race conditions:
+          // if a student wrote new logs between the teacher's read and write, the new logs
+          // could be lost. By not touching pending_logs_json at all, we eliminate the race
+          // condition completely.
+          //
+          // Trade-off: The teacher's periodic merge re-reads already-merged logs. This is
+          // harmless because the merge function deduplicates by log ID (addedCount=0 → skip
+          // DB update). The student's pending_logs_json is naturally bounded in size because
+          // the student only sends unsynced logs (typically 0-2 per action).
           if (totalMerged > 0) {
-            return db.from('students')
-              .select('id, pending_logs_json')
-              .in('id', studentsToClear)
-              .then(function(freshStuR) {
-                if (freshStuR.error) {
-                  console.warn('[DAL] v119 Failed to re-read pending logs for clear:', freshStuR.error.message);
-                  // Fallback: clear all (old behavior)
-                  return db.from('students').update({
-                    pending_logs_json: null
-                  }).in('id', studentsToClear).then(function() { return totalMerged; });
-                }
-                var clearPromises = (freshStuR.data || []).map(function(stu) {
-                  var mergedIds = mergedLogIdsByStudent[stu.id] || [];
-                  if (mergedIds.length === 0) return Promise.resolve();
-                  
-                  var remaining = [];
-                  if (stu.pending_logs_json && stu.pending_logs_json !== '[]' && stu.pending_logs_json !== 'null') {
-                    try {
-                      var currentPending = JSON.parse(stu.pending_logs_json);
-                      if (Array.isArray(currentPending)) {
-                        var mergedIdSet = {};
-                        mergedIds.forEach(function(id) { mergedIdSet[id] = true; });
-                        remaining = currentPending.filter(function(l) { return !mergedIdSet[l.id]; });
-                      }
-                    } catch(e) {}
-                  }
-                  
-                  var newValue = remaining.length > 0 ? JSON.stringify(remaining) : null;
-                  return db.from('students').update({
-                    pending_logs_json: newValue
-                  }).eq('id', stu.id).then(function(ur) {
-                    if (ur.error) {
-                      console.warn('[DAL] v119 Failed to update pending logs for student', stu.id + ':', ur.error.message);
-                    } else if (remaining.length > 0) {
-                      console.log('[DAL] v119 Preserved', remaining.length, 'new pending logs for student', stu.id);
-                    }
-                  });
-                });
-                return Promise.all(clearPromises).then(function() { return totalMerged; });
-              });
+            console.log('[DAL] v120 Merged ' + totalMerged + ' pending logs (not clearing — student will overwrite on next action)');
           }
           return totalMerged;
         });
