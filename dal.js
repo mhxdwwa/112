@@ -1,5 +1,5 @@
 /**
- * dal.js v105 — Fix log loss race condition + cap at 3000 entries
+ * dal.js v119 — Fix student coins double-counting + pending logs race condition
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1218,9 +1218,10 @@ function _mergeStudentPendingLogs(classIds) {
 
       console.log('[DAL] v111 Found ' + studentsWithPending.length + ' students with pending logs');
 
-      // Step 2: Group pending logs by class
+      // Step 2: Group pending logs by class, and track merged log IDs per student
       var pendingByClass = {};
       var studentsToClear = [];
+      var mergedLogIdsByStudent = {}; // v119: Track which log IDs to remove per student
       studentsWithPending.forEach(function(s) {
         try {
           var pending = JSON.parse(s.pending_logs_json);
@@ -1229,6 +1230,8 @@ function _mergeStudentPendingLogs(classIds) {
           if (!pendingByClass[cid]) pendingByClass[cid] = [];
           pendingByClass[cid] = pendingByClass[cid].concat(pending);
           studentsToClear.push(s.id);
+          // v119: Record which log IDs belong to this student
+          mergedLogIdsByStudent[s.id] = pending.map(function(l) { return l.id; });
         } catch(e) {}
       });
 
@@ -1293,16 +1296,52 @@ function _mergeStudentPendingLogs(classIds) {
 
         return Promise.all(updatePromises).then(function(results) {
           var totalMerged = results.reduce(function(sum, n) { return sum + (n || 0); }, 0);
-          // Step 4: Clear pending_logs_json for students whose logs were merged
+          // v119: Step 4 — Re-read pending_logs_json and only remove merged log IDs.
+          // Previously, this set pending_logs_json to null, which caused a race condition:
+          // if a student wrote new logs between the initial read (Step 1) and this clear,
+          // the new logs were lost. Now we re-read and only remove the specific log IDs
+          // that were merged, preserving any new logs written in the meantime.
           if (totalMerged > 0) {
-            return db.from('students').update({
-              pending_logs_json: null
-            }).in('id', studentsToClear).then(function(clearR) {
-              if (clearR.error) {
-                console.warn('[DAL] v111 Failed to clear pending logs:', clearR.error.message);
-              }
-              return totalMerged;
-            });
+            return db.from('students')
+              .select('id, pending_logs_json')
+              .in('id', studentsToClear)
+              .then(function(freshStuR) {
+                if (freshStuR.error) {
+                  console.warn('[DAL] v119 Failed to re-read pending logs for clear:', freshStuR.error.message);
+                  // Fallback: clear all (old behavior)
+                  return db.from('students').update({
+                    pending_logs_json: null
+                  }).in('id', studentsToClear).then(function() { return totalMerged; });
+                }
+                var clearPromises = (freshStuR.data || []).map(function(stu) {
+                  var mergedIds = mergedLogIdsByStudent[stu.id] || [];
+                  if (mergedIds.length === 0) return Promise.resolve();
+                  
+                  var remaining = [];
+                  if (stu.pending_logs_json && stu.pending_logs_json !== '[]' && stu.pending_logs_json !== 'null') {
+                    try {
+                      var currentPending = JSON.parse(stu.pending_logs_json);
+                      if (Array.isArray(currentPending)) {
+                        var mergedIdSet = {};
+                        mergedIds.forEach(function(id) { mergedIdSet[id] = true; });
+                        remaining = currentPending.filter(function(l) { return !mergedIdSet[l.id]; });
+                      }
+                    } catch(e) {}
+                  }
+                  
+                  var newValue = remaining.length > 0 ? JSON.stringify(remaining) : null;
+                  return db.from('students').update({
+                    pending_logs_json: newValue
+                  }).eq('id', stu.id).then(function(ur) {
+                    if (ur.error) {
+                      console.warn('[DAL] v119 Failed to update pending logs for student', stu.id + ':', ur.error.message);
+                    } else if (remaining.length > 0) {
+                      console.log('[DAL] v119 Preserved', remaining.length, 'new pending logs for student', stu.id);
+                    }
+                  });
+                });
+                return Promise.all(clearPromises).then(function() { return totalMerged; });
+              });
           }
           return totalMerged;
         });
@@ -3514,6 +3553,14 @@ function _syncWriteStudentPendingLogs() {
       });
       try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
       _lastOwnWriteTime = Date.now();
+      // v119: CRITICAL — Update _myBaseCoins and _myBasePets after sync XHR succeeds.
+      // Without this, the async _syncStudentToSupabase() fetches the value we just wrote,
+      // then applies localCoinDelta = (local - _myBaseCoins) on top of it, double-counting
+      // the change. This caused coins to be incorrectly calculated after jianghu wins,
+      // shop purchases, and other student-initiated coin changes.
+      // Same fix as v118 for _syncStudentDataImmediate().
+      _myBaseCoins = myStudent.coins;
+      (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
     } else {
       console.warn('[DAL] v115 Student sync write failed, status:', xhr.status, xhr.responseText);
     }
