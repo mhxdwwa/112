@@ -1327,19 +1327,16 @@ function _mergeStudentPendingLogs(classIds) {
           var totalMerged = results.reduce(function(sum, n) { return sum + (n || 0); }, 0);
           // v120: Step 4 — DO NOT clear students.pending_logs_json.
           //
-          // Why: The student's _syncWriteStudentPendingLogs() REPLACES pending_logs_json
-          // with only the current unsynced logs on every call. So after the student's next
-          // action, the old pending logs are naturally overwritten with new content.
+          // Why: Clearing pending_logs_json here creates a race condition: if a student
+          // wrote new logs between the teacher's read (Step 1) and this write, the new
+          // logs would be lost. By not touching pending_logs_json at all, we eliminate
+          // the race condition completely.
           //
-          // Previous approaches (v111 set to null, v119 re-read-and-filter) had race conditions:
-          // if a student wrote new logs between the teacher's read and write, the new logs
-          // could be lost. By not touching pending_logs_json at all, we eliminate the race
-          // condition completely.
-          //
-          // Trade-off: The teacher's periodic merge re-reads already-merged logs. This is
-          // harmless because the merge function deduplicates by log ID (addedCount=0 → skip
-          // DB update). The student's pending_logs_json is naturally bounded in size because
-          // the student only sends unsynced logs (typically 0-2 per action).
+          // v123 update: The student now reads existing pending_logs_json before writing
+          // (GET → merge → PATCH), so logs are never overwritten. The student also caps
+          // the payload at 500 logs to prevent unbounded growth. Combined with the
+          // teacher's periodic merge (which deduplicates by log ID), this keeps
+          // pending_logs_json bounded and safe.
           if (totalMerged > 0) {
             console.log('[DAL] v120 Merged ' + totalMerged + ' pending logs (not clearing — student will overwrite on next action)');
           }
@@ -3462,6 +3459,11 @@ function _syncStudentDataImmediate() {
       } catch(e) {
         console.warn('[DAL] v123 Failed to read existing pending_logs_json in _syncStudentDataImmediate:', e.message);
       }
+      // v123: Cap at 500 logs to prevent unbounded growth of pending_logs_json.
+      // Teacher merges periodically, so old logs are safe in classes.operation_logs_json.
+      if (newLogsPayload.length > 500) {
+        newLogsPayload = newLogsPayload.slice(-500);
+      }
       studentPayload.pending_logs_json = JSON.stringify(newLogsPayload);
     }
 
@@ -3626,6 +3628,10 @@ function _syncWriteStudentPendingLogs() {
       } catch(e) {
         console.warn('[DAL] v123 Failed to read existing pending_logs_json in _syncWriteStudentPendingLogs:', e.message);
       }
+      // v123: Cap at 500 logs to prevent unbounded growth of pending_logs_json.
+      if (newLogsPayload.length > 500) {
+        newLogsPayload = newLogsPayload.slice(-500);
+      }
       studentPayload.pending_logs_json = JSON.stringify(newLogsPayload);
     }
 
@@ -3769,6 +3775,11 @@ function _writeStudentPendingLogsAsync() {
           }
         }
 
+        // v123: Cap at 500 logs to prevent unbounded growth
+        if (finalPayload.length > 500) {
+          finalPayload = finalPayload.slice(-500);
+        }
+
         // Now PATCH with the merged payload
         var xhr = new XMLHttpRequest();
         xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, true);
@@ -3854,10 +3865,12 @@ function _setupPageLifecycle() {
                 shop_items: JSON.stringify(myStudent.shopItems || []),
                 equipped_items: JSON.stringify(myStudent.equippedItems || {})
               };
-              // v123: FIX — sendBeacon can't GET first (page unloading), so send ALL logs (last 200)
+              // v123: FIX — sendBeacon can't GET first (page unloading), so send ALL logs (last 500)
               // to avoid overwriting previous logs. Teacher's merge function deduplicates by id.
+              // NOTE: sendBeacon cannot set custom headers (Authorization/apikey), so this will
+              // likely fail auth and fall back to _syncWriteStudentPendingLogs() below.
               if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs) && window.operationLogs.length > 0) {
-                var logsToSend = window.operationLogs.slice(-200); // Last 200 logs to prevent payload too large
+                var logsToSend = window.operationLogs.slice(-500); // Last 500 logs to prevent payload too large
                 payload.pending_logs_json = JSON.stringify(logsToSend.map(function(l) {
                   return {
                     id: l.id, timestamp: l.timestamp || new Date().toISOString(),
@@ -3934,10 +3947,12 @@ function _setupPageLifecycle() {
                 shop_items: JSON.stringify(myStudent.shopItems || []),
                 equipped_items: JSON.stringify(myStudent.equippedItems || {})
               };
-              // v123: FIX — sendBeacon can't GET first (page hidden/unloading), so send ALL logs (last 200)
+              // v123: FIX — sendBeacon can't GET first (page hidden/unloading), so send ALL logs (last 500)
               // to avoid overwriting previous logs. Teacher's merge function deduplicates by id.
+              // NOTE: sendBeacon cannot set custom headers (Authorization/apikey), so this will
+              // likely fail auth and fall back to _syncWriteStudentPendingLogs() below.
               if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs) && window.operationLogs.length > 0) {
-                var logsToSend = window.operationLogs.slice(-200); // Last 200 logs to prevent payload too large
+                var logsToSend = window.operationLogs.slice(-500); // Last 500 logs to prevent payload too large
                 payload.pending_logs_json = JSON.stringify(logsToSend.map(function(l) {
                   return {
                     id: l.id, timestamp: l.timestamp || new Date().toISOString(),
