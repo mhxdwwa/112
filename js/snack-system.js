@@ -83,7 +83,7 @@ function _renderSnackShopStudentSelect(curClass) {
       html += '<span style="width:16px;height:16px;border-radius:50%;border:1.5px solid #ddd;flex-shrink:0;"></span>';
     }
     html += '<span style="font-weight:600;">' + esc(stu.name || '未命名') + '</span>';
-    html += '<span style="font-size:12px;color:#999;">💰' + (stu.coins || 0) + ' 💊' + (stu.xiandan || 0) + '</span>';
+    html += '<span style="font-size:12px;color:#999;">💰' + (stu.coins || 0) + ' 🟠' + (stu.xiandan || 0) + '</span>';
     html += '</div>';
   });
   html += '</div>';
@@ -160,7 +160,7 @@ function _showSnackShopSnackGrid() {
       if (student) {
         html += '<div style="text-align:center;margin-bottom:12px;padding:8px 16px;background:#e8f5e9;border-radius:10px;">';
         html += '<span style="font-size:13px;color:#2e7d32;">为 <strong>' + esc(student.name) + '</strong> 兑换零食</span>';
-        html += '<span style="font-size:13px;color:#6a1b9a;margin-left:12px;">💊 仙丹: <strong>' + (student.xiandan || 0) + '</strong></span>';
+        html += '<span style="font-size:13px;color:#6a1b9a;margin-left:12px;">🟠 仙丹: <strong>' + (student.xiandan || 0) + '</strong></span>';
         html += '</div>';
       }
     }
@@ -175,7 +175,7 @@ function _showSnackShopSnackGrid() {
       const student = curClass.students.find(s => s.id.toString() === currentUser.studentId.toString());
       if (student) {
         html += '<div style="text-align:center;margin-bottom:12px;padding:6px 16px;background:#f3e5f5;border-radius:10px;">';
-        html += '<span style="font-size:13px;color:#6a1b9a;">💊 我的仙丹: <strong>' + (student.xiandan || 0) + '</strong></span>';
+        html += '<span style="font-size:13px;color:#6a1b9a;">🟠 我的仙丹: <strong>' + (student.xiandan || 0) + '</strong></span>';
         html += '</div>';
       }
     }
@@ -187,7 +187,7 @@ function _showSnackShopSnackGrid() {
     html += `<div onclick="selectSnack('${snack.id}')" style="display:flex;flex-direction:column;align-items:center;padding:12px 8px;background:linear-gradient(135deg,#fff5f8,#f0f8ff);border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;" onmouseenter="this.style.borderColor='#ff6b9d';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform='translateY(0)'">
       <div style="font-size:36px;margin-bottom:6px;">${snack.emoji}</div>
       <div style="font-size:13px;font-weight:600;color:#333;">${snack.name}</div>
-      <div style="font-size:12px;color:#6a1b9a;margin-top:4px;font-weight:600;">💊${price}</div>
+      <div style="font-size:12px;color:#6a1b9a;margin-top:4px;font-weight:600;">🟠${price}</div>
     </div>`;
   });
   html += '</div></div>';
@@ -227,7 +227,7 @@ function selectSnackFlavor(flavor) {
   html += `<div style="font-size:56px;margin-bottom:12px;">${_pendingSnackRequest.snackEmoji}</div>`;
   html += `<div style="font-size:18px;font-weight:700;color:#333;margin-bottom:8px;">${_pendingSnackRequest.snackName}</div>`;
   html += `<div style="font-size:16px;color:#666;margin-bottom:8px;">口味：${flavor}</div>`;
-  html += `<div style="font-size:15px;color:#6a1b9a;font-weight:700;margin-bottom:12px;">💊 价格: ${_pendingSnackRequest.snackPrice} 仙丹</div>`;
+  html += `<div style="font-size:15px;color:#6a1b9a;font-weight:700;margin-bottom:12px;">🟠 价格: ${_pendingSnackRequest.snackPrice} 仙丹</div>`;
   html += '<div style="background:#fff3e0;padding:12px;border-radius:10px;margin:15px 0;">';
   html += '<div style="font-size:13px;color:#e65100;font-weight:600;margin-bottom:6px;">📋 兑换说明</div>';
   html += '<div style="font-size:13px;color:#666;line-height:1.6;">提交后，教师将收到兑换请求通知。<br>教师同意后即可兑换成功。</div>';
@@ -300,7 +300,7 @@ function submitSnackRequest() {
     studentId: student.id,
     studentName: student.name,
     actionType: '零食兑换',
-    details: `申请兑换 ${_pendingSnackRequest.snackEmoji} ${_pendingSnackRequest.snackName}（${_pendingSnackRequest.flavor}）💊-${snackPrice}`,
+    details: `申请兑换 ${_pendingSnackRequest.snackEmoji} ${_pendingSnackRequest.snackName}（${_pendingSnackRequest.flavor}）🟠-${snackPrice}`,
     coinDelta: 0,
     expDelta: 0,
     petId: null,
@@ -361,7 +361,7 @@ function showSnackRequestsModal() {
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;color:#333;">${esc(req.studentName)}</div>
           <div style="font-size:13px;color:#666;margin-top:2px;">${esc(req.snackName)} · ${esc(req.flavor)}</div>
-          <div style="font-size:11px;color:#999;margin-top:2px;">${time}${req.snackPrice ? ' · 💊' + req.snackPrice + '仙丹' : ''}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px;">${time}${req.snackPrice ? ' · 🟠' + req.snackPrice + '仙丹' : ''}</div>
         </div>
         <div style="display:flex;gap:8px;">
           <button onclick="approveSnackRequest(${req.id})" style="padding:8px 14px;background:#4caf50;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">同意</button>
@@ -570,7 +570,7 @@ function showSnackStatusModal() {
       html += `<div style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:10px;background:${statusBg};border-radius:12px;border:2px solid rgba(0,0,0,0.05);">`;
       html += `<div style="font-size:36px;">${req.snackEmoji}</div>`;
       html += `<div style="flex:1;min-width:0;">`;
-      html += `<div style="font-size:14px;font-weight:600;color:#333;">${esc(req.snackName)}${req.snackPrice ? ' <span style="font-size:12px;color:#6a1b9a;">💊' + req.snackPrice + '</span>' : ''}</div>`;
+      html += `<div style="font-size:14px;font-weight:600;color:#333;">${esc(req.snackName)}${req.snackPrice ? ' <span style="font-size:12px;color:#6a1b9a;">🟠' + req.snackPrice + '</span>' : ''}</div>`;
       html += `<div style="font-size:13px;color:#666;margin-top:2px;">${esc(req.flavor)}</div>`;
       html += `<div style="font-size:11px;color:#999;margin-top:2px;">申请时间：${time}</div>`;
       html += `</div>`;
@@ -661,7 +661,7 @@ function showSnackManageModal() {
     html += `<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #eee;">
       <div style="font-size:32px;">${snack.emoji}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:600;color:#333;">${esc(snack.name)} <span style="font-size:12px;color:#6a1b9a;font-weight:700;">💊${price}仙丹</span></div>
+        <div style="font-size:14px;font-weight:600;color:#333;">${esc(snack.name)} <span style="font-size:12px;color:#6a1b9a;font-weight:700;">🟠${price}仙丹</span></div>
         <div style="font-size:12px;color:#999;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(snack.flavors.join('、'))}</div>
       </div>
       <div style="display:flex;gap:6px;">
@@ -744,7 +744,7 @@ function showSnackEditModal(snack, index) {
   html += '</div>';
   
   html += '<div style="margin-bottom:15px;">';
-  html += '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">💊 仙丹价格</label>';
+  html += '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">🟠 仙丹价格</label>';
   html += `<input type="number" id="snackEditPrice" value="${price}" min="0" placeholder="例如：3" style="width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:10px;font-size:14px;box-sizing:border-box;">`;
   html += '<div style="font-size:11px;color:#999;margin-top:4px;">学生兑换此零食需要消耗的仙丹数量</div>';
   html += '</div>';
