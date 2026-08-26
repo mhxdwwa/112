@@ -1411,6 +1411,25 @@ function _scheduleDesktopSave(){
   _desktopSaveTimer = setTimeout(()=>{ _desktopSaveAll(); }, 200);
 }
 /* ========== 桌面 EXE 模式结束 ========== */
+/**
+ * v124: 统一金币写入入口
+ * 所有金币变化都应通过此函数，确保 coinDelta 与日志一致
+ * @param {object} student - 学生对象
+ * @param {number} delta - 金币变化量（正=增加，负=扣除）
+ * @param {string} actionType - 操作类型（传给 recordAction）
+ * @param {string} details - 操作详情
+ * @param {number} expDelta - 经验变化量
+ * @param {string|null} petId - 宠物ID
+ * @param {object|null} extra - 额外数据
+ * @returns {number} 修改后的金币数
+ */
+function changeStudentCoins(student, delta, actionType, details, expDelta, petId, extra) {
+  var before = student.coins || 0;
+  student.coins = before + delta;
+  if (student.coins < 0) student.coins = 0;
+  recordAction(student.id, student.name, actionType, details, delta, expDelta || 0, petId || null, extra || null);
+  return student.coins;
+}
 function recordAction(studentId, studentName, actionType, details, coinDelta, expDelta, petId, extra = null){
   // v107: 所有操作（教师+学生）都记录到历史操作
   // v70: 允许特定类型的操作即使没有金币/经验变化也记录日志
@@ -2491,8 +2510,8 @@ function _supabaseDeleteClass(classId, className){
 }
 function importFromTxt(){document.getElementById('txtImport').click();}
 document.getElementById('txtImport').addEventListener('change',function(e){if(!currentClassId){showNotification('请先选择班级','','error');return;}const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=function(ev){const text=ev.target.result;const names=text.split(/\r?\n/).filter(n=>n.trim());const cur=classesData.find(c=>c.id===currentClassId);names.forEach(name=>{if(!cur.students.find(s=>s.name===name.trim()))cur.students.push({id:_genLocalId(),name:name.trim(),coins:50,pets:[],lastCheckinDate:null,activePetId:null,pkCountToday:0,lastPkDate:null});});saveClassData();scheduleAllRenders();showNotification('导入成功',`添加${names.length}人`,'success');};reader.readAsText(file);this.value='';});
-function classDailyCheckin(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再打卡','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let checkedCount=0; let skipNoPet=0; cur.students.forEach(s=>{if(!s.pets||s.pets.length===0){skipNoPet++;return;} if(_hasCheckedInToday(s)){return;} s.coins+=10;s.lastCheckinDate=new Date().toISOString();recordAction(s.id, s.name, '全班打卡', '+10金币', 10, 0, null);checkedCount++;}); if(checkedCount===0){let reason='全班同学今天都已经打过卡了'; if(skipNoPet>0) reason+=`（${skipNoPet}人未领养宠物，不参与打卡）`; showNotification('今日已打卡',reason,'info');return;} saveClassData('coins'); renderHomePetGrid(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${checkedCount}人打卡成功，每人+10金币`; if(skipNoPet>0) msg+=`（${skipNoPet}人未领养宠物，已跳过）`; showNotification('全班打卡',msg,'success'); }
-function classAllFeed(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再喂食','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let fedCount=0,skipDead=0,skipCoins=0,skipMax=0,skipNoPet=0,skipFed=0; const upgrades=[]; cur.students.forEach(s=>{const pet=getGrowablePet(s); if(!pet && (!s.pets||s.pets.length===0)){skipNoPet++;return;} if(!pet && s.pets.every(p=>p.level>=9)){skipMax++;return;} if(!pet && s.pets.every(p=>p.isDead)){skipDead++;return;} if(!pet){skipMax++;return;} if(_hasFedToday(pet)){skipFed++;return;} if(s.coins<5){skipCoins++;return;} let gain=2; pet.growth+=gain; s.coins-=5; pet.lastFeedDate=new Date().toISOString(); const upResult=updatePetLevel(s, pet.id, gain, true); if(upResult) upgrades.push(upResult); recordAction(s.id, s.name, '全班喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id); fedCount++;}); if(fedCount===0){let reason=''; if(skipFed>0)reason+=`${skipFed}人今天已喂食 `; if(skipDead>0)reason+=`${skipDead}人宠物已死亡 `; if(skipCoins>0)reason+=`${skipCoins}人金币不足 `; if(skipMax>0)reason+=`${skipMax}人全部满级 `; if(skipNoPet>0)reason+=`${skipNoPet}人未领养宠物`; showNotification('无法喂食',reason||'没有可喂食的宠物','info');return;} saveClassData('pet'); scheduleAllRenders(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${fedCount}只宠物喂食成功，每只+2成长值，-5金币`; if(skipFed+skipDead+skipCoins+skipMax+skipNoPet>0){let skips=[]; if(skipFed>0)skips.push(`${skipFed}人今天已喂食`); if(skipDead>0)skips.push(`${skipDead}人宠物已死亡`); if(skipCoins>0)skips.push(`${skipCoins}人金币不足`); if(skipMax>0)skips.push(`${skipMax}人全部满级`); if(skipNoPet>0)skips.push(`${skipNoPet}人未领养宠物`); msg+=`（跳过：${skips.join('、')}）`;} showNotification('全班喂食',msg,'success'); showBatchUpgradeNotice(upgrades); }
+function classDailyCheckin(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再打卡','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let checkedCount=0; let skipNoPet=0; cur.students.forEach(s=>{if(!s.pets||s.pets.length===0){skipNoPet++;return;} if(_hasCheckedInToday(s)){return;} s.lastCheckinDate=new Date().toISOString();changeStudentCoins(s, 10, '全班打卡', '+10金币', 0, null);checkedCount++;}); if(checkedCount===0){let reason='全班同学今天都已经打过卡了'; if(skipNoPet>0) reason+=`（${skipNoPet}人未领养宠物，不参与打卡）`; showNotification('今日已打卡',reason,'info');return;} saveClassData('coins'); renderHomePetGrid(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${checkedCount}人打卡成功，每人+10金币`; if(skipNoPet>0) msg+=`（${skipNoPet}人未领养宠物，已跳过）`; showNotification('全班打卡',msg,'success'); }
+function classAllFeed(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} if(!currentClassId){showNotification('请先选择班级','请在左侧选择一个班级后再喂食','warning');return;} if(checkPauseAndNotify())return; const cur=classesData.find(c=>c.id===currentClassId); if(!cur){showNotification('班级数据异常','未找到当前班级数据','error');return;} if(!cur.students||cur.students.length===0){showNotification('暂无学生','请先添加学生','warning');return;} let fedCount=0,skipDead=0,skipCoins=0,skipMax=0,skipNoPet=0,skipFed=0; const upgrades=[]; cur.students.forEach(s=>{const pet=getGrowablePet(s); if(!pet && (!s.pets||s.pets.length===0)){skipNoPet++;return;} if(!pet && s.pets.every(p=>p.level>=9)){skipMax++;return;} if(!pet && s.pets.every(p=>p.isDead)){skipDead++;return;} if(!pet){skipMax++;return;} if(_hasFedToday(pet)){skipFed++;return;} if(s.coins<5){skipCoins++;return;} let gain=2; pet.growth+=gain; pet.lastFeedDate=new Date().toISOString(); const upResult=updatePetLevel(s, pet.id, gain, true); if(upResult) upgrades.push(upResult); changeStudentCoins(s, -5, '全班喂食', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); fedCount++;}); if(fedCount===0){let reason=''; if(skipFed>0)reason+=`${skipFed}人今天已喂食 `; if(skipDead>0)reason+=`${skipDead}人宠物已死亡 `; if(skipCoins>0)reason+=`${skipCoins}人金币不足 `; if(skipMax>0)reason+=`${skipMax}人全部满级 `; if(skipNoPet>0)reason+=`${skipNoPet}人未领养宠物`; showNotification('无法喂食',reason||'没有可喂食的宠物','info');return;} saveClassData('pet'); scheduleAllRenders(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg=`${fedCount}只宠物喂食成功，每只+2成长值，-5金币`; if(skipFed+skipDead+skipCoins+skipMax+skipNoPet>0){let skips=[]; if(skipFed>0)skips.push(`${skipFed}人今天已喂食`); if(skipDead>0)skips.push(`${skipDead}人宠物已死亡`); if(skipCoins>0)skips.push(`${skipCoins}人金币不足`); if(skipMax>0)skips.push(`${skipMax}人全部满级`); if(skipNoPet>0)skips.push(`${skipNoPet}人未领养宠物`); msg+=`（跳过：${skips.join('、')}）`;} showNotification('全班喂食',msg,'success'); showBatchUpgradeNotice(upgrades); }
 function showBatchUpgradeNotice(upgrades){ if(!upgrades||upgrades.length===0) return; const INTERVAL=4500; const MAX_INDIVIDUAL=3; function showOne(idx){ if(idx>=upgrades.length) return; const u=upgrades[idx]; showUpgradeEffect(u.petRealName, u.newLevel, u.cfgId, u.petName, u.oldLevel, u.studentName); setTimeout(()=>{ showNotification('🎉 宠物升级',`恭喜 ${u.studentName} 同学的 ${u.petName} 进化为${u.stageName}！`,'success'); },300); if(idx+1<upgrades.length){ setTimeout(()=>{ const container=document.getElementById('upgradeEffectContainer'); if(container){const overlays=container.querySelectorAll('.upgrade-overlay'); overlays.forEach(o=>o.remove());} showOne(idx+1); }, INTERVAL); } } if(upgrades.length<=MAX_INDIVIDUAL){ if(upgrades.length>1){ showNotification('🎉 升级预告',`本次共有 ${upgrades.length} 位同学的宠物升级，逐一展示！`,'success'); setTimeout(()=>showOne(0), 800); } else { showOne(0); } } else { showBatchUpgradeBoard(upgrades); } } function showBatchUpgradeBoard(upgrades){ const container=document.getElementById('upgradeEffectContainer'); const overlay=document.createElement('div'); overlay.className='upgrade-overlay'; overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);animation:fadeIn 0.5s ease;'; const listHtml=upgrades.map((u,i)=>{ const cfg=PET_CONFIG[Object.keys(PET_CONFIG).find(k=>PET_CONFIG[k].id===u.cfgId)]; const emoji=cfg?cfg.emoji:'🐾'; const imgSrc=_img(`${u.cfgId}/${u.newLevel}.webp`); return `<div style="display:flex;align-items:center;gap:12px;padding:10px 18px;background:rgba(255,255,255,0.08);border-radius:14px;border:1px solid rgba(255,255,255,0.15);animation:fadeIn 0.5s ease ${i*0.08}s both;"><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ffe0b2,#ffcc80);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;"><img src="${imgSrc}" style="width:40px;height:40px;object-fit:contain;" onerror="this.onerror=null;this.parentNode.innerHTML='<span style=\\'font-size:28px;\\'>${emoji}</span>';"></div><div style="flex:1;min-width:0;"><div style="font-size:16px;font-weight:700;color:#fff;">${esc(u.studentName)}</div><div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">${esc(u.petName)} → ${esc(u.stageName)}</div></div><div style="font-size:22px;">🎉</div></div>`; }).join(''); overlay.innerHTML=` <div style="background:linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:28px;padding:35px 30px;max-width:520px;width:90%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.1);position:relative;overflow:hidden;"> <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#e8637a,#f5a054,#ffd700,#e8637a);background-size:200% 100%;animation:shimmer 2s linear infinite;"></div> <div style="text-align:center;margin-bottom:20px;"> <div style="font-size:36px;margin-bottom:6px;">🏆✨🎊</div> <div style="font-size:24px;font-weight:800;color:#ffd700;text-shadow:0 0 20px rgba(255,215,0,0.4);">集体进化大成功！</div> <div style="font-size:15px;color:rgba(255,255,255,0.7);margin-top:6px;">恭喜以下 <strong style="color:#ff9800;font-size:18px;">${upgrades.length}</strong> 位同学的宠物升级</div> </div> <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:5px;min-height:0;"> ${listHtml} </div> <div style="text-align:center;margin-top:18px;padding-top:15px;border-top:1px solid rgba(255,255,255,0.1);"> <button onclick="this.closest('.upgrade-overlay').remove();" style="padding:10px 36px;border:none;border-radius:20px;background:linear-gradient(135deg,#e8637a,#f5a054);color:#fff;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 15px rgba(232,99,122,0.4);transition:transform 0.2s;">太棒了！为他们鼓掌 👏</button> </div> </div>`; container.appendChild(overlay); overlay.addEventListener('click',(e)=>{if(e.target===overlay)overlay.remove();}); setTimeout(()=>{if(overlay.parentNode)overlay.remove();},15000); playUpgradeSound(); }
 // v128: 重置班级宠物 — 先同步清除本地数据（让同步管道读到空数据），再异步清理 Supabase
 function clearPetData(){
@@ -2987,9 +3006,9 @@ function feedPet(student, pet){
   if(pet.level >= 9){ showNotification('已达万物之神',`${pet.nickname||pet.name}已满级，快去领养新宠物吧！`,'warning'); return false; }
   if(_hasFedToday(pet)){ showNotification('今日已喂食',`${pet.nickname||pet.name}今天已经喂食过了，每天只能喂食一次哦！`,'info'); return false; }
   let gain=2; // 固定2点成长，不受商店道具影响
-  pet.growth+=gain; student.coins-=5; pet.lastFeedDate=new Date().toISOString(); pet.isDead=false;
-  updatePetLevel(student, pet.id, gain);
-  recordAction(student.id, student.name, '喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id);
+   pet.growth+=gain; pet.lastFeedDate=new Date().toISOString(); pet.isDead=false;
+   updatePetLevel(student, pet.id, gain);
+   changeStudentCoins(student, -5, '喂食', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id);
   showNotification('喂食成功',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
   return true;
 }
@@ -3478,11 +3497,11 @@ function refreshCurrentStudentModal(){
 }
 function ensurePetPlayFields(pet){ if(pet.todayPlayCount===undefined) pet.todayPlayCount=0; if(pet.lastPlayDate===undefined) pet.lastPlayDate=null; if(pet.penaltyStreak===undefined) pet.penaltyStreak=0; return pet; }
 function getCurrentStageName(petName,level){const cfg=PET_CONFIG[petName];if(!cfg)return"未知";const s=cfg.stages.find(s=>s.stage===level);return s?s.stageName:`阶段${level}`;}
-function playWithPet(student,pet){ if(pet.isDead){ showNotification('玩耍失败','宠物已经死亡，请先复活','error'); return false; } if(student.coins<20){ showNotification('金币不足','玩耍需要20金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(7+getStudentGrowthBonus(student), 13); pet.growth+=gain; student.coins-=20; pet.lastPlayDate=new Date().toISOString(); updatePetLevel(student, pet.id, gain); recordAction(student.id, student.name, '玩耍', `${pet.nickname||pet.name} +${gain}成长值`, -20, gain, pet.id); showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function walkPet(student,pet){ if(pet.isDead){ showNotification('散步失败','宠物已经死亡，请先复活','error'); return false; } if(student.coins<30){ showNotification('金币不足','散步需要30金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(15+getStudentGrowthBonus(student), 24); pet.growth+=gain; student.coins-=30; updatePetLevel(student, pet.id, gain); recordAction(student.id, student.name, '散步', `${pet.nickname||pet.name} +${gain}成长值`, -30, gain, pet.id); showNotification('散步愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function shoppingPet(student,pet){ if(pet.isDead){ showNotification('逛街失败','宠物已经死亡，请先复活','error'); return false; } if(pet.level<3){ showNotification('等级不足','逛街需要Lv3以上','warning'); return false; } if(student.coins<50){ showNotification('金币不足','逛街需要50金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(35+getStudentGrowthBonus(student), 45); pet.growth+=gain; student.coins-=50; updatePetLevel(student, pet.id, gain); recordAction(student.id, student.name, '逛街', `${pet.nickname||pet.name} +${gain}成长值`, -50, gain, pet.id); showNotification('逛街开心',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function travelPet(student,pet){ if(pet.isDead){ showNotification('旅游失败','宠物已经死亡，请先复活','error'); return false; } if(pet.level<6){ showNotification('等级不足','旅游需要Lv6以上','warning'); return false; } if(student.coins<100){ showNotification('金币不足','旅游需要100金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(85+getStudentGrowthBonus(student), 100); pet.growth+=gain; student.coins-=100; updatePetLevel(student, pet.id, gain); recordAction(student.id, student.name, '旅游', `${pet.nickname||pet.name} +${gain}成长值`, -100, gain, pet.id); showNotification('旅游愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function revivePet(student,pet){ if(!pet.isDead) return false; if(student.coins<50){showNotification('金币不足','复活需要50金币','error');return false;} student.coins-=50; pet.isDead=false; let deadGrowth = pet.deathGrowth !== undefined ? pet.deathGrowth : pet.growth; let newGrowth = Math.floor(deadGrowth * 0.5); let prevGrowth = pet.growth; pet.growth = newGrowth; pet.level = 1; const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } pet.lastFeedDate=new Date().toISOString(); pet.todayFeedCount=0; pet.todayPlayCount=0; pet.lastPlayDate=null; pet.penaltyStreak = 0; delete pet.deathGrowth; recordAction(student.id, student.name, '复活', `${pet.nickname||pet.name} 复活`, -50, newGrowth - prevGrowth, pet.id); showNotification('复活成功',`${pet.nickname||pet.name} 重获新生！经验保留50%`,'success'); renderPKPage(); return true; }
+function playWithPet(student,pet){ if(pet.isDead){ showNotification('玩耍失败','宠物已经死亡，请先复活','error'); return false; } if(student.coins<20){ showNotification('金币不足','玩耍需要20金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(7+getStudentGrowthBonus(student), 13); pet.growth+=gain; pet.lastPlayDate=new Date().toISOString(); updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -20, '玩耍', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
+function walkPet(student,pet){ if(pet.isDead){ showNotification('散步失败','宠物已经死亡，请先复活','error'); return false; } if(student.coins<30){ showNotification('金币不足','散步需要30金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(15+getStudentGrowthBonus(student), 24); pet.growth+=gain; updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -30, '散步', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('散步愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
+function shoppingPet(student,pet){ if(pet.isDead){ showNotification('逛街失败','宠物已经死亡，请先复活','error'); return false; } if(pet.level<3){ showNotification('等级不足','逛街需要Lv3以上','warning'); return false; } if(student.coins<50){ showNotification('金币不足','逛街需要50金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(35+getStudentGrowthBonus(student), 45); pet.growth+=gain; updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -50, '逛街', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('逛街开心',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
+function travelPet(student,pet){ if(pet.isDead){ showNotification('旅游失败','宠物已经死亡，请先复活','error'); return false; } if(pet.level<6){ showNotification('等级不足','旅游需要Lv6以上','warning'); return false; } if(student.coins<100){ showNotification('金币不足','旅游需要100金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(85+getStudentGrowthBonus(student), 100); pet.growth+=gain; updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -100, '旅游', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('旅游愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
+function revivePet(student,pet){ if(!pet.isDead) return false; if(student.coins<50){showNotification('金币不足','复活需要50金币','error');return false;} pet.isDead=false; let deadGrowth = pet.deathGrowth !== undefined ? pet.deathGrowth : pet.growth; let newGrowth = Math.floor(deadGrowth * 0.5); let prevGrowth = pet.growth; pet.growth = newGrowth; pet.level = 1; const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } pet.lastFeedDate=new Date().toISOString(); pet.todayFeedCount=0; pet.todayPlayCount=0; pet.lastPlayDate=null; pet.penaltyStreak = 0; delete pet.deathGrowth; changeStudentCoins(student, -50, '复活', `${pet.nickname||pet.name} 复活`, newGrowth - prevGrowth, pet.id); showNotification('复活成功',`${pet.nickname||pet.name} 重获新生！经验保留50%`,'success'); renderPKPage(); return true; }
 function applyAction(student, action, pet){ let coinsChange = action.coins; let isPenalty = coinsChange < 0; let expChange = 0; let prevGrowth = pet.growth; if(pet.isDead){ if(isPenalty){ showNotification('操作禁止','宠物已死亡，不能施加惩罚','error'); return false; } else { student.coins += coinsChange; if(student.coins < 0) student.coins = 0; if(pet.penaltyStreak !== undefined) pet.penaltyStreak = 0; recordAction(student.id, student.name, '奖惩', `${action.name} (宠物死亡)`, coinsChange, 0, pet.id); showNotification(action.name, `+${coinsChange}金币 (宠物死亡无法获得经验)`, 'success'); return true; } } if(isPenalty){ let absDeduct = Math.abs(coinsChange); let coinDeducted = Math.min(absDeduct, student.coins); let remaining = absDeduct - coinDeducted; student.coins -= coinDeducted; expChange = 0; if(remaining > 0){ expChange = -remaining; pet.growth += expChange; if(pet.growth <= 0){ pet.growth = 0; pet.isDead = true; pet.deathGrowth = prevGrowth; pet.deathDate = new Date().toISOString(); pet.penaltyStreak = 0; recordAction(student.id, student.name, '惩罚致死', `${action.name} 导致死亡（金币不足，经验扣至0）`, -absDeduct, -prevGrowth, pet.id, {causedDeath: true, prevGrowth: prevGrowth}); showNotification('惩罚致死',`${pet.nickname||pet.name} 金币不足，经验被扣至0，宠物死亡！`,'error'); saveClassData(); renderPKPage(); return true; } updatePetLevel(student, pet.id, expChange); } let msg = `${action.name}：金币-${coinDeducted}`; if(expChange !== 0) msg += `，经验${expChange}`; recordAction(student.id, student.name, '奖惩', msg, -coinDeducted, expChange, pet.id); showNotification(action.name, msg, 'warning'); } else { if(pet.penaltyStreak !== undefined) pet.penaltyStreak = 0; student.coins += coinsChange; if(student.coins < 0) student.coins = 0; let msg = `${action.name}：金币+${coinsChange}`; recordAction(student.id, student.name, '奖惩', msg, coinsChange, 0, pet.id); showNotification(action.name, msg, 'success'); } return true; }
 function modalFeed(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;let pet=getActivePet(student);if(!pet)return;if(pet.isDead||pet.level>=9){const growable=getGrowablePet(student);if(growable){pet=growable;}else if(pet.isDead){showNotification('无法喂食','宠物已死亡，请先复活','error');return;}else{showNotification('全部满级','所有宠物都已满级，可以领养新宠物','info');return;}}feedPet(student,pet);saveClassData('pet');refreshCurrentStudentModal();scheduleAllRenders();}
 function modalPlay(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;let pet=getActivePet(student);if(!pet)return;if(pet.isDead||pet.level>=9){const growable=getGrowablePet(student);if(growable){pet=growable;}else if(pet.isDead){showNotification('无法玩耍','宠物已死亡，请先复活','error');return;}else{showNotification('全部满级','所有宠物都已满级，可以领养新宠物','info');return;}}playWithPet(student,pet);saveClassData('pet');refreshCurrentStudentModal();scheduleAllRenders();}
@@ -3505,9 +3524,8 @@ function modalDailyCheckin(){
   }
   
   // Perform check-in: +10 coins
-  student.coins += 10;
   student.lastCheckinDate = new Date().toISOString();
-  recordAction(student.id, student.name, '每日打卡', '+10金币', 10, 0, null);
+  changeStudentCoins(student, 10, '每日打卡', '+10金币', 0, null);
   saveClassData();
   refreshCurrentStudentModal();
   renderHomePetGrid();
@@ -3771,13 +3789,12 @@ function modalBuyItem(itemId){
   const item=getShopItemById(itemId);
   if(!item){showNotification('商品不存在','','error');return;}
   if(studentOwnsItem(student,itemId)){showNotification('已拥有','你已经拥有该商品','warning');return;}
-  if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
-  student.coins-=item.price;
-  if(!student.shopItems) student.shopItems=[];
-  student.shopItems.push(itemId);
-  autoEquipOnBuy(student, itemId);
-  const pet=getActivePet(student);
-  recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+   if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
+   const pet=getActivePet(student);
+   changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null, {shopItemId:itemId});
+   if(!student.shopItems) student.shopItems=[];
+   student.shopItems.push(itemId);
+   autoEquipOnBuy(student, itemId);
   saveClassData();
   refreshCurrentStudentModal();
   renderHomePetGrid();
@@ -9753,22 +9770,21 @@ function jhCreateBurst(parent, side, boss) {
 
 function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   const scene = overlay.querySelector('#jhScene');
-  let coinResult = 0;
-  let coinDelta = 0; // v123: Track actual net coin change for accurate log snapshot
   let growthGain = 0;
   if (won) {
     // 胜利：投入的金币消失，获得三倍奖励（净赚两倍）
-    student.coins -= investCoins; // 投入的金币消失
-    coinResult = investCoins * 3; // 获得三倍
-    student.coins += coinResult;  // 净收益 = +2倍
-    coinDelta = coinResult - investCoins; // v123: Net change = +2x (not 3x)
+    var coinResult = investCoins * 3; // 获得三倍
+    var coinDelta = coinResult - investCoins; // v123: Net change = +2x (not 3x)
+    changeStudentCoins(student, coinDelta, '江湖胜利',
+      `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
+      0, pet.id, { jhType: 'win', bossName: boss.name, investCoins: investCoins });
     growthGain = 0; // 胜利不再获得成长值
   } else {
     // 失败：失去投入的金币，获得投入金币30%的成长值
-    coinResult = -investCoins;
-    coinDelta = -investCoins; // v123: Net change = -investCoins
-    student.coins -= investCoins;
-    if (student.coins < 0) student.coins = 0;
+    var coinDelta = -investCoins; // v123: Net change = -investCoins
+    changeStudentCoins(student, coinDelta, '江湖失败',
+      `${student.name}携${pet.nickname || pet.name}闯荡江湖不敌${boss.name}，投入${investCoins}金币`,
+      0, pet.id, { jhType: 'lose', bossName: boss.name, investCoins: investCoins });
     growthGain = Math.floor(investCoins * 0.3); // 失败获得30%成长值
     pet.growth = (pet.growth || 0) + growthGain;
     _recalcPetLevel(pet);
@@ -9776,14 +9792,6 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
 
   // Mark student as having done jianghu today
   student.lastJianghuDate = new Date().toDateString();
-
-  // Record action
-  // v123: Use coinDelta (actual net change) instead of coinResult (gross reward)
-  // so that snapshot.coinsBefore is calculated correctly for "restore to this point"
-  recordAction(student.id, student.name, won ? '江湖胜利' : '江湖失败',
-    `${student.name}携${pet.nickname || pet.name}闯荡江湖${won ? '击败' : '不敌'}${boss.name}，投入${investCoins}金币`,
-    coinDelta, growthGain, pet.id,
-    { jhType: won ? 'win' : 'lose', bossName: boss.name, investCoins: investCoins });
 
   saveClassData();
   renderHomePetGrid();
