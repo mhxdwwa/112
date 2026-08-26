@@ -1759,8 +1759,8 @@ let _gridObserver=null, _gridBatchBusy=false;
 /* 快速计算学生数据哈希，用于 DOM diff 判断卡片是否需要更新 */
 function _studentDataHash(s) {
   var p = getActivePet(s);
-  if (!p) return s.id + '_nopet_' + (s.coins||0);
-  return s.id + '_' + (s.coins||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (s.pets?s.pets.length:0);
+  if (!p) return s.id + '_nopet_' + (s.coins||0) + '_' + (s.xiandan||0);
+  return s.id + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (s.pets?s.pets.length:0);
 }
 
 function _generateStudentCardHTML(s){
