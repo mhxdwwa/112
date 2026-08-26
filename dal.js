@@ -2466,6 +2466,7 @@ function _syncStudentToSupabase() {
     // The student record ALWAYS exists (created by teacher), so .update() is safe.
     return db.from('students').update({
       coins: finalCoins,
+      xiandan: myStudent.xiandan || 0,
       shop_items: JSON.stringify(myStudent.shopItems || []),
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
       last_checkin_date: myStudent.lastCheckinDate || null,
@@ -2951,6 +2952,9 @@ function _applyRealtimeUpdate(table, payload) {
       var snapCoins = snapStu ? snapStu.coins : undefined;
       targetStudent.coins = _applyWithDelta(targetStudent.coins, snapCoins, newData.coins);
     }
+    
+    // xiandan (仙丹) — 直接更新，教师通过批量奖惩修改
+    if (newData.xiandan !== undefined) targetStudent.xiandan = newData.xiandan;
     
     // 其他字段直接更新（这些字段通常只有本地修改，不会并发冲突）
     if (newData.last_checkin_date !== undefined) targetStudent.lastCheckinDate = newData.last_checkin_date;
@@ -3483,6 +3487,7 @@ function _syncStudentDataImmediate() {
     // Sync student data (coins, checkin, etc.) — this triggers teacher's Realtime for students table
     var studentPayload = {
       coins: myStudent.coins || 0,
+      xiandan: myStudent.xiandan || 0,
       last_checkin_date: myStudent.lastCheckinDate || null,
       last_jianghu_date: myStudent.lastJianghuDate || null,
       last_pk_date: myStudent.lastPkDate || null,
@@ -3610,6 +3615,7 @@ function _syncWriteStudentPendingLogs() {
     // Build combined student payload — data + pending logs in ONE request
     var studentPayload = {
       coins: myStudent.coins || 0,
+      xiandan: myStudent.xiandan || 0,
       last_checkin_date: myStudent.lastCheckinDate || null,
       last_jianghu_date: myStudent.lastJianghuDate || null,
       last_pk_date: myStudent.lastPkDate || null,
@@ -3789,6 +3795,7 @@ function _setupPageLifecycle() {
             if (myStudent) {
               var payload = {
                 coins: myStudent.coins || 0,
+                xiandan: myStudent.xiandan || 0,
                 last_checkin_date: myStudent.lastCheckinDate || null,
                 last_jianghu_date: myStudent.lastJianghuDate || null,
                 last_pk_date: myStudent.lastPkDate || null,
@@ -3871,6 +3878,7 @@ function _setupPageLifecycle() {
             if (myStudent) {
               var payload = {
                 coins: myStudent.coins || 0,
+                xiandan: myStudent.xiandan || 0,
                 last_checkin_date: myStudent.lastCheckinDate || null,
                 last_jianghu_date: myStudent.lastJianghuDate || null,
                 last_pk_date: myStudent.lastPkDate || null,

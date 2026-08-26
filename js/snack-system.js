@@ -1,25 +1,25 @@
 // ========== v120: 零食铺系统 ==========
 const DEFAULT_SNACK_CONFIG = [
-  { id: 'milk_tea', name: '奶茶', emoji: '🧋', flavors: ['珍珠奶茶', '椰果奶茶', '红豆奶茶', '芋泥奶茶', '原味奶茶'] },
-  { id: 'cola', name: '可乐', emoji: '🥤', flavors: ['经典原味', '零度无糖', '香草味', '樱桃味'] },
-  { id: 'chips', name: '薯片', emoji: '🍟', flavors: ['原味', '番茄味', '烧烤味', '黄瓜味', '香辣味'] },
-  { id: 'sprite', name: '雪碧', emoji: '🍋', flavors: ['经典柠檬', '无糖雪碧', '薄荷味'] },
-  { id: 'fanta', name: '芬达', emoji: '🍊', flavors: ['橙味', '葡萄味', '苹果味', '草莓味'] },
-  { id: 'candy', name: '糖果', emoji: '🍬', flavors: ['水果糖', '牛奶糖', '薄荷糖', '棒棒糖'] },
-  { id: 'chocolate', name: '巧克力', emoji: '🍫', flavors: ['黑巧克力', '牛奶巧克力', '白巧克力', '榛子巧克力'] },
-  { id: 'ice_cream', name: '冰淇淋', emoji: '🍦', flavors: ['香草味', '巧克力味', '草莓味', '抹茶味', '芒果味'] },
-  { id: 'cookie', name: '饼干', emoji: '🍪', flavors: ['曲奇饼干', '巧克力饼干', '苏打饼干', '夹心饼干'] },
-  { id: 'cake', name: '蛋糕', emoji: '🍰', flavors: ['奶油蛋糕', '巧克力蛋糕', '草莓蛋糕', '芝士蛋糕'] },
-  { id: 'donut', name: '甜甜圈', emoji: '🍩', flavors: ['糖霜甜甜圈', '巧克力甜甜圈', '草莓甜甜圈'] },
-  { id: 'popcorn', name: '爆米花', emoji: '🍿', flavors: ['焦糖味', '奶油味', '巧克力味', '咸味'] },
-  { id: 'juice', name: '果汁', emoji: '🧃', flavors: ['橙汁', '苹果汁', '葡萄汁', '西瓜汁', '芒果汁'] },
-  { id: 'bread', name: '面包', emoji: '🍞', flavors: ['吐司面包', '菠萝包', '奶油面包', '肉松面包'] },
-  { id: 'pizza', name: '披萨', emoji: '🍕', flavors: ['芝士披萨', '培根披萨', '海鲜披萨', '蔬菜披萨'] },
-  { id: 'hamburger', name: '汉堡', emoji: '🍔', flavors: ['牛肉汉堡', '鸡腿汉堡', '鱼排汉堡', '素食汉堡'] },
-  { id: 'hotdog', name: '热狗', emoji: '🌭', flavors: ['经典热狗', '芝士热狗', '辣味热狗'] },
-  { id: 'sandwich', name: '三明治', emoji: '🥪', flavors: ['火腿三明治', '鸡蛋三明治', '金枪鱼三明治'] },
-  { id: 'sushi', name: '寿司', emoji: '🍣', flavors: ['三文鱼寿司', '金枪鱼寿司', '鳗鱼寿司', '卷寿司'] },
-  { id: 'noodles', name: '方便面', emoji: '🍜', flavors: ['红烧牛肉面', '酸菜牛肉面', '海鲜面', '炸酱面'] }
+  { id: 'milk_tea', name: '奶茶', emoji: '🧋', price: 3, flavors: ['珍珠奶茶', '椰果奶茶', '红豆奶茶', '芋泥奶茶', '原味奶茶'] },
+  { id: 'cola', name: '可乐', emoji: '🥤', price: 2, flavors: ['经典原味', '零度无糖', '香草味', '樱桃味'] },
+  { id: 'chips', name: '薯片', emoji: '🍟', price: 2, flavors: ['原味', '番茄味', '烧烤味', '黄瓜味', '香辣味'] },
+  { id: 'sprite', name: '雪碧', emoji: '🍋', price: 2, flavors: ['经典柠檬', '无糖雪碧', '薄荷味'] },
+  { id: 'fanta', name: '芬达', emoji: '🍊', price: 2, flavors: ['橙味', '葡萄味', '苹果味', '草莓味'] },
+  { id: 'candy', name: '糖果', emoji: '🍬', price: 1, flavors: ['水果糖', '牛奶糖', '薄荷糖', '棒棒糖'] },
+  { id: 'chocolate', name: '巧克力', emoji: '🍫', price: 3, flavors: ['黑巧克力', '牛奶巧克力', '白巧克力', '榛子巧克力'] },
+  { id: 'ice_cream', name: '冰淇淋', emoji: '🍦', price: 4, flavors: ['香草味', '巧克力味', '草莓味', '抹茶味', '芒果味'] },
+  { id: 'cookie', name: '饼干', emoji: '🍪', price: 2, flavors: ['曲奇饼干', '巧克力饼干', '苏打饼干', '夹心饼干'] },
+  { id: 'cake', name: '蛋糕', emoji: '🍰', price: 5, flavors: ['奶油蛋糕', '巧克力蛋糕', '草莓蛋糕', '芝士蛋糕'] },
+  { id: 'donut', name: '甜甜圈', emoji: '🍩', price: 3, flavors: ['糖霜甜甜圈', '巧克力甜甜圈', '草莓甜甜圈'] },
+  { id: 'popcorn', name: '爆米花', emoji: '🍿', price: 2, flavors: ['焦糖味', '奶油味', '巧克力味', '咸味'] },
+  { id: 'juice', name: '果汁', emoji: '🧃', price: 2, flavors: ['橙汁', '苹果汁', '葡萄汁', '西瓜汁', '芒果汁'] },
+  { id: 'bread', name: '面包', emoji: '🍞', price: 2, flavors: ['吐司面包', '菠萝包', '奶油面包', '肉松面包'] },
+  { id: 'pizza', name: '披萨', emoji: '🍕', price: 5, flavors: ['芝士披萨', '培根披萨', '海鲜披萨', '蔬菜披萨'] },
+  { id: 'hamburger', name: '汉堡', emoji: '🍔', price: 5, flavors: ['牛肉汉堡', '鸡腿汉堡', '鱼排汉堡', '素食汉堡'] },
+  { id: 'hotdog', name: '热狗', emoji: '🌭', price: 3, flavors: ['经典热狗', '芝士热狗', '辣味热狗'] },
+  { id: 'sandwich', name: '三明治', emoji: '🥪', price: 3, flavors: ['火腿三明治', '鸡蛋三明治', '金枪鱼三明治'] },
+  { id: 'sushi', name: '寿司', emoji: '🍣', price: 5, flavors: ['三文鱼寿司', '金枪鱼寿司', '鳗鱼寿司', '卷寿司'] },
+  { id: 'noodles', name: '方便面', emoji: '🍜', price: 2, flavors: ['红烧牛肉面', '酸菜牛肉面', '海鲜面', '炸酱面'] }
 ];
 var _pendingSnackRequest = null;
 var _snackShopSelectedStudentId = null;
@@ -83,7 +83,7 @@ function _renderSnackShopStudentSelect(curClass) {
       html += '<span style="width:16px;height:16px;border-radius:50%;border:1.5px solid #ddd;flex-shrink:0;"></span>';
     }
     html += '<span style="font-weight:600;">' + esc(stu.name || '未命名') + '</span>';
-    html += '<span style="font-size:12px;color:#999;">💰' + (stu.coins || 0) + '</span>';
+    html += '<span style="font-size:12px;color:#999;">💰' + (stu.coins || 0) + ' 💊' + (stu.xiandan || 0) + '</span>';
     html += '</div>';
   });
   html += '</div>';
@@ -160,17 +160,34 @@ function _showSnackShopSnackGrid() {
       if (student) {
         html += '<div style="text-align:center;margin-bottom:12px;padding:8px 16px;background:#e8f5e9;border-radius:10px;">';
         html += '<span style="font-size:13px;color:#2e7d32;">为 <strong>' + esc(student.name) + '</strong> 兑换零食</span>';
+        html += '<span style="font-size:13px;color:#6a1b9a;margin-left:12px;">💊 仙丹: <strong>' + (student.xiandan || 0) + '</strong></span>';
         html += '</div>';
       }
     }
   }
   
   html += '<div style="text-align:center;margin-bottom:15px;color:#666;font-size:14px;">选择你想要的零食吧！</div>';
+  
+  // Show student's own 仙丹 balance
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+    const curClass = classesData.find(c => c.id === currentClassId);
+    if (curClass) {
+      const student = curClass.students.find(s => s.id.toString() === currentUser.studentId.toString());
+      if (student) {
+        html += '<div style="text-align:center;margin-bottom:12px;padding:6px 16px;background:#f3e5f5;border-radius:10px;">';
+        html += '<span style="font-size:13px;color:#6a1b9a;">💊 我的仙丹: <strong>' + (student.xiandan || 0) + '</strong></span>';
+        html += '</div>';
+      }
+    }
+  }
+  
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">';
   snacks.forEach(snack => {
+    const price = snack.price || 0;
     html += `<div onclick="selectSnack('${snack.id}')" style="display:flex;flex-direction:column;align-items:center;padding:12px 8px;background:linear-gradient(135deg,#fff5f8,#f0f8ff);border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;" onmouseenter="this.style.borderColor='#ff6b9d';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform='translateY(0)'">
       <div style="font-size:36px;margin-bottom:6px;">${snack.emoji}</div>
       <div style="font-size:13px;font-weight:600;color:#333;">${snack.name}</div>
+      <div style="font-size:12px;color:#6a1b9a;margin-top:4px;font-weight:600;">💊${price}</div>
     </div>`;
   });
   html += '</div></div>';
@@ -186,7 +203,7 @@ function selectSnack(snackId) {
   const snacks = getCurrentSnackConfig();
   const snack = snacks.find(s => s.id === snackId);
   if (!snack) return;
-  _pendingSnackRequest = { snackId: snack.id, snackName: snack.name, snackEmoji: snack.emoji };
+  _pendingSnackRequest = { snackId: snack.id, snackName: snack.name, snackEmoji: snack.emoji, snackPrice: snack.price || 0 };
   let html = '<div style="text-align:center;margin-bottom:15px;">';
   html += `<div style="font-size:48px;margin-bottom:8px;">${snack.emoji}</div>`;
   html += `<div style="font-size:18px;font-weight:700;color:#333;">${snack.name}</div>`;
@@ -209,7 +226,8 @@ function selectSnackFlavor(flavor) {
   let html = '<div style="text-align:center;padding:20px 0;">';
   html += `<div style="font-size:56px;margin-bottom:12px;">${_pendingSnackRequest.snackEmoji}</div>`;
   html += `<div style="font-size:18px;font-weight:700;color:#333;margin-bottom:8px;">${_pendingSnackRequest.snackName}</div>`;
-  html += `<div style="font-size:16px;color:#666;margin-bottom:20px;">口味：${flavor}</div>`;
+  html += `<div style="font-size:16px;color:#666;margin-bottom:8px;">口味：${flavor}</div>`;
+  html += `<div style="font-size:15px;color:#6a1b9a;font-weight:700;margin-bottom:12px;">💊 价格: ${_pendingSnackRequest.snackPrice} 仙丹</div>`;
   html += '<div style="background:#fff3e0;padding:12px;border-radius:10px;margin:15px 0;">';
   html += '<div style="font-size:13px;color:#e65100;font-weight:600;margin-bottom:6px;">📋 兑换说明</div>';
   html += '<div style="font-size:13px;color:#666;line-height:1.6;">提交后，教师将收到兑换请求通知。<br>教师同意后即可兑换成功。</div>';
@@ -238,6 +256,14 @@ function submitSnackRequest() {
   }
   if (!student) { showNotification('错误', '未找到学生信息', 'error'); return; }
   
+  // Check 仙丹 balance
+  const snackPrice = _pendingSnackRequest.snackPrice || 0;
+  const currentXd = student.xiandan || 0;
+  if (snackPrice > 0 && currentXd < snackPrice) {
+    showNotification('仙丹不足', `兑换需要 ${snackPrice} 仙丹，当前只有 ${currentXd} 仙丹`, 'error');
+    return;
+  }
+  
   // Initialize snackRequests array if not exists
   if (!student.snackRequests) student.snackRequests = [];
   
@@ -248,6 +274,7 @@ function submitSnackRequest() {
     snackId: _pendingSnackRequest.snackId,
     snackName: _pendingSnackRequest.snackName,
     snackEmoji: _pendingSnackRequest.snackEmoji,
+    snackPrice: snackPrice,
     flavor: _pendingSnackRequest.flavor,
     studentId: student.id,
     studentName: student.name,
@@ -255,6 +282,11 @@ function submitSnackRequest() {
     approvedAt: null,
     rejectedAt: null
   };
+  
+  // Deduct 仙丹
+  if (snackPrice > 0) {
+    student.xiandan = (student.xiandan || 0) - snackPrice;
+  }
   
   student.snackRequests.push(request);
   saveClassData();
@@ -267,7 +299,7 @@ function submitSnackRequest() {
     studentId: student.id,
     studentName: student.name,
     actionType: '零食兑换',
-    details: `申请兑换 ${_pendingSnackRequest.snackEmoji} ${_pendingSnackRequest.snackName}（${_pendingSnackRequest.flavor}）`,
+    details: `申请兑换 ${_pendingSnackRequest.snackEmoji} ${_pendingSnackRequest.snackName}（${_pendingSnackRequest.flavor}）💊-${snackPrice}`,
     coinDelta: 0,
     expDelta: 0,
     petId: null,
@@ -275,6 +307,7 @@ function submitSnackRequest() {
       snackRequestId: request.id,
       snackName: _pendingSnackRequest.snackName,
       snackEmoji: _pendingSnackRequest.snackEmoji,
+      snackPrice: snackPrice,
       flavor: _pendingSnackRequest.flavor,
       status: 'pending'
     },
@@ -327,7 +360,7 @@ function showSnackRequestsModal() {
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;color:#333;">${esc(req.studentName)}</div>
           <div style="font-size:13px;color:#666;margin-top:2px;">${esc(req.snackName)} · ${esc(req.flavor)}</div>
-          <div style="font-size:11px;color:#999;margin-top:2px;">${time}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px;">${time}${req.snackPrice ? ' · 💊' + req.snackPrice + '仙丹' : ''}</div>
         </div>
         <div style="display:flex;gap:8px;">
           <button onclick="approveSnackRequest(${req.id})" style="padding:8px 14px;background:#4caf50;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">同意</button>
@@ -439,6 +472,11 @@ function rejectSnackRequest(requestId) {
   request.status = 'rejected';
   request.rejectedAt = new Date().toISOString();
   
+  // Refund 仙丹
+  if (request.snackPrice && request.snackPrice > 0) {
+    student.xiandan = (student.xiandan || 0) + request.snackPrice;
+  }
+  
   // Update history log
   const logs = window.operationLogs || [];
   const log = logs.find(l => l.extra && l.extra.snackRequestId === requestId);
@@ -451,7 +489,8 @@ function rejectSnackRequest(requestId) {
   saveClassData();
   _updateSnackRequestBadge(); // 立即更新徽章
   showSnackRequestsModal(); // Refresh modal
-  showNotification('已拒绝', `已拒绝 ${student.name} 的 ${request.snackEmoji} ${request.snackName} 兑换`, 'info');
+  const refundMsg = (request.snackPrice && request.snackPrice > 0) ? `，已退还 ${request.snackPrice} 仙丹` : '';
+  showNotification('已拒绝', `已拒绝 ${student.name} 的 ${request.snackEmoji} ${request.snackName} 兑换${refundMsg}`, 'info');
 }
 
 // 获取待审批零食请求数量（用于教师通知）
@@ -528,7 +567,7 @@ function showSnackStatusModal() {
       html += `<div style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:10px;background:${statusBg};border-radius:12px;border:2px solid rgba(0,0,0,0.05);">`;
       html += `<div style="font-size:36px;">${req.snackEmoji}</div>`;
       html += `<div style="flex:1;min-width:0;">`;
-      html += `<div style="font-size:14px;font-weight:600;color:#333;">${esc(req.snackName)}</div>`;
+      html += `<div style="font-size:14px;font-weight:600;color:#333;">${esc(req.snackName)}${req.snackPrice ? ' <span style="font-size:12px;color:#6a1b9a;">💊' + req.snackPrice + '</span>' : ''}</div>`;
       html += `<div style="font-size:13px;color:#666;margin-top:2px;">${esc(req.flavor)}</div>`;
       html += `<div style="font-size:11px;color:#999;margin-top:2px;">申请时间：${time}</div>`;
       html += `</div>`;
@@ -615,10 +654,11 @@ function showSnackManageModal() {
   // 零食列表
   html += '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:15px;">';
   snacks.forEach((snack, index) => {
+    const price = snack.price || 0;
     html += `<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#fff;border-radius:12px;border:1px solid #eee;">
       <div style="font-size:32px;">${snack.emoji}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:600;color:#333;">${esc(snack.name)}</div>
+        <div style="font-size:14px;font-weight:600;color:#333;">${esc(snack.name)} <span style="font-size:12px;color:#6a1b9a;font-weight:700;">💊${price}仙丹</span></div>
         <div style="font-size:12px;color:#999;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(snack.flavors.join('、'))}</div>
       </div>
       <div style="display:flex;gap:6px;">
@@ -686,6 +726,7 @@ function showSnackEditModal(snack, index) {
   const name = snack ? snack.name : '';
   const emoji = snack ? snack.emoji : '🍬';
   const flavors = snack ? snack.flavors.join('、') : '';
+  const price = snack ? (snack.price || 0) : 2;
   
   let html = '<div style="padding:10px 0;">';
   html += '<div style="margin-bottom:15px;">';
@@ -697,6 +738,12 @@ function showSnackEditModal(snack, index) {
   html += '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">封面图标（Emoji）</label>';
   html += `<input type="text" id="snackEditEmoji" value="${esc(emoji)}" placeholder="例如：🧋" style="width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:10px;font-size:24px;text-align:center;box-sizing:border-box;">`;
   html += '<div style="font-size:11px;color:#999;margin-top:4px;">常用：🧋🥤🍟🍫🍪🍦🍩🍿🍕🍔🌭🍣🍜</div>';
+  html += '</div>';
+  
+  html += '<div style="margin-bottom:15px;">';
+  html += '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">💊 仙丹价格</label>';
+  html += `<input type="number" id="snackEditPrice" value="${price}" min="0" placeholder="例如：3" style="width:100%;padding:10px 14px;border:1.5px solid #ddd;border-radius:10px;font-size:14px;box-sizing:border-box;">`;
+  html += '<div style="font-size:11px;color:#999;margin-top:4px;">学生兑换此零食需要消耗的仙丹数量</div>';
   html += '</div>';
   
   html += '<div style="margin-bottom:15px;">';
@@ -715,12 +762,14 @@ function saveSnackEdit(index) {
   const nameEl = document.getElementById('snackEditName');
   const emojiEl = document.getElementById('snackEditEmoji');
   const flavorsEl = document.getElementById('snackEditFlavors');
+  const priceEl = document.getElementById('snackEditPrice');
   
   if (!nameEl || !emojiEl || !flavorsEl) return;
   
   const name = nameEl.value.trim();
   const emoji = emojiEl.value.trim();
   const flavorsText = flavorsEl.value.trim();
+  const price = priceEl ? Math.max(0, parseInt(priceEl.value) || 0) : 0;
   
   if (!name) { showNotification('错误', '请输入零食名称', 'error'); return; }
   if (!emoji) { showNotification('错误', '请输入封面图标', 'error'); return; }
@@ -735,13 +784,14 @@ function saveSnackEdit(index) {
   if (isNew) {
     // 生成新ID
     const id = 'custom_' + Date.now();
-    snacks.push({ id, name, emoji, flavors });
+    snacks.push({ id, name, emoji, flavors, price });
   } else {
     // 编辑现有
     if (index < 0 || index >= snacks.length) return;
     snacks[index].name = name;
     snacks[index].emoji = emoji;
     snacks[index].flavors = flavors;
+    snacks[index].price = price;
   }
   
   saveCustomSnacks(snacks);
