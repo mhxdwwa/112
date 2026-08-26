@@ -1,5 +1,25 @@
 /**
- * dal.js v122 — Fix student operation logs not recorded on mobile browsers
+ * dal.js v129 — 代码重构版本
+ * 
+ * === CHANGELOG ===
+ * v129: 代码重构（2026-08-26）
+ *   - 消除重复文件：删除根目录 audio.js/jianghu.js/pk-battle.js 和废弃的 index_updated.html
+ *   - 统一金币写入：新增 changeStudentCoins() 函数，10个操作点统一调用
+ *   - 建立测试页面：test.html 包含39个金币逻辑测试用例
+ *   - 拆分 app.js：提取5个独立模块
+ *     · js/snack-system.js (750行) - 零食铺系统
+ *     · js/shop-system.js (288行) - 宠物商店系统
+ *     · js/history-ui.js (415行) - 历史操作UI
+ *     · js/pet-modal.js (245行) - 宠物弹窗增强
+ *     · js/rankings.js (502行) - 排行榜系统
+ *   - app.js 从12282行降至10082行
+ *   - 备份分支：backup-before-refactor
+ *
+ * v123: Fix jianghu coinDelta - use net change instead of gross reward
+ * v122: sendBeacon + 日志搭乘 — 页面卸载可靠写入
+ * v121: 异步XHR后备路径 — 验证重试机制
+ * v120: 日志合并竞态条件修复 — 合并后不再清除 pending_logs_json
+ * v119: 金币双重计算修复 — _myBaseCoins 同步更新
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -45,7 +65,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '128.0';
+var _DAL_VERSION = '129.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
