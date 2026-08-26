@@ -1,4 +1,4 @@
-// ========== 萌萌江湖行 ==========
+// ========== 萌萌江湖行系统 ==========
 let jhSelectedStudentId = null;
 
 function getTodayCoinGain(studentId) {
@@ -37,7 +37,6 @@ function hasPKQualificationToday(studentId) {
   }
   return total >= 5;
 }
-
 
 function renderJianghuColumn(cur, validStudents) {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
@@ -383,7 +382,6 @@ function playJHFinalStrikeSound(){
     o.start(t+1.0);o.stop(t+2.3);
   });
 }
-
 const jhBosses = [
   { name: '血刀老祖', color: '#cc2233', accent: '#ff4455' },
   { name: '毒手药王', color: '#2d6a4f', accent: '#40916c' },
@@ -414,7 +412,7 @@ function jhGenMtnSVG(type) {
 }
 
 function jhGenBossSVG(boss) {
-  return `<img src="${_oss(`战斗兽宠文件夹/${esc(boss.name)}.webp`)}" alt="${esc(boss.name)}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 20px ${boss.accent});"/>`;
+  return `<img src="战斗兽宠文件夹/${esc(boss.name)}.webp" alt="${esc(boss.name)}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 20px ${boss.accent});"/>`;
 }
 
 /* Generate wuxia-style ancient building silhouettes SVG */
@@ -590,7 +588,6 @@ function jhGenBattleBuildingsSVG() {
 
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%"><path d="${paths}" fill="${bldgColor}"/></svg>`;
 }
-
 
 function launchJianghuGame(student, pet, investCoins) {
   // Start probing monster images early so they're ready for battle
@@ -1529,22 +1526,21 @@ function jhCreateBurst(parent, side, boss) {
 
 function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   const scene = overlay.querySelector('#jhScene');
-  let coinResult = 0;
-  let coinDelta = 0; // v123: Track actual net coin change for accurate log snapshot
   let growthGain = 0;
   if (won) {
     // 胜利：投入的金币消失，获得三倍奖励（净赚两倍）
-    student.coins -= investCoins; // 投入的金币消失
-    coinResult = investCoins * 3; // 获得三倍
-    student.coins += coinResult;  // 净收益 = +2倍
-    coinDelta = coinResult - investCoins; // v123: Net change = +2x (not 3x)
+    var coinResult = investCoins * 3; // 获得三倍
+    var coinDelta = coinResult - investCoins; // v123: Net change = +2x (not 3x)
+    changeStudentCoins(student, coinDelta, '江湖胜利',
+      `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
+      0, pet.id, { jhType: 'win', bossName: boss.name, investCoins: investCoins });
     growthGain = 0; // 胜利不再获得成长值
   } else {
     // 失败：失去投入的金币，获得投入金币30%的成长值
-    coinResult = -investCoins;
-    coinDelta = -investCoins; // v123: Net change = -investCoins
-    student.coins -= investCoins;
-    if (student.coins < 0) student.coins = 0;
+    var coinDelta = -investCoins; // v123: Net change = -investCoins
+    changeStudentCoins(student, coinDelta, '江湖失败',
+      `${student.name}携${pet.nickname || pet.name}闯荡江湖不敌${boss.name}，投入${investCoins}金币`,
+      0, pet.id, { jhType: 'lose', bossName: boss.name, investCoins: investCoins });
     growthGain = Math.floor(investCoins * 0.3); // 失败获得30%成长值
     pet.growth = (pet.growth || 0) + growthGain;
     _recalcPetLevel(pet);
@@ -1553,15 +1549,7 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   // Mark student as having done jianghu today
   student.lastJianghuDate = new Date().toDateString();
 
-  // Record action
-  // v123: Use coinDelta (actual net change) instead of coinResult (gross reward)
-  // so that snapshot.coinsBefore is calculated correctly for "restore to this point"
-  recordAction(student.id, student.name, won ? '江湖胜利' : '江湖失败',
-    `${student.name}携${pet.nickname || pet.name}闯荡江湖${won ? '击败' : '不敌'}${boss.name}，投入${investCoins}金币`,
-    coinDelta, growthGain, pet.id,
-    { jhType: won ? 'win' : 'lose', bossName: boss.name, investCoins: investCoins });
-
-  saveClassData('jianghu');
+  saveClassData();
   renderHomePetGrid();
   renderClassTopThree();
   renderPKPage();
@@ -1797,24 +1785,4 @@ function closeJianghuGame() {
   jhSelectedStudentId = null;
   renderJianghuPage();
   renderPKPage();
-}
-
-function renderJianghuPage() {
-  const container = document.getElementById('jhPageContent');
-  if(!container) return;
-  if(!currentClassId) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;">请先在【宠物管理】页面选择一个班级</div>';
-    return;
-  }
-  const cur = classesData.find(c=>c.id===currentClassId);
-  if(!cur || cur.students.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;">班级中暂无学生</div>';
-    return;
-  }
-  const validStudents = cur.students.filter(s => {
-    const p = getActivePet(s);
-    return p && !p.isDead;
-  });
-  let html = renderJianghuColumn(cur, validStudents);
-  container.innerHTML = html;
 }
