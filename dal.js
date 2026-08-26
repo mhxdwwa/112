@@ -3352,6 +3352,91 @@ function _cleanupRealtime() {
 }
 
 // v116: Immediate sync of student + pet data after EACH student action.
+// v124: RPC helper — append a single log to pending_logs_json via database function.
+// This is an atomic operation: the database reads existing logs, appends the new one,
+// and writes back — all in a single request. No GET needed, no race conditions.
+// Traffic: ~500 bytes per call (just the new log), regardless of how many logs exist.
+function _appendPendingLogRpc(logObj) {
+  var studentId = parseInt(localStorage.getItem('studentId'));
+  var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+  if (!studentId || !anonKey) return false;
+
+  var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+  var payload = {
+    id: logObj.id,
+    timestamp: logObj.timestamp || new Date().toISOString(),
+    classId: logObj.classId || parseInt(localStorage.getItem('classId')) || 0,
+    studentId: logObj.studentId,
+    studentName: logObj.studentName || '',
+    actionType: logObj.actionType || '',
+    details: logObj.details || '',
+    coinDelta: parseInt(logObj.coinDelta) || 0,
+    expDelta: parseInt(logObj.expDelta) || 0,
+    petId: logObj.petId || null,
+    extra: logObj.extra || null,
+    snapshot: logObj.snapshot || null,
+    fullSnapshot: logObj.fullSnapshot || null,
+    reverted: !!logObj.reverted
+  };
+
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', baseUrl + '/rpc/append_pending_log', false); // sync
+    xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+    xhr.setRequestHeader('apikey', anonKey);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify({ p_student_id: studentId, p_log: payload }));
+    return (xhr.status >= 200 && xhr.status < 300);
+  } catch(e) {
+    console.warn('[DAL] v124 RPC append failed:', e.message);
+    return false;
+  }
+}
+
+// v124: Async version of RPC append for non-blocking paths.
+function _appendPendingLogRpcAsync(logObj) {
+  var studentId = parseInt(localStorage.getItem('studentId'));
+  var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+  if (!studentId || !anonKey) return Promise.resolve(false);
+
+  var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+  var payload = {
+    id: logObj.id,
+    timestamp: logObj.timestamp || new Date().toISOString(),
+    classId: logObj.classId || parseInt(localStorage.getItem('classId')) || 0,
+    studentId: logObj.studentId,
+    studentName: logObj.studentName || '',
+    actionType: logObj.actionType || '',
+    details: logObj.details || '',
+    coinDelta: parseInt(logObj.coinDelta) || 0,
+    expDelta: parseInt(logObj.expDelta) || 0,
+    petId: logObj.petId || null,
+    extra: logObj.extra || null,
+    snapshot: logObj.snapshot || null,
+    fullSnapshot: logObj.fullSnapshot || null,
+    reverted: !!logObj.reverted
+  };
+
+  return new Promise(function(resolve) {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', baseUrl + '/rpc/append_pending_log', true); // async
+      xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+      xhr.setRequestHeader('apikey', anonKey);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          resolve(xhr.status >= 200 && xhr.status < 300);
+        }
+      };
+      xhr.send(JSON.stringify({ p_student_id: studentId, p_log: payload }));
+    } catch(e) {
+      console.warn('[DAL] v124 Async RPC append failed:', e.message);
+      resolve(false);
+    }
+  });
+}
+
 // This is the KEY fix for "pet cards don't update immediately on teacher's screen".
 //
 // Problem: Student action → saveClassData() → async _syncToSupabase() → 4-step async chain.
@@ -3407,65 +3492,11 @@ function _syncStudentDataImmediate() {
       equipped_items: JSON.stringify(myStudent.equippedItems || {})
     };
 
-    // v122: ALSO include pending_logs_json in this sync XHR.
-    // This is the PROVEN WORKING path on mobile (coins save correctly through this).
-    // By including logs here, we ensure logs ride along the reliable path.
-    // Previously, logs were ONLY sent via _syncWriteStudentPendingLogs() which uses
-    // a much larger payload (all student data + logs) and is often blocked on mobile.
+    // v124: Use RPC to append each unsynced log — 1 request per log, ~500 bytes each.
+    // No more GET + PATCH with full log history. This eliminates the traffic explosion.
     var unsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
       ? window.operationLogs.filter(function(l) { return !l._synced; })
       : [];
-    if (unsyncedLogs.length > 0) {
-      var newLogsPayload = unsyncedLogs.map(function(l) {
-        return {
-          id: l.id,
-          timestamp: l.timestamp || new Date().toISOString(),
-          classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-          studentId: l.studentId,
-          studentName: l.studentName || '',
-          actionType: l.actionType || '',
-          details: l.details || '',
-          coinDelta: parseInt(l.coinDelta) || 0,
-          expDelta: parseInt(l.expDelta) || 0,
-          petId: l.petId || null,
-          extra: l.extra || null,
-          snapshot: l.snapshot || null,
-          fullSnapshot: l.fullSnapshot || null,
-          reverted: !!l.reverted
-        };
-      });
-      // v123: FIX — Read existing pending_logs_json first, then APPEND new logs.
-      // Previously this was a REPLACE operation that overwrote previous logs.
-      try {
-        var getXHR = new XMLHttpRequest();
-        getXHR.open('GET', baseUrl + '/students?id=eq.' + studentId + '&select=pending_logs_json', false);
-        getXHR.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-        getXHR.setRequestHeader('apikey', anonKey);
-        getXHR.send();
-        if (getXHR.status >= 200 && getXHR.status < 300) {
-          var resp = JSON.parse(getXHR.responseText);
-          if (resp && resp.length > 0 && resp[0].pending_logs_json) {
-            var existing = JSON.parse(resp[0].pending_logs_json);
-            if (Array.isArray(existing) && existing.length > 0) {
-              // Merge: existing + new, deduplicate by id
-              var idSet = {};
-              var combined = [];
-              existing.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
-              newLogsPayload.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
-              newLogsPayload = combined;
-            }
-          }
-        }
-      } catch(e) {
-        console.warn('[DAL] v123 Failed to read existing pending_logs_json in _syncStudentDataImmediate:', e.message);
-      }
-      // v123: Cap at 500 logs to prevent unbounded growth of pending_logs_json.
-      // Teacher merges periodically, so old logs are safe in classes.operation_logs_json.
-      if (newLogsPayload.length > 500) {
-        newLogsPayload = newLogsPayload.slice(-500);
-      }
-      studentPayload.pending_logs_json = JSON.stringify(newLogsPayload);
-    }
 
     var xhr = new XMLHttpRequest();
     xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
@@ -3479,14 +3510,19 @@ function _syncStudentDataImmediate() {
       _lastOwnWriteTime = now;
       // v118: Update _myBaseCoins immediately after sync XHR succeeds.
       _myBaseCoins = myStudent.coins;
-      // v122: Mark logs as synced if they were included
-      if (unsyncedLogs.length > 0) {
-        unsyncedLogs.forEach(function(l) {
+
+      // v124: Append each unsynced log via RPC (atomic, no GET needed)
+      var rpcOkCount = 0;
+      unsyncedLogs.forEach(function(l) {
+        if (_appendPendingLogRpc(l)) {
           l._synced = true;
           l._fromSupabase = true;
-        });
+          rpcOkCount++;
+        }
+      });
+      if (rpcOkCount > 0) {
         try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-        console.log('[DAL] v122 Sync XHR wrote ' + unsyncedLogs.length + ' logs (via _syncStudentDataImmediate)');
+        console.log('[DAL] v124 RPC appended ' + rpcOkCount + '/' + unsyncedLogs.length + ' logs (via _syncStudentDataImmediate)');
       }
     }
 
@@ -3583,59 +3619,10 @@ function _syncWriteStudentPendingLogs() {
       equipped_items: JSON.stringify(myStudent.equippedItems || {})
     };
 
-    // Add pending logs if any
-    if (unsyncedLogs.length > 0) {
-      var newLogsPayload = unsyncedLogs.map(function(l) {
-        return {
-          id: l.id,
-          timestamp: l.timestamp || new Date().toISOString(),
-          classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-          studentId: l.studentId,
-          studentName: l.studentName || '',
-          actionType: l.actionType || '',
-          details: l.details || '',
-          coinDelta: parseInt(l.coinDelta) || 0,
-          expDelta: parseInt(l.expDelta) || 0,
-          petId: l.petId || null,
-          extra: l.extra || null,
-          snapshot: l.snapshot || null,
-          fullSnapshot: l.fullSnapshot || null,
-          reverted: !!l.reverted
-        };
-      });
-      // v123: FIX — Read existing pending_logs_json first, then APPEND new logs.
-      // Previously this was a REPLACE operation that overwrote previous logs.
-      try {
-        var getXHR = new XMLHttpRequest();
-        getXHR.open('GET', baseUrl + '/students?id=eq.' + studentId + '&select=pending_logs_json', false);
-        getXHR.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-        getXHR.setRequestHeader('apikey', anonKey);
-        getXHR.send();
-        if (getXHR.status >= 200 && getXHR.status < 300) {
-          var resp = JSON.parse(getXHR.responseText);
-          if (resp && resp.length > 0 && resp[0].pending_logs_json) {
-            var existing = JSON.parse(resp[0].pending_logs_json);
-            if (Array.isArray(existing) && existing.length > 0) {
-              // Merge: existing + new, deduplicate by id
-              var idSet = {};
-              var combined = [];
-              existing.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
-              newLogsPayload.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
-              newLogsPayload = combined;
-            }
-          }
-        }
-      } catch(e) {
-        console.warn('[DAL] v123 Failed to read existing pending_logs_json in _syncWriteStudentPendingLogs:', e.message);
-      }
-      // v123: Cap at 500 logs to prevent unbounded growth of pending_logs_json.
-      if (newLogsPayload.length > 500) {
-        newLogsPayload = newLogsPayload.slice(-500);
-      }
-      studentPayload.pending_logs_json = JSON.stringify(newLogsPayload);
-    }
+    // v124: No longer include pending_logs_json in students PATCH.
+    // Logs are now sent via RPC (atomic append, no GET needed).
 
-    // Synchronous PATCH to students table — writes data + logs in ONE request
+    // Synchronous PATCH to students table — writes student data only
     var xhr = new XMLHttpRequest();
     xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false); // false = synchronous
     xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
@@ -3646,12 +3633,16 @@ function _syncWriteStudentPendingLogs() {
 
     var studentOk = (xhr.status >= 200 && xhr.status < 300);
     if (studentOk) {
-      console.log('[DAL] v115 Sync wrote student data' + (unsyncedLogs.length > 0 ? ' + ' + unsyncedLogs.length + ' pending logs' : '') + ' for student ' + studentId);
-      // Mark all unsynced logs as synced
+      // v124: Append each unsynced log via RPC (atomic, no GET needed)
+      var rpcOkCount = 0;
       unsyncedLogs.forEach(function(l) {
-        l._synced = true;
-        l._fromSupabase = true;
+        if (_appendPendingLogRpc(l)) {
+          l._synced = true;
+          l._fromSupabase = true;
+          rpcOkCount++;
+        }
       });
+      console.log('[DAL] v124 Sync wrote student data + RPC appended ' + rpcOkCount + '/' + unsyncedLogs.length + ' logs for student ' + studentId);
       try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
       _lastOwnWriteTime = Date.now();
       // v119: CRITICAL — Update _myBaseCoins and _myBasePets after sync XHR succeeds.
@@ -3709,6 +3700,7 @@ function _syncWriteStudentPendingLogs() {
 // Called when sync XHR fails (common on mobile browsers that block sync XHR).
 // Uses async XHR which is less reliable during page transitions but works
 // during normal page operation.
+// v124: Now uses RPC for each log — atomic append, no GET needed, minimal traffic.
 function _writeStudentPendingLogsAsync() {
   if (!currentUser || currentUser.type !== 'student') return;
 
@@ -3724,90 +3716,30 @@ function _writeStudentPendingLogsAsync() {
 
   if (unsyncedLogs.length === 0) return;
 
-  console.log('[DAL] v121 Async fallback: writing ' + unsyncedLogs.length + ' pending logs...');
+  console.log('[DAL] v124 Async fallback: writing ' + unsyncedLogs.length + ' pending logs via RPC...');
 
-  try {
-    var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
-    var newLogsPayload = unsyncedLogs.map(function(l) {
-      return {
-        id: l.id,
-        timestamp: l.timestamp || new Date().toISOString(),
-        classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-        studentId: l.studentId,
-        studentName: l.studentName || '',
-        actionType: l.actionType || '',
-        details: l.details || '',
-        coinDelta: parseInt(l.coinDelta) || 0,
-        expDelta: parseInt(l.expDelta) || 0,
-        petId: l.petId || null,
-        extra: l.extra || null,
-        snapshot: l.snapshot || null,
-        fullSnapshot: l.fullSnapshot || null,
-        reverted: !!l.reverted
-      };
-    });
-
-    // v123: FIX — Read existing pending_logs_json first, then APPEND new logs.
-    // Use async GET then async PATCH to avoid overwriting previous logs.
-    var getXHR = new XMLHttpRequest();
-    getXHR.open('GET', baseUrl + '/students?id=eq.' + studentId + '&select=pending_logs_json', true);
-    getXHR.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-    getXHR.setRequestHeader('apikey', anonKey);
-    getXHR.onreadystatechange = function() {
-      if (getXHR.readyState === 4) {
-        var finalPayload = newLogsPayload;
-        if (getXHR.status >= 200 && getXHR.status < 300) {
-          try {
-            var resp = JSON.parse(getXHR.responseText);
-            if (resp && resp.length > 0 && resp[0].pending_logs_json) {
-              var existing = JSON.parse(resp[0].pending_logs_json);
-              if (Array.isArray(existing) && existing.length > 0) {
-                // Merge: existing + new, deduplicate by id
-                var idSet = {};
-                var combined = [];
-                existing.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
-                newLogsPayload.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
-                finalPayload = combined;
-              }
-            }
-          } catch(e) {
-            console.warn('[DAL] v123 Failed to parse existing pending_logs_json in async:', e.message);
-          }
-        }
-
-        // v123: Cap at 500 logs to prevent unbounded growth
-        if (finalPayload.length > 500) {
-          finalPayload = finalPayload.slice(-500);
-        }
-
-        // Now PATCH with the merged payload
-        var xhr = new XMLHttpRequest();
-        xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, true);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-        xhr.setRequestHeader('apikey', anonKey);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('Prefer', 'return=minimal');
-        xhr.onreadystatechange = function() {
-          if (xhr.readyState === 4) {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              console.log('[DAL] v121 Async fallback: wrote ' + finalPayload.length + ' pending logs (merged)');
-              unsyncedLogs.forEach(function(l) {
-                l._synced = true;
-                l._fromSupabase = true;
-              });
-              try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-            } else {
-              console.warn('[DAL] v121 Async fallback failed, status:', xhr.status);
-            }
-          }
-        };
-        xhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(finalPayload) }));
+  // v124: Use async RPC for each log
+  var promises = unsyncedLogs.map(function(l) {
+    return _appendPendingLogRpcAsync(l).then(function(ok) {
+      if (ok) {
+        l._synced = true;
+        l._fromSupabase = true;
       }
-    };
-    getXHR.send();
-  } catch(e) {
-    console.warn('[DAL] v121 Async fallback error:', e.message);
-  }
+      return ok;
+    });
+  });
+
+  Promise.all(promises).then(function(results) {
+    var okCount = results.filter(function(r) { return r; }).length;
+    if (okCount > 0) {
+      try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+      console.log('[DAL] v124 Async RPC appended ' + okCount + '/' + unsyncedLogs.length + ' logs');
+    } else {
+      console.warn('[DAL] v124 Async RPC all failed');
+    }
+  }).catch(function(e) {
+    console.warn('[DAL] v124 Async RPC error:', e.message);
+  });
 }
 
 // v121: Verify that student logs were written to Supabase.
