@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "node build.js",
     "build:vite": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/core.test.mjs"
   },
   "keywords": [
     "education",
