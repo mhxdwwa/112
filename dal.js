@@ -1,5 +1,5 @@
 /**
- * dal.js v120 — Fix student coins double-counting + eliminate pending logs race condition
+ * dal.js v122 — Fix student operation logs not recorded on mobile browsers
  * 
  * Architecture: Supabase as single source of truth + local change preservation
  * - Snapshot-based change detection: only applies changes from OTHER users
@@ -1507,20 +1507,17 @@ function _writeUnsyncedLogsToSupabase() {
   // Teacher-side merge moves these into classes.operation_logs_json.
   // Student-side _loadOperationLogs() also reads pending_logs_json so students see their own history.
   if (currentUser.type === 'student') {
-    console.log('[DAL] v114 Writing ' + unsynced.length + ' unsynced logs to students.pending_logs_json (sync XHR)');
-    var syncOk = _syncWriteStudentPendingLogs();
-    // v121: If sync XHR failed (common on mobile), schedule async XHR fallback.
-    // This is the KEY fix for "logs not recorded" — sync XHR is often blocked on
-    // mobile browsers, but async XHR usually succeeds.
-    if (!syncOk) {
-      console.warn('[DAL] v121 Sync XHR failed, scheduling async fallback for logs...');
-      setTimeout(function() { _writeStudentPendingLogsAsync(); }, 100);
-    }
-    // v121: Also schedule async verification after a delay.
-    // Even if sync XHR succeeded, the logs might not have been written if the
-    // request was silently dropped (common on flaky mobile networks).
-    // The async verification re-checks and re-writes if needed.
-    setTimeout(function() { _verifyStudentLogsWritten(); }, 2000);
+    // v122: Use ASYNC XHR as primary path for student log writing.
+    // Previously used sync XHR (_syncWriteStudentPendingLogs), but sync XHR is
+    // frequently blocked on mobile browsers, especially with large payloads.
+    // The coins were saved via _syncStudentDataImmediate() (small payload, proven working),
+    // but logs were lost because _syncWriteStudentPendingLogs() (large payload) was blocked.
+    //
+    // Now: async XHR is the primary path. It's not blocked by mobile browsers.
+    // v122 also added pending_logs_json to _syncStudentDataImmediate() so logs
+    // ride along the proven working sync XHR path too.
+    console.log('[DAL] v122 Writing ' + unsynced.length + ' unsynced logs via async XHR');
+    _writeStudentPendingLogsAsync();
     return Promise.resolve();
   }
 
@@ -3384,6 +3381,36 @@ function _syncStudentDataImmediate() {
       equipped_items: JSON.stringify(myStudent.equippedItems || {})
     };
 
+    // v122: ALSO include pending_logs_json in this sync XHR.
+    // This is the PROVEN WORKING path on mobile (coins save correctly through this).
+    // By including logs here, we ensure logs ride along the reliable path.
+    // Previously, logs were ONLY sent via _syncWriteStudentPendingLogs() which uses
+    // a much larger payload (all student data + logs) and is often blocked on mobile.
+    var unsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
+      ? window.operationLogs.filter(function(l) { return !l._synced; })
+      : [];
+    if (unsyncedLogs.length > 0) {
+      var pendingPayload = unsyncedLogs.map(function(l) {
+        return {
+          id: l.id,
+          timestamp: l.timestamp || new Date().toISOString(),
+          classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+          studentId: l.studentId,
+          studentName: l.studentName || '',
+          actionType: l.actionType || '',
+          details: l.details || '',
+          coinDelta: parseInt(l.coinDelta) || 0,
+          expDelta: parseInt(l.expDelta) || 0,
+          petId: l.petId || null,
+          extra: l.extra || null,
+          snapshot: l.snapshot || null,
+          fullSnapshot: l.fullSnapshot || null,
+          reverted: !!l.reverted
+        };
+      });
+      studentPayload.pending_logs_json = JSON.stringify(pendingPayload);
+    }
+
     var xhr = new XMLHttpRequest();
     xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, false);
     xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
@@ -3395,10 +3422,16 @@ function _syncStudentDataImmediate() {
     if (xhr.status >= 200 && xhr.status < 300) {
       _lastOwnWriteTime = now;
       // v118: Update _myBaseCoins immediately after sync XHR succeeds.
-      // Without this, the async _syncStudentToSupabase() fetches the value we just wrote,
-      // then applies localCoinDelta = (local - _myBaseCoins) on top of it, double-counting
-      // the change. This caused coins to flicker on teacher's screen (e.g. 5200 → 5150 → 5200).
       _myBaseCoins = myStudent.coins;
+      // v122: Mark logs as synced if they were included
+      if (unsyncedLogs.length > 0) {
+        unsyncedLogs.forEach(function(l) {
+          l._synced = true;
+          l._fromSupabase = true;
+        });
+        try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+        console.log('[DAL] v122 Sync XHR wrote ' + unsyncedLogs.length + ' logs (via _syncStudentDataImmediate)');
+      }
     }
 
     // v118: Sync pets via async XHR (non-blocking) — student coins already synced above.
@@ -3673,31 +3706,76 @@ function _verifyStudentLogsWritten() {
 
 /* ===== Lifecycle ===== */
 function _setupPageLifecycle() {
-  // v54: Robust beforeunload — actually save data synchronously instead of just pinging
-  // v112: Fix student synchronous save — students don't have Supabase Auth token,
-  // so we use SUPABASE_ANON_KEY (public anon key) directly for student writes.
-  // Previously, `if (!token) return;` caused ALL student saves to be silently skipped.
+  // v122: Use navigator.sendBeacon() for beforeunload — the modern, reliable way.
+  // sendBeacon() is specifically designed for sending data when page is unloading.
+  // It's NOT blocked by mobile browsers (unlike sync XHR which is frequently blocked).
+  // The browser guarantees the request will complete even after the page is destroyed.
   window.addEventListener('beforeunload', function() {
-    // v109: Also check for unsynced operation logs — saveLogs() doesn't set _pendingLocalSave
     var hasUnsyncedLogs = false;
     if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs)) {
       hasUnsyncedLogs = window.operationLogs.some(function(l) { return !l._synced; });
     }
-    // If there are unsaved local changes OR unsynced operation logs, try to save them synchronously
     if ((_pendingLocalSave || hasUnsyncedLogs) && currentUser) {
       try {
         var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
 
         if (currentUser.type === 'student') {
-          // v115: _syncWriteStudentPendingLogs() now handles ALL student data
-          // (coins, pets, pending logs) in one call. No need for separate XHR calls.
-          _syncWriteStudentPendingLogs();
+          // v122: Use sendBeacon for students — guaranteed delivery even when page is killed.
+          var studentId = parseInt(localStorage.getItem('studentId'));
+          var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+          if (studentId && anonKey) {
+            var myStudent = null;
+            if (classesData && classesData[0]) {
+              for (var i = 0; i < classesData[0].students.length; i++) {
+                if (classesData[0].students[i].id === studentId) {
+                  myStudent = classesData[0].students[i]; break;
+                }
+              }
+            }
+            if (myStudent) {
+              var payload = {
+                coins: myStudent.coins || 0,
+                last_checkin_date: myStudent.lastCheckinDate || null,
+                last_jianghu_date: myStudent.lastJianghuDate || null,
+                last_pk_date: myStudent.lastPkDate || null,
+                active_pet_id: myStudent.activePetId || null,
+                pk_count_today: myStudent.pkCountToday || 0,
+                shop_items: JSON.stringify(myStudent.shopItems || []),
+                equipped_items: JSON.stringify(myStudent.equippedItems || {})
+              };
+              // Include unsynced logs
+              if (hasUnsyncedLogs) {
+                var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
+                if (unsyncedLogs.length > 0) {
+                  payload.pending_logs_json = JSON.stringify(unsyncedLogs.map(function(l) {
+                    return {
+                      id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+                      classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+                      studentId: l.studentId, studentName: l.studentName || '',
+                      actionType: l.actionType || '', details: l.details || '',
+                      coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+                      petId: l.petId || null, extra: l.extra || null,
+                      snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+                      reverted: !!l.reverted
+                    };
+                  }));
+                }
+              }
+              var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+              var url = baseUrl + '/students?id=eq.' + studentId;
+              if (navigator.sendBeacon(url, blob)) {
+                console.log('[DAL] v122 sendBeacon: student data + logs sent via beforeunload');
+              } else {
+                console.warn('[DAL] v122 sendBeacon failed, falling back to sync XHR');
+                _syncWriteStudentPendingLogs();
+              }
+            }
+          }
         } else {
-          // Teacher: needs Supabase Auth token (students already handled above with anon key)
+          // Teacher: needs Supabase Auth token
           var teacherToken = '';
           try { teacherToken = JSON.parse(localStorage.getItem('sb-xbygooadskfqllnhwmet-auth-token') || '{}').access_token || ''; } catch(e) {}
           if (!teacherToken) return;
-          // Teacher: just send sync_ping (teacher data is more complex, rely on async sync)
           var xhr2 = new XMLHttpRequest();
           xhr2.open('POST', baseUrl + '/rpc/sync_ping', false);
           xhr2.setRequestHeader('Authorization', 'Bearer ' + teacherToken);
@@ -3706,28 +3784,77 @@ function _setupPageLifecycle() {
           console.log('[DAL] v54 beforeunload: teacher sync_ping sent');
         }
       } catch(e) {
-        console.warn('[DAL] v54 beforeunload sync failed:', e.message);
+        console.warn('[DAL] v122 beforeunload save failed:', e.message);
       }
     }
   });
 
-  // Sync on visibility change — v54: also handle page hidden with proper wait
-  // v102: Enhanced — use immediate refresh (no debounce) as safety net for missed Realtime updates
-  // v112: For students, use SYNCHRONOUS XHR with anon key instead of async Supabase client.
-  // Mobile browsers kill the page before async operations complete.
+  // Sync on visibility change — v122: Use sendBeacon for students when page hidden.
+  // sendBeacon() is more reliable than sync XHR on mobile browsers.
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
-      // v115: For students, sync ALL data (coins, pets, logs) via sync XHR when page hidden.
-      // Previously (v114) only synced pending_logs_json — student/pet data was only synced async,
-      // which could be killed on mobile. Teacher's Realtime never fired for student/pet updates,
-      // so pet cards and coins never auto-updated on teacher's screen.
+      // v122: For students, use sendBeacon (or async XHR) when page hidden.
       if (currentUser && currentUser.type === 'student') {
         var _hasUnsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
           ? window.operationLogs.some(function(l) { return !l._synced; })
           : false;
         if (_pendingLocalSave || _hasUnsyncedLogs) {
-          console.log('[DAL] v115 Page hidden — syncing ALL student data (coins + pets + logs) via sync XHR...');
-          _syncWriteStudentPendingLogs();
+          console.log('[DAL] v122 Page hidden — syncing student data via sendBeacon...');
+          // Try sendBeacon first (most reliable), fall back to sync XHR
+          var studentId = parseInt(localStorage.getItem('studentId'));
+          var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+          var beaconSent = false;
+          if (studentId && anonKey && navigator.sendBeacon) {
+            var myStudent = null;
+            if (classesData && classesData[0]) {
+              for (var i = 0; i < classesData[0].students.length; i++) {
+                if (classesData[0].students[i].id === studentId) {
+                  myStudent = classesData[0].students[i]; break;
+                }
+              }
+            }
+            if (myStudent) {
+              var payload = {
+                coins: myStudent.coins || 0,
+                last_checkin_date: myStudent.lastCheckinDate || null,
+                last_jianghu_date: myStudent.lastJianghuDate || null,
+                last_pk_date: myStudent.lastPkDate || null,
+                active_pet_id: myStudent.activePetId || null,
+                pk_count_today: myStudent.pkCountToday || 0,
+                shop_items: JSON.stringify(myStudent.shopItems || []),
+                equipped_items: JSON.stringify(myStudent.equippedItems || {})
+              };
+              if (_hasUnsyncedLogs) {
+                var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
+                if (unsyncedLogs.length > 0) {
+                  payload.pending_logs_json = JSON.stringify(unsyncedLogs.map(function(l) {
+                    return {
+                      id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+                      classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+                      studentId: l.studentId, studentName: l.studentName || '',
+                      actionType: l.actionType || '', details: l.details || '',
+                      coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+                      petId: l.petId || null, extra: l.extra || null,
+                      snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+                      reverted: !!l.reverted
+                    };
+                  }));
+                }
+              }
+              var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+              var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+              var url = baseUrl + '/students?id=eq.' + studentId;
+              beaconSent = navigator.sendBeacon(url, blob);
+              if (beaconSent) {
+                console.log('[DAL] v122 sendBeacon: student data + logs sent via visibilitychange');
+              }
+            }
+          }
+          // Fallback to sync XHR if sendBeacon not available or failed
+          if (!beaconSent) {
+            console.log('[DAL] v122 sendBeacon unavailable, falling back to sync XHR');
+            _syncWriteStudentPendingLogs();
+          }
         }
       } else {
         // Teacher: async is OK (teacher pages rarely killed on mobile)
