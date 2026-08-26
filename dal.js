@@ -3419,7 +3419,7 @@ function _syncStudentDataImmediate() {
       ? window.operationLogs.filter(function(l) { return !l._synced; })
       : [];
     if (unsyncedLogs.length > 0) {
-      var pendingPayload = unsyncedLogs.map(function(l) {
+      var newLogsPayload = unsyncedLogs.map(function(l) {
         return {
           id: l.id,
           timestamp: l.timestamp || new Date().toISOString(),
@@ -3437,7 +3437,32 @@ function _syncStudentDataImmediate() {
           reverted: !!l.reverted
         };
       });
-      studentPayload.pending_logs_json = JSON.stringify(pendingPayload);
+      // v123: FIX — Read existing pending_logs_json first, then APPEND new logs.
+      // Previously this was a REPLACE operation that overwrote previous logs.
+      try {
+        var getXHR = new XMLHttpRequest();
+        getXHR.open('GET', baseUrl + '/students?id=eq.' + studentId + '&select=pending_logs_json', false);
+        getXHR.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+        getXHR.setRequestHeader('apikey', anonKey);
+        getXHR.send();
+        if (getXHR.status >= 200 && getXHR.status < 300) {
+          var resp = JSON.parse(getXHR.responseText);
+          if (resp && resp.length > 0 && resp[0].pending_logs_json) {
+            var existing = JSON.parse(resp[0].pending_logs_json);
+            if (Array.isArray(existing) && existing.length > 0) {
+              // Merge: existing + new, deduplicate by id
+              var idSet = {};
+              var combined = [];
+              existing.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
+              newLogsPayload.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
+              newLogsPayload = combined;
+            }
+          }
+        }
+      } catch(e) {
+        console.warn('[DAL] v123 Failed to read existing pending_logs_json in _syncStudentDataImmediate:', e.message);
+      }
+      studentPayload.pending_logs_json = JSON.stringify(newLogsPayload);
     }
 
     var xhr = new XMLHttpRequest();
@@ -3558,7 +3583,7 @@ function _syncWriteStudentPendingLogs() {
 
     // Add pending logs if any
     if (unsyncedLogs.length > 0) {
-      var pendingPayload = unsyncedLogs.map(function(l) {
+      var newLogsPayload = unsyncedLogs.map(function(l) {
         return {
           id: l.id,
           timestamp: l.timestamp || new Date().toISOString(),
@@ -3576,7 +3601,32 @@ function _syncWriteStudentPendingLogs() {
           reverted: !!l.reverted
         };
       });
-      studentPayload.pending_logs_json = JSON.stringify(pendingPayload);
+      // v123: FIX — Read existing pending_logs_json first, then APPEND new logs.
+      // Previously this was a REPLACE operation that overwrote previous logs.
+      try {
+        var getXHR = new XMLHttpRequest();
+        getXHR.open('GET', baseUrl + '/students?id=eq.' + studentId + '&select=pending_logs_json', false);
+        getXHR.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+        getXHR.setRequestHeader('apikey', anonKey);
+        getXHR.send();
+        if (getXHR.status >= 200 && getXHR.status < 300) {
+          var resp = JSON.parse(getXHR.responseText);
+          if (resp && resp.length > 0 && resp[0].pending_logs_json) {
+            var existing = JSON.parse(resp[0].pending_logs_json);
+            if (Array.isArray(existing) && existing.length > 0) {
+              // Merge: existing + new, deduplicate by id
+              var idSet = {};
+              var combined = [];
+              existing.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
+              newLogsPayload.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
+              newLogsPayload = combined;
+            }
+          }
+        }
+      } catch(e) {
+        console.warn('[DAL] v123 Failed to read existing pending_logs_json in _syncWriteStudentPendingLogs:', e.message);
+      }
+      studentPayload.pending_logs_json = JSON.stringify(newLogsPayload);
     }
 
     // Synchronous PATCH to students table — writes data + logs in ONE request
@@ -3672,7 +3722,7 @@ function _writeStudentPendingLogsAsync() {
 
   try {
     var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
-    var pendingPayload = unsyncedLogs.map(function(l) {
+    var newLogsPayload = unsyncedLogs.map(function(l) {
       return {
         id: l.id,
         timestamp: l.timestamp || new Date().toISOString(),
@@ -3691,27 +3741,59 @@ function _writeStudentPendingLogsAsync() {
       };
     });
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, true); // async
-    xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
-    xhr.setRequestHeader('apikey', anonKey);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.setRequestHeader('Prefer', 'return=minimal');
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState === 4) {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          console.log('[DAL] v121 Async fallback: wrote ' + unsyncedLogs.length + ' pending logs');
-          unsyncedLogs.forEach(function(l) {
-            l._synced = true;
-            l._fromSupabase = true;
-          });
-          try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-        } else {
-          console.warn('[DAL] v121 Async fallback failed, status:', xhr.status);
+    // v123: FIX — Read existing pending_logs_json first, then APPEND new logs.
+    // Use async GET then async PATCH to avoid overwriting previous logs.
+    var getXHR = new XMLHttpRequest();
+    getXHR.open('GET', baseUrl + '/students?id=eq.' + studentId + '&select=pending_logs_json', true);
+    getXHR.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+    getXHR.setRequestHeader('apikey', anonKey);
+    getXHR.onreadystatechange = function() {
+      if (getXHR.readyState === 4) {
+        var finalPayload = newLogsPayload;
+        if (getXHR.status >= 200 && getXHR.status < 300) {
+          try {
+            var resp = JSON.parse(getXHR.responseText);
+            if (resp && resp.length > 0 && resp[0].pending_logs_json) {
+              var existing = JSON.parse(resp[0].pending_logs_json);
+              if (Array.isArray(existing) && existing.length > 0) {
+                // Merge: existing + new, deduplicate by id
+                var idSet = {};
+                var combined = [];
+                existing.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
+                newLogsPayload.forEach(function(l) { if (!idSet[l.id]) { idSet[l.id] = true; combined.push(l); } });
+                finalPayload = combined;
+              }
+            }
+          } catch(e) {
+            console.warn('[DAL] v123 Failed to parse existing pending_logs_json in async:', e.message);
+          }
         }
+
+        // Now PATCH with the merged payload
+        var xhr = new XMLHttpRequest();
+        xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+        xhr.setRequestHeader('apikey', anonKey);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('Prefer', 'return=minimal');
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              console.log('[DAL] v121 Async fallback: wrote ' + finalPayload.length + ' pending logs (merged)');
+              unsyncedLogs.forEach(function(l) {
+                l._synced = true;
+                l._fromSupabase = true;
+              });
+              try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+            } else {
+              console.warn('[DAL] v121 Async fallback failed, status:', xhr.status);
+            }
+          }
+        };
+        xhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(finalPayload) }));
       }
     };
-    xhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(pendingPayload) }));
+    getXHR.send();
   } catch(e) {
     console.warn('[DAL] v121 Async fallback error:', e.message);
   }
@@ -3772,23 +3854,22 @@ function _setupPageLifecycle() {
                 shop_items: JSON.stringify(myStudent.shopItems || []),
                 equipped_items: JSON.stringify(myStudent.equippedItems || {})
               };
-              // Include unsynced logs
-              if (hasUnsyncedLogs) {
-                var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
-                if (unsyncedLogs.length > 0) {
-                  payload.pending_logs_json = JSON.stringify(unsyncedLogs.map(function(l) {
-                    return {
-                      id: l.id, timestamp: l.timestamp || new Date().toISOString(),
-                      classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-                      studentId: l.studentId, studentName: l.studentName || '',
-                      actionType: l.actionType || '', details: l.details || '',
-                      coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
-                      petId: l.petId || null, extra: l.extra || null,
-                      snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
-                      reverted: !!l.reverted
-                    };
-                  }));
-                }
+              // v123: FIX — sendBeacon can't GET first (page unloading), so send ALL logs (last 200)
+              // to avoid overwriting previous logs. Teacher's merge function deduplicates by id.
+              if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs) && window.operationLogs.length > 0) {
+                var logsToSend = window.operationLogs.slice(-200); // Last 200 logs to prevent payload too large
+                payload.pending_logs_json = JSON.stringify(logsToSend.map(function(l) {
+                  return {
+                    id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+                    classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+                    studentId: l.studentId, studentName: l.studentName || '',
+                    actionType: l.actionType || '', details: l.details || '',
+                    coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+                    petId: l.petId || null, extra: l.extra || null,
+                    snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+                    reverted: !!l.reverted
+                  };
+                }));
               }
               var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
               var url = baseUrl + '/students?id=eq.' + studentId;
@@ -3853,22 +3934,22 @@ function _setupPageLifecycle() {
                 shop_items: JSON.stringify(myStudent.shopItems || []),
                 equipped_items: JSON.stringify(myStudent.equippedItems || {})
               };
-              if (_hasUnsyncedLogs) {
-                var unsyncedLogs = window.operationLogs.filter(function(l) { return !l._synced; });
-                if (unsyncedLogs.length > 0) {
-                  payload.pending_logs_json = JSON.stringify(unsyncedLogs.map(function(l) {
-                    return {
-                      id: l.id, timestamp: l.timestamp || new Date().toISOString(),
-                      classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
-                      studentId: l.studentId, studentName: l.studentName || '',
-                      actionType: l.actionType || '', details: l.details || '',
-                      coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
-                      petId: l.petId || null, extra: l.extra || null,
-                      snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
-                      reverted: !!l.reverted
-                    };
-                  }));
-                }
+              // v123: FIX — sendBeacon can't GET first (page hidden/unloading), so send ALL logs (last 200)
+              // to avoid overwriting previous logs. Teacher's merge function deduplicates by id.
+              if (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs) && window.operationLogs.length > 0) {
+                var logsToSend = window.operationLogs.slice(-200); // Last 200 logs to prevent payload too large
+                payload.pending_logs_json = JSON.stringify(logsToSend.map(function(l) {
+                  return {
+                    id: l.id, timestamp: l.timestamp || new Date().toISOString(),
+                    classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+                    studentId: l.studentId, studentName: l.studentName || '',
+                    actionType: l.actionType || '', details: l.details || '',
+                    coinDelta: parseInt(l.coinDelta) || 0, expDelta: parseInt(l.expDelta) || 0,
+                    petId: l.petId || null, extra: l.extra || null,
+                    snapshot: l.snapshot || null, fullSnapshot: l.fullSnapshot || null,
+                    reverted: !!l.reverted
+                  };
+                }));
               }
               var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
               var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
