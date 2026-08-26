@@ -1508,7 +1508,19 @@ function _writeUnsyncedLogsToSupabase() {
   // Student-side _loadOperationLogs() also reads pending_logs_json so students see their own history.
   if (currentUser.type === 'student') {
     console.log('[DAL] v114 Writing ' + unsynced.length + ' unsynced logs to students.pending_logs_json (sync XHR)');
-    _syncWriteStudentPendingLogs();
+    var syncOk = _syncWriteStudentPendingLogs();
+    // v121: If sync XHR failed (common on mobile), schedule async XHR fallback.
+    // This is the KEY fix for "logs not recorded" — sync XHR is often blocked on
+    // mobile browsers, but async XHR usually succeeds.
+    if (!syncOk) {
+      console.warn('[DAL] v121 Sync XHR failed, scheduling async fallback for logs...');
+      setTimeout(function() { _writeStudentPendingLogsAsync(); }, 100);
+    }
+    // v121: Also schedule async verification after a delay.
+    // Even if sync XHR succeeded, the logs might not have been written if the
+    // request was silently dropped (common on flaky mobile networks).
+    // The async verification re-checks and re-writes if needed.
+    setTimeout(function() { _verifyStudentLogsWritten(); }, 2000);
     return Promise.resolve();
   }
 
@@ -3573,6 +3585,90 @@ function _syncWriteStudentPendingLogs() {
     console.warn('[DAL] v115 Sync write failed:', e.message);
     return false;
   }
+}
+
+// v121: Async fallback for writing student pending logs.
+// Called when sync XHR fails (common on mobile browsers that block sync XHR).
+// Uses async XHR which is less reliable during page transitions but works
+// during normal page operation.
+function _writeStudentPendingLogsAsync() {
+  if (!currentUser || currentUser.type !== 'student') return;
+
+  var studentId = parseInt(localStorage.getItem('studentId'));
+  if (!studentId) return;
+
+  var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+  if (!anonKey) return;
+
+  var unsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
+    ? window.operationLogs.filter(function(l) { return !l._synced; })
+    : [];
+
+  if (unsyncedLogs.length === 0) return;
+
+  console.log('[DAL] v121 Async fallback: writing ' + unsyncedLogs.length + ' pending logs...');
+
+  try {
+    var baseUrl = 'https://xbygooadskfqllnhwmet.supabase.co/rest/v1';
+    var pendingPayload = unsyncedLogs.map(function(l) {
+      return {
+        id: l.id,
+        timestamp: l.timestamp || new Date().toISOString(),
+        classId: l.classId || parseInt(localStorage.getItem('classId')) || 0,
+        studentId: l.studentId,
+        studentName: l.studentName || '',
+        actionType: l.actionType || '',
+        details: l.details || '',
+        coinDelta: parseInt(l.coinDelta) || 0,
+        expDelta: parseInt(l.expDelta) || 0,
+        petId: l.petId || null,
+        extra: l.extra || null,
+        snapshot: l.snapshot || null,
+        fullSnapshot: l.fullSnapshot || null,
+        reverted: !!l.reverted
+      };
+    });
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('PATCH', baseUrl + '/students?id=eq.' + studentId, true); // async
+    xhr.setRequestHeader('Authorization', 'Bearer ' + anonKey);
+    xhr.setRequestHeader('apikey', anonKey);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Prefer', 'return=minimal');
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          console.log('[DAL] v121 Async fallback: wrote ' + unsyncedLogs.length + ' pending logs');
+          unsyncedLogs.forEach(function(l) {
+            l._synced = true;
+            l._fromSupabase = true;
+          });
+          try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+        } else {
+          console.warn('[DAL] v121 Async fallback failed, status:', xhr.status);
+        }
+      }
+    };
+    xhr.send(JSON.stringify({ pending_logs_json: JSON.stringify(pendingPayload) }));
+  } catch(e) {
+    console.warn('[DAL] v121 Async fallback error:', e.message);
+  }
+}
+
+// v121: Verify that student logs were written to Supabase.
+// Called 2 seconds after each action. If there are still unsynced logs,
+// it means both sync and async XHR failed, so we retry.
+function _verifyStudentLogsWritten() {
+  if (!currentUser || currentUser.type !== 'student') return;
+
+  var unsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
+    ? window.operationLogs.filter(function(l) { return !l._synced; })
+    : [];
+
+  if (unsyncedLogs.length === 0) return;
+
+  console.log('[DAL] v121 Verification: found ' + unsyncedLogs.length + ' unsynced logs, retrying...');
+  _writeStudentPendingLogsAsync();
 }
 
 /* ===== Lifecycle ===== */
