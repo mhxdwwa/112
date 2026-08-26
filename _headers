@@ -4,6 +4,7 @@
 # HTML 文件 - 只缓存10分钟，确保内容及时更新
 /*.html
   Cache-Control: public, max-age=600, must-revalidate
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com data:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
 
 # JavaScript 文件 - 只缓存10分钟
 /*.js

@@ -88,7 +88,16 @@ function _saveToCache() {
       customActions: (typeof customActions !== 'undefined') ? customActions : [],
       operationLogs: (typeof window.operationLogs !== 'undefined') ? window.operationLogs.slice(0, 500) : []
     };
-    localStorage.setItem(_CACHE_KEY, JSON.stringify(payload));
+    // v-mid1: 优先写入 IndexedDB（无 5MB 限制）
+    if (typeof StorageDB !== 'undefined' && StorageDB.isReady()) {
+      StorageDB.saveCache(payload);
+    }
+    // 同时保留 localStorage 作为降级备份
+    try {
+      localStorage.setItem(_CACHE_KEY, JSON.stringify(payload));
+    } catch(e2) {
+      // localStorage 满溢时忽略，IndexedDB 已保存
+    }
     console.log('[DAL] Cache saved (' + (JSON.stringify(payload).length / 1024).toFixed(1) + ' KB)');
   } catch(e) {
     console.warn('[DAL] Cache save failed:', e.message);
