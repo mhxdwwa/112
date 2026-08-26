@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>金币逻辑测试</title>
+<style>
+body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 20px auto; padding: 0 16px; background: #fafafa; }
+h1 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+h2 { color: #555; margin-top: 24px; }
+.pass { color: #22863a; background: #e6ffed; padding: 6px 12px; border-radius: 6px; margin: 4px 0; }
+.fail { color: #cb2431; background: #ffeef0; padding: 6px 12px; border-radius: 6px; margin: 4px 0; font-weight: 600; }
+.summary { font-size: 18px; font-weight: 700; padding: 16px; border-radius: 10px; margin-top: 20px; }
+.summary.all-pass { background: #e6ffed; color: #22863a; }
+.summary.has-fail { background: #ffeef0; color: #cb2431; }
+</style>
+</head>
+<body>
+<h1>宠物世界 - 金币逻辑测试</h1>
+<div id="results"></div>
+<div id="summary"></div>
+
+<script>
+// ===== 测试基础设施 =====
+var totalTests = 0;
+var passedTests = 0;
+var failedTests = 0;
+var resultsEl = document.getElementById('results');
+
+function assert(condition, msg) {
+  totalTests++;
+  if (condition) {
+    passedTests++;
+    resultsEl.innerHTML += '<div class="pass">PASS: ' + msg + '</div>';
+  } else {
+    failedTests++;
+    resultsEl.innerHTML += '<div class="fail">FAIL: ' + msg + '</div>';
+  }
+}
+
+function assertEqual(actual, expected, msg) {
+  assert(actual === expected, msg + ' (期望=' + expected + ', 实际=' + actual + ')');
+}
+
+function section(name) {
+  resultsEl.innerHTML += '<h2>' + name + '</h2>';
+}
+
+// ===== Mock 环境 =====
+// 模拟 recordAction 需要的全局变量
+var classesData = [];
+var currentClassId = 'test-class';
+var _localIdCounter = 0;
+function _genLocalId() { return 'log-' + (++_localIdCounter); }
+function getActivePet(student) {
+  if (!student.pets || student.pets.length === 0) return null;
+  return student.pets.find(function(p) { return p.isActive; }) || student.pets[0];
+}
+
+// 模拟 recordAction - 捕获调用参数用于验证
+var lastRecordedAction = null;
+var recordedActions = [];
+function recordAction(studentId, studentName, actionType, details, coinDelta, expDelta, petId, extra) {
+  lastRecordedAction = { studentId: studentId, studentName: studentName, actionType: actionType,
+    details: details, coinDelta: coinDelta, expDelta: expDelta, petId: petId, extra: extra };
+  recordedActions.push(lastRecordedAction);
+  // 模拟 snapshot 计算
+  var cur = classesData.find(function(c) { return c.id === currentClassId; });
+  if (cur) {
+    var stu = cur.students.find(function(s) { return s.id.toString() === studentId.toString(); });
+    if (stu) {
+      lastRecordedAction._coinsAfter = stu.coins;
+      lastRecordedAction._coinsBefore = stu.coins - (coinDelta || 0);
+    }
+  }
+}
+
+// 被测函数：changeStudentCoins
+function changeStudentCoins(student, delta, actionType, details, expDelta, petId, extra) {
+  var before = student.coins || 0;
+  student.coins = before + delta;
+  if (student.coins < 0) student.coins = 0;
+  recordAction(student.id, student.name, actionType, details, delta, expDelta || 0, petId || null, extra || null);
+  return student.coins;
+}
+
+// ===== 测试用例 =====
+function createTestStudent(coins) {
+  var student = { id: 's1', name: '测试学生', coins: coins, pets: [{ id: 'p1', name: '小猫', nickname: '咪咪', level: 3, growth: 50, isActive: true }] };
+  classesData = [{ id: 'test-class', students: [student] }];
+  recordedActions = [];
+  lastRecordedAction = null;
+  return student;
+}
+
+// ----- 1. changeStudentCoins 基础测试 -----
+section('1. changeStudentCoins 基础功能');
+
+(function() {
+  var s = createTestStudent(100);
+  changeStudentCoins(s, -5, '喂食', '咪咪 +2成长值', 2, 'p1');
+  assertEqual(s.coins, 95, '喂食扣5金币：100-5=95');
+  assertEqual(lastRecordedAction.coinDelta, -5, 'recordAction coinDelta = -5');
+  assertEqual(lastRecordedAction.actionType, '喂食', 'recordAction actionType = 喂食');
+  assertEqual(lastRecordedAction._coinsBefore, 100, 'snapshot coinsBefore = 100');
+  assertEqual(lastRecordedAction._coinsAfter, 95, 'snapshot coinsAfter = 95');
+})();
+
+(function() {
+  var s = createTestStudent(100);
+  changeStudentCoins(s, 10, '打卡', '+10金币', 0, null);
+  assertEqual(s.coins, 110, '打卡加10金币：100+10=110');
+  assertEqual(lastRecordedAction.coinDelta, 10, 'recordAction coinDelta = +10');
+})();
+
+// ----- 2. 金币下限保护 -----
+section('2. 金币下限保护（不低于0）');
+
+(function() {
+  var s = createTestStudent(30);
+  changeStudentCoins(s, -50, '逛街', '咪咪 +35成长值', 35, 'p1');
+  assertEqual(s.coins, 0, '金币不足时扣到0：30-50 → 0（不是-20）');
+  assertEqual(lastRecordedAction.coinDelta, -50, 'coinDelta 仍记录原始值 -50');
+})();
+
+(function() {
+  var s = createTestStudent(0);
+  changeStudentCoins(s, -10, '喂食', '测试', 0, 'p1');
+  assertEqual(s.coins, 0, '0金币再扣仍为0');
+})();
+
+// ----- 3. 江湖行金币计算 -----
+section('3. 江湖行金币计算');
+
+(function() {
+  // 胜利：投入50，获得3倍=150，净增=+100（2倍）
+  var s = createTestStudent(200);
+  var investCoins = 50;
+  var coinResult = investCoins * 3;
+  var coinDelta = coinResult - investCoins; // = 100
+  changeStudentCoins(s, coinDelta, '江湖胜利', '击败Boss', 0, 'p1', { jhType: 'win', investCoins: investCoins });
+  assertEqual(s.coins, 300, '江湖胜利：200 + 100(净赚2倍) = 300');
+  assertEqual(lastRecordedAction.coinDelta, 100, 'coinDelta = 100（不是150）');
+  assertEqual(lastRecordedAction.extra.jhType, 'win', 'extra.jhType = win');
+})();
+
+(function() {
+  // 失败：投入50，失去50
+  var s = createTestStudent(200);
+  var investCoins = 50;
+  var coinDelta = -investCoins;
+  changeStudentCoins(s, coinDelta, '江湖失败', '不敌Boss', 0, 'p1', { jhType: 'lose', investCoins: investCoins });
+  assertEqual(s.coins, 150, '江湖失败：200 - 50 = 150');
+  assertEqual(lastRecordedAction.coinDelta, -50, 'coinDelta = -50');
+  assertEqual(lastRecordedAction.extra.jhType, 'lose', 'extra.jhType = lose');
+})();
+
+// ----- 4. 各操作费用验证 -----
+section('4. 各操作费用一致性');
+
+(function() {
+  var costs = [
+    { name: '喂食', cost: -5 },
+    { name: '玩耍', cost: -20 },
+    { name: '散步', cost: -30 },
+    { name: '逛街', cost: -50 },
+    { name: '旅游', cost: -100 },
+    { name: '复活', cost: -50 },
+    { name: '打卡', cost: +10 }
+  ];
+  costs.forEach(function(item) {
+    var s = createTestStudent(500);
+    changeStudentCoins(s, item.cost, item.name, '测试', 0, 'p1');
+    assertEqual(s.coins, 500 + item.cost, item.name + '：500' + (item.cost > 0 ? '+' : '') + item.cost + ' = ' + (500 + item.cost));
+    assertEqual(lastRecordedAction.coinDelta, item.cost, item.name + ' coinDelta = ' + item.cost);
+  });
+})();
+
+// ----- 5. PK对战金币计算 -----
+section('5. PK对战金币计算');
+
+(function() {
+  // 宠物PK：胜者+15，败者-5
+  var winner = createTestStudent(100);
+  var loser = createTestStudent(100);
+  loser.id = 's2'; loser.name = '对手';
+  classesData[0].students.push(loser);
+
+  changeStudentCoins(winner, 15, 'PK胜利', '击败对手', 3, 'p1', { pkType: 'win' });
+  changeStudentCoins(loser, -5, 'PK失败', '败给对手', -1, 'p1', { pkType: 'lose' });
+  assertEqual(winner.coins, 115, 'PK胜者：100+15=115');
+  assertEqual(loser.coins, 95, 'PK败者：100-5=95');
+})();
+
+(function() {
+  // 课堂PK平局：双方各+5
+  var s1 = createTestStudent(100);
+  var s2 = { id: 's2', name: '学生2', coins: 100, pets: [{ id: 'p2', name: '小狗', isActive: true }] };
+  classesData[0].students = [s1, s2];
+
+  changeStudentCoins(s1, 5, '课堂PK平局', '平局', 3, 'p1');
+  changeStudentCoins(s2, 5, '课堂PK平局', '平局', 3, 'p2');
+  assertEqual(s1.coins, 105, '课堂PK平局：双方各+5 → s1=105');
+  assertEqual(s2.coins, 105, '课堂PK平局：双方各+5 → s2=105');
+})();
+
+// ----- 6. snapshot coinsBefore 一致性 -----
+section('6. snapshot coinsBefore 一致性');
+
+(function() {
+  var s = createTestStudent(200);
+  changeStudentCoins(s, -50, '旅游', '测试', 85, 'p1');
+  // recordAction 内部计算 coinsBefore = coins - coinDelta = 150 - (-50) = 200
+  assertEqual(lastRecordedAction._coinsBefore, 200, 'coinsBefore 应等于修改前的金币(200)');
+  assertEqual(lastRecordedAction._coinsAfter, 150, 'coinsAfter 应等于修改后的金币(150)');
+})();
+
+(function() {
+  // 江湖胜利的特殊情况：coinDelta = +100（净收益），不是 +150（毛收益）
+  var s = createTestStudent(200);
+  var investCoins = 50;
+  var coinDelta = investCoins * 2; // 净赚2倍 = 100
+  changeStudentCoins(s, coinDelta, '江湖胜利', '测试', 0, 'p1');
+  assertEqual(lastRecordedAction._coinsBefore, 200, '江湖胜利 coinsBefore = 200');
+  assertEqual(lastRecordedAction._coinsAfter, 300, '江湖胜利 coinsAfter = 300');
+  // 关键验证：coinsBefore + coinDelta = coinsAfter
+  assertEqual(lastRecordedAction._coinsBefore + lastRecordedAction.coinDelta, lastRecordedAction._coinsAfter,
+    'coinsBefore + coinDelta = coinsAfter（一致性检查）');
+})();
+
+// ===== 输出总结 =====
+var summaryEl = document.getElementById('summary');
+if (failedTests === 0) {
+  summaryEl.className = 'summary all-pass';
+  summaryEl.innerHTML = '全部通过！ ' + passedTests + '/' + totalTests + ' 测试 PASS';
+} else {
+  summaryEl.className = 'summary has-fail';
+  summaryEl.innerHTML = '有失败！ ' + passedTests + ' pass / ' + failedTests + ' fail / ' + totalTests + ' total';
+}
+</script>
+</body>
+</html>
