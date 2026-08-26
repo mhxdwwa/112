@@ -9754,16 +9754,19 @@ function jhCreateBurst(parent, side, boss) {
 function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   const scene = overlay.querySelector('#jhScene');
   let coinResult = 0;
+  let coinDelta = 0; // v123: Track actual net coin change for accurate log snapshot
   let growthGain = 0;
   if (won) {
     // 胜利：投入的金币消失，获得三倍奖励（净赚两倍）
     student.coins -= investCoins; // 投入的金币消失
     coinResult = investCoins * 3; // 获得三倍
     student.coins += coinResult;  // 净收益 = +2倍
+    coinDelta = coinResult - investCoins; // v123: Net change = +2x (not 3x)
     growthGain = 0; // 胜利不再获得成长值
   } else {
     // 失败：失去投入的金币，获得投入金币30%的成长值
     coinResult = -investCoins;
+    coinDelta = -investCoins; // v123: Net change = -investCoins
     student.coins -= investCoins;
     if (student.coins < 0) student.coins = 0;
     growthGain = Math.floor(investCoins * 0.3); // 失败获得30%成长值
@@ -9775,9 +9778,11 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   student.lastJianghuDate = new Date().toDateString();
 
   // Record action
+  // v123: Use coinDelta (actual net change) instead of coinResult (gross reward)
+  // so that snapshot.coinsBefore is calculated correctly for "restore to this point"
   recordAction(student.id, student.name, won ? '江湖胜利' : '江湖失败',
     `${student.name}携${pet.nickname || pet.name}闯荡江湖${won ? '击败' : '不敌'}${boss.name}，投入${investCoins}金币`,
-    won ? coinResult : coinResult, growthGain, pet.id,
+    coinDelta, growthGain, pet.id,
     { jhType: won ? 'win' : 'lose', bossName: boss.name, investCoins: investCoins });
 
   saveClassData();
