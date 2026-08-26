@@ -1,0 +1,24 @@
+{
+  "name": "pet-world-112",
+  "version": "2.0.0",
+  "description": "宠物世界 - 教育宠物养成 Web 应用",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node build.js",
+    "build:vite": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "education",
+    "pet",
+    "game"
+  ],
+  "author": "mhxdwwa",
+  "license": "ISC",
+  "devDependencies": {
+    "terser": "^5.51.0",
+    "vite": "^8.2.2"
+  }
+}
