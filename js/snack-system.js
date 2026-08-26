@@ -290,6 +290,7 @@ function submitSnackRequest() {
   
   student.snackRequests.push(request);
   saveClassData();
+  if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
   
   // Record to history
   const log = {
@@ -436,6 +437,7 @@ function approveSnackRequest(requestId) {
   }
   
   saveClassData();
+  if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
   _updateSnackRequestBadge(); // 立即更新徽章
   showSnackRequestsModal(); // Refresh modal
   showNotification('兑换成功', `已同意 ${student.name} 的 ${request.snackEmoji} ${request.snackName} 兑换`, 'success');
@@ -487,6 +489,7 @@ function rejectSnackRequest(requestId) {
   }
   
   saveClassData();
+  if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
   _updateSnackRequestBadge(); // 立即更新徽章
   showSnackRequestsModal(); // Refresh modal
   const refundMsg = (request.snackPrice && request.snackPrice > 0) ? `，已退还 ${request.snackPrice} 仙丹` : '';

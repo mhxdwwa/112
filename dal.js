@@ -154,6 +154,7 @@ var _snapshotClassesData = null;
 
 /* ===== Student Delta Tracking (v7.0) ===== */
 var _myBaseCoins = null; // Student's coins at last known Supabase state
+var _myBaseXiandan = null; // Student's xiandan (仙丹) at last known Supabase state
 var _myBasePets = {};    // Student's pet growth at last known Supabase state
 
 /* ===== v36: Growth cap enforcement ===== */
@@ -733,6 +734,9 @@ function _smartRefreshFromSupabase() {
       }
       if (myStu && _myBaseCoins === null) {
         _myBaseCoins = myStu.coins;
+      }
+      if (myStu && _myBaseXiandan === null) {
+        _myBaseXiandan = myStu.xiandan || 0;
       }
     }
 
@@ -1981,6 +1985,7 @@ function _syncTeacherToSupabase() {
           name: stu.name,
           class_id: cls.id,
           coins: stu.coins || 0,
+          xiandan: stu.xiandan || 0,
           last_checkin_date: stu.lastCheckinDate || null,
           last_jianghu_date: stu.lastJianghuDate || null,
           last_pk_date: stu.lastPkDate || null,
@@ -2093,6 +2098,7 @@ function _syncTeacherToSupabase() {
             name: stu.name,
             class_id: (classesData.find(function(c) { return c.students.indexOf(stu) >= 0; }) || {}).id || null,
             coins: stu.coins || 0,
+            xiandan: stu.xiandan || 0,
             last_checkin_date: stu.lastCheckinDate || null,
             last_jianghu_date: stu.lastJianghuDate || null,
             last_pk_date: stu.lastPkDate || null,
@@ -2405,21 +2411,31 @@ function _syncStudentToSupabase() {
 
   // Step 2: Fetch fresh student data to avoid overwriting teacher changes (e.g., coins)
   return Promise.all(petPromises).then(function() {
-    return db.from('students').select('coins, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today, quiz_state').eq('id', studentId).single();
+    return db.from('students').select('coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, pk_count_today, quiz_state').eq('id', studentId).single();
   }).then(function(freshR) {
     // Compute local delta: how much the student changed locally since last sync
     var localCoinDelta = 0;
     if (_myBaseCoins !== null && typeof myStudent.coins === 'number') {
       localCoinDelta = myStudent.coins - _myBaseCoins;
     }
+    var localXiandanDelta = 0;
+    if (_myBaseXiandan !== null && typeof myStudent.xiandan === 'number') {
+      localXiandanDelta = myStudent.xiandan - _myBaseXiandan;
+    }
 
     var finalCoins = myStudent.coins; // default: use local value
+    var finalXiandan = myStudent.xiandan || 0;
     if (freshR && !freshR.error && freshR.data) {
       // Apply local delta on top of fresh Supabase value
       // This preserves both teacher changes AND student spending
       var freshCoins = freshR.data.coins !== undefined ? freshR.data.coins : 0;
       finalCoins = freshCoins + localCoinDelta;
       if (finalCoins < 0) finalCoins = 0;
+
+      // Xiandan: same delta approach — preserves teacher batch changes AND student snack purchases
+      var freshXiandan = freshR.data.xiandan !== undefined ? freshR.data.xiandan : 0;
+      finalXiandan = freshXiandan + localXiandanDelta;
+      if (finalXiandan < 0) finalXiandan = 0;
 
       // Merge other fresh fields (don't overwrite if local has been updated)
       if (freshR.data.last_checkin_date && !myStudent.lastCheckinDate) {
@@ -2466,7 +2482,7 @@ function _syncStudentToSupabase() {
     // The student record ALWAYS exists (created by teacher), so .update() is safe.
     return db.from('students').update({
       coins: finalCoins,
-      xiandan: myStudent.xiandan || 0,
+      xiandan: finalXiandan,
       shop_items: JSON.stringify(myStudent.shopItems || []),
       equipped_items: JSON.stringify(myStudent.equippedItems || {}),
       last_checkin_date: myStudent.lastCheckinDate || null,
@@ -2489,6 +2505,7 @@ function _syncStudentToSupabase() {
           }
           console.log('[DAL] FALLBACK: coins saved via .update() — ' + finalCoins);
           _myBaseCoins = finalCoins;
+          _myBaseXiandan = finalXiandan;
           _lastOwnWriteTime = Date.now();
           (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
           return true;
@@ -2496,6 +2513,7 @@ function _syncStudentToSupabase() {
       } else {
         _studentUpsertOk = true;
         _myBaseCoins = finalCoins;
+        _myBaseXiandan = finalXiandan;
         _lastOwnWriteTime = Date.now();
         (myStudent.pets || []).forEach(function(p) { _myBasePets[p.id] = p.growth || 0; });
         myStudent.pkCountToday = finalPkCountToday;
@@ -2891,10 +2909,18 @@ function _applyRealtimeUpdate(table, payload) {
   // === v102: Echo detection ===
   
   if (isStudent && myStudentId && studentId == myStudentId) {
-    // 学生端：这条 Realtime 是自己写操作的回声，本地内存已经是最新的
-    // 不需要任何时间窗口检查，直接跳过
-    console.log('[DAL] v102 Skipping own write echo (student ID match):', myStudentId);
-    return;
+    // v127: Time-based echo detection for students.
+    // Previously, ALL updates to the student's own row were skipped (v102).
+    // This blocked teacher writes (e.g., batch奖惩, snack refund) from reaching the student.
+    // Now: only skip if the student recently wrote to Supabase (echo of own write).
+    // If the write was more than 5 seconds ago, it's likely a teacher write — apply it.
+    var _studentEchoWindow = 5000; // 5 seconds
+    var _timeSinceOwnWrite = Date.now() - _lastOwnWriteTime;
+    if (_timeSinceOwnWrite < _studentEchoWindow) {
+      console.log('[DAL] v127 Skipping own write echo (within ' + _studentEchoWindow + 'ms):', myStudentId, 'age:', _timeSinceOwnWrite);
+      return;
+    }
+    console.log('[DAL] v127 Applying teacher write to own row (echo window expired):', myStudentId, 'age:', _timeSinceOwnWrite);
   }
   
   // v117: For pets table, echo detection uses PET id (matching _markRowWritten('pets', pet.id))
@@ -2953,8 +2979,12 @@ function _applyRealtimeUpdate(table, payload) {
       targetStudent.coins = _applyWithDelta(targetStudent.coins, snapCoins, newData.coins);
     }
     
-    // xiandan (仙丹) — 直接更新，教师通过批量奖惩修改
-    if (newData.xiandan !== undefined) targetStudent.xiandan = newData.xiandan;
+    // xiandan (仙丹) — 用 snapshot-based delta 保留本地未同步的变化（学生零食购买等）
+    if (newData.xiandan !== undefined) {
+      var snapXd = _snapshotStudentMap[studentId];
+      var snapXiandan = snapXd ? snapXd.xiandan : undefined;
+      targetStudent.xiandan = _applyWithDelta(targetStudent.xiandan, snapXiandan, newData.xiandan);
+    }
     
     // 其他字段直接更新（这些字段通常只有本地修改，不会并发冲突）
     if (newData.last_checkin_date !== undefined) targetStudent.lastCheckinDate = newData.last_checkin_date;
@@ -3515,6 +3545,7 @@ function _syncStudentDataImmediate() {
       _lastOwnWriteTime = now;
       // v118: Update _myBaseCoins immediately after sync XHR succeeds.
       _myBaseCoins = myStudent.coins;
+      _myBaseXiandan = myStudent.xiandan || 0;
 
       // v124: Append each unsynced log via RPC (atomic, no GET needed)
       var rpcOkCount = 0;
