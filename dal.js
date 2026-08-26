@@ -408,7 +408,7 @@ function _smartRefreshFromSupabase() {
   if (isStudent) {
     queries = Promise.all([
       db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
-      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
+      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
       db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
     ]).then(function(results) {
       // Filter pets to class students client-side (already filtered by class)
@@ -430,7 +430,7 @@ function _smartRefreshFromSupabase() {
       // v54: Filter students by class_id at DB level
       return Promise.all([
         Promise.resolve({ data: classes, error: null }),
-        db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').in('class_id', classIds),
+        db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').in('class_id', classIds),
         db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
       ]).then(function(results) {
         // Filter pets to teacher's students client-side
@@ -558,6 +558,34 @@ function _smartRefreshFromSupabase() {
           } else if (freshStu.coins !== localStu.coins) {
             // No snapshot — trust server value
             localStu.coins = freshStu.coins;
+            changesApplied++;
+          }
+        }
+
+        // xiandan (仙丹): same merge logic as coins
+        if (isStudent && localStu.id == studentId) {
+          if (_myBaseXiandan !== null) {
+            if (freshStu.xiandan !== _myBaseXiandan && localStu.xiandan === _myBaseXiandan) {
+              localStu.xiandan = freshStu.xiandan;
+              _myBaseXiandan = freshStu.xiandan;
+              changesApplied++;
+            }
+          } else if (snapStu) {
+            var snapXiandan = snapStu.xiandan || 0;
+            if ((freshStu.xiandan || 0) !== snapXiandan && (localStu.xiandan || 0) === snapXiandan) {
+              localStu.xiandan = freshStu.xiandan;
+              changesApplied++;
+            }
+          }
+        } else {
+          var snapXd = snapStu ? (snapStu.xiandan || 0) : null;
+          if (snapXd !== null) {
+            if ((freshStu.xiandan || 0) !== snapXd && (localStu.xiandan || 0) === snapXd) {
+              localStu.xiandan = freshStu.xiandan;
+              changesApplied++;
+            }
+          } else if ((freshStu.xiandan || 0) !== (localStu.xiandan || 0)) {
+            localStu.xiandan = freshStu.xiandan;
             changesApplied++;
           }
         }
@@ -760,6 +788,7 @@ function _buildTeacherClasses(classes, students, pets) {
       id: s.id,
       name: s.name || '',
       coins: (s.coins != null ? s.coins : 50),
+      xiandan: (s.xiandan != null ? s.xiandan : 0),
       pets: [],
       lastCheckinDate: s.last_checkin_date || null,
       lastJianghuDate: s.last_jianghu_date || null,
@@ -853,7 +882,7 @@ function _loadTeacherFromSupabase() {
     // v54: Filter students by class_id at DB level (not client-side)
     return Promise.all([
       Promise.resolve(classes),
-      db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').in('class_id', classIds),
+      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').in('class_id', classIds),
       db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
     ]);
   }).then(function(results) {
@@ -900,7 +929,7 @@ function _loadStudentFromSupabase() {
 
   return Promise.all([
     db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
-    db.from('students').select('id, name, class_id, coins, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
+    db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
     db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
   ]).then(function(results) {
     var classR = results[0], studentsR = results[1], petsR = results[2];
@@ -921,6 +950,7 @@ function _loadStudentFromSupabase() {
         id: s.id,
         name: s.name || '',
         coins: (s.coins != null ? s.coins : 50),
+        xiandan: (s.xiandan != null ? s.xiandan : 0),
         pets: [],
         lastCheckinDate: s.last_checkin_date || null,
         lastJianghuDate: s.last_jianghu_date || null,
