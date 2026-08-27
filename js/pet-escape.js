@@ -1,8 +1,9 @@
 // ========== 宠物逃跑系统 ==========
 // ========== 闲置宠物出逃系统 ==========
+// v130: 改为按需加载，IIFE 包装为命名函数
 // 全局跟踪当前出逃中的宠物ID（用于DOM重建时保持出逃状态）
-window._escapedPetIds = new Set();
-(function(){
+window._escapedPetIds = window._escapedPetIds || new Set();
+window.__initPetEscape = function(){
   const IDLE_THRESHOLD = 15000;       // 15秒无操作触发
   const ESCAPE_DURATION = 12000;      // 出逃持续12秒
   const ESCAPE_COOLDOWN = 30000;      // 两次出逃间最少间隔30秒
@@ -1522,5 +1523,7 @@ window._escapedPetIds = new Set();
   // 初始启动闲置计时 + 保底计时
   resetIdleTimer();
   scheduleGuaranteedEscape();
-})();
+};
+// 如果非按需加载模式（script tag 直接引入），自动初始化
+if (!window.__lazyLoader) { window.__initPetEscape(); }
 // ========== 闲置宠物出逃系统结束 ==========

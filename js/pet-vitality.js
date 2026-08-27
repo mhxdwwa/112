@@ -1,6 +1,7 @@
 // ========== 宠物活力系统 ==========
 // ========== 宠物生机系统 ==========
-(function(){
+// v130: 改为按需加载，IIFE 包装为命名函数
+window.__initPetVitality = function(){
   // — 配置 —
   const ACTION_MIN_INTERVAL = 4000;   // 最短间隔 ms
   const ACTION_MAX_INTERVAL = 12000;  // 最长间隔 ms
@@ -266,4 +267,6 @@
     initBreathingDelays();
     scheduleNextAction();
   }, 2000);
-})();
+};
+// 如果非按需加载模式（script tag 直接引入），自动初始化
+if (!window.__lazyLoader) { window.__initPetVitality(); }
