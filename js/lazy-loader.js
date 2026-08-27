@@ -7,22 +7,18 @@
   // 模块注册表：id → { src, deps, init }
   var _registry = {
     // --- 导航页模块 ---
-    'pk-battle':       { src: 'js/pk-battle.js?v=130' },
-    'class-pk':        { src: 'js/class-pk.js?v=130' },
-    'jianghu':         { src: 'js/jianghu.js?v=130', deps: ['pk-battle'] },
-    'rankings':        { src: 'js/rankings.js?v=130' },
-    'library':         { src: 'js/library-system.js?v=130' },
+    'pk-battle':       { src: 'js/pk-battle.js?v=135' },
+    'class-pk':        { src: 'js/class-pk.js?v=135' },
+    'jianghu':         { src: 'js/jianghu.js?v=135', deps: ['pk-battle'] },
+    'rankings':        { src: 'js/rankings.js?v=135' },
+    'library':         { src: 'js/library-system.js?v=135' },
 
     // --- 弹窗/按钮模块 ---
-    'snack-system':    { src: 'js/snack-system.js?v=130' },
-    'shop-system':     { src: 'js/shop-system.js?v=130' },
-    'history-ui':      { src: 'js/history-ui.js?v=130' },
-    'pet-modal':       { src: 'js/pet-modal.js?v=130' },
-    'rank-announcement': { src: 'js/rank-announcement.js?v=130' },
-
-    // --- 宠物增强（首屏渲染后加载） ---
-    'pet-vitality':    { src: 'js/pet-vitality.js?v=130', init: '__initPetVitality' },
-    'pet-escape':      { src: 'js/pet-escape.js?v=130', init: '__initPetEscape' },
+    'snack-system':    { src: 'js/snack-system.js?v=135' },
+    'shop-system':     { src: 'js/shop-system.js?v=135' },
+    'history-ui':      { src: 'js/history-ui.js?v=135' },
+    'pet-modal':       { src: 'js/pet-modal.js?v=135' },
+    'rank-announcement': { src: 'js/rank-announcement.js?v=135' },
 
     // --- 游戏模块 ---
     'quiz-bank':       { src: 'quiz-bank.js?v=2' },

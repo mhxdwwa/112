@@ -1785,8 +1785,7 @@ function _applyGridBatchPostProcess(){
     card.style.animationDuration=(2.5+Math.random()*1.5)+'s';
   });
   if(window.__initBreathingDelays) window.__initBreathingDelays();
-  /* v130: 首屏渲染后按需加载宠物增强模块 */
-  if(typeof loadModules==='function'&&!window.__petEnhanceQueued){window.__petEnhanceQueued=true;loadModules(['pet-vitality','pet-escape']).then(function(){if(window.__initBreathingDelays)window.__initBreathingDelays();});}
+  /* v135: 宠物增强模块已改为首屏加载，无需按需加载 */
   if(typeof attachCardHeartListeners==='function') attachCardHeartListeners();
   if(typeof bindPetCardDrag==='function') bindPetCardDrag();
   if(typeof currentUser!=='undefined' && currentUser && currentUser.type==='student'){
