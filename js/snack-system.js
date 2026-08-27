@@ -510,7 +510,13 @@ function getPendingSnackRequestCount() {
 }
 
 // ========== v125: 学生端零食审批状态查询 ==========
-var _snackStatusLastReadTime = 0; // 上次查看审批状态的时间戳
+// v136: 持久化到 localStorage，避免每次登录都显示未读
+var _snackStatusLastReadTime = (function() {
+  try {
+    var saved = localStorage.getItem('snackStatusLastReadTime');
+    return saved ? parseInt(saved) : 0;
+  } catch(e) { return 0; }
+})();
 
 // 显示学生自己的零食审批状态
 function showSnackStatusModal() {
@@ -528,6 +534,7 @@ function showSnackStatusModal() {
   
   // 标记为已读
   _snackStatusLastReadTime = Date.now();
+  try { localStorage.setItem('snackStatusLastReadTime', _snackStatusLastReadTime.toString()); } catch(e) {}
   _updateSnackStatusBadge();
   
   const requests = student.snackRequests || [];
