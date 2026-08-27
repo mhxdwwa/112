@@ -2503,6 +2503,12 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   renderHomePetGrid();
   renderClassTopThree();
   renderPKPage();
+  // Add a direct exit button inside the result overlay (pointer-events: auto)
+  const resultExitBtn = document.createElement('button');
+  resultExitBtn.className = 'pk-result-exit-btn';
+  resultExitBtn.textContent = '退出';
+  resultExitBtn.onclick = function() { closePKModal(); };
+  resultOverlay.appendChild(resultExitBtn);
   if(currentBattleModalOverlay) {
     const exitBtn = currentBattleModalOverlay.querySelector('.modal-actions button');
     if(exitBtn) exitBtn.disabled = false;

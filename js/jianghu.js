@@ -603,6 +603,7 @@ function launchJianghuGame(student, pet, investCoins) {
   const overlay = document.createElement('div');
   overlay.className = 'jh-game-overlay';
   overlay.id = 'jhGameOverlay';
+  overlay.style.opacity = '0';
   overlay.innerHTML = `
     <div class="jh-scene" id="jhScene">
       <div class="jh-moon"></div>
@@ -620,9 +621,20 @@ function launchJianghuGame(student, pet, investCoins) {
         <div class="jh-boss-name" style="color:${boss.accent}">${esc(boss.name)}</div>
       </div>
     </div>
-    <button class="jh-exit-btn" id="jhExitBtn" onclick="closeJianghuGame()">退出</button>
   `;
   document.body.appendChild(overlay);
+  // Create exit button on document.body to avoid stacking context issues
+  const exitBtn = document.createElement('button');
+  exitBtn.className = 'jh-exit-btn';
+  exitBtn.id = 'jhExitBtn';
+  exitBtn.textContent = '退出';
+  exitBtn.onclick = function() { closeJianghuGame(); };
+  document.body.appendChild(exitBtn);
+  // Fade in the overlay (transition animation)
+  requestAnimationFrame(() => {
+    overlay.style.transition = 'opacity 0.6s ease';
+    overlay.style.opacity = '1';
+  });
 
   // Add particles
   const scene = overlay.querySelector('#jhScene');
@@ -680,6 +692,28 @@ function runJianghuJourney(overlay, boss, student, pet, investCoins, petVisual) 
 
 async function startJianghuBattle(overlay, boss, student, pet, investCoins, petVisual) {
   const scene = overlay.querySelector('#jhScene');
+
+  // === 过渡画面：渐黑 + 战斗开始文字 ===
+  const transition = document.createElement('div');
+  transition.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0);z-index:200;display:flex;align-items:center;justify-content:center;transition:background 0.6s ease;pointer-events:none;';
+  scene.appendChild(transition);
+  await sleep(50);
+  transition.style.background = 'rgba(0,0,0,0.85)';
+  await sleep(700);
+  // 显示战斗开始文字
+  const battleText = document.createElement('div');
+  battleText.style.cssText = 'font-family:"Ma Shan Zheng",cursive;font-size:48px;color:#c9a84c;text-shadow:0 0 30px rgba(201,168,76,0.8),0 0 60px rgba(201,168,76,0.4);opacity:0;transition:opacity 0.4s ease;letter-spacing:8px;';
+  battleText.textContent = '⚔ 战斗开始 ⚔';
+  transition.appendChild(battleText);
+  await sleep(50);
+  battleText.style.opacity = '1';
+  await sleep(800);
+  // 渐出
+  battleText.style.opacity = '0';
+  await sleep(400);
+  transition.style.background = 'rgba(0,0,0,0)';
+  await sleep(600);
+  transition.remove();
 
   // 等待江湖boss中文命名图片探测完成
   await probeJhBossImages();
@@ -1588,8 +1622,8 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   scene.appendChild(resultBox);
   if(won) playJHVictorySound(); else playJHDefeatSound();
 
-  // Show exit button
-  const exitBtn = overlay.querySelector('#jhExitBtn');
+  // Show exit button (now on document.body)
+  const exitBtn = document.getElementById('jhExitBtn');
   if (exitBtn) exitBtn.classList.add('jh-visible');
 
   // Petals
@@ -1782,6 +1816,9 @@ function closeJianghuGame() {
     overlay.style.opacity = '0';
     setTimeout(() => overlay.remove(), 500);
   }
+  // Remove exit button from document.body
+  const exitBtn = document.getElementById('jhExitBtn');
+  if (exitBtn) exitBtn.remove();
   jhSelectedStudentId = null;
   renderJianghuPage();
   renderPKPage();
