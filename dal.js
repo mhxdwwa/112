@@ -1043,6 +1043,9 @@ function _loadStudentFromSupabase() {
 /* ===== Load: Custom Actions & Logs ===== */
 function _loadCustomActions() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
+  // v136: Custom actions are teacher-only — skip for students to avoid 400 error
+  // (students have currentUser.id = studentId, not teacherId)
+  if (currentUser.type !== 'teacher') return Promise.resolve();
   // Custom actions are per-class; load all classes for this teacher
   return db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(classR) {
     if (classR.error || !classR.data) return;

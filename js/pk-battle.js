@@ -917,15 +917,15 @@ function probePKMonsterImages() {
       img.onerror = () => { checkDone(); };
       img.src = path;
     }
-    // 左侧池：无补零格式 1.webp ~ 24.webp
-    for(let i = 1; i <= 50; i++) {
+    // 左侧池：无补零格式 1.webp ~ 25.webp
+    for(let i = 1; i <= 25; i++) {
       tryLeft(`战斗兽宠文件夹/${i}.webp`);
     }
-    // 右侧池：所有以0开头的数字图片（01~09, 010~019, 020~024等）
+    // 右侧池：所有以0开头的数字图片（01~09, 010~025等）
     for(let i = 1; i <= 9; i++) {
       tryRight(`战斗兽宠文件夹/0${i}.webp`);
     }
-    for(let i = 10; i <= 50; i++) {
+    for(let i = 10; i <= 25; i++) {
       const padded3 = String(i).padStart(3, '0');
       tryRight(`战斗兽宠文件夹/${padded3}.webp`);
     }
