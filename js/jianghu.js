@@ -624,6 +624,7 @@ function launchJianghuGame(student, pet, investCoins) {
   `;
   document.body.appendChild(overlay);
   // Create exit button on document.body to avoid stacking context issues
+  // Use very high z-index to escape all stacking contexts
   const exitBtn = document.createElement('button');
   exitBtn.className = 'jh-exit-btn';
   exitBtn.id = 'jhExitBtn';
@@ -635,6 +636,11 @@ function launchJianghuGame(student, pet, investCoins) {
     overlay.style.transition = 'opacity 0.6s ease';
     overlay.style.opacity = '1';
   });
+  // Show exit button immediately with a delay (so user can exit during journey)
+  setTimeout(() => {
+    const btn = document.getElementById('jhExitBtn');
+    if (btn) btn.classList.add('jh-visible');
+  }, 1500);
 
   // Add particles
   const scene = overlay.querySelector('#jhScene');
@@ -693,27 +699,30 @@ function runJianghuJourney(overlay, boss, student, pet, investCoins, petVisual) 
 async function startJianghuBattle(overlay, boss, student, pet, investCoins, petVisual) {
   const scene = overlay.querySelector('#jhScene');
 
-  // === 过渡画面：渐黑 + 战斗开始文字 ===
-  const transition = document.createElement('div');
-  transition.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0);z-index:200;display:flex;align-items:center;justify-content:center;transition:background 0.6s ease;pointer-events:none;';
-  scene.appendChild(transition);
+  // === 过渡画面：全屏渐黑 + 战斗开始文字 ===
+  // Use document.body level overlay to escape all stacking contexts
+  const transOverlay = document.createElement('div');
+  transOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0);z-index:100001;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:background 0.8s ease;pointer-events:none;';
+  document.body.appendChild(transOverlay);
   await sleep(50);
-  transition.style.background = 'rgba(0,0,0,0.85)';
-  await sleep(700);
+  transOverlay.style.background = 'rgba(0,0,0,0.95)';
+  await sleep(900);
   // 显示战斗开始文字
   const battleText = document.createElement('div');
-  battleText.style.cssText = 'font-family:"Ma Shan Zheng",cursive;font-size:48px;color:#c9a84c;text-shadow:0 0 30px rgba(201,168,76,0.8),0 0 60px rgba(201,168,76,0.4);opacity:0;transition:opacity 0.4s ease;letter-spacing:8px;';
+  battleText.style.cssText = 'font-family:"Ma Shan Zheng",cursive;font-size:56px;color:#c9a84c;text-shadow:0 0 30px rgba(201,168,76,0.8),0 0 60px rgba(201,168,76,0.4),0 0 100px rgba(201,168,76,0.2);opacity:0;transition:opacity 0.5s ease, transform 0.5s ease;letter-spacing:12px;transform:scale(1.5);';
   battleText.textContent = '⚔ 战斗开始 ⚔';
-  transition.appendChild(battleText);
+  transOverlay.appendChild(battleText);
   await sleep(50);
   battleText.style.opacity = '1';
-  await sleep(800);
+  battleText.style.transform = 'scale(1)';
+  await sleep(1000);
   // 渐出
   battleText.style.opacity = '0';
-  await sleep(400);
-  transition.style.background = 'rgba(0,0,0,0)';
-  await sleep(600);
-  transition.remove();
+  battleText.style.transform = 'scale(0.8)';
+  await sleep(500);
+  transOverlay.style.background = 'rgba(0,0,0,0)';
+  await sleep(800);
+  transOverlay.remove();
 
   // 等待江湖boss中文命名图片探测完成
   await probeJhBossImages();
@@ -1626,6 +1635,25 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   const exitBtn = document.getElementById('jhExitBtn');
   if (exitBtn) exitBtn.classList.add('jh-visible');
 
+  // Also add a clickable exit button directly inside the result box (fallback)
+  const resultExitBtn = document.createElement('button');
+  resultExitBtn.textContent = '退出';
+  resultExitBtn.style.cssText = 'margin-top:30px;padding:14px 40px;font-size:18px;font-weight:700;color:#c9a84c;background:rgba(139,26,26,0.9);border:1px solid rgba(201,168,76,0.5);border-radius:24px;cursor:pointer;pointer-events:auto;letter-spacing:2px;transition:all 0.3s;font-family:"Ma Shan Zheng",cursive;';
+  resultExitBtn.onclick = function() { closeJianghuGame(); };
+  resultExitBtn.onmouseover = function() { this.style.background = 'rgba(139,26,26,1)'; this.style.borderColor = '#c9a84c'; };
+  resultExitBtn.onmouseout = function() { this.style.background = 'rgba(139,26,26,0.9)'; this.style.borderColor = 'rgba(201,168,76,0.5)'; };
+  resultBox.appendChild(resultExitBtn);
+  // Make result box accept pointer events for the button
+  resultBox.style.pointerEvents = 'auto';
+
+  // Auto-cleanup shatter fragments after 5 seconds so they don't block UI
+  setTimeout(() => {
+    const loserEl = won ? bossEl : petEl;
+    if (loserEl) {
+      loserEl.querySelectorAll('.jh-torn-piece-stay, .jh-torn-dust-stay').forEach(el => el.remove());
+    }
+  }, 5000);
+
   // Petals
   jhCreatePetals(won ? 'gold' : 'red');
 }
@@ -1819,6 +1847,8 @@ function closeJianghuGame() {
   // Remove exit button from document.body
   const exitBtn = document.getElementById('jhExitBtn');
   if (exitBtn) exitBtn.remove();
+  // Clean up any remaining transition overlays
+  document.querySelectorAll('div[style*="z-index: 100001"], div[style*="z-index:100001"]').forEach(el => el.remove());
   jhSelectedStudentId = null;
   renderJianghuPage();
   renderPKPage();

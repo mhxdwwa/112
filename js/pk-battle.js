@@ -2036,6 +2036,32 @@ function showAttackDamageText(container, damage, isCritical, isCombo) {
 }
 
 let currentBattleModalOverlay = null;
+let _pkExitBtn = null;
+
+// Create exit button on document.body to escape all stacking contexts
+function _createPKExitButton() {
+  if (_pkExitBtn) _pkExitBtn.remove();
+  _pkExitBtn = document.createElement('button');
+  _pkExitBtn.id = 'pkExitBtn';
+  _pkExitBtn.textContent = '退出';
+  _pkExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:100000;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;';
+  _pkExitBtn.onclick = function() { closePKModal(); };
+  document.body.appendChild(_pkExitBtn);
+}
+
+function _showPKExitButton() {
+  if (_pkExitBtn) {
+    _pkExitBtn.style.opacity = '1';
+    _pkExitBtn.style.pointerEvents = 'auto';
+  }
+}
+
+function _removePKExitButton() {
+  if (_pkExitBtn) {
+    _pkExitBtn.remove();
+    _pkExitBtn = null;
+  }
+}
 
 function startPKBattle() {
   if(pkState.players.length !== 2) return;
@@ -2081,6 +2107,8 @@ function startPKBattle() {
   }
   pkState.isFighting = true;
   pkState._battleCompleted = false; // Reset for this battle
+  // Create exit button on document.body (escapes all stacking contexts)
+  _createPKExitButton();
   const p1 = pkState.players[0];
   const p2 = pkState.players[1];
   
@@ -2233,6 +2261,7 @@ function closePKModal() {
     showNotification('战斗中', '战斗尚未结束，无法退出战场', 'warning');
     return;
   }
+  _removePKExitButton();
   closeModal();
   resetPKSelection();
 }
@@ -2509,6 +2538,8 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   resultExitBtn.textContent = '退出';
   resultExitBtn.onclick = function() { closePKModal(); };
   resultOverlay.appendChild(resultExitBtn);
+  // Show the body-level exit button (escapes all stacking contexts)
+  _showPKExitButton();
   if(currentBattleModalOverlay) {
     const exitBtn = currentBattleModalOverlay.querySelector('.modal-actions button');
     if(exitBtn) exitBtn.disabled = false;
