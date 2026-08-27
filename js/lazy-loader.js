@@ -9,7 +9,7 @@
     // --- 导航页模块 ---
     'pk-battle':       { src: 'js/pk-battle.js?v=130' },
     'class-pk':        { src: 'js/class-pk.js?v=130' },
-    'jianghu':         { src: 'js/jianghu.js?v=130' },
+    'jianghu':         { src: 'js/jianghu.js?v=130', deps: ['pk-battle'] },
     'rankings':        { src: 'js/rankings.js?v=130' },
     'library':         { src: 'js/library-system.js?v=130' },
 
