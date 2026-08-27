@@ -1,4 +1,4 @@
-// ========== 按需加载器 v130 ==========
+// ========== 按需加载器 v136 ==========
 // 管理 JS 模块的延迟加载，减少首屏 JS 体积
 (function() {
   'use strict';
@@ -7,18 +7,17 @@
   // 模块注册表：id → { src, deps, init }
   var _registry = {
     // --- 导航页模块 ---
-    'pk-battle':       { src: 'js/pk-battle.js?v=135' },
-    'class-pk':        { src: 'js/class-pk.js?v=135' },
-    'jianghu':         { src: 'js/jianghu.js?v=135', deps: ['pk-battle'] },
-    'rankings':        { src: 'js/rankings.js?v=135' },
-    'library':         { src: 'js/library-system.js?v=135' },
+    'pk-battle':       { src: 'js/pk-battle.js?v=136' },
+    'class-pk':        { src: 'js/class-pk.js?v=136' },
+    'jianghu':         { src: 'js/jianghu.js?v=136', deps: ['pk-battle'] },
+    'rankings':        { src: 'js/rankings.js?v=136' },
+    'library':         { src: 'js/library-system.js?v=136' },
 
     // --- 弹窗/按钮模块 ---
-    'snack-system':    { src: 'js/snack-system.js?v=135' },
-    'shop-system':     { src: 'js/shop-system.js?v=135' },
-    'history-ui':      { src: 'js/history-ui.js?v=135' },
-    'pet-modal':       { src: 'js/pet-modal.js?v=135' },
-    'rank-announcement': { src: 'js/rank-announcement.js?v=135' },
+    'snack-system':    { src: 'js/snack-system.js?v=136' },
+    'history-ui':      { src: 'js/history-ui.js?v=136' },
+    'pet-modal':       { src: 'js/pet-modal.js?v=136' },
+    'rank-announcement': { src: 'js/rank-announcement.js?v=136' },
 
     // --- 游戏模块 ---
     'quiz-bank':       { src: 'quiz-bank.js?v=2' },
