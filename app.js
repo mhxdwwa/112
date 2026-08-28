@@ -2273,3 +2273,108 @@ function skipAuth(){
 }
 
 
+
+// ========== 缩小功能 ==========
+let _isMinimized = false;
+let _floatingPetPos = { x: window.innerWidth - 90, y: window.innerHeight - 90 };
+
+// 显示/隐藏缩小按钮（仅教师可见）
+function updateMinimizeBtnVisibility() {
+  const btn = document.getElementById('minimizeBtn');
+  if (!btn) return;
+  const isTeacher = (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') || 
+                    localStorage.getItem('userType') === 'teacher';
+  if (isTeacher) {
+    btn.classList.add('teacher-visible');
+  } else {
+    btn.classList.remove('teacher-visible');
+  }
+}
+
+// 缩小应用
+function minimizeApp() {
+  if (_isMinimized) return;
+  _isMinimized = true;
+  document.body.classList.add('minimized');
+  
+  // 显示浮动宠物图标
+  const floatingIcon = document.getElementById('floatingPetIcon');
+  if (floatingIcon) {
+    floatingIcon.classList.add('visible');
+    // 设置位置到右下角
+    floatingIcon.style.left = _floatingPetPos.x + 'px';
+    floatingIcon.style.top = _floatingPetPos.y + 'px';
+    // 启用拖动
+    enableFloatingPetDrag(floatingIcon);
+  }
+  
+  playClickSound();
+}
+
+// 恢复应用
+function restoreApp() {
+  if (!_isMinimized) return;
+  _isMinimized = false;
+  document.body.classList.remove('minimized');
+  
+  // 隐藏浮动宠物图标
+  const floatingIcon = document.getElementById('floatingPetIcon');
+  if (floatingIcon) {
+    floatingIcon.classList.remove('visible');
+  }
+  
+  playClickSound();
+}
+
+// 启用浮动宠物图标拖动
+function enableFloatingPetDrag(el) {
+  let isDragging = false;
+  let startX, startY, startLeft, startTop;
+  
+  function onStart(e) {
+    isDragging = true;
+    const touch = e.touches ? e.touches[0] : e;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    startLeft = parseInt(el.style.left) || 0;
+    startTop = parseInt(el.style.top) || 0;
+    el.style.transition = 'none';
+    e.preventDefault();
+  }
+  
+  function onMove(e) {
+    if (!isDragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    const newX = Math.max(0, Math.min(window.innerWidth - 70, startLeft + dx));
+    const newY = Math.max(0, Math.min(window.innerHeight - 70, startTop + dy));
+    el.style.left = newX + 'px';
+    el.style.top = newY + 'px';
+    e.preventDefault();
+  }
+  
+  function onEnd(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    el.style.transition = '';
+    // 保存位置
+    _floatingPetPos.x = parseInt(el.style.left) || 0;
+    _floatingPetPos.y = parseInt(el.style.top) || 0;
+  }
+  
+  // 鼠标事件
+  el.addEventListener('mousedown', onStart);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+  
+  // 触摸事件
+  el.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
+}
+
+// 初始化缩小按钮可见性
+document.addEventListener('DOMContentLoaded', function() {
+  updateMinimizeBtnVisibility();
+});

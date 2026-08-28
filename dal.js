@@ -4117,6 +4117,10 @@ function applyStudentRestrictions() {
     document.querySelectorAll('.teacher-only').forEach(function(el) {
       el.style.display = 'flex';
     });
+    // v138: Update minimize button visibility for teachers
+    if (typeof updateMinimizeBtnVisibility === 'function') {
+      updateMinimizeBtnVisibility();
+    }
     return;
   }
   
