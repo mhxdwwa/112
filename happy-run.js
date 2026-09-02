@@ -302,7 +302,28 @@
       gameIframe.contentWindow.postMessage({ type: 'happyrun-fullscreen-entered' }, '*');
     }
 
-    // 7. 监听方向变化
+    // 7. 尝试使用 Fullscreen API（隐藏浏览器UI，更好的沉浸体验）
+    try {
+      var fsElem = document.documentElement;
+      var fsPromise;
+      if (fsElem.requestFullscreen) {
+        fsPromise = fsElem.requestFullscreen();
+      } else if (fsElem.webkitRequestFullscreen) {
+        fsPromise = Promise.resolve(fsElem.webkitRequestFullscreen());
+      } else if (fsElem.msRequestFullscreen) {
+        fsPromise = Promise.resolve(fsElem.msRequestFullscreen());
+      }
+      if (fsPromise && fsPromise.then) {
+        fsPromise.then(function() {
+          // 锁定横屏方向
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(function() {});
+          }
+        }).catch(function() {});
+      }
+    } catch(e) {}
+
+    // 8. 监听方向变化
     window.addEventListener('orientationchange', _onOrientationChange);
     window.addEventListener('resize', _onResizeCheck);
   }
@@ -342,8 +363,21 @@
           _gameWrapper.style.top = '0';
         }
       } else if (_isGameFullscreen && window.innerWidth <= window.innerHeight) {
-        // 切回竖屏，退出全屏恢复网页
-        exitGameFullscreen();
+        // 切回竖屏，保持全屏但旋转为横屏显示
+        if (_gameWrapper) {
+          var vw = window.innerWidth;
+          var vh = window.innerHeight;
+          _gameWrapper.style.width = vh + 'px';
+          _gameWrapper.style.height = vw + 'px';
+          _gameWrapper.style.transform = 'rotate(90deg)';
+          _gameWrapper.style.transformOrigin = 'center center';
+          _gameWrapper.style.left = ((vw - vh) / 2) + 'px';
+          _gameWrapper.style.top = ((vh - vw) / 2) + 'px';
+        }
+        // 再次尝试锁定横屏
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(function() {});
+        }
       }
     }, 300);
   }
@@ -478,11 +512,9 @@
         saveHappyRunData(d.data);
       }
 
-      // 游戏开始 - 进入全屏模式（手机端）
+      // 游戏开始 - 进入全屏模式（所有设备）
       if (d.type === 'happyrun-start-game') {
-        if (isMobileDevice()) {
-          enterGameFullscreen();
-        }
+        enterGameFullscreen();
       }
 
       // 游戏请求退出全屏
