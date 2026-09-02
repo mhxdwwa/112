@@ -1224,7 +1224,11 @@ function updatePhysics(){
         if(P.y<50){P.y=50;P.vy=0;}if(P.y>GY-PH){P.y=GY-PH;P.vy=0;}
         P.gnd=false;P.onPlat=-1;P.onCrate=-1;return;
     }
-    if(!P.gnd){P.vy+=GRAV;P.y+=P.vy;}
+    if(!P.gnd){
+        // Variable gravity: reduced when ascending for more hang time (easier to clear pits/obstacles)
+        const grav = P.vy < 0 ? GRAV * 0.55 : GRAV;
+        P.vy+=grav;P.y+=P.vy;
+    }
     if(P.gnd&&P.onPlat>=0){const pl=plats[P.onPlat];if(!pl){P.onPlat=-1;P.gnd=false;P.vy=0;}else{const plSX=w2s(pl.wx);if(PX>plSX+pl.w-2||PX+PW<plSX+2){P.gnd=false;P.vy=0;P.onPlat=-1;}}}
     if(P.gnd&&P.onCrate>=0){const cr=ohs[P.onCrate];if(!cr){P.onCrate=-1;P.gnd=false;P.vy=0;}else{const crSX=w2s(cr.wx);if(PX>crSX+cr.w-2||PX+PW<crSX+2){P.gnd=false;P.vy=0;P.onCrate=-1;}}}
     if(!P.gnd&&P.vy>0){
@@ -3298,6 +3302,16 @@ function draw(){
     c.fillStyle='#e0e0ff';c.font='12px Arial';c.fillText('分数:'+totalScore,580,14);
     c.fillStyle='#e0e0ff';c.font='bold 13px Arial';c.textAlign='right';
     c.fillText('速度:'+(spd/BASE_SPD).toFixed(1)+'x',790,14);c.textAlign='left';
+    // Exit fullscreen button (below speed display, right-aligned) - only show when in fullscreen
+    if(isFullscreenActive){
+        c.fillStyle='rgba(200,60,60,0.7)';
+        c.beginPath();c.roundRect(720,20,70,18,4);c.fill();
+        c.strokeStyle='rgba(255,255,255,0.5)';c.lineWidth=1;
+        c.beginPath();c.roundRect(720,20,70,18,4);c.stroke();
+        c.fillStyle='#fff';c.font='bold 11px Arial';c.textAlign='center';
+        c.fillText('退出全屏',755,33);
+        c.textAlign='left';
+    }
     // Row 2: Progress bar and status effects
     if(state==='playing'&&levelTransition<=0){
         const ld=dist-levelStartDist,cd=getLevelDistance(currentLevel),pr=Math.min(1,ld/cd);
@@ -8354,6 +8368,12 @@ function togglePause(){
 
 cvs.addEventListener('click',(e)=>{
     const{x,y}=getClickPos(e);
+    // Exit fullscreen button (works in any game state)
+    if(isFullscreenActive && x>=720&&x<=790&&y>=20&&y<=38){
+        parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');
+        if(document.fullscreenElement){document.exitFullscreen().catch(function(){});}else if(document.webkitFullscreenElement){document.webkitExitFullscreen();}
+        return;
+    }
     if(state==='playing'){
         // Check game buttons first
         if(hitSkillBtn(x,y)){activateSkill();return;}
@@ -8777,6 +8797,12 @@ cvs.addEventListener('touchstart',e=>{
             if(gx>=310&&gx<=490&&gy>=200&&gy<=242)restartFromLevel();
             if(gx>=520&&gx<=700&&gy>=200&&gy<=242)goToMainMenu();
             return;
+        }
+        // Exit fullscreen button (works in any game state)
+        if(isFullscreenActive && gx>=720&&gx<=790&&gy>=20&&gy<=38){
+            parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');
+            if(document.fullscreenElement){document.exitFullscreen().catch(function(){});}else if(document.webkitFullscreenElement){document.webkitExitFullscreen();}
+            continue;
         }
         if(state==='playing'){
             // Check buttons first (with multi-touch)
