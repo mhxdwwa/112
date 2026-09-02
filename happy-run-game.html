@@ -174,6 +174,24 @@ function mapTouchToGame(clientX, clientY) {
 let isFullscreenActive = false;
 let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
 
+// Desktop: move skill/pause buttons to right side (left of ↑↓ buttons)
+const _dBtn = !isMobileDevice;
+const _skX = _dBtn ? 615 : 35;
+const _skY = _dBtn ? 300 : 305;
+const _skR = 18;
+const _psX = _dBtn ? 604 : 10;
+const _psY = _dBtn ? 338 : 338;
+const _psW = 58;
+const _psH = _dBtn ? 28 : 22;
+// Boss fight desktop button positions
+const _bskX = _dBtn ? 615 : 39;
+const _bskY = _dBtn ? 255 : 300;
+const _bskR = 22;
+const _bpsX = _dBtn ? 604 : 12;
+const _bpsY = _dBtn ? 338 : 338;
+const _bpsW = _dBtn ? 58 : 55;
+const _bpsH = _dBtn ? 28 : 22;
+
 // Listen for fullscreen state changes from parent
 window.addEventListener('message', function(e) {
     if (!e.data || !e.data.type) return;
@@ -525,8 +543,16 @@ for(let i=0;i<8;i++) mtns.push({x:i*130-50,h:50+Math.random()*70});
 function startGame(fromLevel){
     if(state==='playing') return;
     getAudioCtx();
-    // Notify parent to enter fullscreen on mobile
+    // Notify parent to enter fullscreen
     parent.postMessage({ type: 'happyrun-start-game' }, '*');
+    // Also try Fullscreen API directly (works when game is opened directly or in iframe)
+    try {
+        var fsElem = document.documentElement;
+        if (fsElem.requestFullscreen) fsElem.requestFullscreen().catch(function(){});
+        else if (fsElem.webkitRequestFullscreen) fsElem.webkitRequestFullscreen();
+        // Lock orientation to landscape on mobile
+        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){});
+    } catch(e) {}
     P={x:PX,y:GY-PH,vy:0,vx:0,gnd:true,duck:false,af:0,onPlat:-1,onCrate:-1,onPlatH:0,onCrateTop:0,pushX:0,moveLeft:false,moveRight:false,moveUp:false,moveDown:false,shooting:false,facing:1};
     pits=[];ohs=[];plats=[];nails=[];bullets=[];powerups=[];parts=[];coins=[];bats=[];tigers=[];stormClouds=[];skillClones=[];
     fc=0;dist=0;spd=BASE_SPD;nextSpawn=0;gndScr=0;
@@ -549,7 +575,7 @@ function startGame(fromLevel){
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
-function goToMainMenu(){ state='mainMenu'; clearRevivalState(); if(isFullscreenActive) parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*'); }
+function goToMainMenu(){ state='mainMenu'; clearRevivalState(); if(isFullscreenActive){parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');} if(document.fullscreenElement){document.exitFullscreen().catch(function(){});}else if(document.webkitFullscreenElement){document.webkitExitFullscreen();} }
 function revivePlayer(){
     // 检查是否还有复活次数
     if (!canQuizRevive()) {
@@ -5032,8 +5058,8 @@ function drawGameButtons(c){
         if(activeTouches[tid]==='down')dnPressed=true;
     }
     
-    // Skill button: above pause button (bottom left) - moved up for mobile
-    const skillX=35, skillY=305, skillR=18;
+    // Skill button: desktop=right side (left of ↑↓), mobile=bottom left
+    const skillX=_skX, skillY=_skY, skillR=_skR;
     const canUseSkill = skillReady && !skillActive && coinCount >= charSkillCosts[selectedCharacter];
     const skillActiveGlow = skillActive ? Math.sin(fc*0.2)*0.3+0.7 : 0;
     
@@ -5083,8 +5109,8 @@ function drawGameButtons(c){
         c.fillText(remaining+'s',skillX,skillY-15);
     }
     
-    // Pause/Settings button: bottom left (smaller) - moved up for mobile
-    const pbX=10, pbY=338, pbW=50, pbH=22;
+    // Pause/Settings button: desktop=right side, mobile=bottom left
+    const pbX=_psX, pbY=_psY, pbW=_psW, pbH=_psH;
     c.fillStyle=paused?'rgba(46,204,113,0.7)':'rgba(0,0,0,0.4)';
     c.beginPath();c.roundRect(pbX,pbY,pbW,pbH,5);c.fill();
     c.strokeStyle='rgba(255,255,255,0.4)';c.lineWidth=1;
@@ -5123,9 +5149,9 @@ function drawGameButtons(c){
     }
 }
 
-// Button hit-test helpers (virtual 800x400 coords) - expanded hit areas for better responsiveness
-function hitPauseBtn(x,y){ return x>=5&&x<=65&&y>=333&&y<=365; }
-function hitSkillBtn(x,y){ const dx=x-35,dy=y-305; return dx*dx+dy*dy<=18*18; } // radius 18
+// Button hit-test helpers (virtual 800x400 coords) - check both mobile and desktop positions
+function hitPauseBtn(x,y){ return (x>=_psX&&x<=_psX+_psW&&y>=_psY&&y<=_psY+_psH); }
+function hitSkillBtn(x,y){ const dx=x-_skX,dy=y-_skY; return dx*dx+dy*dy<=_skR*_skR; }
 function hitUpBtn(x,y){ return x>=730&&x<=800&&y>=250&&y<=330; }
 function hitDownBtn(x,y){ return x>=730&&x<=800&&y>=330&&y<=400; }
 function drawBtn(c,x,y,w,h,text,grad1,grad2,fontSize){
@@ -7788,10 +7814,10 @@ function drawBossFightButtons(c){
     c.fillStyle='#fff';
     c.fillText('→',rtX+half,rtY+half+6);
     
-    // Boss skill button - above pause button (left side) - moved up for mobile
+    // Boss skill button - desktop=right side (left of d-pad), mobile=left side
     const bossSkillNames = ['螺旋丸','机关鸟','金箍棒','太极阵','独孤九剑','落雁舞','铁甲拳','冰凤舞','广袖飘','魅惑术'];
     const canUseBossSkill = playerMP >= 50 && bossSkillCooldown <= 0 && bossSkillActiveTimer <= 0;
-    const bskX=39, bskY=300, bskR=22;
+    const bskX=_bskX, bskY=_bskY, bskR=_bskR;
     if(canUseBossSkill){
         const skGrad=c.createRadialGradient(bskX,bskY,5,bskX,bskY,bskR+10);
         skGrad.addColorStop(0,'rgba(100,150,255,0.8)');skGrad.addColorStop(1,'rgba(50,80,200,0)');
@@ -7813,13 +7839,13 @@ function drawBossFightButtons(c){
     c.fillText('MP:50 [E]',bskX,bskY+10);
     c.textAlign='left';
     
-    // Settings/Pause button - bottom left - moved up for mobile
+    // Settings/Pause button - desktop=right side, mobile=bottom left
     c.fillStyle=paused?'rgba(46,204,112,0.7)':'rgba(0,0,0,0.35)';
-    c.beginPath();c.roundRect(12,338,55,22,5);c.fill();
+    c.beginPath();c.roundRect(_bpsX,_bpsY,_bpsW,_bpsH,5);c.fill();
     c.strokeStyle='rgba(255,255,255,0.4)';c.lineWidth=1;
-    c.beginPath();c.roundRect(12,338,55,22,5);c.stroke();
+    c.beginPath();c.roundRect(_bpsX,_bpsY,_bpsW,_bpsH,5);c.stroke();
     c.fillStyle='#ccc';c.font='11px Arial';
-    c.fillText(paused?'▶继续':'⏸暂停',39,352);
+    c.fillText(paused?'▶继续':'⏸暂停',_bpsX+_bpsW/2,_bpsY+_bpsH/2+4);
     c.textAlign='left';
 }
 
@@ -8092,8 +8118,8 @@ function drawTransitionRoomButtons(c){
     c.fillStyle='#fff';
     c.fillText('→',rtX+half,rtY+half+5);
     
-    // Skill button - above pause button
-    const skillX=35, skillY=345, skillR=12;
+    // Skill button - desktop=right side (left of d-pad), mobile=bottom left
+    const skillX=_dBtn?615:35, skillY=_dBtn?300:345, skillR=_dBtn?18:12;
     const canUseSkill = skillReady && !skillActive && coinCount >= charSkillCosts[selectedCharacter];
     const skillActiveGlow = skillActive ? Math.sin(fc*0.2)*0.3+0.7 : 0;
     if(canUseSkill){
@@ -8126,13 +8152,13 @@ function drawTransitionRoomButtons(c){
     }
     c.textAlign='left';
     
-    // Settings/Pause button - bottom left
+    // Settings/Pause button - desktop=right side, mobile=bottom left
     c.fillStyle=paused?'rgba(46,204,112,0.7)':'rgba(0,0,0,0.35)';
-    c.beginPath();c.roundRect(12,370,55,22,5);c.fill();
+    c.beginPath();c.roundRect(_dBtn?604:12,_dBtn?340:370,_dBtn?58:55,_dBtn?28:22,5);c.fill();
     c.strokeStyle='rgba(255,255,255,0.4)';c.lineWidth=1;
-    c.beginPath();c.roundRect(12,370,55,22,5);c.stroke();
+    c.beginPath();c.roundRect(_dBtn?604:12,_dBtn?340:370,_dBtn?58:55,_dBtn?28:22,5);c.stroke();
     c.fillStyle='#ccc';c.font='11px Arial';
-    c.fillText(paused?'▶继续':'⏸暂停',39,384);
+    c.fillText(paused?'▶继续':'⏸暂停',(_dBtn?604:12)+(_dBtn?58:55)/2,(_dBtn?340:370)+(_dBtn?28:22)/2+4);
     c.textAlign='left';
 }
 
@@ -8446,8 +8472,8 @@ cvs.addEventListener('click',(e)=>{
         if(x>=520&&x<=700&&y>=200&&y<=242)goToMainMenu();
     }
     if(state==='bossFight'){
-        // Pause button - bottom left (moved up)
-        if(x>=12&&x<=67&&y>=338&&y<=360){togglePause();return;}
+        // Pause button - desktop=right side, mobile=bottom left
+        if(x>=_bpsX&&x<=_bpsX+_bpsW&&y>=_bpsY&&y<=_bpsY+_bpsH){togglePause();return;}
         if(paused)return;
         const half=BF_BTN/2;
         const upX=BF_CX-half, upY=BF_CY-half-BF_BTN-BF_GAP;
@@ -8462,15 +8488,15 @@ cvs.addEventListener('click',(e)=>{
         if(x>=upX&&x<=upX+BF_BTN&&y>=upY&&y<=upY+BF_BTN){P.moveUp=true;setTimeout(()=>{P.moveUp=false;},150);return;}
         // Down button
         if(x>=dnX&&x<=dnX+BF_BTN&&y>=dnY&&y<=dnY+BF_BTN){P.moveDown=true;setTimeout(()=>{P.moveDown=false;},150);return;}
-        // Boss skill button (circle at 39,300 r=22) - moved up
-        const sdx=x-39,sdy=y-300;
-        if(sdx*sdx+sdy*sdy<=22*22){activateBossSkill();return;}
+        // Boss skill button - desktop=right side, mobile=left side
+        const bsDx=x-_bskX,bsDy=y-_bskY;
+        if(bsDx*bsDx+bsDy*bsDy<=_bskR*_bskR){activateBossSkill();return;}
     }
     if(state==='transitionRoom'){
-        // Skill button - above pause button
+        // Skill button - uses shared hit function
         if(hitSkillBtn(x,y)){activateSkill();return;}
-        // Pause button - bottom left (moved up)
-        if(x>=12&&x<=67&&y>=338&&y<=360){togglePause();return;}
+        // Pause button - desktop=right side, mobile=bottom left
+        if(x>=_bpsX&&x<=_bpsX+_bpsW&&y>=_bpsY&&y<=_bpsY+_bpsH){togglePause();return;}
         if(paused)return;
         const half=BF_BTN/2;
         const upX=BF_CX-half, upY=BF_CY-half-BF_BTN-BF_GAP;
@@ -8763,8 +8789,8 @@ cvs.addEventListener('touchstart',e=>{
             activeTouches[tid]='other';
         }
         if(state==='bossFight'){
-            // Pause button - bottom left (moved up)
-            if(gx>=12&&gx<=67&&gy>=338&&gy<=360){togglePause();activeTouches[tid]='pause';continue;}
+            // Pause button - desktop=right side, mobile=bottom left
+            if(gx>=_bpsX&&gx<=_bpsX+_bpsW&&gy>=_bpsY&&gy<=_bpsY+_bpsH){togglePause();activeTouches[tid]='pause';continue;}
             if(paused){activeTouches[tid]='other';continue;}
             const half=BF_BTN/2;
             const upX=BF_CX-half, upY=BF_CY-half-BF_BTN-BF_GAP;
@@ -8779,15 +8805,15 @@ cvs.addEventListener('touchstart',e=>{
             if(gx>=upX&&gx<=upX+BF_BTN&&gy>=upY&&gy<=upY+BF_BTN){P.moveUp=true;activeTouches[tid]='up2';continue;}
             // Down button
             if(gx>=dnX&&gx<=dnX+BF_BTN&&gy>=dnY&&gy<=dnY+BF_BTN){P.moveDown=true;activeTouches[tid]='down2';continue;}
-            // Boss skill button (circle at 39,300 r=22) - moved up
-            const sdx=gx-39,sdy=gy-300;
-            if(sdx*sdx+sdy*sdy<=22*22){activateBossSkill();activeTouches[tid]='skill2';continue;}
+            // Boss skill button - desktop=right side, mobile=left side
+            const bsDx=gx-_bskX,bsDy=gy-_bskY;
+            if(bsDx*bsDx+bsDy*bsDy<=_bskR*_bskR){activateBossSkill();activeTouches[tid]='skill2';continue;}
         }
         if(state==='transitionRoom'){
-            // Skill button - above pause button
+            // Skill button - uses shared hit function (handles both desktop/mobile positions)
             if(hitSkillBtn(gx,gy)){activateSkill();activeTouches[tid]='skill';continue;}
-            // Pause button - bottom left (moved up)
-            if(gx>=12&&gx<=67&&gy>=338&&gy<=360){togglePause();activeTouches[tid]='pause';continue;}
+            // Pause button - desktop=right side, mobile=bottom left
+            if(gx>=_bpsX&&gx<=_bpsX+_bpsW&&gy>=_bpsY&&gy<=_bpsY+_bpsH){togglePause();activeTouches[tid]='pause';continue;}
             if(paused){activeTouches[tid]='other';continue;}
             const half=BF_BTN/2;
             const upX=BF_CX-half, upY=BF_CY-half-BF_BTN-BF_GAP;
