@@ -1184,6 +1184,9 @@ function clearPetData(){
       // 装备特效
       s.equippedItems = {};
       
+      // 已购买的道具特效（商店物品）
+      s.shopItems = [];
+      
       // 所有游戏进度（取金阁、小猪快跑、消消乐、快乐跑一跑等）
       s.quizState = {
         lastQuizDate: '',
@@ -1301,6 +1304,7 @@ function _supabaseClearPets(cls){
         coins: 50,
         xiandan: 0,
         equipped_items: {},
+        shop_items: [],
         quiz_state: {
           lastQuizDate: '',
           todayCoins: 0,
