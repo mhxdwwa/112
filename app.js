@@ -957,7 +957,7 @@ function showClassDataManagerModal(){
   html += '<div style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);border-radius:14px;padding:14px;margin-bottom:16px;border:1px solid #ffcc80;">';
   html += '<div style="font-size:14px;font-weight:700;color:#e65100;margin-bottom:6px;">⚠️ 操作说明</div>';
   html += '<div style="font-size:12px;color:#795548;line-height:1.6;">';
-  html += '• <b>重置宠物</b>：彻底清除该班级所有宠物数据（宠物卡、特效、姓名），学生金币恢复为50<br>';
+  html += '• <b>重置全部</b>：彻底清除该班级所有学生数据（宠物、金币、仙丹、装备特效、所有游戏进度），学生数据完全恢复到初始状态<br>';
   html += '• <b>删除班级</b>：删除班级及所有学生、宠物数据，可在"已删除班级"中恢复<br>';
   html += '• 所有操作会先从云端数据库彻底删除，再更新本地，防止刷新后数据复活';
   html += '</div></div>';
@@ -972,7 +972,7 @@ function showClassDataManagerModal(){
       html += '<div style="font-size:12px;color:#888;">👨‍🎓 ' + cls.students.length + ' · 🐕 ' + petCount + '</div>';
       html += '</div>';
       html += '<div style="display:flex;gap:8px;">';
-      html += '<button onclick="closeModal();currentClassId=\'' + cls.id + '\';clearPetData();" style="flex:1;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#ff9800,#f57c00);color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(255,152,0,0.3);transition:transform 0.2s;" onmouseenter="this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.transform=\'scale(1)\'">🔄 重置宠物</button>';
+      html += '<button onclick="closeModal();currentClassId=\'' + cls.id + '\';clearPetData();" style="flex:1;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#ff9800,#f57c00);color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(255,152,0,0.3);transition:transform 0.2s;" onmouseenter="this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.transform=\'scale(1)\'">🔄 重置全部</button>';
       html += '<button onclick="closeModal();deleteClass(\'' + cls.id + '\');" style="flex:1;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#ef5350,#d32f2f);color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(239,83,80,0.3);transition:transform 0.2s;" onmouseenter="this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.transform=\'scale(1)\'">🗑️ 删除班级</button>';
       html += '</div></div>';
     });
@@ -1151,7 +1151,7 @@ function clearPetData(){
     showNotification('请先选择班级', '', 'warning');
     return;
   }
-  if(!confirm('确定重置当前班级所有宠物数据？\n所有宠物、宠物特效、宠物姓名都将被彻底清除，学生金币恢复为50。\n\n此操作不可撤销！')) return;
+  if(!confirm('确定重置当前班级所有学生数据？\n\n将清除以下内容：\n• 所有宠物、宠物特效、宠物姓名\n• 金币、仙丹货币\n• 已购买的装备特效\n• 所有游戏进度（取金阁、小猪快跑、消消乐、快乐跑一跑）\n• PK记录、打卡记录\n\n学生数据将完全恢复到初始状态。\n\n此操作不可撤销！')) return;
   var cur = classesData.find(function(c){return c.id===currentClassId||c.id==currentClassId;});
   if(!cur){
     showNotification('班级不存在', '', 'error');
@@ -1168,14 +1168,52 @@ function clearPetData(){
       setTimeout(_waitAndClear, 300);
       return;
     }
-    // 步骤2: 同步已完成，清除本地数据
+    // 步骤2: 同步已完成，清除本地数据（完全重置所有学生数据）
     cur.students.forEach(function(s){
+      // 宠物相关
       s.pets = [];
       s.coins = 50;
       s.lastCheckinDate = null;
       s.activePetId = null;
       s.pkCountToday = 0;
       s.lastPkDate = null;
+      
+      // 仙丹货币
+      s.xiandan = 0;
+      
+      // 装备特效
+      s.equippedItems = {};
+      
+      // 所有游戏进度（取金阁、小猪快跑、消消乐、快乐跑一跑等）
+      s.quizState = {
+        lastQuizDate: '',
+        todayCoins: 0,
+        questionsToday: [],
+        totalQuestions: 0,
+        started: false,
+        totalQuizCoins: 0,
+        
+        // 小猪快跑
+        pigRunLevels: {},
+        pigRunTotalScore: 0,
+        pigRunTools: { remove: 1, shuffle: 1, rotate: 1 },
+        
+        // 消消乐
+        match3Levels: {},
+        match3TotalScore: 0,
+        match3Tools: { shuffle: 1, undo: 1 },
+        
+        // 快乐跑一跑
+        happyRunMaxLevel: 1,
+        happyRunLevels: {},
+        happyRunLevelBestCoins: {},
+        happyRunTotalSilver: 0,
+        happyRunSilverBalance: 0,
+        happyRunPetGold: 0,
+        happyRunOwnedChars: [0],
+        happyRunBossKillBonus: {},
+        happyRunTotalScore: 0
+      };
     });
     // 步骤3: 保存干净数据（_pauseSync=true 期间不会触发同步）
     safeLSSave('classPetData', classesData);
@@ -1189,7 +1227,7 @@ function clearPetData(){
         // 步骤5: 恢复同步，触发上传干净状态
         _pauseSync = false;
         saveClassData();
-        showNotification('重置完成', '班级【' + className + '】宠物数据已彻底清空', 'success');
+        showNotification('重置完成', '班级【' + className + '】所有学生数据已完全重置', 'success');
       }).catch(function(err){
         _pauseSync = false;
         saveClassData();
@@ -1199,7 +1237,7 @@ function clearPetData(){
     } else {
       _pauseSync = false;
       saveClassData();
-      showNotification('重置完成', '班级【' + className + '】宠物数据已清空', 'success');
+        showNotification('重置完成', '班级【' + className + '】所有学生数据已完全重置', 'success');
     }
   };
   _waitAndClear();
@@ -1258,13 +1296,40 @@ function _supabaseClearPets(cls){
         throw new Error('删除宠物失败: ' + petDel.error.message);
       }
       console.log('[v127] _supabaseClearPets: deleted', studentIds.length, 'students\' pets');
-      // 重置学生金币为 50
-      var stuUpdate = await db.from('students').update({ coins: 50 }).eq('class_id', targetId);
+      // 完全重置学生数据：金币、仙丹、装备、游戏进度
+      var stuUpdate = await db.from('students').update({ 
+        coins: 50,
+        xiandan: 0,
+        equipped_items: {},
+        quiz_state: {
+          lastQuizDate: '',
+          todayCoins: 0,
+          questionsToday: [],
+          totalQuestions: 0,
+          started: false,
+          totalQuizCoins: 0,
+          pigRunLevels: {},
+          pigRunTotalScore: 0,
+          pigRunTools: { remove: 1, shuffle: 1, rotate: 1 },
+          match3Levels: {},
+          match3TotalScore: 0,
+          match3Tools: { shuffle: 1, undo: 1 },
+          happyRunMaxLevel: 1,
+          happyRunLevels: {},
+          happyRunLevelBestCoins: {},
+          happyRunTotalSilver: 0,
+          happyRunSilverBalance: 0,
+          happyRunPetGold: 0,
+          happyRunOwnedChars: [0],
+          happyRunBossKillBonus: {},
+          happyRunTotalScore: 0
+        }
+      }).eq('class_id', targetId);
       if(stuUpdate.error){
         console.error('[v127] _supabaseClearPets: students update error:', stuUpdate.error);
-        throw new Error('重置金币失败: ' + stuUpdate.error.message);
+        throw new Error('重置学生数据失败: ' + stuUpdate.error.message);
       }
-      console.log('[v127] _supabaseClearPets: reset students coins to 50');
+      console.log('[v127] _supabaseClearPets: reset all student data for', studentIds.length, 'students');
     }
     // 清除该班级的 custom_actions
     var caDel = await db.from('custom_actions').delete().eq('class_id', targetId);
