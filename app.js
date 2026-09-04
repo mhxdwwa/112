@@ -940,7 +940,7 @@ function getEggImage() { return `<img src="${_img('蛋.webp')}" alt="宠物蛋" 
 
 
 function showModal(title,content,actions=[],large=false,extraClass=''){const c=document.getElementById('modalContainer'),m=document.createElement('div');m.className='modal-overlay';const modalClass=extraClass?extraClass:(large?'large':'');m.innerHTML=`<div class="modal ${modalClass}"><div class="modal-title">${esc(title)}</div><div class="modal-content">${content}</div><div class="modal-actions">${actions.map(a=>`<button class="btn ${a.class||'btn-primary'}" onclick="playClickSound(); ${a.onclick}">${esc(a.text)}</button>`).join('')}</div></div>`;c.appendChild(m);m.addEventListener('click',(e)=>{if(e.target===m)closeModal();});return m;}
-function closeModal(){const c=document.getElementById('modalContainer');while(c.firstChild)c.removeChild(c.firstChild);currentModalStudentId=null; stopAllHeartEmitters(); cleanupPetModalEffects(); }
+function closeModal(){const c=document.getElementById('modalContainer');while(c.firstChild)c.removeChild(c.firstChild);currentModalStudentId=null; if(typeof stopAllHeartEmitters==='function') stopAllHeartEmitters(); if(typeof cleanupPetModalEffects==='function') cleanupPetModalEffects(); }
 function saveClassData(changeType, detail){safeLSSave('classPetData', classesData); scheduleFileSave(); triggerRealtimeSync(); if(changeType && typeof _broadcastChange === 'function'){ _broadcastChange(changeType, detail); }}
 function saveDeletedClasses(){safeLSSave('deletedClasses', deletedClasses); scheduleFileSave();}
 function showDeletedClassesModal(){if(deletedClasses.length===0){showModal('🗑️ 已删除班级','<div style="text-align:center;padding:20px;">暂无已删除的班级</div>',[{text:'关闭',onclick:'closeModal()'}],false);return;}let html='<div style="max-height:400px;overflow:auto;">';[...deletedClasses].reverse().forEach((cls,i)=>{const time=new Date(cls.deletedAt).toLocaleString();const stuCount=cls.students?cls.students.length:0;const petCount=cls.students?cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0):0;html+=`<div class="history-log-item"><div><div class="history-log-time">${time} 删除</div><div><strong>${esc(cls.name)}</strong></div><div style="font-size:12px;">👨‍🎓 ${stuCount}名学生 · 🐕 ${petCount}只宠物</div></div><div style="display:flex;gap:6px;"><button class="btn btn-primary" style="padding:6px 12px;" onclick="restoreClass('${cls.id}');closeModal();">恢复</button><button class="btn btn-danger" style="padding:6px 12px;" onclick="permanentDeleteClass('${cls.id}');closeModal();">彻底删除</button></div></div>`;});html+='</div>';showModal('🗑️ 已删除班级',html,[{text:'关闭',onclick:'closeModal()'}],true);}
@@ -2118,7 +2118,7 @@ function refreshCurrentStudentModal(){
   const activePet = getActivePet(student);
   if(!activePet){ closeModal(); return; }
   ensurePetPlayFields(activePet);
-  cleanupPetModalEffects();
+  if(typeof cleanupPetModalEffects==='function') cleanupPetModalEffects();
   // v18: Robust check — is current user a student viewing ANOTHER student's pet?
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
   const _mySid = isStudentView ? (currentUser.studentId || localStorage.getItem('studentId') || '') : '';
