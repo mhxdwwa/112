@@ -1610,13 +1610,14 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
     var coinDelta = coinResult - investCoins; // v123: Net change = +2x (not 3x)
     // v156: 使用 coinsAndPet 同时记录金币+成长值（一条完整日志）
     if(window.USE_API && window.ApiMigration) {
+      student.coins += coinDelta; // v162: 乐观本地更新金币
       window.ApiMigration.coinsAndPet(student, coinDelta, [{
         petId: pet.id, updates: { growth: pet.growth, level: pet.level }
       }], {
         actionType: '江湖胜利',
         details: `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
         expDelta: 0, petId: pet.id
-      });
+      }).then(function(r){if(r.ok)student.coins=r.coinsAfter;});
     } else {
       changeStudentCoins(student, coinDelta, '江湖胜利',
         `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
@@ -1631,13 +1632,14 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
     _recalcPetLevel(pet);
     // v156: 使用 coinsAndPet 同时记录金币+成长值（一条完整日志）
     if(window.USE_API && window.ApiMigration) {
+      student.coins += coinDelta; // v162: 乐观本地更新金币
       window.ApiMigration.coinsAndPet(student, coinDelta, [{
         petId: pet.id, updates: { growth: pet.growth, level: pet.level }
       }], {
         actionType: '江湖失败',
         details: `${student.name}携${pet.nickname || pet.name}闯荡江湖不敌${boss.name}，投入${investCoins}金币`,
         expDelta: growthGain, petId: pet.id
-      });
+      }).then(function(r){if(r.ok)student.coins=r.coinsAfter;});
     } else {
       changeStudentCoins(student, coinDelta, '江湖失败',
         `${student.name}携${pet.nickname || pet.name}闯荡江湖不敌${boss.name}，投入${investCoins}金币`,
