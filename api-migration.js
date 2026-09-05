@@ -24,8 +24,8 @@
   }
 
   // API 基础 URL
-  // v141: 使用完整 URL，因为 Pages 和 Workers 不在同域名
-  var API_BASE = 'https://bjcw.444522621.workers.dev/api';
+  // v142: 使用相对路径，走 Cloudflare Pages Functions（同域名，无跨域问题）
+  var API_BASE = '/api';
 
   // ============================================================
   // 辅助函数
