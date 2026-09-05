@@ -1,7 +1,7 @@
 /**
  * GET /api/classes?teacherId=xxx — 加载教师所有班级
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelect } from './_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbSelect } from '../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
