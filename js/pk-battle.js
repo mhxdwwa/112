@@ -2540,9 +2540,20 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   resultOverlay.appendChild(resultExitBtn);
   // Show the body-level exit button (escapes all stacking contexts)
   _showPKExitButton();
+  // v153: Also force-enable ALL buttons in the modal (exit button was staying disabled)
   if(currentBattleModalOverlay) {
-    const exitBtn = currentBattleModalOverlay.querySelector('.modal-actions button');
-    if(exitBtn) exitBtn.disabled = false;
+    currentBattleModalOverlay.querySelectorAll('.modal-actions button').forEach(function(btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      btn.style.filter = 'none';
+      btn.style.cursor = 'pointer';
+    });
+  }
+  // v153: Persist PK count to server (was only saved locally, reset on reload)
+  if(window.USE_API && window.ApiMigration) {
+    window.ApiMigration.updateStudent(student1.id, {pk_count_today: student1.pkCountToday, last_pk_date: student1.lastPkDate});
+    window.ApiMigration.updateStudent(student2.id, {pk_count_today: student2.pkCountToday, last_pk_date: student2.lastPkDate});
   }
   pkState.isFighting = false;
   pkState._battleCompleted = true; // Mark this battle as completed to prevent re-start

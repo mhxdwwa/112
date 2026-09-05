@@ -1156,7 +1156,11 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
     // 败方还有血量，预设胜方发起终结一击
     await sleep(800);
     jhShowFloatingText(scene, willWin ? 'left' : 'right', '⚡ 终极奥义!', willWin ? '#40916c' : boss.accent, 42);
-    await jhDoAttack(willWin, false, true);
+    try {
+      await jhDoAttack(willWin, false, true);
+    } catch(e) {
+      console.error('[江湖行] 终结一击出错:', e);
+    }
   }
   
   // 确保败方血量精确归零，胜方血量随机保留1~50（看起来像险胜，不穿帮）
@@ -1172,7 +1176,15 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
   jhUpdateHPBar('jhBossHp', bossHp, bossMaxHP);
 
   await sleep(1200);
-  showJianghuResult(overlay, willWin, student, pet, investCoins, boss);
+  // v153: 用try-catch包裹结算，防止特效出错导致卡死
+  try {
+    showJianghuResult(overlay, willWin, student, pet, investCoins, boss);
+  } catch(e) {
+    console.error('[江湖行] 结算出错:', e);
+    // 出错时直接显示退出按钮
+    const exitBtn = document.getElementById('jhExitBtn');
+    if (exitBtn) exitBtn.classList.add('jh-visible');
+  }
 }
 
 

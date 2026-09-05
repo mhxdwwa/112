@@ -1167,8 +1167,13 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
   
   // 启用退出按钮
   if(classPKBattleModal) {
-    const exitBtn = classPKBattleModal.querySelector('.modal-actions button');
-    if(exitBtn) exitBtn.disabled = false;
+    classPKBattleModal.querySelectorAll('.modal-actions button').forEach(function(btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      btn.style.filter = 'none';
+      btn.style.cursor = 'pointer';
+    });
   }
   
   // 显示body级别退出按钮（绕过所有层叠上下文）
