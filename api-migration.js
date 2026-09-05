@@ -103,9 +103,9 @@
         // 更新本地数据
         student.coins = result.coinsAfter;
         
-        // v149-fix: 不再在这里调用 recordAction — 调用方（app.js changeStudentCoins）
-        // 已经做了乐观 recordAction，这里再调一次会导致日志重复
-        // 注意：coinsAndPet 也有同样的问题，一并修复
+        // v163: 回声保护 — 标记刚写入的行，防止 Realtime 回传时重复应用 delta
+        if (typeof _markRowWritten === 'function') _markRowWritten('students', student.id);
+        if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
         
         console.log('[API] coins ok:', student.name, delta, '->', result.coinsAfter);
       } else if (result.error === 'Insufficient balance') {
@@ -172,12 +172,15 @@
               if (pu.updates.last_feed_date) pet.lastFeedDate = pu.updates.last_feed_date;
               if (pu.updates.last_play_date) pet.lastPlayDate = pu.updates.last_play_date;
               if (pu.updates.nickname) pet.nickname = pu.updates.nickname;
+              // v163: 回声保护 — 标记刚写入的宠物行
+              if (typeof _markRowWritten === 'function') _markRowWritten('pets', pet.id);
             }
           });
         }
         
-        // v149-fix: 不再在这里调用 recordAction — 调用方（app.js feedPet/playWithPet 等）
-        // 已经做了乐观 recordAction，这里再调一次会导致日志重复
+        // v163: 回声保护 — 标记学生行 + 更新时间戳
+        if (typeof _markRowWritten === 'function') _markRowWritten('students', student.id);
+        if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
         
         console.log('[API] coins-and-pet ok:', student.name, 'coins:', coinDelta);
       } else if (result.error === 'Insufficient balance') {
@@ -208,6 +211,8 @@
       updates: updates
     }).then(function(result) {
       if (result.ok) {
+        // v163: 回声保护 — 标记刚写入的宠物行
+        if (typeof _markRowWritten === 'function') _markRowWritten('pets', petId);
         console.log('[API] pet update ok:', petId);
       } else {
         console.error('[API] pet update error:', result.error);
@@ -374,6 +379,9 @@
       updates: updates
     }).then(function(result) {
       if (result.ok) {
+        // v163: 回声保护 — 标记刚写入的学生行
+        if (typeof _markRowWritten === 'function') _markRowWritten('students', studentId);
+        if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
         console.log('[API] student update ok:', studentId);
       } else {
         console.error('[API] student update error:', result.error);
@@ -398,6 +406,11 @@
     }
     return apiRequest('/student/manage', payload).then(function(result) {
       if (result.ok) {
+        // v163: 回声保护 — 学生增删后标记
+        if (data && data.studentId && typeof _markRowWritten === 'function') {
+          _markRowWritten('students', data.studentId);
+        }
+        if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
         console.log('[API] student manage ok:', action);
       } else {
         console.error('[API] student manage error:', result.error);

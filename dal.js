@@ -65,7 +65,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, ma
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '129.0';
+var _DAL_VERSION = '163.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -3459,15 +3459,8 @@ function _refreshLogsOnly() {
 }
 
 function _setupRealtimeSubscriptions() {
-  // v143: API 模式 — 不使用 Supabase Realtime，改用 API 轮询
-  if (typeof window.USE_API !== 'undefined' && window.USE_API) {
-    console.log('[DAL] v143 API mode: using API polling instead of Realtime');
-    // 缩短轮询间隔（API 模式下没有 Realtime，需要更频繁的轮询）
-    _refreshInterval = 30000; // 30 秒（旧模式 120 秒）
-    _startFallbackPolling();
-    _initBroadcastChannel();
-    return;
-  }
+  // v163: API 模式也启用 Realtime（v143 曾跳过，现在回声保护修复后重新启用）
+  // 轮询保持 120 秒作为兜底（_refreshInterval 默认值）
   
   if (!db || !db.channel) {
     // No Realtime support — start polling immediately
