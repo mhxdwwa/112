@@ -1197,11 +1197,11 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
   if(window.USE_API && window.ApiMigration) {
     if(p1HP <= 0 && p2HP <= 0) {
       // Draw — sync coins + growth for both
-      window.ApiMigration.coinsAndPet(student1, 0, [{
+      window.ApiMigration.coinsAndPet(student1, 5, [{
         petId: pet1.id, updates: { growth: pet1.growth, level: pet1.level }
       }], { actionType: '课堂PK平局', details: student1.name + ' vs ' + student2.name + ' 平局', expDelta: 3, petId: pet1.id });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(student1.id, student1.name, '课堂PK平局', student1.name+' vs '+student2.name+' 平局', 5, 3, pet1.id);
-      window.ApiMigration.coinsAndPet(student2, 0, [{
+      window.ApiMigration.coinsAndPet(student2, 5, [{
         petId: pet2.id, updates: { growth: pet2.growth, level: pet2.level }
       }], { actionType: '课堂PK平局', details: student2.name + ' vs ' + student1.name + ' 平局', expDelta: 3, petId: pet2.id });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(student2.id, student2.name, '课堂PK平局', student2.name+' vs '+student1.name+' 平局', 5, 3, pet2.id);

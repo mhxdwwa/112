@@ -11,13 +11,13 @@
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Ma+Shan+Zheng&display=swap"></noscript>
 <title>🍭宠物世界🍭</title>
-<link rel="stylesheet" href="style.css?v=160">
+<link rel="stylesheet" href="style.css?v=161">
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- v143: api-migration.js 必须在 auth-check.js 之前加载（设置 USE_API 开关） -->
-<script defer src="api-migration.js?v=160"></script>
-<script defer src="auth-check.js?v=160"></script>
+<script defer src="api-migration.js?v=161"></script>
+<script defer src="auth-check.js?v=161"></script>
 <!-- v103: 移除 prefetch — 游戏 JS 已改为按需加载，不再预取 -->
 </head>
 <body>
@@ -251,16 +251,16 @@ setTimeout(function() { window._hideDalLoading(); }, 5000);
 <div id="upgradeEffectContainer"></div>
 <!-- v136: 首屏脚本顺序优化 -->
   <!-- v136: 商店系统 — 首屏必需（getEquippedItems/getShopItemById/getStudentGrowthBonus在宠物卡渲染中使用） -->
-  <script defer src="js/shop-system.js?v=160"></script>
+  <script defer src="js/shop-system.js?v=161"></script>
   <!-- v135: 宠物活力/出逃模块 — 首屏必需，在 lazy-loader 之前加载以自动初始化 -->
-  <script defer src="js/pet-vitality.js?v=160"></script>
-  <script defer src="js/pet-escape.js?v=160"></script>
+  <script defer src="js/pet-vitality.js?v=161"></script>
+  <script defer src="js/pet-escape.js?v=161"></script>
   <!-- v135: app.js 必须在 heart-effect/bgm-system 之前，因为它们会包装 app.js 中的函数 -->
   <script defer src="js/storage.js?v=1"></script>
-  <script defer src="app.js?v=160"></script>
+  <script defer src="app.js?v=161"></script>
   <script defer src="js/heart-effect.js?v=2"></script>
   <script defer src="js/bgm-system.js?v=2"></script>
-  <script defer src="js/lazy-loader.js?v=160"></script>
+  <script defer src="js/lazy-loader.js?v=161"></script>
   <!-- v136: 以下模块改为按需加载（用户点击时动态加载） -->
   <!-- pk-battle, class-pk, jianghu, snack-system, history-ui,
        pet-modal, rankings, rank-announcement, library-system,
@@ -735,8 +735,8 @@ function escapeHtmlSimple(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
-  <link rel="preload" as="script" href="dal.js?v=160">
-  <script defer src="dal.js?v=160"></script>
+  <link rel="preload" as="script" href="dal.js?v=161">
+  <script defer src="dal.js?v=161"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
