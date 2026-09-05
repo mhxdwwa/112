@@ -497,6 +497,7 @@ function _smartRefreshFromSupabase() {
         id: s.id,
         name: s.name || '',
         coins: s.coins || 0,
+        xiandan: (s.xiandan != null ? s.xiandan : 0),
         lastCheckinDate: s.last_checkin_date || null,
         lastJianghuDate: s.last_jianghu_date || null,
         lastPkDate: s.last_pk_date || null,
@@ -505,7 +506,8 @@ function _smartRefreshFromSupabase() {
         shopItems: (function() { try { return typeof s.shop_items === 'string' ? JSON.parse(s.shop_items) : (s.shop_items || []); } catch(e) { return []; } })(),
         equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
         password: s.password || '',
-        quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })()
+        quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })(),
+        snackRequests: (function() { try { return typeof s.snack_requests === 'string' ? JSON.parse(s.snack_requests) : (s.snack_requests || []); } catch(e) { return []; } })()
       };
     });
 
@@ -1720,14 +1722,9 @@ var _logSyncRetryCount = 0;
 var _LOG_SYNC_MAX_RETRIES = 5;
 
 function _writeUnsyncedLogsToSupabase() {
-  // v141: API 模式下，日志已通过 API 写入，跳过旧同步机制
+  // v145: API 模式下，日志已通过 /api/coins 等端点原子写入，跳过旧同步机制
+  // 不再虚假标记为已同步 — 如果 API 调用失败，日志保留 _synced=false 以便排查
   if (window.USE_API && window.ApiMigration) {
-    // 标记所有未同步的日志为已同步（避免旧机制重复处理）
-    if (window.operationLogs) {
-      window.operationLogs.forEach(function(log) {
-        if (!log._synced) log._synced = true;
-      });
-    }
     return Promise.resolve();
   }
 

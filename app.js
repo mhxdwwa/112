@@ -730,6 +730,8 @@ function changeStudentCoins(student, delta, actionType, details, expDelta, petId
         if (result.ok) {
           // API 成功，用服务端数据校正本地
           student.coins = result.coinsAfter;
+          // v145: 更新基准值，防止智能刷新误判
+          if (typeof _myBaseCoins !== 'undefined') _myBaseCoins = result.coinsAfter;
         } else if (result.error === 'Insufficient balance') {
           // 余额不足，回滚本地数据
           student.coins = before;

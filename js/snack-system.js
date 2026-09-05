@@ -286,6 +286,11 @@ function submitSnackRequest() {
   // Deduct 仙丹
   if (snackPrice > 0) {
     student.xiandan = (student.xiandan || 0) - snackPrice;
+    // v145: API 模式 — 同步仙丹变化到服务器
+    if (window.USE_API && window.ApiMigration) {
+      window.ApiMigration.updateStudent(student.id, { xiandan: student.xiandan });
+      if (typeof _myBaseXiandan !== 'undefined') _myBaseXiandan = student.xiandan;
+    }
   }
   
   student.snackRequests.push(request);
@@ -436,6 +441,17 @@ function approveSnackRequest(requestId) {
     saveLogs();
   }
   
+  // v145: API 模式 — 通过服务端 API 同步审批结果
+  if (window.USE_API && window.ApiMigration) {
+    window.ApiMigration.approveSnack({
+      studentId: student.id,
+      requestId: request.id,
+      approved: true,
+      snackIndex: request.snackId,
+      xiandanDelta: 0  // 仙丹已在申请时扣除，审批不退还
+    });
+  }
+  
   saveClassData();
   if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
   _updateSnackRequestBadge(); // 立即更新徽章
@@ -486,6 +502,17 @@ function rejectSnackRequest(requestId) {
     log.extra.status = 'rejected';
     log.extra.rejectedAt = request.rejectedAt;
     saveLogs();
+  }
+  
+  // v145: API 模式 — 通过服务端 API 同步拒绝结果和仙丹退还
+  if (window.USE_API && window.ApiMigration) {
+    window.ApiMigration.approveSnack({
+      studentId: student.id,
+      requestId: request.id,
+      approved: false,
+      snackIndex: request.snackId,
+      xiandanDelta: request.snackPrice || 0  // 退还仙丹
+    });
   }
   
   saveClassData();
