@@ -15,7 +15,7 @@ const DIST = resolve(__dirname, 'dist');
 // Files to minify
 const JS_FILES = [
   'app.js', 'dal.js', 'auth-check.js', 'quiz.js', 'quiz-bank.js',
-  'pig-run.js', 'match3.js', 'happy-run.js', 'login.js',
+  'pig-run.js', 'match3.js', 'happy-run.js', 'login.js', 'api-migration.js',
 ];
 
 const JS_MODULE_DIR = 'js';
@@ -118,7 +118,7 @@ async function main() {
   console.log(`  ✓ ${cssFile}: copied`);
 
   // Copy HTML files
-  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html']) {
+  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html', 'test-api.html']) {
     const src = resolve(__dirname, html);
     try {
       copyFileSync(src, join(DIST, html));
