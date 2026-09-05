@@ -10,6 +10,31 @@ const STAGE_NAMES = {
   5: '完美精灵', 6: '传说神兽', 7: '远古守护', 8: '星辰之主', 9: '万物之神'
 };
 
+// 阶段升级所需成长值（与客户端 generateStageCurve 保持一致）
+const STAGE_GROWTH = [
+  { stage: 1, growthRequired: 0 },
+  { stage: 2, growthRequired: 30 },
+  { stage: 3, growthRequired: 90 },
+  { stage: 4, growthRequired: 210 },
+  { stage: 5, growthRequired: 410 },
+  { stage: 6, growthRequired: 740 },
+  { stage: 7, growthRequired: 1200 },
+  { stage: 8, growthRequired: 1800 },
+  { stage: 9, growthRequired: 2600 },
+];
+
+// v158: 服务端根据成长值计算等级（安全兜底，防止客户端发送错误的等级）
+function calcLevelFromGrowth(growth) {
+  let level = 1;
+  for (let i = STAGE_GROWTH.length - 1; i >= 0; i--) {
+    if (growth >= STAGE_GROWTH[i].growthRequired) {
+      level = STAGE_GROWTH[i].stage;
+      break;
+    }
+  }
+  return level;
+}
+
 export const onRequestOptions = handleOptions;
 
 export const onRequestPost = async ({ request, env }) => {
@@ -70,6 +95,11 @@ export const onRequestPost = async ({ request, env }) => {
     }
     if (filtered.growth !== undefined && filtered.growth > 2600) filtered.growth = 2600;
     if (filtered.growth !== undefined && filtered.growth < 0) filtered.growth = 0;
+
+    // v158: 服务端根据成长值重算等级（防止客户端发送旧等级导致刷新后等级回退）
+    if (filtered.growth !== undefined) {
+      filtered.level = calcLevelFromGrowth(filtered.growth);
+    }
 
     if (pu.petId && Object.keys(filtered).length > 0) {
       const petR = await sbUpdate(env, 'pets', filtered, `id=eq.${pu.petId}`);
