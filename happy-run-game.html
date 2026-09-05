@@ -1225,8 +1225,8 @@ function updatePhysics(){
         P.gnd=false;P.onPlat=-1;P.onCrate=-1;return;
     }
     if(!P.gnd){
-        // Variable gravity: reduced when ascending for more hang time (easier to clear pits/obstacles)
-        const grav = P.vy < 0 ? GRAV * 0.55 : GRAV;
+        // v152: 跳跃高度恢复原始值，仅在跳跃最高点附近（速度接近0时）降低重力，增加滞空时间
+        const grav = (Math.abs(P.vy) < 3) ? GRAV * 0.4 : GRAV;
         P.vy+=grav;P.y+=P.vy;
     }
     if(P.gnd&&P.onPlat>=0){const pl=plats[P.onPlat];if(!pl){P.onPlat=-1;P.gnd=false;P.vy=0;}else{const plSX=w2s(pl.wx);if(PX>plSX+pl.w-2||PX+PW<plSX+2){P.gnd=false;P.vy=0;P.onPlat=-1;}}}

@@ -21,7 +21,9 @@ export const onRequestPost = async ({ request, env }) => {
 
   if (action === 'add') {
     if (!classId || !name) return jsonResponse({ error: 'Missing classId or name' }, 400);
-    const payload = { name, class_id: classId, coins: 0, xiandan: 0, password: password || '' };
+    const coins = body.coins !== undefined ? body.coins : 50;
+    const xiandan = body.xiandan !== undefined ? body.xiandan : 0;
+    const payload = { name, class_id: classId, coins: coins, xiandan: xiandan, password: password || '' };
     const insertR = await sbInsert(env, 'students', [payload]);
     if (insertR.error) return jsonResponse({ error: 'Failed to add student', details: insertR.error }, 500);
     return jsonResponse({ ok: true, student: insertR.data[0] });
