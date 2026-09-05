@@ -1608,31 +1608,50 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
     // 胜利：投入的金币消失，获得三倍奖励（净赚两倍）
     var coinResult = investCoins * 3; // 获得三倍
     var coinDelta = coinResult - investCoins; // v123: Net change = +2x (not 3x)
-    changeStudentCoins(student, coinDelta, '江湖胜利',
-      `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
-      0, pet.id, { jhType: 'win', bossName: boss.name, investCoins: investCoins });
+    // v156: 使用 coinsAndPet 同时记录金币+成长值（一条完整日志）
+    if(window.USE_API && window.ApiMigration) {
+      window.ApiMigration.coinsAndPet(student, coinDelta, [{
+        petId: pet.id, updates: { growth: pet.growth }
+      }], {
+        actionType: '江湖胜利',
+        details: `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
+        expDelta: 0, petId: pet.id
+      });
+    } else {
+      changeStudentCoins(student, coinDelta, '江湖胜利',
+        `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
+        0, pet.id, { jhType: 'win', bossName: boss.name, investCoins: investCoins });
+    }
     growthGain = 0; // 胜利不再获得成长值
   } else {
     // 失败：失去投入的金币，获得投入金币30%的成长值
     var coinDelta = -investCoins; // v123: Net change = -investCoins
-    changeStudentCoins(student, coinDelta, '江湖失败',
-      `${student.name}携${pet.nickname || pet.name}闯荡江湖不敌${boss.name}，投入${investCoins}金币`,
-      0, pet.id, { jhType: 'lose', bossName: boss.name, investCoins: investCoins });
     growthGain = Math.floor(investCoins * 0.3); // 失败获得30%成长值
     pet.growth = (pet.growth || 0) + growthGain;
     _recalcPetLevel(pet);
+    // v156: 使用 coinsAndPet 同时记录金币+成长值（一条完整日志）
+    if(window.USE_API && window.ApiMigration) {
+      window.ApiMigration.coinsAndPet(student, coinDelta, [{
+        petId: pet.id, updates: { growth: pet.growth, level: pet.level }
+      }], {
+        actionType: '江湖失败',
+        details: `${student.name}携${pet.nickname || pet.name}闯荡江湖不敌${boss.name}，投入${investCoins}金币`,
+        expDelta: growthGain, petId: pet.id
+      });
+    } else {
+      changeStudentCoins(student, coinDelta, '江湖失败',
+        `${student.name}携${pet.nickname || pet.name}闯荡江湖不敌${boss.name}，投入${investCoins}金币`,
+        0, pet.id, { jhType: 'lose', bossName: boss.name, investCoins: investCoins });
+    }
   }
 
   // Mark student as having done jianghu today
   student.lastJianghuDate = new Date().toDateString();
 
   saveClassData();
-  // v156: Sync jianghu result to server (growth on loss + lastJianghuDate)
+  // v156: Sync lastJianghuDate to server (coinsAndPet already synced coins+growth)
   if(window.USE_API && window.ApiMigration) {
     window.ApiMigration.updateStudent(student.id, { last_jianghu_date: student.lastJianghuDate });
-    if(!won && growthGain > 0) {
-      window.ApiMigration.updatePet(pet.id, { growth: pet.growth, level: pet.level });
-    }
   }
   if(typeof renderHomePetGrid==='function') renderHomePetGrid();
   if(typeof renderClassTopThree==='function') renderClassTopThree();

@@ -144,6 +144,10 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
   if (_historyFilterEnabled && _historyFilterStudentId) {
     html += '<button onclick="clearHistoryFilter()" style="padding:2px 8px;border-radius:10px;border:1px solid #ffcccc;background:#fff5f5;color:#cc5555;font-size:11px;cursor:pointer;">✕ 清除</button>';
   }
+  // v156: 一键清空历史记录按钮
+  if(!_isStudentHistoryView) {
+    html += '<button onclick="clearAllHistoryLogs()" style="margin-left:auto;padding:4px 12px;border-radius:14px;border:1.5px solid #ffcccc;background:#fff5f5;color:#cc5555;font-size:12px;cursor:pointer;transition:all 0.2s;">🗑️ 一键清空</button>';
+  }
   html += '</div>';
   if(classLogs.length===0){
     html += '<div style="text-align:center;padding:25px;color:#bba;">该月无操作记录</div>';
@@ -412,4 +416,33 @@ window.onHistoryFilterStudentClick = function(studentId) {
 window.closeHistoryFilterModal = function() {
   var modal = document.getElementById('historyFilterModal');
   if (modal) modal.remove();
+};
+
+// v156: 一键清空历史记录
+window.clearAllHistoryLogs = function() {
+  if(!confirm('确定要清空所有历史记录吗？\n\n此操作将：\n1. 清空本地所有操作日志\n2. 清空服务器上的操作日志\n3. 从此刻起重新开始记录\n\n此操作不可恢复！')) {
+    return;
+  }
+  
+  // 清空本地日志
+  window.operationLogs = [];
+  if(typeof saveLogs === 'function') saveLogs();
+  
+  // v156: 清空服务器日志
+  if(window.USE_API && window.ApiMigration && window.ApiMigration.clearLogs) {
+    window.ApiMigration.clearLogs(currentClassId).then(function(result) {
+      if(result.ok) {
+        showNotification('清空成功', '所有历史记录已清空', 'success');
+        refreshHistoryModalIfOpen();
+      } else {
+        showNotification('清空失败', result.error || '未知错误', 'error');
+      }
+    }).catch(function(err) {
+      console.error('[History] Clear logs error:', err);
+      showNotification('清空失败', '网络错误', 'error');
+    });
+  } else {
+    showNotification('清空成功', '本地历史记录已清空', 'success');
+    refreshHistoryModalIfOpen();
+  }
 };

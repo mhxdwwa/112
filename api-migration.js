@@ -615,6 +615,29 @@
     });
   }
 
+  /**
+   * 通过 API 清空操作日志
+   * v156: 一键清空历史记录功能
+   */
+  function clearLogsViaApi(classId) {
+    if (!classId) {
+      return Promise.resolve({ error: 'Missing classId' });
+    }
+    return apiRequest('/logs/clear', {
+      classId: classId
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] logs clear ok:', classId);
+      } else {
+        console.error('[API] logs clear error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] logs clear failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
   // ============================================================
   // 健康检查
   // ============================================================
@@ -777,6 +800,7 @@
     appendLogsBulk: appendLogsBulkViaApi,
     loadLogs: loadLogsViaApi,
     revertLog: revertLogViaApi,
+    clearLogs: clearLogsViaApi,
     
     // 认证
     authVerify: authVerifyViaApi,

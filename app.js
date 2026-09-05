@@ -722,7 +722,8 @@ function changeStudentCoins(student, delta, actionType, details, expDelta, petId
     var before = student.coins || 0;
     student.coins = before + delta;
     if (student.coins < 0) student.coins = 0;
-    recordAction(student.id, student.name, actionType, details, delta, expDelta || 0, petId || null, extra || null);
+    // v156: 不再调用 recordAction — 服务端 /api/coins 已写入日志
+    // 之前客户端+服务端各写一条，合并后出现重复记录
     
     // 异步调用 API 更新数据库
     window.ApiMigration.changeStudentCoins(student, delta, actionType, details, expDelta, petId, extra)
@@ -735,11 +736,6 @@ function changeStudentCoins(student, delta, actionType, details, expDelta, petId
         } else if (result.error === 'Insufficient balance') {
           // 余额不足，回滚本地数据
           student.coins = before;
-          // 移除最后一条日志
-          if (window.operationLogs && window.operationLogs.length > 0) {
-            window.operationLogs.pop();
-            saveLogs();
-          }
         } else if (result.error) {
           // API 失败，回滚到旧方式（直接写 Supabase）
           console.warn('[API] coins failed, falling back to direct Supabase:', result.error);
@@ -1899,7 +1895,7 @@ function feedPet(student, pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 5;
     if (student.coins < 0) student.coins = 0;
-    recordAction(student.id, student.name, '喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id, null);
+    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
     
     // 异步调用 API
     window.ApiMigration.coinsAndPet(student, -5, [{
@@ -1923,10 +1919,6 @@ function feedPet(student, pet){
         // 回滚
         pet.growth = prevGrowth;
         student.coins = prevCoins;
-        if (window.operationLogs && window.operationLogs.length > 0) {
-          window.operationLogs.pop();
-          saveLogs();
-        }
         console.warn('[API] feedPet failed:', result.error);
       }
     });
@@ -2446,7 +2438,7 @@ function playWithPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 20;
     if (student.coins < 0) student.coins = 0;
-    recordAction(student.id, student.name, '玩耍', `${pet.nickname||pet.name} +${gain}成长值`, -20, gain, pet.id, null);
+    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
     
     window.ApiMigration.coinsAndPet(student, -20, [{
       petId: pet.id,
@@ -2456,7 +2448,7 @@ function playWithPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; }
     });
     
     showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
@@ -2485,7 +2477,7 @@ function walkPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 30;
     if (student.coins < 0) student.coins = 0;
-    recordAction(student.id, student.name, '散步', `${pet.nickname||pet.name} +${gain}成长值`, -30, gain, pet.id, null);
+    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
     
     window.ApiMigration.coinsAndPet(student, -30, [{
       petId: pet.id, updates: { growth: pet.growth }
@@ -2494,7 +2486,7 @@ function walkPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; }
     });
     
     showNotification('散步愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
@@ -2524,7 +2516,7 @@ function shoppingPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 50;
     if (student.coins < 0) student.coins = 0;
-    recordAction(student.id, student.name, '逛街', `${pet.nickname||pet.name} +${gain}成长值`, -50, gain, pet.id, null);
+    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
     
     window.ApiMigration.coinsAndPet(student, -50, [{
       petId: pet.id, updates: { growth: pet.growth }
@@ -2533,7 +2525,7 @@ function shoppingPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; }
     });
     
     showNotification('逛街开心',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
@@ -2563,7 +2555,7 @@ function travelPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 100;
     if (student.coins < 0) student.coins = 0;
-    recordAction(student.id, student.name, '旅游', `${pet.nickname||pet.name} +${gain}成长值`, -100, gain, pet.id, null);
+    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
     
     window.ApiMigration.coinsAndPet(student, -100, [{
       petId: pet.id, updates: { growth: pet.growth }
@@ -2572,7 +2564,7 @@ function travelPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; }
     });
     
     showNotification('旅游愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
@@ -2617,7 +2609,7 @@ function revivePet(student,pet){
     
     student.coins = prevCoins - 50;
     if (student.coins < 0) student.coins = 0;
-    recordAction(student.id, student.name, '复活', `${pet.nickname||pet.name} 复活`, -50, newGrowth - prevGrowth, pet.id, null);
+    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
     
     window.ApiMigration.coinsAndPet(student, -50, [{
       petId: pet.id,
@@ -2641,7 +2633,6 @@ function revivePet(student,pet){
         pet.growth = prevGrowth;
         pet.deathGrowth = prevDeathGrowth;
         student.coins = prevCoins;
-        if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();}
       }
     });
     
