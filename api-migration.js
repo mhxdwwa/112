@@ -304,12 +304,17 @@
 
   /**
    * 通过 API 管理班级（增删改）
+   * v149: 发送扁平参数，与服务端解构格式一致
    */
   function manageClassViaApi(action, data) {
-    return apiRequest('/class/manage', {
-      action: action,
-      data: data
-    }).then(function(result) {
+    var payload = { action: action };
+    if (data) {
+      // 将 data 中的字段展开到顶层
+      Object.keys(data).forEach(function(key) {
+        payload[key] = data[key];
+      });
+    }
+    return apiRequest('/class/manage', payload).then(function(result) {
       if (result.ok) {
         console.log('[API] class manage ok:', action);
       } else {
@@ -318,6 +323,40 @@
       return result;
     }).catch(function(err) {
       console.error('[API] class manage request failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
+  /**
+   * 通过 API 检查班级名称是否重复
+   */
+  function checkClassDuplicateViaApi(name) {
+    return apiRequest('/class/manage', {
+      action: 'checkDuplicate',
+      name: name
+    }).then(function(result) {
+      return result;
+    }).catch(function(err) {
+      console.error('[API] checkClassDuplicate failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
+  /**
+   * 通过 API 重置班级所有学生数据
+   */
+  function resetClassViaApi(classId) {
+    return apiRequest('/class/reset', {
+      classId: classId
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] class reset ok:', classId, 'reset', result.resetStudents, 'students');
+      } else {
+        console.error('[API] class reset error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] class reset request failed:', err);
       return { error: err.message || 'Network error' };
     });
   }
@@ -352,12 +391,16 @@
 
   /**
    * 通过 API 管理学生（增删改密码）
+   * v149: 发送扁平参数，与服务端解构格式一致
    */
   function manageStudentViaApi(action, data) {
-    return apiRequest('/student/manage', {
-      action: action,
-      data: data
-    }).then(function(result) {
+    var payload = { action: action };
+    if (data) {
+      Object.keys(data).forEach(function(key) {
+        payload[key] = data[key];
+      });
+    }
+    return apiRequest('/student/manage', payload).then(function(result) {
       if (result.ok) {
         console.log('[API] student manage ok:', action);
       } else {
@@ -395,13 +438,20 @@
 
   /**
    * 通过 API 撤销/恢复日志
+   * v149: 发送服务端所需的全部字段
    */
-  function revertLogViaApi(logId) {
+  function revertLogViaApi(params) {
+    // params: { classId, logId, reverted, coinDelta, studentId, petUpdates }
     return apiRequest('/logs/revert', {
-      logId: logId
+      classId: params.classId,
+      logId: params.logId,
+      reverted: params.reverted !== undefined ? params.reverted : true,
+      coinDelta: params.coinDelta || 0,
+      studentId: params.studentId,
+      petUpdates: params.petUpdates || []
     }).then(function(result) {
       if (result.ok) {
-        console.log('[API] log revert ok:', logId);
+        console.log('[API] log revert ok:', params.logId);
       } else {
         console.error('[API] log revert error:', result.error);
       }
@@ -588,6 +638,115 @@
   }
 
   // ============================================================
+  // 游戏状态保存 API（取金阁、小猪快跑、快乐跑等）
+  // ============================================================
+
+  /**
+   * 通过 API 保存游戏状态 + 金币
+   * 替代 quiz.js 中 saveCoinsAndQuizState() 的直接 Supabase 写入
+   */
+  function saveQuizStateViaApi(studentId, coins, quizState) {
+    if (!studentId) {
+      return Promise.resolve({ error: 'Invalid studentId' });
+    }
+    var updates = {};
+    if (coins !== undefined && coins !== null) {
+      updates.coins = coins;
+    }
+    if (quizState !== undefined && quizState !== null) {
+      updates.quiz_state = typeof quizState === 'string' ? quizState : JSON.stringify(quizState);
+    }
+    return apiRequest('/student/update', {
+      studentId: studentId,
+      updates: updates
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] quiz state save ok:', studentId);
+      } else {
+        console.error('[API] quiz state save error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] quiz state save failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
+  // ============================================================
+  // 商店状态保存 API
+  // ============================================================
+
+  /**
+   * 通过 API 保存商店购买状态（shopItems + equippedItems）
+   */
+  function saveShopStateViaApi(studentId, shopItems, equippedItems) {
+    if (!studentId) {
+      return Promise.resolve({ error: 'Invalid studentId' });
+    }
+    var updates = {};
+    if (shopItems !== undefined) {
+      updates.shop_items = typeof shopItems === 'string' ? shopItems : JSON.stringify(shopItems);
+    }
+    if (equippedItems !== undefined) {
+      updates.equipped_items = typeof equippedItems === 'string' ? equippedItems : JSON.stringify(equippedItems);
+    }
+    return apiRequest('/student/update', {
+      studentId: studentId,
+      updates: updates
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] shop state save ok:', studentId);
+      } else {
+        console.error('[API] shop state save error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] shop state save failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
+  // ============================================================
+  // 恢复宠物 API（upsert，用于撤销删除宠物）
+  // ============================================================
+
+  /**
+   * 通过 API 恢复被删除的宠物（upsert）
+   * 与 insertPet 不同：接受完整的宠物数据（含 id），尝试恢复原始 ID
+   */
+  function upsertPetViaApi(petData) {
+    if (!petData || !petData.student_id) {
+      return Promise.resolve({ error: 'Invalid pet data' });
+    }
+    return apiRequest('/pet/insert', {
+      id: petData.id,
+      student_id: petData.student_id,
+      name: petData.name,
+      nickname: petData.nickname || '',
+      level: petData.level || 1,
+      growth: petData.growth || 0,
+      coins: petData.coins || 0,
+      is_active: petData.is_active || false,
+      is_dead: petData.is_dead || false,
+      last_feed_date: petData.last_feed_date || null,
+      last_play_date: petData.last_play_date || null,
+      today_feed_count: petData.today_feed_count || 0,
+      today_play_count: petData.today_play_count || 0,
+      penalty_streak: petData.penalty_streak || 0
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] pet upsert ok:', petData.id);
+      } else {
+        console.error('[API] pet upsert error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] pet upsert failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
+  // ============================================================
   // 导出到全局
   // ============================================================
 
@@ -603,12 +762,15 @@
     updatePet: updatePetViaApi,
     insertPet: insertPetViaApi,
     deletePet: deletePetViaApi,
+    upsertPet: upsertPetViaApi,
     
     // 班级
     loadClass: loadClassViaApi,
     loadAllClasses: loadAllClassesViaApi,
     refreshClass: refreshClassViaApi,
     manageClass: manageClassViaApi,
+    checkClassDuplicate: checkClassDuplicateViaApi,
+    resetClass: resetClassViaApi,
     
     // 学生
     updateStudent: updateStudentViaApi,
@@ -628,6 +790,12 @@
     
     // 自定义奖惩
     saveCustomAction: saveCustomActionViaApi,
+    
+    // 游戏状态
+    saveQuizState: saveQuizStateViaApi,
+    
+    // 商店状态
+    saveShopState: saveShopStateViaApi,
     
     // 健康检查
     checkHealth: checkApiHealth

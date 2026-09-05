@@ -39,23 +39,38 @@
   // and _smartRefreshFromSupabase from overwriting fresh local quiz_state with
   // stale Supabase data (race condition caused pig-run level data loss)
   function saveCoinsAndQuizState(student) {
-    if (typeof db === 'undefined' || !db || !student || !student.id) return;
+    if (!student || !student.id) return;
     var quizStateJson = student.quizState ? JSON.stringify(student.quizState) : null;
     var coinsToSave = student.coins;
+    // v149: API 模式下通过 API 保存
+    if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
+      window._quizStateLocallyModified = true;
+      try { _myBaseCoins = coinsToSave; } catch(e) {}
+      try { _lastOwnWriteTime = Date.now(); } catch(e) {}
+      if (typeof _pendingLocalSave !== 'undefined') {
+        _pendingLocalSave = true;
+      }
+      window.ApiMigration.saveQuizState(student.id, coinsToSave, quizStateJson).then(function(r) {
+        if (r.ok) {
+          console.log('[v149] API quiz state save ok:', student.id, 'coins:', coinsToSave);
+          try { _lastOwnWriteTime = Date.now(); } catch(e) {}
+          if (typeof _takeSnapshot === 'function') {
+            _takeSnapshot();
+          }
+        } else {
+          console.error('[v149] API quiz state save error:', r.error);
+          try { _myBaseCoins = null; } catch(e) {}
+          window._quizStateLocallyModified = false;
+        }
+      });
+      return;
+    }
+    // 非 API 模式
+    if (typeof db === 'undefined' || !db) return;
     // v31: Mark quiz_state as locally modified BEFORE the async save.
-    // This prevents _syncStudentToSupabase from fetching stale Supabase data
-    // and overwriting the fresh local quiz_state while the save is in flight.
     window._quizStateLocallyModified = true;
-    // v75: Set protection variables BEFORE the async write to close the race window.
-    // These variables are declared in dal.js (which loads AFTER quiz.js), but they
-    // exist as globals by the time this function runs (user action, not script load).
-    // Previously, typeof checks prevented these from ever executing because dal.js
-    // hadn't loaded yet when quiz.js was parsed. Now we access them directly.
     try { _myBaseCoins = coinsToSave; } catch(e) {}
     try { _lastOwnWriteTime = Date.now(); } catch(e) {}
-    // v75: Mark as pending save so beforeunload handler and visibility change
-    // handler will synchronously save this data if the page closes before the
-    // async write completes. This was the primary cause of "操作回溯" (rollback).
     if (typeof _pendingLocalSave !== 'undefined') {
       _pendingLocalSave = true;
     }
@@ -65,21 +80,14 @@
     }).eq('id', student.id).then(function(r) {
       if (r.error) {
         console.error('[取金阁] 金币/状态保存失败:', r.error.message);
-        // v75: On failure, revert the protection so the sync can retry properly
         try { _myBaseCoins = null; } catch(e) {}
         window._quizStateLocallyModified = false;
-        // Don't clear _lastOwnWriteTime — still want to suppress stale echo briefly
       } else {
         console.log('[取金阁] 金币(' + coinsToSave + ')+状态 已直接保存');
-        // v75: Re-confirm values after successful write (already set above, but
-        // ensures _lastOwnWriteTime is fresh even if there was a delay)
         try { _lastOwnWriteTime = Date.now(); } catch(e) {}
-        // v75: Trigger full sync to ensure all data (pets, shop, etc.) is also saved.
-        // This also updates the snapshot and clears _quizStateLocallyModified after sync.
         if (typeof _syncToSupabase === 'function') {
           _syncToSupabase();
         } else if (typeof _takeSnapshot === 'function') {
-          // Fallback: at least update snapshot if sync not available
           _takeSnapshot();
         }
       }

@@ -947,8 +947,20 @@ function revertToLog(logId){
     }
     log.reverted = true;
     saveClassData('pet'); saveLogs();
-    // Re-sync pet to Supabase
-    if(typeof db !== 'undefined' && db){
+    // v149: API 模式下通过 API 恢复宠物
+    if(window.USE_API&&window.ApiMigration&&window.ApiMigration.upsertPet){
+      var petForApi = restoredPet;
+      window.ApiMigration.upsertPet({
+        id: petForApi.id, student_id: student.id, name: petForApi.name, nickname: petForApi.nickname,
+        level: petForApi.level, growth: petForApi.growth||0, is_dead: petForApi.isDead||false,
+        last_feed_date: petForApi.lastFeedDate, today_feed_count: petForApi.todayFeedCount||0,
+        last_play_date: petForApi.lastPlayDate, today_play_count: petForApi.todayPlayCount||0,
+        penalty_streak: petForApi.penaltyStreak||0, is_active: log.extra.wasActivePet||false
+      }).then(function(r){
+        if(!r.ok) console.warn('[v149] API restorePet error:', r.error);
+        else console.log('[v149] API restorePet ok:', petForApi.id);
+      });
+    } else if(typeof db !== 'undefined' && db){
       var petForSync = restoredPet;
       var petData = { id: petForSync.id, student_id: student.id, name: petForSync.name, nickname: petForSync.nickname, level: petForSync.level, growth: petForSync.growth||0, is_dead: petForSync.isDead||false, last_feed_date: petForSync.lastFeedDate, today_feed_count: petForSync.todayFeedCount||0, last_play_date: petForSync.lastPlayDate, today_play_count: petForSync.todayPlayCount||0, penalty_streak: petForSync.penaltyStreak||0 };
       if(typeof _markRowWritten === 'function') _markRowWritten('pets', petForSync.id);
@@ -963,6 +975,18 @@ function revertToLog(logId){
   _revertStudentLog(curClass, log);
   log.reverted = true;
   saveClassData(); saveLogs();
+  // v149: API 模式下同步撤销操作到服务器
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.revertLog){
+    var reverseDelta = -(log.coinDelta || 0);
+    var petUpdates = [];
+    if(log.petId && log.snapshot && log.snapshot.growthBefore !== undefined){
+      petUpdates.push({ petId: log.petId, updates: { growth: log.snapshot.growthBefore } });
+    }
+    window.ApiMigration.revertLog({
+      classId: currentClassId, logId: log.id, reverted: true,
+      coinDelta: reverseDelta, studentId: log.studentId, petUpdates: petUpdates
+    });
+  }
   scheduleAllRenders();
   if(currentModalStudentId && currentModalStudentId.toString()===log.studentId.toString()) refreshCurrentStudentModal();
   const snap = log.snapshot;
@@ -983,7 +1007,30 @@ function saveClassData(changeType, detail){safeLSSave('classPetData', classesDat
 function saveDeletedClasses(){safeLSSave('deletedClasses', deletedClasses); scheduleFileSave();}
 function showDeletedClassesModal(){if(deletedClasses.length===0){showModal('🗑️ 已删除班级','<div style="text-align:center;padding:20px;">暂无已删除的班级</div>',[{text:'关闭',onclick:'closeModal()'}],false);return;}let html='<div style="max-height:400px;overflow:auto;">';[...deletedClasses].reverse().forEach((cls,i)=>{const time=new Date(cls.deletedAt).toLocaleString();const stuCount=cls.students?cls.students.length:0;const petCount=cls.students?cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0):0;html+=`<div class="history-log-item"><div><div class="history-log-time">${time} 删除</div><div><strong>${esc(cls.name)}</strong></div><div style="font-size:12px;">👨‍🎓 ${stuCount}名学生 · 🐕 ${petCount}只宠物</div></div><div style="display:flex;gap:6px;"><button class="btn btn-primary" style="padding:6px 12px;" onclick="restoreClass('${cls.id}');closeModal();">恢复</button><button class="btn btn-danger" style="padding:6px 12px;" onclick="permanentDeleteClass('${cls.id}');closeModal();">彻底删除</button></div></div>`;});html+='</div>';showModal('🗑️ 已删除班级',html,[{text:'关闭',onclick:'closeModal()'}],true);}
 function restoreClass(id){var numId=parseInt(id);var idx=deletedClasses.findIndex(c=>c.id==numId||c.id==id);if(idx===-1){showNotification('恢复失败','未找到该班级数据','error');return;}const cls=deletedClasses[idx];const restored={id:_genLocalId(),name:cls.name,teacher_id:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null,students:JSON.parse(JSON.stringify(cls.students)),createdAt:new Date().toISOString()};restored.students.forEach(function(stu){var oldStuId=stu.id;stu.id=_genLocalId();var petIdMap={};(stu.pets||[]).forEach(function(pet){var oldPetId=pet.id;pet.id=_genLocalId();petIdMap[oldPetId]=pet.id;});if(stu.activePetId&&petIdMap[stu.activePetId]){stu.activePetId=petIdMap[stu.activePetId];}else if(stu.activePetId){stu.activePetId=null;}});classesData.push(restored);deletedClasses.splice(idx,1);window._quizStateLocallyModified=true;setTimeout(function(){window._quizStateLocallyModified=false;},15000);saveClassData();saveDeletedClasses();currentClassId=restored.id;renderClassList();scheduleAllRenders();showNotification('恢复成功',`班级【${cls.name}】已恢复，含${restored.students.length}名学生`,'success');}
-function permanentDeleteClass(id){if(!confirm('彻底删除后将无法恢复，确定？'))return;var numId=parseInt(id);var idx=deletedClasses.findIndex(c=>c.id==numId||c.id==id);if(idx!==-1){const name=deletedClasses[idx].name;deletedClasses.splice(idx,1);saveDeletedClasses();showNotification('已彻底删除',`班级【${name}】已永久删除`,'info');showDeletedClassesModal();if(typeof db!=='undefined'&&db&&typeof currentUser!=='undefined'&&currentUser){(async()=>{try{var targetId=null;if(typeof _isValidInt4Id==='function'&&_isValidInt4Id(numId)){targetId=numId;}else{var r=await db.from('classes').select('id').eq('teacher_id',currentUser.id).eq('name',name).limit(1);if(r.data&&r.data.length>0){targetId=r.data[0].id;}}if(targetId){const stuR=await db.from('students').select('id').eq('class_id',targetId);const studentIds=(stuR.data||[]).map(s=>s.id);if(studentIds.length>0){await db.from('pets').delete().in('student_id',studentIds);await db.from('students').delete().in('id',studentIds);}await db.from('custom_actions').delete().eq('class_id',targetId);await db.from('classes').delete().eq('id',targetId);console.log('[DAL] permanentDeleteClass: Supabase cleanup complete for class',targetId,'(requested id:',id,')');}else{console.warn('[DAL] permanentDeleteClass: class not found in Supabase by id or name:',id,name);}}catch(e){console.warn('[DAL] permanentDeleteClass: Supabase cleanup failed:',e);}})();}}}
+function permanentDeleteClass(id){if(!confirm('彻底删除后将无法恢复，确定？'))return;var numId=parseInt(id);var idx=deletedClasses.findIndex(c=>c.id==numId||c.id==id);if(idx!==-1){const name=deletedClasses[idx].name;deletedClasses.splice(idx,1);saveDeletedClasses();showNotification('已彻底删除',`班级【${name}】已永久删除`,'info');showDeletedClassesModal();
+  // v149: API 模式
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.manageClass){
+    var _doApiDel=function(targetId){
+      window.ApiMigration.manageClass('delete',{classId:targetId}).then(function(r){
+        if(r.ok) console.log('[v149] API permanentDeleteClass ok:', targetId);
+        else console.warn('[v149] API permanentDeleteClass error:', r.error);
+      });
+    };
+    if(typeof _isValidInt4Id==='function'&&_isValidInt4Id(numId)){
+      _doApiDel(numId);
+    } else if(typeof currentUser!=='undefined'&&currentUser){
+      window.ApiMigration.checkClassDuplicate(name).then(function(r){
+        if(r.exists&&r.existingClass&&r.existingClass.teacher_id===currentUser.id){
+          _doApiDel(r.existingClass.id);
+        } else {
+          console.warn('[v149] permanentDeleteClass: class not found by name:', name);
+        }
+      });
+    }
+    return;
+  }
+  // 非 API 模式
+  if(typeof db!=='undefined'&&db&&typeof currentUser!=='undefined'&&currentUser){(async()=>{try{var targetId=null;if(typeof _isValidInt4Id==='function'&&_isValidInt4Id(numId)){targetId=numId;}else{var r=await db.from('classes').select('id').eq('teacher_id',currentUser.id).eq('name',name).limit(1);if(r.data&&r.data.length>0){targetId=r.data[0].id;}}if(targetId){const stuR=await db.from('students').select('id').eq('class_id',targetId);const studentIds=(stuR.data||[]).map(s=>s.id);if(studentIds.length>0){await db.from('pets').delete().in('student_id',studentIds);await db.from('students').delete().in('id',studentIds);}await db.from('custom_actions').delete().eq('class_id',targetId);await db.from('classes').delete().eq('id',targetId);}else{console.warn('[DAL] permanentDeleteClass: class not found');}}catch(e){console.warn('[DAL] permanentDeleteClass error:',e);}})();}}}
 // v127: 班级数据管理面板 — 独立的删除班级/重置宠物操作区
 function showClassDataManagerModal(){
   if(typeof currentUser==='undefined'||!currentUser||currentUser.type!=='teacher'){
@@ -1101,12 +1148,41 @@ function showSelectedClasses(){
 function createClass(){const n=prompt('班级名称（最多20字）');if(!n)return;
   // v-mid2: 输入验证
   var v=_validateInput(n,20,'班级名称');if(!v.ok){showNotification('输入无效',v.error,'warning');return;}
-  // 检查数据库是否已存在同名班级（跨所有教师）
+  // v149: API 模式下通过 API 查重
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.checkClassDuplicate){
+    window.ApiMigration.checkClassDuplicate(v.value).then(function(r){
+      if(r.exists){
+        var existingClass=r.existingClass;
+        if(existingClass&&existingClass.teacher_id===currentUser.id){
+          showNotification('创建失败','你已经有同名班级「'+v.value+'」，请使用不同的名称','error');
+        }else{
+          showNotification('创建失败','系统中已存在班级「'+v.value+'」，为避免数据混乱，请使用不同的班级名称','error');
+        }
+        return;
+      }
+      // 没有同名班级，通过 API 创建
+      var teacherId=(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null;
+      window.ApiMigration.manageClass('create',{name:v.value,teacherId:teacherId}).then(function(cr){
+        if(cr.ok){
+          var newId=cr.classId||Date.now().toString();
+          classesData.push({id:newId,name:v.value,students:[]});
+          saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
+        }else{
+          showNotification('创建失败',cr.error||'未知错误','error');
+        }
+      });
+    }).catch(function(){
+      // API 失败时回退到本地创建
+      classesData.push({id:Date.now().toString(),name:v.value,students:[]});
+      saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
+    });
+    return;
+  }
+  // 非 API 模式：直接查 Supabase
   if(typeof db!=='undefined'&&db){
     db.from('classes').select('id,name,teacher_id').eq('name',v.value).limit(1).then(function(r){
       if(r.error){console.error('[创建班级] 查询失败:',r.error.message);showNotification('创建失败','数据库查询错误，请重试','error');return;}
       if(r.data&&r.data.length>0){
-        // 找到同名班级，检查是否是当前教师自己的
         const existingClass=r.data[0];
         if(existingClass.teacher_id===currentUser.id){
           showNotification('创建失败','你已经有同名班级「'+v.value+'」，请使用不同的名称','error');
@@ -1115,12 +1191,10 @@ function createClass(){const n=prompt('班级名称（最多20字）');if(!n)ret
         }
         return;
       }
-      // 没有同名班级，可以创建
       classesData.push({id:Date.now().toString(),name:v.value,students:[]});
       saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
     });
   }else{
-    // 离线模式：只检查本地
     if(classesData.some(c=>c.name===v.value)){showNotification('创建失败','本地已有同名班级','error');return;}
     classesData.push({id:Date.now().toString(),name:v.value,students:[]});
     saveClassData();renderClassList();selectClass(classesData[classesData.length-1].id);
@@ -1128,14 +1202,41 @@ function createClass(){const n=prompt('班级名称（最多20字）');if(!n)ret
 }
 function deleteClass(id){if(_isOnCooldown('deleteClass')){showNotification('操作太快','请等待'+_cooldownRemaining('deleteClass')+'秒后再试','warning');return;}if(!confirm('确定删除该班级？删除后可在"已删除班级"中恢复'))return;_startCooldown('deleteClass',5);var cls=classesData.find(function(c){return c.id===id||c.id==id;});var _className=cls?cls.name:'';if(cls){var snapshot={id:cls.id,name:cls.name,students:JSON.parse(JSON.stringify(cls.students)),deletedAt:new Date().toISOString()};deletedClasses.push(snapshot);if(deletedClasses.length>20)deletedClasses.shift();saveDeletedClasses();}classesData=classesData.filter(function(c){return c.id!==id&&c.id!=id;});if(currentClassId===id||currentClassId==id)currentClassId=classesData[0]?.id||null;if(typeof customActions!=='undefined'){customActions=customActions.filter(function(a){return a.class_id!=id;});}renderClassList();scheduleAllRenders();showNotification('班级已删除','可在"已删除班级"中恢复','info');_pauseSync=true;var _waitAndDel=function(){if(typeof _dalSyncing!=='undefined'&&_dalSyncing){setTimeout(_waitAndDel,300);return;}safeLSSave('classPetData',classesData);scheduleFileSave();if(typeof _supabaseDeleteClass==='function'){_supabaseDeleteClass(id,_className).then(function(){_pauseSync=false;saveClassData();}).catch(function(e){console.warn('[DAL] deleteClass Supabase error:',e);_pauseSync=false;saveClassData();});return;}_pauseSync=false;saveClassData();};_waitAndDel();}
 // v127: 从 Supabase 彻底删除班级及其所有关联数据
+// v149: API 模式下通过 /api/class/manage 删除
 function _supabaseDeleteClass(classId, className){
+  // v149: API 模式
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.manageClass){
+    // 尝试获取 Supabase 中的班级 ID
+    var targetId = null;
+    if(typeof _isValidInt4Id === 'function' && _isValidInt4Id(classId)){
+      targetId = classId;
+      return window.ApiMigration.manageClass('delete',{classId:targetId}).then(function(r){
+        if(!r.ok) console.warn('[v149] API deleteClass error:', r.error);
+        else console.log('[v149] API deleteClass ok:', targetId);
+      });
+    } else if(className && typeof currentUser !== 'undefined' && currentUser){
+      // 需要通过名称查找 classId — 使用 checkDuplicate 接口间接查找
+      return window.ApiMigration.checkClassDuplicate(className).then(function(r){
+        if(r.exists && r.existingClass && r.existingClass.teacher_id === currentUser.id){
+          targetId = r.existingClass.id;
+          return window.ApiMigration.manageClass('delete',{classId:targetId}).then(function(r2){
+            if(!r2.ok) console.warn('[v149] API deleteClass error:', r2.error);
+            else console.log('[v149] API deleteClass ok:', targetId);
+          });
+        } else {
+          console.log('[v149] API deleteClass: class not found by name:', className);
+        }
+      });
+    }
+    return Promise.resolve();
+  }
+  // 非 API 模式：直接操作 Supabase
   if(typeof db === 'undefined' || !db || typeof currentUser === 'undefined' || !currentUser){
     console.log('[v127] _supabaseDeleteClass: no Supabase connection, skipping');
     return Promise.resolve();
   }
   return (async function(){
     var targetId = null;
-    // 尝试获取 Supabase 中的班级 ID
     if(typeof _isValidInt4Id === 'function' && _isValidInt4Id(classId)){
       targetId = classId;
     } else if(className){
@@ -1148,33 +1249,18 @@ function _supabaseDeleteClass(classId, className){
       return;
     }
     console.log('[v127] _supabaseDeleteClass: deleting class', targetId);
-    // 获取学生 ID 列表
     var stuR = await db.from('students').select('id').eq('class_id', targetId);
     var studentIds = (stuR.data || []).map(function(s){ return s.id; });
-    console.log('[v127] _supabaseDeleteClass: found', studentIds.length, 'students');
-    // 按顺序删除：operation_logs → pets → students → custom_actions → classes
     if(studentIds.length > 0){
-      // 先删除操作日志（避免外键约束冲突）
-      var logDel = await db.from('operation_logs').delete().in('student_id', studentIds);
-      if(logDel.error) console.warn('[v127] operation_logs delete error:', logDel.error);
-      else console.log('[v127] deleted operation_logs for', studentIds.length, 'students');
-      
       var petDel = await db.from('pets').delete().in('student_id', studentIds);
       if(petDel.error) console.warn('[v127] pets delete error:', petDel.error);
-      else console.log('[v127] deleted', studentIds.length, 'students\' pets');
-      
       var stuDel = await db.from('students').delete().in('id', studentIds);
       if(stuDel.error) console.warn('[v127] students delete error:', stuDel.error);
-      else console.log('[v127] deleted', studentIds.length, 'students');
     }
     var caDel = await db.from('custom_actions').delete().eq('class_id', targetId);
     if(caDel.error) console.warn('[v127] custom_actions delete error:', caDel.error);
-    else console.log('[v127] deleted custom_actions');
-    
     var clsDel = await db.from('classes').delete().eq('id', targetId);
     if(clsDel.error) console.warn('[v127] classes delete error:', clsDel.error);
-    else console.log('[v127] deleted class');
-    
     console.log('[v127] _supabaseDeleteClass: done for class', targetId);
   })();
 }
@@ -1284,7 +1370,31 @@ function clearPetData(){
   _waitAndClear();
 }
 // v127: 从 Supabase 彻底删除班级所有宠物数据
+// v149: API 模式下通过 /api/class/reset 重置
 function _supabaseClearPets(cls){
+  // v149: API 模式
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.resetClass){
+    var classId = cls.id;
+    if(typeof _isValidInt4Id === 'function' && _isValidInt4Id(classId)){
+      return window.ApiMigration.resetClass(classId).then(function(r){
+        if(!r.ok) throw new Error(r.error || 'API reset failed');
+        console.log('[v149] API class reset ok:', classId);
+      });
+    }
+    // classId 不是有效 INT4，需要查找 — 尝试通过 checkClassDuplicate
+    if(typeof currentUser !== 'undefined' && currentUser){
+      return window.ApiMigration.checkClassDuplicate(cls.name).then(function(r){
+        if(r.exists && r.existingClass && r.existingClass.teacher_id === currentUser.id){
+          return window.ApiMigration.resetClass(r.existingClass.id).then(function(r2){
+            if(!r2.ok) throw new Error(r2.error || 'API reset failed');
+          });
+        }
+        throw new Error('班级在云端未找到');
+      });
+    }
+    return Promise.reject(new Error('无法确定班级 ID'));
+  }
+  // 非 API 模式：直接操作 Supabase
   if(typeof db === 'undefined' || !db){
     console.warn('[v127] _supabaseClearPets: db not available');
     return Promise.resolve();
@@ -1295,92 +1405,37 @@ function _supabaseClearPets(cls){
   }
   return (async function(){
     var classId = cls.id;
-    console.log('[v127] _supabaseClearPets: classId=', classId, 'className=', cls.name);
-    // 获取 Supabase 中的班级 ID
     var targetId = null;
     if(typeof _isValidInt4Id === 'function' && _isValidInt4Id(classId)){
       targetId = classId;
-      console.log('[v127] _supabaseClearPets: using direct classId', targetId);
     } else {
-      console.log('[v127] _supabaseClearPets: classId is not valid INT4, searching by name...');
       var r = await db.from('classes').select('id').eq('teacher_id', currentUser.id).eq('name', cls.name).limit(1);
-      if(r.error){
-        console.error('[v127] _supabaseClearPets: classes query error:', r.error);
-        throw new Error('查询班级失败: ' + r.error.message);
-      }
-      if(r.data && r.data.length > 0){
-        targetId = r.data[0].id;
-        console.log('[v127] _supabaseClearPets: found class in Supabase with id', targetId);
-      } else {
-        console.warn('[v127] _supabaseClearPets: class not found in Supabase by name:', cls.name);
-        throw new Error('班级在云端未找到，可能尚未同步');
-      }
+      if(r.error) throw new Error('查询班级失败: ' + r.error.message);
+      if(r.data && r.data.length > 0) targetId = r.data[0].id;
+      else throw new Error('班级在云端未找到，可能尚未同步');
     }
-    if(!targetId){
-      console.warn('[v127] _supabaseClearPets: no targetId resolved');
-      throw new Error('无法确定班级 ID');
-    }
-    console.log('[v127] _supabaseClearPets: clearing pets for class', targetId);
-    // 获取该班级所有学生 ID
+    if(!targetId) throw new Error('无法确定班级 ID');
     var stuR = await db.from('students').select('id').eq('class_id', targetId);
-    if(stuR.error){
-      console.error('[v127] _supabaseClearPets: students query error:', stuR.error);
-      throw new Error('查询学生失败: ' + stuR.error.message);
-    }
+    if(stuR.error) throw new Error('查询学生失败: ' + stuR.error.message);
     var studentIds = (stuR.data || []).map(function(s){ return s.id; });
-    console.log('[v127] _supabaseClearPets: found', studentIds.length, 'students');
     if(studentIds.length > 0){
-      // 删除所有宠物
       var petDel = await db.from('pets').delete().in('student_id', studentIds);
-      if(petDel.error){
-        console.error('[v127] _supabaseClearPets: pets delete error:', petDel.error);
-        throw new Error('删除宠物失败: ' + petDel.error.message);
-      }
-      console.log('[v127] _supabaseClearPets: deleted', studentIds.length, 'students\' pets');
-      // 完全重置学生数据：金币、仙丹、装备、游戏进度
+      if(petDel.error) throw new Error('删除宠物失败: ' + petDel.error.message);
       var stuUpdate = await db.from('students').update({ 
-        coins: 50,
-        xiandan: 0,
-        equipped_items: {},
-        shop_items: [],
+        coins: 50, xiandan: 0, equipped_items: {}, shop_items: [],
         quiz_state: {
-          lastQuizDate: '',
-          todayCoins: 0,
-          questionsToday: [],
-          totalQuestions: 0,
-          started: false,
-          totalQuizCoins: 0,
-          pigRunLevels: {},
-          pigRunTotalScore: 0,
-          pigRunTools: { remove: 1, shuffle: 1, rotate: 1 },
-          match3Levels: {},
-          match3TotalScore: 0,
-          match3Tools: { shuffle: 1, undo: 1 },
-          happyRunMaxLevel: 1,
-          happyRunLevels: {},
-          happyRunLevelBestCoins: {},
-          happyRunTotalSilver: 0,
-          happyRunSilverBalance: 0,
-          happyRunPetGold: 0,
-          happyRunOwnedChars: [0],
-          happyRunBossKillBonus: {},
-          happyRunTotalScore: 0
+          lastQuizDate: '', todayCoins: 0, questionsToday: [], totalQuestions: 0, started: false, totalQuizCoins: 0,
+          pigRunLevels: {}, pigRunTotalScore: 0, pigRunTools: { remove: 1, shuffle: 1, rotate: 1 },
+          match3Levels: {}, match3TotalScore: 0, match3Tools: { shuffle: 1, undo: 1 },
+          happyRunMaxLevel: 1, happyRunLevels: {}, happyRunLevelBestCoins: {},
+          happyRunTotalSilver: 0, happyRunSilverBalance: 0, happyRunPetGold: 0,
+          happyRunOwnedChars: [0], happyRunBossKillBonus: {}, happyRunTotalScore: 0
         }
       }).eq('class_id', targetId);
-      if(stuUpdate.error){
-        console.error('[v127] _supabaseClearPets: students update error:', stuUpdate.error);
-        throw new Error('重置学生数据失败: ' + stuUpdate.error.message);
-      }
-      console.log('[v127] _supabaseClearPets: reset all student data for', studentIds.length, 'students');
+      if(stuUpdate.error) throw new Error('重置学生数据失败: ' + stuUpdate.error.message);
     }
-    // 清除该班级的 custom_actions
     var caDel = await db.from('custom_actions').delete().eq('class_id', targetId);
-    if(caDel.error){
-      console.error('[v127] _supabaseClearPets: custom_actions delete error:', caDel.error);
-      throw new Error('删除操作记录失败: ' + caDel.error.message);
-    }
-    console.log('[v127] _supabaseClearPets: deleted custom_actions');
-    console.log('[v127] _supabaseClearPets: done for class', targetId);
+    if(caDel.error) throw new Error('删除操作记录失败: ' + caDel.error.message);
   })();
 }
 
@@ -1579,8 +1634,19 @@ function restoreDeletedPet(logId){
   log.extra._restored = true;
   // Save data
   saveClassData('pet');
-  // Re-sync pet to Supabase
-  if(typeof db !== 'undefined' && db){
+  // v149: API 模式下通过 API 恢复宠物
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.upsertPet){
+    window.ApiMigration.upsertPet({
+      id: restoredPet.id, student_id: student.id, name: restoredPet.name, nickname: restoredPet.nickname,
+      level: restoredPet.level, growth: restoredPet.growth||0, is_dead: restoredPet.isDead||false,
+      last_feed_date: restoredPet.lastFeedDate, today_feed_count: restoredPet.todayFeedCount||0,
+      last_play_date: restoredPet.lastPlayDate, today_play_count: restoredPet.todayPlayCount||0,
+      penalty_streak: restoredPet.penaltyStreak||0, is_active: true
+    }).then(function(r){
+      if(!r.ok) console.warn('[v149] API restoreDeletedPet error:', r.error);
+      else console.log('[v149] API restoreDeletedPet ok:', restoredPet.id);
+    });
+  } else if(typeof db !== 'undefined' && db){
     var petData = {
       id: restoredPet.id,
       student_id: student.id,
@@ -1707,7 +1773,25 @@ window.confirmResetPassword = function() {
   // Clear the password in local data
   stu.password = '';
 
-  // Save to Supabase directly for immediate effect
+  // v149: API 模式
+  if (window.USE_API && window.ApiMigration && window.ApiMigration.manageStudent) {
+    window.ApiMigration.manageStudent('resetPassword', { studentIds: [stu.id], password: '' }).then(function(r) {
+      if (r.ok) {
+        saveClassData();
+        showNotification('重置成功', '学生「' + stu.name + '」的密码已重置，下次登录时可设置新密码', 'success');
+        closeResetPasswordModal();
+      } else {
+        console.error('[重置密码] API 失败:', r.error);
+        showNotification('重置失败', r.error || '未知错误', 'error');
+      }
+    }).catch(function(err) {
+      console.error('[重置密码] API 请求失败:', err);
+      showNotification('重置失败', err.message || '网络错误', 'error');
+    });
+    return;
+  }
+
+  // 非 API 模式：直接写 Supabase
   if (typeof db !== 'undefined' && db) {
     db.from('students').update({ password: '' }).eq('id', stu.id).then(function(r) {
       if (r.error) {
@@ -1715,7 +1799,6 @@ window.confirmResetPassword = function() {
         showNotification('重置失败', r.error.message, 'error');
         return;
       }
-      // Also save via normal sync to keep local and remote in sync
       saveClassData();
       showNotification('重置成功', '学生「' + stu.name + '」的密码已重置，下次登录时可设置新密码', 'success');
       closeResetPasswordModal();
@@ -2644,7 +2727,22 @@ function deleteCustomAction(id){if(confirm('删除操作')){customActions=custom
 function showStudentListModal(){if(!currentClassId)return;const cur=classesData.find(c=>c.id===currentClassId);let html='<div style="max-height:400px;overflow:auto;">';cur.students.forEach(s=>{html+=`<div class="student-list-item"><span>${esc(s.name)}</span><div><span class="edit-icon" style="cursor:pointer;" onclick="editStudentName('${s.id}')">✏️</span><span class="delete-icon" style="cursor:pointer;margin-left:10px;" onclick="deleteStudentById('${s.id}')">🗑️</span></div></div>`;});html+='</div>';showModal('学生列表',html,[{text:'增加学生',class:'btn-primary',onclick:'addSingleStudent()'},{text:'关闭',class:'btn-secondary',onclick:'closeModal()'},{text:'清空所有',class:'btn-danger',onclick:'clearAllStudents()'}]);}
 function addSingleStudent(){const name=prompt('学生姓名（最多20字）');if(!name)return;var v=_validateInput(name,20,'学生姓名');if(!v.ok){showNotification('输入无效',v.error,'warning');return;}const cur=classesData.find(c=>c.id===currentClassId);if(cur.students.find(s=>s.name===v.value)){showNotification('已存在','','error');return;}cur.students.push({id:_genLocalId(),name:v.value,coins:50,pets:[],lastCheckinDate:null,activePetId:null,pkCountToday:0,lastPkDate:null});saveClassData();closeModal();showStudentListModal();scheduleAllRenders();}
 function editStudentName(id){const cur=classesData.find(c=>c.id===currentClassId);const stu=cur.students.find(s=>s.id.toString()===id.toString());if(!stu)return;const newName=prompt('新名字（最多20字）',stu.name);if(!newName)return;var v=_validateInput(newName,20,'学生姓名');if(!v.ok){showNotification('输入无效',v.error,'warning');return;}stu.name=v.value;saveClassData();closeModal();showStudentListModal();renderHomePetGrid();}
-function deleteStudentById(id){if(!confirm('删除学生'))return;var cur=classesData.find(function(c){return c.id===currentClassId;});if(!cur)return;var deletedStu=cur.students.find(function(s){return s.id.toString()===id.toString();});cur.students=cur.students.filter(function(s){return s.id.toString()!==id.toString();});closeModal();showStudentListModal();scheduleAllRenders();if(currentModalStudentId&&currentModalStudentId===id)closeModal();_pauseSync=true;var _waitAndDel=function(){if(typeof _dalSyncing!=='undefined'&&_dalSyncing){setTimeout(_waitAndDel,300);return;}safeLSSave('classPetData',classesData);scheduleFileSave();if(typeof db!=='undefined'&&db&&deletedStu&&typeof _isValidInt4Id==='function'&&_isValidInt4Id(deletedStu.id)){var stuId=parseInt(deletedStu.id);if(!isNaN(stuId)&&stuId>0){db.from('operation_logs').delete().eq('student_id',stuId).then(function(){return db.from('pets').delete().in('student_id',[stuId]);}).then(function(){return db.from('students').delete().eq('id',stuId);}).then(function(r){if(r.error)console.warn('[DAL] deleteStudent Supabase error:',r.error);else console.log('[DAL] Deleted student',stuId,'from Supabase');}).catch(function(e){console.warn('[DAL] deleteStudent Supabase error:',e);}).finally(function(){_pauseSync=false;saveClassData();});return;}_pauseSync=false;saveClassData();}};_waitAndDel();}
+function deleteStudentById(id){if(!confirm('删除学生'))return;var cur=classesData.find(function(c){return c.id===currentClassId;});if(!cur)return;var deletedStu=cur.students.find(function(s){return s.id.toString()===id.toString();});cur.students=cur.students.filter(function(s){return s.id.toString()!==id.toString();});closeModal();showStudentListModal();scheduleAllRenders();if(currentModalStudentId&&currentModalStudentId===id)closeModal();_pauseSync=true;var _waitAndDel=function(){if(typeof _dalSyncing!=='undefined'&&_dalSyncing){setTimeout(_waitAndDel,300);return;}safeLSSave('classPetData',classesData);scheduleFileSave();
+  // v149: API 模式
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.manageStudent&&deletedStu){
+    var stuId=parseInt(deletedStu.id);
+    if(!isNaN(stuId)&&stuId>0){
+      window.ApiMigration.manageStudent('delete',{studentIds:[stuId]}).then(function(r){
+        if(r.ok) console.log('[v149] API deleteStudent ok:', stuId);
+        else console.warn('[v149] API deleteStudent error:', r.error);
+        _pauseSync=false;saveClassData();
+      }).catch(function(e){console.warn('[v149] API deleteStudent failed:',e);_pauseSync=false;saveClassData();});
+      return;
+    }
+    _pauseSync=false;saveClassData();return;
+  }
+  // 非 API 模式
+  if(typeof db!=='undefined'&&db&&deletedStu&&typeof _isValidInt4Id==='function'&&_isValidInt4Id(deletedStu.id)){var stuId=parseInt(deletedStu.id);if(!isNaN(stuId)&&stuId>0){db.from('pets').delete().in('student_id',[stuId]).then(function(){return db.from('students').delete().eq('id',stuId);}).then(function(r){if(r.error)console.warn('[DAL] deleteStudent Supabase error:',r.error);else console.log('[DAL] Deleted student',stuId,'from Supabase');}).catch(function(e){console.warn('[DAL] deleteStudent Supabase error:',e);}).finally(function(){_pauseSync=false;saveClassData();});return;}_pauseSync=false;saveClassData();}};_waitAndDel();}
 function clearAllStudents(){if(confirm('清空所有学生？')){const cur=classesData.find(c=>c.id===currentClassId);cur.students=[];saveClassData();closeModal();scheduleAllRenders();if(currentModalStudentId)closeModal();}}
 
 /* v130: switchPage 增加按需加载 */

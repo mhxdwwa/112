@@ -1,7 +1,9 @@
 /**
  * POST /api/student/manage — 学生管理（添加、删除、重置密码）
+ * v149: 兼容 { action, data:{...} } 和 { action, ...fields } 两种参数格式
+ *        修复 operation_logs 表不存在的问题
  */
-import { jsonResponse, handleOptions, checkEnv, sbInsert, sbDelete, sbUpdate } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbInsert, sbDelete, sbUpdate, sbSelectSingle } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -10,7 +12,12 @@ export const onRequestPost = async ({ request, env }) => {
   if (envErr) return envErr;
 
   const body = await request.json();
-  const { action, classId, name, password, studentIds } = body;
+  // v149: 兼容两种参数格式
+  const action = body.action || (body.data && body.data.action);
+  const classId = body.classId || (body.data && body.data.classId);
+  const name = body.name || (body.data && body.data.name);
+  const password = body.password !== undefined ? body.password : (body.data && body.data.password);
+  const studentIds = body.studentIds || (body.data && body.data.studentIds);
 
   if (action === 'add') {
     if (!classId || !name) return jsonResponse({ error: 'Missing classId or name' }, 400);
@@ -23,7 +30,8 @@ export const onRequestPost = async ({ request, env }) => {
   if (action === 'delete') {
     if (!studentIds || studentIds.length === 0) return jsonResponse({ error: 'Missing studentIds' }, 400);
     const inFilter = `student_id=in.(${studentIds.join(',')})`;
-    await sbDelete(env, 'operation_logs', inFilter);
+    // v149: operation_logs 不是独立表，日志存在 classes.operation_logs_json 中
+    // 删除学生时不需要单独清理日志
     await sbDelete(env, 'pets', inFilter);
     const delR = await sbDelete(env, 'students', `id=in.(${studentIds.join(',')})`);
     if (delR.error) return jsonResponse({ error: 'Failed to delete students', details: delR.error }, 500);

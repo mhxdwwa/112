@@ -123,7 +123,19 @@
     }
     
     // 同步到 Supabase
-    if (typeof db !== 'undefined' && db) {
+    // v149: API 模式下通过 API 保存
+    if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
+      classesData.forEach(function(cls) {
+        if (!cls.students) return;
+        cls.students.forEach(function(s) {
+          if (s.quizState && s.quizState.pigRunTotalScore !== undefined) {
+            window.ApiMigration.saveQuizState(s.id, null, JSON.stringify(s.quizState)).then(function(r) {
+              if (!r.ok) console.error('[v149] API pig-run repair save error for', s.name, ':', r.error);
+            });
+          }
+        });
+      });
+    } else if (typeof db !== 'undefined' && db) {
       classesData.forEach(function(cls) {
         if (!cls.students) return;
         cls.students.forEach(function(s) {
@@ -231,6 +243,17 @@
     // 保存到 Supabase
     if (typeof saveCoinsAndQuizState === 'function') {
       saveCoinsAndQuizState(student);
+    } else if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
+      // v149: API 模式 fallback
+      window._quizStateLocallyModified = true;
+      window.ApiMigration.saveQuizState(student.id, student.coins, JSON.stringify(qs)).then(function(r) {
+        if (r.ok) {
+          try { _lastOwnWriteTime = Date.now(); } catch(e) {}
+          if (typeof _takeSnapshot === 'function') _takeSnapshot();
+        } else {
+          console.error('[v149] API pig-run save error:', r.error);
+        }
+      });
     } else if (typeof db !== 'undefined' && db) {
       // 标记 quizState 为本地修改，防止 Realtime 事件覆盖
       window._quizStateLocallyModified = true;
