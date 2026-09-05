@@ -2533,9 +2533,9 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   student2.pkCountToday = (student2.lastPkDate === today) ? student2.pkCountToday + 1 : 1;
   student2.lastPkDate = today;
   saveClassData();
-  renderHomePetGrid();
-  renderClassTopThree();
-  renderPKPage();
+  if(typeof renderHomePetGrid==='function') renderHomePetGrid();
+  if(typeof renderClassTopThree==='function') renderClassTopThree();
+  if(typeof renderPKPage==='function') renderPKPage();
   // v155: Mark battle as finished BEFORE showing exit buttons
   pkState.isFighting = false;
   pkState._battleCompleted = true; // Mark this battle as completed to prevent re-start

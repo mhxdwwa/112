@@ -1627,9 +1627,9 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   student.lastJianghuDate = new Date().toDateString();
 
   saveClassData();
-  renderHomePetGrid();
-  renderClassTopThree();
-  renderPKPage();
+  if(typeof renderHomePetGrid==='function') renderHomePetGrid();
+  if(typeof renderClassTopThree==='function') renderClassTopThree();
+  if(typeof renderPKPage==='function') renderPKPage();
 
   // ===== 战斗结果视觉特效 =====
   const petEl = overlay.querySelector('#jhBPet');
@@ -1885,5 +1885,5 @@ function closeJianghuGame() {
   document.querySelectorAll('div[style*="z-index: 100001"], div[style*="z-index:100001"]').forEach(el => el.remove());
   jhSelectedStudentId = null;
   renderJianghuPage();
-  renderPKPage();
+  if(typeof renderPKPage==='function') renderPKPage();
 }

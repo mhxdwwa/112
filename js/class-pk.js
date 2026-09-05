@@ -1170,8 +1170,8 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
   classPKState.selectedStudents = [];
 
   saveClassData();
-  renderHomePetGrid();
-  renderClassTopThree();
+  if(typeof renderHomePetGrid==='function') renderHomePetGrid();
+  if(typeof renderClassTopThree==='function') renderClassTopThree();
   
   // v155: Force-enable ALL buttons in the modal
   if(classPKBattleModal) {
