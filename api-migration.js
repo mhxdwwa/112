@@ -231,9 +231,16 @@
       return Promise.resolve({ error: 'Invalid data' });
     }
 
+    // v144: 修复参数映射 — 端点期望 student_id 和顶层字段
     return apiRequest('/pet/insert', {
-      studentId: studentId,
-      petData: petData
+      student_id: studentId,
+      name: petData.name,
+      nickname: petData.nickname || '',
+      level: petData.level || 1,
+      growth: petData.growth || 0,
+      coins: petData.coins || 0,
+      is_active: petData.is_active || false,
+      is_dead: petData.is_dead || false
     }).then(function(result) {
       if (result.ok) {
         console.log('[API] pet insert ok:', studentId);
