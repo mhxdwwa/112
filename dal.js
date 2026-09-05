@@ -1112,7 +1112,10 @@ function _loadOperationLogs() {
     try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { window.operationLogs = []; }
   }
 
+  var _loadedClassIds = null; // v141: Store classIds for later use
+
   return _getOpLogClassIds().then(function(classIds) {
+    _loadedClassIds = classIds; // v141: Save for later
     if (!classIds || classIds.length === 0) {
       console.warn('[DAL] v29 _loadOperationLogs: no classIds');
       return;
@@ -1243,12 +1246,12 @@ function _loadOperationLogs() {
     // v111: For teachers, also merge student pending logs into classes.operation_logs_json.
     // Students write to students.pending_logs_json (they can't UPDATE classes due to RLS).
     // The teacher reads those pending logs, merges them into the class, and clears them.
-    if (currentUser.type === 'teacher' && classIds.length > 0) {
-      return _mergeStudentPendingLogs(classIds).then(function(mergedCount) {
+    if (currentUser.type === 'teacher' && _loadedClassIds && _loadedClassIds.length > 0) {
+      return _mergeStudentPendingLogs(_loadedClassIds).then(function(mergedCount) {
         if (mergedCount > 0) {
           console.log('[DAL] v111 Merged ' + mergedCount + ' student pending logs');
           // Re-load after merge to include the newly merged logs
-          return _loadOperationLogsAfterMerge(classIds);
+          return _loadOperationLogsAfterMerge(_loadedClassIds);
         }
       });
     }
