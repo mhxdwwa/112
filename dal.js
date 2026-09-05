@@ -1223,9 +1223,26 @@ function _mergeLoadedLogs(allLogs) {
   var serverLogIds = {};
   allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
   
+  // v159: 去重乐观日志 — 当服务器日志到达时，移除匹配的 _apiOptimistic 本地日志
+  // 匹配规则：studentId + actionType + 时间戳相差<10秒
+  var optimisticToRemove = {};
+  (window.operationLogs || []).forEach(function(local) {
+    if (!local._apiOptimistic) return;
+    for (var i = 0; i < allLogs.length; i++) {
+      var server = allLogs[i];
+      if (server.studentId && server.studentId.toString() === local.studentId.toString()
+          && server.actionType === local.actionType
+          && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 10000) {
+        optimisticToRemove[local.id] = true;
+        break;
+      }
+    }
+  });
+
   var localOnly = [];
   var localUnsynced = [];
   (window.operationLogs || []).forEach(function(l) {
+    if (optimisticToRemove[l.id]) return; // v159: 跳过已被服务器日志覆盖的乐观日志
     if (!serverLogIds[l.id]) {
       localOnly.push(l);
     }
@@ -1248,7 +1265,7 @@ function _mergeLoadedLogs(allLogs) {
   });
 
   try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-  console.log('[DAL] v143 Loaded ' + allLogs.length + ' logs, ' + localOnly.length + ' local-only preserved');
+  console.log('[DAL] v159 Loaded ' + allLogs.length + ' logs, ' + localOnly.length + ' local-only preserved, ' + Object.keys(optimisticToRemove).length + ' optimistic deduped');
 }
 
 // v29: Load operation logs from classes.operation_logs_json
@@ -1347,9 +1364,25 @@ function _loadOperationLogs() {
     var serverLogIds = {};
     allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
     
+    // v159: 去重乐观日志 — 当服务器日志到达时，移除匹配的 _apiOptimistic 本地日志
+    var optimisticToRemove2 = {};
+    (window.operationLogs || []).forEach(function(local) {
+      if (!local._apiOptimistic) return;
+      for (var i = 0; i < allLogs.length; i++) {
+        var server = allLogs[i];
+        if (server.studentId && server.studentId.toString() === local.studentId.toString()
+            && server.actionType === local.actionType
+            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 10000) {
+          optimisticToRemove2[local.id] = true;
+          break;
+        }
+      }
+    });
+
     var localOnly = [];
     var localUnsynced = [];
     (window.operationLogs || []).forEach(function(l) {
+      if (optimisticToRemove2[l.id]) return; // v159: 跳过已被服务器日志覆盖的乐观日志
       if (!serverLogIds[l.id]) {
         // Local log not on server — preserve it regardless of _synced status
         localOnly.push(l);
@@ -1601,7 +1634,21 @@ function _loadOperationLogsAfterMerge(classIds) {
     // Preserve local-only logs
     var serverLogIds = {};
     allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
-    var localOnly = (window.operationLogs || []).filter(function(l) { return !serverLogIds[l.id]; });
+    // v159: 去重乐观日志
+    var optimisticToRemove3 = {};
+    (window.operationLogs || []).forEach(function(local) {
+      if (!local._apiOptimistic) return;
+      for (var i = 0; i < allLogs.length; i++) {
+        var server = allLogs[i];
+        if (server.studentId && server.studentId.toString() === local.studentId.toString()
+            && server.actionType === local.actionType
+            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 10000) {
+          optimisticToRemove3[local.id] = true;
+          break;
+        }
+      }
+    });
+    var localOnly = (window.operationLogs || []).filter(function(l) { return !serverLogIds[l.id] && !optimisticToRemove3[l.id]; });
     window.operationLogs = allLogs.concat(localOnly);
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
