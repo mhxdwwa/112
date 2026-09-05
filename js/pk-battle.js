@@ -2044,7 +2044,7 @@ function _createPKExitButton() {
   _pkExitBtn = document.createElement('button');
   _pkExitBtn.id = 'pkExitBtn';
   _pkExitBtn.textContent = '退出';
-  _pkExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:100000;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;';
+  _pkExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:200000;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;';
   _pkExitBtn.onclick = function() { closePKModal(); };
   document.body.appendChild(_pkExitBtn);
 }

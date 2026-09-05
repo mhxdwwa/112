@@ -19,12 +19,19 @@ function probeClassPKRobotImages() {
     for(let i = 1; i <= 13; i++) {
       pending++;
       const img = new Image();
-      const path = `战斗机器人/${i}.webp`;
+      const path = encodeURI('/战斗机器人/' + i + '.webp');
       img.onload = () => { _classPKRobotCache.push(path); done(); };
-      img.onerror = () => { done(); };
+      img.onerror = () => {
+        // 回退：尝试不带前导斜杠的相对路径
+        const fallback = new Image();
+        const fallbackPath = encodeURI('战斗机器人/' + i + '.webp');
+        fallback.onload = () => { _classPKRobotCache.push(fallbackPath); done(); };
+        fallback.onerror = () => { done(); };
+        fallback.src = fallbackPath;
+      };
       img.src = path;
     }
-    setTimeout(() => { _classPKRobotProbed = true; resolve(); }, 3000);
+    setTimeout(() => { _classPKRobotProbed = true; resolve(); }, 5000);
   });
 }
 
@@ -623,6 +630,31 @@ async function startClassPKBattle() {
 }
 
 let classPKBattleModal = null;
+let _classPKExitBtn = null;
+
+function _createClassPKExitButton() {
+  if (_classPKExitBtn) _classPKExitBtn.remove();
+  _classPKExitBtn = document.createElement('button');
+  _classPKExitBtn.id = 'classPKExitBtn';
+  _classPKExitBtn.textContent = '退出';
+  _classPKExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:200000;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;';
+  _classPKExitBtn.onclick = function() { closeClassPKModal(); };
+  document.body.appendChild(_classPKExitBtn);
+}
+
+function _showClassPKExitButton() {
+  if (_classPKExitBtn) {
+    _classPKExitBtn.style.opacity = '1';
+    _classPKExitBtn.style.pointerEvents = 'auto';
+  }
+}
+
+function _removeClassPKExitButton() {
+  if (_classPKExitBtn) {
+    _classPKExitBtn.remove();
+    _classPKExitBtn = null;
+  }
+}
 
 async function showClassPKRobotBattle(student1, student2, pet1, pet2, robot1, robot2, correct1, correct2) {
   const hpBonus1 = correct1 * 30;
@@ -682,6 +714,9 @@ async function showClassPKRobotBattle(student1, student2, pet1, pet2, robot1, ro
     const exitBtn = classPKBattleModal.querySelector('.modal-actions button');
     if(exitBtn) exitBtn.disabled = true;
   }
+
+  // 创建body级别退出按钮（绕过所有层叠上下文）
+  _createClassPKExitButton();
 
   // 开始变身序列
   await sleep(600);
@@ -1136,6 +1171,9 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     if(exitBtn) exitBtn.disabled = false;
   }
   
+  // 显示body级别退出按钮（绕过所有层叠上下文）
+  _showClassPKExitButton();
+  
   classPKState.isFighting = false;
   classPKState.selectedStudents = [];
 }
@@ -1229,6 +1267,7 @@ function closeClassPKModal() {
     showNotification('战斗中', '战斗尚未结束，无法退出', 'warning');
     return;
   }
+  _removeClassPKExitButton();
   closeModal();
   renderClassPKPage();
 }

@@ -637,10 +637,11 @@ function launchJianghuGame(student, pet, investCoins) {
     overlay.style.opacity = '1';
   });
   // Show exit button immediately with a delay (so user can exit during journey)
-  setTimeout(() => {
-    const btn = document.getElementById('jhExitBtn');
-    if (btn) btn.classList.add('jh-visible');
-  }, 1500);
+  // v152: 不在旅途阶段显示退出按钮，只在战斗结束后显示
+  // setTimeout(() => {
+  //   const btn = document.getElementById('jhExitBtn');
+  //   if (btn) btn.classList.add('jh-visible');
+  // }, 1500);
 
   // Add particles
   const scene = overlay.querySelector('#jhScene');
