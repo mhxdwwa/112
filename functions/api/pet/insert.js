@@ -4,6 +4,31 @@
  */
 import { jsonResponse, handleOptions, checkEnv, sbInsert, sbUpdate, sbRequest } from '../../_utils.js';
 
+// 阶段升级所需成长值（与客户端 generateStageCurve 保持一致）
+const STAGE_GROWTH = [
+  { stage: 1, growthRequired: 0 },
+  { stage: 2, growthRequired: 30 },
+  { stage: 3, growthRequired: 90 },
+  { stage: 4, growthRequired: 210 },
+  { stage: 5, growthRequired: 410 },
+  { stage: 6, growthRequired: 740 },
+  { stage: 7, growthRequired: 1200 },
+  { stage: 8, growthRequired: 1800 },
+  { stage: 9, growthRequired: 2600 },
+];
+
+// v159: 服务端根据成长值计算等级（安全兜底）
+function calcLevelFromGrowth(growth) {
+  let level = 1;
+  for (let i = STAGE_GROWTH.length - 1; i >= 0; i--) {
+    if (growth >= STAGE_GROWTH[i].growthRequired) {
+      level = STAGE_GROWTH[i].stage;
+      break;
+    }
+  }
+  return level;
+}
+
 export const onRequestOptions = handleOptions;
 
 export const onRequestPost = async ({ request, env }) => {
@@ -30,6 +55,11 @@ export const onRequestPost = async ({ request, env }) => {
       today_play_count: body.today_play_count || 0,
       penalty_streak: body.penalty_streak || 0,
     };
+
+    // v159: 服务端根据成长值重算等级
+    if (payload.growth) {
+      payload.level = calcLevelFromGrowth(payload.growth);
+    }
 
     // 先尝试更新（宠物可能还在数据库中）
     const updateR = await sbUpdate(env, 'pets', payload, `id=eq.${body.id}`);
@@ -82,6 +112,11 @@ export const onRequestPost = async ({ request, env }) => {
     today_play_count: 0,
     penalty_streak: 0,
   };
+
+  // v159: 服务端根据成长值重算等级
+  if (payload.growth) {
+    payload.level = calcLevelFromGrowth(payload.growth);
+  }
 
   const insertR = await sbInsert(env, 'pets', [payload]);
   if (insertR.error) {

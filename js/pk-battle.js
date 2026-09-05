@@ -2491,9 +2491,11 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   if(p1HP <= 0 && p2HP <= 0) {
     resultOverlay.innerHTML = `<div class="pk-result-draw">平局</div><div class="pk-result-detail">双方势均力敌，无人获得金币奖励</div>`;
     showNotification('战斗平局', '双方都没有获得金币', 'info');
-    // 记录平局（双方各一条）
-    recordAction(student1.id, student1.name, 'PK平局', `${student1.name} vs ${student2.name} 平局`, 0, 0, p1.pet.id, {pkType:'draw', opponentId: student2.id, opponentName: student2.name});
-    recordAction(student2.id, student2.name, 'PK平局', `${student2.name} vs ${student1.name} 平局`, 0, 0, p2.pet.id, {pkType:'draw', opponentId: student1.id, opponentName: student1.name});
+    // 记录平局（双方各一条）— API模式下coinsAndPet会写日志，跳过本地recordAction避免重复
+    if(!(window.USE_API&&window.ApiMigration)){
+      recordAction(student1.id, student1.name, 'PK平局', `${student1.name} vs ${student2.name} 平局`, 0, 0, p1.pet.id, {pkType:'draw', opponentId: student2.id, opponentName: student2.name});
+      recordAction(student2.id, student2.name, 'PK平局', `${student2.name} vs ${student1.name} 平局`, 0, 0, p2.pet.id, {pkType:'draw', opponentId: student1.id, opponentName: student1.name});
+    }
   } else {
     rewardCoin = 15;
     penaltyCoin = -5;
@@ -2522,10 +2524,11 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     `;
     showNotification('战斗胜利', `${winnerStudent.name} 获得 ${rewardCoin} 金币，成长值+3！`, 'success');
     showNotification('战斗失败', `${loserStudent.name} 损失 ${-penaltyCoin} 金币，成长值-1！`, 'error');
-    // 记录胜方
-    recordAction(winnerStudent.id, winnerStudent.name, 'PK胜利', `击败 ${loserStudent.name}（${loserPet.nickname||loserPet.name}）`, rewardCoin, winnerGrowthDelta, winnerPet.id, {pkType:'win', opponentId: loserStudent.id, opponentName: loserStudent.name, opponentPetId: loserPet.id, opponentCoinDelta: penaltyCoin, opponentGrowthDelta: loserGrowthDelta});
-    // 记录败方
-    recordAction(loserStudent.id, loserStudent.name, 'PK失败', `败给 ${winnerStudent.name}（${winnerPet.nickname||winnerPet.name}）`, penaltyCoin, loserGrowthDelta, loserPet.id, {pkType:'lose', opponentId: winnerStudent.id, opponentName: winnerStudent.name, opponentPetId: winnerPet.id, opponentCoinDelta: rewardCoin, opponentGrowthDelta: winnerGrowthDelta});
+    // 记录胜方/败方 — API模式下coinsAndPet会写日志，跳过本地recordAction避免重复
+    if(!(window.USE_API&&window.ApiMigration)){
+      recordAction(winnerStudent.id, winnerStudent.name, 'PK胜利', `击败 ${loserStudent.name}（${loserPet.nickname||loserPet.name}）`, rewardCoin, winnerGrowthDelta, winnerPet.id, {pkType:'win', opponentId: loserStudent.id, opponentName: loserStudent.name, opponentPetId: loserPet.id, opponentCoinDelta: penaltyCoin, opponentGrowthDelta: loserGrowthDelta});
+      recordAction(loserStudent.id, loserStudent.name, 'PK失败', `败给 ${winnerStudent.name}（${winnerPet.nickname||winnerPet.name}）`, penaltyCoin, loserGrowthDelta, loserPet.id, {pkType:'lose', opponentId: winnerStudent.id, opponentName: winnerStudent.name, opponentPetId: winnerPet.id, opponentCoinDelta: rewardCoin, opponentGrowthDelta: winnerGrowthDelta});
+    }
     playVictorySound();
   }
   if(arena) arena.appendChild(resultOverlay);
@@ -2565,7 +2568,19 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     window.ApiMigration.updateStudent(student2.id, {pk_count_today: student2.pkCountToday, last_pk_date: student2.lastPkDate});
     // Sync winner coins + growth via API (server also writes operation log)
     if(p1HP <= 0 && p2HP <= 0) {
-      // Draw — no coin/growth changes to sync (recordAction already logged locally)
+      // Draw — no coin/growth changes, but sync log to server
+      window.ApiMigration.coinsAndPet(student1, 0, [{
+        petId: p1.pet.id, updates: { growth: p1.pet.growth, level: p1.pet.level }
+      }], {
+        actionType: 'PK平局', details: student1.name + ' vs ' + student2.name + ' 平局',
+        expDelta: 0, petId: p1.pet.id
+      });
+      window.ApiMigration.coinsAndPet(student2, 0, [{
+        petId: p2.pet.id, updates: { growth: p2.pet.growth, level: p2.pet.level }
+      }], {
+        actionType: 'PK平局', details: student2.name + ' vs ' + student1.name + ' 平局',
+        expDelta: 0, petId: p2.pet.id
+      });
     } else {
       window.ApiMigration.coinsAndPet(winnerStudent, rewardCoin, [{
         petId: winnerPet.id, updates: { growth: winnerPet.growth, level: winnerPet.level }

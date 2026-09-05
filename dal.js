@@ -167,6 +167,18 @@ function _capPetGrowth(pet) {
   return pet;
 }
 
+// v159: 从成长值重算等级（加载宠物数据时兜底，防止数据库中level与growth不一致）
+var _PET_STAGE_GROWTH = [0, 0, 30, 90, 210, 410, 740, 1200, 1800, 2600]; // index = stage
+function _recalcPetLevelFromGrowth(pet) {
+  if (!pet || typeof pet.growth !== 'number') return pet;
+  var level = 1;
+  for (var i = _PET_STAGE_GROWTH.length - 1; i >= 1; i--) {
+    if (pet.growth >= _PET_STAGE_GROWTH[i]) { level = i; break; }
+  }
+  pet.level = level;
+  return pet;
+}
+
 /* ===== Debounce & Self-Write Protection (v7.0) ===== */
 var _refreshDebounceTimer = null;
 var _REFRESH_DEBOUNCE_MS = 1500; // v14: 1.5s debounce for Realtime events (was 3s)
@@ -531,6 +543,7 @@ function _smartRefreshFromSupabase() {
         penaltyStreak: p.penalty_streak || 0
       };
       _capPetGrowth(pet);
+      _recalcPetLevelFromGrowth(pet);
       freshPetMap[p.id] = pet;
       if (!freshPetByStudent[p.student_id]) freshPetByStudent[p.student_id] = [];
       freshPetByStudent[p.student_id].push(pet);
@@ -848,6 +861,7 @@ function _buildTeacherClasses(classes, students, pets) {
       penaltyStreak: p.penalty_streak || 0
     };
     _capPetGrowth(_pet);
+    _recalcPetLevelFromGrowth(_pet);
     petByStudent[sid].push(_pet);
   });
 
@@ -1067,6 +1081,7 @@ function _loadStudentFromSupabase() {
           penaltyStreak: p.penalty_streak || 0
         };
         _capPetGrowth(_pet3);
+        _recalcPetLevelFromGrowth(_pet3);
         studentMap[sid].pets.push(_pet3);
       }
     });

@@ -42,7 +42,7 @@ export const onRequestPost = async ({ request, env }) => {
   }
 
   const allowedFields = [
-    'growth', 'level', 'is_dead', 'last_feed_date', 'last_play_date',
+    'name', 'growth', 'level', 'is_dead', 'last_feed_date', 'last_play_date',
     'today_feed_count', 'today_play_count', 'penalty_streak', 'is_active', 'nickname', 'coins'
   ];
   const filteredUpdates = {};

@@ -257,7 +257,9 @@ function modalBuyItem(itemId){
     if(!student.shopItems) student.shopItems=[];
     student.shopItems.push(itemId);
     autoEquipOnBuy(student, itemId);
-    recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+    if(!(window.USE_API&&window.ApiMigration)){
+      recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+    }
     saveClassData();
     refreshCurrentStudentModal();
     renderHomePetGrid();

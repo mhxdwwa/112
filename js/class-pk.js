@@ -1123,8 +1123,10 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     // v158: 更新等级（之前缺失导致升级后level未刷新，服务器保存旧等级）
     if(typeof updatePetLevel==='function'){updatePetLevel(student1,pet1.id,3,true);updatePetLevel(student2,pet2.id,3,true);}
     showNotification('课堂PK结果', '平局！双方各+5金币、+3成长值', 'info');
-    recordAction(student1.id, student1.name, '课堂PK平局', `${student1.name} vs ${student2.name} 平局`, 5, 3, pet1.id, {pkType:'draw', opponentId: student2.id, opponentName: student2.name});
-    recordAction(student2.id, student2.name, '课堂PK平局', `${student2.name} vs ${student1.name} 平局`, 5, 3, pet2.id, {pkType:'draw', opponentId: student1.id, opponentName: student1.name});
+    if(!(window.USE_API&&window.ApiMigration)){
+      recordAction(student1.id, student1.name, '课堂PK平局', `${student1.name} vs ${student2.name} 平局`, 5, 3, pet1.id, {pkType:'draw', opponentId: student2.id, opponentName: student2.name});
+      recordAction(student2.id, student2.name, '课堂PK平局', `${student2.name} vs ${student1.name} 平局`, 5, 3, pet2.id, {pkType:'draw', opponentId: student1.id, opponentName: student1.name});
+    }
     playVictorySound();
   } else {
     const winnerSide = p2HP <= 0 ? 1 : 2;
@@ -1163,8 +1165,10 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     showNotification('课堂PK胜利', `${winnerStudent.name} +${winCoin}金币、+${winGrowth}成长值！`, 'success');
     playVictorySound();
 
-    recordAction(winnerStudent.id, winnerStudent.name, '课堂PK胜利', `击败 ${loserStudent.name}（${loserPet.nickname||loserPet.name}）`, winCoin, winGrowth, winnerPet.id, {pkType:'win', opponentId: loserStudent.id, opponentName: loserStudent.name});
-    recordAction(loserStudent.id,  loserStudent.name,  '课堂PK失败', `败给 ${winnerStudent.name}（${winnerPet.nickname||winnerPet.name}）`, loseCoin, loseGrowth, loserPet.id,  {pkType:'lose', opponentId: winnerStudent.id, opponentName: winnerStudent.name});
+    if(!(window.USE_API&&window.ApiMigration)){
+      recordAction(winnerStudent.id, winnerStudent.name, '课堂PK胜利', `击败 ${loserStudent.name}（${loserPet.nickname||loserPet.name}）`, winCoin, winGrowth, winnerPet.id, {pkType:'win', opponentId: loserStudent.id, opponentName: loserStudent.name});
+      recordAction(loserStudent.id,  loserStudent.name,  '课堂PK失败', `败给 ${winnerStudent.name}（${winnerPet.nickname||winnerPet.name}）`, loseCoin, loseGrowth, loserPet.id,  {pkType:'lose', opponentId: winnerStudent.id, opponentName: winnerStudent.name});
+    }
   }
 
   if(arena) arena.appendChild(resultOverlay);
