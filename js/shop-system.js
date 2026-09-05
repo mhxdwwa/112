@@ -252,26 +252,32 @@ function modalBuyItem(itemId){
   if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
   const pet=getActivePet(student);
   if(window.USE_API&&window.ApiMigration){
-    // API 模式：通过 API 扣金币 + 保存商店状态到服务器
+    // v151-fix: 乐观更新本地数据 + 立即刷新 UI，API 调用并行发出
+    student.coins -= item.price;
+    if(!student.shopItems) student.shopItems=[];
+    student.shopItems.push(itemId);
+    autoEquipOnBuy(student, itemId);
     recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+    saveClassData();
+    refreshCurrentStudentModal();
+    renderHomePetGrid();
+    showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
+    // 两个 API 并行发出，不阻塞 UI
     window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null).then(function(r){
       if(r.ok){
         student.coins=r.coinsAfter;
-        if(!student.shopItems) student.shopItems=[];
-        student.shopItems.push(itemId);
-        autoEquipOnBuy(student, itemId);
-        window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
-          if(!r2.ok) console.warn('[API] saveShopState error:', r2.error);
-          saveClassData();
-          refreshCurrentStudentModal();
-          renderHomePetGrid();
-        });
-        showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
       } else if(r.error==='Insufficient balance'){
+        // 回滚
+        student.coins += item.price;
+        var idx2=student.shopItems.indexOf(itemId); if(idx2!==-1) student.shopItems.splice(idx2,1);
+        saveClassData(); refreshCurrentStudentModal(); renderHomePetGrid();
         showNotification('金币不足',`余额不足，无法购买${item.name}`,'error');
       } else {
-        showNotification('购买失败',r.error||'未知错误','error');
+        console.warn('[API] changeStudentCoins error:', r.error);
       }
+    });
+    window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
+      if(!r2.ok) console.warn('[API] saveShopState error:', r2.error);
     });
   } else {
     // 非 API 模式：本地扣金币 + 保存
