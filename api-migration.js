@@ -224,6 +224,29 @@
   }
 
   /**
+   * 通过 API 删除宠物
+   */
+  function deletePetViaApi(petId) {
+    if (!petId) {
+      return Promise.resolve({ error: 'Invalid petId' });
+    }
+
+    return apiRequest('/pet/delete', {
+      petId: petId
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] pet delete ok:', petId);
+      } else {
+        console.error('[API] pet delete error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] pet delete request failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
+  /**
    * 通过 API 领养新宠物
    */
   function insertPetViaApi(studentId, petData) {
@@ -579,6 +602,7 @@
     coinsAndPet: coinsAndPetViaApi,
     updatePet: updatePetViaApi,
     insertPet: insertPetViaApi,
+    deletePet: deletePetViaApi,
     
     // 班级
     loadClass: loadClassViaApi,

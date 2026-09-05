@@ -1498,6 +1498,10 @@ function confirmDeletePet(studentId, petId){
     } else {
       student.activePetId = null;
     }
+    // v147: API 模式 — 同步 active_pet_id 到服务器
+    if (window.USE_API && window.ApiMigration) {
+      window.ApiMigration.updateStudent(student.id, { active_pet_id: student.activePetId });
+    }
   }
   // Save data
   saveClassData('pet');
@@ -1525,6 +1529,17 @@ function confirmDeletePet(studentId, petId){
   showNotification('删除成功', `已删除 ${student.name} 的宠物「${petDisplayName}」`, 'success');
 }
 function _deletePetFromSupabase(petId, studentId){
+  // v147: API 模式 — 通过服务端 API 删除
+  if (window.USE_API && window.ApiMigration) {
+    window.ApiMigration.deletePet(petId).then(function(result) {
+      if (result.ok) {
+        console.log('[DAL] deletePet API OK: pet', petId, 'student', studentId);
+      } else {
+        console.warn('[DAL] deletePet API error:', result.error);
+      }
+    });
+    return;
+  }
   if(typeof db === 'undefined' || !db) return;
   // Mark as echo to avoid realtime re-adding
   if(typeof _markRowWritten === 'function') _markRowWritten('pets', petId);
