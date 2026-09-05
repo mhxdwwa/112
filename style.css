@@ -54,7 +54,7 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .page-title{color:#c04058;font-size:26px;margin-bottom:25px;padding-bottom:15px;border-bottom:3px solid transparent;border-image:linear-gradient(90deg,#e8637a,#f5a054,#e8637a) 1;display:flex;align-items:center;gap:10px;text-shadow:none;position:relative;letter-spacing:1px;}
 .btn{padding:14px 22px;border:none;border-radius:18px;cursor:pointer;font-size:16px;font-weight:600;transition:all 0.3s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 10px rgba(250, 150, 130, 0.2);position:relative;overflow:hidden;}
-.btn:disabled, .modal-btn:disabled, button:disabled{opacity:0.4 !important;filter:grayscale(80%) !important;cursor:not-allowed !important;pointer-events:none;transform:none !important;box-shadow:none !important;}
+.btn:disabled, .modal-btn:disabled, button:disabled{opacity:0.4;filter:grayscale(80%);cursor:not-allowed;pointer-events:none;transform:none;box-shadow:none;}
 .btn-primary{background:linear-gradient(135deg, #ff9e9e 0%, #ffb999 50%, #ffc5a8 100%);color:#fff;border:1px solid rgba(255,255,255,0.3);background-size:200% 200%;animation:btnGradient 3s ease infinite;}
 .btn-primary:hover{background:linear-gradient(135deg, #d5506a 0%, #e8904a 100%);transform:translateY(-3px);box-shadow:0 8px 25px rgba(255,150,130,0.4), 0 0 0 2px rgba(255,200,180,0.3);}
 .btn-secondary{background:linear-gradient(135deg,#fff,#f8f0ed);color:#6a4040;border:1px solid #e8ccc4;}

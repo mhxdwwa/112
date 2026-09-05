@@ -2044,8 +2044,9 @@ function _createPKExitButton() {
   _pkExitBtn = document.createElement('button');
   _pkExitBtn.id = 'pkExitBtn';
   _pkExitBtn.textContent = '退出';
-  _pkExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:200000;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;';
-  _pkExitBtn.onclick = function() { closePKModal(); };
+  _pkExitBtn.setAttribute('type', 'button');
+  _pkExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:999999;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;display:block;';
+  _pkExitBtn.onclick = function(e) { e.preventDefault(); e.stopPropagation(); closePKModal(); };
   document.body.appendChild(_pkExitBtn);
 }
 
@@ -2053,6 +2054,9 @@ function _showPKExitButton() {
   if (_pkExitBtn) {
     _pkExitBtn.style.opacity = '1';
     _pkExitBtn.style.pointerEvents = 'auto';
+    _pkExitBtn.style.display = 'block';
+    _pkExitBtn.disabled = false;
+    _pkExitBtn.removeAttribute('disabled');
   }
 }
 
@@ -2532,6 +2536,10 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   renderHomePetGrid();
   renderClassTopThree();
   renderPKPage();
+  // v155: Mark battle as finished BEFORE showing exit buttons
+  pkState.isFighting = false;
+  pkState._battleCompleted = true; // Mark this battle as completed to prevent re-start
+  
   // Add a direct exit button inside the result overlay (pointer-events: auto)
   const resultExitBtn = document.createElement('button');
   resultExitBtn.className = 'pk-result-exit-btn';
@@ -2540,23 +2548,19 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   resultOverlay.appendChild(resultExitBtn);
   // Show the body-level exit button (escapes all stacking contexts)
   _showPKExitButton();
-  // v153: Also force-enable ALL buttons in the modal (exit button was staying disabled)
+  // v155: Force-enable ALL buttons in the modal (exit button was staying disabled)
   if(currentBattleModalOverlay) {
     currentBattleModalOverlay.querySelectorAll('.modal-actions button').forEach(function(btn) {
+      btn.removeAttribute('disabled');
       btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.style.pointerEvents = 'auto';
-      btn.style.filter = 'none';
-      btn.style.cursor = 'pointer';
+      btn.style.cssText = 'opacity:1;pointer-events:auto;filter:none;cursor:pointer;display:inline-flex;';
     });
   }
-  // v153: Persist PK count to server (was only saved locally, reset on reload)
+  // v155: Persist PK count to server (was only saved locally, reset on reload)
   if(window.USE_API && window.ApiMigration) {
     window.ApiMigration.updateStudent(student1.id, {pk_count_today: student1.pkCountToday, last_pk_date: student1.lastPkDate});
     window.ApiMigration.updateStudent(student2.id, {pk_count_today: student2.pkCountToday, last_pk_date: student2.lastPkDate});
   }
-  pkState.isFighting = false;
-  pkState._battleCompleted = true; // Mark this battle as completed to prevent re-start
   // Clean up seeded RNG
   _pkBattleRng = null;
   _pkBattleLeftMonsterIdx = -1;

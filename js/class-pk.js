@@ -637,8 +637,9 @@ function _createClassPKExitButton() {
   _classPKExitBtn = document.createElement('button');
   _classPKExitBtn.id = 'classPKExitBtn';
   _classPKExitBtn.textContent = '退出';
-  _classPKExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:200000;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;';
-  _classPKExitBtn.onclick = function() { closeClassPKModal(); };
+  _classPKExitBtn.setAttribute('type', 'button');
+  _classPKExitBtn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:999999;padding:14px 40px;font-size:18px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff6b6b,#ee5a24);border:none;border-radius:30px;cursor:pointer;box-shadow:0 4px 20px rgba(238,90,36,0.5);transition:all 0.3s;opacity:0;pointer-events:none;letter-spacing:1px;display:block;';
+  _classPKExitBtn.onclick = function(e) { e.preventDefault(); e.stopPropagation(); closeClassPKModal(); };
   document.body.appendChild(_classPKExitBtn);
 }
 
@@ -646,6 +647,9 @@ function _showClassPKExitButton() {
   if (_classPKExitBtn) {
     _classPKExitBtn.style.opacity = '1';
     _classPKExitBtn.style.pointerEvents = 'auto';
+    _classPKExitBtn.style.display = 'block';
+    _classPKExitBtn.disabled = false;
+    _classPKExitBtn.removeAttribute('disabled');
   }
 }
 
@@ -1161,26 +1165,39 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
 
   if(arena) arena.appendChild(resultOverlay);
 
+  // v155: Mark battle as finished BEFORE showing exit buttons
+  classPKState.isFighting = false;
+  classPKState.selectedStudents = [];
+
   saveClassData();
   renderHomePetGrid();
   renderClassTopThree();
   
-  // 启用退出按钮
+  // v155: Force-enable ALL buttons in the modal
   if(classPKBattleModal) {
     classPKBattleModal.querySelectorAll('.modal-actions button').forEach(function(btn) {
+      btn.removeAttribute('disabled');
       btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.style.pointerEvents = 'auto';
-      btn.style.filter = 'none';
-      btn.style.cursor = 'pointer';
+      btn.style.cssText = 'opacity:1;pointer-events:auto;filter:none;cursor:pointer;display:inline-flex;';
     });
   }
   
-  // 显示body级别退出按钮（绕过所有层叠上下文）
+  // Show body-level exit button (escapes all stacking contexts)
   _showClassPKExitButton();
   
-  classPKState.isFighting = false;
-  classPKState.selectedStudents = [];
+  // v155: Sync class PK results to API (coins, growth, history)
+  if(window.USE_API && window.ApiMigration) {
+    if(p1HP <= 0 && p2HP <= 0) {
+      // Draw
+      window.ApiMigration.updateStudent(student1.id, {coins: student1.coins});
+      window.ApiMigration.updateStudent(student2.id, {coins: student2.coins});
+    } else {
+      const w = p2HP <= 0 ? student1 : student2;
+      const l = p2HP <= 0 ? student2 : student1;
+      window.ApiMigration.updateStudent(w.id, {coins: w.coins});
+      window.ApiMigration.updateStudent(l.id, {coins: l.coins});
+    }
+  }
 }
 
 // 课堂PK败方碎裂特效（立即碎裂，碎片停留空中不消失）

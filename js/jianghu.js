@@ -1075,6 +1075,13 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
   }
 
   // ===== 主战斗循环（最多8回合）=====
+  // v155: Safety timeout - force end battle after 60 seconds
+  var _jhBattleTimeout = setTimeout(function() {
+    console.warn('[江湖行] 战斗超时，强制结束');
+    if (willWin) { bossHp = 0; } else { petHp = 0; }
+  }, 60000);
+  
+  try {
   while (petHp > 0 && bossHp > 0 && turn < 8) {
     turn++;
     await sleep(500);
@@ -1185,6 +1192,20 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
     const exitBtn = document.getElementById('jhExitBtn');
     if (exitBtn) exitBtn.classList.add('jh-visible');
   }
+  } catch(battleErr) {
+    console.error('[江湖行] 战斗循环出错:', battleErr);
+    // 出错时强制设置HP并显示退出按钮
+    if (willWin) { bossHp = 0; } else { petHp = 0; }
+    jhUpdateHPBar('jhPetHp', petHp, petMaxHP);
+    jhUpdateHPBar('jhBossHp', bossHp, bossMaxHP);
+    try { showJianghuResult(overlay, willWin, student, pet, investCoins, boss); }
+    catch(e2) {
+      const exitBtn = document.getElementById('jhExitBtn');
+      if (exitBtn) exitBtn.classList.add('jh-visible');
+    }
+  }
+  // v155: Clear safety timeout
+  clearTimeout(_jhBattleTimeout);
 }
 
 
