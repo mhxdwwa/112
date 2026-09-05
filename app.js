@@ -2712,6 +2712,10 @@ function modalDailyCheckin(){
   // Perform check-in: +10 coins
   student.lastCheckinDate = new Date().toISOString();
   changeStudentCoins(student, 10, '每日打卡', '+10金币', 0, null);
+  // v156: Sync lastCheckinDate to server (was only saved locally)
+  if(window.USE_API&&window.ApiMigration){
+    window.ApiMigration.updateStudent(student.id, { last_checkin_date: student.lastCheckinDate });
+  }
   saveClassData();
   refreshCurrentStudentModal();
   renderHomePetGrid();

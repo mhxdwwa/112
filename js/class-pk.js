@@ -1185,17 +1185,29 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
   // Show body-level exit button (escapes all stacking contexts)
   _showClassPKExitButton();
   
-  // v155: Sync class PK results to API (coins, growth, history)
+  // v156: Sync class PK results to API (coins + growth + history)
   if(window.USE_API && window.ApiMigration) {
     if(p1HP <= 0 && p2HP <= 0) {
-      // Draw
-      window.ApiMigration.updateStudent(student1.id, {coins: student1.coins});
-      window.ApiMigration.updateStudent(student2.id, {coins: student2.coins});
+      // Draw — sync coins + growth for both
+      window.ApiMigration.coinsAndPet(student1, 0, [{
+        petId: pet1.id, updates: { growth: pet1.growth }
+      }], { actionType: '课堂PK平局', details: student1.name + ' vs ' + student2.name + ' 平局', expDelta: 3, petId: pet1.id });
+      window.ApiMigration.coinsAndPet(student2, 0, [{
+        petId: pet2.id, updates: { growth: pet2.growth }
+      }], { actionType: '课堂PK平局', details: student2.name + ' vs ' + student1.name + ' 平局', expDelta: 3, petId: pet2.id });
     } else {
       const w = p2HP <= 0 ? student1 : student2;
       const l = p2HP <= 0 ? student2 : student1;
-      window.ApiMigration.updateStudent(w.id, {coins: w.coins});
-      window.ApiMigration.updateStudent(l.id, {coins: l.coins});
+      const wPet = p2HP <= 0 ? pet1 : pet2;
+      const lPet = p2HP <= 0 ? pet2 : pet1;
+      const wCoin = 20, wGrowth = 5;
+      const lCoin = 5, lGrowth = 3;
+      window.ApiMigration.coinsAndPet(w, wCoin, [{
+        petId: wPet.id, updates: { growth: wPet.growth }
+      }], { actionType: '课堂PK胜利', details: '击败 ' + l.name + '（' + (lPet.nickname||lPet.name) + '）', expDelta: wGrowth, petId: wPet.id });
+      window.ApiMigration.coinsAndPet(l, lCoin, [{
+        petId: lPet.id, updates: { growth: lPet.growth }
+      }], { actionType: '课堂PK失败', details: '败给 ' + w.name + '（' + (wPet.nickname||wPet.name) + '）', expDelta: lGrowth, petId: lPet.id });
     }
   }
 }

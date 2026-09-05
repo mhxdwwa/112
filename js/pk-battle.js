@@ -2556,10 +2556,28 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
       btn.style.cssText = 'opacity:1;pointer-events:auto;filter:none;cursor:pointer;display:inline-flex;';
     });
   }
-  // v155: Persist PK count to server (was only saved locally, reset on reload)
+  // v156: Sync ALL PK data to server (coins, growth, PK count)
   if(window.USE_API && window.ApiMigration) {
+    // Sync PK count
     window.ApiMigration.updateStudent(student1.id, {pk_count_today: student1.pkCountToday, last_pk_date: student1.lastPkDate});
     window.ApiMigration.updateStudent(student2.id, {pk_count_today: student2.pkCountToday, last_pk_date: student2.lastPkDate});
+    // Sync winner coins + growth via API (server also writes operation log)
+    if(p1HP <= 0 && p2HP <= 0) {
+      // Draw — no coin/growth changes to sync (recordAction already logged locally)
+    } else {
+      window.ApiMigration.coinsAndPet(winnerStudent, rewardCoin, [{
+        petId: winnerPet.id, updates: { growth: winnerPet.growth }
+      }], {
+        actionType: 'PK胜利', details: '击败 ' + loserStudent.name + '（' + (loserPet.nickname||loserPet.name) + '）',
+        expDelta: winnerGrowthDelta, petId: winnerPet.id
+      });
+      window.ApiMigration.coinsAndPet(loserStudent, penaltyCoin, [{
+        petId: loserPet.id, updates: { growth: loserPet.growth }
+      }], {
+        actionType: 'PK失败', details: '败给 ' + winnerStudent.name + '（' + (winnerPet.nickname||winnerPet.name) + '）',
+        expDelta: loserGrowthDelta, petId: loserPet.id
+      });
+    }
   }
   // Clean up seeded RNG
   _pkBattleRng = null;

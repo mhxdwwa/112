@@ -1627,6 +1627,13 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
   student.lastJianghuDate = new Date().toDateString();
 
   saveClassData();
+  // v156: Sync jianghu result to server (growth on loss + lastJianghuDate)
+  if(window.USE_API && window.ApiMigration) {
+    window.ApiMigration.updateStudent(student.id, { last_jianghu_date: student.lastJianghuDate });
+    if(!won && growthGain > 0) {
+      window.ApiMigration.updatePet(pet.id, { growth: pet.growth, level: pet.level });
+    }
+  }
   if(typeof renderHomePetGrid==='function') renderHomePetGrid();
   if(typeof renderClassTopThree==='function') renderClassTopThree();
   if(typeof renderPKPage==='function') renderPKPage();
