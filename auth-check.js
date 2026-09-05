@@ -36,7 +36,7 @@ async function _verifyQRToken(token) {
 
 // 初始化 Supabase 客户端
 // v164: API 模式下也初始化真实 Supabase 客户端（用于 Realtime 订阅）
-// 数据写入仍走 API，但 Realtime 需要真实的 WebSocket 连接
+// 数据写入仍走 API（dal.js 通过 ApiMigration 处理），但 Realtime 需要真实的 WebSocket 连接
 (function initSupabase() {
   try {
     if (window.supabase && window.supabase.createClient) {
@@ -49,17 +49,9 @@ async function _verifyQRToken(token) {
       });
       console.log('[Auth] v164 Supabase client created (Realtime enabled)');
       
-      // v164: API 模式下，数据查询走 API，但保留 Realtime 能力
+      // v164: API 模式下，数据查询/写入走 API，但保留 Realtime 能力
       if (typeof window.USE_API !== 'undefined' && window.USE_API === true) {
-        console.log('[Auth] v164 API mode: data writes via API, Realtime via WebSocket');
-        // 包装 db.from，让数据查询走 API（通过 dal.js 的 _smartRefreshFromSupabase）
-        // 但保留 db.channel 用于 Realtime 订阅
-        var _originalFrom = db.from.bind(db);
-        db.from = function(table) {
-          // Realtime 订阅需要 channel 方法，这个保留原样
-          // 数据查询在 API 模式下由 dal.js 通过 ApiMigration 处理
-          return _originalFrom(table);
-        };
+        console.log('[Auth] v164 API mode: data via API, Realtime via WebSocket');
       }
     } else {
       console.error('[Auth] Supabase SDK not loaded, retrying in 1s...');
