@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API 迁移测试</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+    .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+    .test-section h3 { margin-top: 0; }
+    button { padding: 8px 16px; margin: 5px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; }
+    button:hover { background: #f0f0f0; }
+    .result { margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+    .success { color: green; }
+    .error { color: red; }
+    .info { color: blue; }
+  </style>
+</head>
+<body>
+  <h1>API 迁移层测试</h1>
+  
+  <div class="test-section">
+    <h3>1. 健康检查</h3>
+    <button onclick="testHealth()">检查 API 状态</button>
+    <div id="health-result" class="result">点击按钮测试</div>
+  </div>
+
+  <div class="test-section">
+    <h3>2. 金币操作测试</h3>
+    <p>学生 ID: <input type="number" id="student-id" value="1" style="width: 80px;"></p>
+    <button onclick="testCoins(10)">+10 金币</button>
+    <button onclick="testCoins(-5)">-5 金币</button>
+    <button onclick="testCoins(-1000)">测试余额不足</button>
+    <div id="coins-result" class="result">点击按钮测试</div>
+  </div>
+
+  <div class="test-section">
+    <h3>3. 当前配置</h3>
+    <div id="config-result" class="result">加载中...</div>
+  </div>
+
+  <script src="api-migration.js"></script>
+  <script>
+    // 显示配置
+    function showConfig() {
+      const config = document.getElementById('config-result');
+      config.innerHTML = `USE_API: ${window.USE_API}\nApiMigration loaded: ${!!window.ApiMigration}`;
+    }
+    
+    // 健康检查
+    async function testHealth() {
+      const result = document.getElementById('health-result');
+      result.textContent = '检查中...';
+      result.className = 'result info';
+      
+      try {
+        const ok = await window.ApiMigration.checkHealth();
+        if (ok) {
+          result.textContent = '✅ API 服务正常';
+          result.className = 'result success';
+        } else {
+          result.textContent = '❌ API 服务异常';
+          result.className = 'result error';
+        }
+      } catch (e) {
+        result.textContent = '❌ 请求失败: ' + e.message;
+        result.className = 'result error';
+      }
+    }
+    
+    // 金币操作测试
+    async function testCoins(delta) {
+      const result = document.getElementById('coins-result');
+      const studentId = parseInt(document.getElementById('student-id').value);
+      
+      result.textContent = `调用 /api/coins: studentId=${studentId}, delta=${delta}...`;
+      result.className = 'result info';
+      
+      try {
+        const res = await window.ApiMigration.changeStudentCoins(
+          { id: studentId, name: '测试学生' },
+          delta,
+          '测试操作',
+          `测试 ${delta} 金币`,
+          0,
+          null,
+          null
+        );
+        
+        if (res.ok) {
+          result.textContent = `✅ 成功!\n` +
+            `金币变化: ${res.coinsBefore} → ${res.coinsAfter}\n` +
+            `日志 ID: ${res.logId}`;
+          result.className = 'result success';
+        } else if (res.error === 'Insufficient balance') {
+          result.textContent = `⚠️ 余额不足\n当前: ${res.currentCoins}, 需要: ${res.required}`;
+          result.className = 'result info';
+        } else {
+          result.textContent = `❌ 失败: ${res.error}\n${JSON.stringify(res, null, 2)}`;
+          result.className = 'result error';
+        }
+      } catch (e) {
+        result.textContent = '❌ 请求失败: ' + e.message;
+        result.className = 'result error';
+      }
+    }
+    
+    // 初始化
+    showConfig();
+  </script>
+</body>
+</html>

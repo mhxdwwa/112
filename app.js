@@ -714,6 +714,40 @@ function _scheduleDesktopSave(){
  * @returns {number} 修改后的金币数
  */
 function changeStudentCoins(student, delta, actionType, details, expDelta, petId, extra) {
+  // v141: API 模式 — 通过服务端 API 修改金币，避免并发冲突
+  if (window.USE_API && window.ApiMigration) {
+    // 异步调用 API，但先乐观更新本地数据（保持 UI 响应）
+    var before = student.coins || 0;
+    student.coins = before + delta;
+    if (student.coins < 0) student.coins = 0;
+    recordAction(student.id, student.name, actionType, details, delta, expDelta || 0, petId || null, extra || null);
+    
+    // 异步调用 API 更新数据库
+    window.ApiMigration.changeStudentCoins(student, delta, actionType, details, expDelta, petId, extra)
+      .then(function(result) {
+        if (result.ok) {
+          // API 成功，用服务端数据校正本地
+          student.coins = result.coinsAfter;
+        } else if (result.error === 'Insufficient balance') {
+          // 余额不足，回滚本地数据
+          student.coins = before;
+          // 移除最后一条日志
+          if (window.operationLogs && window.operationLogs.length > 0) {
+            window.operationLogs.pop();
+            saveLogs();
+          }
+        } else if (result.error) {
+          // API 失败，回滚到旧方式（直接写 Supabase）
+          console.warn('[API] coins failed, falling back to direct Supabase:', result.error);
+          // 本地数据已更新，触发同步
+          if (typeof triggerRealtimeSync === 'function') triggerRealtimeSync();
+        }
+      });
+    
+    return student.coins;
+  }
+  
+  // 旧方式：直接修改本地数据，通过 _syncToSupabase 同步
   var before = student.coins || 0;
   student.coins = before + delta;
   if (student.coins < 0) student.coins = 0;
@@ -1707,6 +1741,56 @@ function feedPet(student, pet){
   if(pet.level >= 9){ showNotification('已达万物之神',`${pet.nickname||pet.name}已满级，快去领养新宠物吧！`,'warning'); return false; }
   if(_hasFedToday(pet)){ showNotification('今日已喂食',`${pet.nickname||pet.name}今天已经喂食过了，每天只能喂食一次哦！`,'info'); return false; }
   let gain=2; // 固定2点成长，不受商店道具影响
+  
+  // v141: API 模式 — 同时更新金币和宠物
+  if (window.USE_API && window.ApiMigration) {
+    var prevGrowth = pet.growth;
+    var prevCoins = student.coins;
+    
+    // 乐观更新本地数据
+    pet.growth += gain;
+    pet.lastFeedDate = new Date().toISOString();
+    pet.isDead = false;
+    updatePetLevel(student, pet.id, gain);
+    student.coins = prevCoins - 5;
+    if (student.coins < 0) student.coins = 0;
+    recordAction(student.id, student.name, '喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id, null);
+    
+    // 异步调用 API
+    window.ApiMigration.coinsAndPet(student, -5, [{
+      petId: pet.id,
+      updates: {
+        growth: pet.growth,
+        last_feed_date: pet.lastFeedDate,
+        is_dead: false
+      }
+    }], {
+      actionType: '喂食',
+      details: `${pet.nickname||pet.name} +${gain}成长值`,
+      expDelta: gain,
+      petId: pet.id,
+      checkBalance: true
+    }).then(function(result) {
+      if (result.ok) {
+        student.coins = result.coinsAfter;
+        console.log('[API] feedPet ok');
+      } else {
+        // 回滚
+        pet.growth = prevGrowth;
+        student.coins = prevCoins;
+        if (window.operationLogs && window.operationLogs.length > 0) {
+          window.operationLogs.pop();
+          saveLogs();
+        }
+        console.warn('[API] feedPet failed:', result.error);
+      }
+    });
+    
+    showNotification('喂食成功',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+    return true;
+  }
+  
+  // 旧方式
    pet.growth+=gain; pet.lastFeedDate=new Date().toISOString(); pet.isDead=false;
    updatePetLevel(student, pet.id, gain);
    changeStudentCoins(student, -5, '喂食', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id);
@@ -2202,11 +2286,246 @@ function refreshCurrentStudentModal(){
 }
 function ensurePetPlayFields(pet){ if(pet.todayPlayCount===undefined) pet.todayPlayCount=0; if(pet.lastPlayDate===undefined) pet.lastPlayDate=null; if(pet.penaltyStreak===undefined) pet.penaltyStreak=0; return pet; }
 function getCurrentStageName(petName,level){const cfg=PET_CONFIG[petName];if(!cfg)return"未知";const s=cfg.stages.find(s=>s.stage===level);return s?s.stageName:`阶段${level}`;}
-function playWithPet(student,pet){ if(pet.isDead){ showNotification('玩耍失败','宠物已经死亡，请先复活','error'); return false; } if(student.coins<20){ showNotification('金币不足','玩耍需要20金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(7+getStudentGrowthBonus(student), 13); pet.growth+=gain; pet.lastPlayDate=new Date().toISOString(); updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -20, '玩耍', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function walkPet(student,pet){ if(pet.isDead){ showNotification('散步失败','宠物已经死亡，请先复活','error'); return false; } if(student.coins<30){ showNotification('金币不足','散步需要30金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(15+getStudentGrowthBonus(student), 24); pet.growth+=gain; updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -30, '散步', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('散步愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function shoppingPet(student,pet){ if(pet.isDead){ showNotification('逛街失败','宠物已经死亡，请先复活','error'); return false; } if(pet.level<3){ showNotification('等级不足','逛街需要Lv3以上','warning'); return false; } if(student.coins<50){ showNotification('金币不足','逛街需要50金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(35+getStudentGrowthBonus(student), 45); pet.growth+=gain; updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -50, '逛街', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('逛街开心',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function travelPet(student,pet){ if(pet.isDead){ showNotification('旅游失败','宠物已经死亡，请先复活','error'); return false; } if(pet.level<6){ showNotification('等级不足','旅游需要Lv6以上','warning'); return false; } if(student.coins<100){ showNotification('金币不足','旅游需要100金币','error'); return false; } if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; } ensurePetPlayFields(pet); let gain=Math.min(85+getStudentGrowthBonus(student), 100); pet.growth+=gain; updatePetLevel(student, pet.id, gain); changeStudentCoins(student, -100, '旅游', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id); showNotification('旅游愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success'); return true; }
-function revivePet(student,pet){ if(!pet.isDead) return false; if(student.coins<50){showNotification('金币不足','复活需要50金币','error');return false;} pet.isDead=false; let deadGrowth = pet.deathGrowth !== undefined ? pet.deathGrowth : pet.growth; let newGrowth = Math.floor(deadGrowth * 0.5); let prevGrowth = pet.growth; pet.growth = newGrowth; pet.level = 1; const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } pet.lastFeedDate=new Date().toISOString(); pet.todayFeedCount=0; pet.todayPlayCount=0; pet.lastPlayDate=null; pet.penaltyStreak = 0; delete pet.deathGrowth; changeStudentCoins(student, -50, '复活', `${pet.nickname||pet.name} 复活`, newGrowth - prevGrowth, pet.id); showNotification('复活成功',`${pet.nickname||pet.name} 重获新生！经验保留50%`,'success'); if(typeof renderPKPage==="function") renderPKPage(); return true; }
+function playWithPet(student,pet){
+  if(pet.isDead){ showNotification('玩耍失败','宠物已经死亡，请先复活','error'); return false; }
+  if(student.coins<20){ showNotification('金币不足','玩耍需要20金币','error'); return false; }
+  if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; }
+  ensurePetPlayFields(pet);
+  let gain=Math.min(7+getStudentGrowthBonus(student), 13);
+  
+  // v141: API 模式
+  if (window.USE_API && window.ApiMigration) {
+    var prevGrowth = pet.growth;
+    var prevCoins = student.coins;
+    pet.growth+=gain; pet.lastPlayDate=new Date().toISOString();
+    updatePetLevel(student, pet.id, gain);
+    student.coins = prevCoins - 20;
+    if (student.coins < 0) student.coins = 0;
+    recordAction(student.id, student.name, '玩耍', `${pet.nickname||pet.name} +${gain}成长值`, -20, gain, pet.id, null);
+    
+    window.ApiMigration.coinsAndPet(student, -20, [{
+      petId: pet.id,
+      updates: { growth: pet.growth, last_play_date: pet.lastPlayDate }
+    }], {
+      actionType: '玩耍', details: `${pet.nickname||pet.name} +${gain}成长值`,
+      expDelta: gain, petId: pet.id, checkBalance: true
+    }).then(function(result) {
+      if (result.ok) { student.coins = result.coinsAfter; }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+    });
+    
+    showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+    return true;
+  }
+  
+  // 旧方式
+  pet.growth+=gain; pet.lastPlayDate=new Date().toISOString();
+  updatePetLevel(student, pet.id, gain);
+  changeStudentCoins(student, -20, '玩耍', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id);
+  showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+  return true;
+}
+function walkPet(student,pet){
+  if(pet.isDead){ showNotification('散步失败','宠物已经死亡，请先复活','error'); return false; }
+  if(student.coins<30){ showNotification('金币不足','散步需要30金币','error'); return false; }
+  if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; }
+  ensurePetPlayFields(pet);
+  let gain=Math.min(15+getStudentGrowthBonus(student), 24);
+  
+  // v141: API 模式
+  if (window.USE_API && window.ApiMigration) {
+    var prevGrowth = pet.growth;
+    var prevCoins = student.coins;
+    pet.growth+=gain;
+    updatePetLevel(student, pet.id, gain);
+    student.coins = prevCoins - 30;
+    if (student.coins < 0) student.coins = 0;
+    recordAction(student.id, student.name, '散步', `${pet.nickname||pet.name} +${gain}成长值`, -30, gain, pet.id, null);
+    
+    window.ApiMigration.coinsAndPet(student, -30, [{
+      petId: pet.id, updates: { growth: pet.growth }
+    }], {
+      actionType: '散步', details: `${pet.nickname||pet.name} +${gain}成长值`,
+      expDelta: gain, petId: pet.id, checkBalance: true
+    }).then(function(result) {
+      if (result.ok) { student.coins = result.coinsAfter; }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+    });
+    
+    showNotification('散步愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+    return true;
+  }
+  
+  // 旧方式
+  pet.growth+=gain;
+  updatePetLevel(student, pet.id, gain);
+  changeStudentCoins(student, -30, '散步', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id);
+  showNotification('散步愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+  return true;
+}
+function shoppingPet(student,pet){
+  if(pet.isDead){ showNotification('逛街失败','宠物已经死亡，请先复活','error'); return false; }
+  if(pet.level<3){ showNotification('等级不足','逛街需要Lv3以上','warning'); return false; }
+  if(student.coins<50){ showNotification('金币不足','逛街需要50金币','error'); return false; }
+  if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; }
+  ensurePetPlayFields(pet);
+  let gain=Math.min(35+getStudentGrowthBonus(student), 45);
+  
+  // v141: API 模式
+  if (window.USE_API && window.ApiMigration) {
+    var prevGrowth = pet.growth;
+    var prevCoins = student.coins;
+    pet.growth+=gain;
+    updatePetLevel(student, pet.id, gain);
+    student.coins = prevCoins - 50;
+    if (student.coins < 0) student.coins = 0;
+    recordAction(student.id, student.name, '逛街', `${pet.nickname||pet.name} +${gain}成长值`, -50, gain, pet.id, null);
+    
+    window.ApiMigration.coinsAndPet(student, -50, [{
+      petId: pet.id, updates: { growth: pet.growth }
+    }], {
+      actionType: '逛街', details: `${pet.nickname||pet.name} +${gain}成长值`,
+      expDelta: gain, petId: pet.id, checkBalance: true
+    }).then(function(result) {
+      if (result.ok) { student.coins = result.coinsAfter; }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+    });
+    
+    showNotification('逛街开心',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+    return true;
+  }
+  
+  // 旧方式
+  pet.growth+=gain;
+  updatePetLevel(student, pet.id, gain);
+  changeStudentCoins(student, -50, '逛街', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id);
+  showNotification('逛街开心',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+  return true;
+}
+function travelPet(student,pet){
+  if(pet.isDead){ showNotification('旅游失败','宠物已经死亡，请先复活','error'); return false; }
+  if(pet.level<6){ showNotification('等级不足','旅游需要Lv6以上','warning'); return false; }
+  if(student.coins<100){ showNotification('金币不足','旅游需要100金币','error'); return false; }
+  if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; }
+  ensurePetPlayFields(pet);
+  let gain=Math.min(85+getStudentGrowthBonus(student), 100);
+  
+  // v141: API 模式
+  if (window.USE_API && window.ApiMigration) {
+    var prevGrowth = pet.growth;
+    var prevCoins = student.coins;
+    pet.growth+=gain;
+    updatePetLevel(student, pet.id, gain);
+    student.coins = prevCoins - 100;
+    if (student.coins < 0) student.coins = 0;
+    recordAction(student.id, student.name, '旅游', `${pet.nickname||pet.name} +${gain}成长值`, -100, gain, pet.id, null);
+    
+    window.ApiMigration.coinsAndPet(student, -100, [{
+      petId: pet.id, updates: { growth: pet.growth }
+    }], {
+      actionType: '旅游', details: `${pet.nickname||pet.name} +${gain}成长值`,
+      expDelta: gain, petId: pet.id, checkBalance: true
+    }).then(function(result) {
+      if (result.ok) { student.coins = result.coinsAfter; }
+      else { pet.growth = prevGrowth; student.coins = prevCoins; if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();} }
+    });
+    
+    showNotification('旅游愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+    return true;
+  }
+  
+  // 旧方式
+  pet.growth+=gain;
+  updatePetLevel(student, pet.id, gain);
+  changeStudentCoins(student, -100, '旅游', `${pet.nickname||pet.name} +${gain}成长值`, gain, pet.id);
+  showNotification('旅游愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
+  return true;
+}
+function revivePet(student,pet){
+  if(!pet.isDead) return false;
+  if(student.coins<50){showNotification('金币不足','复活需要50金币','error');return false;}
+  
+  let deadGrowth = pet.deathGrowth !== undefined ? pet.deathGrowth : pet.growth;
+  let newGrowth = Math.floor(deadGrowth * 0.5);
+  let prevGrowth = pet.growth;
+  let prevCoins = student.coins;
+  let prevIsDead = pet.isDead;
+  let prevDeathGrowth = pet.deathGrowth;
+  
+  // v141: API 模式
+  if (window.USE_API && window.ApiMigration) {
+    pet.isDead=false;
+    pet.growth = newGrowth;
+    pet.level = 1;
+    const cfg = PET_CONFIG[pet.name];
+    if(cfg){
+      let newLevel = 1;
+      for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; }
+      pet.level = newLevel;
+    }
+    pet.lastFeedDate=new Date().toISOString();
+    pet.todayFeedCount=0;
+    pet.todayPlayCount=0;
+    pet.lastPlayDate=null;
+    pet.penaltyStreak = 0;
+    delete pet.deathGrowth;
+    
+    student.coins = prevCoins - 50;
+    if (student.coins < 0) student.coins = 0;
+    recordAction(student.id, student.name, '复活', `${pet.nickname||pet.name} 复活`, -50, newGrowth - prevGrowth, pet.id, null);
+    
+    window.ApiMigration.coinsAndPet(student, -50, [{
+      petId: pet.id,
+      updates: {
+        growth: pet.growth,
+        level: pet.level,
+        is_dead: false,
+        last_feed_date: pet.lastFeedDate,
+        today_feed_count: 0,
+        today_play_count: 0,
+        penalty_streak: 0
+      }
+    }], {
+      actionType: '复活', details: `${pet.nickname||pet.name} 复活`,
+      expDelta: newGrowth - prevGrowth, petId: pet.id, checkBalance: true
+    }).then(function(result) {
+      if (result.ok) { student.coins = result.coinsAfter; }
+      else {
+        // 回滚
+        pet.isDead = prevIsDead;
+        pet.growth = prevGrowth;
+        pet.deathGrowth = prevDeathGrowth;
+        student.coins = prevCoins;
+        if(window.operationLogs.length>0){window.operationLogs.pop();saveLogs();}
+      }
+    });
+    
+    showNotification('复活成功',`${pet.nickname||pet.name} 重获新生！经验保留50%`,'success');
+    if(typeof renderPKPage==="function") renderPKPage();
+    return true;
+  }
+  
+  // 旧方式
+  pet.isDead=false;
+  pet.growth = newGrowth;
+  pet.level = 1;
+  const cfg = PET_CONFIG[pet.name];
+  if(cfg){
+    let newLevel = 1;
+    for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; }
+    pet.level = newLevel;
+  }
+  pet.lastFeedDate=new Date().toISOString();
+  pet.todayFeedCount=0;
+  pet.todayPlayCount=0;
+  pet.lastPlayDate=null;
+  pet.penaltyStreak = 0;
+  delete pet.deathGrowth;
+  changeStudentCoins(student, -50, '复活', `${pet.nickname||pet.name} 复活`, newGrowth - prevGrowth, pet.id);
+  showNotification('复活成功',`${pet.nickname||pet.name} 重获新生！经验保留50%`,'success');
+  if(typeof renderPKPage==="function") renderPKPage();
+  return true;
+}
 function applyAction(student, action, pet){ let coinsChange = action.coins; let isPenalty = coinsChange < 0; let expChange = 0; let prevGrowth = pet.growth; if(pet.isDead){ if(isPenalty){ showNotification('操作禁止','宠物已死亡，不能施加惩罚','error'); return false; } else { student.coins += coinsChange; if(student.coins < 0) student.coins = 0; if(pet.penaltyStreak !== undefined) pet.penaltyStreak = 0; recordAction(student.id, student.name, '奖惩', `${action.name} (宠物死亡)`, coinsChange, 0, pet.id); showNotification(action.name, `+${coinsChange}金币 (宠物死亡无法获得经验)`, 'success'); return true; } } if(isPenalty){ let absDeduct = Math.abs(coinsChange); let coinDeducted = Math.min(absDeduct, student.coins); let remaining = absDeduct - coinDeducted; student.coins -= coinDeducted; expChange = 0; if(remaining > 0){ expChange = -remaining; pet.growth += expChange; if(pet.growth <= 0){ pet.growth = 0; pet.isDead = true; pet.deathGrowth = prevGrowth; pet.deathDate = new Date().toISOString(); pet.penaltyStreak = 0; recordAction(student.id, student.name, '惩罚致死', `${action.name} 导致死亡（金币不足，经验扣至0）`, -absDeduct, -prevGrowth, pet.id, {causedDeath: true, prevGrowth: prevGrowth}); showNotification('惩罚致死',`${pet.nickname||pet.name} 金币不足，经验被扣至0，宠物死亡！`,'error'); saveClassData(); if(typeof renderPKPage==="function") renderPKPage(); return true; } updatePetLevel(student, pet.id, expChange); } let msg = `${action.name}：金币-${coinDeducted}`; if(expChange !== 0) msg += `，经验${expChange}`; recordAction(student.id, student.name, '奖惩', msg, -coinDeducted, expChange, pet.id); showNotification(action.name, msg, 'warning'); } else { if(pet.penaltyStreak !== undefined) pet.penaltyStreak = 0; student.coins += coinsChange; if(student.coins < 0) student.coins = 0; let msg = `${action.name}：金币+${coinsChange}`; recordAction(student.id, student.name, '奖惩', msg, coinsChange, 0, pet.id); showNotification(action.name, msg, 'success'); } return true; }
 function modalFeed(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;let pet=getActivePet(student);if(!pet)return;if(pet.isDead||pet.level>=9){const growable=getGrowablePet(student);if(growable){pet=growable;}else if(pet.isDead){showNotification('无法喂食','宠物已死亡，请先复活','error');return;}else{showNotification('全部满级','所有宠物都已满级，可以领养新宠物','info');return;}}feedPet(student,pet);saveClassData('pet');refreshCurrentStudentModal();scheduleAllRenders();}
 function modalPlay(){if(checkPauseAndNotify())return;if(!currentModalStudentId)return;const cur=classesData.find(c=>c.id===currentClassId);const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());if(!student)return;let pet=getActivePet(student);if(!pet)return;if(pet.isDead||pet.level>=9){const growable=getGrowablePet(student);if(growable){pet=growable;}else if(pet.isDead){showNotification('无法玩耍','宠物已死亡，请先复活','error');return;}else{showNotification('全部满级','所有宠物都已满级，可以领养新宠物','info');return;}}playWithPet(student,pet);saveClassData('pet');refreshCurrentStudentModal();scheduleAllRenders();}
