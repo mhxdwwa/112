@@ -103,10 +103,9 @@
         // 更新本地数据
         student.coins = result.coinsAfter;
         
-        // 记录本地日志（保持撤销/恢复功能）
-        if (typeof recordAction === 'function') {
-          recordAction(student.id, student.name, actionType, details, delta, expDelta || 0, petId || null, extra || null);
-        }
+        // v149-fix: 不再在这里调用 recordAction — 调用方（app.js changeStudentCoins）
+        // 已经做了乐观 recordAction，这里再调一次会导致日志重复
+        // 注意：coinsAndPet 也有同样的问题，一并修复
         
         console.log('[API] coins ok:', student.name, delta, '->', result.coinsAfter);
       } else if (result.error === 'Insufficient balance') {
@@ -177,11 +176,8 @@
           });
         }
         
-        // 记录本地日志
-        if (typeof recordAction === 'function') {
-          recordAction(student.id, student.name, opts.actionType, opts.details, 
-                      coinDelta, opts.expDelta || 0, opts.petId || null, opts.extra || null);
-        }
+        // v149-fix: 不再在这里调用 recordAction — 调用方（app.js feedPet/playWithPet 等）
+        // 已经做了乐观 recordAction，这里再调一次会导致日志重复
         
         console.log('[API] coins-and-pet ok:', student.name, 'coins:', coinDelta);
       } else if (result.error === 'Insufficient balance') {

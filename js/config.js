@@ -334,33 +334,45 @@ function modalBuyItem(itemId){
   if(!item){showNotification('商品不存在','','error');return;}
   if(studentOwnsItem(student,itemId)){showNotification('已拥有','你已经拥有该商品','warning');return;}
   if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
-  student.coins-=item.price;
-  if(!student.shopItems) student.shopItems=[];
-  student.shopItems.push(itemId);
-  autoEquipOnBuy(student, itemId);
   const pet=getActivePet(student);
-  recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
-  // v149: API 模式下同步金币和商店状态到服务器
+  // v149-fix: 不再手动扣金币和 recordAction — 全部交给 changeStudentCoins 处理
+  // 之前手动扣金币 + changeStudentCoins 再扣一次 = 双重扣除
+  // 之前手动 recordAction + changeStudentCoins 内部 recordAction = 重复日志
   if(window.USE_API&&window.ApiMigration){
-    var _buySave=function(){
-      window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r){
-        if(!r.ok) console.warn('[v149] API saveShopState error:', r.error);
-      });
-    };
-    window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」`, 0, pet?pet.id:null).then(function(r){
+    // API 模式：通过 changeStudentCoins 扣金币（含 API 同步），然后保存商店状态
+    // v149-fix: 手动 recordAction（因为直接调 ApiMigration 而非 app.js 的 changeStudentCoins）
+    recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+    window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null).then(function(r){
       if(r.ok){
         student.coins=r.coinsAfter;
-        _buySave();
+        if(!student.shopItems) student.shopItems=[];
+        student.shopItems.push(itemId);
+        autoEquipOnBuy(student, itemId);
+        window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
+          if(!r2.ok) console.warn('[API] saveShopState error:', r2.error);
+          saveClassData();
+          refreshCurrentStudentModal();
+          renderHomePetGrid();
+        });
+        showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
+      } else if(r.error==='Insufficient balance'){
+        showNotification('金币不足',`余额不足，无法购买${item.name}`,'error');
       } else {
-        // 金币 API 失败，仍然尝试保存商店状态
-        _buySave();
+        showNotification('购买失败',r.error||'未知错误','error');
       }
     });
+  } else {
+    // 非 API 模式：本地扣金币 + recordAction + 保存
+    student.coins-=item.price;
+    if(!student.shopItems) student.shopItems=[];
+    student.shopItems.push(itemId);
+    autoEquipOnBuy(student, itemId);
+    recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+    saveClassData();
+    refreshCurrentStudentModal();
+    renderHomePetGrid();
+    showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
   }
-  saveClassData();
-  refreshCurrentStudentModal();
-  renderHomePetGrid();
-  showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
 }
 function modalEquipItem(itemId){
   if(!currentModalStudentId)return;
