@@ -2566,13 +2566,13 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
       // Draw — no coin/growth changes to sync (recordAction already logged locally)
     } else {
       window.ApiMigration.coinsAndPet(winnerStudent, rewardCoin, [{
-        petId: winnerPet.id, updates: { growth: winnerPet.growth }
+        petId: winnerPet.id, updates: { growth: winnerPet.growth, level: winnerPet.level }
       }], {
         actionType: 'PK胜利', details: '击败 ' + loserStudent.name + '（' + (loserPet.nickname||loserPet.name) + '）',
         expDelta: winnerGrowthDelta, petId: winnerPet.id
       });
       window.ApiMigration.coinsAndPet(loserStudent, penaltyCoin, [{
-        petId: loserPet.id, updates: { growth: loserPet.growth }
+        petId: loserPet.id, updates: { growth: loserPet.growth, level: loserPet.level }
       }], {
         actionType: 'PK失败', details: '败给 ' + winnerStudent.name + '（' + (winnerPet.nickname||winnerPet.name) + '）',
         expDelta: loserGrowthDelta, petId: loserPet.id

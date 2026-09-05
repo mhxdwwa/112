@@ -1190,10 +1190,10 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     if(p1HP <= 0 && p2HP <= 0) {
       // Draw — sync coins + growth for both
       window.ApiMigration.coinsAndPet(student1, 0, [{
-        petId: pet1.id, updates: { growth: pet1.growth }
+        petId: pet1.id, updates: { growth: pet1.growth, level: pet1.level }
       }], { actionType: '课堂PK平局', details: student1.name + ' vs ' + student2.name + ' 平局', expDelta: 3, petId: pet1.id });
       window.ApiMigration.coinsAndPet(student2, 0, [{
-        petId: pet2.id, updates: { growth: pet2.growth }
+        petId: pet2.id, updates: { growth: pet2.growth, level: pet2.level }
       }], { actionType: '课堂PK平局', details: student2.name + ' vs ' + student1.name + ' 平局', expDelta: 3, petId: pet2.id });
     } else {
       const w = p2HP <= 0 ? student1 : student2;
@@ -1203,10 +1203,10 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
       const wCoin = 20, wGrowth = 5;
       const lCoin = 5, lGrowth = 3;
       window.ApiMigration.coinsAndPet(w, wCoin, [{
-        petId: wPet.id, updates: { growth: wPet.growth }
+        petId: wPet.id, updates: { growth: wPet.growth, level: wPet.level }
       }], { actionType: '课堂PK胜利', details: '击败 ' + l.name + '（' + (lPet.nickname||lPet.name) + '）', expDelta: wGrowth, petId: wPet.id });
       window.ApiMigration.coinsAndPet(l, lCoin, [{
-        petId: lPet.id, updates: { growth: lPet.growth }
+        petId: lPet.id, updates: { growth: lPet.growth, level: lPet.level }
       }], { actionType: '课堂PK失败', details: '败给 ' + w.name + '（' + (wPet.nickname||wPet.name) + '）', expDelta: lGrowth, petId: lPet.id });
     }
   }

@@ -15,6 +15,12 @@
  */
 import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, genId } from '../_utils.js';
 
+// 阶段名称映射（与客户端 PET_CONFIG stages 保持一致）
+const STAGE_NAMES = {
+  1: '神秘宠物蛋', 2: '可爱幼体', 3: '成长伙伴', 4: '成熟伙伴',
+  5: '完美精灵', 6: '传说神兽', 7: '远古守护', 8: '星辰之主', 9: '万物之神'
+};
+
 export const onRequestOptions = handleOptions;
 
 export const onRequestPost = async ({ request, env }) => {
@@ -49,16 +55,39 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Failed to update coins', details: updateR.error }, 500);
   }
 
-  // 4. 写操作日志
+  // 4. 读取宠物快照（如果有 petId）
+  let petSnapshot = null;
+  if (petId) {
+    const petR = await sbSelectSingle(env, 'pets', `id=eq.${petId}&select=id,name,nickname,level,growth,is_dead,penalty_streak`);
+    if (petR.data && petR.data.length > 0) {
+      const p = petR.data[0];
+      petSnapshot = {
+        petNick: p.nickname || p.name,
+        petRealName: p.name,
+        petLevel: p.level || 1,
+        growthBefore: Math.max(0, (p.growth || 0) - (expDelta || 0)),
+        growthAfter: p.growth || 0,
+        isDead: p.is_dead || false,
+        penaltyStreak: p.penalty_streak || 0,
+        stageName: STAGE_NAMES[p.level || 1] || '阶段' + (p.level || 1)
+      };
+    }
+  }
+
+  // 5. 写操作日志
   let logId = null;
   if (classId) {
+    const snapshot = { coinsBefore: beforeCoins, coinsAfter: newCoins };
+    if (petSnapshot) {
+      Object.assign(snapshot, petSnapshot);
+    }
     const log = {
       id: genId(),
       timestamp: new Date().toISOString(),
       classId, studentId, studentName: studentName || '',
       actionType: actionType || '', details: details || '',
       coinDelta: delta, expDelta, petId,
-      snapshot: { coinsBefore: beforeCoins, coinsAfter: newCoins },
+      snapshot,
       reverted: false,
     };
 

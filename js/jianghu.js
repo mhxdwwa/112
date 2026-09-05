@@ -1611,7 +1611,7 @@ function showJianghuResult(overlay, won, student, pet, investCoins, boss) {
     // v156: 使用 coinsAndPet 同时记录金币+成长值（一条完整日志）
     if(window.USE_API && window.ApiMigration) {
       window.ApiMigration.coinsAndPet(student, coinDelta, [{
-        petId: pet.id, updates: { growth: pet.growth }
+        petId: pet.id, updates: { growth: pet.growth, level: pet.level }
       }], {
         actionType: '江湖胜利',
         details: `${student.name}携${pet.nickname || pet.name}闯荡江湖击败${boss.name}，投入${investCoins}金币`,
