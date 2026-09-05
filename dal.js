@@ -1535,7 +1535,22 @@ function _verifyLogWrite(classId, writtenLogIds, retryCount) {
 
 // v29: Write unsynced logs to classes.operation_logs_json — same channel as student data.
 // Uses upsert (proven reliable on mobile). Max 5000 logs per class, oldest trimmed.
+// v141: 最大重试次数，防止无限重试刷屏
+var _logSyncRetryCount = 0;
+var _LOG_SYNC_MAX_RETRIES = 5;
+
 function _writeUnsyncedLogsToSupabase() {
+  // v141: API 模式下，日志已通过 API 写入，跳过旧同步机制
+  if (window.USE_API && window.ApiMigration) {
+    // 标记所有未同步的日志为已同步（避免旧机制重复处理）
+    if (window.operationLogs) {
+      window.operationLogs.forEach(function(log) {
+        if (!log._synced) log._synced = true;
+      });
+    }
+    return Promise.resolve();
+  }
+
   if (_writingLogsToSupabase) {
     console.log('[DAL] v29 Write already in progress, queueing...');
     _pendingLogWrites++;
@@ -1621,7 +1636,10 @@ function _writeUnsyncedLogsToSupabase() {
     if (r.error) {
       console.error('[DAL] v29 Failed to read existing logs:', r.error.message);
       _writingLogsToSupabase = false;
-      setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+      _logSyncRetryCount++;
+      if (_logSyncRetryCount <= _LOG_SYNC_MAX_RETRIES) {
+        setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+      }
       return;
     }
 
@@ -1774,10 +1792,17 @@ function _writeUnsyncedLogsToSupabase() {
     }).length;
     console.log('[DAL] v29 Write complete: ' + syncedCount + '/' + unsynced.length + ' logs synced');
 
-    // Retry if some failed
+    // Retry if some failed (v141: 限制最大重试次数)
     if (syncedCount < unsynced.length) {
-      console.warn('[DAL] v29 ' + (unsynced.length - syncedCount) + ' logs still unsynced, retry in 5s');
-      setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+      _logSyncRetryCount++;
+      if (_logSyncRetryCount <= _LOG_SYNC_MAX_RETRIES) {
+        console.warn('[DAL] v29 ' + (unsynced.length - syncedCount) + ' logs still unsynced, retry in 5s (' + _logSyncRetryCount + '/' + _LOG_SYNC_MAX_RETRIES + ')');
+        setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+      } else {
+        console.warn('[DAL] v141 Log sync failed after ' + _LOG_SYNC_MAX_RETRIES + ' retries, giving up');
+      }
+    } else {
+      _logSyncRetryCount = 0; // 成功则重置计数器
     }
 
     // Process queued writes
@@ -1787,8 +1812,13 @@ function _writeUnsyncedLogsToSupabase() {
     }
   }).catch(function(err) {
     _writingLogsToSupabase = false;
-    console.error('[DAL] v29 CRITICAL: write exception:', err.message);
-    setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+    _logSyncRetryCount++;
+    if (_logSyncRetryCount <= _LOG_SYNC_MAX_RETRIES) {
+      console.error('[DAL] v29 CRITICAL: write exception:', err.message, '(retry ' + _logSyncRetryCount + '/' + _LOG_SYNC_MAX_RETRIES + ')');
+      setTimeout(function() { _writeUnsyncedLogsToSupabase(); }, 5000);
+    } else {
+      console.error('[DAL] v141 Log sync failed after ' + _LOG_SYNC_MAX_RETRIES + ' retries, giving up');
+    }
   });
 }
 
