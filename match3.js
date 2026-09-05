@@ -704,11 +704,14 @@ function _m3OnToolClick(toolName) {
   var tools = qs.match3Tools;
   var toolValue = tools[toolName];
 
-  if (toolValue > 0) {
+    if (toolValue > 0) {
     // 有道具可用，消耗1次并执行
     tools[toolName] -= 1;
     if (typeof saveClassData === 'function') saveClassData();
-    if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
+    // v166: 只保存 quiz_state（道具数量变更），不传金币
+    if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
+      window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(ensureMatch3State(_m3CurrentStudent)));
+    } else if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
     if (toolName === 'shuffle') {
       _m3DoShuffle();
     } else if (toolName === 'undo') {
@@ -804,7 +807,10 @@ function _m3SelectAnswer(index) {
       var qs = ensureMatch3State(_m3CurrentStudent);
       qs.match3Tools[_m3QuizState.tool] += reward;
       if (typeof saveClassData === 'function') saveClassData();
-      if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
+      // v166: 只保存 quiz_state（道具数量变更），不传金币
+      if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
+        window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(qs));
+      } else if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
     }
     quizCloseBtn.style.display = 'block';
     _m3UpdateToolUI();
@@ -868,7 +874,8 @@ function _m3ShowResult(success) {
     var msg = '消消乐第' + _m3CurrentLevel + '关通关，得分' + levelScore + '，用时' + elapsed + '秒';
     if (isFirstClear && coinReward > 0) msg += '，获' + coinReward + '金币';
     msg += '，总分:' + qs.match3TotalScore;
-    if (typeof recordAction === 'function') {
+    // v166: API 模式下 changeStudentCoins 已创建服务器日志，跳过本地 recordAction
+    if (!(window.USE_API && window.ApiMigration) && typeof recordAction === 'function') {
       recordAction(_m3CurrentStudent.id, _m3CurrentStudent.name, '宠物消消乐', msg, isFirstClear ? coinReward : 0, 0, null);
     }
 
@@ -886,7 +893,18 @@ function _m3ShowResult(success) {
     _m3Container.innerHTML = html;
 
     if (typeof saveClassData === 'function') saveClassData();
-    if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
+    // v166: API 模式 — 金币用 changeStudentCoins，状态用 saveQuizState（不传金币）
+    if (window.USE_API && window.ApiMigration) {
+      if (isFirstClear && coinReward > 0 && window.ApiMigration.changeStudentCoins) {
+        window.ApiMigration.changeStudentCoins(_m3CurrentStudent, coinReward, '宠物消消乐',
+          '第' + _m3CurrentLevel + '关通关奖励', 0, null);
+      }
+      if (window.ApiMigration.saveQuizState) {
+        window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(qs));
+      }
+    } else if (typeof saveCoinsAndQuizState === 'function') {
+      saveCoinsAndQuizState(_m3CurrentStudent);
+    }
   } else {
     var html2 = '<div style="text-align:center;padding:30px;">';
     html2 += '<div style="font-size:48px;">😢</div>';

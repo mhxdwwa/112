@@ -38,31 +38,36 @@
   // v31: Set _quizStateLocallyModified flag to prevent _syncStudentToSupabase
   // and _smartRefreshFromSupabase from overwriting fresh local quiz_state with
   // stale Supabase data (race condition caused pig-run level data loss)
-  function saveCoinsAndQuizState(student) {
+  function saveCoinsAndQuizState(student, coinDelta) {
     if (!student || !student.id) return;
     var quizStateJson = student.quizState ? JSON.stringify(student.quizState) : null;
     var coinsToSave = student.coins;
-    // v149: API 模式下通过 API 保存
-    if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
+    // v166: API 模式下 — 金币用 changeStudentCoins（原子 delta + 服务器日志），状态用 saveQuizState（不传金币）
+    if (window.USE_API && window.ApiMigration) {
       window._quizStateLocallyModified = true;
-      try { _myBaseCoins = coinsToSave; } catch(e) {}
       try { _lastOwnWriteTime = Date.now(); } catch(e) {}
       if (typeof _pendingLocalSave !== 'undefined') {
         _pendingLocalSave = true;
       }
-      window.ApiMigration.saveQuizState(student.id, coinsToSave, quizStateJson).then(function(r) {
-        if (r.ok) {
-          console.log('[v149] API quiz state save ok:', student.id, 'coins:', coinsToSave);
-          try { _lastOwnWriteTime = Date.now(); } catch(e) {}
-          if (typeof _takeSnapshot === 'function') {
-            _takeSnapshot();
+      // v166: 金币变化通过 changeStudentCoins 原子写入（创建服务器操作日志）
+      if (coinDelta && coinDelta > 0 && window.ApiMigration.changeStudentCoins) {
+        window.ApiMigration.changeStudentCoins(student, coinDelta, '取金阁', '答题奖励', 0, null);
+      }
+      // v166: 只保存 quiz_state，不传 coins（避免绝对值覆盖 PK 等并发操作）
+      if (window.ApiMigration.saveQuizState) {
+        window.ApiMigration.saveQuizState(student.id, null, quizStateJson).then(function(r) {
+          if (r.ok) {
+            console.log('[v166] API quiz state save ok:', student.id);
+            try { _lastOwnWriteTime = Date.now(); } catch(e) {}
+            if (typeof _takeSnapshot === 'function') {
+              _takeSnapshot();
+            }
+          } else {
+            console.error('[v166] API quiz state save error:', r.error);
+            window._quizStateLocallyModified = false;
           }
-        } else {
-          console.error('[v149] API quiz state save error:', r.error);
-          try { _myBaseCoins = null; } catch(e) {}
-          window._quizStateLocallyModified = false;
-        }
-      });
+        });
+      }
       return;
     }
     // 非 API 模式
@@ -252,9 +257,9 @@
       state.totalQuizCoins = (state.totalQuizCoins || 0) + coins;  // 累计答题金币
       student.coins += coins;
 
-      // 记录操作日志
+      // v166: API 模式下 changeStudentCoins 会创建服务器日志，跳过本地 recordAction 避免重复
       var quizLog = null;
-      if (typeof recordAction === 'function') {
+      if (!(window.USE_API && window.ApiMigration) && typeof recordAction === 'function') {
         var msg = '取金阁答题：' + question.id + ' 第' + qState.attempts + '次答对 +' + coins + '金币';
         recordAction(student.id, student.name, '取金阁', msg, coins, 0, null);
         // 找到刚创建的日志
@@ -270,9 +275,8 @@
         }
       }
 
-      // 直接保存金币+状态到 Supabase（不依赖 DAL 异步同步）
-      // v74: 不再调用 saveQuizLogDirect()，日志统一由 _writeUnsyncedLogsToSupabase() 写入
-      saveCoinsAndQuizState(student);
+      // v166: 传入 coinDelta，API 模式下用 changeStudentCoins 原子写入
+      saveCoinsAndQuizState(student, coins);
 
       return {
         correct: true,
@@ -282,8 +286,8 @@
         allDone: isAllDone(state)
       };
     } else {
-      // 答错也要保存状态（防止进度丢失）
-      saveCoinsAndQuizState(student);
+      // 答错也要保存状态（防止进度丢失）— 无金币变化
+      saveCoinsAndQuizState(student, 0);
       return {
         correct: false,
         explanation: question.exp,
@@ -547,8 +551,8 @@
     }
     resetQuizIfNeeded(student);
     initTodayQuestions(student);
-    // 直接保存状态到 Supabase
-    saveCoinsAndQuizState(student);
+    // 直接保存状态到 Supabase（无金币变化）
+    saveCoinsAndQuizState(student, 0);
     renderQuizPage();
   };
 

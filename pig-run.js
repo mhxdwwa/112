@@ -241,19 +241,26 @@
     }
 
     // 保存到 Supabase
-    if (typeof saveCoinsAndQuizState === 'function') {
-      saveCoinsAndQuizState(student);
-    } else if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
-      // v149: API 模式 fallback
+    if (window.USE_API && window.ApiMigration) {
+      // v166: API 模式 — 金币用 changeStudentCoins（原子 delta + 服务器日志），状态用 saveQuizState（不传金币）
       window._quizStateLocallyModified = true;
-      window.ApiMigration.saveQuizState(student.id, student.coins, JSON.stringify(qs)).then(function(r) {
-        if (r.ok) {
-          try { _lastOwnWriteTime = Date.now(); } catch(e) {}
-          if (typeof _takeSnapshot === 'function') _takeSnapshot();
-        } else {
-          console.error('[v149] API pig-run save error:', r.error);
-        }
-      });
+      if (coinReward > 0 && window.ApiMigration.changeStudentCoins) {
+        window.ApiMigration.changeStudentCoins(student, coinReward, '小猪快跑',
+          '第' + level + '关通关奖励', 0, null);
+      }
+      if (window.ApiMigration.saveQuizState) {
+        window.ApiMigration.saveQuizState(student.id, null, JSON.stringify(qs)).then(function(r) {
+          if (r.ok) {
+            console.log('[v166] API pig-run state save ok:', student.id);
+            try { _lastOwnWriteTime = Date.now(); } catch(e) {}
+            if (typeof _takeSnapshot === 'function') _takeSnapshot();
+          } else {
+            console.error('[v166] API pig-run save error:', r.error);
+          }
+        });
+      }
+    } else if (typeof saveCoinsAndQuizState === 'function') {
+      saveCoinsAndQuizState(student);
     } else if (typeof db !== 'undefined' && db) {
       // 标记 quizState 为本地修改，防止 Realtime 事件覆盖
       window._quizStateLocallyModified = true;
@@ -275,8 +282,8 @@
       });
     }
 
-    // 记录操作日志
-    if (typeof recordAction === 'function') {
+    // v166: API 模式下 changeStudentCoins 已创建服务器日志，跳过本地 recordAction 避免重复
+    if (!(window.USE_API && window.ApiMigration) && typeof recordAction === 'function') {
       var msg = '小猪快跑第' + level + '关：' + levelScore + '分(基础' + (pigCount * 5) + '+时间' + (levelScore - pigCount * 5) + ')';
       if (isFirstClear) msg += '，获' + coinReward + '金币';
       else if (scoreDiff > 0) msg += '，提高' + scoreDiff + '分';

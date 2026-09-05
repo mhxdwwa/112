@@ -872,10 +872,15 @@ function restoreToLogEntry(logId){
   }
   // 3. Save to Supabase
   saveClassData();
-  // v151: API 模式下同步恢复的数据到服务器
+  // v166: API 模式下同步恢复的数据到服务器 — 用 changeStudentCoins 避免绝对值覆盖
   if(window.USE_API&&window.ApiMigration){
     if(window.ApiMigration.saveQuizState){
-      window.ApiMigration.saveQuizState(student.id, student.coins, student.quizState ? JSON.stringify(student.quizState) : null);
+      window.ApiMigration.saveQuizState(student.id, null, student.quizState ? JSON.stringify(student.quizState) : null);
+    }
+    // v166: 金币差异通过 changeStudentCoins 原子写入
+    if(window.ApiMigration.changeStudentCoins && snap.coinsAfter !== undefined){
+      var coinDelta = snap.coinsAfter - (student.coins || 0);
+      if(coinDelta !== 0) window.ApiMigration.changeStudentCoins(student, coinDelta, '恢复数据', '恢复到 '+log.timestamp, 0, pet ? pet.id : null);
     }
     if(pet && window.ApiMigration.updatePet){
       window.ApiMigration.updatePet(pet.id, {growth: pet.growth, level: pet.level, is_dead: pet.isDead||false});
@@ -911,11 +916,11 @@ function revertToLog(logId){
     saveClassData(); saveLogs();
     // v151: API 模式下通过 resetClass 恢复（重新加载数据即可，因为 fullSnapshot 是完整快照）
     // 更稳妥的做法是逐个学生同步，但 resetClass 会清空所有数据
-    // 这里用 saveQuizState 同步每个学生的关键数据
+    // v166: 用 saveQuizState(null) + changeStudentCoins 同步每个学生的数据
     if(window.USE_API&&window.ApiMigration){
       curClass.students.forEach(function(stu){
         if(window.ApiMigration.saveQuizState){
-          window.ApiMigration.saveQuizState(stu.id, stu.coins, stu.quizState ? JSON.stringify(stu.quizState) : null);
+          window.ApiMigration.saveQuizState(stu.id, null, stu.quizState ? JSON.stringify(stu.quizState) : null);
         }
       });
     }

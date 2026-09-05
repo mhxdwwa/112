@@ -104,21 +104,21 @@
     if (typeof saveCoinsAndQuizState === 'function') {
       saveCoinsAndQuizState(student);
     } else if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
-      // v149: API 模式 fallback
+      // v166: 只保存 quiz_state，不传 coins（快乐跑不直接修改学生金币，避免绝对值覆盖）
       window._quizStateLocallyModified = true;
-      window.ApiMigration.saveQuizState(student.id, student.coins, JSON.stringify(qs)).then(function(r) {
+      window.ApiMigration.saveQuizState(student.id, null, JSON.stringify(qs)).then(function(r) {
         if (r.ok) {
           try { _lastOwnWriteTime = Date.now(); } catch(e) {}
           if (typeof _takeSnapshot === 'function') _takeSnapshot();
         } else {
-          console.error('[v149] API happy-run save error:', r.error);
+          console.error('[v166] API happy-run save error:', r.error);
         }
       });
     } else if (typeof db !== 'undefined' && db) {
       // 标记 quizState 为本地修改，防止 Realtime 事件覆盖
       window._quizStateLocallyModified = true;
+      // v166: 只保存 quiz_state，不写 coins（快乐跑不修改学生金币，避免覆盖并发操作）
       db.from('students').update({
-        coins: student.coins,
         quiz_state: JSON.stringify(qs)
       }).eq('id', student.id).then(function(r) {
         if (r.error) {

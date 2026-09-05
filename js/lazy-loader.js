@@ -21,10 +21,10 @@
 
     // --- 游戏模块 ---
     'quiz-bank':       { src: 'quiz-bank.js?v=2' },
-    'quiz':            { src: 'quiz.js?v=20', deps: ['quiz-bank'] },
-    'pig-run':         { src: 'pig-run.js?v=33' },
-    'match3':          { src: 'match3.js?v=151' },
-    'happy-run':       { src: 'happy-run.js?v=4' }
+    'quiz':            { src: 'quiz.js?v=166', deps: ['quiz-bank'] },
+    'pig-run':         { src: 'pig-run.js?v=166' },
+    'match3':          { src: 'match3.js?v=166' },
+    'happy-run':       { src: 'happy-run.js?v=166' }
   };
 
   // 已加载/正在加载的模块
