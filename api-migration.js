@@ -40,6 +40,12 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     }).then(function(res) {
+      var ct = res.headers.get('content-type') || '';
+      if (ct.indexOf('application/json') === -1) {
+        // API returned HTML or other non-JSON (e.g. SPA fallback)
+        console.error('[API] Non-JSON response from', endpoint, ':', ct);
+        return { error: 'Server returned non-JSON response (status ' + res.status + ')' };
+      }
       return res.json();
     });
   }
@@ -423,6 +429,117 @@
   }
 
   // ============================================================
+  // 数据加载 API（替代 dal.js 直接连 Supabase）
+  // ============================================================
+
+  /**
+   * 通过 API 加载教师所有班级（含学生、宠物、自定义奖惩）
+   * 替代 _loadTeacherFromSupabase() 中的 db.from('classes/students/pets')
+   */
+  function loadAllClassesViaApi(teacherId) {
+    if (!teacherId) {
+      return Promise.resolve({ error: 'Missing teacherId' });
+    }
+    return fetch(API_BASE + '/classes?teacherId=' + encodeURIComponent(teacherId))
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        console.log('[API] loadAllClasses ok:', (data.classes || []).length, 'classes');
+        return data;
+      })
+      .catch(function(err) {
+        console.error('[API] loadAllClasses failed:', err);
+        return { error: err.message || 'Network error' };
+      });
+  }
+
+  /**
+   * 通过 API 刷新单个班级数据（用于轮询替代 Realtime）
+   * 替代 _smartRefreshFromSupabase() 中的 db.from() 调用
+   */
+  function refreshClassViaApi(classId) {
+    if (!classId) {
+      return Promise.resolve({ error: 'Missing classId' });
+    }
+    return fetch(API_BASE + '/class/' + classId)
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        console.log('[API] refreshClass ok:', classId);
+        return data;
+      })
+      .catch(function(err) {
+        console.error('[API] refreshClass failed:', err);
+        return { error: err.message || 'Network error' };
+      });
+  }
+
+  /**
+   * 通过 API 加载操作日志
+   * 替代 _loadOperationLogs() 中的 db.from('classes').select('operation_logs_json')
+   */
+  function loadLogsViaApi(classId) {
+    if (!classId) {
+      return Promise.resolve({ error: 'Missing classId' });
+    }
+    return fetch(API_BASE + '/logs?classId=' + encodeURIComponent(classId))
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        return data;
+      })
+      .catch(function(err) {
+        console.error('[API] loadLogs failed:', err);
+        return { error: err.message || 'Network error' };
+      });
+  }
+
+  // ============================================================
+  // 认证 API（替代 auth-check.js 直接连 Supabase Auth）
+  // ============================================================
+
+  /**
+   * 通过 API 验证登录身份
+   * 教师：验证 Supabase Auth session
+   * 学生：验证学生记录是否存在
+   */
+  function authVerifyViaApi(data) {
+    return apiRequest('/auth/verify', data)
+      .then(function(result) {
+        return result;
+      })
+      .catch(function(err) {
+        console.error('[API] authVerify failed:', err);
+        return { ok: false, reason: err.message || 'Network error' };
+      });
+  }
+
+  // ============================================================
+  // 批量日志 API
+  // ============================================================
+
+  /**
+   * 通过 API 批量追加操作日志
+   * 替代学生端直接 RPC 调用 append_pending_log
+   */
+  function appendLogsBulkViaApi(classId, logs) {
+    if (!classId || !logs || logs.length === 0) {
+      return Promise.resolve({ ok: true, appended: 0 });
+    }
+    return apiRequest('/logs/append-bulk', {
+      classId: classId,
+      logs: logs
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] logs bulk append ok:', result.appended, 'logs');
+      } else {
+        console.error('[API] logs bulk append error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] logs bulk append failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
+  // ============================================================
   // 健康检查
   // ============================================================
 
@@ -458,6 +575,8 @@
     
     // 班级
     loadClass: loadClassViaApi,
+    loadAllClasses: loadAllClassesViaApi,
+    refreshClass: refreshClassViaApi,
     manageClass: manageClassViaApi,
     
     // 学生
@@ -466,7 +585,12 @@
     
     // 日志
     appendLog: appendLogViaApi,
+    appendLogsBulk: appendLogsBulkViaApi,
+    loadLogs: loadLogsViaApi,
     revertLog: revertLogViaApi,
+    
+    // 认证
+    authVerify: authVerifyViaApi,
     
     // 零食铺
     approveSnack: approveSnackViaApi,

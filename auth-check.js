@@ -35,7 +35,25 @@ async function _verifyQRToken(token) {
 }
 
 // 初始化 Supabase 客户端
+// v143: API 模式下跳过 Supabase 客户端初始化（浏览器可能无法直连 Supabase）
 (function initSupabase() {
+  // v143: 如果启用了 API 模式，不需要初始化 Supabase 客户端
+  if (typeof window.USE_API !== 'undefined' && window.USE_API === true) {
+    console.log('[Auth] API mode enabled, skipping Supabase client init');
+    // 创建一个 dummy db 对象，防止其他代码引用 db 时报错
+    db = {
+      auth: {
+        getSession: function() { return Promise.resolve({ data: { session: null }, error: 'API mode' }); },
+        signOut: function() { return Promise.resolve(); }
+      },
+      from: function() {
+        return {
+          select: function() { return { eq: function() { return { single: function() { return Promise.resolve({ data: null, error: 'API mode' }); } }; } }; }
+        };
+      }
+    };
+    return;
+  }
   try {
     if (window.supabase && window.supabase.createClient) {
       db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -86,6 +104,55 @@ async function checkLogin() {
         localStorage.removeItem('qrLoginTime');
       }
       
+      // v143: API 模式下通过服务端 API 验证教师身份（不直连 Supabase Auth）
+      var useApi = (typeof window.USE_API !== 'undefined' && window.USE_API === true);
+      if (useApi) {
+        // API 模式：尝试从 localStorage 获取 access_token 进行验证
+        var storedToken = '';
+        try { storedToken = JSON.parse(localStorage.getItem('sb-xbygooadskfqllnhwmet-auth-token') || '{}').access_token || ''; } catch(e) {}
+        
+        if (storedToken) {
+          try {
+            var verifyRes = await fetch('/api/auth/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'teacher', accessToken: storedToken })
+            });
+            var verifyData = await verifyRes.json();
+            if (verifyData.ok) {
+              currentUser = {
+                type: userType,
+                id: userId,
+                email: verifyData.user.email || localStorage.getItem('userEmail')
+              };
+              console.log('[Auth] Teacher verified via API:', currentUser);
+              return;
+            } else {
+              console.warn('[Auth] API verify failed:', verifyData.reason);
+              // 验证失败，清除登录信息并跳转
+              localStorage.removeItem('userType');
+              localStorage.removeItem('userId');
+              localStorage.removeItem('userEmail');
+              window.location.href = 'login.html';
+              return;
+            }
+          } catch (e) {
+            console.error('[Auth] API verify error:', e);
+            // API 调用失败，降级允许登录（避免锁住用户）
+          }
+        }
+        
+        // 没有 access_token（扫码登录场景），直接信任 localStorage（已由 qrLoginToken 保护）
+        currentUser = {
+          type: userType,
+          id: userId,
+          email: localStorage.getItem('userEmail')
+        };
+        console.log('[Auth] Teacher logged in (API mode, no token):', currentUser);
+        return;
+      }
+      
+      // 旧模式：直接连 Supabase Auth
       const { data: { session }, error } = await db.auth.getSession();
       if (error || !session) {
         // Session 无效，清除本地存储并跳转
@@ -129,45 +196,74 @@ async function checkLogin() {
       
       // v73: Student login hardening — verify student exists in DB
       // This prevents localStorage tampering (e.g., manually setting userType=student with fake IDs)
-      if (db && currentUser.studentId && currentUser.classId) {
+      if (currentUser.studentId && currentUser.classId) {
         try {
-          var verifyResult = await db.from('students')
-            .select('id, name, class_id')
-            .eq('id', parseInt(currentUser.studentId))
-            .eq('class_id', parseInt(currentUser.classId))
-            .single();
+          // v143: API 模式下通过服务端 API 验证学生身份
+          var useApiForStudent = (typeof window.USE_API !== 'undefined' && window.USE_API === true);
+          var verifyResult;
           
-          if (verifyResult.error || !verifyResult.data) {
-            console.warn('[Auth] Student verification failed — invalid studentId/classId in localStorage');
-            // Clear invalid data and redirect to login
-            localStorage.removeItem('userType');
-            localStorage.removeItem('userId');
-            localStorage.removeItem('studentId');
-            localStorage.removeItem('studentName');
-            localStorage.removeItem('classId');
-            localStorage.removeItem('className');
-            window.location.href = 'login.html';
-            return;
+          if (useApiForStudent) {
+            var apiVerifyRes = await fetch('/api/auth/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'student',
+                studentId: parseInt(currentUser.studentId),
+                classId: parseInt(currentUser.classId),
+                studentName: currentUser.studentName
+              })
+            });
+            var apiVerifyData = await apiVerifyRes.json();
+            if (!apiVerifyData.ok) {
+              console.warn('[Auth] API student verification failed:', apiVerifyData.reason);
+              localStorage.removeItem('userType');
+              localStorage.removeItem('userId');
+              localStorage.removeItem('studentId');
+              localStorage.removeItem('studentName');
+              localStorage.removeItem('classId');
+              localStorage.removeItem('className');
+              window.location.href = 'login.html';
+              return;
+            }
+            console.log('[Auth] Student verified via API:', currentUser.studentName);
+          } else if (db) {
+            verifyResult = await db.from('students')
+              .select('id, name, class_id')
+              .eq('id', parseInt(currentUser.studentId))
+              .eq('class_id', parseInt(currentUser.classId))
+              .single();
+            
+            if (verifyResult.error || !verifyResult.data) {
+              console.warn('[Auth] Student verification failed — invalid studentId/classId in localStorage');
+              localStorage.removeItem('userType');
+              localStorage.removeItem('userId');
+              localStorage.removeItem('studentId');
+              localStorage.removeItem('studentName');
+              localStorage.removeItem('classId');
+              localStorage.removeItem('className');
+              window.location.href = 'login.html';
+              return;
+            }
+            
+            // Verify the student name matches
+            if (verifyResult.data.name !== currentUser.studentName) {
+              console.warn('[Auth] Student name mismatch in localStorage');
+              localStorage.removeItem('userType');
+              localStorage.removeItem('userId');
+              localStorage.removeItem('studentId');
+              localStorage.removeItem('studentName');
+              localStorage.removeItem('classId');
+              localStorage.removeItem('className');
+              window.location.href = 'login.html';
+              return;
+            }
+            
+            console.log('[Auth] Student verified:', currentUser.studentName);
           }
-          
-          // Verify the student name matches
-          if (verifyResult.data.name !== currentUser.studentName) {
-            console.warn('[Auth] Student name mismatch in localStorage');
-            localStorage.removeItem('userType');
-            localStorage.removeItem('userId');
-            localStorage.removeItem('studentId');
-            localStorage.removeItem('studentName');
-            localStorage.removeItem('classId');
-            localStorage.removeItem('className');
-            window.location.href = 'login.html';
-            return;
-          }
-          
-          console.log('[Auth] Student verified:', currentUser.studentName);
         } catch (e) {
           console.error('[Auth] Student verification error:', e);
           // On network error, allow login but log warning
-          // This prevents locking out students when Supabase is temporarily unavailable
+          // This prevents locking out students when API/Supabase is temporarily unavailable
         }
       }
     }
@@ -186,7 +282,9 @@ function isStudent() {
 
 // 登出
 async function logout() {
-  if (db) {
+  // v143: API 模式下跳过 Supabase signOut（dummy db 没有真实 signOut）
+  var useApiLogout = (typeof window.USE_API !== 'undefined' && window.USE_API === true);
+  if (!useApiLogout && db) {
     await db.auth.signOut();
   }
   localStorage.removeItem('userType');

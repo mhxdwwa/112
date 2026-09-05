@@ -402,10 +402,33 @@ function _smartRefreshFromSupabase() {
   
   if (isStudent && (!studentId || !classId)) return Promise.resolve();
 
-  // Build queries based on user type
-  // v54: Teacher queries are sequential — first get class IDs, then filter students/pets at DB level
+  // v143: API 模式 — 通过 Cloudflare Pages Functions 加载数据
   var queries;
-  if (isStudent) {
+  if (typeof window.USE_API !== 'undefined' && window.USE_API && typeof ApiMigration !== 'undefined') {
+    if (isStudent) {
+      queries = ApiMigration.refreshClass(classId).then(function(apiData) {
+        if (apiData.error) throw new Error(apiData.error);
+        var classStudentIds = (apiData.students || []).map(function(s) { return s.id; });
+        var filteredPets = (apiData.pets || []).filter(function(p) { return classStudentIds.indexOf(p.student_id) >= 0; });
+        return [
+          { data: apiData.class, error: null },
+          { data: apiData.students || [], error: null },
+          { data: filteredPets, error: null }
+        ];
+      });
+    } else {
+      queries = ApiMigration.loadAllClasses(currentUser.id).then(function(apiData) {
+        if (apiData.error) throw new Error(apiData.error);
+        var studentIds = (apiData.students || []).map(function(s) { return s.id; });
+        var filteredPets = (apiData.pets || []).filter(function(p) { return studentIds.indexOf(p.student_id) >= 0; });
+        return [
+          { data: apiData.classes || [], error: null },
+          { data: apiData.students || [], error: null },
+          { data: filteredPets, error: null }
+        ];
+      });
+    }
+  } else if (isStudent) {
     queries = Promise.all([
       db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
       db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
@@ -858,6 +881,47 @@ function _buildTeacherClasses(classes, students, pets) {
 }
 
 function _loadTeacherFromSupabase() {
+  // v143: API 模式 — 通过 Cloudflare Pages Functions 加载，不直连 Supabase
+  if (typeof window.USE_API !== 'undefined' && window.USE_API && typeof ApiMigration !== 'undefined') {
+    console.log('[DAL] v143 API mode: loading teacher data via /api/classes');
+    return ApiMigration.loadAllClasses(currentUser.id).then(function(apiData) {
+      if (apiData.error) {
+        console.error('[DAL] v143 API load failed:', apiData.error);
+        throw new Error(apiData.error);
+      }
+      
+      var classes = apiData.classes || [];
+      var students = apiData.students || [];
+      var pets = apiData.pets || [];
+      
+      // 设置 customActions（API 直接返回）
+      if (apiData.customActions && typeof customActions !== 'undefined') {
+        customActions = apiData.customActions.map(function(a) {
+          return { id: a.id, class_id: a.class_id, name: a.name, coins: a.coins };
+        });
+      }
+      
+      // 过滤 pets 到教师的学生
+      var studentIds = students.map(function(s) { return s.id; });
+      pets = pets.filter(function(p) { return studentIds.indexOf(p.student_id) >= 0; });
+      
+      var newClassesData = _buildTeacherClasses(classes, students, pets);
+      classesData = newClassesData;
+      
+      console.log('[DAL] v143 API loaded: ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
+      newClassesData.forEach(function(c) {
+        console.log('[DAL]   Class ' + c.id + ' "' + c.name + '": ' + c.students.length + ' students');
+      });
+      
+      _takeSnapshot();
+      _saveToCache();
+      
+      // 加载操作日志（通过 API）
+      return _loadOperationLogs();
+    });
+  }
+  
+  // 旧模式：直接连 Supabase
   // v54: Sequential queries — first get class IDs, then filter students/pets at DB level.
   // This avoids fetching ALL students/pets from the entire database.
   return db.from('classes').select(_CLASS_COLS).eq('teacher_id', currentUser.id).order('id')
@@ -927,11 +991,28 @@ function _loadStudentFromSupabase() {
     return Promise.reject(new Error('Missing studentId or classId'));
   }
 
-  return Promise.all([
-    db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
-    db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
-    db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
-  ]).then(function(results) {
+  // v143: API 模式 — 通过 Cloudflare Pages Functions 加载
+  var dataPromise;
+  if (typeof window.USE_API !== 'undefined' && window.USE_API && typeof ApiMigration !== 'undefined') {
+    console.log('[DAL] v143 API mode: loading student data via /api/class/' + classId);
+    dataPromise = ApiMigration.refreshClass(classId).then(function(apiData) {
+      if (apiData.error) throw new Error(apiData.error);
+      // 转换为与旧模式相同的 results 格式
+      return [
+        { data: apiData.class, error: null },
+        { data: apiData.students || [], error: null },
+        { data: apiData.pets || [], error: null }
+      ];
+    });
+  } else {
+    dataPromise = Promise.all([
+      db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
+      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
+      db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
+    ]);
+  }
+
+  return dataPromise.then(function(results) {
     var classR = results[0], studentsR = results[1], petsR = results[2];
     if (classR.error) throw classR.error;
 
@@ -1046,6 +1127,13 @@ function _loadCustomActions() {
   // v136: Custom actions are teacher-only — skip for students to avoid 400 error
   // (students have currentUser.id = studentId, not teacherId)
   if (currentUser.type !== 'teacher') return Promise.resolve();
+  
+  // v143: API 模式 — customActions 已在 _loadTeacherFromSupabase 的 API 路径中加载
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) {
+    console.log('[DAL] v143 API mode: customActions already loaded with class data');
+    return Promise.resolve();
+  }
+  
   // Custom actions are per-class; load all classes for this teacher
   return db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(classR) {
     if (classR.error || !classR.data) return;
@@ -1090,6 +1178,17 @@ function _filterLogsByRetention(logs) {
 // Get class IDs for this user
 function _getOpLogClassIds() {
   if (currentUser.type === 'teacher') {
+    // v143: API 模式 — 从 classesData 获取 classIds（已加载到内存中）
+    if (typeof window.USE_API !== 'undefined' && window.USE_API) {
+      if (classesData && classesData.length > 0) {
+        return Promise.resolve(classesData.map(function(c) { return c.id; }));
+      }
+      // classesData 为空时通过 API 加载
+      return ApiMigration.loadAllClasses(currentUser.id).then(function(data) {
+        if (data.classes) return data.classes.map(function(c) { return c.id; });
+        return [];
+      }).catch(function() { return []; });
+    }
     return db.from('classes').select('id').eq('teacher_id', currentUser.id).then(function(r) {
       if (r.error || !r.data) return [];
       return r.data.map(function(c) { return c.id; });
@@ -1101,9 +1200,81 @@ function _getOpLogClassIds() {
   }
 }
 
+// v143: Extracted log merge logic — shared between API and old paths
+function _mergeLoadedLogs(allLogs) {
+  // v105: Preserve ALL local logs that aren't on the server (fixes race condition)
+  var serverLogIds = {};
+  allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
+  
+  var localOnly = [];
+  var localUnsynced = [];
+  (window.operationLogs || []).forEach(function(l) {
+    if (!serverLogIds[l.id]) {
+      localOnly.push(l);
+    }
+    if (!l._synced) {
+      localUnsynced.push(l);
+    }
+  });
+
+  // v34: Deduplicate
+  var dedupedServer = allLogs.filter(function(l) {
+    for (var i = 0; i < localUnsynced.length; i++) {
+      if (localUnsynced[i].id === l.id) return false;
+    }
+    return true;
+  });
+
+  window.operationLogs = dedupedServer.concat(localOnly);
+  window.operationLogs.sort(function(a, b) {
+    return (b.timestamp || '').localeCompare(a.timestamp || '');
+  });
+
+  try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
+  console.log('[DAL] v143 Loaded ' + allLogs.length + ' logs, ' + localOnly.length + ' local-only preserved');
+}
+
 // v29: Load operation logs from classes.operation_logs_json
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
+  
+  // v143: API 模式 — 通过 /api/logs 加载（不直连 Supabase）
+  if (typeof window.USE_API !== 'undefined' && window.USE_API && typeof ApiMigration !== 'undefined') {
+    if (typeof window.operationLogs === 'undefined') {
+      try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { window.operationLogs = []; }
+    }
+    
+    return _getOpLogClassIds().then(function(classIds) {
+      if (!classIds || classIds.length === 0) {
+        console.warn('[DAL] v143 API _loadOperationLogs: no classIds');
+        return;
+      }
+      console.log('[DAL] v143 API loading operation logs for class_ids:', classIds);
+      
+      // 并行加载所有班级的日志
+      return Promise.all(classIds.map(function(cid) {
+        return ApiMigration.loadLogs(cid).then(function(data) {
+          if (data.logs && Array.isArray(data.logs)) {
+            return data.logs.map(function(l) {
+              l._synced = true;
+              l._fromSupabase = true;
+              if (!l.classId) l.classId = cid;
+              return l;
+            });
+          }
+          return [];
+        }).catch(function() { return []; });
+      })).then(function(logArrays) {
+        var allLogs = [];
+        logArrays.forEach(function(arr) { allLogs = allLogs.concat(arr); });
+        _mergeLoadedLogs(allLogs);
+        // v143: API 模式下不需要 merge student pending logs
+        // （日志已通过 API 直接写入 classes.operation_logs_json）
+      });
+    });
+  }
+  
+  // 旧模式
   if (!db) {
     console.warn('[DAL] _loadOperationLogs: db not initialized');
     return Promise.resolve();
@@ -1264,6 +1435,8 @@ function _loadOperationLogs() {
 // merge into classes.operation_logs_json, then clear students.pending_logs_json.
 function _mergeStudentPendingLogs(classIds) {
   if (!classIds || classIds.length === 0) return Promise.resolve(0);
+  // v143: API 模式 — 日志已通过 API 直接写入 classes.operation_logs_json，无需合并
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return Promise.resolve(0);
 
   // Step 1: Read all students with pending logs in these classes
   return db.from('students')
@@ -1389,6 +1562,8 @@ function _mergeStudentPendingLogs(classIds) {
 // v111: Re-load operation logs after merging student pending logs.
 // This ensures the teacher sees the freshly merged logs immediately.
 function _loadOperationLogsAfterMerge(classIds) {
+  // v143: API 模式 — 不需要重新加载（_mergeStudentPendingLogs 在 API 模式下直接返回）
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return Promise.resolve();
   return db.from('classes').select('id, operation_logs_json').in('id', classIds).then(function(r) {
     if (r.error) return;
     var allLogs = [];
@@ -1428,6 +1603,8 @@ var _pendingLogWrites = 0;
 // If our logs are missing, re-read from Supabase, re-merge, and re-write.
 // Retries up to 3 times with increasing delays.
 function _verifyLogWrite(classId, writtenLogIds, retryCount) {
+  // v143: API 模式 — 日志通过 API 直接写入，无需验证
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return Promise.resolve();
   if (retryCount >= 3 || !writtenLogIds || writtenLogIds.length === 0) {
     return Promise.resolve();
   }
@@ -1946,6 +2123,11 @@ function _isValidInt4Id(id) {
 }
 
 function _syncTeacherToSupabase() {
+  // v143: API 模式 — 所有写入已通过 API 完成，跳过全量同步
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) {
+    console.log('[DAL] v143 API mode: skipping _syncTeacherToSupabase');
+    return Promise.resolve();
+  }
   // === Phase 1: Insert/Upsert classes FIRST (v48: resolve real IDs before processing students) ===
   var classPromises = [];
   var newStudents = [];   // { payload, stuRef }
@@ -2407,6 +2589,11 @@ function _syncTeacherToSupabase() {
 }
 
 function _syncStudentToSupabase() {
+  // v143: API 模式 — 所有写入已通过 API 完成，跳过全量同步
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) {
+    console.log('[DAL] v143 API mode: skipping _syncStudentToSupabase');
+    return Promise.resolve();
+  }
   var studentId = parseInt(localStorage.getItem('studentId'));
   if (!studentId) return Promise.resolve();
 
@@ -3213,6 +3400,16 @@ function _refreshLogsOnly() {
 }
 
 function _setupRealtimeSubscriptions() {
+  // v143: API 模式 — 不使用 Supabase Realtime，改用 API 轮询
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) {
+    console.log('[DAL] v143 API mode: using API polling instead of Realtime');
+    // 缩短轮询间隔（API 模式下没有 Realtime，需要更频繁的轮询）
+    _refreshInterval = 30000; // 30 秒（旧模式 120 秒）
+    _startFallbackPolling();
+    _initBroadcastChannel();
+    return;
+  }
+  
   if (!db || !db.channel) {
     // No Realtime support — start polling immediately
     _startFallbackPolling();
@@ -3457,6 +3654,8 @@ function _cleanupRealtime() {
 // and writes back — all in a single request. No GET needed, no race conditions.
 // Traffic: ~500 bytes per call (just the new log), regardless of how many logs exist.
 function _appendPendingLogRpc(logObj) {
+  // v143: API 模式 — 日志已通过 /api/logs/append 写入，跳过直接 RPC
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return true;
   var studentId = parseInt(localStorage.getItem('studentId'));
   var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
   if (!studentId || !anonKey) return false;
@@ -3495,6 +3694,8 @@ function _appendPendingLogRpc(logObj) {
 
 // v124: Async version of RPC append for non-blocking paths.
 function _appendPendingLogRpcAsync(logObj) {
+  // v143: API 模式 — 日志已通过 /api/logs/append 写入，跳过直接 RPC
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return Promise.resolve(true);
   var studentId = parseInt(localStorage.getItem('studentId'));
   var anonKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
   if (!studentId || !anonKey) return Promise.resolve(false);
@@ -3553,6 +3754,8 @@ var _lastStudentSyncXhrTime = 0;
 var _STUDENT_SYNC_XHR_INTERVAL = 2000; // 2 seconds
 
 function _syncStudentDataImmediate() {
+  // v143: API 模式 — 数据已通过 API 直接写入，跳过同步 XHR
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return;
   if (!currentUser || currentUser.type !== 'student') return;
 
   var now = Date.now();
@@ -3673,6 +3876,8 @@ function _syncStudentDataImmediate() {
 // which could be killed on mobile before completing. This caused teacher's Realtime to never
 // fire for student/pet updates, so pet cards and coins never auto-updated on teacher's screen.
 function _syncWriteStudentPendingLogs() {
+  // v143: API 模式 — 数据已通过 API 直接写入，跳过同步 XHR
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return true;
   if (!currentUser || currentUser.type !== 'student') return false;
 
   var studentId = parseInt(localStorage.getItem('studentId'));
@@ -3805,6 +4010,8 @@ function _syncWriteStudentPendingLogs() {
 // during normal page operation.
 // v124: Now uses RPC for each log — atomic append, no GET needed, minimal traffic.
 function _writeStudentPendingLogsAsync() {
+  // v143: API 模式 — 数据已通过 API 直接写入
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return;
   if (!currentUser || currentUser.type !== 'student') return;
 
   var studentId = parseInt(localStorage.getItem('studentId'));
@@ -3849,6 +4056,8 @@ function _writeStudentPendingLogsAsync() {
 // Called 2 seconds after each action. If there are still unsynced logs,
 // it means both sync and async XHR failed, so we retry.
 function _verifyStudentLogsWritten() {
+  // v143: API 模式 — 日志已通过 API 直接写入
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) return;
   if (!currentUser || currentUser.type !== 'student') return;
 
   var unsyncedLogs = (typeof window.operationLogs !== 'undefined' && Array.isArray(window.operationLogs))
@@ -3863,6 +4072,11 @@ function _verifyStudentLogsWritten() {
 
 /* ===== Lifecycle ===== */
 function _setupPageLifecycle() {
+  // v143: API 模式 — 数据已通过 API 直接写入，不需要 sendBeacon/sync XHR 保存
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) {
+    console.log('[DAL] v143 API mode: skipping page lifecycle save (data already persisted via API)');
+    return;
+  }
   // v122: Use navigator.sendBeacon() for beforeunload — the modern, reliable way.
   // sendBeacon() is specifically designed for sending data when page is unloading.
   // It's NOT blocked by mobile browsers (unlike sync XHR which is frequently blocked).
@@ -4527,6 +4741,11 @@ function _initDALCore() {
 }
 
 function _postInitSetup() {
+  // v143: API 模式 — 不需要重试写入未同步日志（API 已直接写入）
+  if (typeof window.USE_API !== 'undefined' && window.USE_API) {
+    console.log('[DAL] v143 API mode: skipping _postInitSetup (no unsynced log retry needed)');
+    return;
+  }
   // v109: Retry writing any unsynced operation logs after init.
   // On mobile, the page may be killed before the debounce timer fires,
   // leaving logs in localStorage that were never written to Supabase.

@@ -15,7 +15,7 @@
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-<script defer src="auth-check.js?v=89"></script>
+<script defer src="auth-check.js?v=143"></script>
 <!-- v103: 移除 prefetch — 游戏 JS 已改为按需加载，不再预取 -->
 </head>
 <body>
@@ -256,8 +256,8 @@ setTimeout(function() { window._hideDalLoading(); }, 5000);
   <!-- v135: app.js 必须在 heart-effect/bgm-system 之前，因为它们会包装 app.js 中的函数 -->
   <script defer src="js/storage.js?v=1"></script>
   <!-- v141: API 迁移层 — 在 app.js 之前加载，提供服务端 API 调用能力 -->
-  <script defer src="api-migration.js?v=142"></script>
-  <script defer src="app.js?v=142"></script>
+  <script defer src="api-migration.js?v=143"></script>
+  <script defer src="app.js?v=143"></script>
   <script defer src="js/heart-effect.js?v=2"></script>
   <script defer src="js/bgm-system.js?v=2"></script>
   <script defer src="js/lazy-loader.js?v=136"></script>
@@ -735,8 +735,8 @@ function escapeHtmlSimple(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
-  <link rel="preload" as="script" href="dal.js?v=141">
-  <script defer src="dal.js?v=141"></script>
+  <link rel="preload" as="script" href="dal.js?v=143">
+  <script defer src="dal.js?v=143"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 <script>
 // staggerFloats MutationObserver 已移除，改为在 renderHomePetGrid 包装函数中调用
