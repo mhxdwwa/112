@@ -61,11 +61,11 @@ var _realtimeChannels = [];
 var _realtimeLastEventTime = 0; // v95: Track last Realtime event arrival for liveness detection
 var _safetyNetTimer = null; // v95: Safety-net poll that runs even when Realtime is "active"
 var _SAFETY_NET_INTERVAL = 15000; // v95: 15s safety-net poll interval
-var _REALTIME_LIVENESS_TIMEOUT = 45000; // v95: If no Realtime event for 45s, mark as dead
+var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mobile browsers drop WebSocket silently
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '163.0';
+var _DAL_VERSION = '164.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -3483,9 +3483,31 @@ function _setupRealtimeSubscriptions() {
     if (channelsConfirmed >= 1 && !_realtimeActive) {
       // At least one channel confirmed — Realtime is working
       _realtimeActive = true;
-      console.log('[DAL] ⚡ Realtime confirmed active (' + channelsConfirmed + '/' + totalChannels + ' channels) — polling disabled, client=' + _clientId);
-      // Stop any fallback polling that may have started
-      _stopFallbackPolling();
+      console.log('[DAL] v164 ⚡ Realtime confirmed active (' + channelsConfirmed + '/' + totalChannels + ' channels) — keeping slow backup polling, client=' + _clientId);
+      // v164: DON'T stop fallback polling completely — keep it as slow backup (5min)
+      // Mobile browsers silently drop WebSocket connections, so we need a safety net
+      if (_refreshTimer) {
+        _stopFallbackPolling();
+      }
+      var _backupInterval = 300000; // 5 minutes backup polling
+      _refreshTimer = setInterval(function() {
+        if (!_realtimeActive) {
+          // Realtime died, switch to normal fallback polling
+          _stopFallbackPolling();
+          _refreshInterval = 120000;
+          _startFallbackPolling();
+          return;
+        }
+        // Check if Realtime is still alive
+        var timeSinceLastEvent = Date.now() - _realtimeLastEventTime;
+        if (timeSinceLastEvent > _REALTIME_LIVENESS_TIMEOUT) {
+          console.warn('[DAL] v164 Backup poll: Realtime dead (' + Math.round(timeSinceLastEvent/1000) + 's no events) — forcing refresh');
+          _realtimeActive = false;
+          _refreshInterval = 120000;
+          _startFallbackPolling();
+        }
+        _refreshFromSupabase();
+      }, _backupInterval);
     }
   }
 
@@ -4317,6 +4339,23 @@ function _setupPageLifecycle() {
       };
       // Initial 2s delay to let any hidden-phase sync complete
       setTimeout(doRefresh, 2000);
+    }
+  });
+  
+  // v164: Also listen for 'focus' event — critical for mobile browsers
+  // where visibilitychange may not fire but the WebSocket was silently dropped
+  window.addEventListener('focus', function() {
+    console.log('[DAL] v164 Window focused — checking data freshness');
+    // If Realtime is "active" but no events received recently, force a refresh
+    var timeSinceLastEvent = Date.now() - _realtimeLastEventTime;
+    if (_realtimeActive && timeSinceLastEvent > 10000) {
+      console.log('[DAL] v164 No Realtime events for ' + Math.round(timeSinceLastEvent / 1000) + 's — forcing refresh');
+      _realtimeActive = false; // Mark as potentially dead
+      _startFallbackPolling(); // Start polling as backup
+      _immediateRefreshFromSupabase();
+    } else if (!_realtimeActive) {
+      // Realtime not active, just do a refresh
+      _immediateRefreshFromSupabase();
     }
   });
 }

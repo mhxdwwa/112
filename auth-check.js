@@ -35,29 +35,32 @@ async function _verifyQRToken(token) {
 }
 
 // 初始化 Supabase 客户端
-// v143: API 模式下跳过 Supabase 客户端初始化（浏览器可能无法直连 Supabase）
+// v164: API 模式下也初始化真实 Supabase 客户端（用于 Realtime 订阅）
+// 数据写入仍走 API，但 Realtime 需要真实的 WebSocket 连接
 (function initSupabase() {
-  // v143: 如果启用了 API 模式，不需要初始化 Supabase 客户端
-  if (typeof window.USE_API !== 'undefined' && window.USE_API === true) {
-    console.log('[Auth] API mode enabled, skipping Supabase client init');
-    // 创建一个 dummy db 对象，防止其他代码引用 db 时报错
-    db = {
-      auth: {
-        getSession: function() { return Promise.resolve({ data: { session: null }, error: 'API mode' }); },
-        signOut: function() { return Promise.resolve(); }
-      },
-      from: function() {
-        return {
-          select: function() { return { eq: function() { return { single: function() { return Promise.resolve({ data: null, error: 'API mode' }); } }; } }; }
-        };
-      }
-    };
-    return;
-  }
   try {
     if (window.supabase && window.supabase.createClient) {
-      db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      console.log('[Auth] Supabase connected');
+      db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        realtime: {
+          params: {
+            events_per_second: 10
+          }
+        }
+      });
+      console.log('[Auth] v164 Supabase client created (Realtime enabled)');
+      
+      // v164: API 模式下，数据查询走 API，但保留 Realtime 能力
+      if (typeof window.USE_API !== 'undefined' && window.USE_API === true) {
+        console.log('[Auth] v164 API mode: data writes via API, Realtime via WebSocket');
+        // 包装 db.from，让数据查询走 API（通过 dal.js 的 _smartRefreshFromSupabase）
+        // 但保留 db.channel 用于 Realtime 订阅
+        var _originalFrom = db.from.bind(db);
+        db.from = function(table) {
+          // Realtime 订阅需要 channel 方法，这个保留原样
+          // 数据查询在 API 模式下由 dal.js 通过 ApiMigration 处理
+          return _originalFrom(table);
+        };
+      }
     } else {
       console.error('[Auth] Supabase SDK not loaded, retrying in 1s...');
       setTimeout(initSupabase, 1000);
