@@ -23,8 +23,9 @@
     window.USE_API = true;
   }
 
-  // API 基础 URL（使用相对路径，前后端同域名）
-  var API_BASE = '/api';
+  // API 基础 URL
+  // v141: 使用完整 URL，因为 Pages 和 Workers 不在同域名
+  var API_BASE = 'https://bjcw.444522621.workers.dev/api';
 
   // ============================================================
   // 辅助函数
