@@ -1120,6 +1120,8 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     student2.coins += 5;
     pet1.growth = (pet1.growth || 0) + 3;
     pet2.growth = (pet2.growth || 0) + 3;
+    // v158: 更新等级（之前缺失导致升级后level未刷新，服务器保存旧等级）
+    if(typeof updatePetLevel==='function'){updatePetLevel(student1,pet1.id,3,true);updatePetLevel(student2,pet2.id,3,true);}
     showNotification('课堂PK结果', '平局！双方各+5金币、+3成长值', 'info');
     recordAction(student1.id, student1.name, '课堂PK平局', `${student1.name} vs ${student2.name} 平局`, 5, 3, pet1.id, {pkType:'draw', opponentId: student2.id, opponentName: student2.name});
     recordAction(student2.id, student2.name, '课堂PK平局', `${student2.name} vs ${student1.name} 平局`, 5, 3, pet2.id, {pkType:'draw', opponentId: student1.id, opponentName: student1.name});
@@ -1149,6 +1151,8 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
     const prevLoserGrowth  = loserPet.growth  || 0;
     winnerPet.growth = prevWinnerGrowth + winGrowth;
     loserPet.growth  = prevLoserGrowth  + loseGrowth;
+    // v158: 更新等级（之前缺失导致升级后level未刷新，服务器保存旧等级）
+    if(typeof updatePetLevel==='function'){updatePetLevel(winnerStudent,winnerPet.id,winGrowth,true);updatePetLevel(loserStudent,loserPet.id,loseGrowth,true);}
 
     resultOverlay.innerHTML = `
       <div class="pk-result-title">${esc(winnerStudent.name)} 胜利！</div>

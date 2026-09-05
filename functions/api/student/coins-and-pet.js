@@ -116,16 +116,3 @@ export const onRequestPost = async ({ request, env }) => {
 
   return jsonResponse({ ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, petResults, logId });
 };
-    const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
-    let existingLogs = [];
-    if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-      try { existingLogs = JSON.parse(logsR.data[0].operation_logs_json); } catch (e) {}
-    }
-    existingLogs.unshift(log);
-    if (existingLogs.length > 3000) existingLogs = existingLogs.slice(0, 3000);
-    await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(existingLogs) }, `id=eq.${classId}`);
-    logId = log.id;
-  }
-
-  return jsonResponse({ ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, petResults, logId });
-};

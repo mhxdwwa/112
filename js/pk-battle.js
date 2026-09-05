@@ -2505,6 +2505,8 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     const loserPrevGrowth = loserPet.growth || 0;
     winnerPet.growth = winnerPrevGrowth + 3;
     loserPet.growth = Math.max(0, loserPrevGrowth - 1);
+    // v158: 更新等级（之前缺失导致升级后level未刷新，服务器保存旧等级）
+    if(typeof updatePetLevel==='function'){updatePetLevel(winnerStudent,winnerPet.id,3,true);updatePetLevel(loserStudent,loserPet.id,loserPet.growth-loserPrevGrowth,true);}
     const winnerGrowthDelta = 3;
     const loserGrowthDelta = loserPet.growth - loserPrevGrowth;
     const winnerImg = document.getElementById(`pk-img-${winnerSide}`);
