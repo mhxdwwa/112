@@ -249,16 +249,41 @@ function modalBuyItem(itemId){
   const item=getShopItemById(itemId);
   if(!item){showNotification('商品不存在','','error');return;}
   if(studentOwnsItem(student,itemId)){showNotification('已拥有','你已经拥有该商品','warning');return;}
-   if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
-   const pet=getActivePet(student);
-   changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null, {shopItemId:itemId});
-   if(!student.shopItems) student.shopItems=[];
-   student.shopItems.push(itemId);
-   autoEquipOnBuy(student, itemId);
-  saveClassData();
-  refreshCurrentStudentModal();
-  renderHomePetGrid();
-  showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
+  if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
+  const pet=getActivePet(student);
+  if(window.USE_API&&window.ApiMigration){
+    // API 模式：通过 API 扣金币 + 保存商店状态到服务器
+    recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+    window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null).then(function(r){
+      if(r.ok){
+        student.coins=r.coinsAfter;
+        if(!student.shopItems) student.shopItems=[];
+        student.shopItems.push(itemId);
+        autoEquipOnBuy(student, itemId);
+        window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
+          if(!r2.ok) console.warn('[API] saveShopState error:', r2.error);
+          saveClassData();
+          refreshCurrentStudentModal();
+          renderHomePetGrid();
+        });
+        showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
+      } else if(r.error==='Insufficient balance'){
+        showNotification('金币不足',`余额不足，无法购买${item.name}`,'error');
+      } else {
+        showNotification('购买失败',r.error||'未知错误','error');
+      }
+    });
+  } else {
+    // 非 API 模式：本地扣金币 + 保存
+    changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null, {shopItemId:itemId});
+    if(!student.shopItems) student.shopItems=[];
+    student.shopItems.push(itemId);
+    autoEquipOnBuy(student, itemId);
+    saveClassData();
+    refreshCurrentStudentModal();
+    renderHomePetGrid();
+    showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
+  }
 }
 function modalEquipItem(itemId){
   if(!currentModalStudentId)return;
@@ -268,6 +293,12 @@ function modalEquipItem(itemId){
   const item=getShopItemById(itemId);
   if(!item)return;
   equipItem(student, itemId);
+  // v151: API 模式下同步装备状态到服务器
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.saveShopState){
+    window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r){
+      if(!r.ok) console.warn('[API] saveShopState equip error:', r.error);
+    });
+  }
   saveClassData();
   refreshCurrentStudentModal();
   renderHomePetGrid();
@@ -281,6 +312,12 @@ function modalUnequipItem(itemId){
   const item=getShopItemById(itemId);
   if(!item)return;
   unequipItem(student, itemId);
+  // v151: API 模式下同步装备状态到服务器
+  if(window.USE_API&&window.ApiMigration&&window.ApiMigration.saveShopState){
+    window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r){
+      if(!r.ok) console.warn('[API] saveShopState unequip error:', r.error);
+    });
+  }
   saveClassData();
   refreshCurrentStudentModal();
   renderHomePetGrid();

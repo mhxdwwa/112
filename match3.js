@@ -708,6 +708,7 @@ function _m3OnToolClick(toolName) {
     // 有道具可用，消耗1次并执行
     tools[toolName] -= 1;
     if (typeof saveClassData === 'function') saveClassData();
+    if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
     if (toolName === 'shuffle') {
       _m3DoShuffle();
     } else if (toolName === 'undo') {
@@ -803,6 +804,7 @@ function _m3SelectAnswer(index) {
       var qs = ensureMatch3State(_m3CurrentStudent);
       qs.match3Tools[_m3QuizState.tool] += reward;
       if (typeof saveClassData === 'function') saveClassData();
+      if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
     }
     quizCloseBtn.style.display = 'block';
     _m3UpdateToolUI();
@@ -884,6 +886,7 @@ function _m3ShowResult(success) {
     _m3Container.innerHTML = html;
 
     if (typeof saveClassData === 'function') saveClassData();
+    if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
   } else {
     var html2 = '<div style="text-align:center;padding:30px;">';
     html2 += '<div style="font-size:48px;">😢</div>';

@@ -20,7 +20,7 @@ export const onRequestPost = async ({ request, env }) => {
   const allowedFields = [
     'quiz_state', 'shop_items', 'equipped_items', 'last_checkin_date',
     'last_jianghu_date', 'last_pk_date', 'pk_count_today', 'active_pet_id',
-    'snack_requests', 'xiandan', 'password'
+    'snack_requests', 'xiandan', 'password', 'name'
   ];
   const filteredUpdates = {};
 
