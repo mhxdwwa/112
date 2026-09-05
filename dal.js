@@ -573,6 +573,10 @@ function _smartRefreshFromSupabase() {
               localStu.coins = freshStu.coins;
               _myBaseCoins = freshStu.coins;
               changesApplied++;
+            } else if (freshStu.coins === localStu.coins && freshStu.coins !== _myBaseCoins) {
+              // v166: Local and server match but differ from base — API wrote successfully
+              // but _myBaseCoins wasn't updated. Sync base to prevent future miscalculation.
+              _myBaseCoins = freshStu.coins;
             }
             // If local changed (student spent coins), localStu.coins !== _myBaseCoins → keep local
           } else if (snapStu) {
@@ -727,6 +731,10 @@ function _smartRefreshFromSupabase() {
                 localPet.growth = freshPet.growth;
                 _myBasePets[freshPet.id] = freshPet.growth;
                 changesApplied++;
+              } else if (freshPet.growth === localPet.growth && freshPet.growth !== baseGrowth) {
+                // v166: Local and server match but differ from base — API wrote successfully
+                // but _myBasePets wasn't updated. Sync base to prevent future miscalculation.
+                _myBasePets[freshPet.id] = freshPet.growth;
               }
               // If local changed (student interaction), keep local
             } else {
@@ -3284,15 +3292,22 @@ function _applyRealtimeUpdate(table, payload) {
   
   // 根据表类型更新对应字段
   if (table === 'students') {
+    // v166: Column-aware filtering — only update coins if the Realtime event actually changed coins.
+    // Supabase Realtime sends the FULL row on ANY column change. Without this check, a quiz_state
+    // update would echo back the full row including coins, potentially overwriting fresh local data.
+    var _changedColumns = (payload.columns || []).map(function(c) { return c.name; });
+    var _coinsActuallyChanged = _changedColumns.length === 0 || _changedColumns.indexOf('coins') >= 0;
+    var _xiandanActuallyChanged = _changedColumns.length === 0 || _changedColumns.indexOf('xiandan') >= 0;
+    
     // v102: coins — 用 snapshot-based delta 保留本地未同步的变化
-    if (newData.coins !== undefined) {
+    if (newData.coins !== undefined && _coinsActuallyChanged) {
       var snapStu = _snapshotStudentMap[studentId];
       var snapCoins = snapStu ? snapStu.coins : undefined;
       targetStudent.coins = _applyWithDelta(targetStudent.coins, snapCoins, newData.coins);
     }
     
     // xiandan (仙丹) — 用 snapshot-based delta 保留本地未同步的变化（学生零食购买等）
-    if (newData.xiandan !== undefined) {
+    if (newData.xiandan !== undefined && _xiandanActuallyChanged) {
       var snapXd = _snapshotStudentMap[studentId];
       var snapXiandan = snapXd ? snapXd.xiandan : undefined;
       targetStudent.xiandan = _applyWithDelta(targetStudent.xiandan, snapXiandan, newData.xiandan);
@@ -3378,8 +3393,13 @@ function _applyRealtimeUpdate(table, payload) {
     }
     
     if (targetPet) {
+      // v166: Column-aware filtering for pets — only update growth if the Realtime event
+      // actually changed the growth column. Prevents echo from unrelated pet field updates.
+      var _petChangedColumns = (payload.columns || []).map(function(c) { return c.name; });
+      var _growthActuallyChanged = _petChangedColumns.length === 0 || _petChangedColumns.indexOf('growth') >= 0;
+      
       // v102: growth — 用 snapshot-based delta 保留本地未同步的变化
-      if (newData.growth !== undefined) {
+      if (newData.growth !== undefined && _growthActuallyChanged) {
         var snapPet = _snapshotPetMap[petId];
         var snapGrowth = snapPet ? snapPet.growth : undefined;
         targetPet.growth = _applyWithDelta(targetPet.growth, snapGrowth, newData.growth);

@@ -103,6 +103,9 @@
         // 更新本地数据
         student.coins = result.coinsAfter;
         
+        // v166: 更新 _myBaseCoins — 防止 smart refresh 误判本地变化导致金币回退
+        if (typeof _myBaseCoins !== 'undefined') _myBaseCoins = result.coinsAfter;
+        
         // v163: 回声保护 — 标记刚写入的行，防止 Realtime 回传时重复应用 delta
         if (typeof _markRowWritten === 'function') _markRowWritten('students', student.id);
         if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
@@ -161,6 +164,9 @@
         // 更新本地数据
         student.coins = result.coinsAfter;
         
+        // v166: 更新 _myBaseCoins — 防止 smart refresh 误判本地变化导致金币/成长值回退
+        if (typeof _myBaseCoins !== 'undefined') _myBaseCoins = result.coinsAfter;
+        
         // 更新宠物本地数据
         if (petUpdates && student.pets) {
           petUpdates.forEach(function(pu) {
@@ -174,6 +180,10 @@
               if (pu.updates.nickname) pet.nickname = pu.updates.nickname;
               // v163: 回声保护 — 标记刚写入的宠物行
               if (typeof _markRowWritten === 'function') _markRowWritten('pets', pet.id);
+              // v166: 更新 _myBasePets — 防止 smart refresh 误判宠物成长值变化
+              if (typeof _myBasePets !== 'undefined' && _myBasePets) {
+                _myBasePets[pet.id] = pet.growth || 0;
+              }
             }
           });
         }
@@ -211,6 +221,10 @@
       updates: updates
     }).then(function(result) {
       if (result.ok) {
+        // v166: 更新 _myBasePets — 防止 smart refresh 误判宠物成长值变化
+        if (updates && updates.growth !== undefined && typeof _myBasePets !== 'undefined' && _myBasePets) {
+          _myBasePets[petId] = updates.growth;
+        }
         // v163: 回声保护 — 标记刚写入的宠物行
         if (typeof _markRowWritten === 'function') _markRowWritten('pets', petId);
         console.log('[API] pet update ok:', petId);
