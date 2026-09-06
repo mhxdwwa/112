@@ -14,7 +14,11 @@ export const onRequestPost = async ({ request, env }) => {
 
   if (!classId) return jsonResponse({ error: 'Missing classId' }, 400);
 
-  await sbDelete(env, 'custom_actions', `class_id=eq.${classId}`);
+  // v182: Check delete result before inserting to prevent data loss
+  const delR = await sbDelete(env, 'custom_actions', `class_id=eq.${classId}`);
+  if (delR.error) {
+    return jsonResponse({ error: 'Failed to clear old actions', details: delR.error }, 500);
+  }
 
   if (actions && actions.length > 0) {
     const payloads = actions.map(a => ({ class_id: classId, name: a.name, coins: a.coins || 0 }));

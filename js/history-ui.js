@@ -43,6 +43,10 @@ var _historyExpandedDates = {}; // Track which date groups user has expanded: {d
 
   // v104: Then sync and refresh in background (non-blocking)
   // This ensures fresh data is loaded without blocking the UI
+  // v182: Only refresh modal if there are remote logs newer than our local logs
+  // This prevents unnecessary rebuild when user just performed an action locally
+  var localLogTimeBefore = (typeof _lastLocalLogTime !== 'undefined') ? _lastLocalLogTime : '';
+  
   var syncPromise = (typeof _writeUnsyncedLogsToSupabase === 'function')
     ? _writeUnsyncedLogsToSupabase()
     : Promise.resolve();
@@ -52,9 +56,24 @@ var _historyExpandedDates = {}; // Track which date groups user has expanded: {d
       return _loadOperationLogs();
     }
   }).then(function() {
-    // v104: Refresh the modal content with fresh data
-    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-    refreshHistoryModalIfOpen();
+    // v182: Check if there are remote-only logs (from other devices)
+    // If all logs are local (from this device), no need to refresh
+    var logs = getOpLogs();
+    var hasRemoteNewLog = false;
+    for (var i = 0; i < logs.length; i++) {
+      var l = logs[i];
+      // Remote log: from Supabase, not optimistic, and newer than our last local log
+      if (l._fromSupabase && !l._apiOptimistic && l.timestamp > localLogTimeBefore) {
+        hasRemoteNewLog = true;
+        break;
+      }
+    }
+    
+    if (hasRemoteNewLog) {
+      // v104: Refresh the modal content with fresh data
+      if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+      refreshHistoryModalIfOpen();
+    }
   }).catch(function(e) {
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e2) {} }
     console.warn('[History] Background refresh error:', e);

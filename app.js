@@ -354,12 +354,22 @@ function _cooldownRemaining(action) {
 // 负数ID永远不会被误认为有效的Supabase ID
 var _idCounter = 0;
 function _genLocalId(){ return -(Date.now() * 1000 + ((_idCounter = (_idCounter + 1) % 1000))); }
-function saveCustomActions(){safeLSSave('customActions', customActions); scheduleFileSave(); if(window.USE_API&&window.ApiMigration&&window.ApiMigration.saveCustomAction){ var _actionsToSync=[]; customActions.forEach(function(a){ if(String(a.id).indexOf('sys_')===0) return; var act={id:a.id,name:a.name,coins:a.coins||0}; if(a.class_id) act.class_id=a.class_id; _actionsToSync.push(act); }); if(_actionsToSync.length===0) return; if(!currentClassId&&classesData.length>0) currentClassId=classesData[0].id; if(!currentClassId) return; _actionsToSync.forEach(function(a){ if(!a.class_id) a.class_id=currentClassId; }); var _groups={}; _actionsToSync.forEach(function(a){ var cid=String(a.class_id); if(!_groups[cid]) _groups[cid]=[]; _groups[cid].push({name:a.name,coins:a.coins}); }); var _groupKeys=Object.keys(_groups); var _syncIdx=0; function _syncNextGroup(){ if(_syncIdx>=_groupKeys.length) return; var cid=_groupKeys[_syncIdx]; _syncIdx++; window.ApiMigration.saveCustomAction({classId:parseInt(cid),actions:_groups[cid]}).then(function(r){ if(!r.ok) console.warn('[API] saveCustomActions group '+cid+' error:',r.error); _syncNextGroup(); }); } _syncNextGroup(); }}
+function saveCustomActions(){safeLSSave('customActions', customActions); scheduleFileSave(); if(window.USE_API&&window.ApiMigration&&window.ApiMigration.saveCustomAction){ var _actionsToSync=[]; customActions.forEach(function(a){ if(String(a.id).indexOf('sys_')===0) return; var act={id:a.id,name:a.name,coins:a.coins||0}; if(a.class_id) act.class_id=a.class_id; _actionsToSync.push(act); }); if(_actionsToSync.length===0) return; if(!currentClassId&&classesData.length>0) currentClassId=classesData[0].id; if(!currentClassId) return; _actionsToSync.forEach(function(a){ if(!a.class_id) a.class_id=currentClassId; }); var _groups={}; _actionsToSync.forEach(function(a){ var cid=String(a.class_id); if(!_groups[cid]) _groups[cid]=[]; _groups[cid].push({name:a.name,coins:a.coins}); }); var _groupKeys=Object.keys(_groups); var _syncIdx=0; function _trySaveWithRetry(classIdVal, actionsData, retries){ window.ApiMigration.saveCustomAction({classId:parseInt(classIdVal),actions:actionsData}).then(function(r){ if(!r.ok){ if(retries>0){ console.warn('[API] saveCustomActions failed, retrying...',r.error); setTimeout(function(){ _trySaveWithRetry(classIdVal,actionsData,retries-1); },1000); } else { console.error('[API] saveCustomActions final failure:',r.error); showNotification('奖惩保存失败','服务器同步失败，请检查网络后重新操作','error'); } } _syncNextGroup(); }); } function _syncNextGroup(){ if(_syncIdx>=_groupKeys.length) return; var cid=_groupKeys[_syncIdx]; _syncIdx++; _trySaveWithRetry(cid,_groups[cid],2); } _syncNextGroup(); }}
 saveCustomActions();
 // v16: SINGLE SOURCE OF TRUTH — operationLogs lives on window only.
 // All reads/writes go through window.operationLogs to eliminate cross-script scope bugs.
 window.operationLogs = [];
 try { window.operationLogs = JSON.parse(localStorage.getItem('operationLogs')) || []; } catch(e) { console.warn('operationLogs读取失败，已重置:', e.message); localStorage.removeItem('operationLogs'); }
+// v182: Track latest local log timestamp to detect remote-only logs
+var _lastLocalLogTime = '';
+(function() {
+  var logs = window.operationLogs || [];
+  for (var i = 0; i < logs.length; i++) {
+    if (logs[i].timestamp && logs[i].timestamp > _lastLocalLogTime) {
+      _lastLocalLogTime = logs[i].timestamp;
+    }
+  }
+})();
 // v16: Helper to get operation logs — always reads from window.operationLogs
 function getOpLogs() { return window.operationLogs || []; }
 // v16: Helper to sync the alias after any reassignment (kept for backward compat)
@@ -808,6 +818,8 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
   };
   // v16: Push to window.operationLogs — the single source of truth
   window.operationLogs.push(log);
+  // v182: Update local log timestamp tracker
+  if (log.timestamp > _lastLocalLogTime) _lastLocalLogTime = log.timestamp;
   saveLogs();
 }
 // v159: API模式下写入乐观本地日志，使PK/江湖行资格立即生效（不触发服务端同步）
@@ -823,6 +835,8 @@ function _recordOptimisticLog(studentId, studentName, actionType, details, coinD
     _synced: true, _apiOptimistic: true
   };
   window.operationLogs.push(log);
+  // v182: Update local log timestamp tracker
+  if (log.timestamp > _lastLocalLogTime) _lastLocalLogTime = log.timestamp;
   try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
 }
 function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
