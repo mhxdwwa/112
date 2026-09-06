@@ -57,7 +57,6 @@ const PET_SHOP_ITEMS = {
     ]
   }
 };
-let _shopActiveCategory = 'borders';
 
 function getAllShopItems(){
   const items=[];
@@ -133,46 +132,6 @@ function autoEquipOnBuy(student, itemId){
   }
 }
 
-function showPetShopBrowse(){
-  if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;}
-  if(!currentClassId){showNotification('请先选择班级','','warning');return;}
-  _shopActiveCategory='borders';
-  const html=_buildShopBrowseHTML();
-  showModal('🏪 宠物商店', html, [{text:'关闭',onclick:'closeModal()'}], true);
-}
-function switchShopCategory(catKey){
-  _shopActiveCategory=catKey;
-  const container=document.querySelector('.modal-content');
-  if(container) container.innerHTML=_buildShopBrowseHTML();
-}
-function _buildShopBrowseHTML(){
-  let html='<div style="margin-bottom:14px;text-align:center;color:#886;font-size:13px;">浏览商品分类，进入学生卡片可购买商品</div>';
-  html+='<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px;">';
-  Object.entries(PET_SHOP_ITEMS).forEach(([key,cat])=>{
-    const isActive=key===_shopActiveCategory;
-    html+=`<button onclick="switchShopCategory('${key}')" style="padding:8px 16px;border-radius:18px;border:2px solid ${isActive?'#9b59b6':'#e0d0c8'};background:${isActive?'linear-gradient(135deg,#9b59b6,#8e44ad)':'#fff8f5'};color:${isActive?'#fff':'#665'};font-size:14px;font-weight:${isActive?'700':'500'};cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:5px;">${cat.icon} ${cat.name}<span style="font-size:11px;opacity:0.7;">(${cat.items.length})</span></button>`;
-  });
-  html+='</div>';
-  const cat=PET_SHOP_ITEMS[_shopActiveCategory];
-  html+=`<div style="background:linear-gradient(135deg,#faf5ff,#f5f0ff);border-radius:18px;padding:16px;border:1.5px solid #e8d8f0;">`;
-  html+=`<h4 style="margin:0 0 12px;color:#7b2d8e;font-size:16px;">${cat.icon} ${cat.name}</h4>`;
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">';
-  cat.items.forEach(item=>{
-    html+=`<div style="background:#fff;border-radius:14px;padding:12px;border:1.5px solid #ecdff5;transition:all 0.2s;cursor:default;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(155,89,182,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
-      <div style="font-weight:700;font-size:14px;color:#5b2d6e;margin-bottom:4px;">${item.name}</div>
-      <div style="font-size:11px;color:#998;margin-bottom:6px;line-height:1.4;">${item.desc}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:13px;font-weight:600;color:#e67e22;">💰 ${item.price}</span>
-        <span style="font-size:11px;color:#27ae60;font-weight:600;">📈 +${item.growthBonus}/次</span>
-      </div>
-    </div>`;
-  });
-  html+='</div></div>';
-  html+='<div style="margin-top:12px;padding:10px 14px;background:#fff8f0;border-radius:12px;font-size:12px;color:#886;line-height:1.6;">';
-  html+='<strong>成长加成说明：</strong>只有佩戴的商品才会产生成长值加成。同类道具只能佩戴一个，佩戴后每次互动额外获得对应的成长加成。可在商店中点击「佩戴/取下」切换生效道具。';
-  html+='</div>';
-  return html;
-}
 let _modalShopCategory = 'borders';
 function _buildModalShopSection(student, pet){
   const owned=getStudentOwnedItems(student);

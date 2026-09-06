@@ -4525,11 +4525,6 @@ function applyStudentRestrictions() {
     el.style.display = '';
   });
 
-  // Hide pet shop buttons
-  document.querySelectorAll('button[onclick*="showPetShopBrowse"]').forEach(function(el) {
-    el.style.display = 'none';
-  });
-
   // Hide deleted classes link
   document.querySelectorAll('[onclick*="showDeletedClassesModal"]').forEach(function(el) {
     el.style.display = 'none';
