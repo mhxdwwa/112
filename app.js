@@ -841,10 +841,10 @@ function _recordOptimisticLog(studentId, studentName, actionType, details, coinD
 }
 function recordResetAction(classId, className, fullSnapshot){ const log = { id: _genLocalId(), timestamp: new Date().toISOString(), classId: classId, studentId: classId, studentName: className, actionType: "重置班级宠物", details: `重置班级【${className}】所有宠物数据（${fullSnapshot.length}名学生）`, fullSnapshot: JSON.parse(JSON.stringify(fullSnapshot)), coinDelta: 0, expDelta: 0, reverted: false, _synced: false }; window.operationLogs.push(log); saveLogs(); }
 function _recalcPetLevel(pet){ const cfg = PET_CONFIG[pet.name]; if(cfg){ let newLevel = 1; for(let i=cfg.stages.length-1;i>=0;i--) if(pet.growth>=cfg.stages[i].growthRequired){ newLevel=cfg.stages[i].stage; break; } pet.level = newLevel; } }
-function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>p.id===log.petId); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.indexOf(itemId); if(idx!==-1) student.shopItems.splice(idx,1); } if(typeof unequipItem==='function') unequipItem(student, itemId); } }
+function _revertStudentLog(curClass, log){ const student = curClass.students.find(s=>s.id.toString()===log.studentId.toString()); if(!student) return; let pet = null; if(log.petId && student.pets) pet = student.pets.find(p=>String(p.id)===String(log.petId)); if(!pet && student.pets.length>0) pet = getActivePet(student); if(log.coinDelta !== 0){ student.coins -= log.coinDelta; if(student.coins < 0) student.coins = 0; } if(log.expDelta !== 0 && pet){ pet.growth -= log.expDelta; if(pet.growth < 0) pet.growth = 0; _recalcPetLevel(pet); } if(log.extra && log.extra.causedDeath && pet){ pet.isDead = false; pet.deathGrowth = undefined; delete pet.deathDate; pet.penaltyStreak = 0; if(log.extra.starvation && log.extra.petSnapshot){ const snap=log.extra.petSnapshot; pet.level=snap.level; pet.growth=snap.growth; pet.lastFeedDate=snap.lastFeedDate; pet.todayFeedCount=snap.todayFeedCount||0; pet.todayPlayCount=snap.todayPlayCount||0; pet.lastPlayDate=snap.lastPlayDate; pet.penaltyStreak=snap.penaltyStreak||0; } else if(log.extra.prevGrowth !== undefined){ pet.growth = log.extra.prevGrowth; _recalcPetLevel(pet); } } if(log.extra && log.extra.shopItemId){ const itemId=log.extra.shopItemId; if(student.shopItems){ const idx=student.shopItems.findIndex(function(si){return String(si)===String(itemId);}); if(idx!==-1) student.shopItems.splice(idx,1); } if(typeof unequipItem==='function') unequipItem(student, itemId); } }
 function restoreToLogEntry(logId){
   var _logs = getOpLogs();
-  const log = _logs.find(l => l.id === logId);
+  const log = _logs.find(l => String(l.id) === String(logId));
   if(!log) return;
   const curClass = classesData.find(c=>c.id===currentClassId);
   if(!curClass) return;
@@ -857,7 +857,7 @@ function restoreToLogEntry(logId){
   var _restoreCoinDelta = (snap.coinsAfter !== undefined) ? (snap.coinsAfter - (student.coins || 0)) : 0;
   // 1. Restore coins and pet growth
   if(snap.coinsAfter !== undefined) student.coins = snap.coinsAfter;
-  const pet = (student.pets||[]).find(p=>p.id===log.petId) || getActivePet(student);
+  const pet = (student.pets||[]).find(p=>String(p.id)===String(log.petId)) || getActivePet(student);
   if(pet && snap.growthAfter !== undefined){
     pet.growth = snap.growthAfter;
     if(snap.petLevel) pet.level = snap.petLevel;
@@ -921,7 +921,7 @@ function restoreToLogEntry(logId){
 }
 function revertToLog(logId){
   var _logs = getOpLogs();
-  const log = _logs.find(l => l.id === logId);
+  const log = _logs.find(l => String(l.id) === String(logId));
   if(!log) return;
   if(log.reverted){ showNotification('无法撤销','该操作已被撤销过', 'warning'); return; }
   const curClass = classesData.find(c=>c.id===currentClassId);
@@ -967,7 +967,7 @@ function revertToLog(logId){
       }
     }
     log.reverted = true;
-    const pairLog = _logs.find(l => l.id !== logId && l.extra && l.extra.pkType && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
+    const pairLog = _logs.find(l => String(l.id) !== String(logId) && l.extra && l.extra.pkType && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
     if(pairLog) pairLog.reverted = true;
     saveLogs(); saveClassData();
     // v151: API 模式下同步 PK 撤销到服务器
@@ -1004,7 +1004,7 @@ function revertToLog(logId){
   // PK平局回溯：标记双方为已撤销
   if(log.extra && log.extra.pkType === 'draw'){
     log.reverted = true;
-    const pairLog = _logs.find(l => l.id !== logId && l.extra && l.extra.pkType === 'draw' && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
+    const pairLog = _logs.find(l => String(l.id) !== String(logId) && l.extra && l.extra.pkType === 'draw' && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
     if(pairLog) pairLog.reverted = true;
     saveLogs();
     // v187: 强制刷新历史弹窗（撤销后按钮状态需更新）
@@ -1695,7 +1695,7 @@ function _deletePetFromSupabase(petId, studentId){
 // v119: 恢复被删除的宠物（从历史记录中恢复，不标记为撤销）
 function restoreDeletedPet(logId){
   var _logs = getOpLogs();
-  const log = _logs.find(l => l.id === logId);
+  const log = _logs.find(l => String(l.id) === String(logId));
   if(!log){ showNotification('恢复失败','未找到该操作记录','error'); return; }
   if(log.actionType !== '删除宠物'){ showNotification('恢复失败','该操作不是删除宠物','error'); return; }
   if(!log.extra || !log.extra.deletedPetSnapshot){ showNotification('恢复失败','该记录没有宠物快照数据','error'); return; }

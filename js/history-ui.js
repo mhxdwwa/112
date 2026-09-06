@@ -321,13 +321,13 @@ function _buildHistoryLogItem(log, isCurrentMonth, isStudentView) {
   let btnHtml = '';
   // Only teachers can revoke operations; students cannot
   if(!isReverted && isCurrentMonth && !isStudentView){
-    btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog(${JSON.stringify(log.id)});closeModal();}">撤销</button>`;
+    btnHtml = `<button class="btn btn-secondary" style="padding:5px 14px;font-size:13px;flex-shrink:0;" onclick="if(confirm('确定撤销「${esc(log.studentName)} · ${esc(log.actionType)}」？此操作将还原数据变更。')){revertToLog('${log.id}');closeModal();}">撤销</button>`;
     // v119: Show "恢复删除宠物" button for "删除宠物" logs (before "恢复到此")
     if(log.actionType === '删除宠物' && log.extra && log.extra.deletedPetSnapshot && !log.extra._restored){
-      btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#fff3e0;color:#e65100;border-color:#ffcc80;margin-right:6px;" onclick="if(confirm('确定恢复被删除的宠物「${esc(log.extra.deletedPetSnapshot.nickname||log.extra.deletedPetSnapshot.name)}」？将恢复到删除时的状态。')){restoreDeletedPet(${JSON.stringify(log.id)});}">恢复删除宠物</button>` + btnHtml;
+      btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#fff3e0;color:#e65100;border-color:#ffcc80;margin-right:6px;" onclick="if(confirm('确定恢复被删除的宠物「${esc(log.extra.deletedPetSnapshot.nickname||log.extra.deletedPetSnapshot.name)}」？将恢复到删除时的状态。')){restoreDeletedPet('${log.id}');}">恢复删除宠物</button>` + btnHtml;
     }
     // v46: Show "恢复到此" button for all logs with snapshot
-    if(snap && (snap.coinsAfter !== undefined || snap.quizStateSnapshot)) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry(${JSON.stringify(log.id)})">恢复到此</button>` + btnHtml;
+    if(snap && (snap.coinsAfter !== undefined || snap.quizStateSnapshot)) btnHtml = `<button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;flex-shrink:0;background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;margin-right:6px;" onclick="restoreToLogEntry('${log.id}')">恢复到此</button>` + btnHtml;
   }
   return `<div class="history-log-item ${isReverted?'history-reverted':''}" style="${opacity}border-left:3px solid ${color};padding-left:14px;margin-bottom:8px;">
     <div style="flex:1;min-width:0;">
