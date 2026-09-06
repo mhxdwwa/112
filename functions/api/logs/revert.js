@@ -16,6 +16,21 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Missing required fields' }, 400);
   }
 
+  // v184: 先读取日志，检查是否已撤销，防止重复撤销导致金币/日志竞态丢失
+  const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
+  let existingLogs = [];
+  if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
+    try { existingLogs = JSON.parse(logsR.data[0].operation_logs_json); } catch (e) {}
+  }
+  const logEntry = existingLogs.find(l => l.id === logId);
+  if (!logEntry) {
+    return jsonResponse({ error: 'Log entry not found' }, 404);
+  }
+  // 如果日志的撤销状态已经和目标状态一致，说明是重复请求，直接返回
+  if (logEntry.reverted === reverted) {
+    return jsonResponse({ ok: true, alreadyProcessed: true });
+  }
+
   // 1. 更新金币
   if (coinDelta) {
     const stuR = await sbSelectSingle(env, 'students', `id=eq.${studentId}&select=coins`);
@@ -32,17 +47,9 @@ export const onRequestPost = async ({ request, env }) => {
     }
   }
 
-  // 3. 标记日志为已撤销/恢复
-  const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
-  let existingLogs = [];
-  if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-    try { existingLogs = JSON.parse(logsR.data[0].operation_logs_json); } catch (e) {}
-  }
-  const logEntry = existingLogs.find(l => l.id === logId);
-  if (logEntry) {
-    logEntry.reverted = reverted;
-    await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(existingLogs) }, `id=eq.${classId}`);
-  }
+  // 3. 标记日志为已撤销/恢复（使用前面已读取的 existingLogs，避免再次读取产生竞态）
+  logEntry.reverted = reverted;
+  await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(existingLogs) }, `id=eq.${classId}`);
 
   return jsonResponse({ ok: true });
 };

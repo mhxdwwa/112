@@ -17,10 +17,12 @@ export const onRequestPost = async ({ request, env }) => {
   }
 
   const jsonFields = ['quiz_state', 'shop_items', 'equipped_items', 'snack_requests'];
+  // v184: 移除 'coins' — 金币变更必须通过 coins-and-pet 或 batch-coins 端点（会记录操作日志），
+  // 防止通过 update 端点绕过审计追踪修改金币
   const allowedFields = [
     'quiz_state', 'shop_items', 'equipped_items', 'last_checkin_date',
     'last_jianghu_date', 'last_pk_date', 'pk_count_today', 'active_pet_id',
-    'snack_requests', 'xiandan', 'password', 'name', 'coins'
+    'snack_requests', 'xiandan', 'password', 'name'
   ];
   const filteredUpdates = {};
 

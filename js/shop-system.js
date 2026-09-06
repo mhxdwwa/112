@@ -223,10 +223,18 @@ function modalBuyItem(itemId){
     refreshCurrentStudentModal();
     renderHomePetGrid();
     showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
-    // 两个 API 并行发出，不阻塞 UI
+    // v184: 改为顺序调用 — 先扣金币，成功后再保存商品状态
+    // 避免并行时 saveShopState 成功但 changeStudentCoins 失败导致学生免费拿商品
     window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null).then(function(r){
       if(r.ok){
         student.coins=r.coinsAfter;
+        // 扣金币成功后才保存商品状态
+        window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
+          if(!r2.ok){
+            console.warn('[API] saveShopState error:', r2.error);
+            // 金币已扣但商品未保存，记录警告供手动恢复
+          }
+        });
       } else if(r.error==='Insufficient balance'){
         // 回滚
         student.coins += item.price;
@@ -236,9 +244,6 @@ function modalBuyItem(itemId){
       } else {
         console.warn('[API] changeStudentCoins error:', r.error);
       }
-    });
-    window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
-      if(!r2.ok) console.warn('[API] saveShopState error:', r2.error);
     });
   } else {
     // 非 API 模式：本地扣金币 + 保存
