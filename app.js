@@ -1158,7 +1158,7 @@ function classDragEnd(e){this.classList.remove('dragging');classDragIdx=null;doc
 function classDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';if(+this.dataset.classIdx!==classDragIdx)this.classList.add('drag-over');}
 function classDragLeave(e){this.classList.remove('drag-over');}
 function classDrop(e){e.preventDefault();this.classList.remove('drag-over');const toIdx=+this.dataset.classIdx;if(classDragIdx===null||classDragIdx===toIdx)return;const moved=classesData.splice(classDragIdx,1)[0];classesData.splice(toIdx,0,moved);saveClassData();renderClassList();}
-function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');/* v130: 按需加载 rank-announcement */if(typeof loadModule==='function'){loadModule('rank-announcement').then(function(){if(typeof showRankAnnouncement==='function'){setTimeout(function(){showRankAnnouncement(id);},800);}});}else{if(typeof showRankAnnouncement==='function'){setTimeout(function(){showRankAnnouncement(id);},800);}}if(typeof _updateSnackStatusBadge==='function'){setTimeout(_updateSnackStatusBadge,100);}}
+function selectClass(id){currentClassId=id;renderClassList();scheduleAllRenders();showNotification('班级切换','已切换','info');if(typeof _updateSnackStatusBadge==='function'){setTimeout(_updateSnackStatusBadge,100);}}
 // === v81: 隐藏/显示班级功能（教师专用）===
 function getHiddenClassIds(){
   try { return JSON.parse(localStorage.getItem('hiddenClassIds')) || []; } catch(e) { return []; }

@@ -139,6 +139,26 @@ function _loadFromCache() {
   }
 }
 
+/* ===== v191: 零食自定义配置持久化 ===== */
+// customSnacks 不存储在 Supabase，仅保存在 localStorage。
+// Supabase 加载会重建 classesData，丢失 customSnacks。
+// 此函数从独立 localStorage key 恢复 customSnacks 到 classesData。
+function _restoreCustomSnacksFromLS() {
+  if (!Array.isArray(classesData)) return;
+  classesData.forEach(function(cls) {
+    if (cls.id == null) return;
+    try {
+      var raw = localStorage.getItem('_customSnacks_' + cls.id);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          cls.customSnacks = parsed;
+        }
+      }
+    } catch(e) {}
+  });
+}
+
 /* ===== v54: Bandwidth Optimization ===== */
 // Classes table columns to select in load/refresh queries.
 // Excludes operation_logs_json (2MB+) which is loaded separately by _loadOperationLogs().
@@ -931,6 +951,7 @@ function _loadTeacherFromSupabase() {
       
       var newClassesData = _buildTeacherClasses(classes, students, pets);
       classesData = newClassesData;
+      _restoreCustomSnacksFromLS();
       
       console.log('[DAL] v143 API loaded: ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
       newClassesData.forEach(function(c) {
@@ -988,6 +1009,7 @@ function _loadTeacherFromSupabase() {
 
     var newClassesData = _buildTeacherClasses(classes, students, pets);
     classesData = newClassesData;
+    _restoreCustomSnacksFromLS();
 
     console.log('[DAL] Loaded ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
     newClassesData.forEach(function(c) {
@@ -1123,6 +1145,7 @@ function _loadStudentFromSupabase() {
       students: classmates,
       createdAt: classInfo.created_at || null
     }];
+    _restoreCustomSnacksFromLS();
 
     // Record base coins for this student — used in _syncStudentToSupabase to compute local delta
     if (myStudent) {
@@ -4917,12 +4940,6 @@ function _postInitSetup() {
     }, 3000);
   }
   
-  // 排行榜滚动公告：数据加载完成后显示
-  setTimeout(function() {
-    if (typeof showRankAnnouncement === 'function') {
-      showRankAnnouncement();
-    }
-  }, 2000);
 }
 
 // Keep initDAL as an alias for backward compatibility

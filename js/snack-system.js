@@ -38,7 +38,27 @@ function saveCustomSnacks(snacks) {
   const curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) return;
   curClass.customSnacks = snacks;
+  // v191: 同时保存到独立 localStorage key，防止 Supabase 加载时丢失
+  try { localStorage.setItem('_customSnacks_' + currentClassId, JSON.stringify(snacks)); } catch(e) {}
   saveClassData();
+}
+
+// v191: 从独立 localStorage 恢复 customSnacks 到 classesData
+// Supabase 加载会重建 classesData，丢失 customSnacks，此函数将其恢复
+function _mergeCustomSnacksFromStorage() {
+  if (typeof classesData === 'undefined' || !Array.isArray(classesData)) return;
+  classesData.forEach(function(cls) {
+    if (cls.id == null) return;
+    try {
+      var raw = localStorage.getItem('_customSnacks_' + cls.id);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          cls.customSnacks = parsed;
+        }
+      }
+    } catch(e) {}
+  });
 }
 
 function showSnackShopModal() {
@@ -757,6 +777,8 @@ function resetToDefaultSnacks() {
   const curClass = classesData.find(c => c.id === currentClassId);
   if (curClass) {
     delete curClass.customSnacks;
+    // v191: 同时清除独立 localStorage key
+    try { localStorage.removeItem('_customSnacks_' + currentClassId); } catch(e) {}
     saveClassData();
   }
   showSnackManageModal();

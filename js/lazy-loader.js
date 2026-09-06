@@ -14,11 +14,9 @@
     'library':         { src: 'js/library-system.js?v=136' },
 
     // --- 弹窗/按钮模块 ---
-    'snack-system':    { src: 'js/snack-system.js?v=136' },
+    'snack-system':    { src: 'js/snack-system.js?v=191' },
     'history-ui':      { src: 'js/history-ui.js?v=172' },
     'pet-modal':       { src: 'js/pet-modal.js?v=136' },
-    'rank-announcement': { src: 'js/rank-announcement.js?v=136' },
-
     // --- 游戏模块 ---
     'quiz-bank':       { src: 'quiz-bank.js?v=2' },
     'quiz':            { src: 'quiz.js?v=166', deps: ['quiz-bank'] },
