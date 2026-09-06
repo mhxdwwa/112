@@ -3417,22 +3417,48 @@ function _applyRealtimeUpdate(table, payload) {
       if (newData.today_play_count !== undefined) targetPet.todayPlayCount = newData.today_play_count;
       if (newData.penalty_streak !== undefined) targetPet.penaltyStreak = newData.penalty_streak;
     } else {
-      // 新宠物，添加到列表
-      targetStudent.pets.push({
-        id: newData.id,
-        name: newData.name || '',
-        nickname: newData.nickname || '',
-        level: newData.level || 1,
-        growth: newData.growth || 0,
-        coins: newData.coins || 0,
-        isActive: !!newData.is_active,
-        isDead: !!newData.is_dead,
-        lastFeedDate: newData.last_feed_date || null,
-        lastPlayDate: newData.last_play_date || null,
-        todayFeedCount: newData.today_feed_count || 0,
-        todayPlayCount: newData.today_play_count || 0,
-        penaltyStreak: newData.penalty_streak || 0
-      });
+      // v168: 新宠物 — 但先检查本地是否已有同名的负ID宠物（本地领养后API尚未返回ID的情况）
+      // 避免 Realtime INSERT 事件导致重复宠物（显示 ×2 错误标识）
+      var _foundLocalNewPet = false;
+      if (payload.eventType === 'INSERT') {
+        for (var m = 0; m < targetStudent.pets.length; m++) {
+          var _lp = targetStudent.pets[m];
+          if (_lp.id < 0 && _lp.name === (newData.name || '') && _lp.nickname === (newData.nickname || '')) {
+            // 匹配到本地新宠物 — 更新ID而不是添加新条目
+            console.log('[DAL] v168 Matching Realtime INSERT to local new pet:', _lp.id, '→', newData.id);
+            _lp.id = newData.id;
+            // 同步其他字段（以服务器为准）
+            if (newData.level !== undefined) _lp.level = newData.level || 1;
+            if (newData.growth !== undefined) _lp.growth = newData.growth || 0;
+            if (newData.is_active !== undefined) _lp.isActive = !!newData.is_active;
+            if (newData.is_dead !== undefined) _lp.isDead = !!newData.is_dead;
+            // 更新 activePetId 如果指向旧的负ID
+            if (Number(targetStudent.activePetId) === Number(_lp.id) || targetStudent.activePetId < 0) {
+              targetStudent.activePetId = newData.id;
+            }
+            _foundLocalNewPet = true;
+            break;
+          }
+        }
+      }
+      if (!_foundLocalNewPet) {
+        // 真正的新宠物，添加到列表
+        targetStudent.pets.push({
+          id: newData.id,
+          name: newData.name || '',
+          nickname: newData.nickname || '',
+          level: newData.level || 1,
+          growth: newData.growth || 0,
+          coins: newData.coins || 0,
+          isActive: !!newData.is_active,
+          isDead: !!newData.is_dead,
+          lastFeedDate: newData.last_feed_date || null,
+          lastPlayDate: newData.last_play_date || null,
+          todayFeedCount: newData.today_feed_count || 0,
+          todayPlayCount: newData.today_play_count || 0,
+          penaltyStreak: newData.penalty_streak || 0
+        });
+      }
     }
   }
   

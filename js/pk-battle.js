@@ -2563,10 +2563,9 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   }
   // v156: Sync ALL PK data to server (coins, growth, PK count)
   if(window.USE_API && window.ApiMigration) {
-    // Sync PK count
-    window.ApiMigration.updateStudent(student1.id, {pk_count_today: student1.pkCountToday, last_pk_date: student1.lastPkDate});
-    window.ApiMigration.updateStudent(student2.id, {pk_count_today: student2.pkCountToday, last_pk_date: student2.lastPkDate});
-    // Sync winner coins + growth via API (server also writes operation log)
+    // v168: 先同步金币+成长（原子API），再同步PK计数（普通update）
+    // 顺序很重要：coinsAndPet 先写入确保服务器有最新的金币值，
+    // 避免 updateStudent 的 Realtime 回传携带旧金币值覆盖
     if(p1HP <= 0 && p2HP <= 0) {
       // Draw — no coin/growth changes, but sync log to server
       window.ApiMigration.coinsAndPet(student1, 0, [{
@@ -2599,6 +2598,9 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
       });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(loserStudent.id, loserStudent.name, 'PK失败', '败给 '+winnerStudent.name, penaltyCoin, loserGrowthDelta, loserPet.id);
     }
+    // v168: PK计数放在最后（不影响金币/成长值的Realtime回传顺序）
+    window.ApiMigration.updateStudent(student1.id, {pk_count_today: student1.pkCountToday, last_pk_date: student1.lastPkDate});
+    window.ApiMigration.updateStudent(student2.id, {pk_count_today: student2.pkCountToday, last_pk_date: student2.lastPkDate});
   }
   // Clean up seeded RNG
   _pkBattleRng = null;
