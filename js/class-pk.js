@@ -1197,13 +1197,15 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
   if(window.USE_API && window.ApiMigration) {
     if(p1HP <= 0 && p2HP <= 0) {
       // Draw — sync coins + growth for both
+      // v185: 顺序执行，避免并行写入导致 operation_logs_json 竞态丢失
       window.ApiMigration.coinsAndPet(student1, 5, [{
         petId: pet1.id, updates: { growth: pet1.growth, level: pet1.level }
-      }], { actionType: '课堂PK平局', details: student1.name + ' vs ' + student2.name + ' 平局', expDelta: 3, petId: pet1.id });
+      }], { actionType: '课堂PK平局', details: student1.name + ' vs ' + student2.name + ' 平局', expDelta: 3, petId: pet1.id }).then(function() {
+        window.ApiMigration.coinsAndPet(student2, 5, [{
+          petId: pet2.id, updates: { growth: pet2.growth, level: pet2.level }
+        }], { actionType: '课堂PK平局', details: student2.name + ' vs ' + student1.name + ' 平局', expDelta: 3, petId: pet2.id });
+      });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(student1.id, student1.name, '课堂PK平局', student1.name+' vs '+student2.name+' 平局', 5, 3, pet1.id);
-      window.ApiMigration.coinsAndPet(student2, 5, [{
-        petId: pet2.id, updates: { growth: pet2.growth, level: pet2.level }
-      }], { actionType: '课堂PK平局', details: student2.name + ' vs ' + student1.name + ' 平局', expDelta: 3, petId: pet2.id });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(student2.id, student2.name, '课堂PK平局', student2.name+' vs '+student1.name+' 平局', 5, 3, pet2.id);
     } else {
       const w = p2HP <= 0 ? student1 : student2;
@@ -1212,15 +1214,20 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
       const lPet = p2HP <= 0 ? pet2 : pet1;
       const wCoin = 20, wGrowth = 5;
       const lCoin = 5, lGrowth = 3;
+      // v185: 顺序执行，避免并行写入导致 operation_logs_json 竞态丢失
       window.ApiMigration.coinsAndPet(w, wCoin, [{
         petId: wPet.id, updates: { growth: wPet.growth, level: wPet.level }
-      }], { actionType: '课堂PK胜利', details: '击败 ' + l.name + '（' + (lPet.nickname||lPet.name) + '）', expDelta: wGrowth, petId: wPet.id });
+      }], { actionType: '课堂PK胜利', details: '击败 ' + l.name + '（' + (lPet.nickname||lPet.name) + '）', expDelta: wGrowth, petId: wPet.id }).then(function() {
+        window.ApiMigration.coinsAndPet(l, lCoin, [{
+          petId: lPet.id, updates: { growth: lPet.growth, level: lPet.level }
+        }], { actionType: '课堂PK失败', details: '败给 ' + w.name + '（' + (wPet.nickname||wPet.name) + '）', expDelta: lGrowth, petId: lPet.id });
+      });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(w.id, w.name, '课堂PK胜利', '击败 '+l.name, wCoin, wGrowth, wPet.id);
-      window.ApiMigration.coinsAndPet(l, lCoin, [{
-        petId: lPet.id, updates: { growth: lPet.growth, level: lPet.level }
-      }], { actionType: '课堂PK失败', details: '败给 ' + w.name + '（' + (wPet.nickname||wPet.name) + '）', expDelta: lGrowth, petId: lPet.id });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(l.id, l.name, '课堂PK失败', '败给 '+w.name, lCoin, lGrowth, lPet.id);
     }
+  }
+  }
+  }
   }
 }
 

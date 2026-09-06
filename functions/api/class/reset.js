@@ -68,12 +68,19 @@ export const onRequestPost = async ({ request, env }) => {
     }
 
     // 重置所有学生数据
+    // v185: 补全遗漏字段 — 冷却日期、PK次数、零食请求、活跃宠物ID
     const stuUpdate = await sbUpdate(env, 'students', {
       coins: 50,
       xiandan: 0,
       equipped_items: '{}',
       shop_items: '[]',
-      quiz_state: DEFAULT_QUIZ_STATE
+      quiz_state: DEFAULT_QUIZ_STATE,
+      snack_requests: '[]',
+      last_checkin_date: null,
+      last_jianghu_date: null,
+      last_pk_date: null,
+      pk_count_today: 0,
+      active_pet_id: null
     }, `class_id=eq.${classId}`);
     if (stuUpdate.error) {
       return jsonResponse({ error: 'Failed to reset students', details: stuUpdate.error }, 500);

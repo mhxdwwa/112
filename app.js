@@ -853,6 +853,8 @@ function restoreToLogEntry(logId){
   const snap = log.snapshot;
   if(!snap){ showNotification('恢复失败','该日志没有快照数据', 'error'); return; }
   if(!confirm(`确定将「${log.studentName}」的数据恢复到 ${log.timestamp} 的状态？\n这将覆盖当前的金币、成长值、小猪快跑和快乐跑数据。`)) return;
+  // v185: 先计算金币差值，再修改本地数据（否则 delta 永远为 0）
+  var _restoreCoinDelta = (snap.coinsAfter !== undefined) ? (snap.coinsAfter - (student.coins || 0)) : 0;
   // 1. Restore coins and pet growth
   if(snap.coinsAfter !== undefined) student.coins = snap.coinsAfter;
   const pet = (student.pets||[]).find(p=>p.id===log.petId) || getActivePet(student);
@@ -893,9 +895,9 @@ function restoreToLogEntry(logId){
       window.ApiMigration.saveQuizState(student.id, null, student.quizState ? JSON.stringify(student.quizState) : null);
     }
     // v166: 金币差异通过 changeStudentCoins 原子写入
-    if(window.ApiMigration.changeStudentCoins && snap.coinsAfter !== undefined){
-      var coinDelta = snap.coinsAfter - (student.coins || 0);
-      if(coinDelta !== 0) window.ApiMigration.changeStudentCoins(student, coinDelta, '恢复数据', '恢复到 '+log.timestamp, 0, pet ? pet.id : null);
+    // v185: 使用预计算的差值（_restoreCoinDelta），避免先赋值后计算导致 delta 为 0
+    if(window.ApiMigration.changeStudentCoins && snap.coinsAfter !== undefined && _restoreCoinDelta !== 0){
+      window.ApiMigration.changeStudentCoins(student, _restoreCoinDelta, '恢复数据', '恢复到 '+log.timestamp, 0, pet ? pet.id : null);
     }
     if(pet && window.ApiMigration.updatePet){
       window.ApiMigration.updatePet(pet.id, {growth: pet.growth, level: pet.level, is_dead: pet.isDead||false});
