@@ -38,27 +38,27 @@ function saveCustomSnacks(snacks) {
   const curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) return;
   curClass.customSnacks = snacks;
-  // v191: 同时保存到独立 localStorage key，防止 Supabase 加载时丢失
-  try { localStorage.setItem('_customSnacks_' + currentClassId, JSON.stringify(snacks)); } catch(e) {}
+  // v192: 保存到统一的 localStorage key，所有班级共享同一份零食配置
+  try { localStorage.setItem('_customSnacks', JSON.stringify(snacks)); } catch(e) {}
   saveClassData();
 }
 
-// v191: 从独立 localStorage 恢复 customSnacks 到 classesData
-// Supabase 加载会重建 classesData，丢失 customSnacks，此函数将其恢复
+// v192: 从统一 localStorage 恢复 customSnacks 到所有班级
+// 零食配置是教师账户级别的全局设置，所有班级共享同一份配置
 function _mergeCustomSnacksFromStorage() {
   if (typeof classesData === 'undefined' || !Array.isArray(classesData)) return;
-  classesData.forEach(function(cls) {
-    if (cls.id == null) return;
-    try {
-      var raw = localStorage.getItem('_customSnacks_' + cls.id);
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+  try {
+    var raw = localStorage.getItem('_customSnacks');
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // 将同一份零食配置应用到所有班级
+        classesData.forEach(function(cls) {
           cls.customSnacks = parsed;
-        }
+        });
       }
-    } catch(e) {}
-  });
+    }
+  } catch(e) {}
 }
 
 function showSnackShopModal() {
@@ -774,13 +774,13 @@ function deleteSnack(index) {
 
 function resetToDefaultSnacks() {
   if (!confirm('确定恢复默认零食吗？自定义零食将被清除。')) return;
-  const curClass = classesData.find(c => c.id === currentClassId);
-  if (curClass) {
-    delete curClass.customSnacks;
-    // v191: 同时清除独立 localStorage key
-    try { localStorage.removeItem('_customSnacks_' + currentClassId); } catch(e) {}
-    saveClassData();
-  }
+  // v192: 清除所有班级的 customSnacks，因为零食配置是全局共享的
+  classesData.forEach(function(cls) {
+    delete cls.customSnacks;
+  });
+  // v192: 清除统一的 localStorage key
+  try { localStorage.removeItem('_customSnacks'); } catch(e) {}
+  saveClassData();
   showSnackManageModal();
   showNotification('恢复成功', '已恢复默认零食', 'success');
 }

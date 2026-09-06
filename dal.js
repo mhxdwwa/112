@@ -139,24 +139,25 @@ function _loadFromCache() {
   }
 }
 
-/* ===== v191: 零食自定义配置持久化 ===== */
+/* ===== v192: 零食自定义配置持久化（全局共享） ===== */
 // customSnacks 不存储在 Supabase，仅保存在 localStorage。
 // Supabase 加载会重建 classesData，丢失 customSnacks。
-// 此函数从独立 localStorage key 恢复 customSnacks 到 classesData。
+// v192: 零食配置是教师账户级别的全局设置，所有班级共享同一份配置
+// 此函数从统一 localStorage key 恢复 customSnacks 到所有班级
 function _restoreCustomSnacksFromLS() {
   if (!Array.isArray(classesData)) return;
-  classesData.forEach(function(cls) {
-    if (cls.id == null) return;
-    try {
-      var raw = localStorage.getItem('_customSnacks_' + cls.id);
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+  try {
+    var raw = localStorage.getItem('_customSnacks');
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // 将同一份零食配置应用到所有班级
+        classesData.forEach(function(cls) {
           cls.customSnacks = parsed;
-        }
+        });
       }
-    } catch(e) {}
-  });
+    }
+  } catch(e) {}
 }
 
 /* ===== v54: Bandwidth Optimization ===== */
