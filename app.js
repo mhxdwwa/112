@@ -2062,7 +2062,7 @@ let _gridObserver=null, _gridBatchBusy=false;
 function _studentDataHash(s) {
   var p = getActivePet(s);
   if (!p) return s.id + '_nopet_' + (s.coins||0) + '_' + (s.xiandan||0);
-  return s.id + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (s.pets?s.pets.length:0);
+  return s.id + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (p.nickname||'') + '_' + (s.pets?s.pets.length:0);
 }
 
 function _generateStudentCardHTML(s){

@@ -4,6 +4,25 @@ let pkState = {
   isFighting: false
 };
 
+// v170: 从 jianghu.js 迁移到此（pk-battle.js 是主要消费者，且 jianghu.js 依赖 pk-battle.js，
+// 之前放在 jianghu.js 会导致按需加载 pk-battle 时 hasPKQualificationToday 未定义，PK 页面崩溃）
+function hasPKQualificationToday(studentId) {
+  const today = new Date().toDateString();
+  let total = 0;
+  const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡', '取金阁', '小猪快跑', '宠物消消乐'];
+  var logs = getOpLogs();
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const log = logs[i];
+    if (log.reverted) continue;
+    const logDate = new Date(log.timestamp).toDateString();
+    if (logDate !== today) continue;
+    if (log.studentId && log.studentId.toString() === studentId.toString() && log.coinDelta > 0 && pkValidTypes.includes(log.actionType)) {
+      total += log.coinDelta;
+    }
+  }
+  return total >= 5;
+}
+
 function resetDailyPkCountIfNeeded(student) {
   const today = new Date().toDateString();
   if (student.lastPkDate !== today) {

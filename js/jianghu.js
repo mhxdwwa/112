@@ -19,24 +19,7 @@ function getTodayCoinGain(studentId) {
   return total;
 }
 
-// v14: 判断学生今日是否有资格参加PK（今日通过奖惩/批量奖惩/打卡获得>=5金币）
-function hasPKQualificationToday(studentId) {
-  const today = new Date().toDateString();
-  let total = 0;
-  // v15: Always read from window.operationLogs for cross-script consistency
-  const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡', '取金阁', '小猪快跑', '宠物消消乐'];
-  var logs = getOpLogs();
-  for (let i = logs.length - 1; i >= 0; i--) {
-    const log = logs[i];
-    if (log.reverted) continue;
-    const logDate = new Date(log.timestamp).toDateString();
-    if (logDate !== today) continue;
-    if (log.studentId && log.studentId.toString() === studentId.toString() && log.coinDelta > 0 && pkValidTypes.includes(log.actionType)) {
-      total += log.coinDelta;
-    }
-  }
-  return total >= 5;
-}
+// v170: hasPKQualificationToday 已迁移到 pk-battle.js（避免按需加载时未定义导致PK页面崩溃）
 
 function renderJianghuColumn(cur, validStudents) {
   const isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
