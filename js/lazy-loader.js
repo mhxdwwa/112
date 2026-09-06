@@ -15,7 +15,7 @@
 
     // --- 弹窗/按钮模块 ---
     'snack-system':    { src: 'js/snack-system.js?v=136' },
-    'history-ui':      { src: 'js/history-ui.js?v=136' },
+    'history-ui':      { src: 'js/history-ui.js?v=172' },
     'pet-modal':       { src: 'js/pet-modal.js?v=136' },
     'rank-announcement': { src: 'js/rank-announcement.js?v=136' },
 

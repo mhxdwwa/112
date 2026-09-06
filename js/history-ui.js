@@ -15,6 +15,7 @@ function _historyActionColor(type){
   return '#886655';
 }
 var _isStudentHistoryView = false; // true when a student is viewing history
+var _historyExpandedDates = {}; // Track which date groups user has expanded: {dateKey: true}
  function showHistoryModal(){
   const curClass = classesData.find(c=>c.id===currentClassId);
   const className = curClass ? curClass.name : '未选择班级';
@@ -23,6 +24,7 @@ var _isStudentHistoryView = false; // true when a student is viewing history
 
   // v104: Show modal IMMEDIATELY with cached/local data, then refresh in background
   // This eliminates the 2+ second wait for network calls before showing the modal
+  _historyExpandedDates = {}; // Reset expand state on fresh open
   var showFn = function() {
     const months = getAvailableMonths();
     if(months.length===0){
@@ -96,15 +98,20 @@ function refreshHistoryModalIfOpen(){
     var savedScrollTop = logList ? logList.scrollTop : 0;
     // 重建内容
     contentEl.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
-    // 恢复滚动位置
+    // 恢复滚动位置（使用 requestAnimationFrame 确保 DOM 已更新）
     var newLogList = contentEl.querySelector('#historyLogList');
-    if(newLogList) newLogList.scrollTop = savedScrollTop;
+    if(newLogList) {
+      requestAnimationFrame(function() {
+        newLogList.scrollTop = savedScrollTop;
+      });
+    }
   }
   // Also update the title to reflect latest data
   if(titleEl) titleEl.textContent = '\uD83D\uDCDC 历史操作记录【' + className + '】';
 }
 function switchHistoryMonth(month){
   _currentHistoryMonth = month;
+  _historyExpandedDates = {}; // Reset expand state when switching months
   const curClass = classesData.find(c=>c.id===currentClassId);
   const className = curClass ? curClass.name : '未选择班级';
   const months = getAvailableMonths();
@@ -184,8 +191,8 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     if (dateKey === today.toISOString().slice(0, 10)) dateLabel = '今天';
     else if (dateKey === yesterday.toISOString().slice(0, 10)) dateLabel = '昨天';
     
-    // Only expand today by default
-    const isExpanded = idx === 0;
+    // Only expand today by default, or respect user's previous expand state
+    const isExpanded = _historyExpandedDates[dateKey] || (idx === 0 && !_historyExpandedDates.hasOwnProperty(dateKey));
     const logCount = dateLogs.length;
     
     html += `<div class="history-date-group" style="margin-bottom:12px;">`;
@@ -221,6 +228,7 @@ function toggleDateGroup(dateKey) {
   if (isHidden) {
     content.style.display = 'block';
     if (arrow) arrow.style.transform = 'rotate(90deg)';
+    _historyExpandedDates[dateKey] = true; // Track expanded state
     
     // Lazy load: if content is placeholder, render actual logs
     if (content.children.length === 1 && content.children[0].textContent.includes('点击展开')) {
@@ -251,6 +259,7 @@ function toggleDateGroup(dateKey) {
   } else {
     content.style.display = 'none';
     if (arrow) arrow.style.transform = 'rotate(0deg)';
+    delete _historyExpandedDates[dateKey]; // Track collapsed state
   }
 }
 
@@ -350,9 +359,13 @@ function _refreshHistoryContent() {
     var logList = container.querySelector('#historyLogList');
     var savedScrollTop = logList ? logList.scrollTop : 0;
     container.innerHTML = _buildHistoryHTML(curClass, className, months, _currentHistoryMonth);
-    // 恢复滚动位置
+    // 恢复滚动位置（使用 requestAnimationFrame 确保 DOM 已更新）
     var newLogList = container.querySelector('#historyLogList');
-    if(newLogList) newLogList.scrollTop = savedScrollTop;
+    if(newLogList) {
+      requestAnimationFrame(function() {
+        newLogList.scrollTop = savedScrollTop;
+      });
+    }
   }
 }
 function showHistoryStudentFilter() {
