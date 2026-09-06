@@ -148,7 +148,11 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
 .home-pet-inner.pet-maxed:hover{border:3px solid #ffaa00;box-shadow:0 0 18px 4px rgba(255,200,0,0.4);}
 /* ===== 满级特效结束 ===== */
 .growable-pet-hint{font-size:11px;color:#9b59b6;font-weight:600;margin-top:1px;}
-.home-pet-middle{width:100%;height:50px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#c04058;border-bottom:1px solid rgba(200,180,170,0.4);letter-spacing:0.5px;}
+.home-pet-middle{width:100%;height:50px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#c04058;border-bottom:1px solid rgba(200,180,170,0.4);letter-spacing:0.5px;gap:6px;overflow:hidden;padding:0 8px;}
+/* v172: Inline title badge in name line */
+.inline-title{position:static!important;transform:none!important;animation:shopTitlePulseInline 2s ease-in-out infinite!important;font-size:11px!important;padding:2px 8px!important;border-radius:10px!important;flex-shrink:0;}
+.pet-name-line{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+@keyframes shopTitlePulseInline{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 .home-pet-bottom{width:100%;height:60px;display:flex;flex-direction:column;align-items:stretch;justify-content:center;font-size:13px;color:#6a4a4a;background:linear-gradient(180deg,#faf5f2,#f5eee9);gap:2px;border-radius:0 0 22px 22px;padding:4px 10px;}
 .home-pet-bottom-row{display:flex;align-items:center;justify-content:space-between;width:100%;}
 .pet-bottom-growth{font-weight:700;text-align:left;}
