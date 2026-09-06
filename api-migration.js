@@ -792,6 +792,61 @@
     });
   }
 
+  /**
+   * v178: 批量原子修改金币 + 记录操作日志
+   * 解决并发竞态条件：多个并行 API 调用导致 operation_logs_json 只有最后一个写入的日志存活
+   * 
+   * @param {Array} items - [{ studentId, studentName, coinDelta, actionType, details, expDelta, petId, petUpdates, checkBalance }]
+   * @returns {Promise<Object>} - { ok, results, logCount }
+   */
+  function batchCoinsViaApi(items) {
+    if (!Array.isArray(items) || items.length === 0) {
+      return Promise.resolve({ error: 'Invalid items' });
+    }
+
+    var classId = getCurrentClassId();
+    if (!classId) {
+      return Promise.resolve({ error: 'No class selected' });
+    }
+
+    return apiRequest('/student/batch-coins', {
+      classId: classId,
+      items: items
+    }).then(function(result) {
+      if (result.ok) {
+        // 更新本地数据 + 回声保护
+        var results = result.results || [];
+        results.forEach(function(r) {
+          if (r.ok) {
+            // 更新 _myBaseCoins（如果是当前学生）
+            if (typeof _myBaseCoins !== 'undefined') _myBaseCoins = r.coinsAfter;
+            // 回声保护
+            if (typeof _markRowWritten === 'function') _markRowWritten('students', r.studentId);
+          }
+        });
+        if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
+        // 宠物回声保护
+        items.forEach(function(item) {
+          if (item.petUpdates) {
+            item.petUpdates.forEach(function(pu) {
+              if (pu.petId && typeof _markRowWritten === 'function') _markRowWritten('pets', pu.petId);
+              if (pu.updates && pu.updates.growth !== undefined && typeof _myBasePets !== 'undefined' && _myBasePets) {
+                _myBasePets[pu.petId] = pu.updates.growth;
+              }
+            });
+          }
+        });
+        console.log('[API] batch-coins ok:', results.length, 'students,', result.logCount, 'logs');
+      } else {
+        console.error('[API] batch-coins error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] batch-coins request failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
+
   // ============================================================
   // 导出到全局
   // ============================================================
@@ -802,6 +857,7 @@
     
     // 金币
     changeStudentCoins: changeStudentCoinsViaApi,
+    batchCoins: batchCoinsViaApi,
     
     // 宠物
     coinsAndPet: coinsAndPetViaApi,
