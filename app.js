@@ -943,8 +943,8 @@ function revertToLog(logId){
     }
     scheduleAllRenders();
     if(currentModalStudentId) refreshCurrentStudentModal();
-    // v185: 刷新历史弹窗
-    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
+    // v187: 强制刷新历史弹窗（撤销后按钮状态需更新）
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     showNotification('撤销成功', `已撤销「重置班级宠物」，${log.fullSnapshot.length}名学生数据已恢复`, 'success');
     return;
   }
@@ -996,8 +996,8 @@ function revertToLog(logId){
     }
     scheduleAllRenders();
     if(currentModalStudentId) refreshCurrentStudentModal();
-    // v185: 刷新历史弹窗
-    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
+    // v187: 强制刷新历史弹窗（撤销后按钮状态需更新）
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     showNotification('撤销成功', `已撤销 ${log.studentName} vs ${log.extra.opponentName} 的PK结果`, 'success');
     return;
   }
@@ -1007,8 +1007,8 @@ function revertToLog(logId){
     const pairLog = _logs.find(l => l.id !== logId && l.extra && l.extra.pkType === 'draw' && l.extra.opponentId && l.extra.opponentId.toString() === log.studentId.toString() && Math.abs(l.id - log.id) < 5);
     if(pairLog) pairLog.reverted = true;
     saveLogs();
-    // v185: 刷新历史弹窗
-    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
+    // v187: 强制刷新历史弹窗（撤销后按钮状态需更新）
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     showNotification('撤销成功', `已撤销 ${log.studentName} 的PK平局记录`, 'success');
     return;
   }
@@ -1049,8 +1049,8 @@ function revertToLog(logId){
     }
     scheduleAllRenders();
     if(currentModalStudentId && currentModalStudentId.toString()===log.studentId.toString()) refreshCurrentStudentModal();
-    // v185: 刷新历史弹窗
-    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
+    // v187: 强制刷新历史弹窗（撤销后按钮状态需更新）
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     showNotification('撤销成功', `已恢复 ${log.studentName} 的宠物「${restoredPet.nickname||restoredPet.name}」`, 'success');
     return;
   }
@@ -1072,8 +1072,8 @@ function revertToLog(logId){
   }
   scheduleAllRenders();
   if(currentModalStudentId && currentModalStudentId.toString()===log.studentId.toString()) refreshCurrentStudentModal();
-  // v185: 刷新历史弹窗，更新按钮状态为"已撤销"
-  if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen();
+  // v187: 强制刷新历史弹窗，更新按钮状态为"已撤销"
+  if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
   const snap = log.snapshot;
   let revertDetail = `已撤销 ${log.studentName} 的「${log.actionType}」`;
   if(snap){

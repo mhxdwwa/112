@@ -81,7 +81,8 @@ var _historyExpandedDates = {}; // Track which date groups user has expanded: {d
   });
 }
 // v12: Refresh history modal content when it's open and new logs arrive (Realtime)
-function refreshHistoryModalIfOpen(){
+// v187: forceRebuild 参数 — 撤销操作时强制重建 HTML（日志数量不变但 reverted 状态变了）
+function refreshHistoryModalIfOpen(forceRebuild){
   var modalOverlay = document.querySelector('#modalContainer .modal-overlay');
   if(!modalOverlay) return;
   var titleEl = modalOverlay.querySelector('.modal-title');
@@ -106,8 +107,8 @@ function refreshHistoryModalIfOpen(){
     }).length;
     var logList = contentEl.querySelector('#historyLogList');
     var existingCount = logList ? logList.children.length : -1;
-    // 如果日志数量没变，大概率内容没变，跳过重建（避免闪烁）
-    if (existingCount === newLogCount && newLogCount > 0) {
+    // v187: forceRebuild 时跳过数量检查，强制重建（撤销操作改变了按钮状态但数量不变）
+    if (!forceRebuild && existingCount === newLogCount && newLogCount > 0) {
       // 只更新标题（月份/班级名可能变了）
       if(titleEl) titleEl.textContent = '\uD83D\uDCDC 历史操作记录【' + className + '】';
       return;

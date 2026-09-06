@@ -16,19 +16,18 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Missing required fields' }, 400);
   }
 
-  // v184: 先读取日志，检查是否已撤销，防止重复撤销导致金币/日志竞态丢失
+  // v187: 先读取日志用于后续标记，但不做已撤销检查
+  // 原因：客户端流程是 saveLogs() 先写入 reverted=true 到 Supabase，
+  // 然后才调用 revertLog API。如果这里检查 reverted 状态会误判为重复请求，
+  // 导致金币/宠物更新被跳过。
   const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
   let existingLogs = [];
   if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
     try { existingLogs = JSON.parse(logsR.data[0].operation_logs_json); } catch (e) {}
   }
-  const logEntry = existingLogs.find(l => l.id === logId);
+  const logEntry = existingLogs.find(l => String(l.id) === String(logId));
   if (!logEntry) {
     return jsonResponse({ error: 'Log entry not found' }, 404);
-  }
-  // 如果日志的撤销状态已经和目标状态一致，说明是重复请求，直接返回
-  if (logEntry.reverted === reverted) {
-    return jsonResponse({ ok: true, alreadyProcessed: true });
   }
 
   // 1. 更新金币
