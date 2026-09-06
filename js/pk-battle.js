@@ -2485,6 +2485,9 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
   const winnerSide = (p2HP <= 0) ? 1 : 2;
   let rewardCoin = 0;
   let penaltyCoin = 0;
+  // v169: 提升到函数作用域，修复 const 块级作用域导致 API 代码 ReferenceError
+  let winnerGrowthDelta = 0;
+  let loserGrowthDelta = 0;
   // 构建结果覆盖层
   const resultOverlay = document.createElement('div');
   resultOverlay.className = 'pk-result-overlay';
@@ -2509,8 +2512,8 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     loserPet.growth = Math.max(0, loserPrevGrowth - 1);
     // v158: 更新等级（之前缺失导致升级后level未刷新，服务器保存旧等级）
     if(typeof updatePetLevel==='function'){updatePetLevel(winnerStudent,winnerPet.id,3,true);updatePetLevel(loserStudent,loserPet.id,loserPet.growth-loserPrevGrowth,true);}
-    const winnerGrowthDelta = 3;
-    const loserGrowthDelta = loserPet.growth - loserPrevGrowth;
+    winnerGrowthDelta = 3;
+    loserGrowthDelta = loserPet.growth - loserPrevGrowth;
     const winnerImg = document.getElementById(`pk-img-${winnerSide}`);
     if(winnerImg) { winnerImg.style.filter = 'drop-shadow(0 0 40px rgba(255,215,0,0.9)) drop-shadow(0 0 80px rgba(255,200,0,0.6))'; winnerImg.style.transition = 'filter 0.6s ease'; }
     // 败方碎裂特效
