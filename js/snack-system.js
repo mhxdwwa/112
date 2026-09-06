@@ -297,6 +297,11 @@ function submitSnackRequest() {
   saveClassData();
   if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
   
+  // v183: API 模式 — 同步 snackRequests 到服务器，确保教师在其他设备能看到兑换请求
+  if (window.USE_API && window.ApiMigration) {
+    window.ApiMigration.updateStudent(student.id, { snack_requests: student.snackRequests });
+  }
+  
   // Record to history
   const log = {
     id: _genLocalId(),

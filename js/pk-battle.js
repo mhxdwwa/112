@@ -2590,34 +2590,38 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     // 避免 updateStudent 的 Realtime 回传携带旧金币值覆盖
     if(p1HP <= 0 && p2HP <= 0) {
       // Draw — no coin/growth changes, but sync log to server
+      // v183: 顺序执行，避免并行写入导致 operation_logs_json 竞态丢失
       window.ApiMigration.coinsAndPet(student1, 0, [{
         petId: p1.pet.id, updates: { growth: p1.pet.growth, level: p1.pet.level }
       }], {
         actionType: 'PK平局', details: student1.name + ' vs ' + student2.name + ' 平局',
         expDelta: 0, petId: p1.pet.id
+      }).then(function() {
+        window.ApiMigration.coinsAndPet(student2, 0, [{
+          petId: p2.pet.id, updates: { growth: p2.pet.growth, level: p2.pet.level }
+        }], {
+          actionType: 'PK平局', details: student2.name + ' vs ' + student1.name + ' 平局',
+          expDelta: 0, petId: p2.pet.id
+        });
       });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(student1.id, student1.name, 'PK平局', student1.name+' vs '+student2.name+' 平局', 0, 0, p1.pet.id);
-      window.ApiMigration.coinsAndPet(student2, 0, [{
-        petId: p2.pet.id, updates: { growth: p2.pet.growth, level: p2.pet.level }
-      }], {
-        actionType: 'PK平局', details: student2.name + ' vs ' + student1.name + ' 平局',
-        expDelta: 0, petId: p2.pet.id
-      });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(student2.id, student2.name, 'PK平局', student2.name+' vs '+student1.name+' 平局', 0, 0, p2.pet.id);
     } else {
+      // v183: 顺序执行，避免并行写入导致 operation_logs_json 竞态丢失
       window.ApiMigration.coinsAndPet(winnerStudent, rewardCoin, [{
         petId: winnerPet.id, updates: { growth: winnerPet.growth, level: winnerPet.level }
       }], {
         actionType: 'PK胜利', details: '击败 ' + loserStudent.name + '（' + (loserPet.nickname||loserPet.name) + '）',
         expDelta: winnerGrowthDelta, petId: winnerPet.id
+      }).then(function() {
+        window.ApiMigration.coinsAndPet(loserStudent, penaltyCoin, [{
+          petId: loserPet.id, updates: { growth: loserPet.growth, level: loserPet.level }
+        }], {
+          actionType: 'PK失败', details: '败给 ' + winnerStudent.name + '（' + (winnerPet.nickname||winnerPet.name) + '）',
+          expDelta: loserGrowthDelta, petId: loserPet.id
+        });
       });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(winnerStudent.id, winnerStudent.name, 'PK胜利', '击败 '+loserStudent.name, rewardCoin, winnerGrowthDelta, winnerPet.id);
-      window.ApiMigration.coinsAndPet(loserStudent, penaltyCoin, [{
-        petId: loserPet.id, updates: { growth: loserPet.growth, level: loserPet.level }
-      }], {
-        actionType: 'PK失败', details: '败给 ' + winnerStudent.name + '（' + (winnerPet.nickname||winnerPet.name) + '）',
-        expDelta: loserGrowthDelta, petId: loserPet.id
-      });
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(loserStudent.id, loserStudent.name, 'PK失败', '败给 '+winnerStudent.name, penaltyCoin, loserGrowthDelta, loserPet.id);
     }
     // v168: PK计数放在最后（不影响金币/成长值的Realtime回传顺序）
