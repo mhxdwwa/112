@@ -141,8 +141,9 @@ function _loadFromCache() {
 
 /* ===== v192: 零食自定义配置持久化（全局共享） ===== */
 // v194: 优先从 Supabase 加载（跨设备同步），回退到 localStorage
-// 教师账户：先同步读 localStorage（即时显示），再异步从 Supabase 拉取最新配置
-// 学生账户：仅从 localStorage 读取
+// 教师账户：用 currentUser.id 从 Supabase 拉取
+// 学生账户：用 classesData[0].teacher_id 从 Supabase 拉取
+// 这样学生就能看到教师设置的零食种类和价格
 function _restoreCustomSnacksFromLS() {
   if (!Array.isArray(classesData)) return Promise.resolve();
 
@@ -159,9 +160,22 @@ function _restoreCustomSnacksFromLS() {
     }
   } catch(e) {}
 
-  // 异步：教师账户从 Supabase 拉取最新配置（跨设备同步）
+  // 异步：从 Supabase 拉取最新配置（跨设备同步）
+  var teacherId = null;
+  
+  // 教师账户：用 currentUser.id
   if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
-    return fetch('/api/snack/config?teacherId=' + encodeURIComponent(currentUser.id))
+    teacherId = currentUser.id;
+  }
+  // 学生账户：用 classesData[0].teacher_id
+  else if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+    if (classesData.length > 0 && classesData[0].teacher_id) {
+      teacherId = classesData[0].teacher_id;
+    }
+  }
+  
+  if (teacherId) {
+    return fetch('/api/snack/config?teacherId=' + encodeURIComponent(teacherId))
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (data.config && Array.isArray(data.config) && data.config.length > 0) {
@@ -174,11 +188,7 @@ function _restoreCustomSnacksFromLS() {
             });
             // 更新 localStorage 缓存
             try { localStorage.setItem('_customSnacks', newRaw); } catch(e) {}
-            console.log('[v194] Snack config updated from Supabase (' + data.config.length + ' items)');
-            // 如果零食管理弹窗正在显示，刷新它
-            if (typeof showSnackManageModal === 'function' && document.getElementById('snackManageRefreshFlag')) {
-              showSnackManageModal();
-            }
+            console.log('[v194] Snack config updated from Supabase for ' + (currentUser.type === 'teacher' ? 'teacher' : 'student') + ' (' + data.config.length + ' items)');
           }
         }
       })
