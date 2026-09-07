@@ -14,7 +14,7 @@
     'library':         { src: 'js/library-system.js?v=136' },
 
     // --- 弹窗/按钮模块 ---
-    'snack-system':    { src: 'js/snack-system.js?v=191' },
+    'snack-system':    { src: 'js/snack-system.js?v=200' },
     'history-ui':      { src: 'js/history-ui.js?v=172' },
     'pet-modal':       { src: 'js/pet-modal.js?v=136' },
     // --- 游戏模块 ---

@@ -12,10 +12,16 @@ export const onRequestGet = async ({ request, env, params }) => {
   if (envErr) return envErr;
 
   const url = new URL(request.url);
-  const teacherId = url.searchParams.get('teacherId');
+  let teacherId = url.searchParams.get('teacherId');
 
   if (!teacherId) {
     return jsonResponse({ error: 'Missing teacherId' }, 400);
+  }
+
+  // 确保 teacherId 是整数（Supabase 表要求）
+  teacherId = parseInt(teacherId);
+  if (isNaN(teacherId)) {
+    return jsonResponse({ error: 'Invalid teacherId' }, 400);
   }
 
   try {
@@ -42,10 +48,16 @@ export const onRequestPost = async ({ request, env }) => {
 
   try {
     const body = await request.json();
-    const { teacherId, config } = body;
+    let { teacherId, config } = body;
 
     if (!teacherId) {
       return jsonResponse({ error: 'Missing teacherId' }, 400);
+    }
+
+    // 确保 teacherId 是整数（Supabase 表要求）
+    teacherId = parseInt(teacherId);
+    if (isNaN(teacherId)) {
+      return jsonResponse({ error: 'Invalid teacherId' }, 400);
     }
 
     if (!config || !Array.isArray(config)) {
