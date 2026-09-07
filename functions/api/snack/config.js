@@ -2,7 +2,7 @@
  * GET /api/snack/config?teacherId=xxx — 获取零食配置
  * POST /api/snack/config — 保存零食配置
  */
-import { jsonResponse, handleOptions, checkEnv } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbSelect, sbRequest } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -19,22 +19,16 @@ export const onRequestGet = async ({ request, env, params }) => {
   }
 
   try {
-    const { data, error } = await env.SB_URL
-      .from('snack_configs')
-      .select('config_data')
-      .eq('teacher_id', teacherId)
-      .single();
+    const { data, error } = await sbSelect(env, 'snack_configs', 'config_data', `teacher_id=eq.${teacherId}`);
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // 记录不存在，返回空配置
-        return jsonResponse({ config: null });
-      }
       console.error('[snack/config] GET error:', error);
       return jsonResponse({ error: error.message }, 500);
     }
 
-    return jsonResponse({ config: data.config_data });
+    // sbSelect 返回数组，取第一条
+    const config = data && data.length > 0 ? data[0].config_data : null;
+    return jsonResponse({ config });
   } catch (err) {
     console.error('[snack/config] GET exception:', err);
     return jsonResponse({ error: err.message }, 500);
@@ -58,25 +52,41 @@ export const onRequestPost = async ({ request, env }) => {
       return jsonResponse({ error: 'Invalid config data' }, 400);
     }
 
-    // 使用 upsert 确保只有一个配置记录
-    const { data, error } = await env.SB_URL
-      .from('snack_configs')
-      .upsert({
-        teacher_id: teacherId,
-        config_data: config,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'teacher_id'
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[snack/config] POST error:', error);
-      return jsonResponse({ error: error.message }, 500);
+    // 先查询是否已存在
+    const { data: existing, error: selectError } = await sbSelect(env, 'snack_configs', 'id', `teacher_id=eq.${teacherId}`);
+    
+    if (selectError) {
+      console.error('[snack/config] POST select error:', selectError);
+      return jsonResponse({ error: selectError.message }, 500);
     }
 
-    return jsonResponse({ ok: true, config: data.config_data });
+    let result;
+    if (existing && existing.length > 0) {
+      // 已存在，更新
+      result = await sbRequest(env, 'PATCH', 'snack_configs', {
+        query: `teacher_id=eq.${teacherId}`,
+        body: {
+          config_data: config,
+          updated_at: new Date().toISOString()
+        }
+      });
+    } else {
+      // 不存在，插入
+      result = await sbRequest(env, 'POST', 'snack_configs', {
+        body: {
+          teacher_id: teacherId,
+          config_data: config,
+          updated_at: new Date().toISOString()
+        }
+      });
+    }
+
+    if (result.error) {
+      console.error('[snack/config] POST error:', result.error);
+      return jsonResponse({ error: result.error.message }, 500);
+    }
+
+    return jsonResponse({ ok: true, config });
   } catch (err) {
     console.error('[snack/config] POST exception:', err);
     return jsonResponse({ error: err.message }, 500);
