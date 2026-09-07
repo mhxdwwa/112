@@ -38,46 +38,12 @@ function saveCustomSnacks(snacks) {
   const curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) return;
   curClass.customSnacks = snacks;
-  // v192: 保存到统一的 localStorage key，所有班级共享同一份零食配置
+  // v192: 保存到统一的 localStorage key，作为离线缓存
   try { localStorage.setItem('_customSnacks', JSON.stringify(snacks)); } catch(e) {}
   saveClassData();
   
-  // v193: 同步到 Supabase，实现跨设备同步
+  // v193: 同步到 Supabase（真正的数据源），实现跨设备同步
   _saveSnackConfigToSupabase(snacks);
-}
-
-// v196: 教师登录后，检查 localStorage 有配置但 Supabase 没有，自动同步
-function _syncSnackConfigIfMissing() {
-  if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'teacher') {
-    return; // 仅教师账户
-  }
-  
-  // 检查 localStorage 是否有配置
-  var localConfig = null;
-  try {
-    var raw = localStorage.getItem('_customSnacks');
-    if (raw) {
-      localConfig = JSON.parse(raw);
-    }
-  } catch(e) {}
-  
-  if (!localConfig || !Array.isArray(localConfig) || localConfig.length === 0) {
-    return; // localStorage 没有配置，不需要同步
-  }
-  
-  // 检查 Supabase 是否有配置
-  fetch('/api/snack/config?teacherId=' + encodeURIComponent(currentUser.id))
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-      if (!data.config || !Array.isArray(data.config) || data.config.length === 0) {
-        // Supabase 没有配置，但 localStorage 有，自动同步
-        console.log('[v196] Auto-syncing snack config to Supabase (localStorage has config but Supabase empty)');
-        _saveSnackConfigToSupabase(localConfig);
-      }
-    })
-    .catch(function(err) {
-      console.warn('[v196] Auto-sync check failed:', err);
-    });
 }
 
 // v193: 保存零食配置到 Supabase
