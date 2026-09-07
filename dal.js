@@ -140,24 +140,54 @@ function _loadFromCache() {
 }
 
 /* ===== v192: 零食自定义配置持久化（全局共享） ===== */
-// customSnacks 不存储在 Supabase，仅保存在 localStorage。
-// Supabase 加载会重建 classesData，丢失 customSnacks。
-// v192: 零食配置是教师账户级别的全局设置，所有班级共享同一份配置
-// 此函数从统一 localStorage key 恢复 customSnacks 到所有班级
+// v194: 优先从 Supabase 加载（跨设备同步），回退到 localStorage
+// 教师账户：先同步读 localStorage（即时显示），再异步从 Supabase 拉取最新配置
+// 学生账户：仅从 localStorage 读取
 function _restoreCustomSnacksFromLS() {
-  if (!Array.isArray(classesData)) return;
+  if (!Array.isArray(classesData)) return Promise.resolve();
+
+  // 同步：先从 localStorage 恢复（即时显示，避免闪烁）
   try {
     var raw = localStorage.getItem('_customSnacks');
     if (raw) {
       var parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // 将同一份零食配置应用到所有班级
         classesData.forEach(function(cls) {
           cls.customSnacks = parsed;
         });
       }
     }
   } catch(e) {}
+
+  // 异步：教师账户从 Supabase 拉取最新配置（跨设备同步）
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
+    return fetch('/api/snack/config?teacherId=' + encodeURIComponent(currentUser.id))
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.config && Array.isArray(data.config) && data.config.length > 0) {
+          // 比较是否与当前配置不同，避免不必要的更新
+          var currentRaw = localStorage.getItem('_customSnacks');
+          var newRaw = JSON.stringify(data.config);
+          if (currentRaw !== newRaw) {
+            classesData.forEach(function(cls) {
+              cls.customSnacks = data.config;
+            });
+            // 更新 localStorage 缓存
+            try { localStorage.setItem('_customSnacks', newRaw); } catch(e) {}
+            console.log('[v194] Snack config updated from Supabase (' + data.config.length + ' items)');
+            // 如果零食管理弹窗正在显示，刷新它
+            if (typeof showSnackManageModal === 'function' && document.getElementById('snackManageRefreshFlag')) {
+              showSnackManageModal();
+            }
+          }
+        }
+      })
+      .catch(function(err) {
+        console.warn('[v194] Load snack config from Supabase failed:', err);
+      });
+  }
+
+  return Promise.resolve();
 }
 
 /* ===== v54: Bandwidth Optimization ===== */
