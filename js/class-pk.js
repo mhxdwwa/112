@@ -1226,9 +1226,6 @@ async function startClassPKBattleLoop(student1, student2, pet1, pet2, p1HP, p2HP
       if(typeof _recordOptimisticLog==='function') _recordOptimisticLog(l.id, l.name, '课堂PK失败', '败给 '+w.name, lCoin, lGrowth, lPet.id);
     }
   }
-  }
-  }
-  }
 }
 
 // 课堂PK败方碎裂特效（立即碎裂，碎片停留空中不消失）

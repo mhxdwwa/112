@@ -2537,7 +2537,7 @@ async function startPKBattleLoop(student1, student2, p1, p2) {
     if(winnerImg) { winnerImg.style.filter = 'drop-shadow(0 0 40px rgba(255,215,0,0.9)) drop-shadow(0 0 80px rgba(255,200,0,0.6))'; winnerImg.style.transition = 'filter 0.6s ease'; }
     // 败方碎裂特效
     const loserImgEl = document.getElementById(`pk-img-${winnerSide === 1 ? 2 : 1}`);
-    if(loserImgEl) applyClassPKShatterEffect(loserImgEl);
+    if(loserImgEl && typeof applyClassPKShatterEffect === 'function') applyClassPKShatterEffect(loserImgEl);
     resultOverlay.innerHTML = `
       <div class="pk-result-title">${esc(winnerStudent.name)} 胜利</div>
       <div class="pk-result-detail">${esc(winnerPet.nickname||winnerPet.name)} 击败了 ${esc(loserPet.nickname||loserPet.name)}</div>
