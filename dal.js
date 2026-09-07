@@ -139,11 +139,11 @@ function _loadFromCache() {
   }
 }
 
-/* ===== v192: 零食自定义配置持久化（全局共享） ===== */
-// v199: 简化逻辑 — 直接从 Supabase 读写，不依赖 localStorage
+/* ===== v201: 零食配置 — 完全从 Supabase 读写 ===== */
 // 教师编辑 → 保存到 Supabase
-// 任何人加载 → 从 Supabase 读取
-function _restoreCustomSnacksFromLS() {
+// 任何人加载 → 从 Supabase 读取（不从 localStorage）
+// Realtime 监听 → 教师编辑后学生立即看到更新
+function _loadSnackConfigFromSupabase() {
   if (!Array.isArray(classesData)) return Promise.resolve();
 
   // 确定教师 ID
@@ -166,12 +166,36 @@ function _restoreCustomSnacksFromLS() {
         classesData.forEach(function(cls) {
           cls.customSnacks = data.config;
         });
-        console.log('[v199] Snack config loaded from Supabase (' + data.config.length + ' items)');
+        console.log('[v201] Snack config loaded from Supabase (' + data.config.length + ' items)');
       }
     })
     .catch(function(err) {
-      console.warn('[v199] Load snack config failed:', err);
+      console.warn('[v201] Load snack config failed:', err);
     });
+}
+
+// v201: Realtime 更新零食配置
+function _applySnackConfigRealtimeUpdate(config) {
+  if (!config || !Array.isArray(config)) return;
+  
+  classesData.forEach(function(cls) {
+    cls.customSnacks = config;
+  });
+  
+  console.log('[v201] Snack config updated via Realtime (' + config.length + ' items)');
+  
+  // 如果零食相关弹窗正在显示，刷新它
+  var modalContainer = document.getElementById('modalContainer');
+  if (modalContainer && modalContainer.innerHTML) {
+    var content = modalContainer.innerHTML;
+    if (content.indexOf('零食') >= 0 || content.indexOf('snackShop') >= 0 || content.indexOf('snackManage') >= 0) {
+      if (typeof showSnackManageModal === 'function' && content.indexOf('零食管理') >= 0) {
+        showSnackManageModal();
+      } else if (typeof showSnackShopModal === 'function') {
+        showSnackShopModal();
+      }
+    }
+  }
 }
 
 /* ===== v54: Bandwidth Optimization ===== */
@@ -966,7 +990,7 @@ function _loadTeacherFromSupabase() {
       
       var newClassesData = _buildTeacherClasses(classes, students, pets);
       classesData = newClassesData;
-      _restoreCustomSnacksFromLS();
+      _loadSnackConfigFromSupabase();
       
       console.log('[DAL] v143 API loaded: ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
       newClassesData.forEach(function(c) {
@@ -3559,7 +3583,7 @@ function _setupRealtimeSubscriptions() {
   
   var channelsCreated = 0;
   var channelsConfirmed = 0;
-  var totalChannels = 3;
+  var totalChannels = 4;
   var realtimeTimeout = null;
 
   function _onChannelConfirmed() {
@@ -3676,6 +3700,21 @@ function _setupRealtimeSubscriptions() {
         if (status === 'SUBSCRIBED') _onChannelConfirmed();
       });
     _realtimeChannels.push(petChannel);
+    channelsCreated++;
+
+    // v201: Subscribe to snack_configs table — 教师编辑后学生立即看到更新
+    var snackChannel = db.channel('dal-snack-configs-' + _clientId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'snack_configs' }, function(payload) {
+        _realtimeLastEventTime = Date.now();
+        console.log('[v201] ⚡ Snack configs: realtime update (' + payload.eventType + ')');
+        if (payload.new && payload.new.config_data) {
+          _applySnackConfigRealtimeUpdate(payload.new.config_data);
+        }
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') _onChannelConfirmed();
+      });
+    _realtimeChannels.push(snackChannel);
     channelsCreated++;
 
     console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels, client=' + _clientId + ') — waiting for confirmation...');
