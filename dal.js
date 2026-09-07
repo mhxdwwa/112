@@ -4878,6 +4878,11 @@ function _initDALCore() {
     // v103: Mark initial load complete — now allow refresh functions to run
     _dalInitialLoadComplete = true;
     
+    // v196: 教师登录后，检查并自动同步零食配置到 Supabase
+    if (typeof _syncSnackConfigIfMissing === 'function') {
+      setTimeout(_syncSnackConfigIfMissing, 1000);
+    }
+    
     // Re-render the app with fresh data
     if (typeof init === 'function') init();
     if (typeof renderClassList === 'function') renderClassList();
