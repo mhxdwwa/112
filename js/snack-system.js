@@ -38,18 +38,16 @@ function saveCustomSnacks(snacks) {
   const curClass = classesData.find(c => c.id === currentClassId);
   if (!curClass) return;
   curClass.customSnacks = snacks;
-  // v192: 保存到统一的 localStorage key，作为离线缓存
-  try { localStorage.setItem('_customSnacks', JSON.stringify(snacks)); } catch(e) {}
   saveClassData();
   
-  // v193: 同步到 Supabase（真正的数据源），实现跨设备同步
+  // 保存到 Supabase（唯一数据源）
   _saveSnackConfigToSupabase(snacks);
 }
 
-// v193: 保存零食配置到 Supabase
+// 保存零食配置到 Supabase
 function _saveSnackConfigToSupabase(config) {
   if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'teacher') {
-    return; // 只有教师账户才同步
+    return; // 只有教师账户才保存
   }
   
   try {
@@ -63,79 +61,16 @@ function _saveSnackConfigToSupabase(config) {
     }).then(res => res.json())
       .then(data => {
         if (data.ok) {
-          console.log('[v193] Snack config synced to Supabase');
+          console.log('[v199] Snack config saved to Supabase');
         } else {
-          console.warn('[v193] Snack config sync failed:', data.error);
+          console.warn('[v199] Snack config save failed:', data.error);
         }
       })
       .catch(err => {
-        console.warn('[v193] Snack config sync error:', err);
+        console.warn('[v199] Snack config save error:', err);
       });
   } catch(e) {
-    console.warn('[v193] Snack config sync exception:', e);
-  }
-}
-
-// v193: 从 Supabase 加载零食配置
-function _loadSnackConfigFromSupabase() {
-  if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'teacher') {
-    return Promise.resolve(null);
-  }
-  
-  return fetch('/api/snack/config?teacherId=' + encodeURIComponent(currentUser.id))
-    .then(res => res.json())
-    .then(data => {
-      if (data.config && Array.isArray(data.config) && data.config.length > 0) {
-        console.log('[v193] Loaded snack config from Supabase');
-        return data.config;
-      }
-      return null;
-    })
-    .catch(err => {
-      console.warn('[v193] Load snack config error:', err);
-      return null;
-    });
-}
-
-// v192: 从统一 localStorage 恢复 customSnacks 到所有班级
-// v193: 优先从 Supabase 加载，实现跨设备同步
-function _mergeCustomSnacksFromStorage() {
-  if (typeof classesData === 'undefined' || !Array.isArray(classesData)) return;
-  
-  // v193: 先尝试从 Supabase 加载
-  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
-    _loadSnackConfigFromSupabase().then(function(config) {
-      if (config) {
-        // 从 Supabase 加载成功，应用到所有班级
-        classesData.forEach(function(cls) {
-          cls.customSnacks = config;
-        });
-        // 同步到 localStorage 作为缓存
-        try { localStorage.setItem('_customSnacks', JSON.stringify(config)); } catch(e) {}
-        console.log('[v193] Applied snack config from Supabase to all classes');
-      } else {
-        // Supabase 没有配置，从 localStorage 加载
-        _loadFromLocalStorage();
-      }
-    });
-  } else {
-    // 学生账户或没有 currentUser，从 localStorage 加载
-    _loadFromLocalStorage();
-  }
-  
-  function _loadFromLocalStorage() {
-    try {
-      var raw = localStorage.getItem('_customSnacks');
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // 将同一份零食配置应用到所有班级
-          classesData.forEach(function(cls) {
-            cls.customSnacks = parsed;
-          });
-        }
-      }
-    } catch(e) {}
+    console.warn('[v199] Snack config save exception:', e);
   }
 }
 
@@ -852,13 +787,26 @@ function deleteSnack(index) {
 
 function resetToDefaultSnacks() {
   if (!confirm('确定恢复默认零食吗？自定义零食将被清除。')) return;
-  // v192: 清除所有班级的 customSnacks，因为零食配置是全局共享的
+  // 清除所有班级的 customSnacks
   classesData.forEach(function(cls) {
     delete cls.customSnacks;
   });
-  // v192: 清除统一的 localStorage key
-  try { localStorage.removeItem('_customSnacks'); } catch(e) {}
   saveClassData();
+  
+  // 从 Supabase 删除配置（保存空数组）
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
+    fetch('/api/snack/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        teacherId: currentUser.id,
+        config: []
+      })
+    }).catch(function(err) {
+      console.warn('[v199] Reset snack config failed:', err);
+    });
+  }
+  
   showSnackManageModal();
   showNotification('恢复成功', '已恢复默认零食', 'success');
 }

@@ -140,107 +140,38 @@ function _loadFromCache() {
 }
 
 /* ===== v192: 零食自定义配置持久化（全局共享） ===== */
-// v198: 数据完全跟随教师账号（Supabase），localStorage 仅作离线备用
-// 教师/学生登录时：
-//   1. 同步读 localStorage（快速显示，避免闪烁）
-//   2. 异步从 Supabase 拉取最新配置（真正的数据源）
-//   3. 如果 Supabase 数据与当前不同，更新 classesData + localStorage + 刷新 UI
+// v199: 简化逻辑 — 直接从 Supabase 读写，不依赖 localStorage
+// 教师编辑 → 保存到 Supabase
+// 任何人加载 → 从 Supabase 读取
 function _restoreCustomSnacksFromLS() {
   if (!Array.isArray(classesData)) return Promise.resolve();
 
-  // 同步：先从 localStorage 恢复（快速显示，避免闪烁）
-  try {
-    var raw = localStorage.getItem('_customSnacks');
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        classesData.forEach(function(cls) {
-          cls.customSnacks = parsed;
-        });
-      }
-    }
-  } catch(e) {}
-
-  // 异步：从 Supabase 拉取最新配置（真正的数据源）
+  // 确定教师 ID
   var teacherId = null;
-  
-  // 教师账户：用 currentUser.id
   if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'teacher') {
     teacherId = currentUser.id;
-  }
-  // 学生账户：用 classesData[0].teacher_id
-  else if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+  } else if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
     if (classesData.length > 0 && classesData[0].teacher_id) {
       teacherId = classesData[0].teacher_id;
     }
   }
   
-  if (teacherId) {
-    return fetch('/api/snack/config?teacherId=' + encodeURIComponent(teacherId))
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        if (data.config && Array.isArray(data.config) && data.config.length > 0) {
-          var newRaw = JSON.stringify(data.config);
-          // 比较是否与当前 classesData 中的配置不同
-          var currentRaw = (classesData[0] && classesData[0].customSnacks) 
-            ? JSON.stringify(classesData[0].customSnacks) : null;
-          if (currentRaw !== newRaw) {
-            classesData.forEach(function(cls) {
-              cls.customSnacks = data.config;
-            });
-            // 更新 localStorage 缓存
-            try { localStorage.setItem('_customSnacks', newRaw); } catch(e) {}
-            console.log('[v198] Snack config updated from Supabase for ' + (currentUser.type === 'teacher' ? 'teacher' : 'student') + ' (' + data.config.length + ' items)');
-            // v198: Supabase 数据更新后，主动刷新零食相关的 UI
-            _refreshSnackUIIfVisible();
-          }
-        } else if (data.config === null || (Array.isArray(data.config) && data.config.length === 0)) {
-          // Supabase 没有配置（新教师或配置被清除），保持当前状态（localStorage 或默认）
-        }
-      })
-      .catch(function(err) {
-        console.warn('[v198] Load snack config from Supabase failed:', err);
-        // Supabase 加载失败，尝试从 localStorage 恢复
-        try {
-          var raw = localStorage.getItem('_customSnacks');
-          if (raw) {
-            var parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              classesData.forEach(function(cls) {
-                cls.customSnacks = parsed;
-              });
-            }
-          }
-        } catch(e) {}
-      });
-  }
+  if (!teacherId) return Promise.resolve();
 
-  return Promise.resolve();
-}
-
-// v198: Supabase 数据更新后，如果零食相关的 UI 正在显示，刷新它
-function _refreshSnackUIIfVisible() {
-  // 如果零食管理弹窗正在显示，刷新它
-  var modalContainer = document.getElementById('modalContainer');
-  if (modalContainer && modalContainer.innerHTML) {
-    // 检查是否有零食相关的弹窗内容
-    var content = modalContainer.innerHTML;
-    if (content.indexOf('snackShopModal') >= 0 || content.indexOf('snackManage') >= 0 || 
-        content.indexOf('零食') >= 0 || content.indexOf('snackShop') >= 0) {
-      // 零食相关弹窗正在显示，通过重新渲染来更新
-      // 找到当前显示的弹窗类型并刷新
-      if (typeof showSnackManageModal === 'function' && content.indexOf('零食管理') >= 0) {
-        showSnackManageModal();
-      } else if (typeof showSnackShopModal === 'function') {
-        // 零食铺弹窗，刷新它
-        showSnackShopModal();
+  // 从 Supabase 读取零食配置
+  return fetch('/api/snack/config?teacherId=' + encodeURIComponent(teacherId))
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.config && Array.isArray(data.config) && data.config.length > 0) {
+        classesData.forEach(function(cls) {
+          cls.customSnacks = data.config;
+        });
+        console.log('[v199] Snack config loaded from Supabase (' + data.config.length + ' items)');
       }
-    }
-  }
-  // 同时刷新主界面的零食按钮（如果有徽章等）
-  if (typeof _updateSnackRequestBadge === 'function') {
-    _updateSnackRequestBadge();
-  }
+    })
+    .catch(function(err) {
+      console.warn('[v199] Load snack config failed:', err);
+    });
 }
 
 /* ===== v54: Bandwidth Optimization ===== */
