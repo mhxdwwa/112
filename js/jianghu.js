@@ -652,7 +652,7 @@ function runJianghuJourney(overlay, boss, student, pet, investCoins, petVisual) 
   const ground = overlay.querySelector('#jhGround');
   const bldgFar = overlay.querySelector('#jhBldgFar');
   const bldgNear = overlay.querySelector('#jhBldgNear');
-  const journeyDuration = 3500;
+  const journeyDuration = 2200;
   let startTime = null;
   let lastFootstep = 0;
 
@@ -686,26 +686,26 @@ async function startJianghuBattle(overlay, boss, student, pet, investCoins, petV
   // === 过渡画面：全屏渐黑 + 战斗开始文字 ===
   // Use document.body level overlay to escape all stacking contexts
   const transOverlay = document.createElement('div');
-  transOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0);z-index:100001;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:background 0.8s ease;pointer-events:none;';
+  transOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0);z-index:100001;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:background 0.4s ease;pointer-events:none;';
   document.body.appendChild(transOverlay);
   await sleep(50);
   transOverlay.style.background = 'rgba(0,0,0,0.95)';
-  await sleep(900);
+  await sleep(450);
   // 显示战斗开始文字
   const battleText = document.createElement('div');
-  battleText.style.cssText = 'font-family:"Ma Shan Zheng",cursive;font-size:56px;color:#c9a84c;text-shadow:0 0 30px rgba(201,168,76,0.8),0 0 60px rgba(201,168,76,0.4),0 0 100px rgba(201,168,76,0.2);opacity:0;transition:opacity 0.5s ease, transform 0.5s ease;letter-spacing:12px;transform:scale(1.5);';
+  battleText.style.cssText = 'font-family:"Ma Shan Zheng",cursive;font-size:56px;color:#c9a84c;text-shadow:0 0 30px rgba(201,168,76,0.8),0 0 60px rgba(201,168,76,0.4),0 0 100px rgba(201,168,76,0.2);opacity:0;transition:opacity 0.3s ease, transform 0.3s ease;letter-spacing:12px;transform:scale(1.5);';
   battleText.textContent = '⚔ 战斗开始 ⚔';
   transOverlay.appendChild(battleText);
   await sleep(50);
   battleText.style.opacity = '1';
   battleText.style.transform = 'scale(1)';
-  await sleep(1000);
+  await sleep(600);
   // 渐出
   battleText.style.opacity = '0';
   battleText.style.transform = 'scale(0.8)';
-  await sleep(500);
+  await sleep(300);
   transOverlay.style.background = 'rgba(0,0,0,0)';
-  await sleep(800);
+  await sleep(400);
   transOverlay.remove();
 
   // 等待江湖boss中文命名图片探测完成
