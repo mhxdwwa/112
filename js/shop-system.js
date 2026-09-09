@@ -214,9 +214,9 @@ function modalBuyItem(itemId){
   if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
   const pet=getActivePet(student);
   
-  // v203-fix: 乐观更新 + 异步同步 + 失败回滚
-  // 先立即更新本地数据并刷新UI（保证用户体验），然后异步同步到服务器
-  // 如果服务器同步失败，回滚本地数据并刷新UI
+  // v203-fix2: 修复双重扣除和双重日志问题
+  // 问题：之前先本地扣金币，再调用 changeStudentCoins 又扣一次
+  // 解决：直接使用 ApiMigration.changeStudentCoins，不经过 app.js 的 changeStudentCoins
   if(window.USE_API&&window.ApiMigration){
     _shopBuying = true;
     
@@ -225,26 +225,27 @@ function modalBuyItem(itemId){
     var _prevShopItems = student.shopItems ? student.shopItems.slice() : [];
     var _prevEquippedItems = student.equippedItems ? JSON.parse(JSON.stringify(student.equippedItems)) : {};
     
-    // 1. 立即乐观更新本地数据
-    student.coins -= item.price;
+    // 1. 乐观更新本地数据（只添加道具，不扣金币）
     if(!student.shopItems) student.shopItems=[];
     student.shopItems.push(itemId);
     autoEquipOnBuy(student, itemId);
-    recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
     
-    // 2. 立即刷新UI（让用户立即看到效果）
+    // 2. 立即刷新UI（让用户立即看到道具效果）
     saveClassData();
     refreshCurrentStudentModal();
     renderHomePetGrid();
     showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
     
-    // 3. 异步调用API同步到服务器
-    // 先扣金币
+    // 3. 直接使用 ApiMigration.changeStudentCoins 扣金币
+    // 不经过 app.js 的 changeStudentCoins，避免双重扣除和双重日志
     window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null).then(function(r){
       if(r.ok){
         // 扣金币成功，用服务器返回的值校正
         student.coins = r.coinsAfter;
-        // 再保存道具状态（带重试）
+        // 更新 _myBaseCoins 防止 Realtime 误判
+        if(typeof _myBaseCoins !== 'undefined') _myBaseCoins = r.coinsAfter;
+        
+        // 保存道具状态到服务器（带重试）
         var _saveAttempts = 0;
         var _maxSaveAttempts = 3;
         function _trySaveShopState(){
@@ -273,8 +274,7 @@ function modalBuyItem(itemId){
         }
         _trySaveShopState();
       } else if(r.error==='Insufficient balance'){
-        // 余额不足（可能是并发导致），回滚
-        student.coins = _prevCoins;
+        // 余额不足，回滚道具
         student.shopItems = _prevShopItems;
         student.equippedItems = _prevEquippedItems;
         saveClassData();
@@ -283,9 +283,8 @@ function modalBuyItem(itemId){
         showNotification('金币不足',`余额不足，无法购买${item.name}`,'error');
         _shopBuying = false;
       } else {
-        // 其他错误，回滚
+        // 其他错误，回滚道具
         console.warn('[API] changeStudentCoins error:', r.error);
-        student.coins = _prevCoins;
         student.shopItems = _prevShopItems;
         student.equippedItems = _prevEquippedItems;
         saveClassData();
