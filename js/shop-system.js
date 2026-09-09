@@ -215,18 +215,21 @@ function modalBuyItem(itemId){
   if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
   const pet=getActivePet(student);
   
-  // v206: 彻底重构购买流程 — 调用 Supabase RPC 原子操作
-  // 在一个事务内完成：锁行 → 校验 → 扣金币 + 加道具 → 写日志
-  // 没有两步 API 之间的竞态，没有 Realtime 回声覆盖问题
+  // v210: 回退到 v205 验证过的方案 — 先保存道具到服务器，确认后再扣金币
+  // v206 的 RPC 方案有根本性缺陷：
+  //   1. RPC 函数用 JSONB 操作符写 shop_items，格式变成对象 {"id":true}，
+  //      但客户端期望数组 ["id"]，导致 .includes() 找不到 → 道具"消失"
+  //   2. RPC 不处理 equipped_items，佩戴状态丢失
+  //   3. RPC 不写 operation_logs_json（或格式与客户端不一致）
+  // v205 方案使用已验证的 saveShopState（格式正确）+ changeStudentCoins（自动写日志）
   if(window.USE_API&&window.ApiMigration){
     _shopBuying = true;
     
     // 保存回滚用的原始数据
-    var _prevCoins = student.coins;
     var _prevShopItems = student.shopItems ? student.shopItems.slice() : [];
     var _prevEquippedItems = student.equippedItems ? JSON.parse(JSON.stringify(student.equippedItems)) : {};
     
-    // 1. 乐观更新本地数据（添加道具）
+    // 1. 乐观更新本地数据（添加道具 + 自动佩戴）
     if(!student.shopItems) student.shopItems=[];
     student.shopItems.push(itemId);
     autoEquipOnBuy(student, itemId);
@@ -237,79 +240,58 @@ function modalBuyItem(itemId){
     renderHomePetGrid();
     showNotification('购买中',`正在购买「${item.name}」...`,'info');
     
-    // 3. 调用原子操作 API（一个事务完成所有操作）
-    // v207: 添加 try-catch 防止 buyItem 方法不存在时锁死
-    try {
-    window.ApiMigration.buyItem({
-      studentId: student.id,
-      classId: currentClassId,
-      itemId: itemId,
-      price: item.price,
-      studentName: student.name || '',
-      itemName: item.name || ''
-    }).then(function(result){
-      _shopBuying = false;
-      
-      if(result.ok){
-        // 成功：用服务器返回的值校正本地数据
-        student.coins = result.coinsAfter;
-        if(typeof _myBaseCoins !== 'undefined') _myBaseCoins = result.coinsAfter;
-        
-        // 用服务器返回的 shopItems 校正（确保一致）
-        if(result.shopItems && Array.isArray(result.shopItems)){
-          student.shopItems = result.shopItems;
-        }
-        
-        // v210: 写入乐观本地日志（服务端 buy-item.js 已写入 operation_logs_json）
-        // 使用 _recordOptimisticLog 标记 _apiOptimistic:true，DAL 合并时自动去重
-        if(typeof _recordOptimisticLog === 'function'){
-          _recordOptimisticLog(student.id, student.name, '商店购买', '购买「'+item.name+'」，成长加成+'+item.growthBonus+'/次', -item.price, 0, pet?pet.id:null);
-        }
-        
-        // v208→v210: 持久化佩戴状态到服务器（RPC 不处理 equipped_items）
-        if(window.ApiMigration.saveShopState && student.equippedItems){
-          window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r){
-            if(!r.ok) console.warn('[v210] saveShopState after buy error:', r.error);
+    // 3. 先将道具保存到服务器（带重试）— 确保道具存在后再扣金币
+    var _saveAttempts = 0;
+    var _maxSaveAttempts = 3;
+    function _saveShopStateWithRetry(){
+      _saveAttempts++;
+      window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r){
+        if(r.ok){
+          console.log('[v210] saveShopState ok (attempt ' + _saveAttempts + ')');
+          // 道具已保存到服务器，现在扣金币（/api/coins 会自动写操作日志）
+          window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', '购买「'+item.name+'」，成长加成+'+item.growthBonus+'/次', 0, pet?pet.id:null).then(function(r2){
+            if(r2.ok){
+              // 扣金币成功，用服务器返回的值校正
+              student.coins = r2.coinsAfter;
+              if(typeof _myBaseCoins !== 'undefined') _myBaseCoins = r2.coinsAfter;
+              saveClassData();
+              renderHomePetGrid();
+              if(currentModalStudentId && currentModalStudentId.toString() === student.id.toString()){
+                refreshCurrentStudentModal();
+              }
+              showNotification('购买成功','获得「'+item.name+'」！已自动佩戴，每次互动额外+'+item.growthBonus+'成长值','success');
+              _shopBuying = false;
+            } else {
+              // 扣金币失败，回滚道具
+              console.warn('[v210] changeStudentCoins failed:', r2.error, '— rolling back items');
+              student.shopItems = _prevShopItems;
+              student.equippedItems = _prevEquippedItems;
+              // 再次保存回滚后的道具状态到服务器
+              window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems);
+              saveClassData();
+              refreshCurrentStudentModal();
+              renderHomePetGrid();
+              showNotification('购买失败',r2.error==='Insufficient balance'?'余额不足':'网络错误，已回滚','error');
+              _shopBuying = false;
+            }
           });
-        }
-        
-        saveClassData();
-        renderHomePetGrid();
-        // 如果在弹窗中，刷新弹窗
-        if(currentModalStudentId && currentModalStudentId.toString() === student.id.toString()){
+        } else if(_saveAttempts < _maxSaveAttempts){
+          console.warn('[v210] saveShopState failed (attempt ' + _saveAttempts + '), retrying...');
+          setTimeout(_saveShopStateWithRetry, 500);
+        } else {
+          // 保存道具彻底失败，回滚本地道具
+          console.error('[v210] saveShopState failed after ' + _maxSaveAttempts + ' attempts');
+          student.shopItems = _prevShopItems;
+          student.equippedItems = _prevEquippedItems;
+          saveClassData();
           refreshCurrentStudentModal();
+          renderHomePetGrid();
+          showNotification('购买失败','保存道具失败，请稍后重试','error');
+          _shopBuying = false;
         }
-        showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
-      } else {
-        // 失败：回滚到原始状态
-        console.warn('[v206] buy-item failed:', result.error, '— rolling back');
-        student.coins = _prevCoins;
-        student.shopItems = _prevShopItems;
-        student.equippedItems = _prevEquippedItems;
-        
-        saveClassData();
-        refreshCurrentStudentModal();
-        renderHomePetGrid();
-        
-        var errorMsg = '购买失败';
-        if(result.error === '余额不足') errorMsg = '余额不足';
-        else if(result.error === '已拥有该商品') errorMsg = '已拥有该商品';
-        else if(result.details) errorMsg = result.details;  // v207: 显示实际错误
-        else errorMsg = '网络错误，请稍后重试';
-        
-        showNotification(errorMsg, '', 'error');
-      }
-    });
-    } catch(e) {
-      _shopBuying = false;
-      student.coins = _prevCoins;
-      student.shopItems = _prevShopItems;
-      student.equippedItems = _prevEquippedItems;
-      saveClassData();
-      refreshCurrentStudentModal();
-      renderHomePetGrid();
-      showNotification('购买失败', e.message || '系统错误', 'error');
+      });
     }
+    _saveShopStateWithRetry();
   } else {
     // 非 API 模式：本地扣金币 + recordAction + 保存
     student.coins-=item.price;
