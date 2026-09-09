@@ -746,9 +746,9 @@ function changeStudentCoins(student, delta, actionType, details, expDelta, petId
           // 余额不足，回滚本地数据
           student.coins = before;
         } else if (result.error) {
-          // API 失败，回滚到旧方式（直接写 Supabase）
-          console.warn('[API] coins failed, falling back to direct Supabase:', result.error);
-          // 本地数据已更新，触发同步
+          // v207: API 失败，回滚金币到操作前的值
+          console.warn('[API] coins failed, rolling back:', result.error);
+          student.coins = before;
           if (typeof triggerRealtimeSync === 'function') triggerRealtimeSync();
         }
         return result;
@@ -1981,6 +1981,7 @@ function feedPet(student, pet){
         // 回滚
         pet.growth = prevGrowth;
         pet.level = prevLevel; // v203: 恢复等级
+        pet.lastFeedDate = ''; // v207: 恢复喂食日期，允许重试
         student.coins = prevCoins;
         console.warn('[API] feedPet failed:', result.error);
       }
@@ -2520,7 +2521,7 @@ function playWithPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
+      else { pet.growth = prevGrowth; pet.level = prevLevel; pet.lastPlayDate = ''; student.coins = prevCoins; } // v207: 恢复玩耍日期
     });
     
     showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');

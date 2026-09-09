@@ -33,13 +33,19 @@
 
   /**
    * 发送 API 请求
+   * v207: 添加 15 秒超时，防止请求无限挂起
    */
   function apiRequest(endpoint, data) {
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
+    
     return fetch(API_BASE + endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
+      signal: controller.signal
     }).then(function(res) {
+      clearTimeout(timeoutId);
       var ct = res.headers.get('content-type') || '';
       if (ct.indexOf('application/json') === -1) {
         // API returned HTML or other non-JSON (e.g. SPA fallback)
@@ -47,6 +53,12 @@
         return { error: 'Server returned non-JSON response (status ' + res.status + ')' };
       }
       return res.json();
+    }).catch(function(err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        return { error: '请求超时，请检查网络后重试' };
+      }
+      throw err;
     });
   }
 

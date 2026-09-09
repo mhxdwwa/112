@@ -16,7 +16,7 @@ export const onRequestGet = async ({ request, env }) => {
   const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
   let logs = [];
   if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-    try { logs = JSON.parse(logsR.data[0].operation_logs_json); } catch (e) {}
+    var _raw = logsR.data[0].operation_logs_json; logs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
   }
   return jsonResponse({ logs });
 };

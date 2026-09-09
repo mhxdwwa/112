@@ -206,6 +206,7 @@ function modalBuyItem(itemId){
   if(checkPauseAndNotify())return;
   if(!currentModalStudentId)return;
   const cur=classesData.find(c=>c.id===currentClassId);
+  if(!cur)return;
   const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());
   if(!student)return;
   const item=getShopItemById(itemId);
@@ -237,6 +238,8 @@ function modalBuyItem(itemId){
     showNotification('购买中',`正在购买「${item.name}」...`,'info');
     
     // 3. 调用原子操作 API（一个事务完成所有操作）
+    // v207: 添加 try-catch 防止 buyItem 方法不存在时锁死
+    try {
     window.ApiMigration.buyItem({
       studentId: student.id,
       classId: currentClassId,
@@ -283,6 +286,16 @@ function modalBuyItem(itemId){
         showNotification(errorMsg, '', 'error');
       }
     });
+    } catch(e) {
+      _shopBuying = false;
+      student.coins = _prevCoins;
+      student.shopItems = _prevShopItems;
+      student.equippedItems = _prevEquippedItems;
+      saveClassData();
+      refreshCurrentStudentModal();
+      renderHomePetGrid();
+      showNotification('购买失败', e.message || '系统错误', 'error');
+    }
   } else {
     // 非 API 模式：本地扣金币 + recordAction + 保存
     student.coins-=item.price;
@@ -299,6 +312,7 @@ function modalBuyItem(itemId){
 function modalEquipItem(itemId){
   if(!currentModalStudentId)return;
   const cur=classesData.find(c=>c.id===currentClassId);
+  if(!cur)return;
   const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());
   if(!student)return;
   const item=getShopItemById(itemId);
@@ -318,6 +332,7 @@ function modalEquipItem(itemId){
 function modalUnequipItem(itemId){
   if(!currentModalStudentId)return;
   const cur=classesData.find(c=>c.id===currentClassId);
+  if(!cur)return;
   const student=cur.students.find(s=>s.id.toString()===currentModalStudentId.toString());
   if(!student)return;
   const item=getShopItemById(itemId);

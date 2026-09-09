@@ -65,7 +65,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mob
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '207.0';
+var _DAL_VERSION = '208.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -2493,10 +2493,10 @@ function _syncTeacherToSupabase() {
             active_pet_id: stu.activePetId || null,
             pk_count_today: stu.pkCountToday || 0,
             // v43: REMOVED shop_items and equipped_items — teacher NEVER writes these.
+            // v207: REMOVED snack_requests — student-owned field, teacher must NOT overwrite.
             // Using .update() (not .upsert()) so only specified fields are modified.
             // This eliminates ALL race conditions with student shop purchases.
-            password: stu.password || '',
-            snack_requests: JSON.stringify(stu.snackRequests || [])
+            password: stu.password || ''
           };
           // v43: Use .update() instead of .upsert() to avoid overwriting student-owned
           // fields (shop_items, equipped_items). .update() only touches listed fields.

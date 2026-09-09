@@ -21,7 +21,7 @@ export const onRequestPost = async ({ request, env }) => {
 
   const student = stuR.data[0];
   let snackRequests = [];
-  try { snackRequests = JSON.parse(student.snack_requests || '[]'); } catch (e) {}
+  var _rawSnack = student.snack_requests; snackRequests = typeof _rawSnack === 'string' ? JSON.parse(_rawSnack || '[]') : (_rawSnack || []);
 
   // v183: 通过 requestId 匹配（客户端发送的是请求的唯一 id）
   // 旧代码用 snackIndex（字符串如 'milk_tea'）做数值比较，永远为 false，导致审批从未持久化

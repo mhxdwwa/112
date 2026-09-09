@@ -184,7 +184,7 @@ export const onRequestPost = async ({ request, env }) => {
     const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
     let existingLogs = [];
     if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-      try { existingLogs = JSON.parse(logsR.data[0].operation_logs_json); } catch (e) {}
+      var _raw = logsR.data[0].operation_logs_json; existingLogs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
     }
     // 新日志插入头部
     const merged = [...newLogs, ...existingLogs].slice(0, 3000);

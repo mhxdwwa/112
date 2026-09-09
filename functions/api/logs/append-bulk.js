@@ -31,10 +31,10 @@ export const onRequestPost = async ({ request, env }) => {
   }
 
   let existingLogs = [];
-  try {
-    const raw = classR.data[0].operation_logs_json;
-    if (raw) existingLogs = JSON.parse(raw);
-  } catch { /* ignore parse error */ }
+  const rawLogs = classR.data[0].operation_logs_json;
+  if (rawLogs) {
+    existingLogs = typeof rawLogs === 'string' ? JSON.parse(rawLogs) : (Array.isArray(rawLogs) ? rawLogs : []);
+  }
 
   // 去重：以 id 为键，跳过已存在的日志
   const existingIds = {};
