@@ -789,7 +789,7 @@ function recordAction(studentId, studentName, actionType, details, coinDelta, ex
   // v107: 所有操作（教师+学生）都记录到历史操作
   // v70: 允许特定类型的操作即使没有金币/经验变化也记录日志
   // 这些类型的操作本身就值得记录（如游戏进度、签到等）
-  var alwaysLogTypes = ['快乐跑一跑', '小猪快跑', '宠物消消乐', '取金阁', '每日打卡', '全班打卡'];
+  var alwaysLogTypes = ['快乐跑一跑', '小猪快跑', '宠物消消乐', '取金阁', '每日打卡', '全班打卡', '批量奖惩'];
   if(coinDelta === 0 && expDelta === 0 && !extra && alwaysLogTypes.indexOf(actionType) === -1) return;
   const cur = classesData.find(c=>c.id===currentClassId);
   let snapshot = null;
