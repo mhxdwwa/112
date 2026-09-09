@@ -588,12 +588,54 @@
       .then(function(data) {
         return data;
       })
-      .catch(function(err) {
-        console.error('[API] loadLogs failed:', err);
-        return { error: err.message || 'Network error' };
-      });
+    .catch(function(err) {
+      console.error('[API] shop state save failed:', err);
+      return { error: err.message || 'Network error' };
+    });
   }
 
+  /**
+   * v206: 商店购买原子操作 API
+   * 调用 Supabase RPC 函数 buy_item，在一个事务内完成：
+   * 1. 锁定学生行（FOR UPDATE，阻塞并发）
+   * 2. 校验余额、是否已拥有
+   * 3. 原子更新 coins + shop_items
+   * 4. 追加操作日志（同时锁 classes 行）
+   * 5. 返回最终状态
+   * 
+   * @param {Object} params - { studentId, classId, itemId, price, studentName }
+   * @returns {Promise<Object>} - { ok, coinsAfter, shopItems } 或 { ok: false, error }
+   */
+  function buyItemViaApi(params) {
+    if (!params || !params.studentId || !params.classId || !params.itemId || params.price === undefined) {
+      return Promise.resolve({ ok: false, error: 'Invalid parameters' });
+    }
+
+    return apiRequest('/student/buy-item', {
+      studentId: params.studentId,
+      classId: params.classId,
+      itemId: params.itemId,
+      price: params.price,
+      studentName: params.studentName || ''
+    }).then(function(result) {
+      if (result.ok) {
+        // v163: 回声保护 — 标记刚写入的学生行
+        if (typeof _markRowWritten === 'function') _markRowWritten('students', params.studentId);
+        if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
+        
+        console.log('[API] buy-item ok:', params.studentId, 'coins:', result.coinsAfter);
+      } else {
+        console.error('[API] buy-item error:', result.error);
+      }
+      return result;
+    }).catch(function(err) {
+      console.error('[API] buy-item request failed:', err);
+      return { ok: false, error: err.message || 'Network error' };
+    });
+  }
+
+  // ============================================================
+  // 恢复宠物 API（upsert，用于撤销删除宠物）
   // ============================================================
   // 认证 API（替代 auth-check.js 直接连 Supabase Auth）
   // ============================================================
@@ -897,8 +939,9 @@
     // 游戏状态
     saveQuizState: saveQuizStateViaApi,
     
-    // 商店状态
+    // 商店
     saveShopState: saveShopStateViaApi,
+    buyItem: buyItemViaApi,
     
     // 健康检查
     checkHealth: checkApiHealth

@@ -65,7 +65,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mob
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '164.0';
+var _DAL_VERSION = '206.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -275,6 +275,17 @@ setInterval(function() {
     }
   });
 }, 10000);
+
+/* ===== v206: Array equality helper for shop_items delta protection ===== */
+function _arraysEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
 
 /* ===== Realtime Channel Coalescing (v53) ===== */
 // All 4 Realtime channels call this instead of _immediateRefreshFromSupabase directly.
@@ -3391,15 +3402,81 @@ function _applyRealtimeUpdate(table, payload) {
       }
     }
     
+    // v206: shop_items — delta 保护（类似 coins 的 _applyWithDelta）
+    // 如果本地有未同步的变化（本地 != 快照），保留本地新增的道具
     if (newData.shop_items !== undefined) {
       try {
+        var serverShopItems = typeof newData.shop_items === 'string'
+          ? JSON.parse(newData.shop_items) : (newData.shop_items || []);
+        
+        var snapStuShop = _snapshotStudentMap[studentId];
+        var snapShopItems = snapStuShop ? snapStuShop.shopItems : undefined;
+        var localShopItems = targetStudent.shopItems || [];
+        
+        // 如果本地有未同步的变化（本地 != 快照），保留本地新增的道具
+        if (snapShopItems !== undefined && !_arraysEqual(localShopItems, snapShopItems)) {
+          // 找出本地新增的道具（在本地但不在快照中）
+          var addedItems = [];
+          for (var si = 0; si < localShopItems.length; si++) {
+            if (snapShopItems.indexOf(localShopItems[si]) === -1) {
+              addedItems.push(localShopItems[si]);
+            }
+          }
+          // 合并：服务器的值 + 本地新增的道具
+          var mergedShop = serverShopItems.slice();
+          for (var ai = 0; ai < addedItems.length; ai++) {
+            if (mergedShop.indexOf(addedItems[ai]) === -1) {
+              mergedShop.push(addedItems[ai]);
+            }
+          }
+          targetStudent.shopItems = mergedShop;
+        } else {
+          // 本地没有未同步的变化，直接使用服务器的值
+          targetStudent.shopItems = serverShopItems;
+        }
+      } catch(e) {
+        console.warn('[DAL] v206 shop_items delta merge error:', e);
+        // 出错时降级：直接使用服务器值
         targetStudent.shopItems = typeof newData.shop_items === 'string' ? JSON.parse(newData.shop_items) : (newData.shop_items || []);
-      } catch(e) {}
+      }
     }
+    
+    // v206: equipped_items — delta 保护（类似 shop_items）
+    // 如果本地有未同步的变化，保留本地的装备状态
     if (newData.equipped_items !== undefined) {
       try {
+        var serverEquipped = typeof newData.equipped_items === 'string'
+          ? JSON.parse(newData.equipped_items) : (newData.equipped_items || {});
+        
+        var snapStuEq = _snapshotStudentMap[studentId];
+        var snapEquipped = snapStuEq ? snapStuEq.equippedItems : undefined;
+        var localEquipped = targetStudent.equippedItems || {};
+        
+        // 如果本地有未同步的变化（本地 != 快照），以本地为准（装备状态是幂等的）
+        if (snapEquipped !== undefined && JSON.stringify(localEquipped) !== JSON.stringify(snapEquipped)) {
+          // 本地有变化，合并：以本地为准，补充服务器新出现的字段
+          var mergedEquipped = {};
+          // 先复制服务器的值
+          for (var ek in serverEquipped) {
+            if (serverEquipped.hasOwnProperty(ek)) {
+              mergedEquipped[ek] = serverEquipped[ek];
+            }
+          }
+          // 再用本地的值覆盖（本地优先）
+          for (var ek2 in localEquipped) {
+            if (localEquipped.hasOwnProperty(ek2)) {
+              mergedEquipped[ek2] = localEquipped[ek2];
+            }
+          }
+          targetStudent.equippedItems = mergedEquipped;
+        } else {
+          // 本地没有未同步的变化，直接使用服务器的值
+          targetStudent.equippedItems = serverEquipped;
+        }
+      } catch(e) {
+        console.warn('[DAL] v206 equipped_items delta merge error:', e);
         targetStudent.equippedItems = typeof newData.equipped_items === 'string' ? JSON.parse(newData.equipped_items) : (newData.equipped_items || {});
-      } catch(e) {}
+      }
     }
     
     // v124: snack_requests — 零食兑换请求实时更新
