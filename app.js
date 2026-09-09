@@ -2919,11 +2919,22 @@ function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&
       });
     }
     // v213: 仙丹历史记录（API mode）— 修复仙丹变更不写入历史操作的问题
+    // v215: 同时调用 /api/logs/append 将日志持久化到服务器，否则刷新页面后丢失
     if (isCustomXd && xdUpdatedCount > 0) {
       cur.students.forEach(function(s) {
         if (selectedIds.includes(s.id.toString())) {
           var _sign = customXdVal > 0 ? '+' : '';
-          _recordOptimisticLog(s.id, s.name, '批量奖惩', '自定义' + _sign + customXdVal + '仙丹', 0, 0, getActivePet(s)?.id || null);
+          var _details = '自定义' + _sign + customXdVal + '仙丹';
+          var _pet = getActivePet(s);
+          // 1. 本地乐观日志
+          _recordOptimisticLog(s.id, s.name, '批量奖惩', _details, 0, 0, _pet ? _pet.id : null);
+          // 2. 服务器日志持久化
+          var _log = window.operationLogs[window.operationLogs.length - 1];
+          if (_log && window.ApiMigration.appendLog) {
+            window.ApiMigration.appendLog(_log).catch(function(e) {
+              console.warn('[v215] appendLog xd failed:', e);
+            });
+          }
         }
       });
     }

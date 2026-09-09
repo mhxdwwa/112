@@ -456,7 +456,10 @@
    * 通过 API 追加操作日志
    */
   function appendLogViaApi(log) {
+    // v215: 服务端 /api/logs/append 需要 classId 在顶层
+    var classId = log.classId || getCurrentClassId();
     return apiRequest('/logs/append', {
+      classId: classId,
       log: log
     }).then(function(result) {
       if (result.ok) {
