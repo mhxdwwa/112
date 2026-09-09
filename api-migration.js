@@ -601,7 +601,7 @@
         return data;
       })
     .catch(function(err) {
-      console.error('[API] shop state save failed:', err);
+      console.error('[API] loadLogs failed:', err);
       return { error: err.message || 'Network error' };
     });
   }

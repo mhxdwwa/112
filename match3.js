@@ -709,8 +709,11 @@ function _m3OnToolClick(toolName) {
     tools[toolName] -= 1;
     if (typeof saveClassData === 'function') saveClassData();
     // v166: 只保存 quiz_state（道具数量变更），不传金币
+    // v210: 添加错误处理
     if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
-      window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(ensureMatch3State(_m3CurrentStudent)));
+      window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(ensureMatch3State(_m3CurrentStudent))).catch(function(e){
+        console.warn('[v210] match3 saveQuizState (道具) failed:', e);
+      });
     } else if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
     if (toolName === 'shuffle') {
       _m3DoShuffle();
@@ -808,8 +811,11 @@ function _m3SelectAnswer(index) {
       qs.match3Tools[_m3QuizState.tool] += reward;
       if (typeof saveClassData === 'function') saveClassData();
       // v166: 只保存 quiz_state（道具数量变更），不传金币
+      // v210: 添加错误处理
       if (window.USE_API && window.ApiMigration && window.ApiMigration.saveQuizState) {
-        window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(qs));
+        window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(qs)).catch(function(e){
+          console.warn('[v210] match3 saveQuizState (道具2) failed:', e);
+        });
       } else if (typeof saveCoinsAndQuizState === 'function') saveCoinsAndQuizState(_m3CurrentStudent);
     }
     quizCloseBtn.style.display = 'block';
@@ -894,13 +900,18 @@ function _m3ShowResult(success) {
 
     if (typeof saveClassData === 'function') saveClassData();
     // v166: API 模式 — 金币用 changeStudentCoins，状态用 saveQuizState（不传金币）
+    // v210: 添加错误处理
     if (window.USE_API && window.ApiMigration) {
       if (isFirstClear && coinReward > 0 && window.ApiMigration.changeStudentCoins) {
         window.ApiMigration.changeStudentCoins(_m3CurrentStudent, coinReward, '宠物消消乐',
-          '第' + _m3CurrentLevel + '关通关奖励', 0, null);
+          '第' + _m3CurrentLevel + '关通关奖励', 0, null).catch(function(e){
+          console.warn('[v210] match3 changeStudentCoins failed:', e);
+        });
       }
       if (window.ApiMigration.saveQuizState) {
-        window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(qs));
+        window.ApiMigration.saveQuizState(_m3CurrentStudent.id, null, JSON.stringify(qs)).catch(function(e){
+          console.warn('[v210] match3 saveQuizState failed:', e);
+        });
       }
     } else if (typeof saveCoinsAndQuizState === 'function') {
       saveCoinsAndQuizState(_m3CurrentStudent);

@@ -243,10 +243,13 @@
     // 保存到 Supabase
     if (window.USE_API && window.ApiMigration) {
       // v166: API 模式 — 金币用 changeStudentCoins（原子 delta + 服务器日志），状态用 saveQuizState（不传金币）
+      // v210: 添加错误处理
       window._quizStateLocallyModified = true;
       if (coinReward > 0 && window.ApiMigration.changeStudentCoins) {
         window.ApiMigration.changeStudentCoins(student, coinReward, '小猪快跑',
-          '第' + level + '关通关奖励', 0, null);
+          '第' + level + '关通关奖励', 0, null).catch(function(e){
+          console.warn('[v210] pig-run changeStudentCoins failed:', e);
+        });
       }
       if (window.ApiMigration.saveQuizState) {
         window.ApiMigration.saveQuizState(student.id, null, JSON.stringify(qs)).then(function(r) {

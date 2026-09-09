@@ -50,8 +50,11 @@
         _pendingLocalSave = true;
       }
       // v166: 金币变化通过 changeStudentCoins 原子写入（创建服务器操作日志）
+      // v210: 添加错误处理
       if (coinDelta && coinDelta > 0 && window.ApiMigration.changeStudentCoins) {
-        window.ApiMigration.changeStudentCoins(student, coinDelta, '取金阁', '答题奖励', 0, null);
+        window.ApiMigration.changeStudentCoins(student, coinDelta, '取金阁', '答题奖励', 0, null).catch(function(e){
+          console.warn('[v210] quiz changeStudentCoins failed:', e);
+        });
       }
       // v166: 只保存 quiz_state，不传 coins（避免绝对值覆盖 PK 等并发操作）
       if (window.ApiMigration.saveQuizState) {
