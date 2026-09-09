@@ -259,6 +259,18 @@ function modalBuyItem(itemId){
           student.shopItems = result.shopItems;
         }
         
+        // v208: 写入本地历史记录（RPC 函数不负责写日志，需客户端补充）
+        if(typeof recordAction === 'function'){
+          recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+        }
+        
+        // v208: 持久化佩戴状态到服务器（autoEquipOnBuy 只改了本地，RPC 不处理 equipped_items）
+        if(window.ApiMigration.saveShopState && student.equippedItems){
+          window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r){
+            if(!r.ok) console.warn('[v208] saveShopState after buy error:', r.error);
+          });
+        }
+        
         saveClassData();
         renderHomePetGrid();
         // 如果在弹窗中，刷新弹窗
