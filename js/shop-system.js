@@ -299,6 +299,7 @@ function modalBuyItem(itemId){
     student.shopItems.push(itemId);
     autoEquipOnBuy(student, itemId);
     recordAction(student.id, student.name, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, -item.price, 0, pet?pet.id:null, {shopItemId:itemId});
+    if(typeof refreshHistoryModalIfOpen==='function')refreshHistoryModalIfOpen(true);
     saveClassData();
     refreshCurrentStudentModal();
     renderHomePetGrid();
