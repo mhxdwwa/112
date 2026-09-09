@@ -628,7 +628,8 @@
       classId: params.classId,
       itemId: params.itemId,
       price: params.price,
-      studentName: params.studentName || ''
+      studentName: params.studentName || '',
+      itemName: params.itemName || ''
     }).then(function(result) {
       if (result.ok) {
         // v163: 回声保护 — 标记刚写入的学生行
