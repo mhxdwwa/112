@@ -272,7 +272,12 @@ function modalBuyItem(itemId){
         showNotification('金币不足',`余额不足，无法购买${item.name}`,'error');
         _shopBuying = false; // v203: 解锁
       } else {
+        // v203: 通用错误也回滚，防止金币/道具不一致
         console.warn('[API] changeStudentCoins error:', r.error);
+        student.coins += item.price;
+        var idx3=student.shopItems.indexOf(itemId); if(idx3!==-1) student.shopItems.splice(idx3,1);
+        saveClassData(); refreshCurrentStudentModal(); renderHomePetGrid();
+        showNotification('购买失败',r.error||'网络错误，请稍后重试','error');
         _shopBuying = false; // v203: 解锁
       }
     });

@@ -884,7 +884,7 @@ function restoreToLogEntry(logId){
       student.quizState.happyRunPetGold = qsSnap.happyRunPetGold || 0;
       student.quizState.happyRunOwnedChars = JSON.parse(JSON.stringify(qsSnap.happyRunOwnedChars || [0]));
       student.quizState.happyRunBossKillBonus = JSON.parse(JSON.stringify(qsSnap.happyRunBossKillBonus || {}));
-      student.quizState.happyRunTotalScore = qsSnap.happyRunTotalSilver || 0;
+      student.quizState.happyRunTotalScore = qsSnap.happyRunTotalScore || 0; // v203: 修复字段错误（之前误用happyRunTotalSilver）
     }
   }
   // 3. Save to Supabase
@@ -1947,6 +1947,7 @@ function feedPet(student, pet){
   if (window.USE_API && window.ApiMigration) {
     var prevGrowth = pet.growth;
     var prevCoins = student.coins;
+    var prevLevel = pet.level; // v203: 保存回滚用等级
     
     // 乐观更新本地数据
     pet.growth += gain;
@@ -1979,6 +1980,7 @@ function feedPet(student, pet){
       } else {
         // 回滚
         pet.growth = prevGrowth;
+        pet.level = prevLevel; // v203: 恢复等级
         student.coins = prevCoins;
         console.warn('[API] feedPet failed:', result.error);
       }
@@ -2503,6 +2505,7 @@ function playWithPet(student,pet){
   if (window.USE_API && window.ApiMigration) {
     var prevGrowth = pet.growth;
     var prevCoins = student.coins;
+    var prevLevel = pet.level; // v203: 保存回滚用等级
     pet.growth+=gain; pet.lastPlayDate=new Date().toISOString();
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 20;
@@ -2517,7 +2520,7 @@ function playWithPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; }
+      else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
     });
     
     showNotification('玩耍快乐',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
@@ -2543,6 +2546,7 @@ function walkPet(student,pet){
   if (window.USE_API && window.ApiMigration) {
     var prevGrowth = pet.growth;
     var prevCoins = student.coins;
+    var prevLevel = pet.level; // v203: 保存回滚用等级
     pet.growth+=gain;
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 30;
@@ -2556,7 +2560,7 @@ function walkPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; }
+      else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
     });
     
     showNotification('散步愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
@@ -2583,6 +2587,7 @@ function shoppingPet(student,pet){
   if (window.USE_API && window.ApiMigration) {
     var prevGrowth = pet.growth;
     var prevCoins = student.coins;
+    var prevLevel = pet.level; // v203: 保存回滚用等级
     pet.growth+=gain;
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 50;
@@ -2596,7 +2601,7 @@ function shoppingPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; }
+      else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
     });
     
     showNotification('逛街开心',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
@@ -2623,6 +2628,7 @@ function travelPet(student,pet){
   if (window.USE_API && window.ApiMigration) {
     var prevGrowth = pet.growth;
     var prevCoins = student.coins;
+    var prevLevel = pet.level; // v203: 保存回滚用等级
     pet.growth+=gain;
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 100;
@@ -2636,7 +2642,7 @@ function travelPet(student,pet){
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
       if (result.ok) { student.coins = result.coinsAfter; }
-      else { pet.growth = prevGrowth; student.coins = prevCoins; }
+      else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
     });
     
     showNotification('旅游愉快',`${pet.nickname||pet.name} 获得 ${gain} 成长值！`,'success');
