@@ -69,6 +69,9 @@
             console.error('[v166] API quiz state save error:', r.error);
             window._quizStateLocallyModified = false;
           }
+        }).catch(function(e) {
+          console.warn('[v212] quiz saveQuizState failed:', e);
+          window._quizStateLocallyModified = false;
         });
       }
       return;
@@ -291,9 +294,11 @@
     } else {
       // 答错也要保存状态（防止进度丢失）— 无金币变化
       saveCoinsAndQuizState(student, 0);
+      // v212: 第一次答错不显示解析（否则学生看解析就能知道答案），第二次答错后才显示
+      var showExp = qState.attempts >= 2 ? question.exp : '';
       return {
         correct: false,
-        explanation: question.exp,
+        explanation: showExp,
         attempts: qState.attempts
       };
     }

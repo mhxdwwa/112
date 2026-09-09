@@ -131,6 +131,8 @@
           if (s.quizState && s.quizState.pigRunTotalScore !== undefined) {
             window.ApiMigration.saveQuizState(s.id, null, JSON.stringify(s.quizState)).then(function(r) {
               if (!r.ok) console.error('[v149] API pig-run repair save error for', s.name, ':', r.error);
+            }).catch(function(e) {
+              console.warn('[v212] pig-run repair saveQuizState failed for', s.name, ':', e);
             });
           }
         });
@@ -260,6 +262,8 @@
           } else {
             console.error('[v166] API pig-run save error:', r.error);
           }
+        }).catch(function(e) {
+          console.warn('[v212] pig-run saveQuizState failed:', e);
         });
       }
     } else if (typeof saveCoinsAndQuizState === 'function') {

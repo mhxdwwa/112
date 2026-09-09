@@ -113,6 +113,8 @@
         } else {
           console.error('[v166] API happy-run save error:', r.error);
         }
+      }).catch(function(e) {
+        console.warn('[v212] happy-run saveQuizState failed:', e);
       });
     } else if (typeof db !== 'undefined' && db) {
       // 标记 quizState 为本地修改，防止 Realtime 事件覆盖
