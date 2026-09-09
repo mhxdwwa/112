@@ -1922,7 +1922,21 @@ function _hasCheckedInToday(student){
     !log.reverted
   );
 }
+// v203: 宠物互动操作冷却（防止快速点击导致金币/成长值数据混乱）
+var _petActionCooldown = 0;
+var _PET_ACTION_CD_MS = 2000; // 2秒冷却
+function _canDoPetAction(){
+  var now = Date.now();
+  if(now < _petActionCooldown){
+    var remain = Math.ceil((_petActionCooldown - now) / 1000);
+    showNotification('操作太频繁', '请稍等 ' + remain + ' 秒后再操作', 'warning');
+    return false;
+  }
+  _petActionCooldown = now + _PET_ACTION_CD_MS;
+  return true;
+}
 function feedPet(student, pet){
+  if(!_canDoPetAction()) return false;
   if(pet.isDead){showNotification('喂食失败','宠物已经死亡，请先复活','error');return false;}
   if(student.coins<5){showNotification('金币不足','喂食需要5金币','error');return false;}
   if(pet.level >= 9){ showNotification('已达万物之神',`${pet.nickname||pet.name}已满级，快去领养新宠物吧！`,'warning'); return false; }
@@ -2478,6 +2492,7 @@ function refreshCurrentStudentModal(){
 function ensurePetPlayFields(pet){ if(pet.todayPlayCount===undefined) pet.todayPlayCount=0; if(pet.lastPlayDate===undefined) pet.lastPlayDate=null; if(pet.penaltyStreak===undefined) pet.penaltyStreak=0; return pet; }
 function getCurrentStageName(petName,level){const cfg=PET_CONFIG[petName];if(!cfg)return"未知";const s=cfg.stages.find(s=>s.stage===level);return s?s.stageName:`阶段${level}`;}
 function playWithPet(student,pet){
+  if(!_canDoPetAction()) return false;
   if(pet.isDead){ showNotification('玩耍失败','宠物已经死亡，请先复活','error'); return false; }
   if(student.coins<20){ showNotification('金币不足','玩耍需要20金币','error'); return false; }
   if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; }
@@ -2517,6 +2532,7 @@ function playWithPet(student,pet){
   return true;
 }
 function walkPet(student,pet){
+  if(!_canDoPetAction()) return false;
   if(pet.isDead){ showNotification('散步失败','宠物已经死亡，请先复活','error'); return false; }
   if(student.coins<30){ showNotification('金币不足','散步需要30金币','error'); return false; }
   if(pet.level >= 9){ showNotification('已达万物之神','无法继续成长，可以领养新宠物','warning'); return false; }
@@ -2555,6 +2571,7 @@ function walkPet(student,pet){
   return true;
 }
 function shoppingPet(student,pet){
+  if(!_canDoPetAction()) return false;
   if(pet.isDead){ showNotification('逛街失败','宠物已经死亡，请先复活','error'); return false; }
   if(pet.level<3){ showNotification('等级不足','逛街需要Lv3以上','warning'); return false; }
   if(student.coins<50){ showNotification('金币不足','逛街需要50金币','error'); return false; }
@@ -2594,6 +2611,7 @@ function shoppingPet(student,pet){
   return true;
 }
 function travelPet(student,pet){
+  if(!_canDoPetAction()) return false;
   if(pet.isDead){ showNotification('旅游失败','宠物已经死亡，请先复活','error'); return false; }
   if(pet.level<6){ showNotification('等级不足','旅游需要Lv6以上','warning'); return false; }
   if(student.coins<100){ showNotification('金币不足','旅游需要100金币','error'); return false; }
@@ -2633,6 +2651,7 @@ function travelPet(student,pet){
   return true;
 }
 function revivePet(student,pet){
+  if(!_canDoPetAction()) return false;
   if(!pet.isDead) return false;
   if(student.coins<50){showNotification('金币不足','复活需要50金币','error');return false;}
   

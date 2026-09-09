@@ -199,7 +199,10 @@ function _buildReadOnlyShopSection(student, pet){
   html+='</div>';
   return html;
 }
+// v203: 购买锁，防止异步过程中重复点击
+var _shopBuying = false;
 function modalBuyItem(itemId){
+  if(_shopBuying){showNotification('正在购买','请等待上次购买完成','warning');return;}
   if(checkPauseAndNotify())return;
   if(!currentModalStudentId)return;
   const cur=classesData.find(c=>c.id===currentClassId);
@@ -211,6 +214,7 @@ function modalBuyItem(itemId){
   if(student.coins<item.price){showNotification('金币不足',`购买${item.name}需要${item.price}金币，当前${student.coins}金币`,'error');return;}
   const pet=getActivePet(student);
   if(window.USE_API&&window.ApiMigration){
+    _shopBuying = true; // v203: 锁定购买操作
     // v151-fix: 乐观更新本地数据 + 立即刷新 UI，API 调用并行发出
     student.coins -= item.price;
     if(!student.shopItems) student.shopItems=[];
@@ -225,24 +229,51 @@ function modalBuyItem(itemId){
     showNotification('购买成功',`获得「${item.name}」！已自动佩戴，每次互动额外+${item.growthBonus}成长值`,'success');
     // v184: 改为顺序调用 — 先扣金币，成功后再保存商品状态
     // 避免并行时 saveShopState 成功但 changeStudentCoins 失败导致学生免费拿商品
+    // v203: saveShopState 失败时重试3次，仍失败则回滚金币（防止扣了金币但道具丢失）
     window.ApiMigration.changeStudentCoins(student, -item.price, '商店购买', `购买「${item.name}」，成长加成+${item.growthBonus}/次`, 0, pet?pet.id:null).then(function(r){
       if(r.ok){
         student.coins=r.coinsAfter;
-        // 扣金币成功后才保存商品状态
-        window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
-          if(!r2.ok){
-            console.warn('[API] saveShopState error:', r2.error);
-            // 金币已扣但商品未保存，记录警告供手动恢复
-          }
-        });
+        // 扣金币成功后才保存商品状态（带重试）
+        var _saveAttempts = 0;
+        var _maxSaveAttempts = 3;
+        function _trySaveShopState(){
+          _saveAttempts++;
+          window.ApiMigration.saveShopState(student.id, student.shopItems, student.equippedItems).then(function(r2){
+            if(r2.ok){
+              console.log('[v203] saveShopState ok (attempt ' + _saveAttempts + ')');
+              _shopBuying = false; // v203: 解锁
+            } else if(_saveAttempts < _maxSaveAttempts){
+              console.warn('[v203] saveShopState failed (attempt ' + _saveAttempts + '), retrying...');
+              setTimeout(_trySaveShopState, 500);
+            } else {
+              // 3次都失败，回滚金币
+              console.error('[v203] saveShopState failed after ' + _maxSaveAttempts + ' attempts, rolling back coins');
+              window.ApiMigration.changeStudentCoins(student, item.price, '商店购买回滚', `购买「${item.name}」失败回滚`, 0, pet?pet.id:null).then(function(r3){
+                if(r3.ok){
+                  student.coins = r3.coinsAfter;
+                  var idx2=student.shopItems.indexOf(itemId); if(idx2!==-1) student.shopItems.splice(idx2,1);
+                  saveClassData(); refreshCurrentStudentModal(); renderHomePetGrid();
+                  showNotification('购买失败','保存道具失败，金币已退回','error');
+                } else {
+                  console.error('[v203] rollback coins also failed:', r3.error);
+                  showNotification('保存异常','道具保存失败，请联系老师处理','error');
+                }
+                _shopBuying = false; // v203: 解锁
+              });
+            }
+          });
+        }
+        _trySaveShopState();
       } else if(r.error==='Insufficient balance'){
         // 回滚
         student.coins += item.price;
         var idx2=student.shopItems.indexOf(itemId); if(idx2!==-1) student.shopItems.splice(idx2,1);
         saveClassData(); refreshCurrentStudentModal(); renderHomePetGrid();
         showNotification('金币不足',`余额不足，无法购买${item.name}`,'error');
+        _shopBuying = false; // v203: 解锁
       } else {
         console.warn('[API] changeStudentCoins error:', r.error);
+        _shopBuying = false; // v203: 解锁
       }
     });
   } else {
