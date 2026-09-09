@@ -2012,7 +2012,9 @@ function feedPet(student, pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 5;
     if (student.coins < 0) student.coins = 0;
-    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
+    // v218: 写入乐观日志，使历史记录立即显示（DAL 合并时自动去重）
+    _recordOptimisticLog(student.id, student.name, '喂食', `${pet.nickname||pet.name} +${gain}成长值`, -5, gain, pet.id);
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     
     // 异步调用 API
     window.ApiMigration.coinsAndPet(student, -5, [{
@@ -2577,7 +2579,9 @@ function playWithPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 20;
     if (student.coins < 0) student.coins = 0;
-    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
+    // v218: 写入乐观日志，使历史记录立即显示（DAL 合并时自动去重）
+    _recordOptimisticLog(student.id, student.name, '玩耍', `${pet.nickname||pet.name} +${gain}成长值`, -20, gain, pet.id);
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     
     window.ApiMigration.coinsAndPet(student, -20, [{
       petId: pet.id,
@@ -2618,7 +2622,9 @@ function walkPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 30;
     if (student.coins < 0) student.coins = 0;
-    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
+    // v218: 写入乐观日志，使历史记录立即显示（DAL 合并时自动去重）
+    _recordOptimisticLog(student.id, student.name, '散步', `${pet.nickname||pet.name} +${gain}成长值`, -30, gain, pet.id);
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     
     window.ApiMigration.coinsAndPet(student, -30, [{
       petId: pet.id, updates: { growth: pet.growth, level: pet.level }
@@ -2659,7 +2665,9 @@ function shoppingPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 50;
     if (student.coins < 0) student.coins = 0;
-    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
+    // v218: 写入乐观日志，使历史记录立即显示（DAL 合并时自动去重）
+    _recordOptimisticLog(student.id, student.name, '逛街', `${pet.nickname||pet.name} +${gain}成长值`, -50, gain, pet.id);
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     
     window.ApiMigration.coinsAndPet(student, -50, [{
       petId: pet.id, updates: { growth: pet.growth, level: pet.level }
@@ -2700,7 +2708,9 @@ function travelPet(student,pet){
     updatePetLevel(student, pet.id, gain);
     student.coins = prevCoins - 100;
     if (student.coins < 0) student.coins = 0;
-    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
+    // v218: 写入乐观日志，使历史记录立即显示（DAL 合并时自动去重）
+    _recordOptimisticLog(student.id, student.name, '旅游', `${pet.nickname||pet.name} +${gain}成长值`, -100, gain, pet.id);
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     
     window.ApiMigration.coinsAndPet(student, -100, [{
       petId: pet.id, updates: { growth: pet.growth, level: pet.level }
@@ -2755,7 +2765,9 @@ function revivePet(student,pet){
     
     student.coins = prevCoins - 50;
     if (student.coins < 0) student.coins = 0;
-    // v156: 不再调用 recordAction — 服务端 coinsAndPet 已写入日志
+    // v218: 写入乐观日志，使历史记录立即显示（DAL 合并时自动去重）
+    _recordOptimisticLog(student.id, student.name, '复活', `${pet.nickname||pet.name} 复活`, -50, newGrowth - prevGrowth, pet.id);
+    if(typeof refreshHistoryModalIfOpen === 'function') refreshHistoryModalIfOpen(true);
     
     window.ApiMigration.coinsAndPet(student, -50, [{
       petId: pet.id,
