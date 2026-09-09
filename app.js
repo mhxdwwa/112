@@ -2161,9 +2161,14 @@ let _gridObserver=null, _gridBatchBusy=false;
 
 /* 快速计算学生数据哈希，用于 DOM diff 判断卡片是否需要更新 */
 function _studentDataHash(s) {
+  // v219: 加入装备道具信息，否则装备/卸下道具后 hash 不变，卡片不会重新渲染
+  var eqStr = '';
+  if (s.equippedItems) {
+    eqStr = Object.values(s.equippedItems).sort().join(',');
+  }
   var p = getActivePet(s);
-  if (!p) return s.id + '_nopet_' + (s.coins||0) + '_' + (s.xiandan||0);
-  return s.id + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (p.nickname||'') + '_' + (s.pets?s.pets.length:0);
+  if (!p) return s.id + '_nopet_' + (s.coins||0) + '_' + (s.xiandan||0) + '_eq:' + eqStr;
+  return s.id + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (p.id||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (p.nickname||'') + '_' + (s.pets?s.pets.length:0) + '_eq:' + eqStr;
 }
 
 function _generateStudentCardHTML(s){
