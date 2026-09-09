@@ -277,6 +277,7 @@ function modalBuyItem(itemId){
         var errorMsg = '购买失败';
         if(result.error === '余额不足') errorMsg = '余额不足';
         else if(result.error === '已拥有该商品') errorMsg = '已拥有该商品';
+        else if(result.details) errorMsg = result.details;  // v207: 显示实际错误
         else errorMsg = '网络错误，请稍后重试';
         
         showNotification(errorMsg, '', 'error');

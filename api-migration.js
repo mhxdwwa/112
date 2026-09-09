@@ -625,7 +625,8 @@
         
         console.log('[API] buy-item ok:', params.studentId, 'coins:', result.coinsAfter);
       } else {
-        console.error('[API] buy-item error:', result.error);
+        // v207: 记录完整错误信息（包括 details）
+        console.error('[API] buy-item error:', result.error, result.details || '');
       }
       return result;
     }).catch(function(err) {

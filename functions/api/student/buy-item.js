@@ -53,26 +53,36 @@ export const onRequestPost = async ({ request, env }) => {
     if (!rpcRes.ok) {
       const errText = await rpcRes.text().catch(() => 'RPC call failed');
       console.error('[buy-item] RPC failed:', rpcRes.status, errText);
-      return jsonResponse({ error: 'Server error', details: errText }, 500);
+      // v207: 将实际错误信息传递给客户端，方便定位问题
+      let userError = 'RPC调用失败';
+      try {
+        const errJson = JSON.parse(errText);
+        userError = errJson.message || errJson.hint || errText;
+      } catch(_) {
+        userError = errText.slice(0, 200);
+      }
+      return jsonResponse({ error: 'Server error', details: userError, rpcStatus: rpcRes.status }, 500);
     }
 
     const result = await rpcRes.json();
     
-    // RPC 函数返回 JSONB，直接使用
-    if (result.ok === false || result.ok === 'false') {
+    // v207: Supabase RPC 可能返回数组（当函数返回 SETOF 时）
+    const data = Array.isArray(result) ? result[0] : result;
+
+    if (data.ok === false || data.ok === 'false') {
       // 校验失败（余额不足、已拥有、学生不存在）
-      return jsonResponse(result, 200);
+      return jsonResponse(data, 200);
     }
 
     // 成功：返回最终状态
     return jsonResponse({
       ok: true,
-      coinsAfter: result.coinsAfter,
-      shopItems: result.shopItems
+      coinsAfter: data.coinsAfter,
+      shopItems: data.shopItems
     });
 
   } catch (err) {
     console.error('[buy-item] Unexpected error:', err);
-    return jsonResponse({ error: 'Unexpected error', details: err.message }, 500);
+    return jsonResponse({ error: err.message || 'Unexpected error' }, 500);
   }
 };
