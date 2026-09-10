@@ -28,25 +28,10 @@
  * - Self-write detection: ignores own writes for 30s
  * - Student delta merge: preserves both teacher rewards and student spending
  * - Operation logs synced to Supabase (both teacher and student)
- * - v54: Bandwidth optimization — Realtime-aware polling, exclude heavy fields
- *   from class queries, filter students/pets by class_id at DB level
- * - v59: Fix delete-class race condition — Phase 1 now checks current classesData
- *   (not captured forEach reference) to prevent re-upserting deleted classes.
- *   Phase 6 tracks deleted class IDs across syncs to ensure Supabase cleanup.
- *   Reverted v58 smartRefresh class list sync (caused conflicts with concurrent syncs).
- * - v60: Fix pet is_active sync — derive from student.activePetId instead of
- *   local pet.isActive to prevent sync loop that kept resetting is_active=false.
- * - v102: Stable realtime sync — distinguish own echoes from others' changes:
- *   Student side: skip Realtime events matching own student ID (exact, no time window)
- *   Teacher side: skip recently written rows via _recentlyWrittenRows (3s window)
- *   Concurrent conflicts: snapshot-based delta preservation for coins/growth
- *   Safety net: visibilitychange triggers immediate full refresh (no debounce)
- * 
- * Flow: loadFromSupabase() → classesData + snapshot → UI
- *       UI action → saveClassData() → _syncToSupabase() → Supabase → update snapshot
- *       Realtime event → _applyRealtimeUpdate() → delta merge → targeted render
- *       Student action → _syncStudentToSupabase() → fetch fresh → delta merge → upsert
  */
+
+// v220: 空函数占位 — 零食配置已完全迁移到 Supabase（v201），不再需要从 localStorage 恢复
+function _restoreCustomSnacksFromLS() {}
 
 /* ===== State ===== */
 var _dalReady = false;
