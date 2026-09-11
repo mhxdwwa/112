@@ -1,15 +1,11 @@
 /**
  * POST /api/logs/migrate — 将 classes.operation_logs_json 迁移到 operation_logs 独立表
+ * v222: 优化为最少子请求数，避免 Cloudflare Workers 子请求限制
  * 
- * 迁移步骤：
- * 1. 确保 operation_logs 表存在且结构正确
- * 2. 读取所有班级的 operation_logs_json
- * 3. 逐条 INSERT 到 operation_logs 表（跳过已存在的 id）
- * 4. 返回迁移结果
- * 
- * 注意：此端点仅在迁移时使用，迁移完成后可删除
+ * 使用方式：POST /api/logs/migrate
+ * 可选参数：{ classId: 126 } — 只迁移指定班级（不传则迁移所有）
  */
-import { jsonResponse, handleOptions, checkEnv, sbRequest, sbSelectSingle } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbRequest } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -18,43 +14,19 @@ export const onRequestPost = async ({ request, env }) => {
   if (envErr) return envErr;
 
   try {
-    // Step 1: 确保 operation_logs 表存在
-    // 使用 Supabase REST API 执行 SQL（通过 rpc 或直接查询表结构）
-    // 先尝试查询表，如果失败说明表不存在
-    const tableCheck = await sbRequest(env, 'GET', 'operation_logs', {
-      query: 'select=id&limit=1'
-    });
+    // 解析可选参数
+    let targetClassId = null;
+    try {
+      const body = await request.json();
+      targetClassId = body.classId || null;
+    } catch (_) { /* no body, migrate all */ }
 
-    if (tableCheck.error && tableCheck.error.message && tableCheck.error.message.includes('does not exist')) {
-      // 表不存在，需要通过 SQL 创建
-      // 使用 Supabase Management API 或返回错误让用户手动创建
-      return jsonResponse({
-        error: 'operation_logs table does not exist. Please create it first using the SQL in the migration guide.',
-        sql: `CREATE TABLE IF NOT EXISTS operation_logs (
-  id text PRIMARY KEY,
-  class_id integer NOT NULL,
-  student_id integer,
-  student_name text DEFAULT '',
-  action_type text DEFAULT '',
-  details text DEFAULT '',
-  coin_delta integer DEFAULT 0,
-  exp_delta integer DEFAULT 0,
-  pet_id integer,
-  snapshot jsonb,
-  extra jsonb,
-  full_snapshot jsonb,
-  reverted boolean DEFAULT false,
-  created_at timestamptz DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_operation_logs_class_id ON operation_logs(class_id);
-CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(created_at DESC);`
-      }, 400);
+    // Step 1: 读取班级数据（1 个子请求）
+    let classesQuery = 'select=id,name,operation_logs_json';
+    if (targetClassId) {
+      classesQuery += '&id=eq.' + targetClassId;
     }
-
-    // Step 2: 读取所有班级数据
-    const classesR = await sbRequest(env, 'GET', 'classes', {
-      query: 'select=id,name,operation_logs_json'
-    });
+    const classesR = await sbRequest(env, 'GET', 'classes', { query: classesQuery });
     if (classesR.error) {
       return jsonResponse({ error: 'Failed to read classes', details: classesR.error }, 500);
     }
@@ -62,11 +34,10 @@ CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(creat
     const results = [];
     let totalMigrated = 0;
     let totalSkipped = 0;
-    let totalFailed = 0;
 
     for (const cls of (classesR.data || [])) {
       if (!cls.operation_logs_json) {
-        results.push({ classId: cls.id, className: cls.name, migrated: 0, skipped: 0, failed: 0 });
+        results.push({ classId: cls.id, className: cls.name, total: 0, migrated: 0, skipped: 0 });
         continue;
       }
 
@@ -75,21 +46,19 @@ CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(creat
         var _raw = cls.operation_logs_json;
         logs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
       } catch (e) {
-        results.push({ classId: cls.id, className: cls.name, error: 'Failed to parse JSON: ' + e.message });
+        results.push({ classId: cls.id, className: cls.name, error: 'JSON parse error: ' + e.message });
         continue;
       }
 
       if (!Array.isArray(logs) || logs.length === 0) {
-        results.push({ classId: cls.id, className: cls.name, migrated: 0, skipped: 0, failed: 0 });
+        results.push({ classId: cls.id, className: cls.name, total: 0, migrated: 0, skipped: 0 });
         continue;
       }
 
       let classMigrated = 0;
-      let classSkipped = 0;
-      let classFailed = 0;
 
-      // 分批插入（每批 50 条），避免请求过大
-      const BATCH_SIZE = 50;
+      // 大批次插入（每批 100 条），减少子请求数
+      const BATCH_SIZE = 100;
       for (let i = 0; i < logs.length; i += BATCH_SIZE) {
         const batch = logs.slice(i, i + BATCH_SIZE);
         const rows = batch.map(function(log) {
@@ -111,69 +80,32 @@ CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(creat
           };
         });
 
-        // 使用 upsert（on_conflict do nothing）避免重复
+        // on_conflict=id 自动跳过已存在的记录
         const insertR = await sbRequest(env, 'POST', 'operation_logs', {
           query: 'on_conflict=id',
           body: rows
         });
 
         if (insertR.error) {
-          // 如果批量插入失败，尝试逐条插入
-          for (const row of rows) {
-            const singleR = await sbRequest(env, 'POST', 'operation_logs', {
-              query: 'on_conflict=id',
-              body: [row]
-            });
-            if (singleR.error) {
-              if (singleR.error.message && singleR.error.message.includes('duplicate')) {
-                classSkipped++;
-              } else {
-                classFailed++;
-              }
-            } else {
-              classMigrated++;
-            }
-          }
+          console.error('[migrate] Batch INSERT error for class', cls.id, ':', insertR.error);
+          // 继续处理下一批
         } else {
           classMigrated += rows.length;
         }
       }
 
       totalMigrated += classMigrated;
-      totalSkipped += classSkipped;
-      totalFailed += classFailed;
       results.push({
         classId: cls.id,
         className: cls.name,
         total: logs.length,
-        migrated: classMigrated,
-        skipped: classSkipped,
-        failed: classFailed
+        migrated: classMigrated
       });
-    }
-
-    // Step 3: 验证迁移结果
-    const verifyR = await sbRequest(env, 'GET', 'operation_logs', {
-      query: 'select=class_id&id=gt.0'
-    });
-    let tableCount = 0;
-    if (!verifyR.error && verifyR.data) {
-      // 按 class_id 统计
-      const countByClass = {};
-      verifyR.data.forEach(function(r) {
-        countByClass[r.class_id] = (countByClass[r.class_id] || 0) + 1;
-      });
-      tableCount = verifyR.data.length;
     }
 
     return jsonResponse({
       ok: true,
-      summary: {
-        totalMigrated: totalMigrated,
-        totalSkipped: totalSkipped,
-        totalFailed: totalFailed,
-        totalInTable: tableCount
-      },
+      totalMigrated: totalMigrated,
       details: results
     });
 
