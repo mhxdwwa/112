@@ -43,9 +43,11 @@ export const onRequestPost = async ({ request, env }) => {
   });
 
   // 使用 on_conflict=id 去重（跳过已存在的日志）
+  // v222: 添加 resolution=merge-duplicates 使 on_conflict 生效
   const insertR = await sbRequest(env, 'POST', 'operation_logs', {
     query: 'on_conflict=id',
-    body: rows
+    body: rows,
+    prefer: 'return=minimal,resolution=merge-duplicates'
   });
 
   if (insertR.error) {

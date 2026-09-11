@@ -41,9 +41,11 @@ function sbHeaders(env) {
   };
 }
 
-export async function sbRequest(env, method, table, { query = '', body = null } = {}) {
+export async function sbRequest(env, method, table, { query = '', body = null, prefer = null } = {}) {
   const url = `${env.SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`;
-  const opts = { method, headers: sbHeaders(env) };
+  const headers = sbHeaders(env);
+  if (prefer) headers['Prefer'] = prefer;
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   const data = await res.json().catch(() => null);

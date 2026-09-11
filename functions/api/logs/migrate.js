@@ -33,11 +33,10 @@ export const onRequestPost = async ({ request, env }) => {
 
     const results = [];
     let totalMigrated = 0;
-    let totalSkipped = 0;
 
     for (const cls of (classesR.data || [])) {
       if (!cls.operation_logs_json) {
-        results.push({ classId: cls.id, className: cls.name, total: 0, migrated: 0, skipped: 0 });
+        results.push({ classId: cls.id, className: cls.name, total: 0, migrated: 0 });
         continue;
       }
 
@@ -51,11 +50,12 @@ export const onRequestPost = async ({ request, env }) => {
       }
 
       if (!Array.isArray(logs) || logs.length === 0) {
-        results.push({ classId: cls.id, className: cls.name, total: 0, migrated: 0, skipped: 0 });
+        results.push({ classId: cls.id, className: cls.name, total: 0, migrated: 0 });
         continue;
       }
 
       let classMigrated = 0;
+      let classErrors = 0;
 
       // 大批次插入（每批 100 条），减少子请求数
       const BATCH_SIZE = 100;
@@ -63,7 +63,7 @@ export const onRequestPost = async ({ request, env }) => {
         const batch = logs.slice(i, i + BATCH_SIZE);
         const rows = batch.map(function(log) {
           return {
-            id: log.id,
+            id: String(log.id),
             class_id: cls.id,
             student_id: log.studentId || null,
             student_name: log.studentName || '',
@@ -80,15 +80,16 @@ export const onRequestPost = async ({ request, env }) => {
           };
         });
 
-        // on_conflict=id 自动跳过已存在的记录
+        // v222: 使用 resolution=merge-duplicates 使 on_conflict 生效
         const insertR = await sbRequest(env, 'POST', 'operation_logs', {
           query: 'on_conflict=id',
-          body: rows
+          body: rows,
+          prefer: 'return=minimal,resolution=merge-duplicates'
         });
 
         if (insertR.error) {
-          console.error('[migrate] Batch INSERT error for class', cls.id, ':', insertR.error);
-          // 继续处理下一批
+          console.error('[migrate] Batch INSERT error for class', cls.id, 'batch', i, ':', JSON.stringify(insertR.error));
+          classErrors++;
         } else {
           classMigrated += rows.length;
         }
@@ -99,7 +100,8 @@ export const onRequestPost = async ({ request, env }) => {
         classId: cls.id,
         className: cls.name,
         total: logs.length,
-        migrated: classMigrated
+        migrated: classMigrated,
+        errors: classErrors
       });
     }
 
