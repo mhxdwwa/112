@@ -1,14 +1,11 @@
 /**
- * POST /api/student/buy-item — 商店购买原子操作
+ * POST /api/student/buy-item — 商店购买操作
  * 
- * 调用 Supabase RPC 函数 buy_item，在一个事务内完成：
- * 1. 锁定学生行（FOR UPDATE）
+ * 使用直接 REST API 调用（不依赖 Supabase RPC 函数）：
+ * 1. 读取学生当前数据（coins, shop_items, equipped_items）
  * 2. 校验余额、是否已拥有
- * 3. 原子更新 coins + shop_items
- * 4. 返回最终状态
- * 
- * 然后在 Cloudflare 端追加操作日志到 operation_logs 独立表
- * （与 coins.js / coins-and-pet.js 保持一致的日志写入模式）
+ * 3. 更新 coins + shop_items + equipped_items
+ * 4. 追加操作日志到 operation_logs 表
  * 
  * Body: {
  *   studentId: number,
@@ -35,65 +32,96 @@ export const onRequestPost = async ({ request, env }) => {
   }
 
   try {
-    // 调用 Supabase RPC 函数（原子操作：锁行 → 校验 → 扣金币 + 加道具）
-    const rpcUrl = `${env.SUPABASE_URL}/rest/v1/rpc/buy_item`;
-    const rpcRes = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: {
-        'apikey': env.SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        p_student_id: parseInt(studentId),
-        p_class_id: parseInt(classId),
-        p_item_id: String(itemId),
-        p_price: parseInt(price),
-        p_student_name: String(studentName || '')
-      })
-    });
+    const sid = parseInt(studentId);
+    const cid = parseInt(classId);
+    const p = parseInt(price);
 
-    if (!rpcRes.ok) {
-      const errText = await rpcRes.text().catch(() => 'RPC call failed');
-      console.error('[buy-item] RPC failed:', rpcRes.status, errText);
-      let userError = 'RPC调用失败';
-      try {
-        const errJson = JSON.parse(errText);
-        userError = errJson.message || errJson.hint || errText;
-      } catch(_) {
-        userError = errText.slice(0, 200);
+    // 1. 读取学生当前数据
+    const stuR = await sbSelectSingle(
+      env, 'students',
+      `id=eq.${sid}&select=id,coins,shop_items,equipped_items`
+    );
+    if (stuR.error || !stuR.data || stuR.data.length === 0) {
+      console.error('[buy-item] Student not found:', sid, stuR.error);
+      return jsonResponse({ ok: false, error: 'Student not found' });
+    }
+
+    const stu = stuR.data[0];
+    const currentCoins = stu.coins || 0;
+
+    // 2. 解析 shop_items
+    let shopItems = [];
+    if (stu.shop_items) {
+      if (typeof stu.shop_items === 'string') {
+        try { shopItems = JSON.parse(stu.shop_items); } catch(_) { shopItems = []; }
+      } else if (Array.isArray(stu.shop_items)) {
+        shopItems = stu.shop_items;
       }
-      return jsonResponse({ error: 'Server error', details: userError, rpcStatus: rpcRes.status }, 500);
     }
 
-    const result = await rpcRes.json();
-    
-    // v207: Supabase RPC 可能返回数组（当函数返回 SETOF 时）
-    const data = Array.isArray(result) ? result[0] : result;
-
-    if (data.ok === false || data.ok === 'false') {
-      // 校验失败（余额不足、已拥有、学生不存在）
-      return jsonResponse(data, 200);
+    // 3. 校验：余额
+    if (currentCoins < p) {
+      return jsonResponse({
+        ok: false,
+        error: 'Insufficient balance',
+        currentCoins: currentCoins,
+        required: p
+      });
     }
 
-    // === v221: 追加操作日志到 operation_logs 独立表 ===
-    var coinsAfter = data.coinsAfter !== undefined ? data.coinsAfter : null;
+    // 4. 校验：已拥有
+    if (shopItems.indexOf(itemId) !== -1) {
+      return jsonResponse({ ok: false, error: 'Already owned' });
+    }
+
+    // 5. 添加道具
+    shopItems.push(itemId);
+
+    // 6. 自动佩戴
+    let equippedItems = {};
+    if (stu.equipped_items) {
+      if (typeof stu.equipped_items === 'string') {
+        try { equippedItems = JSON.parse(stu.equipped_items); } catch(_) { equippedItems = {}; }
+      } else if (typeof stu.equipped_items === 'object') {
+        equippedItems = stu.equipped_items;
+      }
+    }
+
+    const category = getCategory(itemId);
+    if (category && !equippedItems[category]) {
+      equippedItems[category] = itemId;
+    }
+
+    // 7. 计算新金币
+    const newCoins = currentCoins - p;
+
+    // 8. 更新学生数据
+    const updateR = await sbUpdate(env, 'students', {
+      coins: newCoins,
+      shop_items: JSON.stringify(shopItems),
+      equipped_items: JSON.stringify(equippedItems)
+    }, `id=eq.${sid}`);
+
+    if (updateR.error) {
+      console.error('[buy-item] Student update failed:', updateR.error);
+      return jsonResponse({ ok: false, error: 'Update failed', details: updateR.error }, 500);
+    }
+
+    // 9. 追加操作日志到 operation_logs 表
     var logId = null;
-
-    if (classId) {
-      var snapshot = { coinsAfter: coinsAfter };
+    if (cid) {
       logId = genId();
       var row = {
         id: logId,
-        class_id: classId,
-        student_id: studentId,
+        class_id: cid,
+        student_id: sid,
         student_name: studentName || '',
         action_type: '商店购买',
         details: '购买「' + (itemName || itemId) + '」',
-        coin_delta: -(price || 0),
+        coin_delta: -p,
         exp_delta: 0,
         pet_id: null,
-        snapshot: snapshot,
+        snapshot: { coinsAfter: newCoins },
         extra: { shopItemId: itemId },
         full_snapshot: null,
         reverted: false,
@@ -103,16 +131,15 @@ export const onRequestPost = async ({ request, env }) => {
       var logWriteR = await sbRequest(env, 'POST', 'operation_logs', { body: [row] });
       if (logWriteR.error) {
         console.error('[buy-item] Log INSERT failed:', logWriteR.error);
-        // 日志写入失败不影响购买结果
       }
     }
 
-    // 成功：返回最终状态
+    // 10. 返回成功
     return jsonResponse({
       ok: true,
-      coinsAfter: coinsAfter,
-      shopItems: data.shopItems,
-      equippedItems: data.equippedItems,
+      coinsAfter: newCoins,
+      shopItems: shopItems,
+      equippedItems: equippedItems,
       logId: logId
     });
 
@@ -121,3 +148,16 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: err.message || 'Unexpected error' }, 500);
   }
 };
+
+/**
+ * 根据道具 ID 判断装备类别
+ */
+function getCategory(itemId) {
+  if (itemId.indexOf('border_') === 0) return 'borders';
+  if (itemId.indexOf('top_') === 0) return 'topAccessory';
+  if (itemId.indexOf('base_') === 0) return 'baseEffect';
+  if (itemId.indexOf('ptcl_') === 0) return 'particles';
+  if (itemId.indexOf('title_') === 0) return 'titles';
+  if (itemId.indexOf('scene_') === 0) return 'scenes';
+  return null;
+}
