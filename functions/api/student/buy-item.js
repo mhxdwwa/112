@@ -112,6 +112,7 @@ export const onRequestPost = async ({ request, env }) => {
       ok: true,
       coinsAfter: coinsAfter,
       shopItems: data.shopItems,
+      equippedItems: data.equippedItems,
       logId: logId
     });
 

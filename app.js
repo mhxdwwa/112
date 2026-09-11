@@ -2901,7 +2901,7 @@ function showBatchEditModal(){ if(typeof currentUser!=='undefined'&&currentUser&
   customActions.forEach(act=>{ const sign = act.coins>0 ? `+${act.coins}` : `${act.coins}`; studentListHtml += `<option value="${act.id}">${esc(act.name)} (${sign}金币)</option>`; });
   studentListHtml += '</select></label><label style="margin-left:10px;"><input type="checkbox" id="batchCustomToggle" onchange="document.getElementById(\'batchCustomCoins\').style.display=this.checked?\'inline-block\':\'none\';var xt=document.getElementById(\'batchCustomXdToggle\');document.getElementById(\'batchActionSelect\').disabled=this.checked||(xt&&xt.checked);"> 自定义加金币</label><span id="batchCustomCoins" style="display:none;margin-left:8px;"><input type="number" id="batchCustomValue" style="width:70px;padding:4px 6px;border:1px solid #ccc;border-radius:8px;font-size:14px;" placeholder="金币数" value="10"> 金币</span><label style="margin-left:10px;"><input type="checkbox" id="batchCustomXdToggle" onchange="document.getElementById(\'batchCustomXd\').style.display=this.checked?\'inline-block\':\'none\';var ct=document.getElementById(\'batchCustomToggle\');document.getElementById(\'batchActionSelect\').disabled=this.checked||(ct&&ct.checked);"> 自定义添加仙丹</label><span id="batchCustomXd" style="display:none;margin-left:8px;"><input type="number" id="batchCustomXdValue" style="width:70px;padding:4px 6px;border:1px solid #ccc;border-radius:8px;font-size:14px;" placeholder="仙丹数" value="1"> 仙丹</span></div>'; showModal('批量奖惩', studentListHtml, [{text:'取消', class:'btn-secondary', onclick:'closeModal()'},{text:'执行', class:'btn-primary', onclick:'confirmBatchAction()'}], false); setTimeout(()=>{ const selectAll = document.getElementById('selectAllBatch'); if(selectAll) selectAll.onchange = (e) => toggleAllBatch(e.target.checked); }, 50); }
 function toggleAllBatch(checked){ const chks = document.querySelectorAll('.batch-student-chk'); chks.forEach(chk => chk.checked = checked); }
-function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} const cur = classesData.find(c=>c.id===currentClassId); if(!cur) return; const isCustom = document.getElementById('batchCustomToggle')?.checked; const isCustomXd = document.getElementById('batchCustomXdToggle')?.checked; let action; if(isCustom){ const val = parseInt(document.getElementById('batchCustomValue')?.value); if(isNaN(val)||val===0){ showNotification('请输入有效的金币数','不能为0','warning'); return; } action = {id:'_custom_', name:'自定义'+(val>0?'+':'')+val+'金币', coins: val}; } else if(!isCustomXd){ const actionId = document.getElementById('batchActionSelect')?.value; action = customActions.find(a=>String(a.id)===String(actionId)); if(!action){ showNotification('错误','未选择有效的奖惩项目','error'); return; } } let customXdVal = 0; if(isCustomXd){ customXdVal = parseInt(document.getElementById('batchCustomXdValue')?.value); if(isNaN(customXdVal)||customXdVal===0){ showNotification('请输入有效的仙丹数','不能为0','warning'); return; } } const selectedIds = Array.from(document.querySelectorAll('.batch-student-chk:checked')).map(cb=>cb.value); if(selectedIds.length===0){ showNotification('请至少选择一名学生','','warning'); return; } let updatedCount = 0; let xdUpdatedCount = 0; let _batchCoinDeltas = new Map(); cur.students.forEach(s=>{ if(selectedIds.includes(s.id.toString())){ if(isCustomXd && customXdVal !== 0){ const before = s.xiandan || 0; s.xiandan = Math.max(0, before + customXdVal); const actualDelta = (s.xiandan || 0) - before; if(actualDelta !== 0){ if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `自定义${actualDelta>0?'+':''}${actualDelta}仙丹，共${s.xiandan}枚`, 0, 0, getActivePet(s)?.id||null);} xdUpdatedCount++;if(window.USE_API&&window.ApiMigration){window.ApiMigration.updateStudent(s.id,{xiandan:s.xiandan}).catch(function(e){console.warn('[v212] updateStudent xiandan failed:', e);});} } } if(isCustomXd && !isCustom) return; let pet = getActivePet(s); if(pet){ let coinsChange = action.coins; let isPenalty = coinsChange < 0; let expChange = 0; if(pet.isDead){ if(isPenalty){ showNotification('操作跳过',`${s.name} 宠物已死亡，惩罚跳过`,'warning'); return; } else { s.coins += coinsChange; if(s.coins<0) s.coins=0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name} (宠物死亡)`, coinsChange, 0, pet.id);} _batchCoinDeltas.set(s.id, coinsChange); updatedCount++; return; } } if(isPenalty){ let absDeduct = Math.abs(coinsChange); let coinDeducted = Math.min(absDeduct, s.coins); let remaining = absDeduct - coinDeducted; s.coins -= coinDeducted; _batchCoinDeltas.set(s.id, -coinDeducted); expChange = 0; if(remaining > 0){ expChange = -remaining; let prevGrowth = pet.growth; pet.growth += expChange; if(pet.growth <= 0){ pet.growth = 0; pet.isDead = true; pet.deathGrowth = prevGrowth; pet.deathDate = new Date().toISOString(); pet.penaltyStreak = 0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '惩罚致死', `${action.name} 导致死亡（金币不足，经验扣至0）`, -absDeduct, -prevGrowth, pet.id, {causedDeath: true, prevGrowth: prevGrowth});} updatedCount++; return; } updatePetLevel(s, pet.id, expChange); } if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name}`, -coinDeducted, expChange, pet.id);} updatedCount++; } else { if(pet.penaltyStreak !== undefined) pet.penaltyStreak = 0; s.coins += coinsChange; if(s.coins<0) s.coins=0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name}`, coinsChange, 0, pet.id);} _batchCoinDeltas.set(s.id, coinsChange); updatedCount++; } } else { s.coins += action.coins; if(s.coins<0) s.coins=0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name} (无宠物)`, action.coins, 0, null);} _batchCoinDeltas.set(s.id, action.coins); updatedCount++; } } });   if(updatedCount>0 || xdUpdatedCount>0){ saveClassData('coins'); scheduleAllRenders(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg = ''; if(updatedCount>0) msg += `已对${updatedCount}名学生执行"${action ? action.name : ''}"`; if(xdUpdatedCount>0) msg += `${msg?'，':''}已对${xdUpdatedCount}名学生${customXdVal>0?'增加':'扣除'}仙丹`; showNotification('批量操作完成',msg,'success'); } else { showNotification('无变化','操作未生效','info'); }
+function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.type==='student'){showNotification('权限不足','此操作仅限教师','error');return;} const cur = classesData.find(c=>c.id===currentClassId); if(!cur) return; const isCustom = document.getElementById('batchCustomToggle')?.checked; const isCustomXd = document.getElementById('batchCustomXdToggle')?.checked; let action; if(isCustom){ const val = parseInt(document.getElementById('batchCustomValue')?.value); if(isNaN(val)||val===0){ showNotification('请输入有效的金币数','不能为0','warning'); return; } action = {id:'_custom_', name:'自定义'+(val>0?'+':'')+val+'金币', coins: val}; } else if(!isCustomXd){ const actionId = document.getElementById('batchActionSelect')?.value; action = customActions.find(a=>String(a.id)===String(actionId)); if(!action){ showNotification('错误','未选择有效的奖惩项目','error'); return; } } let customXdVal = 0; if(isCustomXd){ customXdVal = parseInt(document.getElementById('batchCustomXdValue')?.value); if(isNaN(customXdVal)||customXdVal===0){ showNotification('请输入有效的仙丹数','不能为0','warning'); return; } } const selectedIds = Array.from(document.querySelectorAll('.batch-student-chk:checked')).map(cb=>cb.value); if(selectedIds.length===0){ showNotification('请至少选择一名学生','','warning'); return; } let updatedCount = 0; let xdUpdatedCount = 0; let _batchCoinDeltas = new Map(); cur.students.forEach(s=>{ if(selectedIds.includes(s.id.toString())){ if(isCustomXd && customXdVal !== 0){ const before = s.xiandan || 0; s.xiandan = Math.max(0, before + customXdVal); const actualDelta = (s.xiandan || 0) - before; if(actualDelta !== 0){ if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `自定义${actualDelta>0?'+':''}${actualDelta}仙丹，共${s.xiandan}枚`, 0, 0, getActivePet(s)?.id||null);} xdUpdatedCount++;} } } if(isCustomXd && !isCustom) return; let pet = getActivePet(s); if(pet){ let coinsChange = action.coins; let isPenalty = coinsChange < 0; let expChange = 0; if(pet.isDead){ if(isPenalty){ showNotification('操作跳过',`${s.name} 宠物已死亡，惩罚跳过`,'warning'); return; } else { s.coins += coinsChange; if(s.coins<0) s.coins=0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name} (宠物死亡)`, coinsChange, 0, pet.id);} _batchCoinDeltas.set(s.id, coinsChange); updatedCount++; return; } } if(isPenalty){ let absDeduct = Math.abs(coinsChange); let coinDeducted = Math.min(absDeduct, s.coins); let remaining = absDeduct - coinDeducted; s.coins -= coinDeducted; _batchCoinDeltas.set(s.id, -coinDeducted); expChange = 0; if(remaining > 0){ expChange = -remaining; let prevGrowth = pet.growth; pet.growth += expChange; if(pet.growth <= 0){ pet.growth = 0; pet.isDead = true; pet.deathGrowth = prevGrowth; pet.deathDate = new Date().toISOString(); pet.penaltyStreak = 0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '惩罚致死', `${action.name} 导致死亡（金币不足，经验扣至0）`, -absDeduct, -prevGrowth, pet.id, {causedDeath: true, prevGrowth: prevGrowth});} updatedCount++; return; } updatePetLevel(s, pet.id, expChange); } if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name}`, -coinDeducted, expChange, pet.id);} updatedCount++; } else { if(pet.penaltyStreak !== undefined) pet.penaltyStreak = 0; s.coins += coinsChange; if(s.coins<0) s.coins=0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name}`, coinsChange, 0, pet.id);} _batchCoinDeltas.set(s.id, coinsChange); updatedCount++; } } else { s.coins += action.coins; if(s.coins<0) s.coins=0; if(!(window.USE_API&&window.ApiMigration)){recordAction(s.id, s.name, '批量奖惩', `${action.name} (无宠物)`, action.coins, 0, null);} _batchCoinDeltas.set(s.id, action.coins); updatedCount++; } } });   if(updatedCount>0 || xdUpdatedCount>0){ saveClassData('coins'); scheduleAllRenders(); if(currentModalStudentId) refreshCurrentStudentModal(); let msg = ''; if(updatedCount>0) msg += `已对${updatedCount}名学生执行"${action ? action.name : ''}"`; if(xdUpdatedCount>0) msg += `${msg?'，':''}已对${xdUpdatedCount}名学生${customXdVal>0?'增加':'扣除'}仙丹`; showNotification('批量操作完成',msg,'success'); } else { showNotification('无变化','操作未生效','info'); }
   // v179: API 模式 — 使用批量原子端点，解决并发竞态导致日志丢失的问题
   if (window.USE_API && window.ApiMigration) {
     var _batchItems = [];
@@ -2910,42 +2910,72 @@ function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&
         var _pet = getActivePet(s);
         // v213: guard action (undefined for 仙丹-only mode)
         var _coinDelta = _batchCoinDeltas.has(s.id) ? _batchCoinDeltas.get(s.id) : (action ? action.coins : 0);
-        if (_pet && (isCustom || (!isCustom && !isCustomXd))) {
+        // v223: 仙丹变更合并到批量请求，避免逐个 updateStudent
+        var _xiandanDelta = (isCustomXd && customXdVal !== 0) ? customXdVal : 0;
+        var _hasCoinOrPet = (isCustom || (!isCustom && !isCustomXd));
+        var _hasXdOnly = isCustomXd && !isCustom && _xiandanDelta !== 0;
+        
+        if (_pet && _hasCoinOrPet) {
           _batchItems.push({
-            studentId: s.id, studentName: s.name, coinDelta: _coinDelta,
+            studentId: s.id, studentName: s.name, coinDelta: _coinDelta, xiandanDelta: _xiandanDelta,
             actionType: '批量奖惩', details: action.name,
             expDelta: 0, petId: _pet.id,
             petUpdates: [{ petId: _pet.id, updates: { growth: _pet.growth, level: _pet.level, is_dead: _pet.isDead, penalty_streak: _pet.penaltyStreak || 0 } }],
             checkBalance: _coinDelta < 0
           });
           _recordOptimisticLog(s.id, s.name, '批量奖惩', action.name, _coinDelta, 0, _pet.id);
-        } else if (!_pet && !isCustomXd) {
+        } else if (!_pet && _hasCoinOrPet) {
           _batchItems.push({
-            studentId: s.id, studentName: s.name, coinDelta: _coinDelta,
+            studentId: s.id, studentName: s.name, coinDelta: _coinDelta, xiandanDelta: _xiandanDelta,
             actionType: '批量奖惩', details: action.name,
             expDelta: 0, petId: null, petUpdates: [],
             checkBalance: _coinDelta < 0
           });
           _recordOptimisticLog(s.id, s.name, '批量奖惩', action.name, _coinDelta, 0, null);
+        } else if (_hasXdOnly) {
+          // v223: 仙丹-only 模式也走批量请求
+          _batchItems.push({
+            studentId: s.id, studentName: s.name, coinDelta: 0, xiandanDelta: _xiandanDelta,
+            actionType: '批量奖惩', details: '自定义' + (_xiandanDelta > 0 ? '+' : '') + _xiandanDelta + '仙丹',
+            expDelta: 0, petId: null, petUpdates: [],
+            checkBalance: false
+          });
         }
       }
     });
     // v179: 异步发送批量API（后台写入服务器，不阻塞UI）
+    // v223: 分批处理，每批最多 15 人，防止 Worker 超时
     if (_batchItems.length > 0) {
-      window.ApiMigration.batchCoins(_batchItems).then(function(result) {
-        if (result.ok) {
-          (result.results || []).forEach(function(r) {
-            if (r.ok) {
-              var stu = cur.students.find(function(s) { return s.id === r.studentId; });
-              if (stu) stu.coins = r.coinsAfter;
+      var _BATCH_SIZE = 15;
+      var _batchPromises = [];
+      for (var _i = 0; _i < _batchItems.length; _i += _BATCH_SIZE) {
+        var _chunk = _batchItems.slice(_i, _i + _BATCH_SIZE);
+        _batchPromises.push(
+          window.ApiMigration.batchCoins(_chunk).then(function(result) {
+            if (result.ok) {
+              (result.results || []).forEach(function(r) {
+                if (r.ok) {
+                  var stu = cur.students.find(function(s) { return s.id === r.studentId; });
+                  if (stu) {
+                    stu.coins = r.coinsAfter;
+                    // v223: 应用服务端返回的仙丹值
+                    if (r.xiandanAfter !== undefined) stu.xiandan = r.xiandanAfter;
+                  }
+                }
+              });
+            } else {
+              console.error('[v179] Batch API error:', result.error);
             }
-          });
-          saveClassData('coins');
-        } else {
-          console.error('[v179] Batch API error:', result.error);
-        }
-      }).catch(function(err) {
-        console.error('[v179] Batch API request failed:', err);
+            return result;
+          }).catch(function(err) {
+            console.error('[v179] Batch API request failed:', err);
+            return { ok: false, error: err.message };
+          })
+        );
+      }
+      // 所有批次完成后统一保存
+      Promise.all(_batchPromises).then(function() {
+        saveClassData('coins');
       });
     }
     // v213: 仙丹历史记录（API mode）— 修复仙丹变更不写入历史操作的问题

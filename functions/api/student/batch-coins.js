@@ -104,7 +104,7 @@ export const onRequestPost = async ({ request, env }) => {
   const newLogs = [];
 
   for (const item of items) {
-    const { studentId, studentName, coinDelta, actionType, details, expDelta = 0, petId = null, petUpdates = [], checkBalance = false } = item;
+    const { studentId, studentName, coinDelta, actionType, details, expDelta = 0, petId = null, petUpdates = [], checkBalance = false, xiandanDelta = 0 } = item;
 
     const student = studentMap[studentId];
     if (!student) {
@@ -113,6 +113,7 @@ export const onRequestPost = async ({ request, env }) => {
     }
 
     const beforeCoins = student.coins || 0;
+    const beforeXiandan = student.xiandan || 0;
 
     // 检查余额
     if (checkBalance && coinDelta < 0 && beforeCoins + coinDelta < 0) {
@@ -123,8 +124,15 @@ export const onRequestPost = async ({ request, env }) => {
     // 计算新金币
     const newCoins = Math.max(0, beforeCoins + coinDelta);
 
-    // 写入金币
-    const coinUpdateR = await sbUpdate(env, 'students', { coins: newCoins }, `id=eq.${studentId}`);
+    // v223: 计算新仙丹
+    const newXiandan = Math.max(0, beforeXiandan + xiandanDelta);
+
+    // 写入金币和仙丹（合并为一次 UPDATE）
+    const studentUpdate = { coins: newCoins };
+    if (xiandanDelta !== 0) {
+      studentUpdate.xiandan = newXiandan;
+    }
+    const coinUpdateR = await sbUpdate(env, 'students', studentUpdate, `id=eq.${studentId}`);
     if (coinUpdateR.error) {
       results.push({ studentId, ok: false, error: 'Failed to update coins' });
       continue;
@@ -176,7 +184,7 @@ export const onRequestPost = async ({ request, env }) => {
     };
     newLogs.push(log);
 
-    results.push({ studentId, ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, petResults, logId: log.id });
+    results.push({ studentId, ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, xiandanBefore: beforeXiandan, xiandanAfter: newXiandan, petResults, logId: log.id });
   }
 
   // 4. v221: 批量 INSERT 到 operation_logs 独立表（无竞态）
@@ -199,7 +207,12 @@ export const onRequestPost = async ({ request, env }) => {
         created_at: log.timestamp
       };
     });
-    const insertR = await sbRequest(env, 'POST', 'operation_logs', { body: rows });
+    // v223: 添加 on_conflict=id 去重，防止重试导致重复日志
+    const insertR = await sbRequest(env, 'POST', 'operation_logs', {
+      query: 'on_conflict=id',
+      body: rows,
+      prefer: 'return=minimal,resolution=merge-duplicates'
+    });
     if (insertR.error) {
       console.error('[batch-coins] Log INSERT failed:', insertR.error);
     }
