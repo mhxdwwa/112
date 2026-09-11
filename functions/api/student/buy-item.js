@@ -45,11 +45,11 @@ export const onRequestPost = async ({ request, env }) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        p_student_id: studentId,
-        p_class_id: classId,
-        p_item_id: itemId,
-        p_price: price,
-        p_student_name: studentName || ''
+        p_student_id: parseInt(studentId),
+        p_class_id: parseInt(classId),
+        p_item_id: String(itemId),
+        p_price: parseInt(price),
+        p_student_name: String(studentName || '')
       })
     });
 
