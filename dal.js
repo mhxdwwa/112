@@ -50,7 +50,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mob
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '208.0';
+var _DAL_VERSION = '221.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -185,7 +185,7 @@ function _applySnackConfigRealtimeUpdate(config) {
 
 /* ===== v54: Bandwidth Optimization ===== */
 // Classes table columns to select in load/refresh queries.
-// Excludes operation_logs_json (2MB+) which is loaded separately by _loadOperationLogs().
+// Excludes operation_logs_json (legacy JSON field) — logs now in operation_logs table (v221).
 // This single change saves ~2-5MB per refresh cycle.
 var _CLASS_COLS = 'id, name, teacher_id, created_at';
 
@@ -1232,16 +1232,15 @@ function _loadCustomActions() {
   }).catch(function(e) { console.warn('[DAL] custom_actions load error:', e); });
 }
 
-/* ===== Operation Logs: classes.operation_logs_json architecture (v29) =====
+/* ===== Operation Logs: operation_logs 独立表架构 (v221) =====
  *
- * v29: Logs are stored as JSON in the classes table — same sync channel as student data.
- * No more operation_logs table (had FK constraints that broke on mobile).
- * Uses upsert (same pattern as student coins) — proven reliable.
- * Max 5000 logs per class — oldest are trimmed automatically.
- * v104: Logs older than 3 days are automatically removed (keep max 5000).
+ * v221: 日志从 classes.operation_logs_json (JSON字段) 迁移到 operation_logs 独立表。
+ * 每条日志是一行独立的 INSERT，55 个学生同时写入 55 条，互不影响，数据库保证每行都能写入。
+ * 彻底消除了 JSON read-modify-write 的竞态条件。
  *
- * WRITE: UI action → saveLogs() → _writeUnsyncedLogsToSupabase() → classes.upsert
- * READ:  init/refresh → _loadOperationLogs() → classes.select → parse JSON
+ * WRITE: UI action → API endpoint → INSERT INTO operation_logs
+ * READ:  init/refresh → /api/logs → SELECT FROM operation_logs
+ * REALTIME: Subscribe to operation_logs table for live updates
  */
 
 var _OP_LOGS_MAX_PER_CLASS = 3000; // v105: Reduced from 5000 to 3000
@@ -1334,7 +1333,7 @@ function _mergeLoadedLogs(allLogs) {
   console.log('[DAL] v159 Loaded ' + allLogs.length + ' logs, ' + localOnly.length + ' local-only preserved, ' + Object.keys(optimisticToRemove).length + ' optimistic deduped');
 }
 
-// v29: Load operation logs from classes.operation_logs_json
+// v221: Load operation logs from operation_logs 独立表
 function _loadOperationLogs() {
   if (!currentUser || !currentUser.id) return Promise.resolve();
   
@@ -1368,8 +1367,8 @@ function _loadOperationLogs() {
         var allLogs = [];
         logArrays.forEach(function(arr) { allLogs = allLogs.concat(arr); });
         _mergeLoadedLogs(allLogs);
-        // v143: API 模式下不需要 merge student pending logs
-        // （日志已通过 API 直接写入 classes.operation_logs_json）
+        // v221: API 模式下不需要 merge student pending logs
+        // （日志已通过 API 直接写入 operation_logs 独立表）
       });
     });
   }
@@ -1551,7 +1550,7 @@ function _loadOperationLogs() {
 // merge into classes.operation_logs_json, then clear students.pending_logs_json.
 function _mergeStudentPendingLogs(classIds) {
   if (!classIds || classIds.length === 0) return Promise.resolve(0);
-  // v143: API 模式 — 日志已通过 API 直接写入 classes.operation_logs_json，无需合并
+  // v221: API 模式 — 日志已通过 API 直接写入 operation_logs 独立表，无需合并
   if (typeof window.USE_API !== 'undefined' && window.USE_API) return Promise.resolve(0);
 
   // Step 1: Read all students with pending logs in these classes
@@ -3682,24 +3681,15 @@ function _setupRealtimeSubscriptions() {
   }
 
   try {
-    // Subscribe to classes table — coalesced refresh on change
-    // Note: operation_logs are stored in classes.operation_logs_json (v29),
-    // so classes table changes include both class data and log updates
+    // v221: Subscribe to classes table — class metadata changes only
+    // operation_logs 已迁移到独立表，不再监听 classes 表的 operation_logs_json 变化
     var classChannel = db.channel('dal-classes-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // 检查是否只有 operation_logs_json 变化（通过比较列）
-        // 如果只有日志变化，使用轻量级刷新（不重建UI）
-        if (payload.columns && payload.columns.length === 1 && payload.columns[0].name === 'operation_logs_json') {
-          console.log('[DAL] v102 Classes channel: logs-only change, using lightweight refresh');
-          _refreshLogsOnly();
-        } else {
-          // v102: classes 表变化（班级名称等）不影响学生/宠物数据
-          // 只刷新班级列表 UI，不查询数据库
-          console.log('[DAL] v102 Classes channel: class metadata change, refreshing class list UI only');
-          if (typeof renderClassList === 'function') {
-            renderClassList();
-          }
+        // v221: classes 表变化只处理班级元数据（名称等），日志变化由 operation_logs channel 处理
+        console.log('[DAL] v221 Classes channel: class metadata change, refreshing class list UI only');
+        if (typeof renderClassList === 'function') {
+          renderClassList();
         }
       })
       .subscribe(function(status) {
@@ -3712,31 +3702,49 @@ function _setupRealtimeSubscriptions() {
     _realtimeChannels.push(classChannel);
     channelsCreated++;
 
+    // v221: Subscribe to operation_logs table — 日志变更实时推送
+    var logsChannel = db.channel('dal-oplogs-' + _clientId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function(payload) {
+        _realtimeLastEventTime = Date.now();
+        console.log('[DAL] v221 Operation logs channel: ' + payload.eventType + ' — lightweight log refresh');
+        _refreshLogsOnly();
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') _onChannelConfirmed();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[DAL] OpLogs channel status:', status);
+        }
+      });
+    _realtimeChannels.push(logsChannel);
+    channelsCreated++;
+
     // Subscribe to students table — v100: 直接用 payload.new 更新内存数据
     var studentChannel = db.channel('dal-students-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v115: Teacher — if student's pending_logs_json changed, merge IMMEDIATELY.
-        // This eliminates the 30s delay from _safetyNetTick periodic merge.
+        // v221: API 模式下日志已直接写入 operation_logs 表，无需合并 pending_logs_json
+        // operation_logs 表的 Realtime 订阅会自动推送新日志
         if (currentUser && currentUser.type === 'teacher' && payload && payload.new) {
-          var _plj = payload.new.pending_logs_json;
-          if (_plj && _plj !== '[]' && _plj !== 'null' && _plj !== '') {
-            console.log('[DAL] v115 ⚡ Student pending_logs_json changed via Realtime — immediate merge');
-            var _mergeClassId = payload.new.class_id;
-            if (_mergeClassId) {
-              _mergeStudentPendingLogs([_mergeClassId]).then(function(mergedCount) {
-                if (mergedCount > 0) {
-                  console.log('[DAL] v115 ⚡ Immediate merge: ' + mergedCount + ' logs merged');
-                  // Reload operation logs and refresh history UI
-                  return _loadOperationLogsAfterMerge([_mergeClassId]).then(function() {
-                    if (typeof refreshHistoryModalIfOpen === 'function') {
-                      clearTimeout(window._historyRefreshDebounce);
-                      window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 500);
-                    }
-                    if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-                  });
-                }
-              });
+          if (!(typeof window.USE_API !== 'undefined' && window.USE_API)) {
+            // 旧模式：合并学生 pending_logs_json
+            var _plj = payload.new.pending_logs_json;
+            if (_plj && _plj !== '[]' && _plj !== 'null' && _plj !== '') {
+              console.log('[DAL] v115 ⚡ Student pending_logs_json changed via Realtime — immediate merge');
+              var _mergeClassId = payload.new.class_id;
+              if (_mergeClassId) {
+                _mergeStudentPendingLogs([_mergeClassId]).then(function(mergedCount) {
+                  if (mergedCount > 0) {
+                    console.log('[DAL] v115 ⚡ Immediate merge: ' + mergedCount + ' logs merged');
+                    return _loadOperationLogsAfterMerge([_mergeClassId]).then(function() {
+                      if (typeof refreshHistoryModalIfOpen === 'function') {
+                        clearTimeout(window._historyRefreshDebounce);
+                        window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 500);
+                      }
+                      if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+                    });
+                  }
+                });
+              }
             }
           }
         }
@@ -3850,23 +3858,23 @@ function _safetyNetTick() {
     _refreshFromSupabase();
     return;
   }
-  // v112: Periodically merge student pending logs (teacher only).
-  // Students write to students.pending_logs_json; teacher merges them into classes.operation_logs_json.
-  // This runs regardless of Realtime status — student logs need to be merged even when Realtime is healthy.
-  if (currentUser && currentUser.type === 'teacher' && typeof _mergeStudentPendingLogs === 'function') {
-    if (!_safetyNetTick._lastMergeTime || Date.now() - _safetyNetTick._lastMergeTime > 30000) {
-      _safetyNetTick._lastMergeTime = Date.now();
-      _getOpLogClassIds().then(function(classIds) {
-        if (classIds && classIds.length > 0) {
-          _mergeStudentPendingLogs(classIds).then(function(mergedCount) {
-            if (mergedCount > 0) {
-              console.log('[DAL] v112 Periodic merge: ' + mergedCount + ' student pending logs merged');
-              // Re-load operation logs to include the newly merged ones
-              return _loadOperationLogsAfterMerge(classIds);
-            }
-          });
-        }
-      });
+  // v221: API 模式下不需要合并 pending_logs（日志已通过 API 直接写入 operation_logs 表）
+  // 旧模式下仍需定期合并学生 pending_logs_json
+  if (!(typeof window.USE_API !== 'undefined' && window.USE_API)) {
+    if (currentUser && currentUser.type === 'teacher' && typeof _mergeStudentPendingLogs === 'function') {
+      if (!_safetyNetTick._lastMergeTime || Date.now() - _safetyNetTick._lastMergeTime > 30000) {
+        _safetyNetTick._lastMergeTime = Date.now();
+        _getOpLogClassIds().then(function(classIds) {
+          if (classIds && classIds.length > 0) {
+            _mergeStudentPendingLogs(classIds).then(function(mergedCount) {
+              if (mergedCount > 0) {
+                console.log('[DAL] v112 Periodic merge: ' + mergedCount + ' student pending logs merged');
+                return _loadOperationLogsAfterMerge(classIds);
+              }
+            });
+          }
+        });
+      }
     }
   }
 

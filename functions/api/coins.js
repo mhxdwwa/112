@@ -13,7 +13,7 @@
  *   checkBalance: boolean,
  * }
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, genId } from '../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, sbRequest, genId } from '../_utils.js';
 
 // 阶段名称映射（与客户端 PET_CONFIG stages 保持一致）
 const STAGE_NAMES = {
@@ -74,33 +74,36 @@ export const onRequestPost = async ({ request, env }) => {
     }
   }
 
-  // 5. 写操作日志
+  // 5. v221: 写操作日志 — INSERT 到 operation_logs 独立表
   let logId = null;
   if (classId) {
     const snapshot = { coinsBefore: beforeCoins, coinsAfter: newCoins };
     if (petSnapshot) {
       Object.assign(snapshot, petSnapshot);
     }
-    const log = {
-      id: genId(),
-      timestamp: new Date().toISOString(),
-      classId, studentId, studentName: studentName || '',
-      actionType: actionType || '', details: details || '',
-      coinDelta: delta, expDelta, petId,
-      snapshot,
+    logId = genId();
+    const row = {
+      id: logId,
+      class_id: classId,
+      student_id: studentId,
+      student_name: studentName || '',
+      action_type: actionType || '',
+      details: details || '',
+      coin_delta: delta,
+      exp_delta: expDelta,
+      pet_id: petId,
+      snapshot: snapshot,
+      extra: null,
+      full_snapshot: null,
       reverted: false,
+      created_at: new Date().toISOString()
     };
 
-    const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
-    let existingLogs = [];
-    if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-      var _raw = logsR.data[0].operation_logs_json; existingLogs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
+    const insertR = await sbRequest(env, 'POST', 'operation_logs', { body: [row] });
+    if (insertR.error) {
+      console.error('[coins] Log INSERT failed:', insertR.error);
+      // 日志写入失败不影响金币操作结果
     }
-    existingLogs.unshift(log);
-    if (existingLogs.length > 3000) existingLogs = existingLogs.slice(0, 3000);
-
-    await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(existingLogs) }, `id=eq.${classId}`);
-    logId = log.id;
   }
 
   return jsonResponse({ ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, delta, logId });

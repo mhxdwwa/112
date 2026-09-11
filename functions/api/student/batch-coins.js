@@ -21,7 +21,7 @@
  *   }],
  * }
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, genId } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, sbRequest, genId } from '../../_utils.js';
 
 const STAGE_NAMES = {
   1: '神秘宠物蛋', 2: '可爱幼体', 3: '成长伙伴', 4: '成熟伙伴',
@@ -179,16 +179,30 @@ export const onRequestPost = async ({ request, env }) => {
     results.push({ studentId, ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, petResults, logId: log.id });
   }
 
-  // 4. 一次性写入所有日志（单次 read-modify-write，无竞态）
+  // 4. v221: 批量 INSERT 到 operation_logs 独立表（无竞态）
   if (newLogs.length > 0) {
-    const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
-    let existingLogs = [];
-    if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-      var _raw = logsR.data[0].operation_logs_json; existingLogs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
+    const rows = newLogs.map(function(log) {
+      return {
+        id: log.id,
+        class_id: log.classId,
+        student_id: log.studentId,
+        student_name: log.studentName || '',
+        action_type: log.actionType || '',
+        details: log.details || '',
+        coin_delta: log.coinDelta,
+        exp_delta: log.expDelta,
+        pet_id: log.petId,
+        snapshot: log.snapshot,
+        extra: null,
+        full_snapshot: null,
+        reverted: false,
+        created_at: log.timestamp
+      };
+    });
+    const insertR = await sbRequest(env, 'POST', 'operation_logs', { body: rows });
+    if (insertR.error) {
+      console.error('[batch-coins] Log INSERT failed:', insertR.error);
     }
-    // 新日志插入头部
-    const merged = [...newLogs, ...existingLogs].slice(0, 3000);
-    await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(merged) }, `id=eq.${classId}`);
   }
 
   return jsonResponse({ ok: true, results, logCount: newLogs.length });

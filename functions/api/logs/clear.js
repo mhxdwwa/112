@@ -1,8 +1,8 @@
 /**
  * POST /api/logs/clear — 清空班级操作日志
- * v156: 一键清空历史记录功能
+ * v221: DELETE FROM operation_logs（替代设置 operation_logs_json = '[]'）
  */
-import { jsonResponse, handleOptions, checkEnv, sbUpdate } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbRequest } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -17,11 +17,13 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Missing classId' }, 400);
   }
 
-  // 将 operation_logs_json 设置为空数组
-  const updateR = await sbUpdate(env, 'classes', { operation_logs_json: '[]' }, `id=eq.${classId}`);
-  if (updateR.error) {
-    return jsonResponse({ error: 'Failed to clear logs', details: updateR.error }, 500);
+  // v221: 从 operation_logs 表删除该班级的所有日志
+  const deleteR = await sbRequest(env, 'DELETE', 'operation_logs', {
+    query: 'class_id=eq.' + encodeURIComponent(classId)
+  });
+  if (deleteR.error) {
+    return jsonResponse({ error: 'Failed to clear logs', details: deleteR.error }, 500);
   }
 
-  return jsonResponse({ ok: true, classId });
+  return jsonResponse({ ok: true, classId: classId });
 };

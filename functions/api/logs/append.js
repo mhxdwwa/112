@@ -1,7 +1,8 @@
 /**
  * POST /api/logs/append — 追加操作日志
+ * v221: INSERT 到 operation_logs 独立表（替代 read-modify-write classes.operation_logs_json）
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, genId } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbRequest, genId } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -14,20 +15,33 @@ export const onRequestPost = async ({ request, env }) => {
 
   if (!classId || !log) return jsonResponse({ error: 'Missing classId or log' }, 400);
 
-  const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
-  let existingLogs = [];
-  if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-    var _raw = logsR.data[0].operation_logs_json; existingLogs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
-  }
-
   if (!log.id) log.id = genId();
   if (!log.timestamp) log.timestamp = new Date().toISOString();
   log.reverted = log.reverted || false;
 
-  existingLogs.unshift(log);
-  if (existingLogs.length > 3000) existingLogs = existingLogs.slice(0, 3000);
+  // v221: INSERT 到 operation_logs 表
+  const row = {
+    id: log.id,
+    class_id: classId,
+    student_id: log.studentId || null,
+    student_name: log.studentName || '',
+    action_type: log.actionType || '',
+    details: log.details || '',
+    coin_delta: parseInt(log.coinDelta) || 0,
+    exp_delta: parseInt(log.expDelta) || 0,
+    pet_id: log.petId || null,
+    snapshot: log.snapshot || null,
+    extra: log.extra || null,
+    full_snapshot: log.fullSnapshot || null,
+    reverted: !!log.reverted,
+    created_at: log.timestamp
+  };
 
-  await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(existingLogs) }, `id=eq.${classId}`);
+  const insertR = await sbRequest(env, 'POST', 'operation_logs', { body: [row] });
+  if (insertR.error) {
+    console.error('[logs/append] INSERT failed:', insertR.error);
+    return jsonResponse({ error: 'Failed to append log', details: insertR.error }, 500);
+  }
 
   return jsonResponse({ ok: true, logId: log.id });
 };

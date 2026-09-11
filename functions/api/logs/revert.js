@@ -1,7 +1,8 @@
 /**
  * POST /api/logs/revert — 撤销/恢复操作日志
+ * v221: UPDATE operation_logs 表（替代 read-modify-write classes.operation_logs_json）
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, sbRequest } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -16,17 +17,11 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Missing required fields' }, 400);
   }
 
-  // v187: 先读取日志用于后续标记，但不做已撤销检查
-  // 原因：客户端流程是 saveLogs() 先写入 reverted=true 到 Supabase，
-  // 然后才调用 revertLog API。如果这里检查 reverted 状态会误判为重复请求，
-  // 导致金币/宠物更新被跳过。
-  const logsR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
-  let existingLogs = [];
-  if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-    var _raw = logsR.data[0].operation_logs_json; existingLogs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
-  }
-  const logEntry = existingLogs.find(l => String(l.id) === String(logId));
-  if (!logEntry) {
+  // v221: 从 operation_logs 表查找日志
+  const logR = await sbRequest(env, 'GET', 'operation_logs', {
+    query: 'select=id&class_id=eq.' + encodeURIComponent(classId) + '&id=eq.' + encodeURIComponent(logId) + '&limit=1'
+  });
+  if (logR.error || !logR.data || logR.data.length === 0) {
     return jsonResponse({ error: 'Log entry not found' }, 404);
   }
 
@@ -46,9 +41,15 @@ export const onRequestPost = async ({ request, env }) => {
     }
   }
 
-  // 3. 标记日志为已撤销/恢复（使用前面已读取的 existingLogs，避免再次读取产生竞态）
-  logEntry.reverted = reverted;
-  await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(existingLogs) }, `id=eq.${classId}`);
+  // 3. v221: 标记日志为已撤销/恢复（UPDATE operation_logs 表的 reverted 字段）
+  const revertR = await sbRequest(env, 'PATCH', 'operation_logs', {
+    query: 'id=eq.' + encodeURIComponent(logId),
+    body: { reverted: reverted }
+  });
+  if (revertR.error) {
+    console.error('[logs/revert] UPDATE failed:', revertR.error);
+    return jsonResponse({ error: 'Failed to revert log', details: revertR.error }, 500);
+  }
 
   return jsonResponse({ ok: true });
 };

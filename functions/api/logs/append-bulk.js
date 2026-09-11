@@ -1,10 +1,8 @@
 /**
  * POST /api/logs/append-bulk — 批量追加操作日志
- * 
- * 学生端使用：一次请求追加多条日志到 classes.operation_logs_json
- * 替代直接 RPC 调用 append_pending_log
+ * v221: 批量 INSERT 到 operation_logs 独立表（替代 read-modify-write classes.operation_logs_json）
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbRequest } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -24,35 +22,36 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Missing classId or empty logs array' }, 400);
   }
 
-  // 读取当前日志
-  const classR = await sbSelectSingle(env, 'classes', `id=eq.${classId}&select=operation_logs_json`);
-  if (classR.error || !classR.data || classR.data.length === 0) {
-    return jsonResponse({ error: 'Class not found' }, 404);
+  // v221: 批量 INSERT 到 operation_logs 表
+  const rows = logs.map(function(log) {
+    return {
+      id: log.id,
+      class_id: classId,
+      student_id: log.studentId || null,
+      student_name: log.studentName || '',
+      action_type: log.actionType || '',
+      details: log.details || '',
+      coin_delta: parseInt(log.coinDelta) || 0,
+      exp_delta: parseInt(log.expDelta) || 0,
+      pet_id: log.petId || null,
+      snapshot: log.snapshot || null,
+      extra: log.extra || null,
+      full_snapshot: log.fullSnapshot || null,
+      reverted: !!log.reverted,
+      created_at: log.timestamp || new Date().toISOString()
+    };
+  });
+
+  // 使用 on_conflict=id 去重（跳过已存在的日志）
+  const insertR = await sbRequest(env, 'POST', 'operation_logs', {
+    query: 'on_conflict=id',
+    body: rows
+  });
+
+  if (insertR.error) {
+    console.error('[logs/append-bulk] INSERT failed:', insertR.error);
+    return jsonResponse({ error: 'Failed to append logs', details: insertR.error }, 500);
   }
 
-  let existingLogs = [];
-  const rawLogs = classR.data[0].operation_logs_json;
-  if (rawLogs) {
-    existingLogs = typeof rawLogs === 'string' ? JSON.parse(rawLogs) : (Array.isArray(rawLogs) ? rawLogs : []);
-  }
-
-  // 去重：以 id 为键，跳过已存在的日志
-  const existingIds = {};
-  existingLogs.forEach(l => { if (l.id) existingIds[l.id] = true; });
-  const newLogs = logs.filter(l => l.id && !existingIds[l.id]);
-
-  if (newLogs.length === 0) {
-    return jsonResponse({ ok: true, appended: 0, total: existingLogs.length });
-  }
-
-  // 合并新日志到头部，限制总数
-  const merged = [...newLogs, ...existingLogs].slice(0, 3000);
-
-  // 写回
-  const updateR = await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(merged) }, `id=eq.${classId}`);
-  if (updateR.error) {
-    return jsonResponse({ error: 'Failed to write logs' }, 500);
-  }
-
-  return jsonResponse({ ok: true, appended: newLogs.length, total: merged.length });
+  return jsonResponse({ ok: true, appended: rows.length, total: rows.length });
 };

@@ -1,7 +1,7 @@
 /**
  * POST /api/class/manage — 班级管理（创建、更新、删除、查重）
  * v149: 兼容 { action, data:{...} } 和 { action, ...fields } 两种参数格式
- *        修复 operation_logs 表不存在的问题（日志存在 classes.operation_logs_json 中）
+ *        v221: 日志已迁移到 operation_logs 独立表，删除班级时同时清理日志
  *        新增 action=checkDuplicate 用于创建班级前查重
  */
 import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbInsert, sbUpdate, sbDelete, sbSelect } from '../../_utils.js';
@@ -50,9 +50,10 @@ export const onRequestPost = async ({ request, env }) => {
 
     if (studentIds.length > 0) {
       const inFilter = `student_id=in.(${studentIds.join(',')})`;
-      // v149: operation_logs 不是独立表，日志存在 classes.operation_logs_json 中
-      // 删除班级时不需要单独清理日志，因为班级本身会被删除
+      // v221: 删除班级时同时清理 operation_logs 表的日志
       // v184: 检查每步删除结果，失败时立即中止，避免部分删除导致数据不一致
+      const opLogsR = await sbDelete(env, 'operation_logs', 'class_id=eq.' + classId);
+      if (opLogsR.error) console.warn('[class/manage] Failed to delete operation_logs:', opLogsR.error);
       const petsR = await sbDelete(env, 'pets', inFilter);
       if (petsR.error) return jsonResponse({ error: 'Failed to delete pets', details: petsR.error }, 500);
     }

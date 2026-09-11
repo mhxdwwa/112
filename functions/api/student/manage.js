@@ -32,8 +32,8 @@ export const onRequestPost = async ({ request, env }) => {
   if (action === 'delete') {
     if (!studentIds || studentIds.length === 0) return jsonResponse({ error: 'Missing studentIds' }, 400);
     const inFilter = `student_id=in.(${studentIds.join(',')})`;
-    // v149: operation_logs 不是独立表，日志存在 classes.operation_logs_json 中
-    // 删除学生时不需要单独清理日志
+    // v221: 日志在 operation_logs 独立表中，删除学生时同时清理其日志
+    await sbDelete(env, 'operation_logs', inFilter);
     await sbDelete(env, 'pets', inFilter);
     const delR = await sbDelete(env, 'students', `id=in.(${studentIds.join(',')})`);
     if (delR.error) return jsonResponse({ error: 'Failed to delete students', details: delR.error }, 500);

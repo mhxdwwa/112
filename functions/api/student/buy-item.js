@@ -7,7 +7,7 @@
  * 3. 原子更新 coins + shop_items
  * 4. 返回最终状态
  * 
- * 然后在 Cloudflare 端追加操作日志到 classes.operation_logs_json
+ * 然后在 Cloudflare 端追加操作日志到 operation_logs 独立表
  * （与 coins.js / coins-and-pet.js 保持一致的日志写入模式）
  * 
  * Body: {
@@ -19,7 +19,7 @@
  *   itemName: string
  * }
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, genId } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, sbRequest, genId } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -76,45 +76,34 @@ export const onRequestPost = async ({ request, env }) => {
       return jsonResponse(data, 200);
     }
 
-    // === v210: 追加操作日志到 classes.operation_logs_json ===
-    // 与 coins.js / coins-and-pet.js 保持一致的日志写入模式
+    // === v221: 追加操作日志到 operation_logs 独立表 ===
     var coinsAfter = data.coinsAfter !== undefined ? data.coinsAfter : null;
     var logId = null;
 
     if (classId) {
       var snapshot = { coinsAfter: coinsAfter };
-      var log = {
-        id: genId(),
-        timestamp: new Date().toISOString(),
-        classId: classId,
-        studentId: studentId,
-        studentName: studentName || '',
-        actionType: '商店购买',
+      logId = genId();
+      var row = {
+        id: logId,
+        class_id: classId,
+        student_id: studentId,
+        student_name: studentName || '',
+        action_type: '商店购买',
         details: '购买「' + (itemName || itemId) + '」',
-        coinDelta: -(price || 0),
-        expDelta: 0,
-        petId: null,
-        extra: { shopItemId: itemId },
+        coin_delta: -(price || 0),
+        exp_delta: 0,
+        pet_id: null,
         snapshot: snapshot,
+        extra: { shopItemId: itemId },
+        full_snapshot: null,
         reverted: false,
+        created_at: new Date().toISOString()
       };
 
-      // 读取现有日志
-      var logsR = await sbSelectSingle(env, 'classes', 'id=eq.' + classId + '&select=operation_logs_json');
-      var existingLogs = [];
-      if (logsR.data && logsR.data.length > 0 && logsR.data[0].operation_logs_json) {
-        var _raw = logsR.data[0].operation_logs_json;
-        existingLogs = typeof _raw === 'string' ? JSON.parse(_raw) : (_raw || []);
-      }
-      existingLogs.unshift(log);
-      if (existingLogs.length > 3000) existingLogs = existingLogs.slice(0, 3000);
-
-      var logWriteR = await sbUpdate(env, 'classes', { operation_logs_json: JSON.stringify(existingLogs) }, 'id=eq.' + classId);
+      var logWriteR = await sbRequest(env, 'POST', 'operation_logs', { body: [row] });
       if (logWriteR.error) {
-        console.error('[buy-item] Failed to write log:', logWriteR.error);
-        // 日志写入失败不影响购买结果，但记录警告
-      } else {
-        logId = log.id;
+        console.error('[buy-item] Log INSERT failed:', logWriteR.error);
+        // 日志写入失败不影响购买结果
       }
     }
 

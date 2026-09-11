@@ -592,7 +592,7 @@
 
   /**
    * 通过 API 加载操作日志
-   * 替代 _loadOperationLogs() 中的 db.from('classes').select('operation_logs_json')
+   * 替代 _loadOperationLogs() 中的 db.from('operation_logs')
    */
   function loadLogsViaApi(classId) {
     if (!classId) {
@@ -853,7 +853,7 @@
 
   /**
    * v178: 批量原子修改金币 + 记录操作日志
-   * 解决并发竞态条件：多个并行 API 调用导致 operation_logs_json 只有最后一个写入的日志存活
+   * v221: 日志写入 operation_logs 独立表，彻底消除 JSON 竞态条件
    * 
    * @param {Array} items - [{ studentId, studentName, coinDelta, actionType, details, expDelta, petId, petUpdates, checkBalance }]
    * @returns {Promise<Object>} - { ok, results, logCount }
