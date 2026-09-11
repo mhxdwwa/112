@@ -51,6 +51,7 @@ export const onRequestPost = async ({ request, env }) => {
   }
 
   if (filteredUpdates.growth !== undefined && filteredUpdates.growth > 2600) filteredUpdates.growth = 2600;
+  if (filteredUpdates.growth !== undefined && filteredUpdates.growth < 0) filteredUpdates.growth = 0;
 
   // v158: 服务端根据成长值重算等级（防止客户端发送旧等级导致刷新后等级回退）
   if (filteredUpdates.growth !== undefined) {

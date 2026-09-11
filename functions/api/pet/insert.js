@@ -57,7 +57,7 @@ export const onRequestPost = async ({ request, env }) => {
     };
 
     // v159: 服务端根据成长值重算等级
-    if (payload.growth) {
+    if (payload.growth !== undefined) {
       payload.level = calcLevelFromGrowth(payload.growth);
     }
 

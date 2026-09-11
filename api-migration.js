@@ -253,13 +253,14 @@
   /**
    * 通过 API 删除宠物
    */
-  function deletePetViaApi(petId) {
+  function deletePetViaApi(petId, studentId) {
     if (!petId) {
       return Promise.resolve({ error: 'Invalid petId' });
     }
 
     return apiRequest('/pet/delete', {
-      petId: petId
+      petId: petId,
+      studentId: studentId || null
     }).then(function(result) {
       if (result.ok) {
         console.log('[API] pet delete ok:', petId);

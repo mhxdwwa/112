@@ -965,7 +965,7 @@ window.__initPetEscape = function(){
             document.querySelectorAll('#homePetGrid .home-pet-card').forEach(c => {
               // 跳过已出逃的卡片（图片被隐藏的）
               const img = c.querySelector('.home-pet-top img, .home-pet-top span');
-              if (img && img.style.display === 'none') return;
+              if (img && (img.style.display === 'none' || img.dataset.escapeHidden === '1' || img.style.opacity === '0')) return;
               const r = c.querySelector('.home-pet-top');
               if (!r) return;
               const rect = r.getBoundingClientRect();
