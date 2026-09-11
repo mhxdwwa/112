@@ -121,7 +121,7 @@ export const onRequestPost = async ({ request, env }) => {
         coin_delta: -p,
         exp_delta: 0,
         pet_id: null,
-        snapshot: { coinsAfter: newCoins },
+        snapshot: { coinsBefore: currentCoins, coinsAfter: newCoins },
         extra: { shopItemId: itemId },
         full_snapshot: null,
         reverted: false,
