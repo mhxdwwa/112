@@ -544,13 +544,20 @@ function startGame(fromLevel){
     if(state==='playing') return;
     getAudioCtx();
     // Notify parent to enter fullscreen
-    parent.postMessage({ type: 'happyrun-start-game' }, '*');
-    // Also try Fullscreen API directly (works when game is opened directly or in iframe)
+    try { parent.postMessage({ type: 'happyrun-start-game' }, '*'); } catch(e) {}
+    // Only try Fullscreen API directly when NOT in iframe (e.g. opened directly in browser)
+    // When in iframe, the parent page handles fullscreen to avoid conflicts on Android
+    var _isInIframe = false;
+    try { _isInIframe = (window.parent !== window); } catch(e) { _isInIframe = true; }
+    if (!_isInIframe) {
+        try {
+            var fsElem = document.documentElement;
+            if (fsElem.requestFullscreen) fsElem.requestFullscreen().catch(function(){});
+            else if (fsElem.webkitRequestFullscreen) fsElem.webkitRequestFullscreen();
+        } catch(e) {}
+    }
+    // Lock orientation to landscape on mobile (works in both cases)
     try {
-        var fsElem = document.documentElement;
-        if (fsElem.requestFullscreen) fsElem.requestFullscreen().catch(function(){});
-        else if (fsElem.webkitRequestFullscreen) fsElem.webkitRequestFullscreen();
-        // Lock orientation to landscape on mobile
         if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){});
     } catch(e) {}
     P={x:PX,y:GY-PH,vy:0,vx:0,gnd:true,duck:false,af:0,onPlat:-1,onCrate:-1,onPlatH:0,onCrateTop:0,pushX:0,moveLeft:false,moveRight:false,moveUp:false,moveDown:false,shooting:false,facing:1};
