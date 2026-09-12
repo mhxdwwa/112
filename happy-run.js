@@ -316,25 +316,30 @@
     }
 
     // 7. 尝试使用 Fullscreen API（隐藏浏览器UI，更好的沉浸体验）
-    try {
-      var fsElem = document.documentElement;
-      var fsPromise;
-      if (fsElem.requestFullscreen) {
-        fsPromise = fsElem.requestFullscreen();
-      } else if (fsElem.webkitRequestFullscreen) {
-        fsPromise = Promise.resolve(fsElem.webkitRequestFullscreen());
-      } else if (fsElem.msRequestFullscreen) {
-        fsPromise = Promise.resolve(fsElem.msRequestFullscreen());
-      }
-      if (fsPromise && fsPromise.then) {
-        fsPromise.then(function() {
-          // 锁定横屏方向
-          if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock('landscape').catch(function() {});
-          }
-        }).catch(function() {});
-      }
-    } catch(e) {}
+    // v227: 移动端跳过原生全屏 — 移动端由 iframe 内的用户手势触发原生全屏，
+    // 或仅使用 CSS 旋转实现横屏。父页面从 postMessage 回调调用 requestFullscreen
+    // 在移动端可能成功但会干扰 CSS 旋转逻辑，导致画面错乱。
+    if (!isMobileDevice()) {
+      try {
+        var fsElem = document.documentElement;
+        var fsPromise;
+        if (fsElem.requestFullscreen) {
+          fsPromise = fsElem.requestFullscreen();
+        } else if (fsElem.webkitRequestFullscreen) {
+          fsPromise = Promise.resolve(fsElem.webkitRequestFullscreen());
+        } else if (fsElem.msRequestFullscreen) {
+          fsPromise = Promise.resolve(fsElem.msRequestFullscreen());
+        }
+        if (fsPromise && fsPromise.then) {
+          fsPromise.then(function() {
+            // 锁定横屏方向
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape').catch(function() {});
+            }
+          }).catch(function() {});
+        }
+      } catch(e) {}
+    }
 
     // 8. 监听方向变化
     window.addEventListener('orientationchange', _onOrientationChange);
@@ -396,6 +401,10 @@
   }
 
   function _onResizeCheck() {
+    // v227: 移动端跳过 — 移动端原生全屏后视口变为横屏，
+    // 但 CSS 旋转仍然需要保持（旋转产生的视觉横屏 innerWidth > innerHeight
+    // 与物理横屏无法区分）。桌面端无 CSS 旋转，此检查安全。
+    if (isMobileDevice()) return;
     if (_isGameFullscreen && window.innerWidth > window.innerHeight) {
       // 横屏状态，确保wrapper正确
       if (_gameWrapper && !_gameWrapper.style.transform) {

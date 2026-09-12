@@ -543,20 +543,21 @@ for(let i=0;i<8;i++) mtns.push({x:i*130-50,h:50+Math.random()*70});
 function startGame(fromLevel){
     if(state==='playing') return;
     getAudioCtx();
-    // Notify parent to enter fullscreen
+    // Notify parent to enter fullscreen (CSS-based, works on all devices)
     try { parent.postMessage({ type: 'happyrun-start-game' }, '*'); } catch(e) {}
-    // Only try Fullscreen API directly when NOT in iframe (e.g. opened directly in browser)
-    // When in iframe, the parent page handles fullscreen to avoid conflicts on Android
-    var _isInIframe = false;
-    try { _isInIframe = (window.parent !== window); } catch(e) { _isInIframe = true; }
-    if (!_isInIframe) {
+    // v227: On desktop, also try native Fullscreen API directly from the iframe.
+    // This runs during a user gesture (click), so it succeeds on desktop browsers.
+    // On mobile, skip this — the parent page handles fullscreen via CSS rotation
+    // to avoid conflicts between native fullscreen and CSS transform on Android.
+    var _isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (!_isMobile) {
         try {
             var fsElem = document.documentElement;
             if (fsElem.requestFullscreen) fsElem.requestFullscreen().catch(function(){});
             else if (fsElem.webkitRequestFullscreen) fsElem.webkitRequestFullscreen();
         } catch(e) {}
     }
-    // Lock orientation to landscape on mobile (works in both cases)
+    // Lock orientation to landscape on mobile
     try {
         if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){});
     } catch(e) {}
