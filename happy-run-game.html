@@ -3330,14 +3330,24 @@ function draw(){
     c.fillStyle='#e0e0ff';c.font='12px Arial';c.fillText('分数:'+totalScore,580,14);
     c.fillStyle='#e0e0ff';c.font='bold 13px Arial';c.textAlign='right';
     c.fillText('速度:'+(spd/BASE_SPD).toFixed(1)+'x',790,14);c.textAlign='left';
-    // Exit fullscreen button (below speed display, right-aligned) - only show when in fullscreen
+    // Fullscreen toggle button (below speed display, right-aligned)
     if(isFullscreenActive){
+        // Exit fullscreen button - red background
         c.fillStyle='rgba(200,60,60,0.7)';
         c.beginPath();c.roundRect(720,20,70,18,4);c.fill();
         c.strokeStyle='rgba(255,255,255,0.5)';c.lineWidth=1;
         c.beginPath();c.roundRect(720,20,70,18,4);c.stroke();
         c.fillStyle='#fff';c.font='bold 11px Arial';c.textAlign='center';
         c.fillText('退出全屏',755,33);
+        c.textAlign='left';
+    } else {
+        // Enter fullscreen button - green background
+        c.fillStyle='rgba(60,180,60,0.7)';
+        c.beginPath();c.roundRect(720,20,70,18,4);c.fill();
+        c.strokeStyle='rgba(255,255,255,0.5)';c.lineWidth=1;
+        c.beginPath();c.roundRect(720,20,70,18,4);c.stroke();
+        c.fillStyle='#fff';c.font='bold 11px Arial';c.textAlign='center';
+        c.fillText('全屏',755,33);
         c.textAlign='left';
     }
     // Row 2: Progress bar and status effects
@@ -8396,10 +8406,24 @@ function togglePause(){
 
 cvs.addEventListener('click',(e)=>{
     const{x,y}=getClickPos(e);
-    // Exit fullscreen button (works in any game state)
-    if(isFullscreenActive && x>=720&&x<=790&&y>=20&&y<=38){
-        parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');
-        if(document.fullscreenElement){document.exitFullscreen().catch(function(){});}else if(document.webkitFullscreenElement){document.webkitExitFullscreen();}
+    // Fullscreen toggle button (works in any game state)
+    if(x>=720&&x<=790&&y>=20&&y<=38){
+        if(isFullscreenActive){
+            // Exit fullscreen
+            parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');
+            if(document.fullscreenElement){document.exitFullscreen().catch(function(){});}else if(document.webkitFullscreenElement){document.webkitExitFullscreen();}
+        } else {
+            // Enter fullscreen
+            try { parent.postMessage({ type: 'happyrun-start-game' }, '*'); } catch(e) {}
+            var _isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (!_isMobile) {
+                try {
+                    var fsElem = document.documentElement;
+                    if (fsElem.requestFullscreen) fsElem.requestFullscreen().catch(function(){});
+                    else if (fsElem.webkitRequestFullscreen) fsElem.webkitRequestFullscreen();
+                } catch(e) {}
+            }
+        }
         return;
     }
     if(state==='playing'){
@@ -8826,10 +8850,22 @@ cvs.addEventListener('touchstart',e=>{
             if(gx>=520&&gx<=700&&gy>=200&&gy<=242)goToMainMenu();
             return;
         }
-        // Exit fullscreen button (works in any game state)
-        if(isFullscreenActive && gx>=720&&gx<=790&&gy>=20&&gy<=38){
-            parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');
-            if(document.fullscreenElement){document.exitFullscreen().catch(function(){});}else if(document.webkitFullscreenElement){document.webkitExitFullscreen();}
+        // Fullscreen toggle button (works in any game state)
+        if(gx>=720&&gx<=790&&gy>=20&&gy<=38){
+            if(isFullscreenActive){
+                parent.postMessage({ type: 'happyrun-exit-fullscreen' }, '*');
+                if(document.fullscreenElement){document.exitFullscreen().catch(function(){});}else if(document.webkitFullscreenElement){document.webkitExitFullscreen();}
+            } else {
+                try { parent.postMessage({ type: 'happyrun-start-game' }, '*'); } catch(e) {}
+                var _isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                if (!_isMobile) {
+                    try {
+                        var fsElem = document.documentElement;
+                        if (fsElem.requestFullscreen) fsElem.requestFullscreen().catch(function(){});
+                        else if (fsElem.webkitRequestFullscreen) fsElem.webkitRequestFullscreen();
+                    } catch(e) {}
+                }
+            }
             continue;
         }
         if(state==='playing'){
