@@ -28,10 +28,8 @@
             .game-canvas { width: 100vw; height: 100vh; max-width: none; aspect-ratio: auto; }
         }
         /* Portrait: rotate game to fill screen as landscape */
-        /* Note: When in iframe, parent page handles rotation via wrapper transform.
-           This CSS rotation only applies when game is opened directly in browser. */
         @media (max-width: 768px) and (orientation: portrait) {
-            .game-canvas.portrait-rotate {
+            .game-canvas {
                 width: 100vh !important; height: 100vw !important;
                 max-width: none !important; aspect-ratio: auto !important;
                 transform: rotate(90deg);
@@ -121,15 +119,16 @@ window.onerror=function(msg){console.error('Game error:',msg);return true;};
 
 // Orientation rotation system
 let isGameRotated = false;
- function isPortraitMode() {
-     if (isGameRotated) return false; // forced landscape via button
-     // v227: When in iframe, parent page handles portrait rotation
-     // Don't apply iframe's own rotation logic to avoid double rotation
-     var isInIframe = false;
-     try { isInIframe = (window.parent !== window); } catch(e) { isInIframe = true; }
-     if (isInIframe) return false;
-     return window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
- }
+function isPortraitMode() {
+    if (isGameRotated) return false; // forced landscape via button
+    // v229: On Android in iframe, skip iframe's rotation (parent handles it)
+    // On desktop/iOS in iframe, or when opened directly, apply normal rotation
+    var isAndroid = /Android/i.test(navigator.userAgent);
+    var isInIframe = false;
+    try { isInIframe = (window.parent !== window); } catch(e) { isInIframe = true; }
+    if (isAndroid && isInIframe) return false;
+    return window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+}
 function isDisplayRotated() {
     return isPortraitMode() || isGameRotated;
 }
@@ -247,17 +246,17 @@ const ctx = cvs.getContext('2d');
 cvs.width = 1850; cvs.height = 900;
 const SF = cvs.width / 800;
 
-// v227: Detect if in iframe - if so, parent page handles portrait rotation
-// Only apply CSS portrait rotation when opened directly in browser
+// v229: On Android in iframe, disable CSS portrait rotation (parent handles it)
+// This prevents double rotation that causes the game to be invisible
 (function() {
+    var isAndroid = /Android/i.test(navigator.userAgent);
     var isInIframe = false;
     try { isInIframe = (window.parent !== window); } catch(e) { isInIframe = true; }
-    if (!isInIframe) {
-        // Not in iframe - apply portrait rotation via CSS class
-        var cvsContainer = document.querySelector('.game-canvas');
-        if (cvsContainer) {
-            cvsContainer.classList.add('portrait-rotate');
-        }
+    if (isAndroid && isInIframe) {
+        // Add a style to override the portrait rotation CSS
+        var style = document.createElement('style');
+        style.textContent = '@media (max-width: 768px) and (orientation: portrait) { .game-canvas { width: 100% !important; height: 100% !important; max-width: 1850px !important; aspect-ratio: 185/90 !important; transform: none !important; position: relative !important; top: auto !important; left: auto !important; margin: 0 !important; } }';
+        document.head.appendChild(style);
     }
 })();
 
