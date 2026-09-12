@@ -1045,6 +1045,7 @@ function _loadTeacherFromSupabase() {
     var newClassesData = _buildTeacherClasses(classes, students, pets);
     classesData = newClassesData;
     _restoreCustomSnacksFromLS();
+    _loadSnackConfigFromSupabase(); // v225: 教师旧模式也需要从 Supabase 加载零食配置
 
     console.log('[DAL] Loaded ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
     newClassesData.forEach(function(c) {
@@ -1181,6 +1182,7 @@ function _loadStudentFromSupabase() {
       createdAt: classInfo.created_at || null
     }];
     _restoreCustomSnacksFromLS();
+    _loadSnackConfigFromSupabase(); // v225: 学生端也需要从 Supabase 加载零食配置
 
     // Record base coins for this student — used in _syncStudentToSupabase to compute local delta
     if (myStudent) {
