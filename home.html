@@ -289,6 +289,28 @@ body {
 .admin-exit-btn:hover {
   background: rgba(255,255,255,0.3);
 }
+.admin-save-btn {
+  padding: 6px 16px;
+  background: #51cf66;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+.admin-save-btn:hover {
+  background: #40c057;
+  transform: translateY(-1px);
+}
+.admin-save-btn.has-changes {
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(81,207,102,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(81,207,102,0); }
+}
 
 /* 上传进度 */
 .upload-toast {
@@ -335,8 +357,11 @@ body {
 <body>
 <!-- 管理员横幅 -->
 <div class="admin-banner" id="adminBanner">
-  <span class="admin-banner-text">🔧 管理员模式 - 点击卡片图标区域上传图片</span>
-  <button class="admin-exit-btn" onclick="exitAdmin()">退出管理</button>
+  <span class="admin-banner-text">🔧 管理员模式 - 点击卡片图标区域更换图片</span>
+  <div style="display:flex;gap:10px;align-items:center">
+    <button class="admin-save-btn" onclick="saveAllChanges()" id="saveBtn">💾 保存更改</button>
+    <button class="admin-exit-btn" onclick="exitAdmin()">退出管理</button>
+  </div>
 </div>
 
 <!-- 上传提示 -->
@@ -551,16 +576,15 @@ body {
 <script>
 let githubToken = '';
 let currentEditCard = null;
-let cardsDataSha = null;
+let pendingChanges = {}; // 待保存的更改
+let hasUnsavedChanges = false;
 
-// 頁面加載 - 優先從localStorage讀取（秒開）
+// 頁面加載 - 從localStorage恢復
 window.addEventListener('DOMContentLoaded', () => {
   loadFromLocalStorage();
-  // 後台靜默從GitHub刷新最新數據
-  silentRefreshFromGitHub();
 });
 
-// 從localStorage加載（即時顯示）
+// 從localStorage加載已保存的圖片
 function loadFromLocalStorage() {
   try {
     const saved = localStorage.getItem('homeCardsData');
@@ -568,21 +592,9 @@ function loadFromLocalStorage() {
       const data = JSON.parse(saved);
       applyImages(data);
     }
-  } catch (e) {}
-}
-
-// 從GitHub靜默刷新（不阻塞UI）
-async function silentRefreshFromGitHub() {
-  try {
-    const resp = await fetch('/home-cards/cards-data.json?t=' + Date.now());
-    if (resp.ok) {
-      const data = await resp.json();
-      if (Object.keys(data).length > 0) {
-        applyImages(data);
-        localStorage.setItem('homeCardsData', JSON.stringify(data));
-      }
-    }
-  } catch (e) {}
+  } catch (e) {
+    console.log('讀取本地存儲失敗:', e);
+  }
 }
 
 // 應用圖片到卡片
@@ -635,9 +647,14 @@ function enterAdminMode() {
 }
 
 function exitAdmin() {
+  if (hasUnsavedChanges) {
+    if (!confirm('有未保存的更改，確定要退出嗎？')) return;
+  }
   document.body.classList.remove('admin-mode');
   document.getElementById('adminBanner').classList.remove('show');
   githubToken = '';
+  pendingChanges = {};
+  hasUnsavedChanges = false;
   const cards = document.querySelectorAll('.card-icon[data-card-id]');
   cards.forEach(card => card.removeEventListener('click', handleCardClick));
 }
@@ -666,88 +683,147 @@ function compressImage(file, maxWidth = 250, quality = 0.7) {
   });
 }
 
-// 監聽文件選擇 - 即時顯示，後台上傳
+// 監聽文件選擇 - 預覽但不保存
 document.getElementById('imageInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file || !currentEditCard) return;
   
   const cardId = currentEditCard.getAttribute('data-card-id');
-  const toast = document.getElementById('uploadToast');
-  const toastText = toast.querySelector('span');
-  toastText.textContent = '正在壓縮圖片...';
-  toast.classList.add('show');
   
   try {
     const { base64, sizeKB } = await compressImage(file);
     
-    // 1. 立即更新顯示（用base64，零等待）
+    // 立即預覽
     const badge = currentEditCard.querySelector('.badge');
     const badgeHTML = badge ? badge.outerHTML : '';
     currentEditCard.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${base64}" alt="${cardId}">`;
     
-    // 2. 保存到localStorage（即時持久化）
-    let localData = {};
-    try { localData = JSON.parse(localStorage.getItem('homeCardsData') || '{}'); } catch(e) {}
-    localData[cardId] = base64;
-    localStorage.setItem('homeCardsData', JSON.stringify(localData));
+    // 記錄待保存
+    pendingChanges[cardId] = base64;
+    hasUnsavedChanges = true;
     
-    toast.classList.remove('show');
+    // 提示保存按鈕
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.classList.add('has-changes');
+    saveBtn.textContent = `💾 保存更改 (${Object.keys(pendingChanges).length})`;
     
-    // 3. 後台上傳到GitHub（不阻塞UI）
-    syncToGitHub(cardId, base64, sizeKB);
+    showToast(`已預覽 (${sizeKB}KB)，點擊"保存更改"生效`, 'info');
     
   } catch (e) {
     alert('處理失敗：' + e.message);
-    toast.classList.remove('show');
   }
   
   e.target.value = '';
 });
 
-// 後台上傳到GitHub
-async function syncToGitHub(cardId, base64, sizeKB) {
-  if (!githubToken) return;
+// 保存所有更改
+async function saveAllChanges() {
+  if (!hasUnsavedChanges) {
+    showToast('沒有需要保存的更改', 'info');
+    return;
+  }
+  
+  const saveBtn = document.getElementById('saveBtn');
+  const originalText = saveBtn.textContent;
+  saveBtn.disabled = true;
+  saveBtn.textContent = '保存中...';
   
   try {
-    // 獲取SHA
-    if (!cardsDataSha) {
-      const getResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
-        headers: { 'Authorization': `token ${githubToken}` }
-      });
-      if (getResp.ok) {
-        const data = await getResp.json();
-        cardsDataSha = data.sha;
-      }
+    // 1. 保存到localStorage（立即生效）
+    let localData = {};
+    try { localData = JSON.parse(localStorage.getItem('homeCardsData') || '{}'); } catch(e) {}
+    
+    Object.assign(localData, pendingChanges);
+    localStorage.setItem('homeCardsData', JSON.stringify(localData));
+    
+    // 2. 同步到GitHub（後台）
+    if (githubToken) {
+      await syncToGitHub(localData);
     }
     
-    // 讀取localStorage中的完整數據
-    const localData = JSON.parse(localStorage.getItem('homeCardsData') || '{}');
-    const jsonContent = btoa(unescape(encodeURIComponent(JSON.stringify(localData))));
+    // 3. 成功反饋
+    pendingChanges = {};
+    hasUnsavedChanges = false;
+    saveBtn.classList.remove('has-changes');
+    saveBtn.textContent = '✅ 已保存';
+    showToast('保存成功！所有訪客將看到更新', 'success');
     
-    const body = {
-      message: `Update card: ${cardId} (${sizeKB}KB)`,
-      content: jsonContent,
-      branch: 'master'
-    };
-    if (cardsDataSha) body.sha = cardsDataSha;
+    setTimeout(() => {
+      saveBtn.textContent = originalText;
+      saveBtn.disabled = false;
+    }, 2000);
     
-    const putResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${githubToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-    
-    if (putResp.ok) {
-      const respData = await putResp.json();
-      cardsDataSha = respData.content.sha;
-      console.log('GitHub同步成功:', cardId);
-    }
   } catch (e) {
-    console.log('GitHub同步失敗（不影響本地顯示）:', e.message);
+    saveBtn.textContent = '❌ 保存失敗';
+    showToast('保存失敗：' + e.message, 'error');
+    setTimeout(() => {
+      saveBtn.textContent = originalText;
+      saveBtn.disabled = false;
+    }, 2000);
   }
+}
+
+// 同步到GitHub
+async function syncToGitHub(data) {
+  let sha = null;
+  try {
+    const getResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
+      headers: { 'Authorization': `token ${githubToken}` }
+    });
+    if (getResp.ok) {
+      const fileInfo = await getResp.json();
+      sha = fileInfo.sha;
+    }
+  } catch (e) {}
+  
+  const jsonContent = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  const body = {
+    message: `Update card images (${Object.keys(pendingChanges).length} changed)`,
+    content: jsonContent,
+    branch: 'master'
+  };
+  if (sha) body.sha = sha;
+  
+  const putResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `token ${githubToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  
+  if (!putResp.ok) {
+    const err = await putResp.json();
+    throw new Error(err.message || 'GitHub同步失敗');
+  }
+}
+
+// 顯示提示
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('uploadToast');
+  const toastText = toast.querySelector('span');
+  toastText.textContent = message;
+  
+  // 根據類型設置樣式
+  const spinner = toast.querySelector('.upload-spinner');
+  if (type === 'success') {
+    spinner.style.display = 'none';
+    toast.style.borderLeft = '4px solid #51cf66';
+  } else if (type === 'error') {
+    spinner.style.display = 'none';
+    toast.style.borderLeft = '4px solid #ff6b6b';
+  } else {
+    spinner.style.display = 'block';
+    toast.style.borderLeft = '4px solid #667eea';
+  }
+  
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+    spinner.style.display = 'block';
+    toast.style.borderLeft = 'none';
+  }, 3000);
 }
 
 document.getElementById('tokenInput').addEventListener('keypress', (e) => {
