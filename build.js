@@ -127,7 +127,7 @@ async function main() {
   console.log('  ✓ HTML files: copied');
 
   // Copy image directories
-  for (const dir of ['战斗兽宠文件夹', '战斗机器人', 'images', 'audio', 'jiangyaoji-audio', 'jiangyaoji-images', 'mengdaxia-audio', 'shendouluo-images', 'zhandouluo-images', 'zhenjiadasheng-images', 'zhenjiadasheng-audio']) {
+  for (const dir of ['战斗兽宠文件夹', '战斗机器人', 'images', 'audio', 'jiangyaoji-audio', 'jiangyaoji-images', 'mengdaxia-audio', 'shendouluo-images', 'zhandouluo-images', 'zhenjiadasheng-images', 'zhenjiadasheng-audio', 'home-cards']) {
     try {
       const srcDir = resolve(__dirname, dir);
       const distDir = join(DIST, dir);
