@@ -71,6 +71,9 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crossh
 /* Toast notification */
 #gameToast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.8);z-index:300;padding:18px 40px;background:rgba(20,0,0,0.92);border:2px solid #c00;color:#fff;font-size:20px;font-family:'Courier New',monospace;letter-spacing:3px;text-align:center;pointer-events:none;opacity:0;transition:opacity 0.3s,transform 0.3s;border-radius:8px;text-shadow:0 0 10px rgba(255,0,0,0.5)}
 #gameToast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#gameOverOverlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:90;display:none;align-items:center;justify-content:center;flex-direction:column;pointer-events:none}
+#gameOverOverlay.show{display:flex}
+#returnMenuBtn:hover{background:linear-gradient(180deg,#500,#300);border-color:#f44;box-shadow:0 0 30px rgba(255,0,0,0.4)}
 #game-preloader{position:fixed;inset:0;z-index:99999;background:linear-gradient(180deg,#0a0a0a,#1a0a0a);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s;font-family:'Courier New',monospace}
 #game-preloader.fade-out{opacity:0;pointer-events:none}
 #game-preloader .pl-title{font-size:clamp(20px,4vw,36px);color:#ff6b35;font-weight:bold;margin-bottom:24px;text-shadow:0 0 20px rgba(255,107,53,.5);letter-spacing:4px}
@@ -156,6 +159,9 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crossh
 </div>
 
 <div id="gameToast"></div>
+<div id="gameOverOverlay">
+  <button id="returnMenuBtn" style="padding:18px 60px;margin-top:100px;font-size:min(3.5vw,30px);cursor:pointer;background:linear-gradient(180deg,#2a0000,#1a0000);color:#fff;border:2px solid #c00;font-family:'Courier New',monospace;letter-spacing:4px;transition:all .15s">返回主菜单</button>
+</div>
 <div id="mobile-controls">
 <div id="joystick-zone"><div id="joystick-label">方向</div><div id="joystick-knob"></div></div>
 <!-- Gun aim joystick (next to movement joystick) -->
@@ -2303,10 +2309,12 @@ function draw() {
         ctx.fillStyle = '#fff';
         ctx.font = `${Math.min(W*0.03,26)}px "Courier New"`;
         ctx.fillText(`最终得分：${score}`, W/2, H/2+20);
-        ctx.fillStyle = '#aaa';
-        ctx.font = `${Math.min(W*0.02,18)}px "Courier New"`;
-        ctx.fillText('按回车键重新开始', W/2, H/2+60);
         ctx.textAlign = 'left';
+        // Show return menu overlay
+        const goOverlay = document.getElementById('gameOverOverlay');
+        if(goOverlay && !goOverlay.classList.contains('show')) {
+            goOverlay.classList.add('show');
+        }
     }
 
     // Paused
@@ -2349,10 +2357,6 @@ document.addEventListener('keydown', e => {
     if(e.key === ' ') keys['space'] = true;
     if(gameState==='playing'||gameState==='gameover') {
         if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key)) e.preventDefault();
-    }
-    if(e.key==='Enter' && gameState==='gameover') {
-        if(score>hiScore) { hiScore=score; localStorage.setItem('cHi',hiScore); }
-        startGame();
     }
     if((e.key==='p'||e.key==='P') && (gameState==='playing'||gameState==='paused')) {
         gameState = gameState==='playing' ? 'paused' : 'playing';
@@ -2504,12 +2508,17 @@ let selectedChar = characters[0];
 // Preload character images (prefer .png for transparency, fallback to .jpg)
 const charImages = {};
 const charProneImages = {};
+let gameImagesLoaded = 0;
+let gameImagesTotal = 0;
+
 function loadImageWithFallback(pngSrc, jpgSrc, onLoaded) {
+    gameImagesTotal++;
     const img = new Image();
-    img.onload = () => { onLoaded(img); };
+    img.onload = () => { gameImagesLoaded++; onLoaded(img); };
     img.onerror = () => {
         const fb = new Image();
-        fb.onload = () => { onLoaded(fb); };
+        fb.onload = () => { gameImagesLoaded++; onLoaded(fb); };
+        fb.onerror = () => { gameImagesLoaded++; };
         fb.src = jpgSrc;
     };
     img.src = pngSrc;
@@ -2696,6 +2705,7 @@ function startGame() {
     if(questionImages.length === 0){ showToast('请先导入题目图片！'); return; }
     document.getElementById('charSelect').style.display = 'none';
     document.getElementById('menu').style.display = 'none';
+    document.getElementById('gameOverOverlay').classList.remove('show');
     gameState = 'playing'; lives = 3; score = 0; stage = 1;
     enemies=[]; eBullets=[]; pBullets=[]; particles=[]; trails=[]; powerups=[];
     boss=null; bossActive=false; stageComplete=false; deathTimer=0;
@@ -2726,46 +2736,40 @@ function gameLoop(timestamp) {
 
 document.getElementById('startBtn').addEventListener('click', showCharSelect);
 document.getElementById('charConfirmBtn').addEventListener('click', startGame);
+document.getElementById('returnMenuBtn').addEventListener('click', function(){
+    if(score>hiScore) { hiScore=score; localStorage.setItem('cHi',hiScore); }
+    document.getElementById('gameOverOverlay').classList.remove('show');
+    document.getElementById('menu').style.display = 'flex';
+    document.getElementById('startBtn').disabled = false;
+    gameState = 'menu';
+});
 document.getElementById('hiD').textContent = hiScore;
 requestAnimationFrame(gameLoop);
 </script>
 
 <script>
 (function(){
-  var urls = ["zhandouluo-images/01.webp", "zhandouluo-images/02.webp", "zhandouluo-images/03.webp", "zhandouluo-images/04.webp", "zhandouluo-images/05.webp", "zhandouluo-images/1.webp", "zhandouluo-images/2.webp", "zhandouluo-images/3.webp", "zhandouluo-images/4.webp", "zhandouluo-images/5.webp", "zhandouluo-images/冰晶.webp", "zhandouluo-images/士兵.webp", "zhandouluo-images/士兵1.webp", "zhandouluo-images/外星人.webp", "zhandouluo-images/无人机.webp", "zhandouluo-images/暗影领主.webp", "zhandouluo-images/沼泽兽.webp", "zhandouluo-images/熔岩魔像.webp", "zhandouluo-images/狙击手.webp", "zhandouluo-images/狙击手1.webp", "zhandouluo-images/跑步者.webp"];
-  var total = urls.length;
-  var loaded = 0;
   var bar = document.getElementById('pl-bar');
   var pct = document.getElementById('pl-pct');
   var preloader = document.getElementById('game-preloader');
-  if(total === 0){ preloader.remove(); return; }
-  function onProgress(){
-    loaded++;
-    var p = Math.round(loaded/total*100);
-    if(bar) bar.style.width = p+'%';
-    if(pct) pct.textContent = p+'%';
-    if(loaded >= total){
-      waitForGameImages();
-    }
-  }
-  urls.forEach(function(src){
-    var img = new Image();
-    img.onload = onProgress;
-    img.onerror = onProgress;
-    img.src = src;
-  });
+  
   function waitForGameImages(){
     var checks = 0;
-    var maxChecks = 100;
+    var maxChecks = 200;
     var checkInterval = setInterval(function(){
       checks++;
-      var ready = typeof enemyImages !== 'undefined'
-        && enemyImages['soldier']
-        && enemyImages['sniper']
-        && enemyImages['drone']
-        && enemyImages['runner']
-        && typeof charImages !== 'undefined'
-        && charImages[1];
+      var ready = typeof gameImagesLoaded !== 'undefined' 
+        && typeof gameImagesTotal !== 'undefined'
+        && gameImagesTotal > 0
+        && gameImagesLoaded >= gameImagesTotal;
+      
+      // Update progress bar based on game image loading
+      if(typeof gameImagesLoaded !== 'undefined' && typeof gameImagesTotal !== 'undefined' && gameImagesTotal > 0){
+        var p = Math.round(gameImagesLoaded/gameImagesTotal*100);
+        if(bar) bar.style.width = p+'%';
+        if(pct) pct.textContent = p+'%';
+      }
+      
       if(ready || checks >= maxChecks){
         clearInterval(checkInterval);
         setTimeout(function(){
@@ -2775,6 +2779,8 @@ requestAnimationFrame(gameLoop);
       }
     }, 50);
   }
+  
+  waitForGameImages();
 })();
 </script>
 </body>
