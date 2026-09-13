@@ -135,6 +135,27 @@ body {
   color: #bba;
 }
 
+/* 卡片 - 即将上线状态 */
+.card.coming-soon {
+  opacity: 0.55;
+  cursor: default;
+}
+.card.coming-soon:hover {
+  transform: none;
+  box-shadow: 0 8px 30px rgba(255,180,160,0.2);
+}
+.coming-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #999;
+  color: #fff;
+  font-weight: 600;
+}
+
 /* 响应式 */
 @media (max-width: 600px) {
   .grid {
@@ -163,7 +184,7 @@ body {
   <!-- ====== 班级宠物 ====== -->
   <div class="section-title">🐾 核心功能</div>
   <div class="grid">
-    <a class="card" href="index.html">
+    <a class="card" href="index.html" target="_blank">
       <div class="card-thumb" style="background:linear-gradient(135deg,#ffe0e8,#ffd0d8);">
         <span class="badge badge-pet">主站</span>
         🐾
@@ -175,15 +196,16 @@ body {
     </a>
   </div>
 
-  <!-- ====== 教学工具（示例，按你的需求增删） ====== -->
+  <!-- ====== 教学工具 ====== -->
   <div class="section-title">📚 教学工具</div>
   <div class="grid">
 
     <!-- 示例卡片 1：替换为你的实际文件 -->
-    <a class="card" href="math-goldminer.html">
+    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
       <div class="card-thumb" style="background:linear-gradient(135deg,#fff3d0,#ffe8a0);">
         <span class="badge badge-hot">热门</span>
         ⛏️
+        <span class="coming-badge">即将上线</span>
       </div>
       <div class="card-body">
         <div class="card-title">数学黄金矿工</div>
@@ -192,10 +214,11 @@ body {
     </a>
 
     <!-- 示例卡片 2 -->
-    <a class="card" href="dictation.html">
+    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
       <div class="card-thumb" style="background:linear-gradient(135deg,#d0f0ff,#a0d8ff);">
         <span class="badge badge-new">新</span>
         📝
+        <span class="coming-badge">即将上线</span>
       </div>
       <div class="card-body">
         <div class="card-title">听写小助手</div>
@@ -204,9 +227,10 @@ body {
     </a>
 
     <!-- 示例卡片 3 -->
-    <a class="card" href="quiz-battle.html">
+    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
       <div class="card-thumb" style="background:linear-gradient(135deg,#e0ffd0,#c0f0a0);">
         🎯
+        <span class="coming-badge">即将上线</span>
       </div>
       <div class="card-body">
         <div class="card-title">答题竞赛</div>
@@ -215,9 +239,10 @@ body {
     </a>
 
     <!-- 示例卡片 4 -->
-    <a class="card" href="timer.html">
+    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
       <div class="card-thumb" style="background:linear-gradient(135deg,#f0e0ff,#d8c0ff);">
         ⏱️
+        <span class="coming-badge">即将上线</span>
       </div>
       <div class="card-body">
         <div class="card-title">课堂计时器</div>
@@ -231,10 +256,11 @@ body {
   <div class="section-title">🧪 探索实验</div>
   <div class="grid">
 
-    <a class="card" href="ai-image.html">
+    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
       <div class="card-thumb" style="background:linear-gradient(135deg,#ffe0ff,#ffc8e8);">
         <span class="badge badge-hot">热门</span>
         🤖
+        <span class="coming-badge">即将上线</span>
       </div>
       <div class="card-body">
         <div class="card-title">AI 图像识别</div>
@@ -242,9 +268,10 @@ body {
       </div>
     </a>
 
-    <a class="card" href="random-picker.html">
+    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
       <div class="card-thumb" style="background:linear-gradient(135deg,#fff0d0,#ffe0a0);">
         🎲
+        <span class="coming-badge">即将上线</span>
       </div>
       <div class="card-body">
         <div class="card-title">随机点名器</div>
