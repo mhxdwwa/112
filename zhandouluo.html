@@ -2531,11 +2531,11 @@ characters.forEach(ch => {
 // Preload enemy images
 const enemyImages = {};
 const enemyImageMap = {
-    'soldier': ['zhandouluo-images/士兵.webp','zhandouluo-images/士兵.webp'],
-    'soldier_up': ['zhandouluo-images/士兵1.webp','zhandouluo-images/士兵1.webp'],
+    'soldier': ['zhandouluo-images/士兵.png','zhandouluo-images/士兵.png'],
+    'soldier_up': ['zhandouluo-images/士兵1.png','zhandouluo-images/士兵1.png'],
     'sniper': ['zhandouluo-images/狙击手.webp','zhandouluo-images/狙击手.webp'],
     'sniper_up': ['zhandouluo-images/狙击手1.webp','zhandouluo-images/狙击手1.webp'],
-    'drone': ['zhandouluo-images/无人机.webp','zhandouluo-images/无人机.webp']
+    'drone': ['zhandouluo-images/无人机.png','zhandouluo-images/无人机.png']
 };
 Object.entries(enemyImageMap).forEach(([type, [pngSrc, jpgSrc]]) => {
     loadImageWithFallback(pngSrc, jpgSrc, img => { enemyImages[type] = img; });
