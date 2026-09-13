@@ -1,0 +1,570 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0"><title>遨游天地</title><style>*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#0a1f2e}#game-container{position:relative;width:100vw;height:100vh;overflow:hidden}.canvas-layer{position:absolute;top:0;left:0;width:100%;height:100%;display:block;pointer-events:none}#player{position:absolute;bottom:0;left:18%;transform:translateX(-50%);z-index:15;will-change:transform;transition:transform 0.05s linear;filter:drop-shadow(0 10px 20px rgba(0,0,0,0.3))}#player img{width:280px;height:auto;display:block;transform-origin:center}#teacher{position:absolute;bottom:0;left:85%;transform:translateX(-50%);z-index:14;will-change:transform;filter:drop-shadow(0 8px 18px rgba(0,0,0,0.25));pointer-events:none}#teacher img{width:288px;height:auto;display:block;transform-origin:center;opacity:0.95}.teacher-float{animation:teacherFloat 2.6s infinite ease-in-out}@keyframes teacherFloat{0%{transform:translateY(0) scale(1)}50%{transform:translateY(-10px) scale(1.01)}100%{transform:translateY(0) scale(1)}}.flap-fast img{animation:wingFlap 0.14s infinite alternate ease-in-out}.flap-gentle img{animation:wingFlap 0.28s infinite alternate ease-in-out}.idle-float img{animation:idleFloat 2.0s infinite ease-in-out}@keyframes wingFlap{0%{transform:scaleY(1) rotate(0deg)}100%{transform:scaleY(0.65) rotate(2deg)}}@keyframes idleFloat{0%{transform:translateY(0)}50%{transform:translateY(-12px)}100%{transform:translateY(0)}}#author-info{position:absolute;bottom:30px;right:110px;color:#FFD700;font-size:30px;font-weight:bold;font-family:'Microsoft YaHei','PingFang SC',sans-serif;z-index:40;pointer-events:none;text-shadow:0 2px 8px rgba(0,0,0,0.7);white-space:nowrap}#control-btn{position:absolute;bottom:25px;right:25px;width:70px;height:70px;border-radius:50%;background:#f5b042;border:3px solid #ffe3a3;box-shadow:0 6px 0 #b45f06,0 8px 20px rgba(0,0,0,0.3);cursor:pointer;z-index:50;display:flex;align-items:center;justify-content:center;transition:all 0.1s;color:#1e2f3d;font-size:32px;font-weight:bold;user-select:none}#control-btn:active{transform:translateY(4px);box-shadow:0 2px 0 #b45f06,0 8px 20px rgba(0,0,0,0.3)}#control-btn.paused{background:#6c8b9b;border-color:#b0d0e8;box-shadow:0 4px 0 #3a5e6b,0 8px 20px rgba(0,0,0,0.2);color:#f0f0f0}#mic-hint{position:absolute;bottom:100px;right:25px;color:#ffec9e;background:rgba(0,0,0,0.4);padding:5px 15px;border-radius:30px;font-size:14px;backdrop-filter:blur(4px);z-index:40;pointer-events:none}#progress-container{position:absolute;bottom:110px;left:20px;width:200px;background:rgba(0,0,0,0.4);border-radius:20px;padding:5px 12px;backdrop-filter:blur(4px);z-index:30;border:1px solid #ffd966aa;display:flex;align-items:center;gap:8px}#progress-bar-bg{flex:1;height:10px;background:#333;border-radius:10px;overflow:hidden}#progress-bar-fill{height:100%;width:0%;background:linear-gradient(90deg,#f1c40f,#e67e22);border-radius:10px;transition:width 0.1s}#progress-text{color:#ffecb3;font-size:14px;font-weight:bold;min-width:45px;text-shadow:0 2px 4px black}#score-board{position:absolute;top:20px;left:20px;background:rgba(10,20,30,0.55);backdrop-filter:blur(8px);padding:12px 20px;border-radius:40px;color:white;z-index:30;border:1px solid rgba(255,220,150,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:baseline;gap:15px}#distance-display{font-size:26px;font-weight:700;color:#ffe484;text-shadow:0 0 10px #ffb347}#distance-unit{font-size:16px;opacity:0.9}#flight-status{font-size:16px;color:#c1e6f5;display:flex;align-items:center;gap:5px}#volume-panel{position:absolute;top:90px;left:20px;width:260px;background:rgba(10,20,30,0.55);backdrop-filter:blur(8px);border-radius:30px;padding:14px 18px;z-index:29;border:1px solid rgba(255,215,100,0.4);box-shadow:0 4px 15px rgba(0,0,0,0.3)}#volume-label{display:flex;justify-content:space-between;color:#f5e9d8;font-size:15px;margin-bottom:6px;text-shadow:0 2px 4px black}#volume-indicator{height:16px;background:rgba(0,0,0,0.4);border-radius:20px;overflow:hidden;box-shadow:inset 0 2px 5px rgba(0,0,0,0.5);margin-bottom:6px}#volume-bar{height:100%;width:0%;background:linear-gradient(90deg,#2ecc71,#f1c40f,#e67e22,#e74c3c);border-radius:20px;transition:width 0.08s linear;box-shadow:0 0 12px #f1c40faa}#volume-value{color:#ffecb3;font-size:16px;font-weight:bold;text-align:right;text-shadow:0 2px 5px black}#height-indicator{display:flex;justify-content:space-between;margin-top:5px;font-size:13px;color:#bcd5ff}#tips{position:absolute;bottom:22px;left:20px;color:#f0e7d6;background:rgba(0,0,0,0.3);padding:8px 18px;border-radius:40px;backdrop-filter:blur(4px);font-size:16px;z-index:30;border-left:4px solid #ffd966;text-shadow:0 2px 4px black}#welcome-message{position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);color:white;font-size:28px;text-shadow:0 4px 10px black;background:rgba(0,0,0,0.3);padding:15px 30px;border-radius:50px;backdrop-filter:blur(5px);z-index:25;pointer-events:none;transition:opacity 0.5s;white-space:nowrap}@media (max-width:600px){#player img{width:180px}#teacher img{width:180px}#welcome-message{font-size:20px;white-space:normal}#control-btn{width:60px;height:60px;font-size:28px}#progress-container{width:150px}#volume-panel{width:220px;top:80px}#player{left:15%}#teacher{left:88%}}</style></head><body><div id="game-container"><canvas id="sky-canvas" class="canvas-layer"></canvas><canvas id="mountain-canvas" class="canvas-layer"></canvas><canvas id="cloud-mid-canvas" class="canvas-layer"></canvas><canvas id="cloud-far-canvas" class="canvas-layer"></canvas><canvas id="ground-canvas" class="canvas-layer"></canvas><canvas id="fx-canvas" class="canvas-layer" style="z-index: 20;"></canvas><canvas id="weapon-canvas" class="canvas-layer" style="z-index: 18;"></canvas><canvas id="aura-canvas" class="canvas-layer" style="z-index: 14;"></canvas><div id="teacher"><div style="text-align:center;color:#FFD700;font-size:22px;font-weight:bold;text-shadow:0 2px 8px rgba(0,0,0,0.7);margin-bottom:2px;pointer-events:none">吴老师</div><img id="teacher-img" class="teacher-float" src="images/老师.png" alt="师父" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\' viewBox=\'0 0 100 100\'%3E%3Ccircle cx=\'50\' cy=\'40\' r=\'30\' fill=\'%23f1c40f\'/%3E%3Crect x=\'30\' y=\'70\' width=\'40\' height=\'30\' fill=\'%238B4513\'/%3E%3Ctext x=\'20\' y=\'95\' font-size=\'20\' fill=\'white\'%3E师父%3C/text%3E%3C/svg%3E'; console.warn('老师图片未找到，使用占位');"></div><div id="player"><img id="player-img" src="images/人物.png" alt="孙悟空" onerror="this.onerror=null; this.src='https://aka.doubaocdn.com/s/YTYu1wLVOi'; console.warn('本地人物图片未找到，使用默认');"></div><div id="welcome-message"></div><div id="score-board"><div style="display: flex; align-items: baseline;"><span style="margin-right: 6px;">✈️</span><span id="distance-display">0</span><span id="distance-unit">米</span></div><div id="flight-status">✨ 等待开始</div></div><div id="volume-panel"><div id="volume-label"><span>🔊 读书音量</span><span id="volume-percent">0%</span></div><div id="volume-indicator"><div id="volume-bar"></div></div><div id="volume-value">📢 允许麦克风</div><div id="height-indicator"><span>⬇️ 地面</span><span id="height-percent">0% 高度</span><span>☁️ 顶部</span></div></div><div id="tips"></div><div id="progress-container"><span>🏆</span><div id="progress-bar-bg"><div id="progress-bar-fill"></div></div><span id="progress-text">0s</span></div><div id="author-info">制作者：九圩中学吴胜闯老师</div><div id="control-btn" title="开始游戏">▶</div><div id="mic-hint">🎙️ </div></div><script>(function(){
+"use strict";
+ 
+const playerEl = document.getElementById('player');
+const teacherEl = document.getElementById('teacher');
+const teacherImg = document.getElementById('teacher-img');
+const playerImg = document.getElementById('player-img');
+const volumeBar = document.getElementById('volume-bar');
+const volumePercent = document.getElementById('volume-percent');
+const volumeValueText = document.getElementById('volume-value');
+const heightPercentSpan = document.getElementById('height-percent');
+const distanceDisplay = document.getElementById('distance-display');
+const flightStatus = document.getElementById('flight-status');
+const controlBtn = document.getElementById('control-btn');
+const welcomeMsg = document.getElementById('welcome-message');
+const progressFill = document.getElementById('progress-bar-fill');
+const progressText = document.getElementById('progress-text');
+const skyCanvas = document.getElementById('sky-canvas');
+const mountainCanvas = document.getElementById('mountain-canvas');
+const cloudMidCanvas = document.getElementById('cloud-mid-canvas');
+const cloudFarCanvas = document.getElementById('cloud-far-canvas');
+const groundCanvas = document.getElementById('ground-canvas');
+const fxCanvas = document.getElementById('fx-canvas');
+const weaponCanvas = document.getElementById('weapon-canvas');
+const auraCanvas = document.getElementById('aura-canvas');
+const canvases = [skyCanvas, mountainCanvas, cloudMidCanvas, cloudFarCanvas, groundCanvas];
+const contexts = canvases.map(c => c.getContext('2d'));
+const fxCtx = fxCanvas.getContext('2d');
+const weaponCtx = weaponCanvas.getContext('2d');
+const auraCtx = auraCanvas.getContext('2d');
+const layerSpeeds = [0.12, 0.4, 0.48, 0.6, 1.0];
+let layerOffsets = [0, 0, 0, 0, 0];
+let audioContext = null, analyser = null, source = null, stream = null;
+let isStarted = false;
+let isPaused = false;
+let animationFrame = null;
+let playerY = 0, velocityY = 0, maxPlayerY = 0, playerHeight = 0;
+let playerXOffset = 0;  
+let teacherXOffset = 0;  
+let teacherY = 0, maxTeacherY = 0, teacherHeight = 0;
+let smoothedVolume = 0;
+const VOLUME_SMOOTHING = 0.35;
+let currentScrollSpeed = 0;
+const SCROLL_SPEED_FACTOR = 30.0;  
+let distance = 0;
+let frequencyData = null;
+let canvasWidth = window.innerWidth, canvasHeight = window.innerHeight;
+let time = 0;
+let cheerTexts = [];
+const CHEER_WORDS = ['👍 真棒！', '📖 大声读！', '🌟 好厉害！', '🎉 继续加油！', '💪 再大声点！', '✨ 优秀！', '🏆 朗读之星', '⭐ 太强了', '🚀 冲上云霄', '🎯 快追上师父'];
+let cheerSpawnCounter = 0;
+let readingSeconds = 0;
+const TARGET_SECONDS = 180;
+let hasWeapon = false;
+const READING_THRESHOLD = 0.03;
+ 
+function updateTeacherMaxY() {
+const img = teacherImg;
+if (img.complete && img.naturalHeight !== 0) {
+teacherHeight = img.offsetHeight || 240;
+} else {
+teacherHeight = 240;
+}
+maxTeacherY = canvasHeight - teacherHeight;
+ 
+if (!isStarted || teacherY === 0) {
+teacherY = maxTeacherY * 0.42;
+teacherEl.style.transform = `translateX(calc(-50% + ${teacherXOffset}vw)) translateY(${-teacherY}px)`;
+}
+}
+function updateMaxPositions() {
+const pImg = playerImg;
+playerHeight = (pImg.complete && pImg.offsetHeight) ? pImg.offsetHeight : 280;
+maxPlayerY = canvasHeight - playerHeight;
+updateTeacherMaxY();
+playerY = Math.min(playerY, maxPlayerY);
+teacherY = Math.min(teacherY, maxTeacherY);
+}
+ 
+teacherImg.addEventListener('load', () => {
+updateTeacherMaxY();
+if (!isStarted) {
+teacherY = maxTeacherY * 0.42;
+teacherEl.style.transform = `translateX(calc(-50% + ${teacherXOffset}vw)) translateY(${-teacherY}px)`;
+}
+});
+ 
+function resizeCanvases() {
+canvasWidth = window.innerWidth;
+canvasHeight = window.innerHeight;
+canvases.forEach(c => { c.width = canvasWidth; c.height = canvasHeight; });
+fxCanvas.width = canvasWidth; fxCanvas.height = canvasHeight;
+weaponCanvas.width = canvasWidth; weaponCanvas.height = canvasHeight;
+auraCanvas.width = canvasWidth; auraCanvas.height = canvasHeight;
+updateMaxPositions();
+if (!isStarted) {
+teacherY = maxTeacherY * 0.42;
+teacherEl.style.transform = `translateX(calc(-50% + ${teacherXOffset}vw)) translateY(${-teacherY}px)`;
+}
+drawAllLayers();
+}
+ 
+function drawSky(ctx, offset) {
+const w = canvasWidth, h = canvasHeight;
+const grad = ctx.createLinearGradient(0, 0, 0, h);
+grad.addColorStop(0, '#1a4a6b');
+grad.addColorStop(0.5, '#6da5c0');
+grad.addColorStop(1, '#c2d9e8');
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, w, h);
+ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+ctx.shadowBlur = 25;
+for (let i = -200; i < w + 200; i += 400) {
+let x = (i + offset * 0.2) % (w + 800) - 400;
+ctx.beginPath();
+ctx.arc(x, 40 + Math.sin(time + i)*8, 60, 0, Math.PI*2);
+ctx.arc(x+70, 60, 45, 0, Math.PI*2);
+ctx.fill();
+}
+ctx.shadowBlur = 0;
+}
+function drawMountain(ctx, offset) {
+const w = canvasWidth, h = canvasHeight;
+ctx.clearRect(0, 0, w, h);
+const baseY = h * 0.72;
+const period = 700;
+const shift = offset % period;
+ctx.fillStyle = '#4a6278';
+ctx.shadowBlur = 12;
+for (let i = -1; i < Math.ceil(w/period)+2; i++) {
+const startX = i * period - shift;
+ctx.beginPath();
+ctx.moveTo(startX, baseY);
+ctx.lineTo(startX + 180, baseY - 280);
+ctx.lineTo(startX + 360, baseY - 140);
+ctx.lineTo(startX + 520, baseY - 310);
+ctx.lineTo(startX + 700, baseY);
+ctx.closePath();
+ctx.fill();
+}
+ctx.shadowBlur = 0;
+ctx.fillStyle = '#5d7a5c';
+ctx.shadowBlur = 8;
+for (let i = -1; i < Math.ceil(w/500)+2; i++) {
+const startX = i * 500 - (offset * 0.7) % 500;
+ctx.beginPath();
+ctx.moveTo(startX, baseY+10);
+ctx.lineTo(startX + 120, baseY - 150);
+ctx.lineTo(startX + 250, baseY - 60);
+ctx.lineTo(startX + 380, baseY - 190);
+ctx.lineTo(startX + 500, baseY+10);
+ctx.closePath();
+ctx.fill();
+}
+ctx.shadowBlur = 0;
+}
+function drawCloudMid(ctx, offset) {
+const w = canvasWidth, h = canvasHeight;
+ctx.clearRect(0, 0, w, h);
+ctx.shadowColor = '#ffffffb0';
+ctx.shadowBlur = 30;
+const baseY = h * 0.42;
+const period = 850;
+const shift = offset % period;
+for (let i = -1; i < Math.ceil(w/period)+2; i++) {
+const baseX = i * period - shift;
+const seed = (i * 7 + 13) % 5;
+const alpha = 0.45 + (i % 3) * 0.1;
+ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+if (seed === 0) {
+ctx.beginPath();
+ctx.arc(baseX + 70, baseY - 10, 65, 0, Math.PI*2);
+ctx.arc(baseX + 150, baseY - 30, 75, 0, Math.PI*2);
+ctx.arc(baseX + 240, baseY - 5, 55, 0, Math.PI*2);
+ctx.fill();
+} else if (seed === 1) {
+ctx.beginPath();
+ctx.ellipse(baseX + 100, baseY, 90, 45, 0, 0, Math.PI*2);
+ctx.ellipse(baseX + 200, baseY - 10, 70, 50, 0, 0, Math.PI*2);
+ctx.ellipse(baseX + 50, baseY - 15, 60, 40, 0, 0, Math.PI*2);
+ctx.fill();
+} else if (seed === 2) {
+ctx.beginPath();
+ctx.arc(baseX + 90, baseY - 10, 80, 0, Math.PI*2);
+ctx.arc(baseX + 180, baseY - 25, 70, 0, Math.PI*2);
+ctx.arc(baseX + 260, baseY - 5, 50, 0, Math.PI*2);
+ctx.arc(baseX + 30, baseY + 5, 40, 0, Math.PI*2);
+ctx.fill();
+} else if (seed === 3) {
+ctx.fillStyle = `rgba(255, 255, 245, ${alpha+0.1})`;
+ctx.beginPath();
+ctx.arc(baseX + 80, baseY - 20, 70, 0, Math.PI*2);
+ctx.arc(baseX + 160, baseY - 40, 85, 0, Math.PI*2);
+ctx.arc(baseX + 250, baseY - 15, 65, 0, Math.PI*2);
+ctx.fill();
+ctx.fillStyle = `rgba(255, 255, 255, ${alpha*0.7})`;
+ctx.beginPath();
+ctx.arc(baseX + 110, baseY - 10, 55, 0, Math.PI*2);
+ctx.arc(baseX + 200, baseY - 30, 60, 0, Math.PI*2);
+ctx.fill();
+} else {
+ctx.beginPath();
+ctx.arc(baseX + 60, baseY, 55, 0, Math.PI*2);
+ctx.arc(baseX + 130, baseY - 25, 65, 0, Math.PI*2);
+ctx.arc(baseX + 210, baseY - 10, 50, 0, Math.PI*2);
+ctx.arc(baseX + 160, baseY + 10, 45, 0, Math.PI*2);
+ctx.fill();
+}
+}
+ctx.shadowBlur = 0;
+}
+function drawCloudFar(ctx, offset) {
+const w = canvasWidth, h = canvasHeight;
+ctx.clearRect(0, 0, w, h);
+ctx.shadowColor = '#ffffff90';
+ctx.shadowBlur = 35;
+const baseY = h * 0.26;
+const period = 1200;
+const shift = offset % period;
+for (let i = -1; i < Math.ceil(w/period)+2; i++) {
+const baseX = i * period - shift;
+const seed = (i * 11 + 5) % 5;
+const alpha = 0.28 + (i % 4) * 0.06;
+ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+if (seed === 0) {
+ctx.beginPath();
+ctx.arc(baseX + 100, baseY, 85, 0, Math.PI*2);
+ctx.arc(baseX + 210, baseY - 20, 95, 0, Math.PI*2);
+ctx.arc(baseX + 320, baseY + 5, 75, 0, Math.PI*2);
+ctx.fill();
+} else if (seed === 1) {
+ctx.beginPath();
+ctx.ellipse(baseX + 130, baseY - 10, 100, 55, 0, 0, Math.PI*2);
+ctx.ellipse(baseX + 260, baseY - 25, 85, 60, 0, 0, Math.PI*2);
+ctx.fill();
+} else if (seed === 2) {
+ctx.beginPath();
+ctx.arc(baseX + 80, baseY - 15, 75, 0, Math.PI*2);
+ctx.arc(baseX + 170, baseY - 35, 90, 0, Math.PI*2);
+ctx.arc(baseX + 280, baseY - 10, 70, 0, Math.PI*2);
+ctx.arc(baseX + 360, baseY - 5, 60, 0, Math.PI*2);
+ctx.fill();
+} else if (seed === 3) {
+ctx.fillStyle = `rgba(255, 250, 240, ${alpha+0.05})`;
+ctx.beginPath();
+ctx.arc(baseX + 120, baseY - 20, 80, 0, Math.PI*2);
+ctx.arc(baseX + 220, baseY - 45, 100, 0, Math.PI*2);
+ctx.fill();
+ctx.fillStyle = `rgba(255, 255, 255, ${alpha*0.8})`;
+ctx.beginPath();
+ctx.arc(baseX + 180, baseY - 10, 60, 0, Math.PI*2);
+ctx.fill();
+} else {
+ctx.beginPath();
+ctx.arc(baseX + 140, baseY - 5, 80, 0, Math.PI*2);
+ctx.arc(baseX + 240, baseY - 30, 85, 0, Math.PI*2);
+ctx.arc(baseX + 330, baseY - 15, 65, 0, Math.PI*2);
+ctx.fill();
+}
+}
+ctx.shadowBlur = 0;
+}
+function drawGround(ctx, offset) {
+const w = canvasWidth, h = canvasHeight;
+ctx.clearRect(0, 0, w, h);
+const grad = ctx.createLinearGradient(0, h-50, 0, h);
+grad.addColorStop(0, '#6b8e4e');
+grad.addColorStop(1, '#3f6123');
+ctx.fillStyle = grad;
+ctx.fillRect(0, h-40, w, 40);
+ctx.strokeStyle = '#8fb56b';
+ctx.lineWidth = 2.5;
+const period = 200;
+const shift = offset % period;
+for (let i = -1; i < w/period+2; i++) {
+const baseX = i * period - shift;
+for (let j = 0; j < 8; j++) {
+ctx.beginPath();
+ctx.moveTo(baseX + j*25, h-30);
+ctx.lineTo(baseX + j*25 + 6, h-45);
+ctx.stroke();
+}
+}
+ctx.fillStyle = '#7a8a7a';
+for (let i = 0; i < w/150; i++) {
+const rockX = (i * 150 + offset * 0.5) % (w + 100) - 50;
+ctx.beginPath();
+ctx.ellipse(rockX, h-25, 8, 4, 0, 0, Math.PI*2);
+ctx.fill();
+}
+ctx.fillStyle = '#2d6a4f';
+for (let i = -1; i < w/300+2; i++) {
+const bushX = i * 300 - (offset * 0.3) % 300;
+ctx.beginPath();
+ctx.arc(bushX, h-45, 18, 0, Math.PI*2);
+ctx.fill();
+ctx.fillStyle = '#40916c';
+ctx.beginPath();
+ctx.arc(bushX-8, h-50, 12, 0, Math.PI*2);
+ctx.fill();
+ctx.fillStyle = '#2d6a4f';
+}
+ctx.strokeStyle = '#f9d849';
+ctx.lineWidth = 5;
+ctx.setLineDash([25, 35]);
+ctx.beginPath();
+ctx.moveTo(0, h-10);
+ctx.lineTo(w, h-10);
+ctx.stroke();
+ctx.setLineDash([]);
+}
+function drawAllLayers() {
+drawSky(contexts[0], layerOffsets[0]);
+drawMountain(contexts[1], layerOffsets[1]);
+drawCloudMid(contexts[2], layerOffsets[2]);
+drawCloudFar(contexts[3], layerOffsets[3]);
+drawGround(contexts[4], layerOffsets[4]);
+}
+ 
+function drawWeapon() {
+weaponCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+if (!hasWeapon) return;
+const rect = playerEl.getBoundingClientRect();
+const handX = rect.left + rect.width * 0.78;
+const handY = rect.top + rect.height * 0.62 - 20;  
+const stickLength = 120;
+const angle = 0.5;
+const dx = Math.cos(angle) * stickLength;
+const dy = Math.sin(angle) * stickLength;
+const startX = handX - dx * 0.2;
+const startY = handY - dy * 0.2;
+const endX = handX + dx * 0.8;
+const endY = handY + dy * 0.8;
+weaponCtx.shadowColor = '#FFD700';
+weaponCtx.shadowBlur = 30;
+const gradient = weaponCtx.createLinearGradient(startX, startY, endX, endY);
+gradient.addColorStop(0, '#FFD700');
+gradient.addColorStop(0.5, '#FFA500');
+gradient.addColorStop(1, '#FFD700');
+weaponCtx.lineWidth = 16;
+weaponCtx.strokeStyle = gradient;
+weaponCtx.beginPath();
+weaponCtx.moveTo(startX, startY);
+weaponCtx.lineTo(endX, endY);
+weaponCtx.stroke();
+weaponCtx.shadowBlur = 0;
+}
+function updateAndDrawCheerTexts(volume) {
+if (volume > 0.1) {
+cheerSpawnCounter += volume * 0.65;
+while (cheerSpawnCounter > 1.0 && cheerTexts.length < 20) {
+cheerSpawnCounter -= 1.0;
+const text = CHEER_WORDS[Math.floor(Math.random() * CHEER_WORDS.length)];
+const rect = playerEl.getBoundingClientRect();
+const baseX = rect.left + rect.width/2 - 320 + (Math.random() - 0.5) * 180;
+const baseY = rect.top + rect.height/2 - 20 + Math.random() * 120;
+cheerTexts.push({
+x: baseX, y: baseY, text, alpha: 1.0, life: 1.0,
+vy: -2.0 - Math.random() * 2.2,
+vx: (Math.random() - 1.0) * 1.0,
+color: `hsl(${Math.random() * 60 + 30}, 90%, 65%)`
+});
+}
+}
+fxCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+for (let i = cheerTexts.length - 1; i >= 0; i--) {
+const t = cheerTexts[i];
+t.x += t.vx;
+t.y += t.vy;
+t.life -= 0.007;
+t.alpha = t.life;
+if (t.life <= 0.02 || t.y < -50) { cheerTexts.splice(i, 1); continue; }
+fxCtx.font = 'bold 30px "Microsoft YaHei", sans-serif';
+fxCtx.shadowColor = '#000000b0';
+fxCtx.shadowBlur = 16;
+fxCtx.fillStyle = t.color;
+fxCtx.globalAlpha = t.alpha;
+fxCtx.fillText(t.text, t.x, t.y);
+}
+fxCtx.shadowBlur = 0;
+fxCtx.globalAlpha = 1.0;
+}
+function computeVolume() {
+if (!analyser || !frequencyData) return 0;
+analyser.getByteFrequencyData(frequencyData);
+let sum = 0;
+for (let i=0; i<frequencyData.length; i++) sum += frequencyData[i];
+let avg = sum / frequencyData.length / 255;
+return Math.min(avg * 2.0, 1.0);
+}
+function updateUI(vol, heightPercent) {
+const percent = Math.round(vol * 100);
+volumeBar.style.width = percent + '%';
+volumePercent.textContent = percent + '%';
+heightPercentSpan.textContent = Math.round(heightPercent * 100) + '% 高度';
+let msg = '', status = '';
+if (vol < 0.03) { msg = '🤫 试试大声朗读～'; status = '🛌 准备起飞'; }
+else if (vol < 0.18) { msg = '📢 再大声一点！'; status = '🐣 缓缓上升'; }
+else if (vol < 0.4) { msg = '🎵 不错哦，保持住'; status = '🕊️ 半空翱翔'; }
+else if (vol < 0.7) { msg = '🔥 声音响亮！'; status = '⚡ 高速飞行'; }
+else { msg = '🎉 满分音量！追上师父！'; status = '☁️ 接近师父'; }
+volumeValueText.textContent = msg;
+if (!hasWeapon) flightStatus.textContent = status;
+playerEl.classList.remove('flap-gentle', 'flap-fast', 'idle-float');
+if (vol < 0.02) playerEl.classList.add('idle-float');
+else if (vol < 0.3) playerEl.classList.add('flap-gentle');
+else playerEl.classList.add('flap-fast');
+}
+function updateGame(vol) {
+smoothedVolume = smoothedVolume * VOLUME_SMOOTHING + vol * (1 - VOLUME_SMOOTHING);
+if (!hasWeapon && !isPaused && smoothedVolume > READING_THRESHOLD) {
+readingSeconds += 0.016;
+if (readingSeconds >= TARGET_SECONDS) {
+readingSeconds = TARGET_SECONDS;
+hasWeapon = true;
+flightStatus.textContent = '🏆 获得金箍棒！';
+}
+}
+const progress = Math.min(readingSeconds / TARGET_SECONDS, 1.0);
+progressFill.style.width = (progress * 100) + '%';
+progressText.textContent = hasWeapon ? '✓已获得' : Math.floor(readingSeconds) + 's';
+const targetSpeed = smoothedVolume * SCROLL_SPEED_FACTOR;
+currentScrollSpeed = currentScrollSpeed * 0.75 + targetSpeed * 0.25;
+const volumeRatio = Math.min(smoothedVolume, 1.0);
+ 
+ 
+ 
+const MAX_OFFSET = 58;
+ 
+const vp = Math.pow(volumeRatio, 1.2);
+const targetXOffset = MAX_OFFSET * vp / (vp + 0.12);
+ 
+const xDiff = targetXOffset - playerXOffset;
+if (xDiff > 0) {
+playerXOffset += xDiff * 0.08;
+} else {
+ 
+playerXOffset += xDiff * 0.14;
+}
+playerXOffset = Math.max(-5, Math.min(MAX_OFFSET * 0.95, playerXOffset));
+ 
+const teacherTargetX = Math.pow(volumeRatio, 3) * 10;
+const teacherXDiff = teacherTargetX - teacherXOffset;
+if (teacherXDiff > 0) {
+teacherXOffset += teacherXDiff * 0.03;
+} else {
+teacherXOffset += teacherXDiff * 0.05;
+}
+teacherXOffset = Math.max(0, Math.min(10, teacherXOffset));
+ 
+const targetPlayerY = maxPlayerY * volumeRatio;
+const diff = targetPlayerY - playerY;
+velocityY += diff * 0.14;
+velocityY *= 0.84;
+playerY = Math.max(0, Math.min(playerY + velocityY, maxPlayerY));
+ 
+playerEl.style.transform = `translateX(calc(-50% + ${playerXOffset}vw)) translateY(${-playerY}px)`;
+ 
+const teacherBaseRatio = 0.42;
+const teacherMaxRatio = 0.70;  
+const targetTeacherRatio = teacherBaseRatio + (teacherMaxRatio - teacherBaseRatio) * volumeRatio;
+const targetTeacherY = maxTeacherY * targetTeacherRatio;
+teacherY = teacherY * 0.92 + targetTeacherY * 0.08;  
+teacherY = Math.max(0, Math.min(teacherY, maxTeacherY));
+teacherEl.style.transform = `translateX(calc(-50% + ${teacherXOffset}vw)) translateY(${-teacherY}px)`;
+for (let i=0; i<layerOffsets.length; i++) {
+layerOffsets[i] = (layerOffsets[i] + currentScrollSpeed * layerSpeeds[i]) % 10000;
+}
+time += 0.8;
+drawAllLayers();
+updateAndDrawCheerTexts(smoothedVolume);
+drawWeapon();
+if (currentScrollSpeed > 0.01) distance += currentScrollSpeed * 0.15;
+distanceDisplay.textContent = Math.floor(distance);
+const heightPercent = maxPlayerY > 0 ? playerY / maxPlayerY : 0;
+updateUI(vol, heightPercent);
+}
+function gameLoop() {
+if (!isStarted || isPaused) {
+if (isStarted && isPaused) {
+drawAllLayers();
+drawWeapon();
+updateAndDrawCheerTexts(smoothedVolume);
+}
+animationFrame = requestAnimationFrame(gameLoop);
+return;
+}
+const rawVol = computeVolume();
+updateGame(rawVol);
+animationFrame = requestAnimationFrame(gameLoop);
+}
+async function initAudio() {
+try {
+stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+audioContext = new (window.AudioContext || window.webkitAudioContext)();
+await audioContext.resume();
+analyser = audioContext.createAnalyser();
+analyser.fftSize = 1024;
+source = audioContext.createMediaStreamSource(stream);
+source.connect(analyser);
+frequencyData = new Uint8Array(analyser.frequencyBinCount);
+return true;
+} catch (err) {
+alert('无法访问麦克风，请授予权限。');
+return false;
+}
+}
+async function startGame() {
+if (isStarted) { togglePause(); return; }
+const success = await initAudio();
+if (!success) return;
+playerY = 0; velocityY = 0; smoothedVolume = 0; currentScrollSpeed = 0; distance = 0;
+playerXOffset = 0;  
+teacherXOffset = 0;  
+readingSeconds = 0; hasWeapon = false;
+layerOffsets = [0,0,0,0,0]; cheerTexts = [];
+updateMaxPositions();
+teacherY = maxTeacherY * 0.42;
+teacherEl.style.transform = `translateX(calc(-50% + ${teacherXOffset}vw)) translateY(${-teacherY}px)`;
+playerEl.style.transform = `translateX(calc(-50% + 0vw)) translateY(0px)`;
+drawAllLayers();
+welcomeMsg.style.opacity = '0';
+isStarted = true; isPaused = false;
+controlBtn.textContent = '⏸'; controlBtn.classList.remove('paused');
+controlBtn.title = '暂停游戏';
+volumeValueText.textContent = '📢 大声朗读吧';
+flightStatus.textContent = '✨ 飞行中';
+progressFill.style.width = '0%'; progressText.textContent = '0s';
+if (animationFrame) cancelAnimationFrame(animationFrame);
+gameLoop();
+}
+function togglePause() {
+if (!isStarted) return;
+isPaused = !isPaused;
+if (isPaused) {
+controlBtn.textContent = '▶'; controlBtn.classList.add('paused');
+controlBtn.title = '继续游戏'; flightStatus.textContent = '⏸ 暂停中';
+} else {
+controlBtn.textContent = '⏸'; controlBtn.classList.remove('paused');
+controlBtn.title = '暂停游戏'; flightStatus.textContent = hasWeapon ? '🏆 金箍棒' : '✨ 飞行中';
+}
+}
+function stopAudio() {
+if (stream) stream.getTracks().forEach(t => t.stop());
+if (audioContext) audioContext.close();
+isStarted = false;
+}
+function handleResize() {
+resizeCanvases();
+playerEl.style.transform = `translateX(calc(-50% + ${playerXOffset}vw)) translateY(${-playerY}px)`;
+teacherEl.style.transform = `translateX(calc(-50% + ${teacherXOffset}vw)) translateY(${-teacherY}px)`;
+drawAllLayers();
+}
+controlBtn.addEventListener('click', startGame);
+window.addEventListener('resize', handleResize);
+window.addEventListener('load', () => {
+resizeCanvases();
+updateMaxPositions();
+teacherY = maxTeacherY * 0.42;
+teacherEl.style.transform = `translateX(calc(-50% + ${teacherXOffset}vw)) translateY(${-teacherY}px)`;
+playerEl.style.transform = `translateX(calc(-50% + 0vw)) translateY(0px)`;
+playerEl.classList.add('idle-float');
+drawAllLayers();
+});
+window.addEventListener('beforeunload', () => {
+stopAudio();
+if (animationFrame) cancelAnimationFrame(animationFrame);
+});
+resizeCanvases();
+})();</script></body></html>
