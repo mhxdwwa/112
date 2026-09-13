@@ -2542,7 +2542,7 @@ Object.entries(bossImageMap).forEach(([type, [pngSrc, jpgSrc]]) => {
         const card = document.createElement('div');
         card.className = 'char-card' + (idx===0?' selected':'');
         card.dataset.idx = idx;
-        card.innerHTML = `<img src="zhandouluo-images/${ch.id}.jpg" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div style="display:none;width:90px;height:90px;background:${ch.color};align-items:center;justify-content:center;border:2px solid ${ch.color};font-size:36px;color:#fff;font-family:Courier New">${ch.name[0]}</div><div class="cname">${ch.name}</div><div class="cdesc">${ch.desc}</div>`;
+        card.innerHTML = `<img src="zhandouluo-images/${ch.id}.png" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div style="display:none;width:90px;height:90px;background:${ch.color};align-items:center;justify-content:center;border:2px solid ${ch.color};font-size:36px;color:#fff;font-family:Courier New">${ch.name[0]}</div><div class="cname">${ch.name}</div><div class="cdesc">${ch.desc}</div>`;
         card.addEventListener('click', () => {
             grid.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
