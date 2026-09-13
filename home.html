@@ -579,12 +579,13 @@ let currentEditCard = null;
 let pendingChanges = {}; // 待保存的更改
 let hasUnsavedChanges = false;
 
-// 頁面加載 - 從localStorage恢復
+// 頁面加載 - 先從localStorage秒開，再從服務器同步最新
 window.addEventListener('DOMContentLoaded', () => {
   loadFromLocalStorage();
+  syncFromServer();
 });
 
-// 從localStorage加載已保存的圖片
+// 從localStorage加載（秒開）
 function loadFromLocalStorage() {
   try {
     const saved = localStorage.getItem('homeCardsData');
@@ -592,9 +593,22 @@ function loadFromLocalStorage() {
       const data = JSON.parse(saved);
       applyImages(data);
     }
-  } catch (e) {
-    console.log('讀取本地存儲失敗:', e);
-  }
+  } catch (e) {}
+}
+
+// 從服務器同步最新圖片（所有訪客都能看到）
+async function syncFromServer() {
+  try {
+    const resp = await fetch('/home-cards/cards-data.json?t=' + Date.now());
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Object.keys(data).length > 0) {
+        applyImages(data);
+        // 保存到localStorage供下次秒開
+        localStorage.setItem('homeCardsData', JSON.stringify(data));
+      }
+    }
+  } catch (e) {}
 }
 
 // 應用圖片到卡片
