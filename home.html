@@ -551,34 +551,52 @@ body {
 <script>
 let githubToken = '';
 let currentEditCard = null;
-let cardsData = {}; // 缓存所有卡片圖片數據
-let cardsDataSha = null; // JSON文件的SHA
+let cardsDataSha = null;
 
-// 頁面加載時檢查自定義圖片
+// 頁面加載 - 優先從localStorage讀取（秒開）
 window.addEventListener('DOMContentLoaded', () => {
-  loadCustomImages();
+  loadFromLocalStorage();
+  // 後台靜默從GitHub刷新最新數據
+  silentRefreshFromGitHub();
 });
 
-// 加載自定義圖片 - 只請求一次JSON
-async function loadCustomImages() {
+// 從localStorage加載（即時顯示）
+function loadFromLocalStorage() {
   try {
-    const resp = await fetch('/home-cards/cards-data.json?t=' + Date.now());
-    if (resp.ok) {
-      cardsData = await resp.json();
-      const cards = document.querySelectorAll('.card-icon[data-card-id]');
-      cards.forEach(card => {
-        const cardId = card.getAttribute('data-card-id');
-        if (cardsData[cardId]) {
-          const badge = card.querySelector('.badge');
-          const badgeHTML = badge ? badge.outerHTML : '';
-          card.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${cardsData[cardId]}" alt="${cardId}">`;
-        }
-      });
+    const saved = localStorage.getItem('homeCardsData');
+    if (saved) {
+      const data = JSON.parse(saved);
+      applyImages(data);
     }
   } catch (e) {}
 }
 
-// 顯示Token輸入框
+// 從GitHub靜默刷新（不阻塞UI）
+async function silentRefreshFromGitHub() {
+  try {
+    const resp = await fetch('/home-cards/cards-data.json?t=' + Date.now());
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Object.keys(data).length > 0) {
+        applyImages(data);
+        localStorage.setItem('homeCardsData', JSON.stringify(data));
+      }
+    }
+  } catch (e) {}
+}
+
+// 應用圖片到卡片
+function applyImages(data) {
+  Object.keys(data).forEach(cardId => {
+    const card = document.querySelector(`.card-icon[data-card-id="${cardId}"]`);
+    if (card && data[cardId]) {
+      const badge = card.querySelector('.badge');
+      const badgeHTML = badge ? badge.outerHTML : '';
+      card.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${data[cardId]}" alt="${cardId}">`;
+    }
+  });
+}
+
 function showTokenModal() {
   document.getElementById('tokenModal').classList.add('show');
   document.getElementById('tokenInput').value = '';
@@ -589,7 +607,6 @@ function hideTokenModal() {
   document.getElementById('tokenModal').classList.remove('show');
 }
 
-// 驗證Token
 async function verifyToken() {
   const token = document.getElementById('tokenInput').value.trim();
   if (!token) { alert('請輸入Token'); return; }
@@ -632,7 +649,6 @@ function handleCardClick(e) {
   document.getElementById('imageInput').click();
 }
 
-// 壓縮圖片 - 250px足夠，卡片顯示區域只有130px高
 function compressImage(file, maxWidth = 250, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -650,7 +666,7 @@ function compressImage(file, maxWidth = 250, quality = 0.7) {
   });
 }
 
-// 監聽文件選擇 - 只需2次API調用
+// 監聽文件選擇 - 即時顯示，後台上傳
 document.getElementById('imageInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file || !currentEditCard) return;
@@ -663,27 +679,53 @@ document.getElementById('imageInput').addEventListener('change', async (e) => {
   
   try {
     const { base64, sizeKB } = await compressImage(file);
-    toastText.textContent = `壓縮至${sizeKB}KB，正在同步到GitHub...`;
     
-    // 更新本地緩存
-    cardsData[cardId] = base64;
+    // 1. 立即更新顯示（用base64，零等待）
+    const badge = currentEditCard.querySelector('.badge');
+    const badgeHTML = badge ? badge.outerHTML : '';
+    currentEditCard.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${base64}" alt="${cardId}">`;
     
-    // 只調用一次API：獲取SHA + 更新JSON文件
+    // 2. 保存到localStorage（即時持久化）
+    let localData = {};
+    try { localData = JSON.parse(localStorage.getItem('homeCardsData') || '{}'); } catch(e) {}
+    localData[cardId] = base64;
+    localStorage.setItem('homeCardsData', JSON.stringify(localData));
+    
+    toast.classList.remove('show');
+    
+    // 3. 後台上傳到GitHub（不阻塞UI）
+    syncToGitHub(cardId, base64, sizeKB);
+    
+  } catch (e) {
+    alert('處理失敗：' + e.message);
+    toast.classList.remove('show');
+  }
+  
+  e.target.value = '';
+});
+
+// 後台上傳到GitHub
+async function syncToGitHub(cardId, base64, sizeKB) {
+  if (!githubToken) return;
+  
+  try {
+    // 獲取SHA
     if (!cardsDataSha) {
-      try {
-        const getResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
-          headers: { 'Authorization': `token ${githubToken}` }
-        });
-        if (getResp.ok) {
-          const data = await getResp.json();
-          cardsDataSha = data.sha;
-        }
-      } catch (e) {}
+      const getResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
+        headers: { 'Authorization': `token ${githubToken}` }
+      });
+      if (getResp.ok) {
+        const data = await getResp.json();
+        cardsDataSha = data.sha;
+      }
     }
     
-    const jsonContent = btoa(unescape(encodeURIComponent(JSON.stringify(cardsData))));
+    // 讀取localStorage中的完整數據
+    const localData = JSON.parse(localStorage.getItem('homeCardsData') || '{}');
+    const jsonContent = btoa(unescape(encodeURIComponent(JSON.stringify(localData))));
+    
     const body = {
-      message: `Update card: ${cardId}`,
+      message: `Update card: ${cardId} (${sizeKB}KB)`,
       content: jsonContent,
       branch: 'master'
     };
@@ -701,26 +743,12 @@ document.getElementById('imageInput').addEventListener('change', async (e) => {
     if (putResp.ok) {
       const respData = await putResp.json();
       cardsDataSha = respData.content.sha;
-      
-      // 立即更新本地顯示（用base64，不需要等CDN）
-      const badge = currentEditCard.querySelector('.badge');
-      const badgeHTML = badge ? badge.outerHTML : '';
-      currentEditCard.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${base64}" alt="${cardId}">`;
-      
-      toast.classList.remove('show');
-      toastText.textContent = '正在同步到GitHub...';
-    } else {
-      const err = await putResp.json();
-      alert('上傳失敗：' + (err.message || '未知錯誤'));
-      toast.classList.remove('show');
+      console.log('GitHub同步成功:', cardId);
     }
   } catch (e) {
-    alert('上傳失敗：' + e.message);
-    toast.classList.remove('show');
+    console.log('GitHub同步失敗（不影響本地顯示）:', e.message);
   }
-  
-  e.target.value = '';
-});
+}
 
 document.getElementById('tokenInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') verifyToken();
