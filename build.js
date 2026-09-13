@@ -118,7 +118,7 @@ async function main() {
   console.log(`  ✓ ${cssFile}: copied`);
 
   // Copy HTML files
-  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html', 'test-api.html', 'home.html']) {
+  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html', 'test-api.html', 'home.html', 'jiangmoji.html', 'starrollcall.html']) {
     const src = resolve(__dirname, html);
     try {
       copyFileSync(src, join(DIST, html));

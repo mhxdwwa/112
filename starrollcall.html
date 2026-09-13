@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>星空点名系统 - 九圩中学吴胜闯老师</title>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.128.0/build/three.module.js"}}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC','Segoe UI',Arial,sans-serif;background:linear-gradient(135deg,#0a0a2a,#1a1a4a);color:#fff;overflow-x:hidden;min-height:100vh}
+#stars-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
+.container{position:relative;z-index:1;width:100%;min-height:100vh}
+.bottom-left-controls{position:fixed;bottom:20px;left:20px;z-index:20;display:flex;gap:12px;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);padding:8px 16px;border-radius:50px;border:1px solid rgba(255,255,255,0.2);flex-wrap:wrap;}
+.control-btn,.mode-btn{background:rgba(0,0,0,0.6);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 18px;border-radius:40px;cursor:pointer;font-size:14px;font-weight:500;transition:all 0.2s;backdrop-filter:blur(4px)}
+.control-btn:hover,.mode-btn:hover{background:rgba(78,205,196,0.6);transform:scale(1.02);border-color:#4ECDC4}
+.mode-btn.active{background:#4ECDC4;border-color:#fff;box-shadow:0 0 12px rgba(78,205,196,0.8)}
+/* 音量控件样式 */
+.volume-control-wrapper{background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);padding:4px 12px;border-radius:40px;border:1px solid rgba(255,255,255,0.2);display:flex;align-items:center;gap:8px;transition:all 0.2s;}
+.volume-control-wrapper:hover{background:rgba(78,205,196,0.4);border-color:#4ECDC4;}
+.volume-icon{font-size:16px;color:#fff;}
+.volume-slider{width:90px;height:4px;-webkit-appearance:none;background:rgba(255,255,255,0.3);border-radius:5px;outline:none;cursor:pointer;}
+.volume-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#4ECDC4;border:none;cursor:pointer;box-shadow:0 0 4px #4ECDC4;}
+.volume-slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#4ECDC4;border:none;cursor:pointer;}
+.volume-value{font-size:12px;min-width:40px;color:#fff;font-weight:500;}
+.main-content{position:relative;width:100%;height:100vh;display:flex;align-items:center;justify-content:center}
+.sphere-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
+#sphere-canvas{width:100%;height:100%}
+.status-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:min(12vw,100px);font-weight:bold;color:#fff;text-shadow:0 0 50px #4ECDC4;text-align:center;z-index:10;pointer-events:none;width:90%;white-space:nowrap;opacity:0;transition:opacity 0.3s;font-family:monospace}
+.status-text.double{white-space:normal;font-size:min(8vw,70px);line-height:1.3}
+.center-controls{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:20}
+.center-controls button{padding:14px 40px;font-size:1.5rem;font-weight:bold;border-radius:50px;border:none;background:linear-gradient(135deg,#4ECDC4,#44A08D);color:#fff;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.3);transition:all 0.2s;min-width:200px}
+.center-controls button:hover:not(:disabled){transform:translateY(-3px);box-shadow:0 6px 20px rgba(78,205,196,0.5)}
+.center-controls button:disabled{opacity:0.5;cursor:not-allowed;filter:grayscale(0.2)}
+#fireworks-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3}
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:200;display:none;justify-content:center;align-items:center}
+.modal-content{background:#1e1e3a;border-radius:28px;width:90%;max-width:650px;max-height:85vh;display:flex;flex-direction:column;border:1px solid rgba(78,205,196,0.6);box-shadow:0 20px 40px rgba(0,0,0,0.5)}
+.modal-header{padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;justify-content:space-between;align-items:center}
+.modal-title{font-size:1.6rem;color:#4ECDC4;font-weight:bold}
+.close-btn{background:none;border:none;color:#fff;font-size:32px;cursor:pointer;transition:0.2s}
+.close-btn:hover{color:#FF6B6B}
+.class-controls{padding:12px 20px;display:flex;gap:12px;background:rgba(0,0,0,0.3);align-items:center}
+.class-select{flex:1;background:rgba(30,30,58,0.9);border:1px solid #4ECDC4;color:#fff;padding:8px 14px;border-radius:40px;font-size:1rem}
+.class-select option{background:#2a2a4a;color:#fff;padding:8px}
+.icon-btn{background:rgba(255,255,255,0.15);border:none;width:40px;height:40px;border-radius:40px;cursor:pointer;font-size:1.2rem;transition:0.2s;color:#fff}
+.icon-btn:hover{background:#4ECDC4}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.student-manage-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:20px}
+.manage-item{background:rgba(255,255,255,0.08);border-radius:40px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;backdrop-filter:blur(4px)}
+.manage-item span{font-size:0.9rem}
+.delete-btn{background:none;border:none;color:#FF6B6B;font-size:1.2rem;cursor:pointer;padding:0 6px}
+.modal-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.add-student-form{display:flex;gap:10px;flex:2}
+.student-input{background:rgba(255,255,255,0.1);border:1px solid #4ECDC4;border-radius:40px;padding:8px 16px;color:#fff;flex:1;outline:none}
+.add-btn,.secondary-btn{background:#4ECDC4;border:none;padding:8px 18px;border-radius:40px;cursor:pointer;font-weight:bold;transition:0.2s}
+.secondary-btn{background:#6c757d;color:#fff}
+.import-area{display:none;flex-direction:column;margin-top:16px;gap:12px;background:rgba(0,0,0,0.3);border-radius:20px;padding:12px}
+.import-textarea{width:100%;height:120px;background:rgba(0,0,0,0.5);border:1px solid #4ECDC4;border-radius:20px;padding:12px;color:#fff;resize:vertical;font-family:monospace}
+.file-upload-area{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.file-label{background:#4ECDC4;padding:6px 16px;border-radius:30px;cursor:pointer;font-size:0.9rem}
+.creator-credit{position:fixed;bottom:15px;right:20px;color:rgba(255,255,255,0.5);font-size:12px;z-index:50;pointer-events:none;font-family:'Microsoft YaHei',sans-serif;letter-spacing:0.5px;background:rgba(0,0,0,0.3);padding:4px 12px;border-radius:20px;backdrop-filter:blur(4px)}
+@media (max-width:768px){
+.center-controls button{padding:10px 24px;font-size:1.2rem;min-width:160px}
+.status-text{font-size:40px;white-space:nowrap}
+.bottom-left-controls{bottom:12px;left:12px;gap:8px;padding:6px 12px}
+.control-btn,.mode-btn{padding:6px 12px;font-size:12px}
+.volume-slider{width:70px;}
+.volume-value{font-size:10px;min-width:32px;}
+.creator-credit{font-size:10px;bottom:10px;right:12px}
+}
+</style>
+</head>
+<body>
+<canvas id="stars-canvas"></canvas>
+<div class="bottom-left-controls">
+<button id="manage-btn" class="control-btn">📋 管理名单</button>
+<button id="mode-single" class="mode-btn active">👤 单人模式</button>
+<button id="mode-double" class="mode-btn">👥 双人模式</button>
+<!-- 音量调节控件：替换原音效开关 -->
+<div class="volume-control-wrapper">
+<span class="volume-icon">🔊</span>
+<input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="100">
+<span id="volume-value" class="volume-value">100%</span>
+</div>
+</div>
+<div class="container">
+<div class="main-content">
+<canvas id="fireworks-canvas"></canvas>
+<div class="status-text" id="status-text"></div>
+<div class="sphere-container"><div id="sphere-canvas"></div></div>
+<div class="center-controls"><button id="toggle-btn">🚀 开始滚动</button></div>
+</div>
+</div>
+<div class="modal-overlay" id="manage-modal">
+<div class="modal-content">
+<div class="modal-header"><div class="modal-title">👥 名单管理</div><button class="close-btn" id="close-modal">&times;</button></div>
+<div class="class-controls">
+<select id="class-select" class="class-select"></select>
+<button id="add-class-btn" class="icon-btn" title="新建班级">➕</button>
+<button id="del-class-btn" class="icon-btn" style="color:#FF6B6B;" title="删除班级">🗑️</button>
+</div>
+<div class="modal-body">
+<div class="student-manage-list" id="manage-list"></div>
+<div id="import-area" class="import-area">
+<div class="file-upload-area">
+<span style="font-size:0.9rem;">📄 从TXT导入(一行一个姓名)：</span>
+<label class="file-label" for="txt-upload">选择文件</label>
+<input type="file" id="txt-upload" accept=".txt" style="display:none">
+<button class="secondary-btn" id="preview-txt-btn">预览到文本框</button>
+</div>
+<textarea id="import-input" class="import-textarea" placeholder="姓名列表（一行一个姓名）&#10;也可直接粘贴，点击确认导入添加至当前班级"></textarea>
+<div style="display:flex; gap:12px; justify-content:flex-end;">
+<button class="secondary-btn" id="cancel-import-btn">取消</button>
+<button class="add-btn" id="confirm-import-btn">确认导入</button>
+</div>
+</div>
+</div>
+<div class="modal-footer">
+<div class="add-student-form">
+<input type="text" class="student-input" id="new-student-name" placeholder="学生姓名">
+<button class="add-btn" id="add-student-btn">添加</button>
+</div>
+<div style="display:flex; gap:8px;">
+<button class="secondary-btn" id="show-import-btn">📎 批量导入</button>
+<button class="secondary-btn" id="clear-all-btn" style="background:#FF6B6B;">清空全部</button>
+</div>
+</div>
+</div>
+</div>
+<div class="creator-credit">制作者：九圩中学吴胜闯老师</div>
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- 预设班级数据 ----------
+const class1List=["曹心怡","常艺萱","陈宇正","陈馨瑶","崔皓睿","丁子轩","董柯涵","樊哲熙","冯照钦","高浩轩","郭一言","何珏","惠敬涵","靳稼和","李辰希","李嘉树","李开轩","李若涵","李奕萱","刘朔","刘一诺","刘雨菲","刘怡然","刘宸睿","齐韶甯","申晴","史墨轩","司晨铄","宋紫彤","孙杨","王明杰","王文硕","王希妍","王梓慕","吴俊铭","席雨晴","徐金逸","徐与航","许雯菲","薛宗阳","杨思涵","杨依果","杨子墨","杨昊烁","余欣芮","袁宇乾","张嘉聪","张家乐","张培栋","张诗妍","张煜瑶","赵文硕","仲浩珏","边嘉淇"];
+const class2List=["曹嘉懿","柴奕恒","陈佳宁","陈沫翰","陈怡然","陈艺钦","陈奕旭","陈韵翔","陈梓睿","董哲睿","董梓煜","侯智宸","胡宸硕","胡心月","贾双瑞","江晓茹","李安琪","李金铭","李沐夏","李沐源","李世浩","李宜航","梁皓轩","刘宸硕","刘宸熙","刘尚","刘万行","卢泽坤","孟鑫浩","齐逸晨","秦雨诺","任奕辰","宋沛凝","宋雨昕","孙皓楠","孙芊羽","孙若曦","万润升","王宸宇","王仕杰","王桢皓","王梓琪","谢雨函","杨智洋","杨紫萱","叶尚嘉","张柏苒","张婧涵","张靖嵩","张熠晨","张芷嫣","赵瑾萱","朱晨曦","朱迎溪"];
+const class3List=Array.from({length:54},(_,i)=>(i+1).toString());
+const presetClasses={"一班":[...class1List],"二班":[...class2List],"新班级":[...class3List]};
+
+let classData={},currentClassName="一班",students=[],availableStudents=[],isScrolling=false,scrollInterval=null,currentMode=1;
+// 音量控制：全局音量系数 0-1，替代原 soundEnabled
+let globalVolume = 1.0;   // 默认100%
+
+const toggleBtn=document.getElementById('toggle-btn');
+function updateToggleButton(){
+    if(availableStudents.length===0){
+        toggleBtn.disabled=true;
+        toggleBtn.textContent="🚀 开始滚动";
+    }else{
+        toggleBtn.disabled=false;
+        toggleBtn.textContent=isScrolling?"⏸️ 停止选择":"🚀 开始滚动";
+    }
+}
+
+// ---------- Web Audio 上下文 (带自动恢复机制) ----------
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// 全局保证 AudioContext 在用户首次交互时恢复 (避免浏览器策略限制)
+let audioResumed = false;
+function ensureAudioContext() {
+    if (audioCtx.state === 'suspended' && !audioResumed) {
+        audioCtx.resume().then(() => {
+            audioResumed = true;
+        }).catch(e=>console.warn("AudioContext resume failed", e));
+    } else if (audioCtx.state === 'running') {
+        audioResumed = true;
+    }
+}
+// 在任意用户首次交互时尝试恢复 (点击任意按钮、滑块)
+function bindGlobalAudioResume() {
+    const resumeHandler = () => {
+        ensureAudioContext();
+        document.removeEventListener('click', resumeHandler);
+        document.removeEventListener('touchstart', resumeHandler);
+    };
+    document.addEventListener('click', resumeHandler);
+    document.addEventListener('touchstart', resumeHandler);
+}
+bindGlobalAudioResume();
+
+// 滚动音效 (音量受 globalVolume 控制)
+function playScrollSound(){
+    if(globalVolume <= 0) return;
+    ensureAudioContext();
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now+0.05);
+    // 应用全局音量系数: 原最大0.25，最低0.01
+    const maxGain = 0.25 * globalVolume;
+    const endGain = 0.01 * globalVolume;
+    gain.gain.setValueAtTime(maxGain, now);
+    gain.gain.exponentialRampToValueAtTime(endGain, now+0.08);
+    osc.start(now);
+    osc.stop(now+0.08);
+}
+
+// 选择音效 (点名成功音效，三和弦)
+function playSelectSound(){
+    if(globalVolume <= 0) return;
+    ensureAudioContext();
+    const now = audioCtx.currentTime;
+    const baseVol = 0.2 * globalVolume;
+    const endVol = 0.01 * globalVolume;
+    [523.25, 659.25, 783.99].forEach((freq, i)=>{
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(baseVol, now + i*0.08);
+        gain.gain.exponentialRampToValueAtTime(endVol, now + i*0.08 + 0.3);
+        osc.start(now + i*0.08);
+        osc.stop(now + i*0.08 + 0.3);
+    });
+}
+
+// 多音字修正
+const polyphoneMap={"覃":"秦"};
+function fixPolyphone(t){
+    let r=t;
+    for(let [o,n] of Object.entries(polyphoneMap)) r=r.replaceAll(o,n);
+    return r;
+}
+
+// 语音合成 (支持音量调节)
+function speakName(names){
+    if(globalVolume <= 0 || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    let text="";
+    if(Array.isArray(names)){
+        if(names.length===1) text=`有请${names[0]}${/^\d+$/.test(names[0])?"号同学":"同学"}`;
+        else text=`有请${names.join("和")}${/^\d+$/.test(names[0])?"号同学":"同学"}`;
+    } else {
+        text=`有请${names}${/^\d+$/.test(names)?"号同学":"同学"}`;
+    }
+    text=fixPolyphone(text);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang='zh-CN';
+    utterance.pitch=1.1;
+    utterance.rate=1.0;
+    utterance.volume = globalVolume;   // 应用全局音量
+    window.speechSynthesis.speak(utterance);
+}
+
+// ---------- 存储相关 ----------
+const STORAGE_KEY='star_roll_v7_merged';
+function saveData(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({classData, currentClassName}));
+}
+function initData(){
+    const saved=localStorage.getItem(STORAGE_KEY);
+    if(saved){
+        try{
+            const data=JSON.parse(saved);
+            classData=data.classData||JSON.parse(JSON.stringify(presetClasses));
+            currentClassName=data.currentClassName||Object.keys(classData)[0];
+        }catch(e){
+            classData=JSON.parse(JSON.stringify(presetClasses));
+            currentClassName="一班";
+        }
+    }else{
+        classData=JSON.parse(JSON.stringify(presetClasses));
+        currentClassName="一班";
+    }
+    if(!classData[currentClassName]) currentClassName=Object.keys(classData)[0];
+    students=[...(classData[currentClassName]||[])];
+    availableStudents=[...students];
+}
+function loadCurrentClass(){
+    students=classData[currentClassName]||[];
+    availableStudents=[...students];
+    if(window.refreshNameTags) window.refreshNameTags(students, availableStudents);
+    updateToggleButton();
+    if(students.length===0){
+        document.getElementById('status-text').style.opacity='0';
+        document.getElementById('status-text').textContent='';
+    }
+}
+
+// ---------- Three.js 3D 星空球体 ----------
+let scene,camera,renderer,mainGroup,nameTagsList=[],rotationSpeed=.001;
+function initThree(){
+    const container=document.getElementById('sphere-canvas');
+    const w=container.clientWidth, h=container.clientHeight;
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
+    camera.position.z=24;
+    renderer=new THREE.WebGLRenderer({antialias:true, alpha:true});
+    renderer.setSize(w,h);
+    container.appendChild(renderer.domElement);
+    mainGroup=new THREE.Group();
+    scene.add(mainGroup);
+    createNameTags3D(students, availableStudents);
+    animate3D();
+}
+function createNameTags3D(names, available){
+    if(nameTagsList.length) nameTagsList.forEach(t=>mainGroup.remove(t.mesh));
+    nameTagsList=[];
+    const radius=13, count=names.length;
+    const colors=['#4ECDC4','#FF6B6B','#FFE66D','#A8E6CF','#C77DFF','#9D4EDD','#80FFDB'];
+    for(let i=0;i<count;i++){
+        const phi=Math.acos(-1+(2*i)/count);
+        const theta=Math.sqrt(count*Math.PI)*phi;
+        const canvas=document.createElement('canvas');
+        canvas.width=512;
+        canvas.height=256;
+        const ctx=canvas.getContext('2d');
+        ctx.fillStyle=colors[i%colors.length];
+        ctx.font='bold 78px "Microsoft YaHei"';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText(names[i],256,128);
+        const texture=new THREE.CanvasTexture(canvas);
+        const material=new THREE.SpriteMaterial({map:texture, transparent:true, opacity:available.includes(names[i])?1:.3});
+        const sprite=new THREE.Sprite(material);
+        sprite.position.set(radius*Math.cos(theta)*Math.sin(phi), radius*Math.sin(theta)*Math.sin(phi), radius*Math.cos(phi));
+        sprite.scale.set(6,3,1);
+        mainGroup.add(sprite);
+        nameTagsList.push({name:names[i], mesh:sprite});
+    }
+}
+function animate3D(){
+    requestAnimationFrame(animate3D);
+    if(isScrolling){
+        mainGroup.rotation.y+=rotationSpeed*48;
+        mainGroup.rotation.x+=rotationSpeed*18;
+        if(rotationSpeed<.05) rotationSpeed+=.0005;
+    }else{
+        mainGroup.rotation.y+=.002;
+        rotationSpeed=.001;
+    }
+    renderer.render(scene,camera);
+}
+window.refreshNameTags=(names,avail)=>{ createNameTags3D(names,avail); };
+
+// 烟花效果
+const fwCanvas=document.getElementById('fireworks-canvas'), fwCtx=fwCanvas.getContext('2d');
+let particles=[];
+function resizeFireworks(){ fwCanvas.width=window.innerWidth; fwCanvas.height=window.innerHeight; }
+function createFireworks(x,y){
+    const colors=['#4ECDC4','#FF6B6B','#FFE66D','#A8E6CF'];
+    for(let i=0;i<60;i++){
+        const angle=Math.random()*Math.PI*2, v=Math.random()*4+2;
+        particles.push({
+            x,y, vx:Math.cos(angle)*v, vy:Math.sin(angle)*v,
+            radius:Math.random()*4+2, color:colors[Math.floor(Math.random()*colors.length)],
+            life:1, decay:.015
+        });
+    }
+}
+function animateFireworks(){
+    fwCtx.clearRect(0,0,fwCanvas.width,fwCanvas.height);
+    particles=particles.filter(p=>{
+        p.x+=p.vx; p.y+=p.vy; p.vy+=0.1; p.life-=p.decay;
+        if(p.life>0){
+            fwCtx.globalAlpha=p.life;
+            fwCtx.fillStyle=p.color;
+            fwCtx.beginPath();
+            fwCtx.arc(p.x,p.y,p.radius,0,Math.PI*2);
+            fwCtx.fill();
+            return true;
+        }
+        return false;
+    });
+    requestAnimationFrame(animateFireworks);
+}
+
+// 点名核心逻辑
+function startRolling(){
+    if(isScrolling || availableStudents.length===0) return;
+    if(currentMode===2 && availableStudents.length<2){
+        alert("双人模式需要至少2名学生，当前人数不足，请切换单人模式或添加学生");
+        return;
+    }
+    isScrolling=true;
+    updateToggleButton();
+    const statusEl=document.getElementById('status-text');
+    statusEl.style.opacity='0';
+    statusEl.textContent='';
+    statusEl.classList.remove('double');
+    scrollInterval=setInterval(()=>{
+        if(availableStudents.length>0) playScrollSound();
+    },100);
+}
+function stopRolling(){
+    if(!isScrolling) return;
+    isScrolling=false;
+    clearInterval(scrollInterval);
+    updateToggleButton();
+    if(availableStudents.length===0) return;
+    let selectedNames=[];
+    if(currentMode===1){
+        const idx=Math.floor(Math.random()*availableStudents.length);
+        selectedNames=[availableStudents[idx]];
+        availableStudents=availableStudents.filter((_,i)=>i!==idx);
+    }else{
+        if(availableStudents.length<2){
+            alert("双人模式需要至少2人，请添加学生或切换模式");
+            return;
+        }
+        let idx1=Math.floor(Math.random()*availableStudents.length);
+        let idx2=Math.floor(Math.random()*(availableStudents.length-1));
+        if(idx2>=idx1) idx2++;
+        selectedNames=[availableStudents[idx1], availableStudents[idx2]];
+        availableStudents=availableStudents.filter((_,i)=>i!==idx1 && i!==idx2);
+    }
+    const statusEl=document.getElementById('status-text');
+    if(selectedNames.length===1){
+        statusEl.textContent=selectedNames[0];
+        statusEl.classList.remove('double');
+    }else{
+        statusEl.textContent=selectedNames.join(" 和 ");
+        statusEl.classList.add('double');
+    }
+    statusEl.style.opacity='1';
+    playSelectSound();
+    speakName(selectedNames);
+    createFireworks(window.innerWidth/2, window.innerHeight*0.4);
+    nameTagsList.forEach(tag=>{
+        tag.mesh.material.opacity=availableStudents.includes(tag.name)?1:.3;
+    });
+    updateToggleButton();
+    if(availableStudents.length===0){
+        statusEl.textContent="🎉 全员已点名 🎉";
+        setTimeout(()=>{
+            if(availableStudents.length===0 && !isScrolling){
+                statusEl.style.opacity='0';
+                setTimeout(()=>{ if(availableStudents.length===0) statusEl.textContent=''; },500);
+            }
+        },2000);
+    }
+}
+function toggleRolling(){ isScrolling ? stopRolling() : startRolling(); }
+
+// 星星背景
+const starsCanvas=document.getElementById('stars-canvas'), starsCtx=starsCanvas.getContext('2d');
+let stars=[];
+function resizeStars(){
+    starsCanvas.width=window.innerWidth;
+    starsCanvas.height=window.innerHeight;
+    stars=[];
+    const starCount=Math.floor(window.innerWidth*window.innerHeight/5000)+300;
+    for(let i=0;i<starCount;i++){
+        stars.push({
+            x:Math.random()*starsCanvas.width, y:Math.random()*starsCanvas.height,
+            r:Math.random()*2.5+0.8, alpha:Math.random()*0.7+0.3,
+            speed:Math.random()*0.02+0.005, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.1
+        });
+    }
+}
+function drawStars(){
+    starsCtx.clearRect(0,0,starsCanvas.width,starsCanvas.height);
+    const w=starsCanvas.width,h=starsCanvas.height;
+    stars.forEach(star=>{
+        star.x+=star.vx; star.y+=star.vy;
+        if(star.x<0) star.x=w; if(star.x>w) star.x=0;
+        if(star.y<0) star.y=h; if(star.y>h) star.y=0;
+        star.alpha+=star.speed*(Math.random()>0.5?1:-1);
+        if(star.alpha>0.9) star.alpha=0.9;
+        if(star.alpha<0.2) star.alpha=0.2;
+        starsCtx.beginPath();
+        starsCtx.arc(star.x,star.y,star.r,0,Math.PI*2);
+        starsCtx.fillStyle=`rgba(255,255,255,${star.alpha})`;
+        starsCtx.fill();
+    });
+    requestAnimationFrame(drawStars);
+}
+
+// 管理界面UI
+let modal=document.getElementById('manage-modal');
+function updateManageUI(){
+    const listDiv=document.getElementById('manage-list');
+    listDiv.innerHTML='';
+    students.forEach((name,idx)=>{
+        const div=document.createElement('div');
+        div.className='manage-item';
+        div.innerHTML=`<span>${escapeHtml(name)}</span><button class="delete-btn" data-idx="${idx}">✖</button>`;
+        listDiv.appendChild(div);
+    });
+    document.querySelectorAll('.delete-btn').forEach(btn=>{
+        btn.onclick=(e)=>{
+            const i=parseInt(btn.dataset.idx);
+            students.splice(i,1);
+            availableStudents=[...students];
+            saveData();
+            updateManageUI();
+            loadCurrentClass();
+            window.refreshNameTags(students,availableStudents);
+            updateToggleButton();
+        };
+    });
+}
+function escapeHtml(s){ return s; }
+function updateClassSelect(){
+    const sel=document.getElementById('class-select');
+    sel.innerHTML='';
+    Object.keys(classData).forEach(c=>{
+        const opt=document.createElement('option');
+        opt.value=c; opt.textContent=c;
+        if(c===currentClassName) opt.selected=true;
+        sel.appendChild(opt);
+    });
+}
+
+// ---------- 音量滑块控制 ----------
+const volumeSlider = document.getElementById('volume-slider');
+const volumeValueSpan = document.getElementById('volume-value');
+function setVolumeFromSlider(value){
+    const vol = parseInt(value,10) / 100;
+    globalVolume = Math.min(1, Math.max(0, vol));
+    volumeValueSpan.innerText = `${Math.round(globalVolume*100)}%`;
+    // 用户滑动时主动唤醒 AudioContext
+    ensureAudioContext();
+}
+volumeSlider.addEventListener('input', (e) => {
+    setVolumeFromSlider(e.target.value);
+});
+// 初始设置音量显示
+setVolumeFromSlider(100);
+
+// 绑定所有 UI 事件，保留原有功能完全不变，只移除旧音乐开关逻辑
+document.getElementById('manage-btn').onclick=()=>{ updateClassSelect(); updateManageUI(); modal.style.display='flex'; };
+document.getElementById('close-modal').onclick=()=>modal.style.display='none';
+document.getElementById('add-class-btn').onclick=()=>{
+    let newName=prompt('请输入新班级名称');
+    if(newName && newName.trim() && !classData[newName.trim()]){
+        classData[newName.trim()]=[];
+        currentClassName=newName.trim();
+        students=[]; availableStudents=[];
+        saveData(); loadCurrentClass(); updateClassSelect(); updateManageUI();
+        window.refreshNameTags([],[]); updateToggleButton();
+        document.getElementById('status-text').style.opacity='0';
+    }else if(newName) alert('班级名已存在');
+};
+document.getElementById('del-class-btn').onclick=()=>{
+    if(Object.keys(classData).length<=1) return alert('至少保留一个班级');
+    if(confirm(`确定删除班级 "${currentClassName}" 吗？`)){
+        delete classData[currentClassName];
+        currentClassName=Object.keys(classData)[0];
+        students=classData[currentClassName]||[];
+        availableStudents=[...students];
+        saveData(); loadCurrentClass(); updateClassSelect(); updateManageUI();
+        window.refreshNameTags(students,availableStudents); updateToggleButton();
+    }
+};
+document.getElementById('class-select').onchange=(e)=>{
+    currentClassName=e.target.value;
+    students=classData[currentClassName]||[];
+    availableStudents=[...students];
+    saveData(); loadCurrentClass(); updateManageUI();
+    window.refreshNameTags(students,availableStudents); updateToggleButton();
+    document.getElementById('status-text').style.opacity='0';
+    document.getElementById('status-text').textContent='';
+};
+document.getElementById('add-student-btn').onclick=()=>{
+    const input=document.getElementById('new-student-name'), val=input.value.trim();
+    if(val){
+        students.push(val); availableStudents.push(val);
+        input.value=''; saveData(); updateManageUI(); loadCurrentClass();
+        window.refreshNameTags(students,availableStudents); updateToggleButton();
+    }
+};
+const importArea=document.getElementById('import-area'), txtUpload=document.getElementById('txt-upload'), importTextarea=document.getElementById('import-input');
+document.getElementById('show-import-btn').onclick=()=>importArea.style.display='flex';
+document.getElementById('cancel-import-btn').onclick=()=>{ importArea.style.display='none'; importTextarea.value=''; };
+document.getElementById('preview-txt-btn').onclick=()=>txtUpload.click();
+txtUpload.onchange=(e)=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{ importTextarea.value=ev.target.result; };
+    reader.readAsText(file,'UTF-8');
+    txtUpload.value='';
+};
+document.getElementById('confirm-import-btn').onclick=()=>{
+    const text=importTextarea.value, lines=text.split(/\r?\n/), newNames=lines.map(l=>l.trim()).filter(n=>n.length>0);
+    if(newNames.length){
+        students.push(...newNames); availableStudents=[...students];
+        saveData(); updateManageUI(); loadCurrentClass();
+        window.refreshNameTags(students,availableStudents);
+        importArea.style.display='none'; importTextarea.value=''; updateToggleButton();
+    }else alert("没有检测到有效姓名");
+};
+document.getElementById('clear-all-btn').onclick=()=>{
+    if(confirm('清空当前班级所有学生？')){
+        students=[]; availableStudents=[];
+        saveData(); updateManageUI(); loadCurrentClass();
+        window.refreshNameTags([],[]); updateToggleButton();
+        document.getElementById('status-text').style.opacity='0';
+        document.getElementById('status-text').textContent='';
+    }
+};
+const singleBtn=document.getElementById('mode-single'), doubleBtn=document.getElementById('mode-double');
+function setMode(m){
+    currentMode=m;
+    if(m===1){ singleBtn.classList.add('active'); doubleBtn.classList.remove('active'); }
+    else{ doubleBtn.classList.add('active'); singleBtn.classList.remove('active'); }
+}
+singleBtn.onclick=()=>setMode(1);
+doubleBtn.onclick=()=>setMode(2);
+
+// 窗口初始化
+window.onload=()=>{
+    initData();
+    resizeStars(); drawStars();
+    resizeFireworks(); animateFireworks();
+    initThree();
+    loadCurrentClass();
+    toggleBtn.onclick=toggleRolling;
+    window.addEventListener('resize',()=>{
+        resizeStars(); resizeFireworks();
+        if(renderer){
+            const w=document.getElementById('sphere-canvas').clientWidth, h=document.getElementById('sphere-canvas').clientHeight;
+            renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix();
+        }
+    });
+    document.addEventListener('keydown',(e)=>{ if(e.code==='Space'){ e.preventDefault(); toggleRolling(); } });
+};
+</script>
+</body>
+</html>
