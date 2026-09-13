@@ -9,170 +9,139 @@
 
 body {
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-  background: linear-gradient(135deg, #ffe6dd, #ffd4e8, #ffe0f0);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   min-height: 100vh;
   padding: 20px;
 }
 
-/* 浮动装饰 */
-.deco {
-  position: fixed;
-  font-size: 32px;
-  opacity: 0.15;
-  pointer-events: none;
-  animation: float 6s ease-in-out infinite;
-}
-.deco-1 { top: 5%; left: 3%; animation-delay: 0s; }
-.deco-2 { top: 15%; right: 5%; animation-delay: 1.5s; }
-.deco-3 { bottom: 20%; left: 8%; animation-delay: 3s; }
-.deco-4 { bottom: 10%; right: 4%; animation-delay: 4.5s; }
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
-}
-
 .container {
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
 /* 顶部标题 */
 .header {
   text-align: center;
-  padding: 30px 20px 20px;
+  padding: 40px 20px 30px;
+  color: #fff;
 }
 .header h1 {
-  font-size: 28px;
-  color: #c04058;
+  font-size: 36px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.2);
 }
 .header p {
-  font-size: 14px;
-  color: #998;
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+/* 分类标题 */
+.section-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin: 30px 0 16px;
+  padding-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
 /* 卡片网格 */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 18px;
-  padding: 10px 0 40px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  padding: 0 0 20px;
 }
 
 /* 卡片 */
 .card {
-  background: rgba(255,255,255,0.92);
-  border-radius: 18px;
+  background: #fff;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 8px 30px rgba(255,180,160,0.2);
-  transition: transform 0.25s, box-shadow 0.25s;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  transition: transform 0.3s, box-shadow 0.3s;
   cursor: pointer;
   text-decoration: none;
   color: inherit;
   display: block;
 }
 .card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 40px rgba(255,150,130,0.35);
+  transform: translateY(-8px);
+  box-shadow: 0 16px 50px rgba(0,0,0,0.25);
 }
 
-.card-thumb {
-  height: 130px;
+.card-icon {
+  height: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 52px;
   position: relative;
+  overflow: hidden;
 }
-.card-thumb .badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  color: #fff;
-  font-weight: 600;
+.card-icon svg {
+  width: 80px;
+  height: 80px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));
 }
-.badge-hot { background: #ff6b6b; }
-.badge-new  { background: #51cf66; }
-.badge-pet  { background: #c04058; }
 
 .card-body {
-  padding: 12px 14px 16px;
+  padding: 16px 18px 20px;
 }
 .card-title {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   color: #333;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   line-height: 1.4;
 }
 .card-desc {
-  font-size: 12px;
-  color: #999;
-  line-height: 1.5;
+  font-size: 13px;
+  color: #888;
+  line-height: 1.6;
 }
 
-/* 分类标题 */
-.section-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #6a4040;
-  margin: 24px 0 12px;
-  padding-left: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* 徽章 */
+.badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
+.badge-hot { background: linear-gradient(135deg, #ff6b6b, #ee5a6f); }
+.badge-new  { background: linear-gradient(135deg, #51cf66, #40c057); }
+.badge-main { background: linear-gradient(135deg, #667eea, #764ba2); }
 
 /* 底部 */
 .footer {
   text-align: center;
-  padding: 20px 0 30px;
-  font-size: 12px;
-  color: #bba;
-}
-
-/* 卡片 - 即将上线状态 */
-.card.coming-soon {
-  opacity: 0.55;
-  cursor: default;
-}
-.card.coming-soon:hover {
-  transform: none;
-  box-shadow: 0 8px 30px rgba(255,180,160,0.2);
-}
-.coming-badge {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: #999;
-  color: #fff;
-  font-weight: 600;
+  padding: 30px 0 40px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
 }
 
 /* 响应式 */
 @media (max-width: 600px) {
   .grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 14px;
   }
-  .card-thumb { height: 100px; font-size: 40px; }
-  .header h1 { font-size: 22px; }
+  .card-icon { height: 110px; }
+  .card-icon svg { width: 60px; height: 60px; }
+  .header h1 { font-size: 28px; }
+  .section-title { font-size: 18px; }
 }
 </style>
 </head>
 <body>
-
-<div class="deco deco-1">🐾</div>
-<div class="deco deco-2">🌸</div>
-<div class="deco deco-3">🍀</div>
-<div class="deco deco-4">🎈</div>
 
 <div class="container">
 
@@ -181,13 +150,13 @@ body {
     <p>互动教学工具 & 趣味课件，打开即用</p>
   </div>
 
-  <!-- ====== 班级宠物 ====== -->
-  <div class="section-title">🐾 核心功能</div>
+  <!-- ====== 核心功能 ====== -->
+  <div class="section-title">⭐ 核心功能</div>
   <div class="grid">
     <a class="card" href="index.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#ffe0e8,#ffd0d8);">
-        <span class="badge badge-pet">主站</span>
-        🐾
+      <div class="card-icon" style="background:linear-gradient(135deg,#ffe0e8,#ffc0d0);">
+        <span class="badge badge-main">主站</span>
+        <svg viewBox="0 0 100 100"><circle cx="50" cy="40" r="25" fill="#ff6b9d"/><ellipse cx="50" cy="70" rx="30" ry="20" fill="#ff6b9d"/><circle cx="42" cy="35" r="4" fill="#fff"/><circle cx="58" cy="35" r="4" fill="#fff"/><path d="M 40 48 Q 50 55 60 48" stroke="#fff" stroke-width="2" fill="none"/></svg>
       </div>
       <div class="card-body">
         <div class="card-title">班级宠物</div>
@@ -196,14 +165,25 @@ body {
     </a>
   </div>
 
-  <!-- ====== 教学工具 ====== -->
-  <div class="section-title">📚 教学工具</div>
+  <!-- ====== 答题闯关 ====== -->
+  <div class="section-title">🎮 答题闯关</div>
   <div class="grid">
 
-    <a class="card" href="jiangmoji.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#3a0a0a,#6a1a0a);">
+    <a class="card" href="jiangyaoji.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#ff6b35,#8b0000);">
         <span class="badge badge-hot">热门</span>
-        ⚔️
+        <svg viewBox="0 0 100 100"><path d="M 30 70 Q 25 50 35 35 Q 40 25 50 30 Q 60 25 65 35 Q 75 50 70 70 Z" fill="#ffd700"/><circle cx="40" cy="45" r="5" fill="#ff0000"/><circle cx="60" cy="45" r="5" fill="#ff0000"/><path d="M 35 60 Q 50 65 65 60" stroke="#ff0000" stroke-width="3" fill="none"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">降妖记</div>
+        <div class="card-desc">西游降妖，答题除魔，挑战十方妖王</div>
+      </div>
+    </a>
+
+    <a class="card" href="jiangmoji.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#2c1810,#5a2a1a);">
+        <span class="badge badge-hot">热门</span>
+        <svg viewBox="0 0 100 100"><rect x="35" y="25" width="30" height="50" rx="3" fill="#8b4513"/><rect x="40" y="30" width="20" height="15" fill="#ffd700"/><line x1="50" y1="50" x2="50" y2="70" stroke="#c0c0c0" stroke-width="3"/><polygon points="45,70 55,70 50,80" fill="#c0c0c0"/></svg>
       </div>
       <div class="card-body">
         <div class="card-title">降魔记</div>
@@ -211,10 +191,99 @@ body {
       </div>
     </a>
 
-    <a class="card" href="starrollcall.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#0a0a2a,#1a1a5a);">
+    <a class="card" href="zhenjiadasheng.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#ffd700,#ff8c00);">
         <span class="badge badge-new">新</span>
-        🌟
+        <svg viewBox="0 0 100 100"><circle cx="50" cy="45" r="28" fill="#daa520"/><circle cx="40" cy="40" r="6" fill="#fff"/><circle cx="60" cy="40" r="6" fill="#fff"/><circle cx="40" cy="40" r="3" fill="#000"/><circle cx="60" cy="40" r="3" fill="#000"/><path d="M 35 55 Q 50 62 65 55" stroke="#8b4513" stroke-width="3" fill="none"/><path d="M 30 25 Q 35 15 45 20" stroke="#ffd700" stroke-width="4" fill="none"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">真假大圣</div>
+        <div class="card-desc">火眼金睛，辨别真假，答题闯关</div>
+      </div>
+    </a>
+
+    <a class="card" href="wulinzhengba.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#e8ddce,#c9b89c);">
+        <span class="badge badge-new">新</span>
+        <svg viewBox="0 0 100 100"><circle cx="50" cy="35" r="15" fill="#8b4513"/><rect x="40" y="50" width="20" height="30" fill="#f5f5dc"/><line x1="30" y1="55" x2="40" y2="60" stroke="#8b4513" stroke-width="4"/><line x1="70" y1="55" x2="60" y2="60" stroke="#8b4513" stroke-width="4"/><path d="M 25 70 L 35 60" stroke="#c0c0c0" stroke-width="3"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">武林争霸</div>
+        <div class="card-desc">水墨风格，武侠对战，答题闯关</div>
+      </div>
+    </a>
+
+    <a class="card" href="damaoxian.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#667eea,#764ba2);">
+        <span class="badge badge-hot">热门</span>
+        <svg viewBox="0 0 100 100"><rect x="30" y="40" width="40" height="35" rx="5" fill="#4169e1"/><circle cx="50" cy="30" r="15" fill="#ffdbac"/><rect x="35" y="75" width="8" height="15" fill="#4169e1"/><rect x="57" y="75" width="8" height="15" fill="#4169e1"/><text x="50" y="60" font-size="20" fill="#fff" text-anchor="middle" font-weight="bold">?</text></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">数学大冒险</div>
+        <div class="card-desc">横版闯关，答题打怪，挑战吴老师Boss</div>
+      </div>
+    </a>
+
+    <a class="card" href="mengdaxia.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#FFB6C1,#FF69B4);">
+        <span class="badge badge-new">新</span>
+        <svg viewBox="0 0 100 100"><circle cx="35" cy="50" r="20" fill="#ff6b6b"/><circle cx="65" cy="50" r="20" fill="#4169e1"/><circle cx="30" cy="45" r="4" fill="#fff"/><circle cx="40" cy="45" r="4" fill="#fff"/><circle cx="60" cy="45" r="4" fill="#fff"/><circle cx="70" cy="45" r="4" fill="#fff"/><path d="M 30 55 Q 35 60 40 55" stroke="#fff" stroke-width="2" fill="none"/><path d="M 60 55 Q 65 60 70 55" stroke="#fff" stroke-width="2" fill="none"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">萌大侠</div>
+        <div class="card-desc">红蓝对决，答题格斗，谁是真大侠</div>
+      </div>
+    </a>
+
+    <a class="card" href="bahe.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#ff9a56,#e74c3c);">
+        <span class="badge badge-new">新</span>
+        <svg viewBox="0 0 100 100"><line x1="20" y1="50" x2="80" y2="50" stroke="#8b4513" stroke-width="6"/><circle cx="25" cy="50" r="12" fill="#ff6b6b"/><circle cx="75" cy="50" r="12" fill="#4169e1"/><circle cx="22" cy="47" r="2" fill="#fff"/><circle cx="28" cy="47" r="2" fill="#fff"/><circle cx="72" cy="47" r="2" fill="#fff"/><circle cx="78" cy="47" r="2" fill="#fff"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">拔河答题大挑战</div>
+        <div class="card-desc">红蓝对抗，答题拔河，团队竞技</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ====== 射击冒险 ====== -->
+  <div class="section-title">🚀 射击冒险</div>
+  <div class="grid">
+
+    <a class="card" href="shendouluo.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#1a0000,#4a0000);">
+        <span class="badge badge-hot">热门</span>
+        <svg viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="35" ry="25" fill="#4a4a4a"/><rect x="45" y="25" width="10" height="20" fill="#666"/><circle cx="50" cy="20" r="8" fill="#ff0000"/><line x1="30" y1="50" x2="20" y2="45" stroke="#c0c0c0" stroke-width="3"/><line x1="70" y1="50" x2="80" y2="45" stroke="#c0c0c0" stroke-width="3"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">神斗罗</div>
+        <div class="card-desc">横版射击，神话角色，闯关答题</div>
+      </div>
+    </a>
+
+    <a class="card" href="zhandouluo.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#1a0505,#3a0a0a);">
+        <span class="badge badge-new">新</span>
+        <svg viewBox="0 0 100 100"><circle cx="50" cy="40" r="18" fill="#2c5f2d"/><rect x="40" y="58" width="20" height="25" fill="#3a7d44"/><line x1="30" y1="55" x2="20" y2="65" stroke="#2c5f2d" stroke-width="5"/><line x1="70" y1="55" x2="80" y2="65" stroke="#2c5f2d" stroke-width="5"/><rect x="75" y="60" width="15" height="4" fill="#666"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">战斗罗</div>
+        <div class="card-desc">横版射击，多角色切换，Boss闯关</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ====== 互动课堂 ====== -->
+  <div class="section-title">📢 互动课堂</div>
+  <div class="grid">
+
+    <a class="card" href="starrollcall.html" target="_blank">
+      <div class="card-icon" style="background:linear-gradient(135deg,#0a0a2a,#1a1a5a);">
+        <span class="badge badge-new">新</span>
+        <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="#1a1a3a"/><circle cx="50" cy="50" r="30" fill="#0a0a2a"/><text x="50" y="45" font-size="16" fill="#ffd700" text-anchor="middle">★</text><text x="35" y="60" font-size="12" fill="#fff" text-anchor="middle">张</text><text x="65" y="60" font-size="12" fill="#fff" text-anchor="middle">李</text><circle cx="50" cy="50" r="3" fill="#ffd700"/></svg>
       </div>
       <div class="card-body">
         <div class="card-title">播报星空点名</div>
@@ -223,9 +292,9 @@ body {
     </a>
 
     <a class="card" href="aoyoutiandi.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#87CEEB,#4A90A4);">
+      <div class="card-icon" style="background:linear-gradient(135deg,#87CEEB,#4A90A4);">
         <span class="badge badge-new">新</span>
-        🐦
+        <svg viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="25" ry="15" fill="#8b4513"/><circle cx="50" cy="35" r="12" fill="#ffdbac"/><path d="M 30 45 Q 20 35 25 25" stroke="#8b4513" stroke-width="3" fill="none"/><path d="M 70 45 Q 80 35 75 25" stroke="#8b4513" stroke-width="3" fill="none"/><circle cx="45" cy="33" r="2" fill="#000"/><circle cx="55" cy="33" r="2" fill="#000"/></svg>
       </div>
       <div class="card-body">
         <div class="card-title">早读神器：遨游天地</div>
@@ -233,143 +302,20 @@ body {
       </div>
     </a>
 
-    <a class="card" href="bahe.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#ff9a56,#e74c3c);">
-        <span class="badge badge-new">新</span>
-        🏆
-      </div>
-      <div class="card-body">
-        <div class="card-title">拔河答题大挑战</div>
-        <div class="card-desc">红蓝对抗，答题拔河，团队竞技</div>
-      </div>
-    </a>
+  </div>
 
-    <a class="card" href="damaoxian.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#667eea,#764ba2);">
-        <span class="badge badge-hot">热门</span>
-        ⚔️
-      </div>
-      <div class="card-body">
-        <div class="card-title">数学大冒险</div>
-        <div class="card-desc">横版闯关，答题打怪，挑战吴老师Boss</div>
-      </div>
-    </a>
-
-    <a class="card" href="jiangyaoji.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#ff6b35,#8b0000);">
-        <span class="badge badge-hot">热门</span>
-        🐉
-      </div>
-      <div class="card-body">
-        <div class="card-title">降妖记</div>
-        <div class="card-desc">西游降妖，答题除魔，挑战十方妖王</div>
-      </div>
-    </a>
-
-    <a class="card" href="mengdaxia.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#FFB6C1,#FF69B4);">
-        <span class="badge badge-new">新</span>
-        🐼
-      </div>
-      <div class="card-body">
-        <div class="card-title">萌大侠</div>
-        <div class="card-desc">红蓝对决，答题格斗，谁是真大侠</div>
-      </div>
-    </a>
-
-    <a class="card" href="shendouluo.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#1a0000,#4a0000);">
-        <span class="badge badge-hot">热门</span>
-        🏹
-      </div>
-      <div class="card-body">
-        <div class="card-title">神斗罗</div>
-        <div class="card-desc">横版射击，神话角色，闯关答题</div>
-      </div>
-    </a>
-
-    <a class="card" href="wulinzhengba.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#e8ddce,#c9b89c);">
-        <span class="badge badge-new">新</span>
-        🥋
-      </div>
-      <div class="card-body">
-        <div class="card-title">武林争霸</div>
-        <div class="card-desc">水墨风格，武侠对战，答题闯关</div>
-      </div>
-    </a>
+  <!-- ====== 实用工具 ====== -->
+  <div class="section-title">🔧 实用工具</div>
+  <div class="grid">
 
     <a class="card" href="shuxuezuotu.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
+      <div class="card-icon" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
         <span class="badge badge-new">新</span>
-        📐
+        <svg viewBox="0 0 100 100"><line x1="20" y1="80" x2="80" y2="80" stroke="#333" stroke-width="2"/><line x1="20" y1="80" x2="20" y2="20" stroke="#333" stroke-width="2"/><path d="M 20 80 Q 50 20 80 80" stroke="#4169e1" stroke-width="3" fill="none"/><circle cx="50" cy="50" r="15" stroke="#ff6b6b" stroke-width="2" fill="none"/></svg>
       </div>
       <div class="card-body">
         <div class="card-title">数学作图工具</div>
         <div class="card-desc">函数图像，几何作图，动态演示</div>
-      </div>
-    </a>
-
-    <a class="card" href="zhandouluo.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#1a0505,#3a0a0a);">
-        <span class="badge badge-new">新</span>
-        🎯
-      </div>
-      <div class="card-body">
-        <div class="card-title">战斗罗</div>
-        <div class="card-desc">横版射击，多角色切换，Boss闯关</div>
-      </div>
-    </a>
-
-    <a class="card" href="zhenjiadasheng.html" target="_blank">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#ffd700,#ff8c00);">
-        <span class="badge badge-new">新</span>
-        🐵
-      </div>
-      <div class="card-body">
-        <div class="card-title">真假大圣</div>
-        <div class="card-desc">火眼金睛，辨别真假，答题闯关</div>
-      </div>
-    </a>
-
-    <!-- 示例卡片 4 -->
-    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#f0e0ff,#d8c0ff);">
-        ⏱️
-        <span class="coming-badge">即将上线</span>
-      </div>
-      <div class="card-body">
-        <div class="card-title">课堂计时器</div>
-        <div class="card-desc">倒计时/正计时，课堂时间管理</div>
-      </div>
-    </a>
-
-  </div>
-
-  <!-- ====== 后续更多分类可以继续加 ====== -->
-  <div class="section-title">🧪 探索实验</div>
-  <div class="grid">
-
-    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#ffe0ff,#ffc8e8);">
-        <span class="badge badge-hot">热门</span>
-        🤖
-        <span class="coming-badge">即将上线</span>
-      </div>
-      <div class="card-body">
-        <div class="card-title">AI 图像识别</div>
-        <div class="card-desc">体验 AI 如何"看"世界</div>
-      </div>
-    </a>
-
-    <a class="card coming-soon" href="javascript:void(0)" onclick="alert('即将上线，敬请期待！')">
-      <div class="card-thumb" style="background:linear-gradient(135deg,#fff0d0,#ffe0a0);">
-        🎲
-        <span class="coming-badge">即将上线</span>
-      </div>
-      <div class="card-body">
-        <div class="card-title">随机点名器</div>
-        <div class="card-desc">公平随机，课堂提问必备</div>
       </div>
     </a>
 
