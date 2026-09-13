@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>🍭 宠物世界教学平台 🍭</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: linear-gradient(135deg, #ffe6dd, #ffd4e8, #ffe0f0);
+  min-height: 100vh;
+  padding: 20px;
+}
+
+/* 浮动装饰 */
+.deco {
+  position: fixed;
+  font-size: 32px;
+  opacity: 0.15;
+  pointer-events: none;
+  animation: float 6s ease-in-out infinite;
+}
+.deco-1 { top: 5%; left: 3%; animation-delay: 0s; }
+.deco-2 { top: 15%; right: 5%; animation-delay: 1.5s; }
+.deco-3 { bottom: 20%; left: 8%; animation-delay: 3s; }
+.deco-4 { bottom: 10%; right: 4%; animation-delay: 4.5s; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* 顶部标题 */
+.header {
+  text-align: center;
+  padding: 30px 20px 20px;
+}
+.header h1 {
+  font-size: 28px;
+  color: #c04058;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.header p {
+  font-size: 14px;
+  color: #998;
+}
+
+/* 卡片网格 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 18px;
+  padding: 10px 0 40px;
+}
+
+/* 卡片 */
+.card {
+  background: rgba(255,255,255,0.92);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(255,180,160,0.2);
+  transition: transform 0.25s, box-shadow 0.25s;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(255,150,130,0.35);
+}
+
+.card-thumb {
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52px;
+  position: relative;
+}
+.card-thumb .badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+}
+.badge-hot { background: #ff6b6b; }
+.badge-new  { background: #51cf66; }
+.badge-pet  { background: #c04058; }
+
+.card-body {
+  padding: 12px 14px 16px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.card-desc {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+}
+
+/* 分类标题 */
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #6a4040;
+  margin: 24px 0 12px;
+  padding-left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 底部 */
+.footer {
+  text-align: center;
+  padding: 20px 0 30px;
+  font-size: 12px;
+  color: #bba;
+}
+
+/* 响应式 */
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .card-thumb { height: 100px; font-size: 40px; }
+  .header h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="deco deco-1">🐾</div>
+<div class="deco deco-2">🌸</div>
+<div class="deco deco-3">🍀</div>
+<div class="deco deco-4">🎈</div>
+
+<div class="container">
+
+  <div class="header">
+    <h1>🍭 宠物世界教学平台 🍭</h1>
+    <p>互动教学工具 & 趣味课件，打开即用</p>
+  </div>
+
+  <!-- ====== 班级宠物 ====== -->
+  <div class="section-title">🐾 核心功能</div>
+  <div class="grid">
+    <a class="card" href="index.html">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#ffe0e8,#ffd0d8);">
+        <span class="badge badge-pet">主站</span>
+        🐾
+      </div>
+      <div class="card-body">
+        <div class="card-title">班级宠物</div>
+        <div class="card-desc">养成宠物、课堂互动、积分排行，登录即用</div>
+      </div>
+    </a>
+  </div>
+
+  <!-- ====== 教学工具（示例，按你的需求增删） ====== -->
+  <div class="section-title">📚 教学工具</div>
+  <div class="grid">
+
+    <!-- 示例卡片 1：替换为你的实际文件 -->
+    <a class="card" href="math-goldminer.html">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#fff3d0,#ffe8a0);">
+        <span class="badge badge-hot">热门</span>
+        ⛏️
+      </div>
+      <div class="card-body">
+        <div class="card-title">数学黄金矿工</div>
+        <div class="card-desc">趣味计算练习，支持加减乘除</div>
+      </div>
+    </a>
+
+    <!-- 示例卡片 2 -->
+    <a class="card" href="dictation.html">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#d0f0ff,#a0d8ff);">
+        <span class="badge badge-new">新</span>
+        📝
+      </div>
+      <div class="card-body">
+        <div class="card-title">听写小助手</div>
+        <div class="card-desc">词语听写练习，课堂好帮手</div>
+      </div>
+    </a>
+
+    <!-- 示例卡片 3 -->
+    <a class="card" href="quiz-battle.html">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#e0ffd0,#c0f0a0);">
+        🎯
+      </div>
+      <div class="card-body">
+        <div class="card-title">答题竞赛</div>
+        <div class="card-desc">分组抢答，活跃课堂氛围</div>
+      </div>
+    </a>
+
+    <!-- 示例卡片 4 -->
+    <a class="card" href="timer.html">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#f0e0ff,#d8c0ff);">
+        ⏱️
+      </div>
+      <div class="card-body">
+        <div class="card-title">课堂计时器</div>
+        <div class="card-desc">倒计时/正计时，课堂时间管理</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ====== 后续更多分类可以继续加 ====== -->
+  <div class="section-title">🧪 探索实验</div>
+  <div class="grid">
+
+    <a class="card" href="ai-image.html">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#ffe0ff,#ffc8e8);">
+        <span class="badge badge-hot">热门</span>
+        🤖
+      </div>
+      <div class="card-body">
+        <div class="card-title">AI 图像识别</div>
+        <div class="card-desc">体验 AI 如何"看"世界</div>
+      </div>
+    </a>
+
+    <a class="card" href="random-picker.html">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#fff0d0,#ffe0a0);">
+        🎲
+      </div>
+      <div class="card-body">
+        <div class="card-title">随机点名器</div>
+        <div class="card-desc">公平随机，课堂提问必备</div>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="footer">
+    宠物世界教学平台 &copy; wscls.cn
+  </div>
+
+</div>
+
+</body>
+</html>
