@@ -72,8 +72,23 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crossh
 #gameToast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.8);z-index:300;padding:18px 40px;background:rgba(20,0,0,0.92);border:2px solid #c00;color:#fff;font-size:20px;font-family:'Courier New',monospace;letter-spacing:3px;text-align:center;pointer-events:none;opacity:0;transition:opacity 0.3s,transform 0.3s;border-radius:8px;text-shadow:0 0 10px rgba(255,0,0,0.5)}
 #gameToast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 </style>
+
+/* === PRELOADER === */
+#game-preloader{position:fixed;inset:0;z-index:99999;background:linear-gradient(180deg,#0a0a0a,#1a0a0a);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s;font-family:'Courier New',monospace}
+#game-preloader.fade-out{opacity:0;pointer-events:none}
+#game-preloader .pl-title{font-size:clamp(20px,4vw,36px);color:#ff6b35;font-weight:bold;margin-bottom:24px;text-shadow:0 0 20px rgba(255,107,53,.5);letter-spacing:4px}
+#game-preloader .pl-bar-wrap{width:min(320px,70vw);height:12px;background:rgba(255,255,255,.1);border-radius:6px;overflow:hidden;border:1px solid rgba(255,107,53,.3)}
+#game-preloader .pl-bar{height:100%;width:0%;background:linear-gradient(90deg,#ff6b35,#ff3535);border-radius:6px;transition:width .2s}
+#game-preloader .pl-text{margin-top:14px;font-size:clamp(12px,2vw,16px);color:#aaa}
+#game-preloader .pl-percent{color:#ff6b35;font-weight:bold}
 </head>
 <body>
+<div id="game-preloader">
+  <div class="pl-title">加载游戏资源中...</div>
+  <div class="pl-bar-wrap"><div class="pl-bar" id="pl-bar"></div></div>
+  <div class="pl-text">正在进入游戏中... <span class="pl-percent" id="pl-pct">0%</span></div>
+</div>
+
 <canvas id="c"></canvas>
 <div id="menu">
 <h1>战 斗 罗</h1>
@@ -2715,6 +2730,36 @@ document.getElementById('startBtn').addEventListener('click', showCharSelect);
 document.getElementById('charConfirmBtn').addEventListener('click', startGame);
 document.getElementById('hiD').textContent = hiScore;
 requestAnimationFrame(gameLoop);
+</script>
+
+<script>
+(function(){
+  var urls = ["zhandouluo-images/01.webp", "zhandouluo-images/02.webp", "zhandouluo-images/03.webp", "zhandouluo-images/04.webp", "zhandouluo-images/05.webp", "zhandouluo-images/1.webp", "zhandouluo-images/2.webp", "zhandouluo-images/3.webp", "zhandouluo-images/4.webp", "zhandouluo-images/5.webp", "zhandouluo-images/冰晶.webp", "zhandouluo-images/士兵.webp", "zhandouluo-images/士兵1.webp", "zhandouluo-images/外星人.webp", "zhandouluo-images/无人机.webp", "zhandouluo-images/暗影领主.webp", "zhandouluo-images/沼泽兽.webp", "zhandouluo-images/熔岩魔像.webp", "zhandouluo-images/狙击手.webp", "zhandouluo-images/狙击手1.webp", "zhandouluo-images/跑步者.webp"];
+  var total = urls.length;
+  var loaded = 0;
+  var bar = document.getElementById('pl-bar');
+  var pct = document.getElementById('pl-pct');
+  var preloader = document.getElementById('game-preloader');
+  if(total === 0){ preloader.remove(); return; }
+  function onProgress(){
+    loaded++;
+    var p = Math.round(loaded/total*100);
+    if(bar) bar.style.width = p+'%';
+    if(pct) pct.textContent = p+'%';
+    if(loaded >= total){
+      setTimeout(function(){
+        preloader.classList.add('fade-out');
+        setTimeout(function(){ preloader.remove(); }, 600);
+      }, 300);
+    }
+  }
+  urls.forEach(function(src){
+    var img = new Image();
+    img.onload = onProgress;
+    img.onerror = onProgress;
+    img.src = src;
+  });
+})();
 </script>
 </body>
 </html>

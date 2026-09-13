@@ -82,8 +82,23 @@ canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
 /* 制作者文本样式 */
 .credits-text{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);font-family:'ZCOOL QingKe HuangYou','Ma Shan Zheng',sans-serif;color:#ffd700;font-size:clamp(18px,5vw,26px);font-weight:bold;text-shadow:0 0 8px rgba(0,0,0,0.5),0 0 12px rgba(255,200,0,0.6);pointer-events:none;z-index:100;white-space:nowrap;background:rgba(20,10,0,0.55);padding:6px 20px;border-radius:60px;backdrop-filter:blur(4px);letter-spacing:2px;border:1px solid rgba(255,215,0,0.5);}
 </style>
+
+/* === PRELOADER === */
+#game-preloader{position:fixed;inset:0;z-index:99999;background:linear-gradient(180deg,#0a0a0a,#1a0a0a);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s;font-family:'Courier New',monospace}
+#game-preloader.fade-out{opacity:0;pointer-events:none}
+#game-preloader .pl-title{font-size:clamp(20px,4vw,36px);color:#ff6b35;font-weight:bold;margin-bottom:24px;text-shadow:0 0 20px rgba(255,107,53,.5);letter-spacing:4px}
+#game-preloader .pl-bar-wrap{width:min(320px,70vw);height:12px;background:rgba(255,255,255,.1);border-radius:6px;overflow:hidden;border:1px solid rgba(255,107,53,.3)}
+#game-preloader .pl-bar{height:100%;width:0%;background:linear-gradient(90deg,#ff6b35,#ff3535);border-radius:6px;transition:width .2s}
+#game-preloader .pl-text{margin-top:14px;font-size:clamp(12px,2vw,16px);color:#aaa}
+#game-preloader .pl-percent{color:#ff6b35;font-weight:bold}
 </head>
 <body>
+<div id="game-preloader">
+  <div class="pl-title">加载游戏资源中...</div>
+  <div class="pl-bar-wrap"><div class="pl-bar" id="pl-bar"></div></div>
+  <div class="pl-text">正在进入游戏中... <span class="pl-percent" id="pl-pct">0%</span></div>
+</div>
+
 <canvas id="gc"></canvas>
 <div id="hud">
  <div class="hud-left">
@@ -960,6 +975,36 @@ window.backToMenu = backToMenu;
 document.getElementById('rematchBtn').onclick = backToMenu;
 requestAnimationFrame(gameLoop);
 })()
+</script>
+
+<script>
+(function(){
+  var urls = ["zhenjiadasheng-images/右人物.webp", "zhenjiadasheng-images/左人物.webp"];
+  var total = urls.length;
+  var loaded = 0;
+  var bar = document.getElementById('pl-bar');
+  var pct = document.getElementById('pl-pct');
+  var preloader = document.getElementById('game-preloader');
+  if(total === 0){ preloader.remove(); return; }
+  function onProgress(){
+    loaded++;
+    var p = Math.round(loaded/total*100);
+    if(bar) bar.style.width = p+'%';
+    if(pct) pct.textContent = p+'%';
+    if(loaded >= total){
+      setTimeout(function(){
+        preloader.classList.add('fade-out');
+        setTimeout(function(){ preloader.remove(); }, 600);
+      }, 300);
+    }
+  }
+  urls.forEach(function(src){
+    var img = new Image();
+    img.onload = onProgress;
+    img.onerror = onProgress;
+    img.src = src;
+  });
+})();
 </script>
 </body>
 </html>
