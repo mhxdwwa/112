@@ -507,6 +507,17 @@ return false;
 }
 async function startGame() {
 if (isStarted) { togglePause(); return; }
+// 等待图片加载完成
+const playerImg = document.getElementById('player-img');
+const teacherImg = document.getElementById('teacher-img');
+if (!playerImg.complete || !teacherImg.complete) {
+  controlBtn.textContent = '⏳';
+  await Promise.all([
+    playerImg.complete ? Promise.resolve() : new Promise(r => playerImg.onload = r),
+    teacherImg.complete ? Promise.resolve() : new Promise(r => teacherImg.onload = r)
+  ]);
+  controlBtn.textContent = '▶';
+}
 const success = await initAudio();
 if (!success) return;
 playerY = 0; velocityY = 0; smoothedVolume = 0; currentScrollSpeed = 0; distance = 0;

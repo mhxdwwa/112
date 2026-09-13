@@ -130,9 +130,10 @@ canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
  <div class="subtitle"> </div>
  <input type="file" id="imageUpload" accept="image/*" multiple style="display:none;">
  <button class="btn" onclick="document.getElementById('imageUpload').click()">📁 导入</button>
- <button class="btn" id="startClassicBtn" onclick="startGame('classic')" disabled>取经模式</button>
- <button class="btn red" id="startStackBtn" onclick="startGame('stack')" disabled>大闹天宫</button>
- <div class="controls-hint"><br><br></div>
+  <button class="btn" id="startClassicBtn" onclick="startGame('classic')" disabled>取经模式</button>
+  <button class="btn red" id="startStackBtn" onclick="startGame('stack')" disabled>大闹天宫</button>
+  <div id="loadingIndicator" style="color:#ffd700;font-size:18px;margin-top:20px;animation:pulse 1.5s infinite;">⏳ 正在加载资源...</div>
+  <div class="controls-hint"><br><br></div>
 </div>
 <div class="screen" id="gameOverScreen">
  <h2>大圣陨落</h2>
@@ -1029,7 +1030,13 @@ function startGame(mode){
   updateHUD();announceWave('第 1 难');playSound('wave'); initQuizCanvas();
 }
 function backToMenu(){gameState='menu'; document.getElementById('gameOverScreen').classList.remove('active'); document.getElementById('dpad').classList.remove('active'); document.getElementById('skillBtn').classList.remove('active'); document.getElementById('menuScreen').classList.add('active');}
-preloadImages().then(()=>console.log('资源加载完成'));
+preloadImages().then(()=>{
+  console.log('资源加载完成');
+  document.getElementById('startClassicBtn').disabled=false;
+  document.getElementById('startStackBtn').disabled=false;
+  const loadingEl=document.getElementById('loadingIndicator');
+  if(loadingEl) loadingEl.style.display='none';
+});
 requestAnimationFrame(gameLoop);
 window.startGame=startGame;window.backToMenu=backToMenu;
 })();
