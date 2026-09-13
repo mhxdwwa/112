@@ -577,12 +577,11 @@ async function loadCustomImages() {
     const img = new Image();
     img.onload = () => {
       // 图片加载成功，替换SVG
-      card.innerHTML = `<img src="${img.src}" alt="${cardId}">`;
-      // 重新添加徽章
       const badge = card.querySelector('.badge');
-      if (badge) card.appendChild(badge);
+      const badgeHTML = badge ? badge.outerHTML : '';
+      card.innerHTML = badgeHTML + `<img src="${img.src}" alt="${cardId}">`;
     };
-    img.src = `/home-cards/${cardId}.png?t=${version}`;
+    img.src = `/home-cards/${cardId}.jpg?t=${version}`;
   });
 }
 
@@ -665,6 +664,33 @@ function handleCardClick(e) {
   document.getElementById('imageInput').click();
 }
 
+// 压缩图片（用canvas缩放）
+function compressImage(file, maxWidth = 400, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      // 计算缩放比例
+      let w = img.width, h = img.height;
+      if (w > maxWidth) {
+        h = Math.round(h * maxWidth / w);
+        w = maxWidth;
+      }
+      // 画到canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      // 导出为JPEG（更小体积）
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      const base64 = dataUrl.split(',')[1];
+      resolve({ base64, size: base64.length });
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 // 监听文件选择
 document.getElementById('imageInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
@@ -672,65 +698,68 @@ document.getElementById('imageInput').addEventListener('change', async (e) => {
   
   const cardId = currentEditCard.getAttribute('data-card-id');
   const toast = document.getElementById('uploadToast');
+  const toastText = toast.querySelector('span');
+  toastText.textContent = '正在压缩图片...';
   toast.classList.add('show');
   
   try {
-    // 转换为base64
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64 = event.target.result.split(',')[1];
-      
-      // 获取文件的SHA（如果存在）
-      let sha = null;
-      try {
-        const getResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.png`, {
-          headers: { 'Authorization': `token ${githubToken}` }
-        });
-        if (getResp.ok) {
-          const data = await getResp.json();
-          sha = data.sha;
-        }
-      } catch (e) {}
-      
-      // 上传到GitHub
-      const body = {
-        message: `Update card image: ${cardId}`,
-        content: base64,
-        branch: 'master'
-      };
-      if (sha) body.sha = sha;
-      
-      const putResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.png`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `token ${githubToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
+    // 先压缩图片
+    const { base64, size } = await compressImage(file, 400, 0.8);
+    const sizeKB = Math.round(size * 0.75 / 1024); // base64转实际大小
+    toastText.textContent = `压缩完成 (${sizeKB}KB)，正在上传...`;
+    
+    // 获取文件的SHA（如果存在）
+    let sha = null;
+    try {
+      const getResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.jpg`, {
+        headers: { 'Authorization': `token ${githubToken}` }
       });
-      
-      if (putResp.ok) {
-        // 更新版本号文件
-        await updateVersionFile();
-        
-        // 更新本地显示
-        const img = new Image();
-        img.onload = () => {
-          currentEditCard.innerHTML = `<img src="${img.src}" alt="${cardId}">`;
-          toast.classList.remove('show');
-          alert('图片上传成功！所有访客将在几秒后看到更新。');
-        };
-        img.src = `/home-cards/${cardId}.png?t=${Date.now()}`;
-      } else {
-        const err = await putResp.json();
-        alert('上传失败：' + (err.message || '未知错误'));
-        toast.classList.remove('show');
+      if (getResp.ok) {
+        const data = await getResp.json();
+        sha = data.sha;
       }
+    } catch (e) {}
+    
+    // 上传到GitHub
+    const body = {
+      message: `Update card image: ${cardId}`,
+      content: base64,
+      branch: 'master'
     };
-    reader.readAsDataURL(file);
+    if (sha) body.sha = sha;
+    
+    const putResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.jpg`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${githubToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    
+    if (putResp.ok) {
+      // 更新版本号文件
+      await updateVersionFile();
+      
+      // 更新本地显示
+      const img = new Image();
+      img.onload = () => {
+        currentEditCard.innerHTML = `<img src="${img.src}" alt="${cardId}">`;
+        toast.classList.remove('show');
+        toastText.textContent = '正在上传图片...';
+        alert(`上传成功！图片已压缩至 ${sizeKB}KB，所有访客将在几秒后看到更新。`);
+      };
+      img.src = `/home-cards/${cardId}.jpg?t=${Date.now()}`;
+    } else {
+      const err = await putResp.json();
+      alert('上传失败：' + (err.message || '未知错误'));
+      toast.classList.remove('show');
+      toastText.textContent = '正在上传图片...';
+    }
   } catch (e) {
     alert('上传失败：' + e.message);
     toast.classList.remove('show');
+    toastText.textContent = '正在上传图片...';
   }
   
   // 重置input
