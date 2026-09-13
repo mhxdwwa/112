@@ -72,7 +72,7 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crossh
 #gameToast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.8);z-index:300;padding:18px 40px;background:rgba(20,0,0,0.92);border:2px solid #c00;color:#fff;font-size:20px;font-family:'Courier New',monospace;letter-spacing:3px;text-align:center;pointer-events:none;opacity:0;transition:opacity 0.3s,transform 0.3s;border-radius:8px;text-shadow:0 0 10px rgba(255,0,0,0.5)}
 #gameToast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 #gameOverOverlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:90;display:none;align-items:center;justify-content:center;flex-direction:column;pointer-events:none}
-#gameOverOverlay.show{display:flex}
+#gameOverOverlay.show{display:flex;pointer-events:auto}
 #returnMenuBtn:hover{background:linear-gradient(180deg,#500,#300);border-color:#f44;box-shadow:0 0 30px rgba(255,0,0,0.4)}
 #game-preloader{position:fixed;inset:0;z-index:99999;background:linear-gradient(180deg,#0a0a0a,#1a0a0a);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s;font-family:'Courier New',monospace}
 #game-preloader.fade-out{opacity:0;pointer-events:none}
