@@ -2745,10 +2745,7 @@ requestAnimationFrame(gameLoop);
     if(bar) bar.style.width = p+'%';
     if(pct) pct.textContent = p+'%';
     if(loaded >= total){
-      setTimeout(function(){
-        preloader.classList.add('fade-out');
-        setTimeout(function(){ preloader.remove(); }, 600);
-      }, 300);
+      waitForGameImages();
     }
   }
   urls.forEach(function(src){
@@ -2757,6 +2754,27 @@ requestAnimationFrame(gameLoop);
     img.onerror = onProgress;
     img.src = src;
   });
+  function waitForGameImages(){
+    var checks = 0;
+    var maxChecks = 100;
+    var checkInterval = setInterval(function(){
+      checks++;
+      var ready = typeof enemyImages !== 'undefined'
+        && enemyImages['soldier']
+        && enemyImages['sniper']
+        && enemyImages['drone']
+        && enemyImages['runner']
+        && typeof charImages !== 'undefined'
+        && charImages[1];
+      if(ready || checks >= maxChecks){
+        clearInterval(checkInterval);
+        setTimeout(function(){
+          preloader.classList.add('fade-out');
+          setTimeout(function(){ preloader.remove(); }, 600);
+        }, 300);
+      }
+    }, 50);
+  }
 })();
 </script>
 </body>
