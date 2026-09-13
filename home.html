@@ -3,386 +3,412 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>吴胜闯老师教学平台</title>
+<title>智趣课堂</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  min-height: 100vh;
-  padding: 20px;
+/* === RESET & BASE === */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg1:#0f0c29;--bg2:#302b63;--bg3:#24243e;
+  --glass:rgba(255,255,255,0.08);
+  --glass-border:rgba(255,255,255,0.15);
+  --accent:#7c5cfc;--accent2:#ff6bcb;
+  --text:#f0f0f5;--text-dim:rgba(255,255,255,0.55);
+  --card-bg:rgba(255,255,255,0.06);
+  --card-hover:rgba(255,255,255,0.12);
+  --radius:20px;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;
+  background:linear-gradient(160deg,var(--bg1),var(--bg2),var(--bg3));
+  min-height:100vh;color:var(--text);overflow-x:hidden;
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0;
-  padding-left: 20px;
+/* === ANIMATED BACKGROUND === */
+.bg-orbs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-orbs span{
+  position:absolute;border-radius:50%;filter:blur(80px);opacity:.35;
+  animation:orbFloat 20s infinite ease-in-out alternate;
+}
+.bg-orbs span:nth-child(1){width:500px;height:500px;background:#7c5cfc;top:-10%;left:-5%;animation-delay:0s}
+.bg-orbs span:nth-child(2){width:400px;height:400px;background:#ff6bcb;bottom:-10%;right:-5%;animation-delay:-7s}
+.bg-orbs span:nth-child(3){width:350px;height:350px;background:#00d2ff;top:40%;left:50%;animation-delay:-14s}
+@keyframes orbFloat{
+  0%{transform:translate(0,0) scale(1)}
+  33%{transform:translate(40px,-60px) scale(1.1)}
+  66%{transform:translate(-30px,40px) scale(0.9)}
+  100%{transform:translate(20px,-20px) scale(1.05)}
 }
 
-/* 顶部标题 */
-.header {
-  text-align: center;
-  padding: 30px 0 20px;
-  color: #fff;
+/* === LAYOUT === */
+.page{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:24px 28px 60px}
+
+/* === CREATOR BADGE === */
+.creator-badge{
+  position:fixed;top:20px;right:24px;z-index:100;
+  background:rgba(255,255,255,0.1);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,0.2);
+  padding:8px 20px;border-radius:40px;
+  font-size:13px;font-weight:500;color:rgba(255,255,255,0.85);
+  box-shadow:0 4px 24px rgba(0,0,0,0.2);
+  animation:badgeFloat 4s infinite ease-in-out;
 }
-.header h1 {
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: 8px;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+@keyframes badgeFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+
+/* === HEADER === */
+.header{text-align:center;padding:50px 0 36px;position:relative}
+.header h1{
+  font-size:42px;font-weight:900;
+  background:linear-gradient(135deg,#fff 0%,#c4b5fd 50%,#ff6bcb 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  letter-spacing:2px;
 }
 
-/* 分类标题 */
-.section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
-  margin: 24px 0 14px;
-  padding-left: 4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.15);
+/* === SECTION === */
+.section{margin-top:40px}
+.section-head{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:18px;padding-left:2px;
+}
+.section-icon{
+  width:36px;height:36px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 4px 16px rgba(124,92,252,0.3);
+}
+.section-label{
+  font-size:18px;font-weight:700;
+  background:linear-gradient(90deg,#fff,rgba(255,255,255,0.7));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.section-line{flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.15),transparent)}
+
+/* === CARD GRID === */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:18px;
 }
 
-/* 卡片网格 */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  padding: 0 0 16px;
+/* === CARD === */
+.card{
+  background:var(--card-bg);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius);
+  overflow:hidden;cursor:pointer;
+  text-decoration:none;color:inherit;display:block;
+  transition:transform .35s cubic-bezier(.22,1,.36,1),
+             box-shadow .35s cubic-bezier(.22,1,.36,1),
+             border-color .35s;
+  backdrop-filter:blur(12px);
+  position:relative;
+}
+.card::before{
+  content:'';position:absolute;inset:0;border-radius:var(--radius);
+  background:linear-gradient(135deg,rgba(124,92,252,0.15),rgba(255,107,203,0.08));
+  opacity:0;transition:opacity .35s;pointer-events:none;z-index:0;
+}
+.card:hover{
+  transform:translateY(-8px) scale(1.02);
+  box-shadow:0 20px 60px rgba(124,92,252,0.2),0 0 0 1px rgba(255,255,255,0.1);
+  border-color:rgba(255,255,255,0.3);
+}
+.card:hover::before{opacity:1}
+
+.card-thumb{
+  height:140px;position:relative;overflow:hidden;
+  background-size:cover;background-position:center;
+}
+.card-thumb img{
+  width:100%;height:100%;object-fit:cover;
+  transition:transform .5s cubic-bezier(.22,1,.36,1);
+}
+.card:hover .card-thumb img{transform:scale(1.08)}
+
+.card-body{padding:16px 18px 20px;position:relative;z-index:1}
+.card-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;line-height:1.4}
+.card-desc{font-size:12px;color:var(--text-dim);line-height:1.6}
+
+/* === BADGE === */
+.badge{
+  position:absolute;top:10px;right:10px;z-index:2;
+  font-size:10px;padding:4px 10px;border-radius:20px;
+  font-weight:600;letter-spacing:0.5px;
+  backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,0.2);
+}
+.badge-hot{background:rgba(255,75,75,0.85);color:#fff}
+.badge-new{background:rgba(0,210,130,0.85);color:#fff}
+.badge-main{background:rgba(124,92,252,0.85);color:#fff}
+
+/* === FOOTER === */
+.footer{
+  text-align:center;padding:48px 0 20px;
+  font-size:12px;color:var(--text-dim);
+  border-top:1px solid rgba(255,255,255,0.06);
+  margin-top:48px;
 }
 
-/* 卡片 */
-.card {
-  background: #fff;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-  transition: transform 0.3s, box-shadow 0.3s;
-  cursor: pointer;
-  text-decoration: none;
-  color: inherit;
-  display: block;
-  position: relative;
-}
-.card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
-}
+/* === ENTRANCE ANIMATION === */
+.card{opacity:0;transform:translateY(30px);animation:cardIn .6s forwards}
+@keyframes cardIn{to{opacity:1;transform:translateY(0)}}
+.section:nth-child(2) .card:nth-child(1){animation-delay:.05s}
+.section:nth-child(3) .card:nth-child(1){animation-delay:.05s}
+.section:nth-child(3) .card:nth-child(2){animation-delay:.1s}
+.section:nth-child(3) .card:nth-child(3){animation-delay:.15s}
+.section:nth-child(3) .card:nth-child(4){animation-delay:.2s}
+.section:nth-child(3) .card:nth-child(5){animation-delay:.25s}
+.section:nth-child(3) .card:nth-child(6){animation-delay:.3s}
+.section:nth-child(3) .card:nth-child(7){animation-delay:.35s}
+.section:nth-child(3) .card:nth-child(8){animation-delay:.4s}
+.section:nth-child(3) .card:nth-child(9){animation-delay:.45s}
+.section:nth-child(4) .card:nth-child(1){animation-delay:.15s}
+.section:nth-child(4) .card:nth-child(2){animation-delay:.2s}
+.section:nth-child(5) .card:nth-child(1){animation-delay:.2s}
 
-.card-icon {
-  height: 130px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-  background-size: cover;
-  background-position: center;
-}
-.card-icon svg {
-  width: 70px;
-  height: 70px;
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));
-}
-.card-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.card-body {
-  padding: 14px 16px 18px;
-}
-.card-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #333;
-  margin-bottom: 5px;
-  line-height: 1.4;
-}
-.card-desc {
-  font-size: 12px;
-  color: #888;
-  line-height: 1.5;
-}
-
-/* 徽章 */
-.badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 10px;
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 2;
-}
-.badge-hot { background: linear-gradient(135deg, #ff6b6b, #ee5a6f); }
-.badge-new  { background: linear-gradient(135deg, #51cf66, #40c057); }
-.badge-main { background: linear-gradient(135deg, #667eea, #764ba2); }
-
-/* 底部 */
-.footer {
-  text-align: left;
-  padding: 24px 0 32px;
-  font-size: 12px;
-  color: rgba(255,255,255,0.6);
-}
-
-/* 制作者悬浮标识 */
-.creator-badge {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: rgba(255,250,245,0.95);
-  padding: 10px 20px;
-  border-radius: 50px;
-  border: 1.5px solid rgba(255,210,200,0.6);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-  font-size: 14px;
-  font-weight: 600;
-  color: #a04050;
-  z-index: 998;
-  animation: floatBadge 3s infinite ease-in-out;
-}
-
-@keyframes floatBadge {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-
-/* 响应式 */
-@media (max-width: 600px) {
-  .grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  .card-icon { height: 100px; }
-  .card-icon svg { width: 50px; height: 50px; }
-  .header h1 { font-size: 24px; }
-  .section-title { font-size: 16px; }
+/* === RESPONSIVE === */
+@media(max-width:640px){
+  .page{padding:16px 16px 40px}
+  .header{padding:36px 0 24px}
+  .header h1{font-size:30px}
+  .grid{grid-template-columns:repeat(2,1fr);gap:12px}
+  .card-thumb{height:110px}
+  .card-body{padding:12px 14px 16px}
+  .card-title{font-size:14px}
+  .creator-badge{top:12px;right:12px;font-size:11px;padding:6px 14px}
 }
 </style>
 </head>
 <body>
-<div class="container">
 
+<!-- Animated background orbs -->
+<div class="bg-orbs"><span></span><span></span><span></span></div>
+
+<!-- Creator badge -->
+<div class="creator-badge">制作者：吴胜闯老师</div>
+
+<div class="page">
+
+  <!-- Header -->
   <div class="header">
     <h1>智趣课堂</h1>
   </div>
 
-  <!-- 制作者悬浮标识 -->
-  <div class="creator-badge">🍭制作者：吴胜闯老师🍭</div>
-
-  <!-- ====== 核心功能 ====== -->
-  <div class="section-title">⭐ 核心功能</div>
-  <div class="grid">
-    <a class="card" href="index.html" target="_blank">
-      <div class="card-icon" data-card-id="banji" style="background:linear-gradient(135deg,#ffe0e8,#ffc0d0);">
-        <span class="badge badge-main">主站</span>
-        <svg viewBox="0 0 100 100"><circle cx="50" cy="40" r="25" fill="#ff6b9d"/><ellipse cx="50" cy="70" rx="30" ry="20" fill="#ff6b9d"/><circle cx="42" cy="35" r="4" fill="#fff"/><circle cx="58" cy="35" r="4" fill="#fff"/><path d="M 40 48 Q 50 55 60 48" stroke="#fff" stroke-width="2" fill="none"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">班级宠物</div>
-        <div class="card-desc">养成宠物、课堂互动、积分排行，登录即用</div>
-      </div>
-    </a>
+  <!-- 核心功能 -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-icon">⭐</div>
+      <div class="section-label">习惯养成</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid">
+      <a class="card" href="index.html" target="_blank">
+        <div class="card-thumb" data-card-id="banji">
+          <span class="badge badge-main">主站</span>
+          <img src="home-cards/banji.jpg" alt="班级宠物">
+        </div>
+        <div class="card-body">
+          <div class="card-title">班级宠物</div>
+          <div class="card-desc">养成宠物、课堂互动、积分排行，登录即用</div>
+        </div>
+      </a>
+    </div>
   </div>
 
-  <!-- ====== 答题闯关 ====== -->
-  <div class="section-title">🎮 答题闯关</div>
-  <div class="grid">
+  <!-- 答题闯关 -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-icon">🎮</div>
+      <div class="section-label">趣味学习</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid">
 
-    <a class="card" href="jiangyaoji.html" target="_blank">
-      <div class="card-icon" data-card-id="jiangyaoji" style="background:linear-gradient(135deg,#ff6b35,#8b0000);">
-        <span class="badge badge-hot">热门</span>
-        <svg viewBox="0 0 100 100"><path d="M 30 70 Q 25 50 35 35 Q 40 25 50 30 Q 60 25 65 35 Q 75 50 70 70 Z" fill="#ffd700"/><circle cx="40" cy="45" r="5" fill="#ff0000"/><circle cx="60" cy="45" r="5" fill="#ff0000"/><path d="M 35 60 Q 50 65 65 60" stroke="#ff0000" stroke-width="3" fill="none"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">降妖记</div>
-        <div class="card-desc">西游降妖，答题除魔，挑战十方妖王</div>
-      </div>
-    </a>
+      <a class="card" href="jiangyaoji.html" target="_blank">
+        <div class="card-thumb" data-card-id="jiangyaoji">
+          <span class="badge badge-hot">热门</span>
+          <img src="home-cards/jiangyaoji.jpg" alt="降妖记">
+        </div>
+        <div class="card-body">
+          <div class="card-title">降妖记</div>
+          <div class="card-desc">西游降妖，答题除魔，挑战十方妖王</div>
+        </div>
+      </a>
 
-    <a class="card" href="jiangmoji.html" target="_blank">
-      <div class="card-icon" data-card-id="jiangmoji" style="background:linear-gradient(135deg,#2c1810,#5a2a1a);">
-        <span class="badge badge-hot">热门</span>
-        <svg viewBox="0 0 100 100"><rect x="35" y="25" width="30" height="50" rx="3" fill="#8b4513"/><rect x="40" y="30" width="20" height="15" fill="#ffd700"/><line x1="50" y1="50" x2="50" y2="70" stroke="#c0c0c0" stroke-width="3"/><polygon points="45,70 55,70 50,80" fill="#c0c0c0"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">降魔记</div>
-        <div class="card-desc">降妖除魔，答题闯关，修炼升级</div>
-      </div>
-    </a>
+      <a class="card" href="jiangmoji.html" target="_blank">
+        <div class="card-thumb" data-card-id="jiangmoji">
+          <span class="badge badge-hot">热门</span>
+          <img src="home-cards/jiangmoji.jpg" alt="降魔记">
+        </div>
+        <div class="card-body">
+          <div class="card-title">降魔记</div>
+          <div class="card-desc">降妖除魔，答题闯关，修炼升级</div>
+        </div>
+      </a>
 
-    <a class="card" href="zhenjiadasheng.html" target="_blank">
-      <div class="card-icon" data-card-id="zhenjiadasheng" style="background:linear-gradient(135deg,#ffd700,#ff8c00);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><circle cx="50" cy="45" r="28" fill="#daa520"/><circle cx="40" cy="40" r="6" fill="#fff"/><circle cx="60" cy="40" r="6" fill="#fff"/><circle cx="40" cy="40" r="3" fill="#000"/><circle cx="60" cy="40" r="3" fill="#000"/><path d="M 35 55 Q 50 62 65 55" stroke="#8b4513" stroke-width="3" fill="none"/><path d="M 30 25 Q 35 15 45 20" stroke="#ffd700" stroke-width="4" fill="none"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">真假大圣</div>
-        <div class="card-desc">火眼金睛，辨别真假，答题闯关</div>
-      </div>
-    </a>
+      <a class="card" href="zhenjiadasheng.html" target="_blank">
+        <div class="card-thumb" data-card-id="zhenjiadasheng">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/zhenjiadasheng.jpg" alt="真假大圣">
+        </div>
+        <div class="card-body">
+          <div class="card-title">真假大圣</div>
+          <div class="card-desc">火眼金睛，辨别真假，答题闯关</div>
+        </div>
+      </a>
 
-    <a class="card" href="wulinzhengba.html" target="_blank">
-      <div class="card-icon" data-card-id="wulinzhengba" style="background:linear-gradient(135deg,#e8ddce,#c9b89c);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><circle cx="50" cy="35" r="15" fill="#8b4513"/><rect x="40" y="50" width="20" height="30" fill="#f5f5dc"/><line x1="30" y1="55" x2="40" y2="60" stroke="#8b4513" stroke-width="4"/><line x1="70" y1="55" x2="60" y2="60" stroke="#8b4513" stroke-width="4"/><path d="M 25 70 L 35 60" stroke="#c0c0c0" stroke-width="3"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">武林争霸</div>
-        <div class="card-desc">水墨风格，武侠对战，答题闯关</div>
-      </div>
-    </a>
+      <a class="card" href="wulinzhengba.html" target="_blank">
+        <div class="card-thumb" data-card-id="wulinzhengba">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/wulinzhengba.jpg" alt="武林争霸">
+        </div>
+        <div class="card-body">
+          <div class="card-title">武林争霸</div>
+          <div class="card-desc">水墨风格，武侠对战，答题闯关</div>
+        </div>
+      </a>
 
-    <a class="card" href="damaoxian.html" target="_blank">
-      <div class="card-icon" data-card-id="damaoxian" style="background:linear-gradient(135deg,#667eea,#764ba2);">
-        <span class="badge badge-hot">热门</span>
-        <svg viewBox="0 0 100 100"><rect x="30" y="40" width="40" height="35" rx="5" fill="#4169e1"/><circle cx="50" cy="30" r="15" fill="#ffdbac"/><rect x="35" y="75" width="8" height="15" fill="#4169e1"/><rect x="57" y="75" width="8" height="15" fill="#4169e1"/><text x="50" y="60" font-size="20" fill="#fff" text-anchor="middle" font-weight="bold">?</text></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">数学大冒险</div>
-        <div class="card-desc">横版闯关，答题打怪，挑战吴老师Boss</div>
-      </div>
-    </a>
+      <a class="card" href="damaoxian.html" target="_blank">
+        <div class="card-thumb" data-card-id="damaoxian">
+          <span class="badge badge-hot">热门</span>
+          <img src="home-cards/damaoxian.jpg" alt="数学大冒险">
+        </div>
+        <div class="card-body">
+          <div class="card-title">数学大冒险</div>
+          <div class="card-desc">横版闯关，答题打怪，挑战吴老师Boss</div>
+        </div>
+      </a>
 
-    <a class="card" href="mengdaxia.html" target="_blank">
-      <div class="card-icon" data-card-id="mengdaxia" style="background:linear-gradient(135deg,#FFB6C1,#FF69B4);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><circle cx="35" cy="50" r="20" fill="#ff6b6b"/><circle cx="65" cy="50" r="20" fill="#4169e1"/><circle cx="30" cy="45" r="4" fill="#fff"/><circle cx="40" cy="45" r="4" fill="#fff"/><circle cx="60" cy="45" r="4" fill="#fff"/><circle cx="70" cy="45" r="4" fill="#fff"/><path d="M 30 55 Q 35 60 40 55" stroke="#fff" stroke-width="2" fill="none"/><path d="M 60 55 Q 65 60 70 55" stroke="#fff" stroke-width="2" fill="none"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">萌大侠</div>
-        <div class="card-desc">红蓝对决，答题格斗，谁是真大侠</div>
-      </div>
-    </a>
+      <a class="card" href="mengdaxia.html" target="_blank">
+        <div class="card-thumb" data-card-id="mengdaxia">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/mengdaxia.jpg" alt="萌大侠">
+        </div>
+        <div class="card-body">
+          <div class="card-title">萌大侠</div>
+          <div class="card-desc">红蓝对决，答题格斗，谁是真大侠</div>
+        </div>
+      </a>
 
-    <a class="card" href="bahe.html" target="_blank">
-      <div class="card-icon" data-card-id="bahe" style="background:linear-gradient(135deg,#ff9a56,#e74c3c);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><line x1="20" y1="50" x2="80" y2="50" stroke="#8b4513" stroke-width="6"/><circle cx="25" cy="50" r="12" fill="#ff6b6b"/><circle cx="75" cy="50" r="12" fill="#4169e1"/><circle cx="22" cy="47" r="2" fill="#fff"/><circle cx="28" cy="47" r="2" fill="#fff"/><circle cx="72" cy="47" r="2" fill="#fff"/><circle cx="78" cy="47" r="2" fill="#fff"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">拔河答题大挑战</div>
-        <div class="card-desc">红蓝对抗，答题拔河，团队竞技</div>
-      </div>
-    </a>
+      <a class="card" href="bahe.html" target="_blank">
+        <div class="card-thumb" data-card-id="bahe">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/bahe.jpg" alt="拔河答题大挑战">
+        </div>
+        <div class="card-body">
+          <div class="card-title">拔河答题大挑战</div>
+          <div class="card-desc">红蓝对抗，答题拔河，团队竞技</div>
+        </div>
+      </a>
 
+      <a class="card" href="shendouluo.html" target="_blank">
+        <div class="card-thumb" data-card-id="shendouluo">
+          <span class="badge badge-hot">热门</span>
+          <img src="home-cards/shendouluo.jpg" alt="神斗罗">
+        </div>
+        <div class="card-body">
+          <div class="card-title">神斗罗</div>
+          <div class="card-desc">横版射击，神话角色，闯关答题</div>
+        </div>
+      </a>
+
+      <a class="card" href="zhandouluo.html" target="_blank">
+        <div class="card-thumb" data-card-id="zhandouluo">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/zhandouluo.jpg" alt="战斗罗">
+        </div>
+        <div class="card-body">
+          <div class="card-title">战斗罗</div>
+          <div class="card-desc">横版射击，多角色切换，Boss闯关</div>
+        </div>
+      </a>
+
+    </div>
   </div>
 
-  <!-- ====== 射击冒险 ====== -->
-  <div class="section-title">🚀 射击冒险</div>
-  <div class="grid">
+  <!-- 互动课堂 -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-icon">📢</div>
+      <div class="section-label">互动课堂</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid">
 
-    <a class="card" href="shendouluo.html" target="_blank">
-      <div class="card-icon" data-card-id="shendouluo" style="background:linear-gradient(135deg,#1a0000,#4a0000);">
-        <span class="badge badge-hot">热门</span>
-        <svg viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="35" ry="25" fill="#4a4a4a"/><rect x="45" y="25" width="10" height="20" fill="#666"/><circle cx="50" cy="20" r="8" fill="#ff0000"/><line x1="30" y1="50" x2="20" y2="45" stroke="#c0c0c0" stroke-width="3"/><line x1="70" y1="50" x2="80" y2="45" stroke="#c0c0c0" stroke-width="3"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">神斗罗</div>
-        <div class="card-desc">横版射击，神话角色，闯关答题</div>
-      </div>
-    </a>
+      <a class="card" href="starrollcall.html" target="_blank">
+        <div class="card-thumb" data-card-id="starrollcall">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/starrollcall.jpg" alt="播报星空点名">
+        </div>
+        <div class="card-body">
+          <div class="card-title">播报星空点名</div>
+          <div class="card-desc">星空旋转点名，随机抽选，课堂必备</div>
+        </div>
+      </a>
 
-    <a class="card" href="zhandouluo.html" target="_blank">
-      <div class="card-icon" data-card-id="zhandouluo" style="background:linear-gradient(135deg,#1a0505,#3a0a0a);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><circle cx="50" cy="40" r="18" fill="#2c5f2d"/><rect x="40" y="58" width="20" height="25" fill="#3a7d44"/><line x1="30" y1="55" x2="20" y2="65" stroke="#2c5f2d" stroke-width="5"/><line x1="70" y1="55" x2="80" y2="65" stroke="#2c5f2d" stroke-width="5"/><rect x="75" y="60" width="15" height="4" fill="#666"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">战斗罗</div>
-        <div class="card-desc">横版射击，多角色切换，Boss闯关</div>
-      </div>
-    </a>
+      <a class="card" href="aoyoutiandi.html" target="_blank">
+        <div class="card-thumb" data-card-id="aoyoutiandi">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/aoyoutiandi.jpg" alt="早读神器：遨游天地">
+        </div>
+        <div class="card-body">
+          <div class="card-title">早读神器：遨游天地</div>
+          <div class="card-desc">大声朗读，化身飞鸟翱翔天地之间</div>
+        </div>
+      </a>
 
+    </div>
   </div>
 
-  <!-- ====== 互动课堂 ====== -->
-  <div class="section-title">📢 互动课堂</div>
-  <div class="grid">
+  <!-- 实用工具 -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-icon">🔧</div>
+      <div class="section-label">实用工具</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="grid">
 
-    <a class="card" href="starrollcall.html" target="_blank">
-      <div class="card-icon" data-card-id="starrollcall" style="background:linear-gradient(135deg,#0a0a2a,#1a1a5a);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="#1a1a3a"/><circle cx="50" cy="50" r="30" fill="#0a0a2a"/><text x="50" y="45" font-size="16" fill="#ffd700" text-anchor="middle">★</text><text x="35" y="60" font-size="12" fill="#fff" text-anchor="middle">张</text><text x="65" y="60" font-size="12" fill="#fff" text-anchor="middle">李</text><circle cx="50" cy="50" r="3" fill="#ffd700"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">播报星空点名</div>
-        <div class="card-desc">星空旋转点名，随机抽选，课堂必备</div>
-      </div>
-    </a>
+      <a class="card" href="shuxuezuotu.html" target="_blank">
+        <div class="card-thumb" data-card-id="shuxuezuotu">
+          <span class="badge badge-new">新</span>
+          <img src="home-cards/shuxuezuotu.jpg" alt="数学作图工具">
+        </div>
+        <div class="card-body">
+          <div class="card-title">数学作图工具</div>
+          <div class="card-desc">函数图像，几何作图，动态演示</div>
+        </div>
+      </a>
 
-    <a class="card" href="aoyoutiandi.html" target="_blank">
-      <div class="card-icon" data-card-id="aoyoutiandi" style="background:linear-gradient(135deg,#87CEEB,#4A90A4);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="25" ry="15" fill="#8b4513"/><circle cx="50" cy="35" r="12" fill="#ffdbac"/><path d="M 30 45 Q 20 35 25 25" stroke="#8b4513" stroke-width="3" fill="none"/><path d="M 70 45 Q 80 35 75 25" stroke="#8b4513" stroke-width="3" fill="none"/><circle cx="45" cy="33" r="2" fill="#000"/><circle cx="55" cy="33" r="2" fill="#000"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">早读神器：遨游天地</div>
-        <div class="card-desc">大声朗读，化身飞鸟翱翔天地之间</div>
-      </div>
-    </a>
-
+    </div>
   </div>
 
-  <!-- ====== 实用工具 ====== -->
-  <div class="section-title">🔧 实用工具</div>
-  <div class="grid">
-
-    <a class="card" href="shuxuezuotu.html" target="_blank">
-      <div class="card-icon" data-card-id="shuxuezuotu" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
-        <span class="badge badge-new">新</span>
-        <svg viewBox="0 0 100 100"><line x1="20" y1="80" x2="80" y2="80" stroke="#333" stroke-width="2"/><line x1="20" y1="80" x2="20" y2="20" stroke="#333" stroke-width="2"/><path d="M 20 80 Q 50 20 80 80" stroke="#4169e1" stroke-width="3" fill="none"/><circle cx="50" cy="50" r="15" stroke="#ff6b6b" stroke-width="2" fill="none"/></svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">数学作图工具</div>
-        <div class="card-desc">函数图像，几何作图，动态演示</div>
-      </div>
-    </a>
-
-  </div>
-
-  <div class="footer">
-    吴胜闯老师教学平台 &copy; wscls.cn
-  </div>
+  <!-- Footer -->
+  <div class="footer">智趣课堂 @ 吴胜闯老师</div>
 
 </div>
 
 <script>
-// 页面加载时从服务器同步卡片图片
-window.addEventListener('DOMContentLoaded', () => {
-  syncFromServer();
-});
-
-// 从服务器同步最新图片
-async function syncFromServer() {
-  try {
-    const resp = await fetch('/home-cards/cards-data.json?t=' + Date.now());
-    if (resp.ok) {
-      const data = await resp.json();
-      if (Object.keys(data).length > 0) {
-        applyImages(data);
-      }
-    }
-  } catch (e) {}
+// Sync card images from server
+window.addEventListener('DOMContentLoaded',()=>{syncFromServer()});
+async function syncFromServer(){
+  try{
+    const r=await fetch('/home-cards/cards-data.json?t='+Date.now());
+    if(r.ok){const d=await r.json();if(Object.keys(d).length>0)applyImages(d)}
+  }catch(e){}
 }
-
-// 应用图片到卡片
-function applyImages(data) {
-  Object.keys(data).forEach(cardId => {
-    const card = document.querySelector(`.card-icon[data-card-id="${cardId}"]`);
-    if (card && data[cardId]) {
-      const badge = card.querySelector('.badge');
-      const badgeHTML = badge ? badge.outerHTML : '';
-      card.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${data[cardId]}" alt="${cardId}">`;
+function applyImages(data){
+  Object.keys(data).forEach(id=>{
+    const el=document.querySelector(`.card-thumb[data-card-id="${id}"]`);
+    if(el&&data[id]){
+      const badge=el.querySelector('.badge');
+      const bHTML=badge?badge.outerHTML:'';
+      el.innerHTML=bHTML+`<img src="data:image/jpeg;base64,${data[id]}" alt="${id}">`;
     }
   });
 }
