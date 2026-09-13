@@ -388,8 +388,8 @@ function preloadImages(){
   const loadImg=(key,src)=>new Promise(r=>{
     const img=new Image();img.onload=()=>{imageCache[key]=img;r(true);};img.onerror=()=>{r(false);};img.src=src;
   });
-  promises.push(loadImg('p1','zhenjiadasheng-images/左人物.png'));
-  promises.push(loadImg('p2','zhenjiadasheng-images/右人物.png'));
+  promises.push(loadImg('p1','zhenjiadasheng-images/左人物.webp'));
+  promises.push(loadImg('p2','zhenjiadasheng-images/右人物.webp'));
   return Promise.all(promises);
 }
 

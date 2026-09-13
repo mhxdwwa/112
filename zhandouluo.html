@@ -2502,34 +2502,34 @@ function loadImageWithFallback(pngSrc, jpgSrc, onLoaded) {
     img.src = pngSrc;
 }
 characters.forEach(ch => {
-    loadImageWithFallback('zhandouluo-images/' + ch.id + '.png', 'zhandouluo-images/' + ch.id + '.jpg', img => { charImages[ch.id] = img; });
-    loadImageWithFallback('zhandouluo-images/0' + ch.id + '.png', 'zhandouluo-images/0' + ch.id + '.jpg', img => { charProneImages[ch.id] = img; });
+    loadImageWithFallback('zhandouluo-images/' + ch.id + '.webp', 'zhandouluo-images/' + ch.id + '.webp', img => { charImages[ch.id] = img; });
+    loadImageWithFallback('zhandouluo-images/0' + ch.id + '.webp', 'zhandouluo-images/0' + ch.id + '.webp', img => { charProneImages[ch.id] = img; });
 });
 
 // Preload enemy images
 const enemyImages = {};
 const enemyImageMap = {
-    'soldier': ['zhandouluo-images/士兵.png','zhandouluo-images/士兵.jpg'],
-    'soldier_up': ['zhandouluo-images/士兵1.png','zhandouluo-images/士兵1.jpg'],
-    'sniper': ['zhandouluo-images/狙击手.png','zhandouluo-images/狙击手.jpg'],
-    'sniper_up': ['zhandouluo-images/狙击手1.png','zhandouluo-images/狙击手1.jpg'],
-    'drone': ['zhandouluo-images/无人机.png','zhandouluo-images/无人机.jpg']
+    'soldier': ['zhandouluo-images/士兵.webp','zhandouluo-images/士兵.webp'],
+    'soldier_up': ['zhandouluo-images/士兵1.webp','zhandouluo-images/士兵1.webp'],
+    'sniper': ['zhandouluo-images/狙击手.webp','zhandouluo-images/狙击手.webp'],
+    'sniper_up': ['zhandouluo-images/狙击手1.webp','zhandouluo-images/狙击手1.webp'],
+    'drone': ['zhandouluo-images/无人机.webp','zhandouluo-images/无人机.webp']
 };
 Object.entries(enemyImageMap).forEach(([type, [pngSrc, jpgSrc]]) => {
     loadImageWithFallback(pngSrc, jpgSrc, img => { enemyImages[type] = img; });
 });
 
 // Preload runner image (PNG with JPG fallback)
-loadImageWithFallback('zhandouluo-images/跑步者.png', 'zhandouluo-images/跑步者.jpg', function(img){ enemyImages['runner'] = img; });
+loadImageWithFallback('zhandouluo-images/跑步者.webp', 'zhandouluo-images/跑步者.webp', function(img){ enemyImages['runner'] = img; });
 
 // Preload boss images
 const bossImages = {};
 const bossImageMap = {
-    'alien': ['zhandouluo-images/外星人.png','zhandouluo-images/外星人.jpg'],
-    'lava_golem': ['zhandouluo-images/熔岩魔像.png','zhandouluo-images/熔岩魔像.jpg'],
-    'ice_crystal': ['zhandouluo-images/冰晶.png','zhandouluo-images/冰晶.jpg'],
-    'swamp_beast': ['zhandouluo-images/沼泽兽.png','zhandouluo-images/沼泽兽.jpg'],
-    'shadow_lord': ['zhandouluo-images/暗影领主.png','zhandouluo-images/暗影领主.jpg']
+    'alien': ['zhandouluo-images/外星人.webp','zhandouluo-images/外星人.webp'],
+    'lava_golem': ['zhandouluo-images/熔岩魔像.webp','zhandouluo-images/熔岩魔像.webp'],
+    'ice_crystal': ['zhandouluo-images/冰晶.webp','zhandouluo-images/冰晶.webp'],
+    'swamp_beast': ['zhandouluo-images/沼泽兽.webp','zhandouluo-images/沼泽兽.webp'],
+    'shadow_lord': ['zhandouluo-images/暗影领主.webp','zhandouluo-images/暗影领主.webp']
 };
 Object.entries(bossImageMap).forEach(([type, [pngSrc, jpgSrc]]) => {
     loadImageWithFallback(pngSrc, jpgSrc, img => { bossImages[type] = img; });
@@ -2542,7 +2542,7 @@ Object.entries(bossImageMap).forEach(([type, [pngSrc, jpgSrc]]) => {
         const card = document.createElement('div');
         card.className = 'char-card' + (idx===0?' selected':'');
         card.dataset.idx = idx;
-        card.innerHTML = `<img src="zhandouluo-images/${ch.id}.png" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div style="display:none;width:90px;height:90px;background:${ch.color};align-items:center;justify-content:center;border:2px solid ${ch.color};font-size:36px;color:#fff;font-family:Courier New">${ch.name[0]}</div><div class="cname">${ch.name}</div><div class="cdesc">${ch.desc}</div>`;
+        card.innerHTML = `<img src="zhandouluo-images/${ch.id}.webp" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div style="display:none;width:90px;height:90px;background:${ch.color};align-items:center;justify-content:center;border:2px solid ${ch.color};font-size:36px;color:#fff;font-family:Courier New">${ch.name[0]}</div><div class="cname">${ch.name}</div><div class="cdesc">${ch.desc}</div>`;
         card.addEventListener('click', () => {
             grid.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
