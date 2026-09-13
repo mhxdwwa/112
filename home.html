@@ -15,106 +15,116 @@ body {
 }
 
 .container {
-  max-width: 1100px;
-  margin: 0 auto;
+  max-width: 1200px;
+  margin: 0;
+  padding-left: 20px;
 }
 
 /* 顶部标题 */
 .header {
-  text-align: center;
-  padding: 40px 20px 30px;
+  text-align: left;
+  padding: 30px 0 20px;
   color: #fff;
 }
 .header h1 {
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   text-shadow: 0 2px 10px rgba(0,0,0,0.2);
 }
 .header p {
-  font-size: 16px;
+  font-size: 15px;
   opacity: 0.9;
 }
 
 /* 分类标题 */
 .section-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #fff;
-  margin: 30px 0 16px;
-  padding-left: 8px;
+  margin: 24px 0 14px;
+  padding-left: 4px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
 /* 卡片网格 */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
-  padding: 0 0 20px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 0 0 16px;
 }
 
 /* 卡片 */
 .card {
   background: #fff;
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
   transition: transform 0.3s, box-shadow 0.3s;
   cursor: pointer;
   text-decoration: none;
   color: inherit;
   display: block;
+  position: relative;
 }
 .card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 50px rgba(0,0,0,0.25);
+  transform: translateY(-6px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
 }
 
 .card-icon {
-  height: 140px;
+  height: 130px;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
+  background-size: cover;
+  background-position: center;
 }
 .card-icon svg {
-  width: 80px;
-  height: 80px;
+  width: 70px;
+  height: 70px;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));
+}
+.card-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .card-body {
-  padding: 16px 18px 20px;
+  padding: 14px 16px 18px;
 }
 .card-title {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   color: #333;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
   line-height: 1.4;
 }
 .card-desc {
-  font-size: 13px;
+  font-size: 12px;
   color: #888;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* 徽章 */
 .badge {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 12px;
+  top: 10px;
+  right: 10px;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 10px;
   color: #fff;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 2;
 }
 .badge-hot { background: linear-gradient(135deg, #ff6b6b, #ee5a6f); }
 .badge-new  { background: linear-gradient(135deg, #51cf66, #40c057); }
@@ -122,26 +132,218 @@ body {
 
 /* 底部 */
 .footer {
-  text-align: center;
-  padding: 30px 0 40px;
+  text-align: left;
+  padding: 24px 0 32px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+
+/* 编辑按钮 */
+.edit-trigger {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  z-index: 100;
+}
+.edit-trigger:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+}
+.edit-trigger svg {
+  width: 24px;
+  height: 24px;
+  fill: #667eea;
+}
+
+/* 模态框 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-overlay.show {
+  display: flex;
+}
+.modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.modal h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+  color: #333;
+}
+.modal input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  transition: border-color 0.3s;
+}
+.modal input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+.modal-btns {
+  display: flex;
+  gap: 12px;
+}
+.modal-btns button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.btn-cancel {
+  background: #f0f0f0;
+  color: #666;
+}
+.btn-cancel:hover {
+  background: #e0e0e0;
+}
+.btn-confirm {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+}
+.btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+}
+
+/* 管理员模式 */
+.admin-mode .card-icon::after {
+  content: '点击上传';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.3s;
+  cursor: pointer;
+}
+.admin-mode .card-icon:hover::after {
+  opacity: 1;
+}
+
+.admin-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  padding: 12px 20px;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 999;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.admin-banner.show {
+  display: flex;
+}
+.admin-banner-text {
+  font-size: 14px;
+  font-weight: 600;
+}
+.admin-exit-btn {
+  padding: 6px 16px;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
   font-size: 13px;
-  color: rgba(255,255,255,0.7);
+  transition: all 0.3s;
+}
+.admin-exit-btn:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* 上传进度 */
+.upload-toast {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: #fff;
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  display: none;
+  align-items: center;
+  gap: 12px;
+  z-index: 1001;
+}
+.upload-toast.show {
+  display: flex;
+}
+.upload-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* 响应式 */
 @media (max-width: 600px) {
   .grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
+    gap: 12px;
   }
-  .card-icon { height: 110px; }
-  .card-icon svg { width: 60px; height: 60px; }
-  .header h1 { font-size: 28px; }
-  .section-title { font-size: 18px; }
+  .card-icon { height: 100px; }
+  .card-icon svg { width: 50px; height: 50px; }
+  .header h1 { font-size: 24px; }
+  .section-title { font-size: 16px; }
 }
 </style>
 </head>
 <body>
+<!-- 管理员横幅 -->
+<div class="admin-banner" id="adminBanner">
+  <span class="admin-banner-text">🔧 管理员模式 - 点击卡片图标区域上传图片</span>
+  <button class="admin-exit-btn" onclick="exitAdmin()">退出管理</button>
+</div>
+
+<!-- 上传提示 -->
+<div class="upload-toast" id="uploadToast">
+  <div class="upload-spinner"></div>
+  <span>正在上传图片...</span>
+</div>
 
 <div class="container">
 
@@ -154,7 +356,7 @@ body {
   <div class="section-title">⭐ 核心功能</div>
   <div class="grid">
     <a class="card" href="index.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#ffe0e8,#ffc0d0);">
+      <div class="card-icon" data-card-id="banji" style="background:linear-gradient(135deg,#ffe0e8,#ffc0d0);">
         <span class="badge badge-main">主站</span>
         <svg viewBox="0 0 100 100"><circle cx="50" cy="40" r="25" fill="#ff6b9d"/><ellipse cx="50" cy="70" rx="30" ry="20" fill="#ff6b9d"/><circle cx="42" cy="35" r="4" fill="#fff"/><circle cx="58" cy="35" r="4" fill="#fff"/><path d="M 40 48 Q 50 55 60 48" stroke="#fff" stroke-width="2" fill="none"/></svg>
       </div>
@@ -170,7 +372,7 @@ body {
   <div class="grid">
 
     <a class="card" href="jiangyaoji.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#ff6b35,#8b0000);">
+      <div class="card-icon" data-card-id="jiangyaoji" style="background:linear-gradient(135deg,#ff6b35,#8b0000);">
         <span class="badge badge-hot">热门</span>
         <svg viewBox="0 0 100 100"><path d="M 30 70 Q 25 50 35 35 Q 40 25 50 30 Q 60 25 65 35 Q 75 50 70 70 Z" fill="#ffd700"/><circle cx="40" cy="45" r="5" fill="#ff0000"/><circle cx="60" cy="45" r="5" fill="#ff0000"/><path d="M 35 60 Q 50 65 65 60" stroke="#ff0000" stroke-width="3" fill="none"/></svg>
       </div>
@@ -181,7 +383,7 @@ body {
     </a>
 
     <a class="card" href="jiangmoji.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#2c1810,#5a2a1a);">
+      <div class="card-icon" data-card-id="jiangmoji" style="background:linear-gradient(135deg,#2c1810,#5a2a1a);">
         <span class="badge badge-hot">热门</span>
         <svg viewBox="0 0 100 100"><rect x="35" y="25" width="30" height="50" rx="3" fill="#8b4513"/><rect x="40" y="30" width="20" height="15" fill="#ffd700"/><line x1="50" y1="50" x2="50" y2="70" stroke="#c0c0c0" stroke-width="3"/><polygon points="45,70 55,70 50,80" fill="#c0c0c0"/></svg>
       </div>
@@ -192,7 +394,7 @@ body {
     </a>
 
     <a class="card" href="zhenjiadasheng.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#ffd700,#ff8c00);">
+      <div class="card-icon" data-card-id="zhenjiadasheng" style="background:linear-gradient(135deg,#ffd700,#ff8c00);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><circle cx="50" cy="45" r="28" fill="#daa520"/><circle cx="40" cy="40" r="6" fill="#fff"/><circle cx="60" cy="40" r="6" fill="#fff"/><circle cx="40" cy="40" r="3" fill="#000"/><circle cx="60" cy="40" r="3" fill="#000"/><path d="M 35 55 Q 50 62 65 55" stroke="#8b4513" stroke-width="3" fill="none"/><path d="M 30 25 Q 35 15 45 20" stroke="#ffd700" stroke-width="4" fill="none"/></svg>
       </div>
@@ -203,7 +405,7 @@ body {
     </a>
 
     <a class="card" href="wulinzhengba.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#e8ddce,#c9b89c);">
+      <div class="card-icon" data-card-id="wulinzhengba" style="background:linear-gradient(135deg,#e8ddce,#c9b89c);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><circle cx="50" cy="35" r="15" fill="#8b4513"/><rect x="40" y="50" width="20" height="30" fill="#f5f5dc"/><line x1="30" y1="55" x2="40" y2="60" stroke="#8b4513" stroke-width="4"/><line x1="70" y1="55" x2="60" y2="60" stroke="#8b4513" stroke-width="4"/><path d="M 25 70 L 35 60" stroke="#c0c0c0" stroke-width="3"/></svg>
       </div>
@@ -214,7 +416,7 @@ body {
     </a>
 
     <a class="card" href="damaoxian.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#667eea,#764ba2);">
+      <div class="card-icon" data-card-id="damaoxian" style="background:linear-gradient(135deg,#667eea,#764ba2);">
         <span class="badge badge-hot">热门</span>
         <svg viewBox="0 0 100 100"><rect x="30" y="40" width="40" height="35" rx="5" fill="#4169e1"/><circle cx="50" cy="30" r="15" fill="#ffdbac"/><rect x="35" y="75" width="8" height="15" fill="#4169e1"/><rect x="57" y="75" width="8" height="15" fill="#4169e1"/><text x="50" y="60" font-size="20" fill="#fff" text-anchor="middle" font-weight="bold">?</text></svg>
       </div>
@@ -225,7 +427,7 @@ body {
     </a>
 
     <a class="card" href="mengdaxia.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#FFB6C1,#FF69B4);">
+      <div class="card-icon" data-card-id="mengdaxia" style="background:linear-gradient(135deg,#FFB6C1,#FF69B4);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><circle cx="35" cy="50" r="20" fill="#ff6b6b"/><circle cx="65" cy="50" r="20" fill="#4169e1"/><circle cx="30" cy="45" r="4" fill="#fff"/><circle cx="40" cy="45" r="4" fill="#fff"/><circle cx="60" cy="45" r="4" fill="#fff"/><circle cx="70" cy="45" r="4" fill="#fff"/><path d="M 30 55 Q 35 60 40 55" stroke="#fff" stroke-width="2" fill="none"/><path d="M 60 55 Q 65 60 70 55" stroke="#fff" stroke-width="2" fill="none"/></svg>
       </div>
@@ -236,7 +438,7 @@ body {
     </a>
 
     <a class="card" href="bahe.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#ff9a56,#e74c3c);">
+      <div class="card-icon" data-card-id="bahe" style="background:linear-gradient(135deg,#ff9a56,#e74c3c);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><line x1="20" y1="50" x2="80" y2="50" stroke="#8b4513" stroke-width="6"/><circle cx="25" cy="50" r="12" fill="#ff6b6b"/><circle cx="75" cy="50" r="12" fill="#4169e1"/><circle cx="22" cy="47" r="2" fill="#fff"/><circle cx="28" cy="47" r="2" fill="#fff"/><circle cx="72" cy="47" r="2" fill="#fff"/><circle cx="78" cy="47" r="2" fill="#fff"/></svg>
       </div>
@@ -253,7 +455,7 @@ body {
   <div class="grid">
 
     <a class="card" href="shendouluo.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#1a0000,#4a0000);">
+      <div class="card-icon" data-card-id="shendouluo" style="background:linear-gradient(135deg,#1a0000,#4a0000);">
         <span class="badge badge-hot">热门</span>
         <svg viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="35" ry="25" fill="#4a4a4a"/><rect x="45" y="25" width="10" height="20" fill="#666"/><circle cx="50" cy="20" r="8" fill="#ff0000"/><line x1="30" y1="50" x2="20" y2="45" stroke="#c0c0c0" stroke-width="3"/><line x1="70" y1="50" x2="80" y2="45" stroke="#c0c0c0" stroke-width="3"/></svg>
       </div>
@@ -264,7 +466,7 @@ body {
     </a>
 
     <a class="card" href="zhandouluo.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#1a0505,#3a0a0a);">
+      <div class="card-icon" data-card-id="zhandouluo" style="background:linear-gradient(135deg,#1a0505,#3a0a0a);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><circle cx="50" cy="40" r="18" fill="#2c5f2d"/><rect x="40" y="58" width="20" height="25" fill="#3a7d44"/><line x1="30" y1="55" x2="20" y2="65" stroke="#2c5f2d" stroke-width="5"/><line x1="70" y1="55" x2="80" y2="65" stroke="#2c5f2d" stroke-width="5"/><rect x="75" y="60" width="15" height="4" fill="#666"/></svg>
       </div>
@@ -281,7 +483,7 @@ body {
   <div class="grid">
 
     <a class="card" href="starrollcall.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#0a0a2a,#1a1a5a);">
+      <div class="card-icon" data-card-id="starrollcall" style="background:linear-gradient(135deg,#0a0a2a,#1a1a5a);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="#1a1a3a"/><circle cx="50" cy="50" r="30" fill="#0a0a2a"/><text x="50" y="45" font-size="16" fill="#ffd700" text-anchor="middle">★</text><text x="35" y="60" font-size="12" fill="#fff" text-anchor="middle">张</text><text x="65" y="60" font-size="12" fill="#fff" text-anchor="middle">李</text><circle cx="50" cy="50" r="3" fill="#ffd700"/></svg>
       </div>
@@ -292,7 +494,7 @@ body {
     </a>
 
     <a class="card" href="aoyoutiandi.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#87CEEB,#4A90A4);">
+      <div class="card-icon" data-card-id="aoyoutiandi" style="background:linear-gradient(135deg,#87CEEB,#4A90A4);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="25" ry="15" fill="#8b4513"/><circle cx="50" cy="35" r="12" fill="#ffdbac"/><path d="M 30 45 Q 20 35 25 25" stroke="#8b4513" stroke-width="3" fill="none"/><path d="M 70 45 Q 80 35 75 25" stroke="#8b4513" stroke-width="3" fill="none"/><circle cx="45" cy="33" r="2" fill="#000"/><circle cx="55" cy="33" r="2" fill="#000"/></svg>
       </div>
@@ -309,7 +511,7 @@ body {
   <div class="grid">
 
     <a class="card" href="shuxuezuotu.html" target="_blank">
-      <div class="card-icon" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
+      <div class="card-icon" data-card-id="shuxuezuotu" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
         <span class="badge badge-new">新</span>
         <svg viewBox="0 0 100 100"><line x1="20" y1="80" x2="80" y2="80" stroke="#333" stroke-width="2"/><line x1="20" y1="80" x2="20" y2="20" stroke="#333" stroke-width="2"/><path d="M 20 80 Q 50 20 80 80" stroke="#4169e1" stroke-width="3" fill="none"/><circle cx="50" cy="50" r="15" stroke="#ff6b6b" stroke-width="2" fill="none"/></svg>
       </div>
@@ -327,5 +529,253 @@ body {
 
 </div>
 
+<!-- 编辑按钮 -->
+<button class="edit-trigger" onclick="showTokenModal()" title="管理员编辑">
+  <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+</button>
+
+<!-- Token验证模态框 -->
+<div class="modal-overlay" id="tokenModal">
+  <div class="modal">
+    <h2>🔐 管理员验证</h2>
+    <input type="password" id="tokenInput" placeholder="请输入 GitHub Token" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="hideTokenModal()">取消</button>
+      <button class="btn-confirm" onclick="verifyToken()">验证</button>
+    </div>
+  </div>
+</div>
+
+<!-- 隐藏的文件输入 -->
+<input type="file" id="imageInput" accept="image/*" style="display:none">
+<script>
+let githubToken = '';
+let currentEditCard = null;
+
+// 页面加载时检查自定义图片
+window.addEventListener('DOMContentLoaded', () => {
+  loadCustomImages();
+});
+
+// 加载自定义图片
+async function loadCustomImages() {
+  const cards = document.querySelectorAll('.card-icon[data-card-id]');
+  
+  // 获取版本号文件用于缓存破坏
+  let version = Date.now();
+  try {
+    const vResp = await fetch('/home-cards/version.json?t=' + Date.now());
+    if (vResp.ok) {
+      const vData = await vResp.json();
+      version = vData.timestamp || version;
+    }
+  } catch (e) {}
+  
+  // 为每个卡片尝试加载自定义图片
+  cards.forEach(card => {
+    const cardId = card.getAttribute('data-card-id');
+    const img = new Image();
+    img.onload = () => {
+      // 图片加载成功，替换SVG
+      card.innerHTML = `<img src="${img.src}" alt="${cardId}">`;
+      // 重新添加徽章
+      const badge = card.querySelector('.badge');
+      if (badge) card.appendChild(badge);
+    };
+    img.src = `/home-cards/${cardId}.png?t=${version}`;
+  });
+}
+
+// 显示Token输入框
+function showTokenModal() {
+  document.getElementById('tokenModal').classList.add('show');
+  document.getElementById('tokenInput').value = '';
+  document.getElementById('tokenInput').focus();
+}
+
+// 隐藏Token输入框
+function hideTokenModal() {
+  document.getElementById('tokenModal').classList.remove('show');
+}
+
+// 验证Token
+async function verifyToken() {
+  const token = document.getElementById('tokenInput').value.trim();
+  if (!token) {
+    alert('请输入Token');
+    return;
+  }
+  
+  try {
+    const resp = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': `token ${token}` }
+    });
+    
+    if (resp.ok) {
+      const user = await resp.json();
+      // 验证是否是仓库所有者或有权限
+      const repoResp = await fetch('https://api.github.com/repos/mhxdwwa/112', {
+        headers: { 'Authorization': `token ${token}` }
+      });
+      
+      if (repoResp.ok) {
+        githubToken = token;
+        hideTokenModal();
+        enterAdminMode();
+      } else {
+        alert('Token无效或没有仓库访问权限');
+      }
+    } else {
+      alert('Token验证失败，请检查Token是否正确');
+    }
+  } catch (e) {
+    alert('验证失败：' + e.message);
+  }
+}
+
+// 进入管理员模式
+function enterAdminMode() {
+  document.body.classList.add('admin-mode');
+  document.getElementById('adminBanner').classList.add('show');
+  
+  // 为每个卡片添加点击事件
+  const cards = document.querySelectorAll('.card-icon[data-card-id]');
+  cards.forEach(card => {
+    card.addEventListener('click', handleCardClick);
+  });
+}
+
+// 退出管理员模式
+function exitAdmin() {
+  document.body.classList.remove('admin-mode');
+  document.getElementById('adminBanner').classList.remove('show');
+  githubToken = '';
+  
+  const cards = document.querySelectorAll('.card-icon[data-card-id]');
+  cards.forEach(card => {
+    card.removeEventListener('click', handleCardClick);
+  });
+}
+
+// 处理卡片点击
+function handleCardClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  currentEditCard = this;
+  document.getElementById('imageInput').click();
+}
+
+// 监听文件选择
+document.getElementById('imageInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file || !currentEditCard) return;
+  
+  const cardId = currentEditCard.getAttribute('data-card-id');
+  const toast = document.getElementById('uploadToast');
+  toast.classList.add('show');
+  
+  try {
+    // 转换为base64
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target.result.split(',')[1];
+      
+      // 获取文件的SHA（如果存在）
+      let sha = null;
+      try {
+        const getResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.png`, {
+          headers: { 'Authorization': `token ${githubToken}` }
+        });
+        if (getResp.ok) {
+          const data = await getResp.json();
+          sha = data.sha;
+        }
+      } catch (e) {}
+      
+      // 上传到GitHub
+      const body = {
+        message: `Update card image: ${cardId}`,
+        content: base64,
+        branch: 'master'
+      };
+      if (sha) body.sha = sha;
+      
+      const putResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.png`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${githubToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      
+      if (putResp.ok) {
+        // 更新版本号文件
+        await updateVersionFile();
+        
+        // 更新本地显示
+        const img = new Image();
+        img.onload = () => {
+          currentEditCard.innerHTML = `<img src="${img.src}" alt="${cardId}">`;
+          toast.classList.remove('show');
+          alert('图片上传成功！所有访客将在几秒后看到更新。');
+        };
+        img.src = `/home-cards/${cardId}.png?t=${Date.now()}`;
+      } else {
+        const err = await putResp.json();
+        alert('上传失败：' + (err.message || '未知错误'));
+        toast.classList.remove('show');
+      }
+    };
+    reader.readAsDataURL(file);
+  } catch (e) {
+    alert('上传失败：' + e.message);
+    toast.classList.remove('show');
+  }
+  
+  // 重置input
+  e.target.value = '';
+});
+
+// 更新版本号文件
+async function updateVersionFile() {
+  const timestamp = Date.now();
+  const content = btoa(JSON.stringify({ timestamp }));
+  
+  let sha = null;
+  try {
+    const getResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/version.json', {
+      headers: { 'Authorization': `token ${githubToken}` }
+    });
+    if (getResp.ok) {
+      const data = await getResp.json();
+      sha = data.sha;
+    }
+  } catch (e) {}
+  
+  const body = {
+    message: 'Update version timestamp',
+    content: content,
+    branch: 'master'
+  };
+  if (sha) body.sha = sha;
+  
+  await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/version.json', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `token ${githubToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+}
+
+// 回车键提交Token
+document.getElementById('tokenInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    verifyToken();
+  }
+});
+</script>
 </body>
 </html>
