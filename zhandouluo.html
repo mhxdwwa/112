@@ -7,6 +7,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Courier New',monospace;user-select:none;-webkit-user-select:none}
+<style>
 canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crosshair}
 #menu{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(180deg,#000 0%,#0a0000 40%,#1a0505 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100}
 #menu h1{color:#ff2200;font-size:min(12vw,120px);text-shadow:0 0 40px #f00,0 0 80px #800,4px 4px 0 #000;letter-spacing:12px;font-weight:900;animation:tp 2s ease-in-out infinite}
@@ -15,6 +16,7 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crossh
 #menu .info{color:#888;font-size:14px;margin-top:30px;letter-spacing:2px}
 #menu button{padding:18px 60px;margin:6px;font-size:min(3.5vw,30px);cursor:pointer;background:linear-gradient(180deg,#2a0000,#1a0000);color:#fff;border:2px solid #c00;font-family:'Courier New',monospace;letter-spacing:4px;text-transform:uppercase;transition:all .15s;position:relative;overflow:hidden}
 #menu button:hover{background:linear-gradient(180deg,#500,#300);border-color:#f44;box-shadow:0 0 30px rgba(255,0,0,0.4)}
+</style>
 #menu button::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(transparent,rgba(255,255,255,0.03),transparent);transform:rotate(45deg);animation:btnShine 3s infinite}
 @keyframes btnShine{0%{transform:translateX(-100%) rotate(45deg)}100%{transform:translateX(100%) rotate(45deg)}}
 #hud{position:fixed;top:0;left:0;width:100%;z-index:50;pointer-events:none;padding:12px 24px;display:flex;justify-content:space-between;align-items:flex-start}
@@ -73,7 +75,6 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crossh
 #gameToast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 </style>
 
-/* === PRELOADER === */
 #game-preloader{position:fixed;inset:0;z-index:99999;background:linear-gradient(180deg,#0a0a0a,#1a0a0a);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s;font-family:'Courier New',monospace}
 #game-preloader.fade-out{opacity:0;pointer-events:none}
 #game-preloader .pl-title{font-size:clamp(20px,4vw,36px);color:#ff6b35;font-weight:bold;margin-bottom:24px;text-shadow:0 0 20px rgba(255,107,53,.5);letter-spacing:4px}
@@ -81,6 +82,7 @@ canvas{display:block;width:100vw;height:100vh;image-rendering:auto;cursor:crossh
 #game-preloader .pl-bar{height:100%;width:0%;background:linear-gradient(90deg,#ff6b35,#ff3535);border-radius:6px;transition:width .2s}
 #game-preloader .pl-text{margin-top:14px;font-size:clamp(12px,2vw,16px);color:#aaa}
 #game-preloader .pl-percent{color:#ff6b35;font-weight:bold}
+</style>
 </head>
 <body>
 <div id="game-preloader">

@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+QingKe+HuangYou&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+<style>
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'ZCOOL QingKe HuangYou','Rajdhani',sans-serif;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none}
 canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
 .screen{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10;pointer-events:auto}
@@ -15,6 +16,7 @@ canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
 #menuScreen h1{font-family:'Ma Shan Zheng',cursive;font-size:clamp(36px,9vw,80px);font-weight:900;letter-spacing:8px;background:linear-gradient(180deg,#ffd700,#ff6600);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 40px rgba(255,180,0,.5);margin-bottom:8px;line-height:1.2}
 #menuScreen .subtitle{font-family:'ZCOOL QingKe HuangYou',sans-serif;font-size:clamp(12px,2.8vw,20px);color:#ffd700;letter-spacing:6px;margin-bottom:40px;text-shadow:0 0 20px rgba(255,200,0,.6)}
 .btn{font-family:'ZCOOL QingKe HuangYou',sans-serif;font-size:clamp(14px,3vw,20px);padding:14px 40px;margin:8px;border:1px solid #ffd700;background:rgba(255,200,0,.08);color:#ffd700;cursor:pointer;letter-spacing:3px;transition:all .2s;min-width:220px;text-align:center;border-radius:4px}
+</style>
 .btn:hover,.btn:active{background:rgba(255,200,0,.25);box-shadow:0 0 30px rgba(255,180,0,.4);transform:scale(1.04)}
 .btn.disabled-btn{opacity:0.4;cursor:not-allowed;pointer-events:none;border-color:#666;color:#999;background:rgba(100,100,100,.08)}
 .btn.disabled-btn:hover{transform:none;box-shadow:none;background:rgba(100,100,100,.08)}
@@ -83,7 +85,6 @@ canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
 .credits-text{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);font-family:'ZCOOL QingKe HuangYou','Ma Shan Zheng',sans-serif;color:#ffd700;font-size:clamp(18px,5vw,26px);font-weight:bold;text-shadow:0 0 8px rgba(0,0,0,0.5),0 0 12px rgba(255,200,0,0.6);pointer-events:none;z-index:100;white-space:nowrap;background:rgba(20,10,0,0.55);padding:6px 20px;border-radius:60px;backdrop-filter:blur(4px);letter-spacing:2px;border:1px solid rgba(255,215,0,0.5);}
 </style>
 
-/* === PRELOADER === */
 #game-preloader{position:fixed;inset:0;z-index:99999;background:linear-gradient(180deg,#0a0a0a,#1a0a0a);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s;font-family:'Courier New',monospace}
 #game-preloader.fade-out{opacity:0;pointer-events:none}
 #game-preloader .pl-title{font-size:clamp(20px,4vw,36px);color:#ff6b35;font-weight:bold;margin-bottom:24px;text-shadow:0 0 20px rgba(255,107,53,.5);letter-spacing:4px}
@@ -91,6 +92,7 @@ canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
 #game-preloader .pl-bar{height:100%;width:0%;background:linear-gradient(90deg,#ff6b35,#ff3535);border-radius:6px;transition:width .2s}
 #game-preloader .pl-text{margin-top:14px;font-size:clamp(12px,2vw,16px);color:#aaa}
 #game-preloader .pl-percent{color:#ff6b35;font-weight:bold}
+</style>
 </head>
 <body>
 <div id="game-preloader">
