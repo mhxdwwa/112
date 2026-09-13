@@ -551,112 +551,80 @@ body {
 <script>
 let githubToken = '';
 let currentEditCard = null;
+let cardsData = {}; // 缓存所有卡片圖片數據
+let cardsDataSha = null; // JSON文件的SHA
 
-// 页面加载时检查自定义图片
+// 頁面加載時檢查自定義圖片
 window.addEventListener('DOMContentLoaded', () => {
   loadCustomImages();
 });
 
-// 加载自定义图片
+// 加載自定義圖片 - 只請求一次JSON
 async function loadCustomImages() {
-  const cards = document.querySelectorAll('.card-icon[data-card-id]');
-  
-  // 获取版本号文件用于缓存破坏
-  let version = Date.now();
   try {
-    const vResp = await fetch('/home-cards/version.json?t=' + Date.now());
-    if (vResp.ok) {
-      const vData = await vResp.json();
-      version = vData.timestamp || version;
+    const resp = await fetch('/home-cards/cards-data.json?t=' + Date.now());
+    if (resp.ok) {
+      cardsData = await resp.json();
+      const cards = document.querySelectorAll('.card-icon[data-card-id]');
+      cards.forEach(card => {
+        const cardId = card.getAttribute('data-card-id');
+        if (cardsData[cardId]) {
+          const badge = card.querySelector('.badge');
+          const badgeHTML = badge ? badge.outerHTML : '';
+          card.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${cardsData[cardId]}" alt="${cardId}">`;
+        }
+      });
     }
   } catch (e) {}
-  
-  // 为每个卡片尝试加载自定义图片
-  cards.forEach(card => {
-    const cardId = card.getAttribute('data-card-id');
-    const img = new Image();
-    img.onload = () => {
-      // 图片加载成功，替换SVG
-      const badge = card.querySelector('.badge');
-      const badgeHTML = badge ? badge.outerHTML : '';
-      card.innerHTML = badgeHTML + `<img src="${img.src}" alt="${cardId}">`;
-    };
-    img.src = `/home-cards/${cardId}.jpg?t=${version}`;
-  });
 }
 
-// 显示Token输入框
+// 顯示Token輸入框
 function showTokenModal() {
   document.getElementById('tokenModal').classList.add('show');
   document.getElementById('tokenInput').value = '';
   document.getElementById('tokenInput').focus();
 }
 
-// 隐藏Token输入框
 function hideTokenModal() {
   document.getElementById('tokenModal').classList.remove('show');
 }
 
-// 验证Token
+// 驗證Token
 async function verifyToken() {
   const token = document.getElementById('tokenInput').value.trim();
-  if (!token) {
-    alert('请输入Token');
-    return;
-  }
+  if (!token) { alert('請輸入Token'); return; }
   
   try {
-    const resp = await fetch('https://api.github.com/user', {
+    const resp = await fetch('https://api.github.com/repos/mhxdwwa/112', {
       headers: { 'Authorization': `token ${token}` }
     });
-    
     if (resp.ok) {
-      const user = await resp.json();
-      // 验证是否是仓库所有者或有权限
-      const repoResp = await fetch('https://api.github.com/repos/mhxdwwa/112', {
-        headers: { 'Authorization': `token ${token}` }
-      });
-      
-      if (repoResp.ok) {
-        githubToken = token;
-        hideTokenModal();
-        enterAdminMode();
-      } else {
-        alert('Token无效或没有仓库访问权限');
-      }
+      githubToken = token;
+      hideTokenModal();
+      enterAdminMode();
     } else {
-      alert('Token验证失败，请检查Token是否正确');
+      alert('Token無效或沒有倉庫訪問權限');
     }
   } catch (e) {
-    alert('验证失败：' + e.message);
+    alert('驗證失敗：' + e.message);
   }
 }
 
-// 进入管理员模式
 function enterAdminMode() {
   document.body.classList.add('admin-mode');
   document.getElementById('adminBanner').classList.add('show');
-  
-  // 为每个卡片添加点击事件
   const cards = document.querySelectorAll('.card-icon[data-card-id]');
-  cards.forEach(card => {
-    card.addEventListener('click', handleCardClick);
-  });
+  cards.forEach(card => card.addEventListener('click', handleCardClick));
 }
 
-// 退出管理员模式
 function exitAdmin() {
   document.body.classList.remove('admin-mode');
   document.getElementById('adminBanner').classList.remove('show');
   githubToken = '';
-  
   const cards = document.querySelectorAll('.card-icon[data-card-id]');
-  cards.forEach(card => {
-    card.removeEventListener('click', handleCardClick);
-  });
+  cards.forEach(card => card.removeEventListener('click', handleCardClick));
 }
 
-// 处理卡片点击
 function handleCardClick(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -664,34 +632,25 @@ function handleCardClick(e) {
   document.getElementById('imageInput').click();
 }
 
-// 压缩图片（用canvas缩放）
-function compressImage(file, maxWidth = 400, quality = 0.8) {
+// 壓縮圖片 - 250px足夠，卡片顯示區域只有130px高
+function compressImage(file, maxWidth = 250, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      // 计算缩放比例
       let w = img.width, h = img.height;
-      if (w > maxWidth) {
-        h = Math.round(h * maxWidth / w);
-        w = maxWidth;
-      }
-      // 画到canvas
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
       const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      // 导出为JPEG（更小体积）
-      const dataUrl = canvas.toDataURL('image/jpeg', quality);
-      const base64 = dataUrl.split(',')[1];
-      resolve({ base64, size: base64.length });
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const base64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+      resolve({ base64, sizeKB: Math.round(base64.length * 0.75 / 1024) });
     };
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });
 }
 
-// 监听文件选择
+// 監聽文件選擇 - 只需2次API調用
 document.getElementById('imageInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file || !currentEditCard) return;
@@ -699,36 +658,38 @@ document.getElementById('imageInput').addEventListener('change', async (e) => {
   const cardId = currentEditCard.getAttribute('data-card-id');
   const toast = document.getElementById('uploadToast');
   const toastText = toast.querySelector('span');
-  toastText.textContent = '正在压缩图片...';
+  toastText.textContent = '正在壓縮圖片...';
   toast.classList.add('show');
   
   try {
-    // 先压缩图片
-    const { base64, size } = await compressImage(file, 400, 0.8);
-    const sizeKB = Math.round(size * 0.75 / 1024); // base64转实际大小
-    toastText.textContent = `压缩完成 (${sizeKB}KB)，正在上传...`;
+    const { base64, sizeKB } = await compressImage(file);
+    toastText.textContent = `壓縮至${sizeKB}KB，正在同步到GitHub...`;
     
-    // 获取文件的SHA（如果存在）
-    let sha = null;
-    try {
-      const getResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.jpg`, {
-        headers: { 'Authorization': `token ${githubToken}` }
-      });
-      if (getResp.ok) {
-        const data = await getResp.json();
-        sha = data.sha;
-      }
-    } catch (e) {}
+    // 更新本地緩存
+    cardsData[cardId] = base64;
     
-    // 上传到GitHub
+    // 只調用一次API：獲取SHA + 更新JSON文件
+    if (!cardsDataSha) {
+      try {
+        const getResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
+          headers: { 'Authorization': `token ${githubToken}` }
+        });
+        if (getResp.ok) {
+          const data = await getResp.json();
+          cardsDataSha = data.sha;
+        }
+      } catch (e) {}
+    }
+    
+    const jsonContent = btoa(unescape(encodeURIComponent(JSON.stringify(cardsData))));
     const body = {
-      message: `Update card image: ${cardId}`,
-      content: base64,
+      message: `Update card: ${cardId}`,
+      content: jsonContent,
       branch: 'master'
     };
-    if (sha) body.sha = sha;
+    if (cardsDataSha) body.sha = cardsDataSha;
     
-    const putResp = await fetch(`https://api.github.com/repos/mhxdwwa/112/contents/home-cards/${cardId}.jpg`, {
+    const putResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/cards-data.json', {
       method: 'PUT',
       headers: {
         'Authorization': `token ${githubToken}`,
@@ -738,72 +699,31 @@ document.getElementById('imageInput').addEventListener('change', async (e) => {
     });
     
     if (putResp.ok) {
-      // 更新版本号文件
-      await updateVersionFile();
+      const respData = await putResp.json();
+      cardsDataSha = respData.content.sha;
       
-      // 更新本地显示
-      const img = new Image();
-      img.onload = () => {
-        currentEditCard.innerHTML = `<img src="${img.src}" alt="${cardId}">`;
-        toast.classList.remove('show');
-        toastText.textContent = '正在上传图片...';
-        alert(`上传成功！图片已压缩至 ${sizeKB}KB，所有访客将在几秒后看到更新。`);
-      };
-      img.src = `/home-cards/${cardId}.jpg?t=${Date.now()}`;
+      // 立即更新本地顯示（用base64，不需要等CDN）
+      const badge = currentEditCard.querySelector('.badge');
+      const badgeHTML = badge ? badge.outerHTML : '';
+      currentEditCard.innerHTML = badgeHTML + `<img src="data:image/jpeg;base64,${base64}" alt="${cardId}">`;
+      
+      toast.classList.remove('show');
+      toastText.textContent = '正在同步到GitHub...';
     } else {
       const err = await putResp.json();
-      alert('上传失败：' + (err.message || '未知错误'));
+      alert('上傳失敗：' + (err.message || '未知錯誤'));
       toast.classList.remove('show');
-      toastText.textContent = '正在上传图片...';
     }
   } catch (e) {
-    alert('上传失败：' + e.message);
+    alert('上傳失敗：' + e.message);
     toast.classList.remove('show');
-    toastText.textContent = '正在上传图片...';
   }
   
-  // 重置input
   e.target.value = '';
 });
 
-// 更新版本号文件
-async function updateVersionFile() {
-  const timestamp = Date.now();
-  const content = btoa(JSON.stringify({ timestamp }));
-  
-  let sha = null;
-  try {
-    const getResp = await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/version.json', {
-      headers: { 'Authorization': `token ${githubToken}` }
-    });
-    if (getResp.ok) {
-      const data = await getResp.json();
-      sha = data.sha;
-    }
-  } catch (e) {}
-  
-  const body = {
-    message: 'Update version timestamp',
-    content: content,
-    branch: 'master'
-  };
-  if (sha) body.sha = sha;
-  
-  await fetch('https://api.github.com/repos/mhxdwwa/112/contents/home-cards/version.json', {
-    method: 'PUT',
-    headers: {
-      'Authorization': `token ${githubToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-}
-
-// 回车键提交Token
 document.getElementById('tokenInput').addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    verifyToken();
-  }
+  if (e.key === 'Enter') verifyToken();
 });
 </script>
 </body>
