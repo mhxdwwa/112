@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>🏆 拔河答题大挑战 · 正逆序导入版</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+        body {
+            font-family: 'PingFang SC','Noto Sans SC','Helvetica Neue',sans-serif;
+            background:#0d0d1a; display:flex; justify-content:center; align-items:center;
+            height:100vh; height:100dvh; touch-action:manipulation; overflow:hidden;
+        }
+        .game-container {
+            width:100%; height:100%; max-width:1900px; background:#1a1a2e;
+            display:flex; flex-direction:column; position:relative;
+        }
+        .arena-section {
+            position:relative; flex:1 1 45%;
+            background: linear-gradient(180deg, #b8dff5 0%, #eaf6fc 30%, #c8dfb8 65%, #5d8a3e 100%);
+            overflow:hidden;
+        }
+        .arena-section canvas { position:absolute; top:0; left:0; width:100%; height:100%; display:block; }
+        .info-overlay {
+            position:absolute; top:10px; left:10px; right:10px;
+            display:flex; justify-content:space-between; align-items:center;
+            pointer-events:none; z-index:10;
+        }
+        .score-tag {
+            background:rgba(0,0,0,0.75); padding:8px 22px; border-radius:24px;
+            font-size:1.3rem; font-weight:700; color:white;
+            backdrop-filter:blur(4px);
+        }
+        .red-tag { color:#ff6b6b; border:2px solid rgba(255,107,107,0.4); }
+        .blue-tag { color:#5dade2; border:2px solid rgba(93,173,226,0.4); }
+        .timer-tag {
+            background:rgba(0,0,0,0.8); padding:8px 24px; border-radius:30px;
+            font-size:1.4rem; font-weight:700; color:#fff;
+            border:2px solid rgba(255,255,255,0.4);
+        }
+        .timer-tag.warning { border-color:#f39c12; color:#f39c12; }
+        .timer-tag.danger { border-color:#e74c3c; color:#e74c3c; }
+
+        .answer-section {
+            flex:1 1 55%; display:flex; gap:16px; padding:12px;
+            background:#f0f2f5; position:relative;
+        }
+        .team-panel {
+            flex:1; background:#ffffff; border-radius:20px; padding:12px;
+            display:flex; flex-direction:column; box-shadow:0 8px 20px rgba(0,0,0,0.05);
+            border:2px solid #e0e0e0;
+        }
+        .team-panel.red { border-top:4px solid #e74c3c; }
+        .team-panel.blue { border-top:4px solid #3498db; }
+        .team-label { display: none; }
+        .question-display {
+            background:#f8f9fa; border-radius:16px; padding:8px 12px;
+            font-size: clamp(3rem, 7vw, 5rem); font-weight:700; color:#1e1e1e;
+            text-align:center; line-height:1.2; flex:4; display:flex;
+            align-items:center; justify-content:center; word-break: break-word;
+            margin-bottom:6px; min-height:0;
+        }
+        .options-row {
+            display:flex; gap:6px; flex:1; align-items:stretch; min-height:40px;
+        }
+        .opt-btn {
+            flex:1; background:#ffffff; border:2px solid #d0d0d0; border-radius:10px;
+            font-size:1.2rem; font-weight:600; color:#333; cursor:pointer;
+            transition:0.1s; display:flex; align-items:center; justify-content:center;
+            padding:2px 4px; box-shadow:0 2px 4px rgba(0,0,0,0.03);
+        }
+        .opt-btn:active { transform:scale(0.97); background:#f0f0f0; }
+        .opt-btn.correct-flash { background:#2ecc71 !important; color:white !important; border-color:#27ae60 !important; }
+        .opt-btn.wrong-flash { background:#e74c3c !important; color:white !important; border-color:#c0392b !important; }
+        .opt-btn:disabled { opacity:0.6; pointer-events:none; }
+        .status-msg { text-align:center; font-size:0.75rem; color:#777; margin-top:2px; }
+
+        .answer-result-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; justify-content:center; align-items:center;
+            background:rgba(0,0,0,0.7); backdrop-filter:blur(6px);
+            z-index:20; flex-direction:column; gap:16px;
+        }
+        .answer-result-overlay .result-title { font-size:2.2rem; font-weight:900; color:white; }
+        .answer-result-overlay .result-detail { font-size:1.1rem; color:#ddd; }
+
+        .review-panel {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.9); z-index:40; display:none;
+            flex-direction:column; padding:20px; color:white;
+        }
+        .review-panel .review-header {
+            display:flex; justify-content:center; gap:20px; margin-bottom:15px;
+        }
+        .review-panel .team-tab {
+            padding:12px 36px; border-radius:30px; font-weight:700; cursor:pointer;
+            background:rgba(255,255,255,0.2); font-size:1.4rem;
+        }
+        .review-panel .team-tab.active { background:#f39c12; color:#000; }
+        .review-list {
+            flex:1; overflow-y:auto; display:grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap:10px;
+        }
+        .review-card {
+            background:rgba(255,255,255,0.1); border-radius:12px; padding:14px;
+            border-left:5px solid #2ecc71; cursor:pointer; transition:0.2s;
+        }
+        .review-card:hover { background:rgba(255,255,255,0.2); }
+        .review-card.wrong { border-left-color:#e74c3c; }
+        .review-card .question-text { font-size:1.4rem; margin-bottom:6px; font-weight:700; }
+        .review-card .answer-info { font-size:1rem; color:#ccc; }
+
+        .fullscreen-card {
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            background:#000; z-index:100; display:none; justify-content:center;
+            align-items:center; flex-direction:column; padding:40px;
+            cursor:pointer;
+        }
+        .fullscreen-card .big-question {
+            font-size: clamp(3rem, 8vw, 8rem); font-weight:900; color:#fff;
+            text-align:center; word-break: break-word; line-height:1.3;
+            margin-bottom:30px;
+        }
+        .fullscreen-card .big-answer {
+            font-size: clamp(2rem, 5vw, 5rem); color:#ddd; text-align:center;
+        }
+
+        .corner-menu-btn {
+            position:fixed; bottom:16px; right:16px; background:#f39c12;
+            border:none; padding:12px 24px; border-radius:40px;
+            font-size:1rem; font-weight:700; color:#000; cursor:pointer;
+            z-index:50; box-shadow:0 5px 15px rgba(0,0,0,0.3); display:none;
+        }
+        .corner-menu-btn.show { display:block; }
+
+        .overlay {
+            position:absolute; inset:0; background:rgba(10,10,30,0.88);
+            display:flex; align-items:center; justify-content:center;
+            z-index:30; flex-direction:column; gap:18px; backdrop-filter:blur(10px);
+        }
+        .overlay .main-title {
+            font-size:3.2rem; font-weight:900; color:#fff;
+            text-shadow: 0 0 30px rgba(255,200,50,0.6), 0 2px 6px rgba(0,0,0,0.5);
+            letter-spacing:4px;
+        }
+        .overlay .sub-title {
+            color:rgba(255,255,255,0.6); text-align:center; font-size:1rem;
+            margin-bottom:8px;
+        }
+        .menu-btn {
+            background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+            border:none; padding:14px 40px; border-radius:50px;
+            font-size:1.3rem; font-weight:700; cursor:pointer; transition:all 0.25s;
+            box-shadow:0 5px 20px rgba(0,0,0,0.2); display:flex; align-items:center; gap:10px;
+            color:#333; min-width:260px; justify-content:center;
+        }
+        .menu-btn:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(0,0,0,0.3); }
+        .menu-btn:active { transform:scale(0.96); }
+        .menu-btn:disabled { opacity:0.5; pointer-events:none; }
+        .menu-btn.start-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color:white; font-size:1.5rem; padding:16px 48px;
+            box-shadow: 0 5px 25px rgba(39,174,96,0.4);
+        }
+        .menu-btn.start-btn:hover { box-shadow: 0 8px 35px rgba(39,174,96,0.5); }
+        .countdown-num {
+            font-size:7rem; font-weight:900; color:white;
+            text-shadow:0 0 40px rgba(255,255,255,0.8); animation:count-pop 0.7s;
+        }
+        @keyframes count-pop { 0%{transform:scale(2.5);opacity:0;} 60%{transform:scale(0.9);opacity:1;} }
+    </style>
+</head>
+<body>
+<div class="game-container" id="gameContainer">
+    <div class="arena-section" id="arenaSection">
+        <canvas id="arenaCanvas"></canvas>
+        <div class="info-overlay">
+            <div class="score-tag red-tag" id="redScoreTag">🔴 0</div>
+            <div class="timer-tag" id="timerTag">90</div>
+            <div class="score-tag blue-tag" id="blueScoreTag">🔵 0</div>
+        </div>
+    </div>
+
+    <div class="answer-section" id="answerSection">
+        <div class="team-panel red" id="redPanel">
+            <div class="question-display" id="redQuestion"></div>
+            <div class="options-row" id="redOptions"></div>
+            <div class="status-msg" id="redStatus"></div>
+        </div>
+        <div class="team-panel blue" id="bluePanel">
+            <div class="question-display" id="blueQuestion"></div>
+            <div class="options-row" id="blueOptions"></div>
+            <div class="status-msg" id="blueStatus"></div>
+        </div>
+
+        <div class="answer-result-overlay" id="answerResultOverlay">
+            <div class="result-title" id="answerResultTitle"></div>
+            <div class="result-detail" id="answerResultDetail"></div>
+            <button class="menu-btn" id="reviewBtn">📋 查看答题情况</button>
+        </div>
+
+        <div class="review-panel" id="reviewPanel">
+            <div class="review-header">
+                <div class="team-tab active" data-team="red">🔴 红队</div>
+                <div class="team-tab" data-team="blue">🔵 蓝队</div>
+            </div>
+            <div class="review-list" id="reviewList"></div>
+            <button class="menu-btn" id="closeReviewBtn" style="margin:15px auto 0;">关闭回顾</button>
+        </div>
+    </div>
+
+    <div class="fullscreen-card" id="fullscreenCard">
+        <div class="big-question" id="bigQuestionText"></div>
+        <div class="big-answer" id="bigAnswerText"></div>
+    </div>
+
+    <button class="corner-menu-btn" id="cornerMenuBtn">🏠 返回主菜单</button>
+
+    <div class="overlay" id="mainOverlay">
+        <div style="font-size:4rem; margin-bottom:-4px;">🏆</div>
+        <div class="main-title">拔河答题大挑战</div>
+        <div class="sub-title">导入Excel题目，红蓝双方答题拔河对决</div>
+        <button class="menu-btn" id="downloadTemplateBtn">📥 下载Excel模板</button>
+        <button class="menu-btn" id="importBtn">📂 导入题目 (Excel)</button>
+        <button class="menu-btn start-btn" id="startGameBtn" disabled>⚡ 开始比赛</button>
+        <div id="importStatus" style="color:#f39c12; font-weight:600; font-size:1.1rem;"></div>
+    </div>
+
+    <div class="overlay" id="countdownOverlay" style="display:none;">
+        <div class="countdown-num" id="countdownNum">3</div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const canvas = document.getElementById('arenaCanvas');
+        const ctx = canvas.getContext('2d');
+        const timerTag = document.getElementById('timerTag');
+        const redScoreTag = document.getElementById('redScoreTag');
+        const blueScoreTag = document.getElementById('blueScoreTag');
+        const redQuestionEl = document.getElementById('redQuestion');
+        const blueQuestionEl = document.getElementById('blueQuestion');
+        const redOptionsEl = document.getElementById('redOptions');
+        const blueOptionsEl = document.getElementById('blueOptions');
+        const redStatusEl = document.getElementById('redStatus');
+        const blueStatusEl = document.getElementById('blueStatus');
+        const mainOverlay = document.getElementById('mainOverlay');
+        const importBtn = document.getElementById('importBtn');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const downloadTemplateBtn = document.getElementById('downloadTemplateBtn');
+        const importStatus = document.getElementById('importStatus');
+        const countdownOverlay = document.getElementById('countdownOverlay');
+        const countdownNum = document.getElementById('countdownNum');
+        const answerResultOverlay = document.getElementById('answerResultOverlay');
+        const answerResultTitle = document.getElementById('answerResultTitle');
+        const answerResultDetail = document.getElementById('answerResultDetail');
+        const reviewBtn = document.getElementById('reviewBtn');
+        const reviewPanel = document.getElementById('reviewPanel');
+        const reviewList = document.getElementById('reviewList');
+        const closeReviewBtn = document.getElementById('closeReviewBtn');
+        const cornerMenuBtn = document.getElementById('cornerMenuBtn');
+        const teamTabs = document.querySelectorAll('.team-tab');
+        const fullscreenCard = document.getElementById('fullscreenCard');
+        const bigQuestionText = document.getElementById('bigQuestionText');
+        const bigAnswerText = document.getElementById('bigAnswerText');
+
+        const CANVAS_W = 1900, CANVAS_H = 520;
+        canvas.width = CANVAS_W; canvas.height = CANVAS_H;
+
+        let audioCtx = null;
+        function getAudioCtx() { if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); return audioCtx; }
+        function playBeep(f,d,t='square',v=0.08){ try{ const ac=getAudioCtx(); const o=ac.createOscillator(); const g=ac.createGain(); o.type=t; o.frequency.setValueAtTime(f,ac.currentTime); g.gain.setValueAtTime(v,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+d); }catch(e){} }
+        function sfxCorrect() { playBeep(880,0.1); playBeep(1100,0.08); }
+        function sfxWrong() { playBeep(200,0.25,'triangle',0.1); }
+        function sfxCountdown() { playBeep(600,0.15,'sine',0.09); }
+
+        const audioLeft = new Audio('audio/左.mp3');
+        const audioRight = new Audio('audio/右.mp3');
+        const audioLeftSlip = new Audio('audio/左打滑.mp3');
+        const audioRightSlip = new Audio('audio/右打滑.mp3');
+        const audioDefeat = new Audio('audio/失败.mp3');
+        const audioVictory = new Audio('audio/胜利.mp3');
+        [audioLeft,audioRight,audioLeftSlip,audioRightSlip,audioDefeat,audioVictory].forEach(a=>a.preload='auto');
+
+        const INIT_POS=50, WIN_LEFT=18, WIN_RIGHT=82, ROPE_MOVE=5, PLAYERS_PER_TEAM=10, ROPE_PULL_DURATION=3000;
+        let gameState='menu';
+        let importedQuestions=[];
+        let targetRopePos=INIT_POS, displayRopePos=INIT_POS;
+        let redScore=0, blueScore=0;
+        let redQuestions=[], blueQuestions=[];
+        let redQIdx=0, blueQIdx=0;
+        let redLocked=false, blueLocked=false, redFinished=false, blueFinished=false;
+        let timeRemaining=90, timerInterval=null, animFrameId=null;
+        let particles=[], shiverTime=0;
+        let ropeMoving=false, isPulling=false;
+        let ropeMoveStart=INIT_POS, ropeMoveTarget=INIT_POS, ropeMoveStartTime=0;
+        let redFootShake=0, blueFootShake=0;
+        let redFootShakeTimer=null, blueFootShakeTimer=null;
+        let loserTeam=null, winnerTeam=null;
+        let isDraw=false;
+        let endAnimStartTime=0;
+        const DEFEAT_DURATION=3000, VICTORY_DURATION=5000;
+        let redAnswerLog = [];
+        let blueAnswerLog = [];
+
+        function generateTemplate(){
+            const header=['题目','正确答案','选项A','选项B','选项C','选项D'];
+            const rows=[['8+7=?','15','15','14','16','13'],['6×3=?','18','18','16','20','15'],['25-9=?','16','16','15','17','14'],['12+13=?','25','25','24','26','23']];
+            const ws=XLSX.utils.aoa_to_sheet([header,...rows]); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"题目"); XLSX.writeFile(wb,"拔河答题模板.xlsx");
+        }
+
+        function handleFile(file){
+            const reader=new FileReader();
+            reader.onload=(e)=>{
+                try{
+                    const data=new Uint8Array(e.target.result); const wb=XLSX.read(data,{type:'array'});
+                    const ws=wb.Sheets[wb.SheetNames[0]]; const json=XLSX.utils.sheet_to_json(ws,{header:1});
+                    if(json.length<2) throw new Error('至少需要一行数据');
+                    const qs=[];
+                    for(let i=1;i<json.length;i++){ const row=json[i]; if(!row||row.length<6) continue; const question=String(row[0]).trim(), answer=String(row[1]).trim(); const options=[String(row[2]).trim(),String(row[3]).trim(),String(row[4]).trim(),String(row[5]).trim()]; if(!question||!answer||options.some(o=>!o)) continue; qs.push({question,answer,options}); }
+                    if(qs.length===0) throw new Error('未检测到有效题目');
+                    importedQuestions=qs; importStatus.textContent=`✅ 已导入 ${qs.length} 道题目`; startGameBtn.disabled=false;
+                }catch(err){ alert('导入失败：'+err.message); importStatus.textContent='❌ 导入失败'; }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function prepareQuestions(){
+            // 左侧红队正序，右侧蓝队逆序
+            redQuestions = [...importedQuestions];
+            blueQuestions = [...importedQuestions].reverse();
+            redAnswerLog = [];
+            blueAnswerLog = [];
+        }
+
+        function renderQuestion(team){
+            const isRed=team==='red'; const qs=isRed?redQuestions:blueQuestions; const idx=isRed?redQIdx:blueQIdx;
+            const qEl=isRed?redQuestionEl:blueQuestionEl, optEl=isRed?redOptionsEl:blueOptionsEl, statusEl=isRed?redStatusEl:blueStatusEl;
+            if(idx>=qs.length){ qEl.textContent='✓ 全部完成'; optEl.innerHTML=''; statusEl.textContent='等待对手...'; if(isRed){ redFinished=true; document.getElementById('redPanel').classList.add('done'); } else { blueFinished=true; document.getElementById('bluePanel').classList.add('done'); } checkBothFinished(); return; }
+            const q=qs[idx]; qEl.textContent=q.question; optEl.innerHTML='';
+            q.options.forEach((opt,i)=>{ const btn=document.createElement('button'); btn.className='opt-btn'; btn.textContent=`${'ABCD'[i]}. ${opt}`; btn.addEventListener('pointerdown',e=>{ e.preventDefault(); handleAnswer(team,opt,btn); }); optEl.appendChild(btn); });
+            statusEl.textContent=`第 ${idx+1}/${qs.length} 题`;
+        }
+
+        function disableOptions(team){ (team==='red'?redOptionsEl:blueOptionsEl).querySelectorAll('.opt-btn').forEach(b=>b.disabled=true); }
+        function enableOptions(team){ (team==='red'?redOptionsEl:blueOptionsEl).querySelectorAll('.opt-btn').forEach(b=>b.disabled=false); }
+
+        function handleAnswer(team,chosen,btn){
+            if(gameState!=='playing') return;
+            if(team==='red'&&(redLocked||redFinished)) return;
+            if(team==='blue'&&(blueLocked||blueFinished)) return;
+            const qs=team==='red'?redQuestions:blueQuestions, idx=team==='red'?redQIdx:blueQIdx;
+            if(idx>=qs.length) return;
+            const correct=chosen===qs[idx].answer;
+            if(team==='red') redLocked=true; else blueLocked=true;
+            disableOptions(team);
+            const log = { question: qs[idx].question, userAnswer: chosen, correctAnswer: qs[idx].answer, isCorrect: correct };
+            if(team==='red') redAnswerLog.push(log); else blueAnswerLog.push(log);
+            if(correct){
+                btn.classList.add('correct-flash'); sfxCorrect();
+                if(team==='red'){
+                    audioLeft.currentTime=0; audioLeft.play().catch(()=>{});
+                    redScore++; redScoreTag.textContent='🔴 '+redScore; targetRopePos=Math.max(0,targetRopePos-ROPE_MOVE);
+                    triggerFootShake('blue');
+                } else {
+                    audioRight.currentTime=0; audioRight.play().catch(()=>{});
+                    blueScore++; blueScoreTag.textContent='🔵 '+blueScore; targetRopePos=Math.min(100,targetRopePos+ROPE_MOVE);
+                    triggerFootShake('red');
+                }
+                startRopePull(); spawnParticles(team);
+            } else {
+                btn.classList.add('wrong-flash'); sfxWrong();
+                triggerFootShake(team);
+            }
+            setTimeout(()=>{
+                btn.classList.remove('correct-flash','wrong-flash');
+                if(team==='red'){ redQIdx++; redLocked=false; if(redQIdx>=redQuestions.length){ redFinished=true; document.getElementById('redPanel').classList.add('done'); redQuestionEl.textContent='✓ 全部完成'; redOptionsEl.innerHTML=''; redStatusEl.textContent='等待对手...'; } else { renderQuestion('red'); enableOptions('red'); } }
+                else { blueQIdx++; blueLocked=false; if(blueQIdx>=blueQuestions.length){ blueFinished=true; document.getElementById('bluePanel').classList.add('done'); blueQuestionEl.textContent='✓ 全部完成'; blueOptionsEl.innerHTML=''; blueStatusEl.textContent='等待对手...'; } else { renderQuestion('blue'); enableOptions('blue'); } }
+                checkBothFinished(); checkWinCondition();
+            },380);
+        }
+
+        function triggerFootShake(team){
+            if(team==='red'){
+                redFootShake = 8;
+                if(redFootShakeTimer) clearTimeout(redFootShakeTimer);
+                redFootShakeTimer = setTimeout(()=>{ redFootShake = 0; }, 2000);
+                audioLeftSlip.currentTime=0; audioLeftSlip.play().catch(()=>{});
+            } else {
+                blueFootShake = 8;
+                if(blueFootShakeTimer) clearTimeout(blueFootShakeTimer);
+                blueFootShakeTimer = setTimeout(()=>{ blueFootShake = 0; }, 2000);
+                audioRightSlip.currentTime=0; audioRightSlip.play().catch(()=>{});
+            }
+        }
+
+        function checkBothFinished(){ if(redFinished&&blueFinished&&gameState==='playing') endGame('both_done'); }
+        function checkWinCondition(){ if(gameState!=='playing') return; if(targetRopePos<=WIN_LEFT) endGame('red_win_line'); else if(targetRopePos>=WIN_RIGHT) endGame('blue_win_line'); }
+        function startRopePull(){ ropeMoveStart=displayRopePos; ropeMoveTarget=targetRopePos; ropeMoveStartTime=performance.now(); ropeMoving=true; }
+        function spawnParticles(team){ const ratio=displayRopePos/100, col=team==='red'?'#ff6b6b':'#5dade2'; for(let i=0;i<8;i++) particles.push({ x:ratio+(Math.random()-0.5)*0.15, y:0.35+Math.random()*0.2, vx:(Math.random()-0.5)*0.04, vy:-Math.random()*0.06-0.03, life:1, decay:0.01+Math.random()*0.03, color:col, size:3+Math.random()*5 }); }
+
+        // 重新设计的人物 - hipX/hipY为锚点，身体各部分紧密连接
+        function drawPlayer(hipX, hipY, tiltAngleRad, color, footShake, isGritting, posture = 'normal', facing = 1){
+            const S = 1.5; // 缩放倍数
+            const headR = 12*S, torsoLen = 30*S, legLen = 22*S, armLen = 24*S;
+            const shakeOX = Math.sin(shiverTime*60 + hipX*0.1) * footShake * 0.5;
+            const shakeOY = Math.cos(shiverTime*55 + hipX*0.1) * footShake * 0.25;
+            let torsoAngle = (posture === 'normal') ? tiltAngleRad : 0;
+            const shoulderX = hipX + Math.sin(torsoAngle) * torsoLen;
+            const shoulderY = hipY - Math.cos(torsoAngle) * torsoLen;
+            const headCX = shoulderX + Math.sin(torsoAngle) * 4*S;
+            const headCY = shoulderY - Math.cos(torsoAngle) * 4*S - headR;
+
+            ctx.save();
+            // 腿
+            const footLX = hipX - 7*S + shakeOX, footLY = hipY + legLen + shakeOY;
+            const footRX = hipX + 7*S + shakeOX, footRY = hipY + legLen + shakeOY;
+            ctx.strokeStyle = '#555'; ctx.lineWidth = 6*S; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(footLX, footLY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(footRX, footRY); ctx.stroke();
+            ctx.fillStyle = '#333';
+            ctx.beginPath(); ctx.ellipse(footLX, footLY+2, 5*S, 3*S, -0.1, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(footRX, footRY+2, 5*S, 3*S, 0.1, 0, Math.PI*2); ctx.fill();
+            // 躯干
+            const tCX = (hipX + shoulderX)/2, tCY = (hipY + shoulderY)/2;
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.ellipse(tCX, tCY, 12*S, torsoLen/2+2*S, torsoAngle, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1.5*S; ctx.stroke();
+            // 头
+            ctx.fillStyle = '#FFE0BD'; ctx.beginPath(); ctx.arc(headCX, headCY, headR, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1.5*S; ctx.stroke();
+            ctx.fillStyle = color==='#e74c3c'?'#4a2511':'#162c3b';
+            ctx.beginPath(); ctx.arc(headCX, headCY-3*S, headR+1*S, Math.PI+0.15, -0.15); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(headCX-4*S, headCY-2*S, 3.5*S, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(headCX+4*S, headCY-2*S, 3.5*S, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#111';
+            ctx.beginPath(); ctx.arc(headCX-4*S+1.5*S*facing, headCY-1.5*S, 1.8*S, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(headCX+4*S+1.5*S*facing, headCY-1.5*S, 1.8*S, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,100,100,0.25)';
+            ctx.beginPath(); ctx.arc(headCX-8*S, headCY+3*S, 2.5*S, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(headCX+8*S, headCY+3*S, 2.5*S, 0, Math.PI*2); ctx.fill();
+            // 嘴
+            if(posture === 'defeated'){
+                ctx.strokeStyle = '#8B2020'; ctx.lineWidth = 1.8*S;
+                ctx.beginPath(); ctx.arc(headCX, headCY+7*S, 3.5*S, Math.PI+0.5, -0.5); ctx.stroke();
+            } else if(posture === 'victory'){
+                ctx.fillStyle = '#fff'; ctx.fillRect(headCX-4*S, headCY+4*S, 8*S, 4*S);
+                ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2*S; ctx.strokeRect(headCX-4*S, headCY+4*S, 8*S, 4*S);
+            } else if(posture === 'released'){
+                ctx.strokeStyle = '#8B2020'; ctx.lineWidth = 1.8*S;
+                ctx.beginPath(); ctx.arc(headCX, headCY+3*S, 3.5*S, 0.3, Math.PI-0.3); ctx.stroke();
+            } else {
+                if(isGritting){
+                    ctx.fillStyle = '#fff'; ctx.fillRect(headCX-4*S, headCY+4*S, 8*S, 3.5*S);
+                    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2*S; ctx.strokeRect(headCX-4*S, headCY+4*S, 8*S, 3.5*S);
+                } else {
+                    ctx.strokeStyle = '#8B2020'; ctx.lineWidth = 1.8*S;
+                    ctx.beginPath(); ctx.arc(headCX, headCY+3*S, 3.5*S, 0.3, Math.PI-0.3); ctx.stroke();
+                }
+            }
+            // 手臂
+            ctx.strokeStyle = '#FFE0BD'; ctx.lineWidth = 6*S; ctx.lineCap = 'round';
+            if(posture === 'defeated'){
+                ctx.beginPath(); ctx.moveTo(shoulderX-8*S, shoulderY+2*S); ctx.lineTo(shoulderX-14*S, shoulderY+armLen); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(shoulderX+8*S, shoulderY+2*S); ctx.lineTo(shoulderX+14*S, shoulderY+armLen); ctx.stroke();
+            } else if(posture === 'victory'){
+                // 单手循环上下挥动（激动庆祝）
+                ctx.lineWidth = 7*S;
+                const waveY = Math.sin(shiverTime * 6) * 14*S;
+                // 举起的手（facing方向）循环挥动
+                const raiseX = shoulderX + 10*S * facing;
+                const raiseY = shoulderY - armLen - 6*S + waveY;
+                ctx.beginPath(); ctx.moveTo(shoulderX + 7*S * facing, shoulderY); ctx.lineTo(raiseX, raiseY); ctx.stroke();
+                ctx.fillStyle = '#FFE0BD'; ctx.beginPath(); ctx.arc(raiseX, raiseY, 4*S, 0, Math.PI*2); ctx.fill();
+                // 另一只手自然下垂
+                ctx.beginPath(); ctx.moveTo(shoulderX - 7*S * facing, shoulderY+2*S); ctx.lineTo(shoulderX - 12*S * facing, shoulderY + armLen*0.6); ctx.stroke();
+            } else if(posture === 'released'){
+                ctx.beginPath(); ctx.moveTo(shoulderX-8*S, shoulderY+2*S); ctx.lineTo(shoulderX-12*S, shoulderY+armLen-4*S); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(shoulderX+8*S, shoulderY+2*S); ctx.lineTo(shoulderX+12*S, shoulderY+armLen-4*S); ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawFullPlayer(hipX, hipY, handX, handY, tiltAngleRad, color, footShake, isGritting, posture, facing){
+            drawPlayer(hipX, hipY, tiltAngleRad, color, footShake, isGritting, posture, facing);
+            if(posture === 'normal'){
+                const S = 1.5;
+                const torsoLen = 30*S;
+                const shoulderX = hipX + Math.sin(tiltAngleRad) * torsoLen;
+                const shoulderY = hipY - Math.cos(tiltAngleRad) * torsoLen;
+                const elbowX = shoulderX * 0.55 + handX * 0.45;
+                const elbowY = shoulderY * 0.45 + handY * 0.55;
+                ctx.strokeStyle = '#FFE0BD'; ctx.lineWidth = 6*S; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(shoulderX + 6*S*facing, shoulderY+2); ctx.lineTo(elbowX, elbowY); ctx.stroke();
+                ctx.fillStyle = '#FFE0BD'; ctx.beginPath(); ctx.arc(elbowX, elbowY, 4*S, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        function drawArena(){
+            const W=CANVAS_W, H=CANVAS_H; ctx.clearRect(0,0,W,H);
+            const skyGrad=ctx.createLinearGradient(0,0,0,H*0.55); skyGrad.addColorStop(0,'#b8dff5'); skyGrad.addColorStop(1,'#eaf6fc'); ctx.fillStyle=skyGrad; ctx.fillRect(0,0,W,H*0.55);
+            const grassGrad=ctx.createLinearGradient(0,H*0.5,0,H); grassGrad.addColorStop(0,'#8fbc6b'); grassGrad.addColorStop(1,'#5d8a3e'); ctx.fillStyle=grassGrad; ctx.fillRect(0,H*0.52,W,H*0.48);
+            const groundY=H*0.6; ctx.strokeStyle='#5a4030'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(0,groundY); ctx.lineTo(W,groundY); ctx.stroke();
+            const leftWinX=W*(WIN_LEFT/100), rightWinX=W*(WIN_RIGHT/100);
+            ctx.setLineDash([8,6]); ctx.strokeStyle='rgba(255,100,100,0.9)'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(leftWinX,groundY-45); ctx.lineTo(leftWinX,groundY+50); ctx.stroke(); ctx.setLineDash([]);
+            ctx.fillStyle='#ff4444'; ctx.font='bold 16px "PingFang SC"'; ctx.textAlign='center'; ctx.fillText('红队胜出线',leftWinX,groundY-52);
+            ctx.setLineDash([8,6]); ctx.strokeStyle='rgba(100,150,255,0.9)'; ctx.beginPath(); ctx.moveTo(rightWinX,groundY-45); ctx.lineTo(rightWinX,groundY+50); ctx.stroke(); ctx.setLineDash([]);
+            ctx.fillStyle='#4488ff'; ctx.fillText('蓝队胜出线',rightWinX,groundY-52);
+            const ropeLen=W*0.88, ropeMidX=W*(displayRopePos/100);
+            const ropeLeft=ropeMidX-ropeLen/2, ropeRight=ropeMidX+ropeLen/2, ropeY=groundY-35;
+
+            let redPosture = 'normal', bluePosture = 'normal';
+            let showRope = true;
+            if(gameState==='defeat_anim'){
+                showRope = false;
+                if(isDraw){ redPosture='released'; bluePosture='released'; }
+                else {
+                    if(loserTeam==='red'){ redPosture='defeated'; bluePosture='released'; }
+                    if(loserTeam==='blue'){ bluePosture='defeated'; redPosture='released'; }
+                }
+            } else if(gameState==='victory_anim'){
+                showRope = false;
+                if(loserTeam==='red'){ redPosture='defeated'; bluePosture='victory'; }
+                if(loserTeam==='blue'){ bluePosture='defeated'; redPosture='victory'; }
+            } else if(gameState==='draw_anim' || (gameState==='show_result' && isDraw)){
+                showRope = false;
+                redPosture='victory'; bluePosture='victory';
+            } else if(gameState==='show_result'){
+                showRope = false;
+                if(loserTeam==='red') redPosture='defeated';
+                if(winnerTeam==='red') redPosture='victory';
+                if(loserTeam==='blue') bluePosture='defeated';
+                if(winnerTeam==='blue') bluePosture='victory';
+            }
+
+            if(showRope){
+                ctx.strokeStyle='#8B6914'; ctx.lineWidth=14; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(ropeLeft,ropeY); ctx.lineTo(ropeRight,ropeY); ctx.stroke();
+                ctx.strokeStyle='#c99b30'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(ropeLeft,ropeY-3); ctx.lineTo(ropeRight,ropeY-3); ctx.stroke();
+                ctx.fillStyle = '#cc0000'; ctx.beginPath(); ctx.moveTo(ropeMidX-12, ropeY-18); ctx.lineTo(ropeMidX+12, ropeY-18); ctx.lineTo(ropeMidX+8, ropeY-6); ctx.lineTo(ropeMidX-8, ropeY-6); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = '#ff3333'; ctx.beginPath(); ctx.moveTo(ropeMidX-8, ropeY-20); ctx.lineTo(ropeMidX+8, ropeY-20); ctx.lineTo(ropeMidX+5, ropeY-10); ctx.lineTo(ropeMidX-5, ropeY-10); ctx.closePath(); ctx.fill();
+                ctx.fillStyle='#7a5c10'; ctx.beginPath(); ctx.arc(ropeLeft, ropeY, 10,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(ropeRight, ropeY, 10,0,Math.PI*2); ctx.fill();
+            }
+
+            const tiltActive = (gameState === 'playing'); // 只有比赛中身体倾斜
+            const redTilt = tiltActive ? -0.35 : 0;   // 红队向左倾斜
+            const blueTilt = tiltActive ? 0.35 : 0;    // 蓝队向右倾斜
+            const hipY = groundY - 33; // 臀部位置 = 地面 - 腿长(22*1.5=33)
+
+            for(let i=0;i<PLAYERS_PER_TEAM;i++){
+                const handX = ropeLeft + (ropeMidX - ropeLeft) * (i+1) / (PLAYERS_PER_TEAM+1);
+                const hipX = handX + Math.sin(redTilt) * 40;
+                drawFullPlayer(hipX, hipY, handX, ropeY-2, redTilt, '#e74c3c', redFootShake, tiltActive, redPosture, 1);
+            }
+            for(let i=0;i<PLAYERS_PER_TEAM;i++){
+                const handX = ropeMidX + (ropeRight - ropeMidX) * (i+1) / (PLAYERS_PER_TEAM+1);
+                const hipX = handX + Math.sin(blueTilt) * 40;
+                drawFullPlayer(hipX, hipY, handX, ropeY-2, blueTilt, '#3498db', blueFootShake, tiltActive, bluePosture, -1);
+            }
+            for(const p of particles){ ctx.fillStyle=p.color; ctx.globalAlpha=p.life; ctx.beginPath(); ctx.arc(p.x*W,p.y*H,p.size,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha=1;
+
+            // 制作者信息
+            ctx.fillStyle = '#FFD700'; ctx.font = 'bold 22px "PingFang SC","Noto Sans SC",sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+            ctx.fillText('制作者：九圩中学吴胜闯老师', W - 16, H - 10);
+        }
+
+        function animate(timestamp){
+            shiverTime+=0.016;
+            if(gameState==='playing'){
+                if(ropeMoving){
+                    const progress=Math.min((timestamp-ropeMoveStartTime)/ROPE_PULL_DURATION,1);
+                    displayRopePos=ropeMoveStart+(ropeMoveTarget-ropeMoveStart)*progress;
+                    if(progress>=1){ displayRopePos=ropeMoveTarget; ropeMoving=false; }
+                }
+                isPulling=ropeMoving;
+                for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.0012; p.life-=p.decay; if(p.life<=0) particles.splice(i,1); }
+            }
+            checkEndAnimProgress(timestamp);
+            drawArena();
+            animFrameId=requestAnimationFrame(animate);
+        }
+
+        function checkEndAnimProgress(timestamp){
+            if(gameState === 'defeat_anim' && timestamp - endAnimStartTime >= DEFEAT_DURATION){
+                if(isDraw){
+                    showResult();
+                    return;
+                }
+                gameState = 'victory_anim'; endAnimStartTime = timestamp;
+                let playCount = 0;
+                const playVictory = () => { if(playCount>=3) return; audioVictory.currentTime=0; audioVictory.play().catch(()=>{}); playCount++; setTimeout(playVictory,1500); };
+                playVictory();
+            } else if(gameState === 'victory_anim' && timestamp - endAnimStartTime >= VICTORY_DURATION){
+                showResult();
+            } else if(gameState === 'draw_anim' && timestamp - endAnimStartTime >= VICTORY_DURATION){
+                showResult();
+            }
+        }
+
+        function showResult(){
+            gameState = 'show_result';
+            answerResultOverlay.style.display = 'flex';
+            cornerMenuBtn.classList.add('show');
+            if(isDraw){
+                answerResultTitle.textContent = '🤝 平局！';
+                answerResultDetail.textContent = `红队答对 ${redScore} 题 | 蓝队答对 ${blueScore} 题`;
+            } else if(winnerTeam === 'red'){
+                answerResultTitle.textContent = '🏆 红队获胜！';
+                answerResultDetail.textContent = `红队答对 ${redScore} 题 | 蓝队答对 ${blueScore} 题`;
+            } else if(winnerTeam === 'blue'){
+                answerResultTitle.textContent = '🏆 蓝队获胜！';
+                answerResultDetail.textContent = `红队答对 ${redScore} 题 | 蓝队答对 ${blueScore} 题`;
+            }
+        }
+
+        function showReview(){
+            reviewPanel.style.display = 'flex';
+            renderReviewList('red');
+            document.querySelector('.team-tab.active')?.classList.remove('active');
+            document.querySelector('.team-tab[data-team="red"]').classList.add('active');
+        }
+
+        function renderReviewList(team){
+            const logs = team==='red' ? redAnswerLog : blueAnswerLog;
+            reviewList.innerHTML = logs.map((log, i) => `
+                <div class="review-card ${log.isCorrect ? '' : 'wrong'}" data-question="${log.question}" data-answer="正确答案：${log.correctAnswer}  你的答案：${log.userAnswer}">
+                    <div class="question-text">${i+1}. ${log.question}</div>
+                    <div class="answer-info">你的答案：${log.userAnswer} | 正确答案：${log.correctAnswer} ${log.isCorrect ? '✅' : '❌'}</div>
+                </div>
+            `).join('');
+            document.querySelectorAll('.review-card').forEach(card => {
+                card.addEventListener('click', function(){
+                    bigQuestionText.textContent = this.dataset.question;
+                    bigAnswerText.textContent = this.dataset.answer;
+                    fullscreenCard.style.display = 'flex';
+                });
+            });
+        }
+
+        fullscreenCard.addEventListener('click', ()=>{ fullscreenCard.style.display = 'none'; });
+        teamTabs.forEach(tab => {
+            tab.addEventListener('click', function(){
+                teamTabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                renderReviewList(this.dataset.team);
+            });
+        });
+        closeReviewBtn.addEventListener('click', ()=>{ reviewPanel.style.display = 'none'; });
+        reviewBtn.addEventListener('click', showReview);
+
+        function startCountdown(){
+            gameState='countdown'; mainOverlay.style.display='none'; countdownOverlay.style.display='flex';
+            let count=3; countdownNum.textContent=count; sfxCountdown();
+            const iv=setInterval(()=>{ count--; if(count<=0){ clearInterval(iv); countdownOverlay.style.display='none'; startPlaying(); } else { countdownNum.textContent=count; sfxCountdown(); } },700);
+        }
+
+        function startPlaying(){
+            gameState='playing'; redQIdx=0; blueQIdx=0; redScore=0; blueScore=0;
+            redFinished=false; blueFinished=false; redLocked=false; blueLocked=false;
+            targetRopePos=INIT_POS; displayRopePos=INIT_POS; ropeMoving=false; isPulling=false;
+            particles=[]; redFootShake=0; blueFootShake=0;
+            redScoreTag.textContent='🔴 0'; blueScoreTag.textContent='🔵 0'; timeRemaining=90; timerTag.textContent='90';
+            timerTag.classList.remove('warning','danger');
+            document.getElementById('redPanel').classList.remove('done'); document.getElementById('bluePanel').classList.remove('done');
+            prepareQuestions(); renderQuestion('red'); renderQuestion('blue'); enableOptions('red'); enableOptions('blue');
+            cornerMenuBtn.classList.remove('show');
+            isDraw=false; winnerTeam=null; loserTeam=null;
+            if(timerInterval) clearInterval(timerInterval);
+            timerInterval=setInterval(()=>{ timeRemaining--; timerTag.textContent=timeRemaining;
+                if(timeRemaining<=20&&timeRemaining>8){ timerTag.classList.add('warning'); timerTag.classList.remove('danger'); }
+                else if(timeRemaining<=8){ timerTag.classList.add('danger'); timerTag.classList.remove('warning'); }
+                if(timeRemaining<=0) endGame('time_up'); },1000);
+        }
+
+        function endGame(reason){
+            if(gameState==='defeat_anim' || gameState==='victory_anim' || gameState==='show_result' || gameState==='draw_anim') return;
+            if(timerInterval) clearInterval(timerInterval);
+            disableOptions('red'); disableOptions('blue');
+            displayRopePos = targetRopePos; ropeMoving = false; isPulling = false;
+            if(reason.includes('red')) { winnerTeam = 'red'; loserTeam = 'blue'; isDraw = false; }
+            else if(reason.includes('blue')) { winnerTeam = 'blue'; loserTeam = 'red'; isDraw = false; }
+            else {
+                if(displayRopePos < 47) { winnerTeam = 'red'; loserTeam = 'blue'; isDraw = false; }
+                else if(displayRopePos > 53) { winnerTeam = 'blue'; loserTeam = 'red'; isDraw = false; }
+                else { isDraw = true; }
+            }
+            if(isDraw){
+                gameState = 'draw_anim'; endAnimStartTime = performance.now();
+                let playCount = 0;
+                const playVictory = () => { if(playCount>=3) return; audioVictory.currentTime=0; audioVictory.play().catch(()=>{}); playCount++; setTimeout(playVictory,1500); };
+                playVictory();
+            } else {
+                gameState = 'defeat_anim'; endAnimStartTime = performance.now();
+                audioDefeat.currentTime = 0; audioDefeat.play().catch(()=>{});
+            }
+        }
+
+        function resetToMenu(){
+            if(timerInterval) clearInterval(timerInterval);
+            if(redFootShakeTimer) clearTimeout(redFootShakeTimer);
+            if(blueFootShakeTimer) clearTimeout(blueFootShakeTimer);
+            if(animFrameId) cancelAnimationFrame(animFrameId);
+            gameState='menu'; targetRopePos=INIT_POS; displayRopePos=INIT_POS;
+            redScore=0; blueScore=0; redQIdx=0; blueQIdx=0; redFinished=false; blueFinished=false;
+            particles=[]; ropeMoving=false; isPulling=false; redFootShake=0; blueFootShake=0;
+            redScoreTag.textContent='🔴 0'; blueScoreTag.textContent='🔵 0'; timerTag.textContent='90';
+            timerTag.classList.remove('warning','danger');
+            redQuestionEl.textContent=''; blueQuestionEl.textContent=''; redOptionsEl.innerHTML=''; blueOptionsEl.innerHTML='';
+            document.getElementById('redPanel').classList.remove('done'); document.getElementById('bluePanel').classList.remove('done');
+            answerResultOverlay.style.display = 'none';
+            reviewPanel.style.display = 'none';
+            fullscreenCard.style.display = 'none';
+            mainOverlay.style.display = 'flex';
+            cornerMenuBtn.classList.remove('show');
+            if(importedQuestions.length>0) startGameBtn.disabled=false;
+            loserTeam=null; winnerTeam=null; isDraw=false;
+            drawArena(); animFrameId=requestAnimationFrame(animate);
+        }
+
+        cornerMenuBtn.addEventListener('click', resetToMenu);
+        downloadTemplateBtn.addEventListener('click',generateTemplate);
+        importBtn.addEventListener('click',()=>{ const input=document.createElement('input'); input.type='file'; input.accept='.xlsx,.xls'; input.onchange=e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); }; input.click(); });
+        startGameBtn.addEventListener('click',startCountdown);
+        drawArena(); animFrameId=requestAnimationFrame(animate);
+    })();
+</script>
+</body>
+</html>
