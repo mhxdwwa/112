@@ -134,6 +134,28 @@ body {
   color: rgba(255,255,255,0.6);
 }
 
+/* 制作者悬浮标识 */
+.creator-badge {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(255,250,245,0.95);
+  padding: 10px 20px;
+  border-radius: 50px;
+  border: 1.5px solid rgba(255,210,200,0.6);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  font-size: 14px;
+  font-weight: 600;
+  color: #a04050;
+  z-index: 998;
+  animation: floatBadge 3s infinite ease-in-out;
+}
+
+@keyframes floatBadge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
 /* 编辑按钮 */
 .edit-trigger {
   position: fixed;
@@ -369,8 +391,11 @@ body {
 <div class="container">
 
   <div class="header">
-    <h1>吴胜闯老师教学平台</h1>
+    <h1>智趣课堂</h1>
   </div>
+
+  <!-- 制作者悬浮标识 -->
+  <div class="creator-badge">🍭制作者：吴胜闯老师🍭</div>
 
   <!-- ====== 核心功能 ====== -->
   <div class="section-title">⭐ 核心功能</div>
