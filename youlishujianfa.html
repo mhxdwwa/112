@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>有理数减法法则探究</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #f5f0e8;
+  --card-left: #fffdf7;
+  --card-right: #f7faff;
+  --accent-left: #e8734a;
+  --accent-right: #4a7de8;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --radius: 16px;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(232,115,74,0.06) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(74,125,232,0.06) 0%, transparent 50%);
+  overflow: hidden;
+}
+
+header {
+  text-align: center;
+  padding: 12px 0 6px;
+  user-select: none;
+}
+header h1 {
+  font-family: 'SimSun', 'STSong', 'Songti SC', serif;
+  font-size: 1.8rem;
+  color: #3a3a3a;
+  letter-spacing: 4px;
+  position: relative;
+  display: inline-block;
+}
+header h1::after {
+  content: '';
+  position: absolute;
+  bottom: -4px; left: 10%; right: 10%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-left), var(--accent-right));
+  border-radius: 2px;
+}
+
+/* ── Main layout ── */
+.container {
+  display: flex;
+  gap: 16px;
+  padding: 8px 20px 0;
+  height: calc(100vh - 110px);
+}
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-left);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: border-color 0.3s;
+}
+.panel.right { background: var(--card-right); }
+.panel:focus-within { border-color: var(--accent-left); }
+.panel.right:focus-within { border-color: var(--accent-right); }
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  flex-shrink: 0;
+}
+.panel-title {
+  font-family: 'SimSun', 'STSong', 'Songti SC', serif;
+  font-size: 1.15rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-title .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.panel.left .dot { background: var(--accent-left); }
+.panel.right .dot { background: var(--accent-right); }
+
+/* Tool buttons */
+.tool-btn {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(0,0,0,0.1);
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.15s, transform 0.1s;
+  margin-left: 2px;
+}
+.tool-btn:hover { background: #f0f0f0; transform: scale(1.05); }
+.tool-btn.active { background: #e0e0e0; border-color: #999; }
+.tool-btn svg { width: 16px; height: 16px; }
+
+.size-slider {
+  width: 50px;
+  accent-color: #666;
+  cursor: pointer;
+}
+
+/* Canvas area */
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.canvas-wrap canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  cursor: crosshair;
+}
+
+/* Problem overlay */
+.problems {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  padding: 10px 18px;
+  z-index: 2;
+}
+.problem-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'SimSun', 'STSong', 'Songti SC', serif;
+  font-size: 3.1rem;
+  font-weight: bold;
+  color: #2a2a2a;
+  user-select: none;
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
+}
+.problem-row .answer-space {
+  flex: 1;
+  min-width: 80px;
+  border-bottom: 2px dashed rgba(0,0,0,0.15);
+  margin-left: 6px;
+  height: 2px;
+  align-self: flex-end;
+  margin-bottom: 4px;
+}
+
+.panel.left .problem-row { color: #3a2a1a; }
+.panel.right .problem-row { color: #1a2a3a; }
+
+/* ── Number line (right panel bottom) ── */
+.numberline-wrap {
+  flex-shrink: 0;
+  height: 90px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  position: relative;
+  background: rgba(74,125,232,0.03);
+  user-select: none;
+  overflow: visible;
+}
+.numberline-wrap canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+.numberline-wrap .dot-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 3;
+  pointer-events: none;
+}
+.nl-dot {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 38%, #ff5555, #cc2222);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 5px rgba(200,0,0,0.45);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  z-index: 4;
+  transition: box-shadow 0.15s;
+  pointer-events: auto;
+}
+.nl-dot:hover, .nl-dot.dragging {
+  box-shadow: 0 2px 14px rgba(200,0,0,0.7);
+  cursor: grabbing;
+}
+.nl-dot .nl-label {
+  position: absolute;
+  top: -20px; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'SimSun', serif;
+  font-size: 13px;
+  font-weight: bold;
+  color: #cc2222;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Bottom color palette bar ── */
+.bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 8px 20px 10px;
+  flex-shrink: 0;
+}
+.bottom-bar .bar-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bottom-bar .bar-label {
+  font-family: 'SimSun', 'STSong', serif;
+  font-size: 0.85rem;
+  color: #888;
+  margin-right: 2px;
+}
+.bottom-bar .divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0,0,0,0.15);
+  margin: 0 4px;
+}
+.color-btn {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.2s;
+}
+.color-btn:hover { transform: scale(1.15); }
+.color-btn.active { border-color: #333; transform: scale(1.15); }
+
+/* Responsive */
+@media (max-width: 700px) {
+  .container { flex-direction: column; padding: 6px 8px 0; gap: 8px; height: calc(100vh - 100px); }
+  header h1 { font-size: 1.3rem; }
+  .problem-row { font-size: 1.6rem; }
+  .bottom-bar { gap: 12px; padding: 6px 10px 8px; }
+  .color-btn { width: 18px; height: 18px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>有理数减法法则探究</h1>
+</header>
+
+<div class="container">
+  <!-- LEFT PANEL: Addition -->
+  <div class="panel left" id="panelLeft">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>加法练习</div>
+    </div>
+    <div class="canvas-wrap" id="wrapLeft">
+      <canvas id="canvasLeft"></canvas>
+      <div class="problems" id="problemsLeft"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Subtraction -->
+  <div class="panel right" id="panelRight">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span>减法练习</div>
+    </div>
+    <div class="canvas-wrap" id="wrapRight">
+      <canvas id="canvasRight"></canvas>
+      <div class="problems" id="problemsRight"></div>
+    </div>
+    <!-- Number line strip -->
+    <div class="numberline-wrap" id="numberlineWrap">
+      <canvas id="nlCanvas"></canvas>
+      <div class="dot-layer" id="nlDotLayer"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom color palette and tools -->
+<div class="bottom-bar">
+  <div class="bar-section">
+    <span class="bar-label">左侧：</span>
+    <div id="colorsLeft" style="display:flex;gap:5px;"></div>
+    <div class="divider"></div>
+    <div id="toolsLeft" style="display:flex;gap:4px;"></div>
+  </div>
+  <div class="bar-section">
+    <span class="bar-label">右侧：</span>
+    <div id="colorsRight" style="display:flex;gap:5px;"></div>
+    <div class="divider"></div>
+    <div id="toolsRight" style="display:flex;gap:4px;"></div>
+  </div>
+</div>
+
+<script>
+// ── Problem data (bottom 2 moved to top) ──
+const leftProblems = [
+  '9 + (-8) =',
+  '15 + (-7) =',
+  '-3 + 5 =',
+  '0 + 3 =',
+  '-1 + 3 ='
+];
+const rightProblems = [
+  '9 - 8 =',
+  '15 - 7 =',
+  '-3 - (-5) =',
+  '0 - (-3) =',
+  '-1 - (-3) ='
+];
+
+// ── Render problems ──
+function renderProblems(containerId, problems) {
+  const el = document.getElementById(containerId);
+  problems.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'problem-row';
+    row.innerHTML = `<span>${p}</span><span class="answer-space"></span>`;
+    el.appendChild(row);
+  });
+}
+renderProblems('problemsLeft', leftProblems);
+renderProblems('problemsRight', rightProblems);
+
+// ── Color palette ──
+const colors = [
+  { name: '黑', hex: '#2a2a2a' },
+  { name: '红', hex: '#d94040' },
+  { name: '蓝', hex: '#3465d0' },
+  { name: '绿', hex: '#2ea857' },
+  { name: '紫', hex: '#8844cc' },
+  { name: '橙', hex: '#e8853a' },
+];
+
+// ── Build bottom color bars and tools ──
+function buildColorBar(containerId, board) {
+  const container = document.getElementById(containerId);
+  colors.forEach((c, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn' + (i === 0 ? ' active' : '');
+    btn.style.background = c.hex;
+    btn.title = c.name;
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      board.setColor(c.hex);
+      board.setEraser(false);
+      // deactivate eraser in tools
+      const toolsContainer = container.parentElement.querySelector('[id^="tools"]');
+      if (toolsContainer) {
+        toolsContainer.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+      }
+    });
+    container.appendChild(btn);
+  });
+}
+
+function buildTools(containerId, board) {
+  const container = document.getElementById(containerId);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = 1; slider.max = 12; slider.value = 3;
+  slider.className = 'size-slider';
+  slider.title = '笔粗细';
+  slider.addEventListener('input', () => board.setSize(+slider.value));
+  container.appendChild(slider);
+
+  const eraserBtn = document.createElement('button');
+  eraserBtn.className = 'tool-btn';
+  eraserBtn.title = '橡皮擦';
+  eraserBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7L3 16l9-9 8 8-4 4z"/><path d="M6 11l8 8"/></svg>`;
+  eraserBtn.addEventListener('click', () => {
+    board.setEraser(!board.isEraser);
+    eraserBtn.classList.toggle('active', board.isEraser);
+  });
+  container.appendChild(eraserBtn);
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'tool-btn';
+  clearBtn.title = '清空手写';
+  clearBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+  clearBtn.addEventListener('click', () => board.clear());
+  container.appendChild(clearBtn);
+}
+
+// ── Drawing Board class ──
+class DrawingBoard {
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.drawing = false;
+    this.color = '#2a2a2a';
+    this.lineWidth = 3;
+    this.isEraser = false;
+    this.lastX = 0;
+    this.lastY = 0;
+
+    this._resize();
+    this._bindEvents();
+
+    const ro = new ResizeObserver(() => {
+      this._resize();
+    });
+    ro.observe(this.canvas.parentElement);
+  }
+
+  _resize() {
+    const parent = this.canvas.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    const w = parent.clientWidth;
+    const h = parent.clientHeight;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+  }
+
+  _getPos(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+  }
+
+  _bindEvents() {
+    const start = (e) => {
+      e.preventDefault();
+      this.drawing = true;
+      const pos = this._getPos(e);
+      this.lastX = pos.x; this.lastY = pos.y;
+    };
+    const move = (e) => {
+      if (!this.drawing) return;
+      e.preventDefault();
+      const pos = this._getPos(e);
+      this._drawLine(this.lastX, this.lastY, pos.x, pos.y);
+      this.lastX = pos.x; this.lastY = pos.y;
+    };
+    const end = () => { this.drawing = false; };
+
+    this.canvas.addEventListener('mousedown', start);
+    this.canvas.addEventListener('mousemove', move);
+    this.canvas.addEventListener('mouseup', end);
+    this.canvas.addEventListener('mouseleave', end);
+    this.canvas.addEventListener('touchstart', start, { passive: false });
+    this.canvas.addEventListener('touchmove', move, { passive: false });
+    this.canvas.addEventListener('touchend', end);
+  }
+
+  _drawLine(x1, y1, x2, y2) {
+    this.ctx.save();
+    if (this.isEraser) {
+      this.ctx.globalCompositeOperation = 'destination-out';
+      this.ctx.lineWidth = this.lineWidth * 6;
+    } else {
+      this.ctx.globalCompositeOperation = 'source-over';
+      this.ctx.strokeStyle = this.color;
+      this.ctx.lineWidth = this.lineWidth;
+    }
+    this.ctx.beginPath();
+    this.ctx.moveTo(x1, y1);
+    this.ctx.lineTo(x2, y2);
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  setColor(c) { this.color = c; }
+  setSize(s) { this.lineWidth = s; }
+  setEraser(v) {
+    this.isEraser = v;
+    this.canvas.style.cursor = v ? 'cell' : 'crosshair';
+  }
+  clear() {
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.restore();
+  }
+}
+
+// ── Number Line ──
+class NumberLine {
+  constructor(wrapId, canvasId, dotLayerId, minVal, maxVal) {
+    this.wrap = document.getElementById(wrapId);
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.dotLayer = document.getElementById(dotLayerId);
+    this.minVal = minVal;
+    this.maxVal = maxVal;
+    this.dots = []; // {el, label, value}
+    this.padding = 36; // px from edges
+
+    this._resize();
+    this._draw();
+    this._bindClick();
+
+    const ro = new ResizeObserver(() => {
+      this._resize();
+      this._draw();
+      this._updateDotPositions();
+    });
+    ro.observe(this.wrap);
+  }
+
+  _resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.wrap.clientWidth;
+    const h = this.wrap.clientHeight;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.W = w;
+    this.H = h;
+    // Position line upper area so ticks above, labels below
+    this.lineY = 32;
+  }
+
+  valToX(v) {
+    const usable = this.W - this.padding * 2;
+    return this.padding + ((v - this.minVal) / (this.maxVal - this.minVal)) * usable;
+  }
+
+  xToVal(x) {
+    const usable = this.W - this.padding * 2;
+    const ratio = (x - this.padding) / usable;
+    return Math.round(this.minVal + ratio * (this.maxVal - this.minVal));
+  }
+
+  _draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.W, this.H);
+
+    // Main line - darker and thicker
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(this.padding - 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12, this.lineY);
+    ctx.stroke();
+
+    // Right arrow only (standard math number line)
+    const arrowSize = 11;
+    ctx.beginPath();
+    ctx.moveTo(this.W - this.padding + 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY - arrowSize / 2);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY + arrowSize / 2);
+    ctx.closePath();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fill();
+
+    // Ticks above the line, numbers below the line
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = 'bold 13px SimSun, serif';
+    ctx.textAlign = 'center';
+
+    for (let v = this.minVal; v <= this.maxVal; v++) {
+      const x = this.valToX(v);
+      const tickH = 10;
+
+      // Tick above the line only
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, this.lineY);
+      ctx.lineTo(x, this.lineY - tickH);
+      ctx.stroke();
+
+      // Number label below the line
+      ctx.textBaseline = 'top';
+      ctx.fillText(v.toString(), x, this.lineY + 4);
+    }
+  }
+
+  _bindClick() {
+    // Click on empty area of number line to add a dot
+    this.wrap.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('nl-dot')) return; // handled by dot drag
+      const rect = this.wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // Only respond near the line
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      this._addDot(val);
+    });
+
+    this.wrap.addEventListener('touchstart', (e) => {
+      if (e.target.classList.contains('nl-dot')) return;
+      const rect = this.wrap.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      e.preventDefault();
+      this._addDot(val);
+    }, { passive: false });
+  }
+
+  _addDot(val) {
+    if (this.dots.length >= 2) {
+      // Remove oldest, add new
+      const old = this.dots.shift();
+      old.el.remove();
+    }
+
+    const el = document.createElement('div');
+    el.className = 'nl-dot';
+    const label = document.createElement('span');
+    label.className = 'nl-label';
+    label.textContent = val;
+    el.appendChild(label);
+    this.dotLayer.appendChild(el);
+
+    const dotObj = { el, label, value: val };
+    this.dots.push(dotObj);
+    this._positionDot(dotObj);
+    this._bindDotDrag(dotObj);
+  }
+
+  _positionDot(dotObj) {
+    const x = this.valToX(dotObj.value);
+    dotObj.el.style.left = x + 'px';
+    // Position dot just above the line so it doesn't cover numbers below
+    dotObj.el.style.top = (this.lineY - 2) + 'px';
+  }
+
+  _updateDotPositions() {
+    this.dots.forEach(d => this._positionDot(d));
+  }
+
+  _bindDotDrag(dotObj) {
+    let dragging = false;
+
+    const onStart = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      dotObj.el.classList.add('dragging');
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = this.wrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      let val = this.xToVal(x);
+      val = Math.max(this.minVal, Math.min(this.maxVal, val));
+      dotObj.value = val;
+      dotObj.label.textContent = val;
+      this._positionDot(dotObj);
+    };
+
+    const onEnd = () => {
+      dragging = false;
+      dotObj.el.classList.remove('dragging');
+    };
+
+    dotObj.el.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+
+    dotObj.el.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }
+}
+
+// ── Initialize ──
+const boardLeft = new DrawingBoard('canvasLeft');
+const boardRight = new DrawingBoard('canvasRight');
+buildColorBar('colorsLeft', boardLeft);
+buildColorBar('colorsRight', boardRight);
+buildTools('toolsLeft', boardLeft);
+buildTools('toolsRight', boardRight);
+
+const numberLine = new NumberLine('numberlineWrap', 'nlCanvas', 'nlDotLayer', -8, 15);
+</script>
+</body>
+</html>
