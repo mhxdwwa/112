@@ -146,21 +146,32 @@ header h1::after {
   z-index: 2;
 }
 .problem-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 4em auto auto auto 1fr;
   align-items: center;
-  gap: 4px;
+  gap: 0 10px;
   font-family: 'SimSun', 'STSong', 'Songti SC', serif;
-  font-size: 3.1rem;
+  font-size: 3.5rem;
   font-weight: bold;
   color: #2a2a2a;
   user-select: none;
   text-shadow: 0 0 6px rgba(255,255,255,0.9);
 }
+.problem-row .col-first {
+  text-align: left;
+  white-space: pre;
+}
+.problem-row .col-op {
+  text-align: center;
+}
+.problem-row .col-second {
+  text-align: left;
+}
+.problem-row .col-eq {
+  text-align: center;
+}
 .problem-row .answer-space {
-  flex: 1;
-  min-width: 80px;
   border-bottom: 2px dashed rgba(0,0,0,0.15);
-  margin-left: 6px;
   height: 2px;
   align-self: flex-end;
   margin-bottom: 4px;
@@ -169,13 +180,13 @@ header h1::after {
 .panel.left .problem-row { color: #3a2a1a; }
 .panel.right .problem-row { color: #1a2a3a; }
 
-/* ── Number line (right panel bottom) ── */
+/* ── Number line (left panel bottom) ── */
 .numberline-wrap {
   flex-shrink: 0;
   height: 90px;
   border-top: 1px solid rgba(0,0,0,0.08);
   position: relative;
-  background: rgba(74,125,232,0.03);
+  background: rgba(232,115,74,0.03);
   user-select: none;
   overflow: visible;
 }
@@ -282,6 +293,11 @@ header h1::after {
       <canvas id="canvasLeft"></canvas>
       <div class="problems" id="problemsLeft"></div>
     </div>
+    <!-- Number line strip -->
+    <div class="numberline-wrap" id="numberlineWrap">
+      <canvas id="nlCanvas"></canvas>
+      <div class="dot-layer" id="nlDotLayer"></div>
+    </div>
   </div>
 
   <!-- RIGHT PANEL: Subtraction -->
@@ -292,11 +308,6 @@ header h1::after {
     <div class="canvas-wrap" id="wrapRight">
       <canvas id="canvasRight"></canvas>
       <div class="problems" id="problemsRight"></div>
-    </div>
-    <!-- Number line strip -->
-    <div class="numberline-wrap" id="numberlineWrap">
-      <canvas id="nlCanvas"></canvas>
-      <div class="dot-layer" id="nlDotLayer"></div>
     </div>
   </div>
 </div>
@@ -318,20 +329,20 @@ header h1::after {
 </div>
 
 <script>
-// ── Problem data (bottom 2 moved to top) ──
+// ── Problem data (structured for alignment) ──
 const leftProblems = [
-   '  0 - （-3） =',
-  '（-1） - （-3） =',
-  '（-5） - （-3） =',
-  '  1 - （-3） =',
-  '  5 - （-3） ='
+  { first: '   0', op: '-', second: '（-3）' },
+  { first: '（-1）', op: '-', second: '（-3）' },
+  { first: '（-5）', op: '-', second: '（-3）' },
+  { first: '   1', op: '-', second: '（-3）' },
+  { first: '   5', op: '-', second: '（-3）' }
 ];
 const rightProblems = [
-  '  0 + (+3) =',
-  '（-1） + (+3) =',
-  '（-5） + （+3） =',
-  '  1 + （+3） =',
-  '  5 + (+3) ='
+  { first: '   0', op: '+', second: '（+3）' },
+  { first: '（-1）', op: '+', second: '（+3）' },
+  { first: '（-5）', op: '+', second: '（+3）' },
+  { first: '   1', op: '+', second: '（+3）' },
+  { first: '   5', op: '+', second: '（+3）' }
 ];
 
 // ── Render problems ──
@@ -340,7 +351,13 @@ function renderProblems(containerId, problems) {
   problems.forEach(p => {
     const row = document.createElement('div');
     row.className = 'problem-row';
-    row.innerHTML = `<span>${p}</span><span class="answer-space"></span>`;
+    row.innerHTML = `
+      <span class="col-first">${p.first}</span>
+      <span class="col-op">${p.op}</span>
+      <span class="col-second">${p.second}</span>
+      <span class="col-eq">=</span>
+      <span class="answer-space"></span>
+    `;
     el.appendChild(row);
   });
 }
@@ -708,7 +725,9 @@ buildColorBar('colorsRight', boardRight);
 buildTools('toolsLeft', boardLeft);
 buildTools('toolsRight', boardRight);
 
-const numberLine = new NumberLine('numberlineWrap', 'nlCanvas', 'nlDotLayer', -8, 15);
+const numberLine = new NumberLine('numberlineWrap', 'nlCanvas', 'nlDotLayer', -6, 10);
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
