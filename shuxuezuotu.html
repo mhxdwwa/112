@@ -182,7 +182,7 @@ const G={
   panning:false,panSX:0,panSY:0,panOX:0,panOY:0,
   mpx:0,mpy:0,mmx:0,mmy:0,
   fhPts:[],pointerDown:false,
-  showGrid:false,showAxes:false,snap:false,
+  showGrid:false,showAxes:false,showNumberLine:false,snap:false,
   undoStack:[],redoStack:[],
   funcs:[],pointN:0,
   drawState:null,demo:null,
@@ -235,18 +235,57 @@ function drawBg(){
     bgX.fillStyle='#0f172a';
     bgX.beginPath();bgX.moveTo(W-1,G.oy);bgX.lineTo(W-10,G.oy-4);bgX.lineTo(W-10,G.oy+4);bgX.fill();
     bgX.beginPath();bgX.moveTo(G.ox,1);bgX.lineTo(G.ox-4,10);bgX.lineTo(G.ox+4,10);bgX.fill();
+    // X-axis: tick marks above, numbers below
+    bgX.strokeStyle='#0f172a';bgX.lineWidth=1.5;
     bgX.fillStyle='#0f172a';bgX.font='bold 11px JetBrains Mono';
     bgX.textAlign='center';bgX.textBaseline='top';
     const ixMin=Math.ceil(-G.ox/G.scale),ixMax=Math.floor((W-G.ox)/G.scale);
-    for(let i=ixMin;i<=ixMax;i++){if(i===0)continue;bgX.fillText(i,G.ox+i*G.scale,G.oy+5)}
+    for(let i=ixMin;i<=ixMax;i++){
+      if(i===0)continue;
+      const px=G.ox+i*G.scale;
+      // Tick mark above x-axis
+      bgX.beginPath();bgX.moveTo(px,G.oy-5);bgX.lineTo(px,G.oy+5);bgX.stroke();
+      // Number below x-axis
+      bgX.fillText(i,px,G.oy+8);
+    }
+    // Y-axis: tick marks left, numbers right of ticks
     bgX.textAlign='right';bgX.textBaseline='middle';
     const iyMin=Math.ceil(-(H-G.oy)/G.scale),iyMax=Math.floor(G.oy/G.scale);
-    for(let i=iyMin;i<=iyMax;i++){if(i===0)continue;bgX.fillText(i,G.ox-6,G.oy-i*G.scale)}
+    for(let i=iyMin;i<=iyMax;i++){
+      if(i===0)continue;
+      const py=G.oy-i*G.scale;
+      // Tick mark left of y-axis
+      bgX.beginPath();bgX.moveTo(G.ox-5,py);bgX.lineTo(G.ox+5,py);bgX.stroke();
+      // Number left of y-axis
+      bgX.fillText(i,G.ox-8,py);
+    }
     bgX.textAlign='right';bgX.textBaseline='top';bgX.fillText('O',G.ox-5,G.oy+4);
     bgX.font='bold 13px JetBrains Mono';bgX.textAlign='left';bgX.textBaseline='middle';
     bgX.fillText('x',W-22,G.oy+16);
     bgX.textAlign='center';bgX.textBaseline='bottom';
     bgX.fillText('y',G.ox+14,16);
+  }
+  // Number line: only x-axis, with ticks above and numbers below
+  if(G.showNumberLine){
+    const axisY=G.oy;
+    bgX.strokeStyle='#0f172a';bgX.lineWidth=2;
+    // Main horizontal line
+    bgX.beginPath();bgX.moveTo(0,axisY);bgX.lineTo(W,axisY);bgX.stroke();
+    // Arrow at right end
+    bgX.fillStyle='#0f172a';
+    bgX.beginPath();bgX.moveTo(W-1,axisY);bgX.lineTo(W-10,axisY-4);bgX.lineTo(W-10,axisY+4);bgX.fill();
+    // Tick marks and numbers
+    bgX.strokeStyle='#0f172a';bgX.lineWidth=1.5;
+    bgX.fillStyle='#0f172a';bgX.font='bold 12px JetBrains Mono';
+    bgX.textAlign='center';bgX.textBaseline='top';
+    const ixMin=Math.ceil(-G.ox/G.scale),ixMax=Math.floor((W-G.ox)/G.scale);
+    for(let i=ixMin;i<=ixMax;i++){
+      const px=G.ox+i*G.scale;
+      // Tick mark above the line
+      bgX.beginPath();bgX.moveTo(px,axisY-6);bgX.lineTo(px,axisY+6);bgX.stroke();
+      // Number below the line
+      bgX.fillText(i,px,axisY+10);
+    }
   }
 }
 
@@ -2388,6 +2427,7 @@ tbHTML+='<div id="eraserSizeWrap" style="display:none;align-items:center;gap:4px
 tbHTML+='<div class="tsep"></div>';
 tbHTML+='<button class="tg" id="tgGrid">网格</button>';
 tbHTML+='<button class="tg" id="tgAxes">坐标</button>';
+tbHTML+='<button class="tg" id="tgNumLine">数轴</button>';
 tbHTML+='<button class="tg" id="tgSnap">吸附</button>';
 tbHTML+='<div class="tsep"></div>';
 tbHTML+='<button class="ab" id="btnUndo" title="撤销">↩</button>';
@@ -2446,6 +2486,7 @@ document.getElementById('btnClear').addEventListener('click',()=>{
 });
 document.getElementById('tgGrid').addEventListener('click',function(){G.showGrid=!G.showGrid;this.classList.toggle('on',G.showGrid);drawBg()});
 document.getElementById('tgAxes').addEventListener('click',function(){G.showAxes=!G.showAxes;this.classList.toggle('on',G.showAxes);drawBg()});
+document.getElementById('tgNumLine').addEventListener('click',function(){G.showNumberLine=!G.showNumberLine;this.classList.toggle('on',G.showNumberLine);drawBg()});
 document.getElementById('tgSnap').addEventListener('click',function(){G.snap=!G.snap;this.classList.toggle('on',G.snap)});
 
 // === FUNCTION PANEL ===
