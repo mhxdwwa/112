@@ -2550,14 +2550,13 @@ const toolRow=document.getElementById('toolRow');
 let tbHTML='';
 // Left group: auxiliary tools
 tbHTML+='<input type="color" id="colorPicker" value="#2563eb" style="display:none" title="选择颜色">';
-tbHTML+='<div id="eraserSizeWrap" style="display:none;align-items:center;gap:4px;flex-shrink:0"><span style="font-size:11px;color:#111827;font-weight:600;white-space:nowrap">擦除范围</span><input type="range" id="eraserSize" min="10" max="80" value="40" style="width:60px;height:4px;-webkit-appearance:none;background:var(--bd);border-radius:2px;outline:none"><span id="eraserSizeVal" style="font-size:11px;color:#111827;font-weight:600;min-width:20px;font-family:var(--m)">40</span></div>';
-tbHTML+='<div class="tsep"></div>';
 tbHTML+='<button class="tg" id="tgGrid">网格</button>';
 tbHTML+='<button class="tg" id="tgAxes">坐标</button>';
 tbHTML+='<button class="tg" id="tgNumLine">数轴</button>';
 tbHTML+='<button class="tg" id="tgSnap">吸附</button>';
 tbHTML+='<button class="tg" id="tgSmartDraw">智能作图</button>';
 tbHTML+='<button class="tg" id="tgFuncGraph">函数图像</button>';
+tbHTML+='<div id="eraserSizeWrap" style="display:none;align-items:center;gap:4px;flex-shrink:0"><span style="font-size:11px;color:#111827;font-weight:600;white-space:nowrap">擦除范围</span><input type="range" id="eraserSize" min="10" max="80" value="40" style="width:60px;height:4px;-webkit-appearance:none;background:var(--bd);border-radius:2px;outline:none"><span id="eraserSizeVal" style="font-size:11px;color:#111827;font-weight:600;min-width:20px;font-family:var(--m)">40</span></div>';
 // Center spacer
 tbHTML+='<div style="flex:1"></div>';
 // Center group: main tools
