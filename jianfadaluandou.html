@@ -509,7 +509,12 @@ function speakNames(name1, name2) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   
-  const text = `有请${name1}和${name2}同学`;
+  // Fix pronunciation: 覃 should be pronounced as "秦" (qín), not "谭" (tán)
+  const fixPronunciation = (name) => name.replace(/覃/g, '秦');
+  const name1Fixed = fixPronunciation(name1);
+  const name2Fixed = fixPronunciation(name2);
+  
+  const text = `有请${name1Fixed}和${name2Fixed}同学`;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'zh-CN';
   utterance.pitch = 1.1;
