@@ -66,20 +66,12 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .toolbar{background:#fff;border-top:1px solid var(--bd);flex-shrink:0;box-shadow:0 -1px 6px rgba(0,0,0,.04);position:relative;overflow:visible}
 .toolbar-row{display:flex;align-items:center;padding:5px 8px;gap:3px;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .toolbar-row::-webkit-scrollbar{height:0}
-.tb{min-width:36px;height:36px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:16px;transition:all .08s;border:1.5px solid transparent;flex-shrink:0;padding:2px 4px}
+.tb{min-width:34px;height:34px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:15px;transition:all .08s;border:1.5px solid transparent;flex-shrink:0;padding:1px 3px}
 .tb:active{background:rgba(0,0,0,.08);transform:scale(.92)}
 .tb.on{background:var(--blueg);border-color:var(--blue);color:var(--blue)}
 .tb-l{font-size:9px;color:var(--td);font-weight:600;line-height:1}
 .tb.on .tb-l{color:var(--blue)}
 .tsep{width:1px;height:28px;background:var(--bd);flex-shrink:0;margin:0 2px}
-.tool-group{position:relative;flex-shrink:0}
-.tool-group-btn{min-width:36px;height:36px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:16px;transition:all .08s;border:1.5px solid transparent;flex-shrink:0;padding:2px 4px;cursor:pointer;background:transparent}
-.tool-group-btn:hover{background:rgba(0,0,0,.05)}
-.tool-group-btn .tb-l{font-size:9px;color:var(--td);font-weight:600;line-height:1}
-.tool-dropdown{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:rgba(255,255,255,.98);backdrop-filter:blur(8px);border:1px solid var(--bd);border-radius:8px;padding:6px;display:none;flex-direction:column;gap:3px;min-width:120px;box-shadow:0 -4px 16px rgba(0,0,0,.15);z-index:100}
-.tool-dropdown.on{display:flex}
-.tool-dropdown .tb{width:100%;flex-direction:row;justify-content:flex-start;gap:8px;padding:6px 10px;font-size:14px}
-.tool-dropdown .tb .tb-l{font-size:11px}
 /* Auto-hide toolbar in fullscreen */
 .toolbar-row.auto-hidden{transform:translateY(100%);opacity:0;pointer-events:none}
 .toolbar-row{transition:transform .3s ease,opacity .3s ease}
@@ -2520,39 +2512,29 @@ function undo(){if(!G.undoStack.length)return;G.redoStack.push(JSON.stringify(G.
 function redo(){if(!G.redoStack.length)return;G.undoStack.push(JSON.stringify(G.objs));G.objs=JSON.parse(G.redoStack.pop());draw()}
 
 // === BUILD TOOLBAR ===
-const toolGroups=[
-  {id:'basic',icon:'•',label:'基本',tools:[
-    {t:'point',icon:'•',label:'点'},
-    {t:'segment',icon:'─',label:'线段'},
-    {t:'line',icon:'⟷',label:'直线'},
-    {t:'ray',icon:'→',label:'射线'},
-  ]},
-  {id:'shapes',icon:'△',label:'图形',tools:[
-    {t:'triangle',icon:'△',label:'三角'},
-    {t:'quad',icon:'▭',label:'四边'},
-    {t:'polygon',icon:'⬡',label:'多边形'},
-    {t:'circle',icon:'○',label:'圆'},
-    {t:'sector',icon:'◔',label:'扇形'},
-  ]},
-  {id:'aux',icon:'⊥',label:'辅助',tools:[
-    {t:'perp',icon:'⊥',label:'垂线'},
-    {t:'parallel',icon:'∥',label:'平行'},
-    {t:'tangent',icon:'⊃',label:'切线'},
-    {t:'midperp',icon:'⊤',label:'中垂'},
-    {t:'bisect',icon:'∠',label:'平分'},
-  ]},
-  {id:'solid',icon:'⬜',label:'立体',tools:[
-    {t:'box',icon:'⬜',label:'方块'},
-    {t:'cylinder',icon:'⬭',label:'圆柱'},
-    {t:'cone',icon:'△',label:'圆锥'},
-    {t:'sphere',icon:'●',label:'球'},
-  ]},
-  {id:'tools',icon:'📐',label:'工具',tools:[
-    {t:'ruler',icon:'📏',label:'直尺'},
-    {t:'compass',icon:'⊙',label:'圆规'},
-    {t:'measure',icon:'📐',label:'测量'},
-    {t:'unfold',icon:'⊞',label:'展开图'},
-  ]},
+const allTools=[
+  {t:'point',icon:'•',label:'点'},
+  {t:'segment',icon:'─',label:'线段'},
+  {t:'line',icon:'⟷',label:'直线'},
+  {t:'ray',icon:'→',label:'射线'},
+  {t:'triangle',icon:'△',label:'三角'},
+  {t:'quad',icon:'▭',label:'四边'},
+  {t:'polygon',icon:'⬡',label:'多边形'},
+  {t:'circle',icon:'○',label:'圆'},
+  {t:'sector',icon:'◔',label:'扇形'},
+  {t:'perp',icon:'⊥',label:'垂线'},
+  {t:'parallel',icon:'∥',label:'平行'},
+  {t:'tangent',icon:'⊃',label:'切线'},
+  {t:'midperp',icon:'⊤',label:'中垂'},
+  {t:'bisect',icon:'∠',label:'平分'},
+  {t:'box',icon:'⬜',label:'方块'},
+  {t:'cylinder',icon:'⬭',label:'圆柱'},
+  {t:'cone',icon:'△',label:'圆锥'},
+  {t:'sphere',icon:'●',label:'球'},
+  {t:'ruler',icon:'📏',label:'直尺'},
+  {t:'compass',icon:'⊙',label:'圆规'},
+  {t:'measure',icon:'📐',label:'测量'},
+  {t:'unfold',icon:'⊞',label:'展开图'},
 ];
 const toolRow=document.getElementById('toolRow');
 let tbHTML='';
@@ -2564,15 +2546,9 @@ tbHTML+=`<button class="tb" data-t="eraser"><span>⌫</span><span class="tb-l">�
 // Fullscreen button
 tbHTML+=`<button class="tb" id="btnFullscreen" title="全屏"><span>⛶</span><span class="tb-l">全屏</span></button>`;
 tbHTML+='<div class="tsep"></div>';
-// Tool groups with dropdowns
-toolGroups.forEach(group=>{
-  tbHTML+=`<div class="tool-group" id="group-${group.id}">`;
-  tbHTML+=`<button class="tool-group-btn" data-group="${group.id}"><span>${group.icon}</span><span class="tb-l">${group.label}</span></button>`;
-  tbHTML+=`<div class="tool-dropdown" id="dropdown-${group.id}">`;
-  group.tools.forEach(tool=>{
-    tbHTML+=`<button class="tb" data-t="${tool.t}"><span>${tool.icon}</span><span class="tb-l">${tool.label}</span></button>`;
-  });
-  tbHTML+=`</div></div>`;
+// All tools flat
+allTools.forEach(tool=>{
+  tbHTML+=`<button class="tb" data-t="${tool.t}"><span>${tool.icon}</span><span class="tb-l">${tool.label}</span></button>`;
 });
 tbHTML+='<div class="tsep"></div>';
 tbHTML+='<input type="color" id="colorPicker" value="#2563eb" style="width:30px;height:30px;border:1.5px solid var(--bd);border-radius:6px;cursor:pointer;padding:2px;flex-shrink:0" title="选择颜色">';
@@ -2629,37 +2605,10 @@ document.getElementById('pcpClose').addEventListener('click',()=>{
   document.getElementById('penColorRow').classList.remove('on');
 });
 
-// Tool group dropdown toggle
-document.querySelectorAll('.tool-group-btn').forEach(btn=>{
-  btn.addEventListener('click',e=>{
-    e.stopPropagation();
-    const groupId=btn.dataset.group;
-    const dropdown=document.getElementById('dropdown-'+groupId);
-    // Close all other dropdowns
-    document.querySelectorAll('.tool-dropdown').forEach(d=>{if(d!==dropdown)d.classList.remove('on')});
-    dropdown.classList.toggle('on');
-  });
-});
-// Close dropdowns when clicking outside
-document.addEventListener('click',()=>{
-  document.querySelectorAll('.tool-dropdown').forEach(d=>d.classList.remove('on'));
-});
-// Prevent dropdown close when clicking inside
-document.querySelectorAll('.tool-dropdown').forEach(d=>{
-  d.addEventListener('click',e=>e.stopPropagation());
-});
-// Tool buttons inside dropdowns
-document.querySelectorAll('.tool-dropdown .tb[data-t]').forEach(b=>{
-  b.addEventListener('click',()=>{
-    if(b.dataset.t==='unfold'){toggleUnfoldPanel();return}
-    setTool(b.dataset.t);
-    // Close all dropdowns after selecting
-    document.querySelectorAll('.tool-dropdown').forEach(d=>d.classList.remove('on'));
-  });
-});
-// Standalone tool buttons (move)
+// All tool buttons
 document.querySelectorAll('.toolbar-row > .tb[data-t]').forEach(b=>{
   b.addEventListener('click',()=>{
+    if(b.dataset.t==='unfold'){toggleUnfoldPanel();return}
     setTool(b.dataset.t);
   });
 });
