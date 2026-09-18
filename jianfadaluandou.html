@@ -884,7 +884,9 @@ function playAttackAnimation(winnerSide, winnerName) {
   const W = canvas.width, H = canvas.height;
   const heroX = winnerSide === 'left' ? W * 0.18 : W * 0.82;
   const heroY = H * 0.55;
-  const monsterX = W * 0.5, monsterY = H * 0.42;
+  const loserX = winnerSide === 'left' ? W * 0.82 : W * 0.18;
+  const loserY = H * 0.55;
+  const loserName = winnerSide === 'left' ? STATE.playerRight : STATE.playerLeft;
   let frame = 0;
   let particles = [];
   let heroScale = 0, monsterScale = 2, monsterAlpha = 1;
@@ -952,6 +954,83 @@ function playAttackAnimation(winnerSide, winnerName) {
     ctx.fillStyle = '#d48020';
     ctx.beginPath(); ctx.ellipse(-15, 45, 12, 7, -0.1, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(15, 45, 12, 7, 0.1, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // --- LOSER HERO: pouting with fists clasped ---
+  function drawLoserHero(x, y, sc) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+    // Body (round chibi) - same as winner
+    const bodyGrad = ctx.createRadialGradient(-5, -5, 5, 0, 0, 45);
+    bodyGrad.addColorStop(0, '#ffe066'); bodyGrad.addColorStop(1, '#f0a030');
+    ctx.fillStyle = bodyGrad; ctx.beginPath(); ctx.arc(0, 5, 42, 0, Math.PI*2); ctx.fill();
+    // Belly highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.ellipse(-5, 10, 18, 22, -0.2, 0, Math.PI*2); ctx.fill();
+    // Arms crossed/fists clasped in front
+    ctx.fillStyle = '#f0a030';
+    ctx.beginPath(); ctx.ellipse(-15, 20, 14, 10, 0.3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(15, 20, 14, 10, -0.3, 0, Math.PI*2); ctx.fill();
+    // Fists clasped
+    ctx.fillStyle = '#ffe4c4';
+    ctx.beginPath(); ctx.arc(-8, 22, 8, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(8, 22, 8, 0, Math.PI*2); ctx.fill();
+    // Face
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(-13, -8, 10, 11, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(13, -8, 10, 11, 0, 0, Math.PI*2); ctx.fill();
+    // Pupils (looking down, determined)
+    ctx.fillStyle = '#2a1a4e';
+    ctx.beginPath(); ctx.ellipse(-13, -4, 6, 7, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(13, -4, 6, 7, 0, 0, Math.PI*2); ctx.fill();
+    // Eye shine
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-15, -7, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(11, -7, 3, 0, Math.PI*2); ctx.fill();
+    // Eyebrows (determined, angled down)
+    ctx.strokeStyle = '#2a1a4e'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-20, -18); ctx.lineTo(-8, -15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(20, -18); ctx.lineTo(8, -15); ctx.stroke();
+    // Blush
+    ctx.fillStyle = 'rgba(255,120,120,0.35)';
+    ctx.beginPath(); ctx.ellipse(-22, 4, 8, 5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(22, 4, 8, 5, 0, 0, Math.PI*2); ctx.fill();
+    // Mouth (pouting, not happy)
+    ctx.strokeStyle = '#c0504d'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, 10, 6, 1.15*Math.PI, 1.85*Math.PI); ctx.stroke();
+    // Crown (same as winner)
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(-18, -38); ctx.lineTo(-14, -55); ctx.lineTo(-6, -42);
+    ctx.lineTo(0, -60); ctx.lineTo(6, -42); ctx.lineTo(14, -55); ctx.lineTo(18, -38);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#e6a800'; ctx.lineWidth = 1.5; ctx.stroke();
+    // Crown gems
+    ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.arc(0, -48, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#4488ff'; ctx.beginPath(); ctx.arc(-10, -44, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#44dd44'; ctx.beginPath(); ctx.arc(10, -44, 2.5, 0, Math.PI*2); ctx.fill();
+    // Feet
+    ctx.fillStyle = '#d48020';
+    ctx.beginPath(); ctx.ellipse(-15, 45, 12, 7, -0.1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(15, 45, 12, 7, 0.1, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // --- DIZZY STARS (rotating above head) ---
+  function drawDizzyStars(x, y, sc) {
+    // Use Date.now() for continuous rotation even after animation ends
+    const t = Date.now() * 0.003;
+    ctx.save();
+    ctx.translate(x, y - 60 * sc);
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `bold ${16 * sc}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < 3; i++) {
+      const a = t + (i / 3) * Math.PI * 2;
+      const starX = Math.cos(a) * 20 * sc;
+      const starY = Math.sin(a) * 8 * sc;
+      ctx.fillText('★', starX, starY);
+    }
     ctx.restore();
   }
 
@@ -1329,10 +1408,11 @@ function playAttackAnimation(winnerSide, winnerName) {
     ctx.beginPath(); ctx.arc(W*0.85, H*0.1, 45, 0, Math.PI*2); ctx.fill(); ctx.restore();
 
     if (frame < 50) {
-      // Phase 0: Hero AND monster appear simultaneously
+      // Phase 0: Hero AND loser AND monster appear simultaneously
       heroScale = Math.min(2, frame / 12 * 2);
       monsterScale = Math.min(2, frame / 12 * 2);
       drawHero(heroX, heroY, heroScale);
+      drawLoserHero(loserX, loserY, heroScale);
       // Draw monster at center
       const monsterDrawX = monsterX + Math.sin(frame) * 3;
       if (monsterType === 0) drawMonsterType0(monsterDrawX, monsterY, monsterScale, monsterAlpha);
@@ -1346,6 +1426,7 @@ function playAttackAnimation(winnerSide, winnerName) {
     } else if (frame < 200) {
       // Phase 1: Attack effect
       heroScale = 2; drawHero(heroX, heroY, heroScale);
+      drawLoserHero(loserX, loserY, 2);
       const ap = (frame-50)/150;
       
       // Initialize projectile array if not exists
@@ -1558,6 +1639,7 @@ function playAttackAnimation(winnerSide, winnerName) {
     } else if (frame < 280) {
       // Phase 2: Monster defeated - flash effect then lie down
       heroScale = 2; drawHero(heroX, heroY, heroScale);
+      drawLoserHero(loserX, loserY, 2);
       const ep = (frame-200)/80;
       const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
       const cornerY = H * 0.82;
@@ -1587,6 +1669,10 @@ function playAttackAnimation(winnerSide, winnerName) {
       else if (monsterType === 3) drawMonsterType3(0, 0, 1, 0.7);
       else if (monsterType === 4) drawMonsterType4(0, 0, 1, 0.7);
       ctx.restore();
+      // Dizzy stars for lying monster
+      if (slideP > 0.5) {
+        drawDizzyStars(mCurX, mCurY - 20, mCurScale);
+      }
       // Name follows monster
       if (slideP > 0.3) {
         ctx.save();
@@ -1615,6 +1701,7 @@ function playAttackAnimation(winnerSide, winnerName) {
     } else if (frame < 400) {
       // Phase 3: Chang'e flies in FAST, result cards appear immediately
       heroScale = 2; drawHero(heroX, heroY, heroScale);
+      drawLoserHero(loserX, loserY, 2);
       // Draw lying defeated monster in the corner
       const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
       const cornerY = H * 0.82;
@@ -1653,6 +1740,8 @@ function playAttackAnimation(winnerSide, winnerName) {
       ctx.fillStyle = '#ffd700';
       ctx.fillText(lyingName, cornerX, cornerY - 42);
       ctx.restore();
+      // Dizzy stars for lying monster
+      drawDizzyStars(cornerX, cornerY - 20, 0.7);
       // Chang'e flies in FAST
       const cp = (frame-280)/80;
       const ease = 1 - Math.pow(1-Math.min(1,cp), 3);
@@ -1666,6 +1755,7 @@ function playAttackAnimation(winnerSide, winnerName) {
     } else {
       // Phase 4: Mooncake flies from Chang'e's hands to hero
       heroScale = 2; drawHero(heroX, heroY, heroScale);
+      drawLoserHero(loserX, loserY, 2);
       drawChange(W*0.5, H*0.38, 2);
       // Draw lying defeated monster in the corner
       const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
@@ -1682,6 +1772,8 @@ function playAttackAnimation(winnerSide, winnerName) {
       else if (monsterType === 3) drawMonsterType3(0, 0, 1, 0.7);
       else if (monsterType === 4) drawMonsterType4(0, 0, 1, 0.7);
       ctx.restore();
+      // Dizzy stars for lying monster
+      drawDizzyStars(cornerX, cornerY - 20, 0.7);
       // Draw name for lying defeated monster
       ctx.save();
       ctx.font = '900 18px "Microsoft YaHei", sans-serif';
@@ -1706,6 +1798,41 @@ function playAttackAnimation(winnerSide, winnerName) {
       ctx.fillStyle = '#ffd700'; ctx.shadowBlur = 8; ctx.shadowColor = '#ffd700';
       ctx.fillText(lyingName2, cornerX, cornerY - 42);
       ctx.restore();
+      // Loser's text bubble "下次我一定行！" appears when Chang'e delivers mooncake
+      const bubbleAlpha = Math.min(1, (frame-400)/30);
+      if (bubbleAlpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = bubbleAlpha;
+        // Draw speech bubble
+        const bubbleX = loserX;
+        const bubbleY = loserY - 120;
+        const bubbleW = 180;
+        const bubbleH = 50;
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.beginPath();
+        ctx.moveTo(bubbleX - bubbleW/2 + 10, bubbleY - bubbleH/2);
+        ctx.lineTo(bubbleX + bubbleW/2 - 10, bubbleY - bubbleH/2);
+        ctx.quadraticCurveTo(bubbleX + bubbleW/2, bubbleY - bubbleH/2, bubbleX + bubbleW/2, bubbleY - bubbleH/2 + 10);
+        ctx.lineTo(bubbleX + bubbleW/2, bubbleY + bubbleH/2 - 10);
+        ctx.quadraticCurveTo(bubbleX + bubbleW/2, bubbleY + bubbleH/2, bubbleX + bubbleW/2 - 10, bubbleY + bubbleH/2);
+        // Tail pointing down to loser
+        ctx.lineTo(bubbleX + 10, bubbleY + bubbleH/2);
+        ctx.lineTo(bubbleX, bubbleY + bubbleH/2 + 15);
+        ctx.lineTo(bubbleX - 10, bubbleY + bubbleH/2);
+        ctx.lineTo(bubbleX - bubbleW/2 + 10, bubbleY + bubbleH/2);
+        ctx.quadraticCurveTo(bubbleX - bubbleW/2, bubbleY + bubbleH/2, bubbleX - bubbleW/2, bubbleY + bubbleH/2 - 10);
+        ctx.lineTo(bubbleX - bubbleW/2, bubbleY - bubbleH/2 + 10);
+        ctx.quadraticCurveTo(bubbleX - bubbleW/2, bubbleY - bubbleH/2, bubbleX - bubbleW/2 + 10, bubbleY - bubbleH/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+        // Text
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 20px "Microsoft YaHei", sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('下次我一定行！', bubbleX, bubbleY);
+        ctx.restore();
+      }
       const mp = Math.min(1, (frame-400)/70);
       // Mooncake starts at Chang'e's hands (slightly below her center) and flies to hero
       const cakeStartX = W*0.5 + (winnerSide === 'left' ? -30 : 30);
@@ -1881,8 +2008,8 @@ function playMonsterWinsAnimation() {
     // Lying on side - rotate 90 degrees
     const rot = faceDir === 'left' ? Math.PI / 2 : -Math.PI / 2;
     ctx.rotate(rot);
-    // Dizzy stars above head
-    const t = frame * 0.1;
+    // Dizzy stars above head (time-based for continuous rotation)
+    const t = Date.now() * 0.003;
     ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     for (let i = 0; i < 3; i++) {
       const a = t + (i / 3) * Math.PI * 2;
