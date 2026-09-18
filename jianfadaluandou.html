@@ -1388,6 +1388,32 @@ function playAttackAnimation(winnerSide, winnerName) {
   // Mooncake persistence - store final position for idle loop
   let _mooncakeFinalX = 0, _mooncakeFinalY = 0, _mooncakeArrived = false;
 
+  // Mooncake persistent particle effect (golden sparkles orbiting the cake)
+  function drawMooncakeParticles(cx, cy) {
+    const t = Date.now() * 0.002;
+    ctx.save();
+    // Orbiting golden sparkles
+    for (let i = 0; i < 8; i++) {
+      const angle = t + (i / 8) * Math.PI * 2;
+      const radius = 28 + Math.sin(t * 1.5 + i) * 6;
+      const px = cx + Math.cos(angle) * radius;
+      const py = cy + Math.sin(angle) * radius;
+      const alpha = 0.5 + Math.sin(t * 2 + i * 0.8) * 0.4;
+      const size = 2 + Math.sin(t * 3 + i) * 1;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = ['#ffd700','#ffaa00','#fff','#ffcc33'][i % 4];
+      ctx.beginPath(); ctx.arc(px, py, size, 0, Math.PI * 2); ctx.fill();
+    }
+    // Outer glow ring
+    ctx.globalAlpha = 0.15 + Math.sin(t * 1.2) * 0.08;
+    const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, 38);
+    glow.addColorStop(0, 'rgba(255,215,0,0.3)');
+    glow.addColorStop(1, 'rgba(255,215,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   function animate(now) {
     if (!_lastTime) _lastTime = now;
     const dt = Math.min(now - _lastTime, 50);
@@ -1856,6 +1882,10 @@ function playAttackAnimation(winnerSide, winnerName) {
         _mooncakeFinalX = cakeEndX;
         _mooncakeFinalY = cakeEndY;
       }
+      // Show persistent sparkle particles once mooncake arrives
+      if (_mooncakeArrived) {
+        drawMooncakeParticles(_mooncakeFinalX, _mooncakeFinalY);
+      }
       if (particles.length < 150) {
         const spawnCount = Math.min(2, Math.round(2 * dtFactor));
         for (let i = 0; i < spawnCount; i++) {
@@ -1952,6 +1982,7 @@ function playAttackAnimation(winnerSide, winnerName) {
       // Persistent mooncake at hero's hand (stays until page switch)
       if (_mooncakeArrived) {
         drawMooncake(_mooncakeFinalX, _mooncakeFinalY, 0.8);
+        drawMooncakeParticles(_mooncakeFinalX, _mooncakeFinalY);
       }
       // Loser hero with speech bubble
       drawLoserHero(loserX, loserY, 2);
