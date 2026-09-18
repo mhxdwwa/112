@@ -96,6 +96,9 @@ body{background:radial-gradient(ellipse at 50% 20%,#1a2a5e 0%,#0d1533 50%,#060a1
 .tool-btn.active{border-color:#ffd700;background:rgba(255,215,0,.15);color:#ffd700;}
 .tool-btn.submit-btn{border-color:#4ade80;color:#4ade80;background:rgba(74,222,128,.1);font-size:15px;padding:8px 20px;}
 .tool-btn.submit-btn:hover{background:rgba(74,222,128,.2);}
+.pen-size-slider{width:60px;height:6px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.15);border-radius:3px;outline:none;cursor:pointer;}
+.pen-size-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#ffd700;cursor:pointer;box-shadow:0 0 6px rgba(255,215,0,.5);}
+.pen-size-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#ffd700;cursor:pointer;border:none;box-shadow:0 0 6px rgba(255,215,0,.5);}
 /* JUDGE - inline buttons in toolbar */
 .judge-btns-inline{display:flex;gap:8px;margin-left:8px;align-items:center;}
 .judge-btn-sm{width:clamp(40px,7vw,60px);height:clamp(40px,7vw,60px);border-radius:50%;border:3px solid;font-size:clamp(18px,3.5vw,30px);cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.5);}
@@ -268,6 +271,7 @@ body{background:radial-gradient(ellipse at 50% 20%,#1a2a5e 0%,#0d1533 50%,#060a1
         <div class="hw-color-dot" style="background:#ffffff" onclick="setColor('left','#ffffff',this)"></div>
         <button class="tool-btn active" id="penBtnLeft" onclick="setTool('left','pen')">✏️ 画笔</button>
         <button class="tool-btn" id="eraserBtnLeft" onclick="setTool('left','eraser')">🧹 擦除</button>
+        <input type="range" min="2" max="12" value="4" class="pen-size-slider" id="penSizeLeft" oninput="setPenSize('left',this.value)" title="画笔粗细">
         <button class="tool-btn submit-btn" onclick="submitAnswer('left')">📤 提交</button>
         <div class="judge-btns-inline" id="judgeBtnsLeft" style="display:none;">
           <button class="judge-btn-sm correct" onclick="judgeAnswer('left',true)">✓</button>
@@ -289,6 +293,7 @@ body{background:radial-gradient(ellipse at 50% 20%,#1a2a5e 0%,#0d1533 50%,#060a1
         <div class="hw-color-dot" style="background:#ffffff" onclick="setColor('right','#ffffff',this)"></div>
         <button class="tool-btn active" id="penBtnRight" onclick="setTool('right','pen')">✏️ 画笔</button>
         <button class="tool-btn" id="eraserBtnRight" onclick="setTool('right','eraser')">🧹 擦除</button>
+        <input type="range" min="2" max="12" value="4" class="pen-size-slider" id="penSizeRight" oninput="setPenSize('right',this.value)" title="画笔粗细">
         <button class="tool-btn submit-btn" onclick="submitAnswer('right')">📤 提交</button>
         <div class="judge-btns-inline" id="judgeBtnsRight" style="display:none;">
           <button class="judge-btn-sm correct" onclick="judgeAnswer('right',true)">✓</button>
@@ -843,6 +848,9 @@ function setTool(side, tool) {
   document.getElementById(side === 'left' ? 'penBtnLeft' : 'penBtnRight').classList.toggle('active', tool === 'pen');
   document.getElementById(side === 'left' ? 'eraserBtnLeft' : 'eraserBtnRight').classList.toggle('active', tool === 'eraser');
   hwState[side].canvas.classList.toggle('eraser-cursor', tool === 'eraser');
+}
+function setPenSize(side, size) {
+  hwState[side].size = parseInt(size);
 }
 
 /* ========== SUBMIT & JUDGE ========== */
