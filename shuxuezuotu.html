@@ -575,6 +575,15 @@ function drawObj(o,sel,hov){
       mx.fillStyle='rgba(161,98,7,0.6)';
       mx.beginPath();mx.arc(a.x,a.y,4,0,Math.PI*2);mx.fill();
       mx.beginPath();mx.arc(b.x,b.y,4,0,Math.PI*2);mx.fill();
+      // Draw X button at the end of the ruler
+      const xBtnX=b.x+ux*15+nx*(rw+8);
+      const xBtnY=b.y+uy*15+ny*(rw+8);
+      const xBtnR=10;
+      mx.fillStyle='#ef4444';
+      mx.beginPath();mx.arc(xBtnX,xBtnY,xBtnR,0,Math.PI*2);mx.fill();
+      mx.strokeStyle='#fff';mx.lineWidth=2;
+      mx.beginPath();mx.moveTo(xBtnX-4,xBtnY-4);mx.lineTo(xBtnX+4,xBtnY+4);mx.stroke();
+      mx.beginPath();mx.moveTo(xBtnX+4,xBtnY-4);mx.lineTo(xBtnX-4,xBtnY+4);mx.stroke();
       break;
     }
     case'arc':{
@@ -1936,6 +1945,26 @@ function onDown(e){
   const sp=G.tool==='point'?{x:Math.round(m.x*100)/100,y:Math.round(m.y*100)/100}:snapPt(m);
   G.touchId=e.pointerId;G.pointerDown=true;
   const t=G.tool;
+
+  // Check if clicking on ruler X button
+  for(const o of G.objs){
+    if(o.type==='ruler'){
+      const a=m2p(o.x1,o.y1),b=m2p(o.x2,o.y2);
+      const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
+      if(len<1)continue;
+      const ux=dx/len,uy=dy/len,nx=-uy,ny=ux;
+      const rw=22;
+      const xBtnX=b.x+ux*15+nx*(rw+8);
+      const xBtnY=b.y+uy*15+ny*(rw+8);
+      if(Math.hypot(px-xBtnX,py-xBtnY)<12){
+        saveUndo();
+        G.objs=G.objs.filter(obj=>obj.id!==o.id);
+        if(G.selected===o.id)G.selected=null;
+        draw();
+        return;
+      }
+    }
+  }
 
   if(t==='move'){
     const hit=hitTest(px,py);
