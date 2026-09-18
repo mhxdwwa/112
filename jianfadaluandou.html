@@ -883,10 +883,10 @@ function playAttackAnimation(winnerSide, winnerName) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const heroX = winnerSide === 'left' ? W * 0.18 : W * 0.82;
-  const heroY = H * 0.55;
+  const heroY = H * 0.42;
   const monsterX = W * 0.5, monsterY = H * 0.42;
   const loserX = winnerSide === 'left' ? W * 0.82 : W * 0.18;
-  const loserY = H * 0.55;
+  const loserY = H * 0.42;
   const loserName = winnerSide === 'left' ? STATE.playerRight : STATE.playerLeft;
   let frame = 0;
   let particles = [];
@@ -998,17 +998,9 @@ function playAttackAnimation(winnerSide, winnerName) {
     // Mouth (pouting, not happy)
     ctx.strokeStyle = '#c0504d'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(0, 10, 6, 1.15*Math.PI, 1.85*Math.PI); ctx.stroke();
-    // Crown (same as winner)
-    ctx.fillStyle = '#ffd700';
-    ctx.beginPath();
-    ctx.moveTo(-18, -38); ctx.lineTo(-14, -55); ctx.lineTo(-6, -42);
-    ctx.lineTo(0, -60); ctx.lineTo(6, -42); ctx.lineTo(14, -55); ctx.lineTo(18, -38);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#e6a800'; ctx.lineWidth = 1.5; ctx.stroke();
-    // Crown gems
-    ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.arc(0, -48, 3, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#4488ff'; ctx.beginPath(); ctx.arc(-10, -44, 2.5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#44dd44'; ctx.beginPath(); ctx.arc(10, -44, 2.5, 0, Math.PI*2); ctx.fill();
+    // Hair tuft (no crown for loser)
+    ctx.fillStyle = '#f0a030';
+    ctx.beginPath(); ctx.moveTo(-5, -42); ctx.quadraticCurveTo(0, -52, 5, -42); ctx.fill();
     // Feet
     ctx.fillStyle = '#d48020';
     ctx.beginPath(); ctx.ellipse(-15, 45, 12, 7, -0.1, 0, Math.PI*2); ctx.fill();
@@ -1746,7 +1738,7 @@ function playAttackAnimation(winnerSide, winnerName) {
       // Chang'e flies in FAST
       const cp = (frame-280)/80;
       const ease = 1 - Math.pow(1-Math.min(1,cp), 3);
-      changeY = H+100 - (H*0.42+100)*ease;
+      changeY = H+100 - (H*0.32+100)*ease;
       if (cp < 1 && particles.length < 150) {
         const spawnCount = Math.min(2, Math.round(2 * dtFactor));
         for (let i = 0; i < spawnCount; i++) particles.push({ x: W*0.5+(Math.random()-0.5)*30, y: changeY+60+Math.random()*20,
@@ -1757,7 +1749,7 @@ function playAttackAnimation(winnerSide, winnerName) {
       // Phase 4: Mooncake flies from Chang'e's hands to hero
       heroScale = 2; drawHero(heroX, heroY, heroScale);
       drawLoserHero(loserX, loserY, 2);
-      drawChange(W*0.5, H*0.38, 2);
+      drawChange(W*0.5, H*0.32, 2);
       // Draw lying defeated monster in the corner
       const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
       const cornerY = H * 0.82;
@@ -1837,7 +1829,7 @@ function playAttackAnimation(winnerSide, winnerName) {
       const mp = Math.min(1, (frame-400)/70);
       // Mooncake starts at Chang'e's hands (slightly below her center) and flies to hero
       const cakeStartX = W*0.5 + (winnerSide === 'left' ? -30 : 30);
-      const cakeStartY = H*0.38 + 20; // Chang'e's hand level
+      const cakeStartY = H*0.32 + 20; // Chang'e's hand level
       // Mooncake flies to hero's hand (right hand if hero on left, left hand if hero on right)
       const cakeEndX = winnerSide === 'left' ? heroX + 76 : heroX - 76;
       const cakeEndY = heroY + 20; // Hero's hand level
