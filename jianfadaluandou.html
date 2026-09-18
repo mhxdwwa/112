@@ -1371,6 +1371,7 @@ function playAttackAnimation(winnerSide, winnerName) {
   // Reset projectiles for this attack
   window.attackProjectiles = [];
   window._resultCardsShown = false;
+  window._idleStarted = false;
 
   // Time-based animation for consistent speed on all refresh rates (60Hz-240Hz+)
   let _lastTime = 0;
@@ -1735,10 +1736,9 @@ function playAttackAnimation(winnerSide, winnerName) {
       ctx.restore();
       // Dizzy stars for lying monster
       drawDizzyStars(cornerX, cornerY - 20, 0.7);
-      // Chang'e flies in FAST
-      const cp = (frame-280)/80;
-      const ease = 1 - Math.pow(1-Math.min(1,cp), 3);
-      changeY = H+100 - (H*0.32+100)*ease;
+      // Chang'e flies in smoothly - linear flight to final position
+      const cp = Math.min(1, (frame-280)/120);
+      changeY = H+100 - (H*0.32+100)*cp;
       if (cp < 1 && particles.length < 150) {
         const spawnCount = Math.min(2, Math.round(2 * dtFactor));
         for (let i = 0; i < spawnCount; i++) particles.push({ x: W*0.5+(Math.random()-0.5)*30, y: changeY+60+Math.random()*20,
@@ -1882,7 +1882,10 @@ function playAttackAnimation(winnerSide, winnerName) {
         window._resultCardsShown = true;
         showAttackResultCards();
         document.getElementById('attackBottomArea').style.display = 'flex';
-        // Start idle animation loop to keep stars spinning
+      }
+      // Start idle animation loop to keep stars spinning (if not already started)
+      if (!window._idleStarted) {
+        window._idleStarted = true;
         startIdleAnimation();
       }
     }
@@ -2061,6 +2064,7 @@ function playMonsterWinsAnimation() {
   let leftHit = false, rightHit = false;
   const totalFrames = 600;
   window._resultCardsShownMW = false;
+  window._idleStartedMW = false;
 
   // Draw a chibi student character
   function drawStudent(x, y, sc, color, name, angle) {
@@ -2452,7 +2456,10 @@ function playMonsterWinsAnimation() {
         window._resultCardsShownMW = true;
         showAttackResultCards();
         document.getElementById('attackBottomArea').style.display = 'flex';
-        // Start idle animation loop to keep stars spinning
+      }
+      // Start idle animation loop to keep stars spinning (if not already started)
+      if (!window._idleStartedMW) {
+        window._idleStartedMW = true;
         startIdleAnimationMW();
       }
     }
@@ -2887,6 +2894,8 @@ function spawnResultParticles() {
 function continueGame() {
   // Stop idle animation
   window._stopIdleAnimation = true;
+  window._idleStarted = false;
+  window._idleStartedMW = false;
   // Hide attack bottom area and update state
   document.getElementById('attackBottomArea').style.display = 'none';
   STATE.monsterWins = false;
@@ -2897,6 +2906,8 @@ function continueGame() {
 function backToMenu() {
   // Stop idle animation
   window._stopIdleAnimation = true;
+  window._idleStarted = false;
+  window._idleStartedMW = false;
   // Hide attack bottom area and reset
   document.getElementById('attackBottomArea').style.display = 'none';
   STATE.monsterWins = false;
