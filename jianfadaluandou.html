@@ -469,8 +469,11 @@ function handleStart() {
   // Use questions in order (no shuffle) - each side has its own question set
   STATE.shuffledQuestions = [...STATE.questions];
   STATE.shuffledQuestionsRight = [...STATE.questionsRight];
-  STATE.qIdxLeft = 0;
-  STATE.qIdxRight = 0;
+  // Only initialize indices on first round (not when continuing)
+  if (STATE.round === 0) {
+    STATE.qIdxLeft = 0;
+    STATE.qIdxRight = 0;
+  }
   showScreen('preGame');
   renderPreGame();
 }
@@ -2969,6 +2972,19 @@ function continueGame() {
   STATE.monsterWins = false;
   STATE.usedNames.push(STATE.playerLeft, STATE.playerRight);
   STATE.round++;
+  
+  // Increment question indices for next round
+  STATE.qIdxLeft++;
+  STATE.qIdxRight++;
+  
+  // Loop back to 0 if all questions are used
+  if (STATE.qIdxLeft >= STATE.questions.length) {
+    STATE.qIdxLeft = 0;
+  }
+  if (STATE.qIdxRight >= STATE.questionsRight.length) {
+    STATE.qIdxRight = 0;
+  }
+  
   handleStart();
 }
 function backToMenu() {
