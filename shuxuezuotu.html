@@ -2548,12 +2548,9 @@ const allTools=[
 ];
 const toolRow=document.getElementById('toolRow');
 let tbHTML='';
-// Left group: undo/redo + auxiliary tools
-tbHTML+='<button class="ab" id="btnUndo" title="撤销">↩</button>';
-tbHTML+='<button class="ab" id="btnRedo" title="重做">↪</button>';
-tbHTML+='<div class="tsep"></div>';
-tbHTML+='<input type="color" id="colorPicker" value="#2563eb" style="width:30px;height:30px;border:1.5px solid var(--bd);border-radius:6px;cursor:pointer;padding:2px;flex-shrink:0" title="选择颜色">';
-tbHTML+='<div id="eraserSizeWrap" style="display:none;align-items:center;gap:4px;flex-shrink:0;margin-left:4px"><span style="font-size:11px;color:#111827;font-weight:600;white-space:nowrap">擦除范围</span><input type="range" id="eraserSize" min="10" max="80" value="40" style="width:60px;height:4px;-webkit-appearance:none;background:var(--bd);border-radius:2px;outline:none"><span id="eraserSizeVal" style="font-size:11px;color:#111827;font-weight:600;min-width:20px;font-family:var(--m)">40</span></div>';
+// Left group: auxiliary tools
+tbHTML+='<input type="color" id="colorPicker" value="#2563eb" style="display:none" title="选择颜色">';
+tbHTML+='<div id="eraserSizeWrap" style="display:none;align-items:center;gap:4px;flex-shrink:0"><span style="font-size:11px;color:#111827;font-weight:600;white-space:nowrap">擦除范围</span><input type="range" id="eraserSize" min="10" max="80" value="40" style="width:60px;height:4px;-webkit-appearance:none;background:var(--bd);border-radius:2px;outline:none"><span id="eraserSizeVal" style="font-size:11px;color:#111827;font-weight:600;min-width:20px;font-family:var(--m)">40</span></div>';
 tbHTML+='<div class="tsep"></div>';
 tbHTML+='<button class="tg" id="tgGrid">网格</button>';
 tbHTML+='<button class="tg" id="tgAxes">坐标</button>';
@@ -2567,6 +2564,8 @@ tbHTML+='<div style="flex:1"></div>';
 tbHTML+=`<button class="tb on" data-t="move"><span>☝</span><span class="tb-l">移动</span></button>`;
 tbHTML+=`<button class="tb" data-t="pen"><span>✎</span><span class="tb-l">画笔</span></button>`;
 tbHTML+=`<button class="tb" data-t="eraser"><span>⌫</span><span class="tb-l">擦除</span></button>`;
+tbHTML+='<button class="ab" id="btnUndo" title="撤销">↩</button>';
+tbHTML+='<button class="ab" id="btnRedo" title="重做">↪</button>';
 tbHTML+=`<button class="ab" id="btnClear" title="清除">🗑</button>`;
 tbHTML+=`<button class="tb" id="btnFullscreen" title="全屏"><span>⛶</span><span class="tb-l">全屏</span></button>`;
 // Center spacer
