@@ -1294,10 +1294,11 @@ function playAttackAnimation(winnerSide, winnerName) {
     ctx.restore();
   }
 
-  const totalFrames = 900;
+  const totalFrames = 600;
   
   // Reset projectiles for this attack
   window.attackProjectiles = [];
+  window._resultCardsShown = false;
 
   // Time-based animation for consistent speed on all refresh rates (60Hz-240Hz+)
   let _lastTime = 0;
@@ -1327,17 +1328,25 @@ function playAttackAnimation(winnerSide, winnerName) {
     ctx.fillStyle = mGrad;
     ctx.beginPath(); ctx.arc(W*0.85, H*0.1, 45, 0, Math.PI*2); ctx.fill(); ctx.restore();
 
-    if (frame < 80) {
-      // Phase 0: Hero appears
-      heroScale = Math.min(2.2, frame / 15 * 2);
-      if (heroScale > 2) heroScale = 2 + (2.2-2)*(1-(frame-40)/40);
+    if (frame < 50) {
+      // Phase 0: Hero AND monster appear simultaneously
+      heroScale = Math.min(2, frame / 12 * 2);
+      monsterScale = Math.min(2, frame / 12 * 2);
       drawHero(heroX, heroY, heroScale);
+      // Draw monster at center
+      const monsterDrawX = monsterX + Math.sin(frame) * 3;
+      if (monsterType === 0) drawMonsterType0(monsterDrawX, monsterY, monsterScale, monsterAlpha);
+      else if (monsterType === 1) drawMonsterType1(monsterDrawX, monsterY, monsterScale, monsterAlpha);
+      else if (monsterType === 2) drawMonsterType2(monsterDrawX, monsterY, monsterScale, monsterAlpha);
+      else if (monsterType === 3) drawMonsterType3(monsterDrawX, monsterY, monsterScale, monsterAlpha);
+      else if (monsterType === 4) drawMonsterType4(monsterDrawX, monsterY, monsterScale, monsterAlpha);
+      drawMonsterName(monsterDrawX, monsterY, monsterScale);
       showText = '';
       textAlpha = 0;
-    } else if (frame < 250) {
+    } else if (frame < 200) {
       // Phase 1: Attack effect
       heroScale = 2; drawHero(heroX, heroY, heroScale);
-      const ap = (frame-80)/170;
+      const ap = (frame-50)/150;
       
       // Initialize projectile array if not exists
       if (!window.attackProjectiles) window.attackProjectiles = [];
@@ -1546,10 +1555,10 @@ function playAttackAnimation(winnerSide, winnerName) {
       else if (monsterType === 3) drawMonsterType3(monsterDrawX, monsterY, monsterScale, monsterAlpha);
       else if (monsterType === 4) drawMonsterType4(monsterDrawX, monsterY, monsterScale, monsterAlpha);
       drawMonsterName(monsterDrawX, monsterY, monsterScale);
-    } else if (frame < 390) {
+    } else if (frame < 280) {
       // Phase 2: Monster defeated - flash effect then lie down
       heroScale = 2; drawHero(heroX, heroY, heroScale);
-      const ep = (frame-250)/140;
+      const ep = (frame-200)/80;
       const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
       const cornerY = H * 0.82;
       // Brief white flash at impact
@@ -1603,8 +1612,8 @@ function playAttackAnimation(winnerSide, winnerName) {
         ctx.fillText(n, mCurX, mCurY - 42);
         ctx.restore();
       }
-    } else if (frame < 640) {
-      // Phase 3: Chang'e flies in
+    } else if (frame < 400) {
+      // Phase 3: Chang'e flies in FAST, result cards appear immediately
       heroScale = 2; drawHero(heroX, heroY, heroScale);
       // Draw lying defeated monster in the corner
       const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
@@ -1644,8 +1653,8 @@ function playAttackAnimation(winnerSide, winnerName) {
       ctx.fillStyle = '#ffd700';
       ctx.fillText(lyingName, cornerX, cornerY - 42);
       ctx.restore();
-      // Chang'e
-      const cp = (frame-440)/150;
+      // Chang'e flies in FAST
+      const cp = (frame-280)/80;
       const ease = 1 - Math.pow(1-Math.min(1,cp), 3);
       changeY = H+100 - (H*0.42+100)*ease;
       if (cp < 1 && particles.length < 150) {
@@ -1697,7 +1706,7 @@ function playAttackAnimation(winnerSide, winnerName) {
       ctx.fillStyle = '#ffd700'; ctx.shadowBlur = 8; ctx.shadowColor = '#ffd700';
       ctx.fillText(lyingName2, cornerX, cornerY - 42);
       ctx.restore();
-      const mp = Math.min(1, (frame-640)/90);
+      const mp = Math.min(1, (frame-400)/70);
       // Mooncake starts at Chang'e's hands (slightly below her center) and flies to hero
       const cakeStartX = W*0.5 + (winnerSide === 'left' ? -30 : 30);
       const cakeStartY = H*0.38 + 20; // Chang'e's hand level
@@ -1715,8 +1724,8 @@ function playAttackAnimation(winnerSide, winnerName) {
             life: 0.7, color: ['#ffd700','#ffaa00','#fff'][Math.floor(Math.random()*3)] });
         }
       }
-      if (frame > 780) {
-        ctx.save(); ctx.globalAlpha = Math.min(1, (frame-780)/35);
+      if (frame > 400) {
+        ctx.save(); ctx.globalAlpha = Math.min(1, (frame-400)/20);
         ctx.font = `900 ${Math.min(W/10,72)}px Microsoft YaHei, sans-serif`;
         ctx.textAlign = 'center'; ctx.fillStyle = '#ffd700';
         ctx.fillText(`${winnerName} 获胜！`, W/2, H*0.12); ctx.restore();
@@ -1748,7 +1757,16 @@ function playAttackAnimation(winnerSide, winnerName) {
     }
     if (frame < totalFrames) requestAnimationFrame(animate);
     else {
-      // Show result cards and buttons at bottom
+      // Show result cards and buttons at bottom (if not already shown)
+      if (!window._resultCardsShown) {
+        window._resultCardsShown = true;
+        showAttackResultCards();
+        document.getElementById('attackBottomArea').style.display = 'flex';
+      }
+    }
+    // Show result cards early when Chang'e appears (Phase 3 starts)
+    if (frame >= 280 && frame < 282 && !window._resultCardsShown) {
+      window._resultCardsShown = true;
       showAttackResultCards();
       document.getElementById('attackBottomArea').style.display = 'flex';
     }
@@ -1802,7 +1820,8 @@ function playMonsterWinsAnimation() {
   let studentLeftY = studentY, studentRightY = studentY;
   let attackType = Math.floor(Math.random() * 5); // Random attack type
   let leftHit = false, rightHit = false;
-  const totalFrames = 900;
+  const totalFrames = 600;
+  window._resultCardsShownMW = false;
 
   // Draw a chibi student character
   function drawStudent(x, y, sc, color, name, angle) {
@@ -2043,11 +2062,11 @@ function playMonsterWinsAnimation() {
         ctx.beginPath(); ctx.arc(monsterX+Math.cos(a)*r, monsterY+Math.sin(a)*r, 6+cp*4, 0, Math.PI*2); ctx.fill();
       }
       ctx.restore();
-    } else if (frame < 400) {
+    } else if (frame < 320) {
       // Phase 2: Monster attacks both students
       drawMonsterAt(monsterX, monsterY, 2 + Math.sin(frame*0.5)*0.15, 1);
       drawMonsterNameMW(monsterX, monsterY, 2 + Math.sin(frame*0.5)*0.15);
-      const ap = (frame - 120) / 280;
+      const ap = (frame - 120) / 200;
 
       // Attack left student
       if (ap > 0.1 && !leftHit) {
@@ -2165,9 +2184,9 @@ function playMonsterWinsAnimation() {
       }
 
       // Text
-      if (frame > 440) {
+      if (frame > 320) {
         ctx.save();
-        ctx.globalAlpha = Math.min(1, (frame - 440) / 40);
+        ctx.globalAlpha = Math.min(1, (frame - 320) / 30);
         ctx.font = `900 ${Math.min(W/10, 72)}px Microsoft YaHei, sans-serif`;
         ctx.textAlign = 'center'; ctx.fillStyle = '#ef4444';
         ctx.fillText('怪兽获胜！', W/2, H*0.12);
@@ -2189,6 +2208,16 @@ function playMonsterWinsAnimation() {
 
     if (frame < totalFrames) requestAnimationFrame(animate);
     else {
+      STATE.monsterWins = true;
+      if (!window._resultCardsShownMW) {
+        window._resultCardsShownMW = true;
+        showAttackResultCards();
+        document.getElementById('attackBottomArea').style.display = 'flex';
+      }
+    }
+    // Show result cards early when monster victory phase starts (Phase 3)
+    if (frame >= 320 && frame < 322 && !window._resultCardsShownMW) {
+      window._resultCardsShownMW = true;
       STATE.monsterWins = true;
       showAttackResultCards();
       document.getElementById('attackBottomArea').style.display = 'flex';
