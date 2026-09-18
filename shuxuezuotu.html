@@ -2539,7 +2539,6 @@ const tools=[
   {t:'compass',icon:'⊙',label:'圆规'},
   {t:'pen',icon:'✎',label:'画笔'},
   {t:'eraser',icon:'⌫',label:'擦除'},
-  {sep:true},
   {t:'measure',icon:'📐',label:'测量'},
   {t:'unfold',icon:'⊞',label:'展开图'},
 ];
@@ -2549,6 +2548,8 @@ tools.forEach(item=>{
   if(item.sep){tbHTML+='<div class="tsep"></div>';return}
   tbHTML+=`<button class="tb${item.t==='move'?' on':''}" data-t="${item.t}"><span>${item.icon}</span><span class="tb-l">${item.label}</span></button>`;
 });
+// Add fullscreen button after move tool
+tbHTML+=`<button class="tb" id="btnFullscreen" title="全屏"><span>⛶</span><span class="tb-l">全屏</span></button>`;
 tbHTML+='<div class="tsep"></div>';
 tbHTML+='<input type="color" id="colorPicker" value="#2563eb" style="width:30px;height:30px;border:1.5px solid var(--bd);border-radius:6px;cursor:pointer;padding:2px;flex-shrink:0" title="选择颜色">';
 tbHTML+='<div class="tsep"></div>';
@@ -2619,6 +2620,33 @@ document.getElementById('tgAxes').addEventListener('click',function(){G.showAxes
 document.getElementById('tgNumLine').addEventListener('click',function(){G.showNumberLine=!G.showNumberLine;this.classList.toggle('on',G.showNumberLine);drawBg()});
 document.getElementById('tgSnap').addEventListener('click',function(){G.snap=!G.snap;this.classList.toggle('on',G.snap)});
 document.getElementById('tgSmartDraw').addEventListener('click',function(){G.smartDraw=!G.smartDraw;this.classList.toggle('on',G.smartDraw)});
+
+// === FULLSCREEN ===
+const btnFullscreen=document.getElementById('btnFullscreen');
+function updateFullscreenBtn(){
+  const isFullscreen=document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement;
+  btnFullscreen.querySelector('span:last-child').textContent=isFullscreen?'退出全屏':'全屏';
+  btnFullscreen.classList.toggle('on',!!isFullscreen);
+}
+btnFullscreen.addEventListener('click',()=>{
+  const isFullscreen=document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement;
+  if(isFullscreen){
+    if(document.exitFullscreen)document.exitFullscreen();
+    else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+    else if(document.mozCancelFullScreen)document.mozCancelFullScreen();
+    else if(document.msExitFullscreen)document.msExitFullscreen();
+  }else{
+    const el=document.documentElement;
+    if(el.requestFullscreen)el.requestFullscreen();
+    else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();
+    else if(el.mozRequestFullScreen)el.mozRequestFullScreen();
+    else if(el.msRequestFullscreen)el.msRequestFullscreen();
+  }
+});
+document.addEventListener('fullscreenchange',updateFullscreenBtn);
+document.addEventListener('webkitfullscreenchange',updateFullscreenBtn);
+document.addEventListener('mozfullscreenchange',updateFullscreenBtn);
+document.addEventListener('MSFullscreenChange',updateFullscreenBtn);
 
 // === FUNCTION PANEL ===
 const funcColors=['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#0891b2'];
