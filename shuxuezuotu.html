@@ -1855,13 +1855,13 @@ function setTool(t){
         pcp.style.bottom='100%';
         pcp.style.marginBottom='8px';
       }
-      // Start 2-second timer - if no color selected, default to red and close panel
+      // Start 3-second timer - if no color selected, default to red and close panel
       window._penColorTimer=setTimeout(()=>{
         G.color='#dc2626';
         document.getElementById('colorPicker').value='#dc2626';
         pcp.classList.remove('on');
         window._penColorTimer=null;
-      },2000);
+      },3000);
     }else{
       pcp.classList.remove('on');
     }
