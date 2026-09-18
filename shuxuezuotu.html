@@ -73,7 +73,7 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .tb.on .tb-l{color:var(--blue)}
 .tsep{width:1px;height:28px;background:var(--bd);flex-shrink:0;margin:0 2px}
 /* Auto-hide toolbar in fullscreen */
-.toolbar-row.auto-hidden{transform:translateY(100%);opacity:0;pointer-events:none}
+.toolbar-row.auto-hidden,.func-panel.auto-hidden{transform:translateY(100%);opacity:0;pointer-events:none}
 .toolbar-row{transition:transform .3s ease,opacity .3s ease}
 .toolbar-trigger{position:fixed;bottom:0;left:0;right:0;height:40px;z-index:50}
 .tg{padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;border:1.5px solid var(--bd);transition:all .08s;white-space:nowrap;flex-shrink:0;color:#111827}
@@ -2660,9 +2660,12 @@ function isFullscreen(){
   return !!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement);
 }
 
+const funcPanel=document.getElementById('funcPanel');
+
 function showToolbar(){
   if(!isFullscreen())return;
   toolbar.classList.remove('auto-hidden');
+  funcPanel.classList.remove('auto-hidden');
   isToolbarVisible=true;
   resetAutoHideTimer();
 }
@@ -2670,6 +2673,7 @@ function showToolbar(){
 function hideToolbar(){
   if(!isFullscreen())return;
   toolbar.classList.add('auto-hidden');
+  funcPanel.classList.add('auto-hidden');
   isToolbarVisible=false;
 }
 
@@ -2706,6 +2710,7 @@ document.addEventListener('fullscreenchange',()=>{
   }else{
     if(autoHideTimer)clearTimeout(autoHideTimer);
     toolbar.classList.remove('auto-hidden');
+    funcPanel.classList.remove('auto-hidden');
     isToolbarVisible=true;
   }
 });
