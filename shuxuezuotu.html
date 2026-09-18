@@ -235,7 +235,7 @@ function drawBg(){
     bgX.fillStyle='#0f172a';
     bgX.beginPath();bgX.moveTo(W-1,G.oy);bgX.lineTo(W-10,G.oy-4);bgX.lineTo(W-10,G.oy+4);bgX.fill();
     bgX.beginPath();bgX.moveTo(G.ox,1);bgX.lineTo(G.ox-4,10);bgX.lineTo(G.ox+4,10);bgX.fill();
-    // X-axis: tick marks above, numbers below
+    // X-axis: tick marks above only, numbers below
     bgX.strokeStyle='#0f172a';bgX.lineWidth=1.5;
     bgX.fillStyle='#0f172a';bgX.font='bold 11px JetBrains Mono';
     bgX.textAlign='center';bgX.textBaseline='top';
@@ -243,21 +243,21 @@ function drawBg(){
     for(let i=ixMin;i<=ixMax;i++){
       if(i===0)continue;
       const px=G.ox+i*G.scale;
-      // Tick mark above x-axis
-      bgX.beginPath();bgX.moveTo(px,G.oy-5);bgX.lineTo(px,G.oy+5);bgX.stroke();
+      // Tick mark above x-axis only
+      bgX.beginPath();bgX.moveTo(px,G.oy-5);bgX.lineTo(px,G.oy);bgX.stroke();
       // Number below x-axis
-      bgX.fillText(i,px,G.oy+8);
+      bgX.fillText(i,px,G.oy+5);
     }
-    // Y-axis: tick marks left, numbers right of ticks
-    bgX.textAlign='right';bgX.textBaseline='middle';
+    // Y-axis: tick marks right side only, numbers right of axis
+    bgX.textAlign='left';bgX.textBaseline='middle';
     const iyMin=Math.ceil(-(H-G.oy)/G.scale),iyMax=Math.floor(G.oy/G.scale);
     for(let i=iyMin;i<=iyMax;i++){
       if(i===0)continue;
       const py=G.oy-i*G.scale;
-      // Tick mark left of y-axis
-      bgX.beginPath();bgX.moveTo(G.ox-5,py);bgX.lineTo(G.ox+5,py);bgX.stroke();
-      // Number left of y-axis
-      bgX.fillText(i,G.ox-8,py);
+      // Tick mark right of y-axis only
+      bgX.beginPath();bgX.moveTo(G.ox,py);bgX.lineTo(G.ox+5,py);bgX.stroke();
+      // Number right of y-axis
+      bgX.fillText(i,G.ox+8,py);
     }
     bgX.textAlign='right';bgX.textBaseline='top';bgX.fillText('O',G.ox-5,G.oy+4);
     bgX.font='bold 13px JetBrains Mono';bgX.textAlign='left';bgX.textBaseline='middle';
@@ -281,8 +281,8 @@ function drawBg(){
     const ixMin=Math.ceil(-G.ox/G.scale),ixMax=Math.floor((W-G.ox)/G.scale);
     for(let i=ixMin;i<=ixMax;i++){
       const px=G.ox+i*G.scale;
-      // Tick mark above the line
-      bgX.beginPath();bgX.moveTo(px,axisY-6);bgX.lineTo(px,axisY+6);bgX.stroke();
+      // Tick mark above the line only
+      bgX.beginPath();bgX.moveTo(px,axisY-6);bgX.lineTo(px,axisY);bgX.stroke();
       // Number below the line
       bgX.fillText(i,px,axisY+10);
     }
