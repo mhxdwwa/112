@@ -958,6 +958,36 @@ function playAttackAnimation(winnerSide, winnerName) {
   // --- MONSTER TYPE SELECTION ---
   // Randomly select monster type for this round (0-4)
   const monsterType = STATE.round % 5; // Rotate through 5 monsters
+  const MONSTER_NAMES = ['马虎怪', '偷懒怪', '畏难怪', '急躁怪', '遗忘怪'];
+  
+  // Draw monster name label above the monster
+  function drawMonsterName(x, y, sc) {
+    const name = MONSTER_NAMES[monsterType];
+    ctx.save();
+    ctx.font = `900 ${Math.max(16, 22 * sc)}px "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const nameY = y - 80 * sc;
+    const m = ctx.measureText(name);
+    const pw = 14, ph = 6;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath();
+    const rx = x - m.width/2 - pw, ry = nameY - 12*sc - ph;
+    const rw = m.width + pw*2, rh = 24*sc + ph*2, cr = 8;
+    ctx.moveTo(rx+cr, ry); ctx.lineTo(rx+rw-cr, ry);
+    ctx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+cr);
+    ctx.lineTo(rx+rw, ry+rh-cr);
+    ctx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-cr, ry+rh);
+    ctx.lineTo(rx+cr, ry+rh);
+    ctx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-cr);
+    ctx.lineTo(rx, ry+cr);
+    ctx.quadraticCurveTo(rx, ry, rx+cr, ry);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,215,0,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowBlur = 10; ctx.shadowColor = '#ffd700';
+    ctx.fillText(name, x, nameY);
+    ctx.restore();
+  }
   
   // --- MONSTER: spooky but cute (Type 0: Dark Code Demon) ---
   function drawMonster(x, y, sc, alpha) {
@@ -1508,6 +1538,7 @@ function playAttackAnimation(winnerSide, winnerName) {
       else if (monsterType === 2) drawMonsterType2(monsterDrawX, monsterY, monsterScale, monsterAlpha);
       else if (monsterType === 3) drawMonsterType3(monsterDrawX, monsterY, monsterScale, monsterAlpha);
       else if (monsterType === 4) drawMonsterType4(monsterDrawX, monsterY, monsterScale, monsterAlpha);
+      drawMonsterName(monsterDrawX, monsterY, monsterScale);
     } else if (frame < 680) {
       // Phase 2: Explosion with Z-shaped fragments
       heroScale = 2; drawHero(heroX, heroY, heroScale);
@@ -1634,6 +1665,30 @@ function playAttackAnimation(winnerSide, winnerName) {
       else if (monsterType === 3) drawMonsterType3(0, 0, 1, monsterReassembleAlpha * 0.7);
       else if (monsterType === 4) drawMonsterType4(0, 0, 1, monsterReassembleAlpha * 0.7);
       ctx.restore();
+      // Draw name for lying defeated monster
+      ctx.save();
+      ctx.font = '900 18px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const lyingName = MONSTER_NAMES[monsterType];
+      const lnm = ctx.measureText(lyingName);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const lnpw = 10, lnph = 4;
+      ctx.beginPath();
+      const lrx = cornerX - lnm.width/2 - lnpw, lry = cornerY - 55;
+      const lrw = lnm.width + lnpw*2, lrh = 24 + lnph*2, lcr = 6;
+      ctx.moveTo(lrx+lcr, lry); ctx.lineTo(lrx+lrw-lcr, lry);
+      ctx.quadraticCurveTo(lrx+lrw, lry, lrx+lrw, lry+lcr);
+      ctx.lineTo(lrx+lrw, lry+lrh-lcr);
+      ctx.quadraticCurveTo(lrx+lrw, lry+lrh, lrx+lrw-lcr, lry+lrh);
+      ctx.lineTo(lrx+lcr, lry+lrh);
+      ctx.quadraticCurveTo(lrx, lry+lrh, lrx, lry+lrh-lcr);
+      ctx.lineTo(lrx, lry+lcr);
+      ctx.quadraticCurveTo(lrx, lry, lrx+lcr, lry);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,215,0,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#ffd700'; ctx.shadowBlur = 8; ctx.shadowColor = '#ffd700';
+      ctx.fillText(lyingName, cornerX, cornerY - 42);
+      ctx.restore();
       // Chang'e
       const cp = (frame-720)/200;
       const ease = 1 - Math.pow(1-Math.min(1,cp), 3);
@@ -1675,6 +1730,30 @@ function playAttackAnimation(winnerSide, winnerName) {
       else if (monsterType === 2) drawMonsterType2(0, 0, 1, 0.7);
       else if (monsterType === 3) drawMonsterType3(0, 0, 1, 0.7);
       else if (monsterType === 4) drawMonsterType4(0, 0, 1, 0.7);
+      ctx.restore();
+      // Draw name for lying defeated monster
+      ctx.save();
+      ctx.font = '900 18px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const lyingName2 = MONSTER_NAMES[monsterType];
+      const lnm2 = ctx.measureText(lyingName2);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const lnpw2 = 10, lnph2 = 4;
+      ctx.beginPath();
+      const lrx2 = cornerX - lnm2.width/2 - lnpw2, lry2 = cornerY - 55;
+      const lrw2 = lnm2.width + lnpw2*2, lrh2 = 24 + lnph2*2, lcr2 = 6;
+      ctx.moveTo(lrx2+lcr2, lry2); ctx.lineTo(lrx2+lrw2-lcr2, lry2);
+      ctx.quadraticCurveTo(lrx2+lrw2, lry2, lrx2+lrw2, lry2+lcr2);
+      ctx.lineTo(lrx2+lrw2, lry2+lrh2-lcr2);
+      ctx.quadraticCurveTo(lrx2+lrw2, lry2+lrh2, lrx2+lrw2-lcr2, lry2+lrh2);
+      ctx.lineTo(lrx2+lcr2, lry2+lrh2);
+      ctx.quadraticCurveTo(lrx2, lry2+lrh2, lrx2, lry2+lrh2-lcr2);
+      ctx.lineTo(lrx2, lry2+lcr2);
+      ctx.quadraticCurveTo(lrx2, lry2, lrx2+lcr2, lry2);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,215,0,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#ffd700'; ctx.shadowBlur = 8; ctx.shadowColor = '#ffd700';
+      ctx.fillText(lyingName2, cornerX, cornerY - 42);
       ctx.restore();
       const mp = Math.min(1, (frame-1000)/140);
       // Mooncake starts at Chang'e's hands (slightly below her center) and flies to hero
@@ -1746,6 +1825,34 @@ function playMonsterWinsAnimation() {
   const studentLeftX = W * 0.18, studentRightX = W * 0.82;
   const studentY = H * 0.55;
   const monsterType = STATE.round % 5;
+  const MONSTER_NAMES_MW = ['马虎怪', '偷懒怪', '畏难怪', '急躁怪', '遗忘怪'];
+  function drawMonsterNameMW(x, y, sc) {
+    const name = MONSTER_NAMES_MW[monsterType];
+    ctx.save();
+    ctx.font = `900 ${Math.max(16, 22 * sc)}px "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const nameY = y - 80 * sc;
+    const m = ctx.measureText(name);
+    const pw = 14, ph = 6;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath();
+    const rx = x - m.width/2 - pw, ry = nameY - 12*sc - ph;
+    const rw = m.width + pw*2, rh = 24*sc + ph*2, cr = 8;
+    ctx.moveTo(rx+cr, ry); ctx.lineTo(rx+rw-cr, ry);
+    ctx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+cr);
+    ctx.lineTo(rx+rw, ry+rh-cr);
+    ctx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-cr, ry+rh);
+    ctx.lineTo(rx+cr, ry+rh);
+    ctx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-cr);
+    ctx.lineTo(rx, ry+cr);
+    ctx.quadraticCurveTo(rx, ry, rx+cr, ry);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,215,0,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowBlur = 10; ctx.shadowColor = '#ffd700';
+    ctx.fillText(name, x, nameY);
+    ctx.restore();
+  }
   let frame = 0;
   let particles = [];
   let monsterScale = 0;
@@ -1957,6 +2064,7 @@ function playMonsterWinsAnimation() {
       monsterScale = Math.min(2, frame / 20 * 2);
       if (monsterScale > 2) monsterScale = 2;
       drawMonsterAt(monsterX, monsterY, monsterScale, 1);
+      drawMonsterNameMW(monsterX, monsterY, monsterScale);
       // Students appear
       const studentAlpha = Math.min(1, frame / 60);
       ctx.save(); ctx.globalAlpha = studentAlpha;
@@ -1966,6 +2074,7 @@ function playMonsterWinsAnimation() {
     } else if (frame < 200) {
       // Phase 1: Monster charges up
       drawMonsterAt(monsterX, monsterY, 2, 1);
+      drawMonsterNameMW(monsterX, monsterY, 2);
       drawStudent(studentLeftX, studentY, 1.8, '#ff6b6b', STATE.playerLeft, 0);
       drawStudent(studentRightX, studentY, 1.8, '#6ba3ff', STATE.playerRight, 0);
       // Charge effect
@@ -1989,6 +2098,7 @@ function playMonsterWinsAnimation() {
     } else if (frame < 500) {
       // Phase 2: Monster attacks both students
       drawMonsterAt(monsterX, monsterY, 2 + Math.sin(frame*0.5)*0.15, 1);
+      drawMonsterNameMW(monsterX, monsterY, 2 + Math.sin(frame*0.5)*0.15);
       const ap = (frame - 200) / 300;
 
       // Attack left student
@@ -2094,6 +2204,7 @@ function playMonsterWinsAnimation() {
       // Monster in center, celebrating
       const monsterBounce = Math.sin(frame * 0.1) * 5;
       drawMonsterAt(monsterX, monsterY + monsterBounce, 2.2, 1);
+      drawMonsterNameMW(monsterX, monsterY + monsterBounce, 2.2);
 
       // Students lying in corners
       drawLyingStudent(W * 0.12, H * 0.85, 1.5, '#ff6b6b', STATE.playerLeft, 'left');
