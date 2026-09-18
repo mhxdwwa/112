@@ -884,6 +884,7 @@ function playAttackAnimation(winnerSide, winnerName) {
   const W = canvas.width, H = canvas.height;
   const heroX = winnerSide === 'left' ? W * 0.18 : W * 0.82;
   const heroY = H * 0.55;
+  const monsterX = W * 0.5, monsterY = H * 0.42;
   const loserX = winnerSide === 'left' ? W * 0.82 : W * 0.18;
   const loserY = H * 0.55;
   const loserName = winnerSide === 'left' ? STATE.playerRight : STATE.playerLeft;
