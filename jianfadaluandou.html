@@ -351,7 +351,7 @@ body{background:radial-gradient(ellipse at 50% 20%,#1a2a5e 0%,#0d1533 50%,#060a1
 <script>
 /* ========== STATE ========== */
 const STATE = {
-  names: [], usedNames: [], questions: [], rule: 'a-b=a+(-b)',
+  names: [], usedNames: [], questions: [], questionsRight: [], rule: 'a-b=a+(-b)',
   playerLeft: '', playerRight: '',
   scores: { left: 0, right: 0 }, round: 0,
   timers: { left: 0, right: 0 },
@@ -361,23 +361,26 @@ const STATE = {
   results: { left: null, right: null },
   // Each side tracks its own question index
   qIdxLeft: 0, qIdxRight: 0,
-  shuffledQuestions: [],
+  shuffledQuestions: [], shuffledQuestionsRight: [],
   canvasData: {},
   monsterWins: false
 };
 window.STATE = STATE;
 
-const DEFAULT_QUESTIONS = [
-  { q: '(-3)-(-5)=', ans: '2' },
+const DEFAULT_QUESTIONS_LEFT = [
   { q: '0-(-4)=', ans: '4' },
-  { q: '(-6)-2=', ans: '-8' },
-  { q: '7-12=', ans: '-5' },
-  { q: '(-7)-(-3)=', ans: '-4' },
-  { q: '9-4=', ans: '5' },
-  { q: '(-2)-6=', ans: '-8' },
-  { q: '0-(-9)=', ans: '9' },
-  { q: '(-5)-3=', ans: '-8' },
-  { q: '4-(-6)=', ans: '10' }
+  { q: '4.9-(-2.3)=', ans: '7.2' },
+  { q: '(-2/5)-(+1/2)=', ans: '-9/10' },
+  { q: '(-3⅖)-(+1¾)=', ans: '-103/20' },
+  { q: '(+1⅚)-(-2⅗)=', ans: '133/30' }
+];
+
+const DEFAULT_QUESTIONS_RIGHT = [
+  { q: '0-7=', ans: '-7' },
+  { q: '(-12.3)-(-5.1)=', ans: '-7.2' },
+  { q: '(-1/4)-(+2/3)=', ans: '-11/12' },
+  { q: '(-2½)-(+3⅓)=', ans: '-35/6' },
+  { q: '(+1⅚)-(-2⅗)=', ans: '133/30' }
 ];
 
 const DEFAULT_NAMES = [
@@ -394,7 +397,8 @@ const DEFAULT_NAMES = [
 /* ========== INIT ========== */
 function init() {
   STATE.names = [...DEFAULT_NAMES];
-  STATE.questions = [...DEFAULT_QUESTIONS];
+  STATE.questions = [...DEFAULT_QUESTIONS_LEFT];
+  STATE.questionsRight = [...DEFAULT_QUESTIONS_RIGHT];
   updateMenuInfo();
   initStars();
   initParticles();
@@ -423,9 +427,14 @@ function importQuestions() {
   });
   if (qs.length === 0) return alert('未检测到有效题目');
   STATE.questions = qs;
+  STATE.questionsRight = qs; // Both sides use the same imported questions
   updateMenuInfo(); hideModal('questionModal');
 }
-function resetQuestions() { STATE.questions = [...DEFAULT_QUESTIONS]; updateMenuInfo(); hideModal('questionModal'); }
+function resetQuestions() { 
+  STATE.questions = [...DEFAULT_QUESTIONS_LEFT]; 
+  STATE.questionsRight = [...DEFAULT_QUESTIONS_RIGHT]; 
+  updateMenuInfo(); hideModal('questionModal'); 
+}
 function importNames() {
   const text = document.getElementById('nameInput').value.trim();
   if (!text) return alert('请输入姓名');
@@ -457,10 +466,11 @@ function handleStart() {
     }
     return;
   }
-  // Shuffle questions for this round so each side gets them in different order
-  STATE.shuffledQuestions = shuffleArray([...STATE.questions]);
+  // Use questions in order (no shuffle) - each side has its own question set
+  STATE.shuffledQuestions = [...STATE.questions];
+  STATE.shuffledQuestionsRight = [...STATE.questionsRight];
   STATE.qIdxLeft = 0;
-  STATE.qIdxRight = Math.min(1, STATE.shuffledQuestions.length - 1); // start at different offset
+  STATE.qIdxRight = 0;
   showScreen('preGame');
   renderPreGame();
 }
@@ -716,7 +726,8 @@ function initCanvases() {
 
     // Set question text on overlay (not on canvas - can't be erased)
     const qIdx = side === 'left' ? STATE.qIdxLeft : STATE.qIdxRight;
-    const q = STATE.shuffledQuestions[qIdx];
+    const qArray = side === 'left' ? STATE.shuffledQuestions : STATE.shuffledQuestionsRight;
+    const q = qArray[qIdx];
     qOverlay.textContent = q ? q.q : '';
 
     // Size canvas to fill wrap
@@ -2625,7 +2636,8 @@ function showAttackResultCards() {
 function openReview(side) {
   const playerName = side === 'left' ? STATE.playerLeft : STATE.playerRight;
   const qIdx = side === 'left' ? STATE.qIdxLeft : STATE.qIdxRight;
-  const q = STATE.shuffledQuestions[qIdx];
+  const qArray = side === 'left' ? STATE.shuffledQuestions : STATE.shuffledQuestionsRight;
+  const q = qArray[qIdx];
   const canvasData = STATE.canvasData[side];
   
   document.getElementById('reviewTitle').textContent = `${playerName} 的答题情况`;
