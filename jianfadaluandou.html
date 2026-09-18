@@ -1921,13 +1921,21 @@ function playAttackAnimation(winnerSide, winnerName) {
   function startIdleAnimation() {
     const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
     const cornerY = H * 0.82;
+    let _lastIdleTime = 0;
+    let _idleParticleTimer = 0;
 
-    function idleAnimate() {
+    function idleAnimate(now) {
       // Check if we should stop (page changed)
       if (window._stopIdleAnimation) {
         window._stopIdleAnimation = false;
         return;
       }
+
+      // Time-based throttling (same as main animation loop)
+      if (!_lastIdleTime) _lastIdleTime = now;
+      const dt = Math.min(now - _lastIdleTime, 50);
+      _lastIdleTime = now;
+      const dtFactor = dt / 16.667;
 
       ctx.clearRect(0, 0, W, H);
       // Background
@@ -1952,9 +1960,12 @@ function playAttackAnimation(winnerSide, winnerName) {
       // Persistent mooncake at hero's hand (stays until page switch)
       if (_mooncakeArrived) {
         drawMooncake(_mooncakeFinalX, _mooncakeFinalY, 0.8);
-        // Keep spawning the same golden particle effect around the mooncake
-        if (particles.length < 150) {
-          for (let i = 0; i < 2; i++) {
+        // Keep spawning the same golden particle effect around the mooncake (time-throttled)
+        _idleParticleTimer += dt;
+        if (_idleParticleTimer >= 16.667 && particles.length < 150) {
+          _idleParticleTimer -= 16.667;
+          const spawnCount = Math.min(2, Math.round(2 * dtFactor));
+          for (let i = 0; i < spawnCount; i++) {
             const a = Math.random()*Math.PI*2, d = 15+Math.random()*10;
             particles.push({ x: _mooncakeFinalX+Math.cos(a)*d, y: _mooncakeFinalY+Math.sin(a)*d, vx: Math.cos(a)*1.5, vy: -Math.random()*2-0.5,
               life: 0.7, color: ['#ffd700','#ffaa00','#fff'][Math.floor(Math.random()*3)] });
@@ -2040,10 +2051,10 @@ function playAttackAnimation(winnerSide, winnerName) {
       ctx.fillText(`${winnerName} 获胜！`, W/2, H*0.12);
       ctx.restore();
 
-      // Update and draw particles (same as main animation loop)
+      // Update and draw particles (time-scaled, same as main loop)
       if (particles.length > 300) particles.splice(0, particles.length - 300);
       particles = particles.filter(p => {
-        p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.vx *= 0.99; p.life -= 0.018;
+        p.x += p.vx * dtFactor; p.y += p.vy * dtFactor; p.vy += 0.04 * dtFactor; p.vx *= Math.pow(0.99, dtFactor); p.life -= 0.018 * dtFactor;
         if (p.life > 0) {
           ctx.save(); ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
           ctx.beginPath(); ctx.arc(p.x, p.y, 3*p.life+1, 0, Math.PI*2); ctx.fill();
