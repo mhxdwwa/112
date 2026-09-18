@@ -80,6 +80,10 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .tool-dropdown.on{display:flex}
 .tool-dropdown .tb{width:100%;flex-direction:row;justify-content:flex-start;gap:8px;padding:6px 10px;font-size:14px}
 .tool-dropdown .tb .tb-l{font-size:11px}
+/* Auto-hide toolbar in fullscreen */
+.toolbar-row.auto-hidden{transform:translateY(100%);opacity:0;pointer-events:none}
+.toolbar-row{transition:transform .3s ease,opacity .3s ease}
+.toolbar-trigger{position:fixed;bottom:0;left:0;right:0;height:40px;z-index:50}
 .tg{padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;border:1.5px solid var(--bd);transition:all .08s;white-space:nowrap;flex-shrink:0;color:#111827}
 .tg:active{transform:scale(.95)}
 .tg.on{background:var(--blue);color:#fff;border-color:var(--blue)}
@@ -116,7 +120,6 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
     <canvas id="mainC"></canvas>
     <canvas id="ovC"></canvas>
     <div class="status"><span id="sHint">选择工具开始作图</span><span id="sCoord">(0, 0)</span><span id="sZoom">100%</span><span id="s3D" style="display:none;color:var(--blue)">3D视角 ← → ↑ ↓</span></div>
-    <div class="obj-panel" id="objPanel" style="display:none"><div class="obj-panel-h">对象</div><div id="objList"></div></div>
     <div class="unfold-panel" id="unfoldPanel">
       <div class="up-title">选择几何体展开图</div>
       <div class="up-row" id="upShapes"></div>
@@ -307,7 +310,6 @@ function draw(){
     drawPreview();
   }
   drawOverlay();
-  updateObjList();
   // Show 3D hint if any 3D shapes exist
   const has3D=G.objs.some(o=>['box','cylinder','cone','sphere'].includes(o.type));
   document.getElementById('s3D').style.display=has3D?'inline':'none';
@@ -2545,11 +2547,9 @@ const toolGroups=[
     {t:'cone',icon:'△',label:'圆锥'},
     {t:'sphere',icon:'●',label:'球'},
   ]},
-  {id:'draw',icon:'✎',label:'绘图',tools:[
+  {id:'tools',icon:'📐',label:'工具',tools:[
     {t:'ruler',icon:'📏',label:'直尺'},
     {t:'compass',icon:'⊙',label:'圆规'},
-    {t:'pen',icon:'✎',label:'画笔'},
-    {t:'eraser',icon:'⌫',label:'擦除'},
     {t:'measure',icon:'📐',label:'测量'},
     {t:'unfold',icon:'⊞',label:'展开图'},
   ]},
@@ -2558,6 +2558,9 @@ const toolRow=document.getElementById('toolRow');
 let tbHTML='';
 // Move tool (standalone)
 tbHTML+=`<button class="tb on" data-t="move"><span>☝</span><span class="tb-l">移动</span></button>`;
+// Common tools directly visible
+tbHTML+=`<button class="tb" data-t="pen"><span>✎</span><span class="tb-l">画笔</span></button>`;
+tbHTML+=`<button class="tb" data-t="eraser"><span>⌫</span><span class="tb-l">擦除</span></button>`;
 // Fullscreen button
 tbHTML+=`<button class="tb" id="btnFullscreen" title="全屏"><span>⛶</span><span class="tb-l">全屏</span></button>`;
 tbHTML+='<div class="tsep"></div>';
@@ -2698,6 +2701,65 @@ document.addEventListener('fullscreenchange',updateFullscreenBtn);
 document.addEventListener('webkitfullscreenchange',updateFullscreenBtn);
 document.addEventListener('mozfullscreenchange',updateFullscreenBtn);
 document.addEventListener('MSFullscreenChange',updateFullscreenBtn);
+
+// === AUTO-HIDE TOOLBAR IN FULLSCREEN ===
+let autoHideTimer=null;
+let isToolbarVisible=true;
+const toolbar=document.getElementById('toolRow');
+
+function isFullscreen(){
+  return !!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement);
+}
+
+function showToolbar(){
+  if(!isFullscreen())return;
+  toolbar.classList.remove('auto-hidden');
+  isToolbarVisible=true;
+  resetAutoHideTimer();
+}
+
+function hideToolbar(){
+  if(!isFullscreen())return;
+  toolbar.classList.add('auto-hidden');
+  isToolbarVisible=false;
+}
+
+function resetAutoHideTimer(){
+  if(autoHideTimer)clearTimeout(autoHideTimer);
+  autoHideTimer=setTimeout(()=>{
+    if(isFullscreen()&&isToolbarVisible){
+      hideToolbar();
+    }
+  },3000);
+}
+
+// Show toolbar on mouse movement near bottom
+document.addEventListener('mousemove',e=>{
+  if(!isFullscreen())return;
+  if(e.clientY>window.innerHeight-80){
+    showToolbar();
+  }
+});
+
+// Show toolbar on touch near bottom
+document.addEventListener('touchstart',e=>{
+  if(!isFullscreen())return;
+  const touch=e.touches[0];
+  if(touch.clientY>window.innerHeight-80){
+    showToolbar();
+  }
+});
+
+// Start auto-hide timer when entering fullscreen
+document.addEventListener('fullscreenchange',()=>{
+  if(isFullscreen()){
+    resetAutoHideTimer();
+  }else{
+    if(autoHideTimer)clearTimeout(autoHideTimer);
+    toolbar.classList.remove('auto-hidden');
+    isToolbarVisible=true;
+  }
+});
 
 // === FUNCTION PANEL ===
 const funcColors=['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#0891b2'];
@@ -2919,20 +2981,6 @@ function stopDemo(){
   if(demoOverlay){demoOverlay.remove();demoOverlay=null}
   document.querySelectorAll('.demo-btn').forEach(b=>b.classList.remove('active'));
   updateFuncList();draw();
-}
-
-// === OBJECT LIST ===
-function updateObjList(){
-  const panel=document.getElementById('objPanel'),list=document.getElementById('objList');
-  if(G.objs.length===0){panel.style.display='none';return}
-  panel.style.display='block';
-  list.innerHTML=G.objs.map(o=>{
-    const name=o.type==='point'?(o.label||'点'):o.type==='segment'?'线段':o.type==='line'?'直线':o.type==='ray'?'射线':o.type==='circle'?'圆':o.type==='sector'?'扇形':o.type==='polygon'?'多边形':o.type==='freehand'?'画笔':o.type==='ruler'?'直尺':o.type==='arc'?'弧':o.type==='box'?(o.w===o.h?'正方体':'长方体'):o.type==='cylinder'?'圆柱':o.type==='cone'?'圆锥':o.type==='sphere'?'球':o.type==='unfold'?'展开图':o.type;
-    const sel=o.id===G.selected?' sel':'';
-    return`<div class="obj-item${sel}" data-id="${o.id}"><div class="od" style="background:${o.color||G.color}"></div><div class="on">${name}</div><div class="ox" data-id="${o.id}">×</div></div>`;
-  }).join('');
-  list.querySelectorAll('.obj-item').forEach(el=>{el.addEventListener('click',()=>{G.selected=parseInt(el.dataset.id);draw()})});
-  list.querySelectorAll('.ox').forEach(x=>{x.addEventListener('click',e=>{e.stopPropagation();saveUndo();G.objs=G.objs.filter(o=>o.id!==parseInt(x.dataset.id));G.selected=null;draw()})});
 }
 
 // === KEYBOARD ===
