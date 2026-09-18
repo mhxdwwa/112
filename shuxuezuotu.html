@@ -182,7 +182,7 @@ const G={
   panning:false,panSX:0,panSY:0,panOX:0,panOY:0,
   mpx:0,mpy:0,mmx:0,mmy:0,
   fhPts:[],pointerDown:false,
-  showGrid:false,showAxes:false,showNumberLine:false,snap:false,
+  showGrid:false,showAxes:false,showNumberLine:false,snap:false,smartDraw:false,
   undoStack:[],redoStack:[],
   funcs:[],pointN:0,
   drawState:null,demo:null,
@@ -2181,6 +2181,113 @@ function onMove(e){
   else if(G.tool==='eraser')drawOverlay();
 }
 
+// === SMART DRAWING RECOGNITION ===
+function recognizeShape(pts) {
+  if (pts.length < 5) return null;
+  
+  // Calculate total path length
+  let pathLen = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x;
+    const dy = pts[i].y - pts[i-1].y;
+    pathLen += Math.sqrt(dx*dx + dy*dy);
+  }
+  
+  // Direct distance from start to end
+  const directDist = Math.sqrt(
+    Math.pow(pts[pts.length-1].x - pts[0].x, 2) +
+    Math.pow(pts[pts.length-1].y - pts[0].y, 2)
+  );
+  
+  // Check if path is closed (for rectangle/circle detection)
+  const isClosed = directDist < pathLen * 0.15;
+  
+  // 1. LINE DETECTION
+  const straightness = directDist / pathLen;
+  if (straightness > 0.92) {
+    return { type: 'line', x1: pts[0].x, y1: pts[0].y, x2: pts[pts.length-1].x, y2: pts[pts.length-1].y };
+  }
+  
+  // Only check closed shapes if path is roughly closed
+  if (!isClosed) return null;
+  
+  // 2. CIRCLE DETECTION
+  // Calculate centroid
+  let cx = 0, cy = 0;
+  pts.forEach(p => { cx += p.x; cy += p.y; });
+  cx /= pts.length; cy /= pts.length;
+  
+  // Calculate average radius and variance
+  let avgR = 0;
+  const radii = pts.map(p => Math.sqrt(Math.pow(p.x - cx, 2) + Math.pow(p.y - cy, 2)));
+  radii.forEach(r => avgR += r);
+  avgR /= pts.length;
+  
+  let variance = 0;
+  radii.forEach(r => variance += Math.pow(r - avgR, 2));
+  variance /= pts.length;
+  const stdDev = Math.sqrt(variance);
+  const cv = stdDev / avgR; // coefficient of variation
+  
+  // If all points are roughly equidistant from center, it's a circle
+  if (cv < 0.15 && avgR > 10) {
+    return { type: 'circle', cx, cy, r: avgR };
+  }
+  
+  // 3. RECTANGLE DETECTION
+  // Find bounding box
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  pts.forEach(p => {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  });
+  
+  const bboxW = maxX - minX;
+  const bboxH = maxY - minY;
+  const bboxArea = bboxW * bboxH;
+  
+  // Calculate how much of the bounding box is covered by the path
+  // Use a simple grid-based approach
+  const gridSize = 5;
+  const gridW = Math.ceil(bboxW / gridSize);
+  const gridH = Math.ceil(bboxH / gridSize);
+  const occupied = new Set();
+  
+  pts.forEach(p => {
+    const gx = Math.floor((p.x - minX) / gridSize);
+    const gy = Math.floor((p.y - minY) / gridSize);
+    occupied.add(`${gx},${gy}`);
+  });
+  
+  const occupiedArea = occupied.size * gridSize * gridSize;
+  const coverage = occupiedArea / bboxArea;
+  
+  // Check if the path follows the edges of the bounding box
+  // Count how many points are near the edges
+  const edgeThreshold = Math.max(bboxW, bboxH) * 0.15;
+  let edgePoints = 0;
+  pts.forEach(p => {
+    const distToEdges = Math.min(
+      Math.abs(p.x - minX),
+      Math.abs(p.x - maxX),
+      Math.abs(p.y - minY),
+      Math.abs(p.y - maxY)
+    );
+    if (distToEdges < edgeThreshold) edgePoints++;
+  });
+  
+  const edgeRatio = edgePoints / pts.length;
+  
+  // If most points are near edges and coverage is reasonable, it's a rectangle
+  if (edgeRatio > 0.7 && coverage > 0.3 && coverage < 0.8 && bboxArea > 400) {
+    return { type: 'rectangle', x: minX, y: minY, w: bboxW, h: bboxH };
+  }
+  
+  return null;
+}
+
 function onUp(e){
   G.pointerDown=false;
   G.eraserActive=false;
@@ -2215,7 +2322,29 @@ function onUp(e){
   }
   
   if(G.tool==='pen'&&G.fhPts.length>1){
-    saveUndo();G.objs.push({id:G.nextId++,type:'freehand',pts:[...G.fhPts],color:G.color});G.fhPts=[];draw();
+    saveUndo();
+    // Smart drawing recognition
+    if(G.smartDraw){
+      const shape = recognizeShape(G.fhPts);
+      if(shape){
+        if(shape.type === 'line'){
+          G.objs.push({id:G.nextId++,type:'segment',x1:shape.x1,y1:shape.y1,x2:shape.x2,y2:shape.y2,color:G.color});
+        } else if(shape.type === 'circle'){
+          G.objs.push({id:G.nextId++,type:'circle',cx:shape.cx,cy:shape.cy,r:shape.r,color:G.color});
+        } else if(shape.type === 'rectangle'){
+          G.objs.push({id:G.nextId++,type:'polygon',pts:[
+            {x:shape.x,y:shape.y},
+            {x:shape.x+shape.w,y:shape.y},
+            {x:shape.x+shape.w,y:shape.y+shape.h},
+            {x:shape.x,y:shape.y+shape.h}
+          ],color:G.color});
+        }
+        G.fhPts=[];
+        draw();
+        return;
+      }
+    }
+    G.objs.push({id:G.nextId++,type:'freehand',pts:[...G.fhPts],color:G.color});G.fhPts=[];draw();
   }
   G.touchId=null;
 }
@@ -2429,6 +2558,7 @@ tbHTML+='<button class="tg" id="tgGrid">网格</button>';
 tbHTML+='<button class="tg" id="tgAxes">坐标</button>';
 tbHTML+='<button class="tg" id="tgNumLine">数轴</button>';
 tbHTML+='<button class="tg" id="tgSnap">吸附</button>';
+tbHTML+='<button class="tg" id="tgSmartDraw">智能作图</button>';
 tbHTML+='<div class="tsep"></div>';
 tbHTML+='<button class="ab" id="btnUndo" title="撤销">↩</button>';
 tbHTML+='<button class="ab" id="btnRedo" title="重做">↪</button>';
@@ -2488,6 +2618,7 @@ document.getElementById('tgGrid').addEventListener('click',function(){G.showGrid
 document.getElementById('tgAxes').addEventListener('click',function(){G.showAxes=!G.showAxes;this.classList.toggle('on',G.showAxes);drawBg()});
 document.getElementById('tgNumLine').addEventListener('click',function(){G.showNumberLine=!G.showNumberLine;this.classList.toggle('on',G.showNumberLine);drawBg()});
 document.getElementById('tgSnap').addEventListener('click',function(){G.snap=!G.snap;this.classList.toggle('on',G.snap)});
+document.getElementById('tgSmartDraw').addEventListener('click',function(){G.smartDraw=!G.smartDraw;this.classList.toggle('on',G.smartDraw)});
 
 // === FUNCTION PANEL ===
 const funcColors=['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#0891b2'];
