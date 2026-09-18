@@ -1377,6 +1377,17 @@ function playAttackAnimation(winnerSide, winnerName) {
   let _lastTime = 0;
   let _projTimer = 0;
 
+  // Phase 3: Chang'e constant velocity flight (time-based)
+  let _phase3StartTime = null;
+  const PHASE3_DURATION_MS = 2000; // 2 seconds for Chang'e to fly up
+  const CHANGE_START_Y = H + 100;
+  const CHANGE_END_Y = H * 0.32;
+  const CHANGE_TOTAL_DIST = CHANGE_START_Y - CHANGE_END_Y;
+  const CHANGE_SPEED = CHANGE_TOTAL_DIST / PHASE3_DURATION_MS; // px per ms
+
+  // Mooncake persistence - store final position for idle loop
+  let _mooncakeFinalX = 0, _mooncakeFinalY = 0, _mooncakeArrived = false;
+
   function animate(now) {
     if (!_lastTime) _lastTime = now;
     const dt = Math.min(now - _lastTime, 50);
@@ -1692,8 +1703,8 @@ function playAttackAnimation(winnerSide, winnerName) {
         ctx.fillText(n, mCurX, mCurY - 42);
         ctx.restore();
       }
-    } else if (frame < 400) {
-      // Phase 3: Chang'e flies in FAST, result cards appear immediately
+    } else if (_phase3StartTime === null || (Date.now() - _phase3StartTime) < PHASE3_DURATION_MS) {
+      // Phase 3: Chang'e flies in at constant velocity (time-based, works on any refresh rate)
       heroScale = 2; drawHero(heroX, heroY, heroScale);
       drawLoserHero(loserX, loserY, 2);
       // Draw lying defeated monster in the corner
@@ -1736,9 +1747,12 @@ function playAttackAnimation(winnerSide, winnerName) {
       ctx.restore();
       // Dizzy stars for lying monster
       drawDizzyStars(cornerX, cornerY - 20, 0.7);
-      // Chang'e flies in smoothly - linear flight to final position
-      const cp = Math.min(1, (frame-280)/120);
-      changeY = H+100 - (H*0.32+100)*cp;
+      // Chang'e flies in at CONSTANT VELOCITY using real time (not frame-based)
+      if (!_phase3StartTime) _phase3StartTime = Date.now();
+      const elapsed = Date.now() - _phase3StartTime;
+      const cp = Math.min(1, elapsed / PHASE3_DURATION_MS);
+      // Constant velocity: distance = speed * time, position moves uniformly
+      changeY = CHANGE_START_Y - CHANGE_SPEED * Math.min(elapsed, PHASE3_DURATION_MS);
       if (cp < 1 && particles.length < 150) {
         const spawnCount = Math.min(2, Math.round(2 * dtFactor));
         for (let i = 0; i < spawnCount; i++) particles.push({ x: W*0.5+(Math.random()-0.5)*30, y: changeY+60+Math.random()*20,
@@ -1836,6 +1850,12 @@ function playAttackAnimation(winnerSide, winnerName) {
       const cakeX = cakeStartX + (cakeEndX - cakeStartX) * mp;
       const cakeY = cakeStartY + (cakeEndY - cakeStartY) * mp;
       drawMooncake(cakeX, cakeY, Math.min(0.8, mp*1.6));
+      // Track mooncake arrival for idle loop persistence
+      if (mp >= 1 && !_mooncakeArrived) {
+        _mooncakeArrived = true;
+        _mooncakeFinalX = cakeEndX;
+        _mooncakeFinalY = cakeEndY;
+      }
       if (particles.length < 150) {
         const spawnCount = Math.min(2, Math.round(2 * dtFactor));
         for (let i = 0; i < spawnCount; i++) {
@@ -1929,6 +1949,10 @@ function playAttackAnimation(winnerSide, winnerName) {
 
       // Winner hero
       drawHero(heroX, heroY, 2);
+      // Persistent mooncake at hero's hand (stays until page switch)
+      if (_mooncakeArrived) {
+        drawMooncake(_mooncakeFinalX, _mooncakeFinalY, 0.8);
+      }
       // Loser hero with speech bubble
       drawLoserHero(loserX, loserY, 2);
       // Speech bubble
