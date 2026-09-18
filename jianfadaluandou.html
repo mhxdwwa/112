@@ -1882,6 +1882,8 @@ function playAttackAnimation(winnerSide, winnerName) {
         window._resultCardsShown = true;
         showAttackResultCards();
         document.getElementById('attackBottomArea').style.display = 'flex';
+        // Start idle animation loop to keep stars spinning
+        startIdleAnimation();
       }
     }
     // Show result cards early when Chang'e appears (Phase 3 starts)
@@ -1891,6 +1893,123 @@ function playAttackAnimation(winnerSide, winnerName) {
       document.getElementById('attackBottomArea').style.display = 'flex';
     }
   }
+
+  // Idle animation loop - keeps stars spinning after main animation ends
+  function startIdleAnimation() {
+    const cornerX = winnerSide === 'right' ? W * 0.15 : W * 0.85;
+    const cornerY = H * 0.82;
+
+    function idleAnimate() {
+      // Check if we should stop (page changed)
+      if (window._stopIdleAnimation) {
+        window._stopIdleAnimation = false;
+        return;
+      }
+
+      ctx.clearRect(0, 0, W, H);
+      // Background
+      const bg = ctx.createRadialGradient(W/2, H*0.15, 30, W/2, H*0.15, W*0.8);
+      bg.addColorStop(0, '#1a2a5e'); bg.addColorStop(0.5, '#0d1533'); bg.addColorStop(1, '#060a1a');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      // Stars
+      for (let i = 0; i < 100; i++) {
+        const sx = (i*137.5)%W, sy = (i*97.3)%H;
+        ctx.fillStyle = `rgba(255,255,255,${0.3+Math.sin(Date.now()*0.001+i)*0.2})`;
+        ctx.beginPath(); ctx.arc(sx, sy, 1, 0, Math.PI*2); ctx.fill();
+      }
+      // Moon
+      ctx.save();
+      const mGrad = ctx.createRadialGradient(W*0.85, H*0.1, 8, W*0.85, H*0.1, 50);
+      mGrad.addColorStop(0, '#ffffff'); mGrad.addColorStop(0.7, '#f0f0f0'); mGrad.addColorStop(1, '#d0d0d0');
+      ctx.fillStyle = mGrad;
+      ctx.beginPath(); ctx.arc(W*0.85, H*0.1, 45, 0, Math.PI*2); ctx.fill(); ctx.restore();
+
+      // Winner hero
+      drawHero(heroX, heroY, 2);
+      // Loser hero with speech bubble
+      drawLoserHero(loserX, loserY, 2);
+      // Speech bubble
+      ctx.save();
+      const bubbleX = loserX;
+      const bubbleY = loserY - 120;
+      const bubbleW = 180;
+      const bubbleH = 50;
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.moveTo(bubbleX - bubbleW/2 + 10, bubbleY - bubbleH/2);
+      ctx.lineTo(bubbleX + bubbleW/2 - 10, bubbleY - bubbleH/2);
+      ctx.quadraticCurveTo(bubbleX + bubbleW/2, bubbleY - bubbleH/2, bubbleX + bubbleW/2, bubbleY - bubbleH/2 + 10);
+      ctx.lineTo(bubbleX + bubbleW/2, bubbleY + bubbleH/2 - 10);
+      ctx.quadraticCurveTo(bubbleX + bubbleW/2, bubbleY + bubbleH/2, bubbleX + bubbleW/2 - 10, bubbleY + bubbleH/2);
+      ctx.lineTo(bubbleX + 10, bubbleY + bubbleH/2);
+      ctx.lineTo(bubbleX, bubbleY + bubbleH/2 + 15);
+      ctx.lineTo(bubbleX - 10, bubbleY + bubbleH/2);
+      ctx.lineTo(bubbleX - bubbleW/2 + 10, bubbleY + bubbleH/2);
+      ctx.quadraticCurveTo(bubbleX - bubbleW/2, bubbleY + bubbleH/2, bubbleX - bubbleW/2, bubbleY + bubbleH/2 - 10);
+      ctx.lineTo(bubbleX - bubbleW/2, bubbleY - bubbleH/2 + 10);
+      ctx.quadraticCurveTo(bubbleX - bubbleW/2, bubbleY - bubbleH/2, bubbleX - bubbleW/2 + 10, bubbleY - bubbleH/2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 20px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('下次我一定行！', bubbleX, bubbleY);
+      ctx.restore();
+
+      // Chang'e
+      drawChange(W*0.5, H*0.32, 2);
+      // Lying monster with dizzy stars
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.translate(cornerX, cornerY);
+      const lieAngle = winnerSide === 'right' ? Math.PI / 2 : -Math.PI / 2;
+      ctx.rotate(lieAngle);
+      ctx.scale(0.7, 0.7);
+      if (monsterType === 0) drawMonsterType0(0, 0, 1, 0.7);
+      else if (monsterType === 1) drawMonsterType1(0, 0, 1, 0.7);
+      else if (monsterType === 2) drawMonsterType2(0, 0, 1, 0.7);
+      else if (monsterType === 3) drawMonsterType3(0, 0, 1, 0.7);
+      else if (monsterType === 4) drawMonsterType4(0, 0, 1, 0.7);
+      ctx.restore();
+      // Dizzy stars for monster
+      drawDizzyStars(cornerX, cornerY - 20, 0.7);
+      // Monster name
+      ctx.save();
+      ctx.font = '900 18px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const lyingName = MONSTER_NAMES[monsterType];
+      const lnm = ctx.measureText(lyingName);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const lnpw = 10, lnph = 4;
+      ctx.beginPath();
+      const lrx = cornerX - lnm.width/2 - lnpw, lry = cornerY - 55;
+      const lrw = lnm.width + lnpw*2, lrh = 24 + lnph*2, lcr = 6;
+      ctx.moveTo(lrx+lcr, lry); ctx.lineTo(lrx+lrw-lcr, lry);
+      ctx.quadraticCurveTo(lrx+lrw, lry, lrx+lrw, lry+lcr);
+      ctx.lineTo(lrx+lrw, lry+lrh-lcr);
+      ctx.quadraticCurveTo(lrx+lrw, lry+lrh, lrx+lrw-lcr, lry+lrh);
+      ctx.lineTo(lrx+lcr, lry+lrh);
+      ctx.quadraticCurveTo(lrx, lry+lrh, lrx, lry+lrh-lcr);
+      ctx.lineTo(lrx, lry+lcr);
+      ctx.quadraticCurveTo(lrx, lry, lrx+lcr, lry);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffd700';
+      ctx.fillText(lyingName, cornerX, cornerY - 42);
+      ctx.restore();
+
+      // Winner text
+      ctx.save();
+      ctx.font = `900 ${Math.min(W/10,72)}px Microsoft YaHei, sans-serif`;
+      ctx.textAlign = 'center'; ctx.fillStyle = '#ffd700';
+      ctx.fillText(`${winnerName} 获胜！`, W/2, H*0.12);
+      ctx.restore();
+
+      requestAnimationFrame(idleAnimate);
+    }
+    requestAnimationFrame(idleAnimate);
+  }
+
   requestAnimationFrame(animate);
   playAttackSound();
 }
@@ -2333,6 +2452,8 @@ function playMonsterWinsAnimation() {
         window._resultCardsShownMW = true;
         showAttackResultCards();
         document.getElementById('attackBottomArea').style.display = 'flex';
+        // Start idle animation loop to keep stars spinning
+        startIdleAnimationMW();
       }
     }
     // Show result cards early when monster victory phase starts (Phase 3)
@@ -2343,6 +2464,49 @@ function playMonsterWinsAnimation() {
       document.getElementById('attackBottomArea').style.display = 'flex';
     }
   }
+
+  // Idle animation loop for monster wins - keeps stars spinning
+  function startIdleAnimationMW() {
+    function idleAnimateMW() {
+      // Check if we should stop (page changed)
+      if (window._stopIdleAnimation) {
+        window._stopIdleAnimation = false;
+        return;
+      }
+
+      ctx.clearRect(0, 0, W, H);
+      // Background
+      const bg = ctx.createRadialGradient(W/2, H*0.15, 30, W/2, H*0.15, W*0.8);
+      bg.addColorStop(0, '#2a1a3e'); bg.addColorStop(0.5, '#150d28'); bg.addColorStop(1, '#060a1a');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      // Stars
+      for (let i = 0; i < 100; i++) {
+        const sx = (i*137.5)%W, sy = (i*97.3)%H;
+        ctx.fillStyle = `rgba(255,255,255,${0.3+Math.sin(Date.now()*0.001+i)*0.2})`;
+        ctx.beginPath(); ctx.arc(sx, sy, 1, 0, Math.PI*2); ctx.fill();
+      }
+
+      // Monster in center, celebrating
+      const monsterBounce = Math.sin(Date.now() * 0.003) * 5;
+      drawMonsterAt(monsterX, monsterY + monsterBounce, 2.2, 1);
+      drawMonsterNameMW(monsterX, monsterY + monsterBounce, 2.2);
+
+      // Students lying in corners with dizzy stars
+      drawLyingStudent(W * 0.12, H * 0.85, 1.5, '#ff6b6b', STATE.playerLeft, 'left');
+      drawLyingStudent(W * 0.88, H * 0.85, 1.5, '#6ba3ff', STATE.playerRight, 'right');
+
+      // Victory text
+      ctx.save();
+      ctx.font = `900 ${Math.min(W/10, 72)}px Microsoft YaHei, sans-serif`;
+      ctx.textAlign = 'center'; ctx.fillStyle = '#ef4444';
+      ctx.fillText('怪兽获胜！', W/2, H*0.12);
+      ctx.restore();
+
+      requestAnimationFrame(idleAnimateMW);
+    }
+    requestAnimationFrame(idleAnimateMW);
+  }
+
   requestAnimationFrame(animate);
   // Play monster victory sound
   try {
@@ -2721,6 +2885,8 @@ function spawnResultParticles() {
   setTimeout(()=>{cancelAnimationFrame(animId);ctx.clearRect(0,0,canvas.width,canvas.height);},5000);
 }
 function continueGame() {
+  // Stop idle animation
+  window._stopIdleAnimation = true;
   // Hide attack bottom area and update state
   document.getElementById('attackBottomArea').style.display = 'none';
   STATE.monsterWins = false;
@@ -2729,6 +2895,8 @@ function continueGame() {
   handleStart();
 }
 function backToMenu() {
+  // Stop idle animation
+  window._stopIdleAnimation = true;
   // Hide attack bottom area and reset
   document.getElementById('attackBottomArea').style.display = 'none';
   STATE.monsterWins = false;
