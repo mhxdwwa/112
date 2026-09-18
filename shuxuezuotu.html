@@ -30,7 +30,8 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .obj-item .od{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .obj-item .on{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .obj-item .ox{color:var(--td);font-size:16px;padding:2px 6px;cursor:pointer}
-.func-panel{border-top:1px solid var(--bd);background:#fafafa;flex-shrink:0;padding:6px 12px;display:flex;flex-direction:column;gap:4px}
+.func-panel{border-top:1px solid var(--bd);background:#fafafa;flex-shrink:0;padding:6px 12px;display:none;flex-direction:column;gap:4px}
+.func-panel.on{display:flex}
 .func-btn-row{display:flex;gap:4px;align-items:center}
 .func-type-btn{padding:5px 14px;border-radius:6px;font-size:13px;font-weight:600;border:2px solid var(--bd);transition:all .15s;white-space:nowrap;color:#111827}
 .func-type-btn:active{transform:scale(.95)}
@@ -1835,6 +1836,8 @@ function setTool(t){
   if(eraserSizeWrap)eraserSizeWrap.style.display=t==='eraser'?'flex':'none';
   // Show/hide pen color panel and position it above the pen button
   const pcp=document.getElementById('penColorRow');
+  // Clear any existing pen color timer
+  if(window._penColorTimer){clearTimeout(window._penColorTimer);window._penColorTimer=null}
   if(pcp){
     if(t==='pen'){
       pcp.classList.add('on');
@@ -1852,6 +1855,13 @@ function setTool(t){
         pcp.style.bottom='100%';
         pcp.style.marginBottom='8px';
       }
+      // Start 2-second timer - if no color selected, default to red and close panel
+      window._penColorTimer=setTimeout(()=>{
+        G.color='#dc2626';
+        document.getElementById('colorPicker').value='#dc2626';
+        pcp.classList.remove('on');
+        window._penColorTimer=null;
+      },2000);
     }else{
       pcp.classList.remove('on');
     }
@@ -2560,6 +2570,7 @@ tbHTML+='<button class="tg" id="tgAxes">坐标</button>';
 tbHTML+='<button class="tg" id="tgNumLine">数轴</button>';
 tbHTML+='<button class="tg" id="tgSnap">吸附</button>';
 tbHTML+='<button class="tg" id="tgSmartDraw">智能作图</button>';
+tbHTML+='<button class="tg" id="tgFuncGraph">函数图像</button>';
 tbHTML+='<div class="tsep"></div>';
 tbHTML+='<button class="ab" id="btnUndo" title="撤销">↩</button>';
 tbHTML+='<button class="ab" id="btnRedo" title="重做">↪</button>';
@@ -2592,6 +2603,10 @@ if(pcpSwatches){
       document.getElementById('pcpCustom').value=c;
       pcpSwatches.querySelectorAll('.pcp-swatch').forEach(s=>s.classList.remove('on'));
       sw.classList.add('on');
+      // Cancel the 2-second timer when color is selected
+      if(window._penColorTimer){clearTimeout(window._penColorTimer);window._penColorTimer=null}
+      // Close the color panel after selection
+      document.getElementById('penColorRow').classList.remove('on');
     });
     pcpSwatches.appendChild(sw);
   });
@@ -2600,9 +2615,13 @@ document.getElementById('pcpCustom').addEventListener('input',e=>{
   G.color=e.target.value;
   document.getElementById('colorPicker').value=e.target.value;
   pcpSwatches.querySelectorAll('.pcp-swatch').forEach(s=>s.classList.remove('on'));
+  // Cancel the 2-second timer when color is selected
+  if(window._penColorTimer){clearTimeout(window._penColorTimer);window._penColorTimer=null}
 });
 document.getElementById('pcpClose').addEventListener('click',()=>{
   document.getElementById('penColorRow').classList.remove('on');
+  // Cancel the 2-second timer when panel is closed
+  if(window._penColorTimer){clearTimeout(window._penColorTimer);window._penColorTimer=null}
 });
 
 // All tool buttons
@@ -2623,6 +2642,11 @@ document.getElementById('tgAxes').addEventListener('click',function(){G.showAxes
 document.getElementById('tgNumLine').addEventListener('click',function(){G.showNumberLine=!G.showNumberLine;this.classList.toggle('on',G.showNumberLine);drawBg()});
 document.getElementById('tgSnap').addEventListener('click',function(){G.snap=!G.snap;this.classList.toggle('on',G.snap)});
 document.getElementById('tgSmartDraw').addEventListener('click',function(){G.smartDraw=!G.smartDraw;this.classList.toggle('on',G.smartDraw)});
+document.getElementById('tgFuncGraph').addEventListener('click',function(){
+  const funcPanel=document.getElementById('funcPanel');
+  funcPanel.classList.toggle('on');
+  this.classList.toggle('on',funcPanel.classList.contains('on'));
+});
 
 // === FULLSCREEN ===
 const btnFullscreen=document.getElementById('btnFullscreen');
