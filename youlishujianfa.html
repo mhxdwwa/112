@@ -184,13 +184,12 @@ header h1::after {
 /* ── Number line (left panel bottom) ── */
 .numberline-wrap {
   flex-shrink: 0;
-  width: 120px;
+  height: 90px;
+  border-top: 1px solid rgba(0,0,0,0.08);
   position: relative;
   background: rgba(232,115,74,0.03);
   user-select: none;
   overflow: visible;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
 }
 .numberline-wrap canvas {
   position: absolute;
@@ -297,12 +296,6 @@ header h1::after {
     </div>
   </div>
 
-  <!-- Number line strip (middle) -->
-  <div class="numberline-wrap" id="numberlineWrap">
-    <canvas id="nlCanvas"></canvas>
-    <div class="dot-layer" id="nlDotLayer"></div>
-  </div>
-
   <!-- RIGHT PANEL: Subtraction -->
   <div class="panel right" id="panelRight">
     <div class="panel-header">
@@ -311,6 +304,11 @@ header h1::after {
     <div class="canvas-wrap" id="wrapRight">
       <canvas id="canvasRight"></canvas>
       <div class="problems" id="problemsRight"></div>
+    </div>
+    <!-- Number line strip (below right problems) -->
+    <div class="numberline-wrap" id="numberlineWrap">
+      <canvas id="nlCanvas"></canvas>
+      <div class="dot-layer" id="nlDotLayer"></div>
     </div>
   </div>
 </div>
@@ -624,18 +622,18 @@ class NumberLine {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.W = w;
     this.H = h;
-    // Position line in center horizontally
-    this.lineX = w / 2;
+    // Position line upper area so ticks above, labels below
+    this.lineY = 32;
   }
 
-  valToY(v) {
-    const usable = this.H - this.padding * 2;
+  valToX(v) {
+    const usable = this.W - this.padding * 2;
     return this.padding + ((v - this.minVal) / (this.maxVal - this.minVal)) * usable;
   }
 
-  yToVal(y) {
-    const usable = this.H - this.padding * 2;
-    const ratio = (y - this.padding) / usable;
+  xToVal(x) {
+    const usable = this.W - this.padding * 2;
+    const ratio = (x - this.padding) / usable;
     return Math.round(this.minVal + ratio * (this.maxVal - this.minVal));
   }
 
@@ -643,159 +641,677 @@ class NumberLine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.W, this.H);
 
-    // Main line - darker and thicker (vertical)
+    // Main line - darker and thicker
     ctx.strokeStyle = '#1a1a1a';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(this.lineX, this.padding - 12);
-    ctx.lineTo(this.lineX, this.H - this.padding + 12);
+    ctx.moveTo(this.padding - 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12, this.lineY);
     ctx.stroke();
 
-    // Bottom arrow only (standard math number line, pointing down for increasing values)
+    // Right arrow only (standard math number line)
     const arrowSize = 11;
     ctx.beginPath();
-    ctx.moveTo(this.lineX, this.H - this.padding + 12);
-    ctx.lineTo(this.lineX - arrowSize / 2, this.H - this.padding + 12 - arrowSize);
-    ctx.lineTo(this.lineX + arrowSize / 2, this.H - this.padding + 12 - arrowSize);
+    ctx.moveTo(this.W - this.padding + 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY - arrowSize / 2);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY + arrowSize / 2);
     ctx.closePath();
     ctx.fillStyle = '#1a1a1a';
     ctx.fill();
 
-    // Ticks to the right of the line, numbers to the left of the line
+    // Ticks above the line, numbers below the line
     ctx.fillStyle = '#1a1a1a';
     ctx.font = 'bold 13px SimSun, serif';
-    ctx.textAlign = 'right';
+    ctx.textAlign = 'center';
 
     for (let v = this.minVal; v <= this.maxVal; v++) {
-      const y = this.valToY(v);
-      const tickW = 10;
-      
-      // Tick mark to the right
+      const x = this.valToX(v);
+      const tickH = 10;
+
+      // Tick above the line only
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(this.lineX, y);
-      ctx.lineTo(this.lineX + tickW, y);
+      ctx.moveTo(x, this.lineY);
+      ctx.lineTo(x, this.lineY - tickH);
       ctx.stroke();
 
-      // Number label to the left
-      ctx.fillText(v.toString(), this.lineX - 8, y + 5);
+      // Number label below the line
+      ctx.textBaseline = 'top';
+      ctx.fillText(v.toString(), x, this.lineY + 4);
     }
   }
 
   _bindClick() {
+    // Click on empty area of number line to add a dot
     this.wrap.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('nl-dot')) return; // handled by dot drag
       const rect = this.wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      const val = this.yToVal(y);
-      if (val >= this.minVal && val <= this.maxVal) {
-        this.addDot(val);
-      }
+      // Only respond near the line
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      this._addDot(val);
     });
 
     this.wrap.addEventListener('touchstart', (e) => {
-      e.preventDefault();
+      if (e.target.classList.contains('nl-dot')) return;
       const rect = this.wrap.getBoundingClientRect();
       const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
-      const val = this.yToVal(y);
-      if (val >= this.minVal && val <= this.maxVal) {
-        this.addDot(val);
-      }
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      e.preventDefault();
+      this._addDot(val);
     }, { passive: false });
   }
 
-  addDot(val) {
-    const dot = document.createElement('div');
-    dot.className = 'nl-dot';
-    dot.style.cssText = `
-      position: absolute;
-      width: 16px; height: 16px;
-      background: #e8734a;
-      border: 2px solid white;
-      border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      cursor: grab;
-      z-index: 10;
-      left: ${this.lineX - 8}px;
-      top: ${this.valToY(val) - 8}px;
-    `;
-    
-    const label = document.createElement('div');
-    label.className = 'nl-dot-label';
-    label.style.cssText = `
-      position: absolute;
-      background: white;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: bold;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      pointer-events: none;
-      left: ${this.lineX - 30}px;
-      top: ${this.valToY(val) - 24}px;
-    `;
+  _addDot(val) {
+    if (this.dots.length >= 2) {
+      // Remove oldest, add new
+      const old = this.dots.shift();
+      old.el.remove();
+    }
+
+    const el = document.createElement('div');
+    el.className = 'nl-dot';
+    const label = document.createElement('span');
+    label.className = 'nl-label';
     label.textContent = val;
-    
-    this.dotLayer.appendChild(dot);
-    this.dotLayer.appendChild(label);
-    this.dots.push({ el: dot, label: label, value: val });
-    
-    this._makeDraggable(dot, val);
+    el.appendChild(label);
+    this.dotLayer.appendChild(el);
+
+    const dotObj = { el, label, value: val };
+    this.dots.push(dotObj);
+    this._positionDot(dotObj);
+    this._bindDotDrag(dotObj);
   }
 
-  _makeDraggable(dot, val) {
-    let isDragging = false;
-    let startY = 0;
-    let startVal = val;
-
-    const onMove = (e) => {
-      if (!isDragging) return;
-      e.preventDefault();
-      const rect = this.wrap.getBoundingClientRect();
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const y = clientY - rect.top;
-      const newVal = this.yToVal(y);
-      if (newVal >= this.minVal && newVal <= this.maxVal && newVal !== startVal) {
-        dot.style.top = (this.valToY(newVal) - 8) + 'px';
-        const label = this.dots.find(d => d.el === dot)?.label;
-        if (label) {
-          label.style.top = (this.valToY(newVal) - 24) + 'px';
-          label.textContent = newVal;
-        }
-        const dotData = this.dots.find(d => d.el === dot);
-        if (dotData) dotData.value = newVal;
-      }
-    };
-
-    const onEnd = () => {
-      isDragging = false;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onEnd);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onEnd);
-    };
-
-    dot.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      e.preventDefault();
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onEnd);
-    });
-
-    dot.addEventListener('touchstart', (e) => {
-      isDragging = true;
-      e.preventDefault();
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onEnd);
-    }, { passive: false });
+  _positionDot(dotObj) {
+    const x = this.valToX(dotObj.value);
+    dotObj.el.style.left = x + 'px';
+    // Position dot just above the line so it doesn't cover numbers below
+    dotObj.el.style.top = (this.lineY - 2) + 'px';
   }
 
   _updateDotPositions() {
+    this.dots.forEach(d => this._positionDot(d));
+  }
+
+  _bindDotDrag(dotObj) {
+    let dragging = false;
+
+    const onStart = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      dotObj.el.classList.add('dragging');
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = this.wrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      let val = this.xToVal(x);
+      val = Math.max(this.minVal, Math.min(this.maxVal, val));
+      dotObj.value = val;
+      dotObj.label.textContent = val;
+      this._positionDot(dotObj);
+    };
+
+    const onEnd = () => {
+      dragging = false;
+      dotObj.el.classList.remove('dragging');
+    };
+
+    dotObj.el.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+
+    dotObj.el.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }
+
+  clearDots() {
     this.dots.forEach(d => {
-      d.el.style.left = (this.lineX - 8) + 'px';
-      d.el.style.top = (this.valToY(d.value) - 8) + 'px';
-      d.label.style.left = (this.lineX - 30) + 'px';
-      d.label.style.top = (this.valToY(d.value) - 24) + 'px';
+      d.el.remove();
+      d.label.remove();
     });
+    this.dots = [];
+  }
+}
+
+  _resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.wrap.clientWidth;
+    const h = this.wrap.clientHeight;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.W = w;
+    this.H = h;
+    // Position line upper area so ticks above, labels below
+    this.lineY = 32;
+  }
+
+  valToX(v) {
+    const usable = this.W - this.padding * 2;
+    return this.padding + ((v - this.minVal) / (this.maxVal - this.minVal)) * usable;
+  }
+
+  xToVal(x) {
+    const usable = this.W - this.padding * 2;
+    const ratio = (x - this.padding) / usable;
+    return Math.round(this.minVal + ratio * (this.maxVal - this.minVal));
+  }
+
+  _draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.W, this.H);
+
+    // Main line - darker and thicker
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(this.padding - 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12, this.lineY);
+    ctx.stroke();
+
+    // Right arrow only (standard math number line)
+    const arrowSize = 11;
+    ctx.beginPath();
+    ctx.moveTo(this.W - this.padding + 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY - arrowSize / 2);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY + arrowSize / 2);
+    ctx.closePath();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fill();
+
+    // Ticks above the line, numbers below the line
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = 'bold 13px SimSun, serif';
+    ctx.textAlign = 'center';
+
+    for (let v = this.minVal; v <= this.maxVal; v++) {
+      const x = this.valToX(v);
+      const tickH = 10;
+
+      // Tick above the line only
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, this.lineY);
+      ctx.lineTo(x, this.lineY - tickH);
+      ctx.stroke();
+
+      // Number label below the line
+      ctx.textBaseline = 'top';
+      ctx.fillText(v.toString(), x, this.lineY + 4);
+    }
+  }
+
+  _bindClick() {
+    // Click on empty area of number line to add a dot
+    this.wrap.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('nl-dot')) return; // handled by dot drag
+      const rect = this.wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // Only respond near the line
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      this._addDot(val);
+    });
+
+    this.wrap.addEventListener('touchstart', (e) => {
+      if (e.target.classList.contains('nl-dot')) return;
+      const rect = this.wrap.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      e.preventDefault();
+      this._addDot(val);
+    }, { passive: false });
+  }
+
+  _addDot(val) {
+    if (this.dots.length >= 2) {
+      // Remove oldest, add new
+      const old = this.dots.shift();
+      old.el.remove();
+    }
+
+    const el = document.createElement('div');
+    el.className = 'nl-dot';
+    const label = document.createElement('span');
+    label.className = 'nl-label';
+    label.textContent = val;
+    el.appendChild(label);
+    this.dotLayer.appendChild(el);
+
+    const dotObj = { el, label, value: val };
+    this.dots.push(dotObj);
+    this._positionDot(dotObj);
+    this._bindDotDrag(dotObj);
+  }
+
+  _positionDot(dotObj) {
+    const x = this.valToX(dotObj.value);
+    dotObj.el.style.left = x + 'px';
+    // Position dot just above the line so it doesn't cover numbers below
+    dotObj.el.style.top = (this.lineY - 2) + 'px';
+  }
+
+  _updateDotPositions() {
+    this.dots.forEach(d => this._positionDot(d));
+  }
+
+  _bindDotDrag(dotObj) {
+    let dragging = false;
+
+    const onStart = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      dotObj.el.classList.add('dragging');
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = this.wrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      let val = this.xToVal(x);
+      val = Math.max(this.minVal, Math.min(this.maxVal, val));
+      dotObj.value = val;
+      dotObj.label.textContent = val;
+      this._positionDot(dotObj);
+    };
+
+    const onEnd = () => {
+      dragging = false;
+      dotObj.el.classList.remove('dragging');
+    };
+
+    dotObj.el.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+
+    dotObj.el.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }
+
+  clearDots() {
+    this.dots.forEach(d => {
+      d.el.remove();
+      d.label.remove();
+    });
+    this.dots = [];
+  }
+}
+
+  _resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.wrap.clientWidth;
+    const h = this.wrap.clientHeight;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.W = w;
+    this.H = h;
+    // Position line upper area so ticks above, labels below
+    this.lineY = 32;
+  }
+
+  valToX(v) {
+    const usable = this.W - this.padding * 2;
+    return this.padding + ((v - this.minVal) / (this.maxVal - this.minVal)) * usable;
+  }
+
+  xToVal(x) {
+    const usable = this.W - this.padding * 2;
+    const ratio = (x - this.padding) / usable;
+    return Math.round(this.minVal + ratio * (this.maxVal - this.minVal));
+  }
+
+  _draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.W, this.H);
+
+    // Main line - darker and thicker
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(this.padding - 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12, this.lineY);
+    ctx.stroke();
+
+    // Right arrow only (standard math number line)
+    const arrowSize = 11;
+    ctx.beginPath();
+    ctx.moveTo(this.W - this.padding + 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY - arrowSize / 2);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY + arrowSize / 2);
+    ctx.closePath();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fill();
+
+    // Ticks above the line, numbers below the line
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = 'bold 13px SimSun, serif';
+    ctx.textAlign = 'center';
+
+    for (let v = this.minVal; v <= this.maxVal; v++) {
+      const x = this.valToX(v);
+      const tickH = 10;
+
+      // Tick above the line only
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, this.lineY);
+      ctx.lineTo(x, this.lineY - tickH);
+      ctx.stroke();
+
+      // Number label below the line
+      ctx.textBaseline = 'top';
+      ctx.fillText(v.toString(), x, this.lineY + 4);
+    }
+  }
+
+  _bindClick() {
+    // Click on empty area of number line to add a dot
+    this.wrap.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('nl-dot')) return; // handled by dot drag
+      const rect = this.wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // Only respond near the line
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      this._addDot(val);
+    });
+
+    this.wrap.addEventListener('touchstart', (e) => {
+      if (e.target.classList.contains('nl-dot')) return;
+      const rect = this.wrap.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      e.preventDefault();
+      this._addDot(val);
+    }, { passive: false });
+  }
+
+  _addDot(val) {
+    if (this.dots.length >= 2) {
+      // Remove oldest, add new
+      const old = this.dots.shift();
+      old.el.remove();
+    }
+
+    const el = document.createElement('div');
+    el.className = 'nl-dot';
+    const label = document.createElement('span');
+    label.className = 'nl-label';
+    label.textContent = val;
+    el.appendChild(label);
+    this.dotLayer.appendChild(el);
+
+    const dotObj = { el, label, value: val };
+    this.dots.push(dotObj);
+    this._positionDot(dotObj);
+    this._bindDotDrag(dotObj);
+  }
+
+  _positionDot(dotObj) {
+    const x = this.valToX(dotObj.value);
+    dotObj.el.style.left = x + 'px';
+    // Position dot just above the line so it doesn't cover numbers below
+    dotObj.el.style.top = (this.lineY - 2) + 'px';
+  }
+
+  _updateDotPositions() {
+    this.dots.forEach(d => this._positionDot(d));
+  }
+
+  _bindDotDrag(dotObj) {
+    let dragging = false;
+
+    const onStart = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      dotObj.el.classList.add('dragging');
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = this.wrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      let val = this.xToVal(x);
+      val = Math.max(this.minVal, Math.min(this.maxVal, val));
+      dotObj.value = val;
+      dotObj.label.textContent = val;
+      this._positionDot(dotObj);
+    };
+
+    const onEnd = () => {
+      dragging = false;
+      dotObj.el.classList.remove('dragging');
+    };
+
+    dotObj.el.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+
+    dotObj.el.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }
+
+  clearDots() {
+    this.dots.forEach(d => {
+      d.el.remove();
+      d.label.remove();
+    });
+    this.dots = [];
+  }
+}
+
+  _resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.wrap.clientWidth;
+    const h = this.wrap.clientHeight;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.W = w;
+    this.H = h;
+    // Position line upper area so ticks above, labels below
+    this.lineY = 32;
+  }
+
+  valToX(v) {
+    const usable = this.W - this.padding * 2;
+    return this.padding + ((v - this.minVal) / (this.maxVal - this.minVal)) * usable;
+  }
+
+  xToVal(x) {
+    const usable = this.W - this.padding * 2;
+    const ratio = (x - this.padding) / usable;
+    return Math.round(this.minVal + ratio * (this.maxVal - this.minVal));
+  }
+
+  _draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.W, this.H);
+
+    // Main line - darker and thicker
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(this.padding - 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12, this.lineY);
+    ctx.stroke();
+
+    // Right arrow only (standard math number line)
+    const arrowSize = 11;
+    ctx.beginPath();
+    ctx.moveTo(this.W - this.padding + 12, this.lineY);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY - arrowSize / 2);
+    ctx.lineTo(this.W - this.padding + 12 - arrowSize, this.lineY + arrowSize / 2);
+    ctx.closePath();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fill();
+
+    // Ticks above the line, numbers below the line
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = 'bold 13px SimSun, serif';
+    ctx.textAlign = 'center';
+
+    for (let v = this.minVal; v <= this.maxVal; v++) {
+      const x = this.valToX(v);
+      const tickH = 10;
+
+      // Tick above the line only
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, this.lineY);
+      ctx.lineTo(x, this.lineY - tickH);
+      ctx.stroke();
+
+      // Number label below the line
+      ctx.textBaseline = 'top';
+      ctx.fillText(v.toString(), x, this.lineY + 4);
+    }
+  }
+
+  _bindClick() {
+    // Click on empty area of number line to add a dot
+    this.wrap.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('nl-dot')) return; // handled by dot drag
+      const rect = this.wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // Only respond near the line
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      this._addDot(val);
+    });
+
+    this.wrap.addEventListener('touchstart', (e) => {
+      if (e.target.classList.contains('nl-dot')) return;
+      const rect = this.wrap.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      if (Math.abs(y - this.lineY) > 28) return;
+      const val = this.xToVal(x);
+      if (val < this.minVal || val > this.maxVal) return;
+      e.preventDefault();
+      this._addDot(val);
+    }, { passive: false });
+  }
+
+  _addDot(val) {
+    if (this.dots.length >= 2) {
+      // Remove oldest, add new
+      const old = this.dots.shift();
+      old.el.remove();
+    }
+
+    const el = document.createElement('div');
+    el.className = 'nl-dot';
+    const label = document.createElement('span');
+    label.className = 'nl-label';
+    label.textContent = val;
+    el.appendChild(label);
+    this.dotLayer.appendChild(el);
+
+    const dotObj = { el, label, value: val };
+    this.dots.push(dotObj);
+    this._positionDot(dotObj);
+    this._bindDotDrag(dotObj);
+  }
+
+  _positionDot(dotObj) {
+    const x = this.valToX(dotObj.value);
+    dotObj.el.style.left = x + 'px';
+    // Position dot just above the line so it doesn't cover numbers below
+    dotObj.el.style.top = (this.lineY - 2) + 'px';
+  }
+
+  _updateDotPositions() {
+    this.dots.forEach(d => this._positionDot(d));
+  }
+
+  _bindDotDrag(dotObj) {
+    let dragging = false;
+
+    const onStart = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      dotObj.el.classList.add('dragging');
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = this.wrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      let val = this.xToVal(x);
+      val = Math.max(this.minVal, Math.min(this.maxVal, val));
+      dotObj.value = val;
+      dotObj.label.textContent = val;
+      this._positionDot(dotObj);
+    };
+
+    const onEnd = () => {
+      dragging = false;
+      dotObj.el.classList.remove('dragging');
+    };
+
+    dotObj.el.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+
+    dotObj.el.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
   }
 
   clearDots() {
