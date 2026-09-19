@@ -724,8 +724,8 @@ function stopTimers() { clearInterval(STATE.timerIntervals.left); clearInterval(
 
 /* ========== HANDWRITING CANVAS (independent per side) ========== */
 const hwState = {
-  left: { ctx: null, canvas: null, drawing: false, tool: 'pen', color: '#ffd700', size: 4, paths: [], currentPath: null },
-  right: { ctx: null, canvas: null, drawing: false, tool: 'pen', color: '#ffd700', size: 4, paths: [], currentPath: null }
+  left: { ctx: null, canvas: null, drawing: false, tool: 'pen', color: '#ffd700', size: 4, paths: [], currentPath: null, touchPos: null },
+  right: { ctx: null, canvas: null, drawing: false, tool: 'pen', color: '#ffd700', size: 4, paths: [], currentPath: null, touchPos: null }
 };
 
 function initCanvases() {
@@ -771,13 +771,70 @@ function initCanvases() {
     newCtx.fillRect(0, 0, newCanvas.width, newCanvas.height);
 
     // Independent event listeners per side
+    // Track touch IDs per canvas to avoid cross-canvas interference
+    const activeTouches = new Map(); // touchId -> position
     newCanvas.addEventListener('mousedown', (e) => hwStart(e, side));
-    newCanvas.addEventListener('mousemove', (e) => hwMove(e, side));
+    newCanvas.addEventListener('mousemove', (e) => {
+      if (!hwState[side].drawing && e.buttons === 1) {
+        // Mouse button already held (from outside this canvas), start drawing
+        hwStart(e, side);
+      }
+      hwMove(e, side);
+    });
     newCanvas.addEventListener('mouseup', () => hwEnd(side));
     newCanvas.addEventListener('mouseleave', () => hwEnd(side));
-    newCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); hwStart(e, side); }, { passive: false });
-    newCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); hwMove(e, side); }, { passive: false });
-    newCanvas.addEventListener('touchend', () => hwEnd(side));
+    newCanvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        activeTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
+      }
+      // Store the first local touch position for hwGetPos
+      const rect = newCanvas.getBoundingClientRect();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        const scaleX = newCanvas.width / rect.width;
+        const scaleY = newCanvas.height / rect.height;
+        hwState[side].touchPos = { x: (t.clientX - rect.left) * scaleX, y: (t.clientY - rect.top) * scaleY };
+        break; // only need one
+      }
+      hwStart(e, side);
+    }, { passive: false });
+    newCanvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      // Filter: only process touches that belong to THIS canvas
+      let hasLocalTouch = false;
+      for (let i = 0; i < e.touches.length; i++) {
+        if (activeTouches.has(e.touches[i].identifier)) {
+          hasLocalTouch = true;
+          // Update stored touch position
+          const rect = newCanvas.getBoundingClientRect();
+          const scaleX = newCanvas.width / rect.width;
+          const scaleY = newCanvas.height / rect.height;
+          hwState[side].touchPos = { x: (e.touches[i].clientX - rect.left) * scaleX, y: (e.touches[i].clientY - rect.top) * scaleY };
+          break;
+        }
+      }
+      if (hasLocalTouch) hwMove(e, side);
+    }, { passive: false });
+    newCanvas.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        activeTouches.delete(e.changedTouches[i].identifier);
+      }
+      if (activeTouches.size === 0) {
+        hwState[side].touchPos = null;
+        hwEnd(side);
+      }
+    });
+    newCanvas.addEventListener('touchcancel', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        activeTouches.delete(e.changedTouches[i].identifier);
+      }
+      if (activeTouches.size === 0) {
+        hwState[side].touchPos = null;
+        hwEnd(side);
+      }
+    });
   });
 }
 
@@ -786,8 +843,9 @@ function hwGetPos(e, side) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
-  if (e.touches && e.touches.length > 0) {
-    return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+  // For touch events, use the stored touch position (filtered per canvas)
+  if (e.touches && e.touches.length > 0 && hwState[side].touchPos) {
+    return hwState[side].touchPos;
   }
   return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
 }
