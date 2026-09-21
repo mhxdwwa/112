@@ -160,7 +160,6 @@ header h1::after {
 }
 .problem-row .col-first {
   display: inline-block;
-  min-width: 4.2em;
   text-align: right;
   white-space: nowrap;
   flex-shrink: 0;
@@ -293,7 +292,23 @@ header h1::after {
 </header>
 
 <div class="container">
-  <!-- LEFT PANEL: Addition -->
+  <!-- LEFT PANEL: Subtraction -->
+  <div class="panel right" id="panelRight">
+    <div class="panel-header">
+      <div class="panel-title"><span class="dot"></span></div>
+    </div>
+    <div class="canvas-wrap" id="wrapRight">
+      <canvas id="canvasRight"></canvas>
+      <div class="problems" id="problemsRight"></div>
+    </div>
+    <!-- Number line strip (below left problems) -->
+    <div class="numberline-wrap" id="numberlineWrap">
+      <canvas id="nlCanvas"></canvas>
+      <div class="dot-layer" id="nlDotLayer"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Addition -->
   <div class="panel left" id="panelLeft">
     <div class="panel-header">
       <div class="panel-title"><span class="dot"></span></div>
@@ -303,37 +318,21 @@ header h1::after {
       <div class="problems" id="problemsLeft"></div>
     </div>
   </div>
-
-  <!-- RIGHT PANEL: Subtraction -->
-  <div class="panel right" id="panelRight">
-    <div class="panel-header">
-      <div class="panel-title"><span class="dot"></span></div>
-    </div>
-    <div class="canvas-wrap" id="wrapRight">
-      <canvas id="canvasRight"></canvas>
-      <div class="problems" id="problemsRight"></div>
-    </div>
-    <!-- Number line strip (below right problems) -->
-    <div class="numberline-wrap" id="numberlineWrap">
-      <canvas id="nlCanvas"></canvas>
-      <div class="dot-layer" id="nlDotLayer"></div>
-    </div>
-  </div>
 </div>
 
 <!-- Bottom color palette and tools -->
 <div class="bottom-bar">
   <div class="bar-section">
     <span class="bar-label">左侧：</span>
-    <div id="colorsLeft" style="display:flex;gap:5px;"></div>
-    <div class="divider"></div>
-    <div id="toolsLeft" style="display:flex;gap:4px;"></div>
-  </div>
-  <div class="bar-section">
-    <span class="bar-label">右侧：</span>
     <div id="colorsRight" style="display:flex;gap:5px;"></div>
     <div class="divider"></div>
     <div id="toolsRight" style="display:flex;gap:4px;"></div>
+  </div>
+  <div class="bar-section">
+    <span class="bar-label">右侧：</span>
+    <div id="colorsLeft" style="display:flex;gap:5px;"></div>
+    <div class="divider"></div>
+    <div id="toolsLeft" style="display:flex;gap:4px;"></div>
   </div>
 </div>
 
@@ -342,14 +341,14 @@ header h1::after {
 const leftProblems = [
   { first: '0', op: '+', second: '（+3）' },
   { first: '（-1）', op: '+', second: '（+3）' },
-  { first: '1', op: '+', second: '（+2）' },
-  { first: '5', op: '+', second: '（+1）' }
+  { first: '1', op: '+', second: '（+3）' },
+  { first: '5', op: '+', second: '（+3）' }
 ];
 const rightProblems = [
   { first: '0', op: '-', second: '（-3）' },
   { first: '（-1）', op: '-', second: '（-3）' },
-  { first: '1', op: '-', second: '（-2）' },
-  { first: '5', op: '-', second: '（-1）' }
+  { first: '1', op: '-', second: '（-3）' },
+  { first: '5', op: '-', second: '（-3）' }
 ];
 
 // ── Render problems ──
@@ -370,6 +369,22 @@ function renderProblems(containerId, problems) {
 }
 renderProblems('problemsLeft', leftProblems);
 renderProblems('problemsRight', rightProblems);
+
+// Dynamically set first-column width to fit the widest number
+function alignFirstColumn(containerId) {
+  const container = document.getElementById(containerId);
+  const firsts = container.querySelectorAll('.col-first');
+  let maxWidth = 0;
+  firsts.forEach(el => {
+    el.style.minWidth = '0';
+    maxWidth = Math.max(maxWidth, el.offsetWidth);
+  });
+  firsts.forEach(el => {
+    el.style.minWidth = maxWidth + 'px';
+  });
+}
+alignFirstColumn('problemsLeft');
+alignFirstColumn('problemsRight');
 
 // ── Color palette ──
 const colors = [
