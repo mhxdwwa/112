@@ -2169,7 +2169,7 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
   background-size:100% 100%,300% 300%;
   background-position:0 0,center;
   background-repeat:no-repeat,no-repeat;
-  animation:_ba var(--_bspd,3s) linear infinite;
+  animation:_ba var(--_bspd,10s) linear infinite;
   position:relative;
   overflow:hidden;
   contain:layout style;
@@ -2208,13 +2208,13 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
 }
 .home-pet-inner.pet-border-rainbow:hover{
   box-shadow:inset 0 0 30px rgba(255,100,200,0.7),inset 0 0 60px rgba(100,200,255,0.5);
-  --_bspd:1.5s;
+  --_bspd:5s;
 }
 
 /* 烈焰之框 */
 .home-pet-inner.pet-border-flame{
   --_bgrad:conic-gradient(from var(--ba),#ff2200,#ff6600,#ffaa00,#ff4400,#ff0000,#ff8800,#ff2200);
-  --_bspd:2s;
+  --_bspd:6s;
   box-shadow:inset 0 0 25px rgba(255,69,0,0.6),inset 0 0 50px rgba(255,140,0,0.3);
 }
 .home-pet-inner.pet-border-flame:hover{
@@ -2292,7 +2292,7 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
 /* 星空幻境 */
 .home-pet-inner.pet-border-starry{
   --_bgrad:conic-gradient(from var(--ba),#1a0533,#3d1a78,#6a0dad,#4b0082,#7c3aed,#4b0082,#2a0845,#3d1a78,#1a0533);
-  --_bspd:6s;
+  --_bspd:12s;
   box-shadow:inset 0 0 30px rgba(100,50,200,0.6),inset 0 0 60px rgba(150,100,255,0.3);
 }
 .home-pet-inner.pet-border-starry:hover{
