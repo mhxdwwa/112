@@ -16,7 +16,13 @@ export const onRequestPost = async ({ request, env }) => {
   if (!classId || !log) return jsonResponse({ error: 'Missing classId or log' }, 400);
 
   if (!log.id) log.id = genId();
-  if (!log.timestamp) log.timestamp = new Date().toISOString();
+  // 确保时间戳是UTC格式（带Z后缀）
+  if (!log.timestamp) {
+    log.timestamp = new Date().toISOString();
+  } else if (!log.timestamp.endsWith('Z') && !log.timestamp.includes('+') && log.timestamp.includes('T')) {
+    // 如果时间戳没有时区标记，添加Z表示UTC
+    log.timestamp = log.timestamp + 'Z';
+  }
   log.reverted = log.reverted || false;
 
   // v221: INSERT 到 operation_logs 表
