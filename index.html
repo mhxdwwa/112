@@ -8,7 +8,7 @@
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 <link rel="dns-prefetch" href="https://xbygooadskfqllnhwmet.supabase.co">
 <title>🍭宠物世界🍭</title>
-<link rel="stylesheet" href="style.css?v=247">
+<link rel="stylesheet" href="style.css?v=248">
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -62,7 +62,7 @@ setTimeout(function() { window._hideDalLoading(); }, 5000);
 <!-- v246: 制作者悬浮框 - 固定在页面左侧 -->
 <div class="credit-float-fixed" id="creditFloat"><span>🍭制作者：吴胜闯老师🍭</span></div>
 <!-- v246: 音乐控制面板 - 固定在页面右侧 -->
-<div class="music-panel-fixed" id="musicPanel"><button class="music-toggle-fixed" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button><button class="music-expand-btn-fixed" id="musicExpandBtn" onclick="toggleMusicPanel(event)" title="音量设置">▶</button><span class="music-name-fixed" id="musicName">宠物乐园</span><div class="music-vol-wrap-fixed"><span class="music-vol-icon-fixed" id="musicVolIcon" onclick="toggleMute()">🔊</span><input type="range" class="music-vol-slider-fixed" id="musicVolSlider" min="0" max="100" value="40" oninput="setBgMusicVol(this.value)"></div></div>
+<div class="music-panel-fixed" id="musicPanel"><button class="music-toggle-fixed" id="musicToggleBtn" onclick="toggleBgMusic()" title="播放/暂停背景音乐">🎵</button><button class="music-expand-btn-fixed" id="musicExpandBtn" onclick="toggleMusicPanel(event)" title="音量设置">▶</button><div class="music-vol-wrap-fixed"><span class="music-vol-icon-fixed" id="musicVolIcon" onclick="toggleMute()">🔊</span><input type="range" class="music-vol-slider-fixed" id="musicVolSlider" min="0" max="100" value="40" oninput="setBgMusicVol(this.value)"></div><span class="music-name-fixed" id="musicName">宠物乐园</span></div>
 <div class="content-container">
 <div class="page active" id="class-pet-page">
   <div class="paw-deco" style="top:20px;right:30px;--paw-rot:20deg;font-size:45px;">🐾</div>
@@ -219,7 +219,7 @@ setTimeout(function() { window._hideDalLoading(); }, 5000);
   <script defer src="js/pet-escape.js?v=243"></script>
   <!-- v135: app.js 必须在 heart-effect/bgm-system 之前，因为它们会包装 app.js 中的函数 -->
   <script defer src="js/storage.js?v=1"></script>
-  <script defer src="app.js?v=247"></script>
+  <script defer src="app.js?v=248"></script>
   <script defer src="js/heart-effect.js?v=2"></script>
   <script defer src="js/bgm-system.js?v=2"></script>
   <script defer src="js/lazy-loader.js?v=230"></script>
