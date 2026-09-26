@@ -11,7 +11,7 @@
     'class-pk':        { src: 'js/class-pk.js?v=205' },
     'jianghu':         { src: 'js/jianghu.js?v=171', deps: ['pk-battle'] },
     'rankings':        { src: 'js/rankings.js?v=136' },
-    'library':         { src: 'js/library-system.js?v=257' },
+    'library':         { src: 'js/library-system.js?v=258' },
 
     // --- 弹窗/按钮模块 ---
     'snack-system':    { src: 'js/snack-system.js?v=201' },
