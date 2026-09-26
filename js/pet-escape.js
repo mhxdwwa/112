@@ -303,8 +303,9 @@ window.__initPetEscape = function(){
     if (top) {
       const img = top.querySelector('img');
       const span = top.querySelector('span');
-      if (img) { img.dataset.escapeHidden = '1'; img.style.opacity = '0'; img.style.transition = 'opacity 0.3s'; }
-      if (span) { span.dataset.escapeHidden = '1'; span.style.opacity = '0'; span.style.transition = 'opacity 0.3s'; }
+      // v242: 使用 display:none 而非 opacity:0，确保宠物图片彻底隐藏
+      if (img) { img.dataset.escapeHidden = '1'; img.style.display = 'none'; }
+      if (span) { span.dataset.escapeHidden = '1'; span.style.display = 'none'; }
       // 显示一个"出逃中"的提示
       if (!top.querySelector('.escape-empty-hint')) {
         const hint = document.createElement('div');
@@ -321,17 +322,16 @@ window.__initPetEscape = function(){
   function showCardPet(card) {
     const top = card.querySelector('.home-pet-top');
     if (top) {
-      // v46: Handle both data-escape-hidden attribute AND inline opacity:0 style
-      // (rebuilt cards from renderHomePetGrid use inline style, not data attribute)
-      const img = top.querySelector('img[data-escape-hidden]') || top.querySelector('img[style*="opacity: 0"]') || top.querySelector('img[style*="opacity:0"]');
-      const span = top.querySelector('span[data-escape-hidden]') || top.querySelector('span[style*="opacity: 0"]') || top.querySelector('span[style*="opacity:0"]');
+      // v242: 支持 display:none 和 opacity:0 两种隐藏方式
+      const img = top.querySelector('img[data-escape-hidden]') || top.querySelector('img[style*="display: none"]') || top.querySelector('img[style*="display:none"]');
+      const span = top.querySelector('span[data-escape-hidden]') || top.querySelector('span[style*="display: none"]') || top.querySelector('span[style*="display:none"]');
       // 先移除提示
       const hint = top.querySelector('.escape-empty-hint');
       if (hint) { hint.style.opacity = '0'; setTimeout(() => hint.remove(), 300); }
       // 延迟一点再显示，配合回来动画
       setTimeout(() => {
-        if (img) { img.style.opacity = '1'; delete img.dataset.escapeHidden; }
-        if (span) { span.style.opacity = '1'; delete span.dataset.escapeHidden; }
+        if (img) { img.style.display = ''; delete img.dataset.escapeHidden; }
+        if (span) { span.style.display = ''; delete span.dataset.escapeHidden; }
       }, 100);
     }
   }
@@ -901,12 +901,25 @@ window.__initPetEscape = function(){
       setTimeout(() => {
         if (!escapeActive) return;
 
+        // v242: 在预告前就记录出逃宠物ID，确保预告期间的任何DOM重渲染都正确隐藏宠物
+        if (petInfo.petId) window._escapedPetIds.add(String(petInfo.petId));
+
         // === 出逃前预告阶段 ===
         showPreEscapePreview(petInfo.card).then(() => {
           if (!escapeActive) return;
 
+        // v242: 重新查询卡片（预告期间可能被 renderHomePetGrid 重建过）
+        let freshCard = petInfo.card;
+        if (petInfo.studentId) {
+          const newCard = document.querySelector(`#homePetGrid .home-pet-card[data-sid="${petInfo.studentId}"]`);
+          if (newCard && newCard.isConnected) {
+            freshCard = newCard;
+            petInfo.card = freshCard; // 更新引用
+          }
+        }
+
         // 从卡片位置跳出
-        const cardRect = petInfo.card.getBoundingClientRect();
+        const cardRect = freshCard.getBoundingClientRect();
         const el = createEscapedPetEl(petInfo);
         el.style.left = (cardRect.left + cardRect.width / 2 - 65) + 'px';
         el.style.top = (cardRect.top + cardRect.height / 2 - 65) + 'px';
@@ -922,22 +935,20 @@ window.__initPetEscape = function(){
         const burstY = cardRect.top + cardRect.height / 2;
         burstEscapeParticles(burstX, burstY);
 
-        // 卡片上宠物消失（出逃了）
-        hideCardPet(petInfo.card);
+        // 卡片上宠物消失（出逃了）— v242: 使用 freshCard
+        hideCardPet(freshCard);
 
         // 卡片原位抖动提示
-        petInfo.card.style.transition = 'transform 0.15s';
-        petInfo.card.style.transform = 'scale(0.95)';
+        freshCard.style.transition = 'transform 0.15s';
+        freshCard.style.transform = 'scale(0.95)';
         setTimeout(() => {
-          petInfo.card.style.transform = '';
-          setTimeout(() => petInfo.card.style.transition = '', 200);
+          freshCard.style.transform = '';
+          setTimeout(() => { freshCard.style.transition = ''; }, 200);
         }, 200);
 
         const personality = detectPersonality(petInfo);
         const petData = { el, petInfo, phase: 'jumpOut', caught: false, personality };
         escapedPets.push(petData);
-        // 记录出逃宠物ID（用于DOM重建时保持出逃状态）
-        if (petInfo.petId) window._escapedPetIds.add(String(petInfo.petId));
 
         // 点击捕获
         el.addEventListener('click', (e) => {

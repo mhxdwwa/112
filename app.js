@@ -2220,7 +2220,8 @@ function _generateStudentCardHTML(s){
   const growable=getGrowablePet(s); const growHint=(p.level>=9 && growable && growable.id!==p.id)?`<div class="growable-pet-hint">🌱 ${esc(growable.nickname||growable.name)} 培养中</div>`:(p.level>=9 && !growable)?`<div class="growable-pet-hint">⭐ 全部满级</div>`:'';
   // 检查宠物是否正在出逃（用于DOM重建时保持出逃状态）
   const isEscaped = window._escapedPetIds && window._escapedPetIds.has(String(p.id));
-  const petImgStyle = isEscaped ? 'opacity:0;transition:opacity 0.3s;' : '';
+  // v242: 使用 display:none 而非 opacity:0，确保宠物图片彻底隐藏
+  const petImgStyle = isEscaped ? 'display:none;' : '';
   const petImgAttr = isEscaped ? 'data-escape-hidden="1"' : '';
   const escapeHint = isEscaped ? '<div class="escape-empty-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:13px;color:#cba090;font-weight:700;pointer-events:none;text-align:center;line-height:1.6;">🐾<br>出逃中…</div>' : '';
   // v174: 分区点击 - 图片+底部打开详情，名字行修改宠物名
