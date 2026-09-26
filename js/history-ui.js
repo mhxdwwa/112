@@ -187,10 +187,17 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
     <label style="cursor:pointer;"><input type="checkbox" id="historyShowReverted" onchange="toggleRevertedVisibility(this.checked)" checked> 显示已撤销</label>
   </div>`;
   
-  // v68: Group logs by date for lazy loading
+  // v68: Group logs by date for lazy loading (使用北京时间)
   const logsByDate = {};
   classLogs.forEach(log => {
-    const dateKey = log.timestamp.slice(0, 10); // YYYY-MM-DD
+    // 将时间戳转换为北京时间后提取日期
+    let timestampStr = log.timestamp;
+    if (timestampStr && !timestampStr.endsWith('Z') && !timestampStr.includes('+') && timestampStr.includes('T')) {
+      timestampStr = timestampStr + 'Z';
+    }
+    const time = new Date(timestampStr);
+    // 使用北京时间提取日期
+    const dateKey = time.toLocaleDateString('en-CA', {timeZone: 'Asia/Shanghai'}); // en-CA 格式为 YYYY-MM-DD
     if (!logsByDate[dateKey]) logsByDate[dateKey] = [];
     logsByDate[dateKey].push(log);
   });
@@ -202,14 +209,17 @@ function _buildHistoryHTML(curClass, className, months, activeMonth){
   
   sortedDates.forEach((dateKey, idx) => {
     const dateLogs = logsByDate[dateKey];
-    const date = new Date(dateKey);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    const date = new Date(dateKey + 'T00:00:00+08:00'); // 将日期字符串解析为北京时间
+    
+    // 获取北京时间的今天和昨天
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA', {timeZone: 'Asia/Shanghai'});
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = yesterday.toLocaleDateString('en-CA', {timeZone: 'Asia/Shanghai'});
     
     let dateLabel = date.toLocaleDateString('zh-CN', {month: 'long', day: 'numeric', weekday: 'long'});
-    if (dateKey === today.toISOString().slice(0, 10)) dateLabel = '今天';
-    else if (dateKey === yesterday.toISOString().slice(0, 10)) dateLabel = '昨天';
+    if (dateKey === todayStr) dateLabel = '今天';
+    else if (dateKey === yesterdayStr) dateLabel = '昨天';
     
     // Only expand today by default, or respect user's previous expand state
     const isExpanded = _historyExpandedDates[dateKey] || (idx === 0 && !_historyExpandedDates.hasOwnProperty(dateKey));
@@ -285,8 +295,20 @@ function toggleDateGroup(dateKey) {
 
 // v68: Build single log item HTML (extracted for reuse)
 function _buildHistoryLogItem(log, isCurrentMonth, isStudentView) {
-  const time = new Date(log.timestamp);
-  const timeStr = time.toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}) + ' ' + time.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  // 修复时区问题：确保时间戳正确解析为UTC并转换为北京时间
+  let time;
+  let timestampStr = log.timestamp;
+  
+  // 如果时间戳没有Z后缀（UTC标记），添加它以确保正确解析为UTC时间
+  if (timestampStr && !timestampStr.endsWith('Z') && !timestampStr.includes('+') && timestampStr.includes('T')) {
+    timestampStr = timestampStr + 'Z';
+  }
+  
+  time = new Date(timestampStr);
+  
+  // 使用北京时间（UTC+8）显示
+  const timeStr = time.toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit', timeZone: 'Asia/Shanghai'}) + ' ' + 
+                  time.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit', timeZone: 'Asia/Shanghai'});
   const icon = _historyActionIcon(log.actionType);
   const color = _historyActionColor(log.actionType);
   const isReverted = log.reverted;
