@@ -2,14 +2,10 @@
 # 解决 JS/CSS/HTML 文件缓存1年不更新的问题
 
 # HTML 文件 - 只缓存10分钟，确保内容及时更新
+# v256: 添加 unsafe-eval 支持 PDF.js
 /*.html
   Cache-Control: public, max-age=600, must-revalidate
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com data:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
-
-# PDF 查看器页面 - 允许加载 PDF.js 和 PDF 文件
-/pdf-viewer.html
-  Cache-Control: public, max-age=600, must-revalidate
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
 
 # PDF 文件 - 设置正确的 MIME 类型和缓存
 # v255: 使用具体文件名替代通配符，确保Cloudflare Pages正确匹配
