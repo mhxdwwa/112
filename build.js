@@ -146,6 +146,28 @@ async function main() {
     } catch (e) { /* skip */ }
   }
 
+  // v255: Copy books/ directory (PDF files for library)
+  try {
+    const booksSrc = resolve(__dirname, 'books');
+    const booksDist = join(DIST, 'books');
+    mkdirSync(booksDist, { recursive: true });
+    const bookFiles = readdirSync(booksSrc);
+    for (const f of bookFiles) {
+      copyFileSync(join(booksSrc, f), join(booksDist, f));
+    }
+    console.log(`  ✓ books/: ${bookFiles.length} files copied`);
+  } catch (e) {
+    console.error(`  ✗ books/: ${e.message}`);
+  }
+
+  // v255: Copy _headers and _redirects for Cloudflare Pages
+  for (const cf of ['_headers', '_redirects']) {
+    try {
+      copyFileSync(resolve(__dirname, cf), join(DIST, cf));
+      console.log(`  ✓ ${cf}: copied`);
+    } catch (e) { /* skip if not exists */ }
+  }
+
   // Summary
   const totalOrig = results.reduce((s, r) => s + r.origSize, 0);
   const totalMin = results.reduce((s, r) => s + r.minSize, 0);
