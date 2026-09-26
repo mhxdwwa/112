@@ -1,5 +1,5 @@
 // ========== 图书馆系统 ==========
-// 从 app.js 拆分 - v129, v254: 直接使用浏览器原生PDF查看器
+// 从 app.js 拆分 - v129, v255: 文件名改ASCII解决Cloudflare中文文件名问题
 (function() {
   'use strict';
 
@@ -7,11 +7,12 @@
   var BOOKS_REPO = 'books';
   
   // 书籍列表（直接配置，无需API）
+  // v255: 文件名改为ASCII，解决Cloudflare Pages无法正确服务中文文件名的问题
   var BOOKS_LIST = [
-    { name: '七年级上册数学课本', file: '七年级上册数学课本.pdf', size: '16MB' },
-    { name: '七年级下册数学课本', file: '七年级下册数学课本.pdf', size: '24MB' },
-    { name: '八年级上册数学课本', file: '八年级上册数学课本.pdf', size: '9.6MB' },
-    { name: '八年级下册数学课本', file: '八年级下册数学课本.pdf', size: '18MB' }
+    { name: '七年级上册数学课本', file: 'math-grade7-vol1.pdf', size: '16MB' },
+    { name: '七年级下册数学课本', file: 'math-grade7-vol2.pdf', size: '24MB' },
+    { name: '八年级上册数学课本', file: 'math-grade8-vol1.pdf', size: '9.6MB' },
+    { name: '八年级下册数学课本', file: 'math-grade8-vol2.pdf', size: '18MB' }
   ];
   
   // 渲染图书馆页面

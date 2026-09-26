@@ -12,7 +12,20 @@
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
 
 # PDF 文件 - 设置正确的 MIME 类型和缓存
-/books/*.pdf
+# v255: 使用具体文件名替代通配符，确保Cloudflare Pages正确匹配
+/books/math-grade7-vol1.pdf
+  Cache-Control: public, max-age=86400
+  Content-Type: application/pdf
+  Access-Control-Allow-Origin: *
+/books/math-grade7-vol2.pdf
+  Cache-Control: public, max-age=86400
+  Content-Type: application/pdf
+  Access-Control-Allow-Origin: *
+/books/math-grade8-vol1.pdf
+  Cache-Control: public, max-age=86400
+  Content-Type: application/pdf
+  Access-Control-Allow-Origin: *
+/books/math-grade8-vol2.pdf
   Cache-Control: public, max-age=86400
   Content-Type: application/pdf
   Access-Control-Allow-Origin: *
