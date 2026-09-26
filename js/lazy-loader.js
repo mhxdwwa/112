@@ -15,7 +15,7 @@
 
     // --- 弹窗/按钮模块 ---
     'snack-system':    { src: 'js/snack-system.js?v=201' },
-    'history-ui':      { src: 'js/history-ui.js?v=172' },
+    'history-ui':      { src: 'js/history-ui.js?v=173' },
     'pet-modal':       { src: 'js/pet-modal.js?v=136' },
     // --- 游戏模块 ---
     'quiz-bank':       { src: 'quiz-bank.js?v=2' },
