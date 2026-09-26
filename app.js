@@ -2335,8 +2335,8 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if (!orderChanged && !needsFullRebuild && changedSids.length === 0 && Object.keys(existingCards).length === _gridStudents.length) {
     return;
   }
-  // 如果有新增卡片或排序变了，做全量重建（保持排序正确）
-  if (orderChanged || needsFullRebuild || changedSids.length > 2) {
+  // v236: 只有排序变化或新增学生才做全量重建，数据变化一律逐张替换（消除闪屏）
+  if (orderChanged || needsFullRebuild) {
     _gridRenderedCount = 0; grid.innerHTML = '';
     _renderGridBatch(grid);
     if(_gridRenderedCount<_gridStudents.length){
@@ -2353,7 +2353,7 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
       requestAnimationFrame(()=>_gridCheckSentinel(grid,sentinel));
     }
   } else {
-    // 只更新变化的卡片（少量变化，1-2张卡片）
+    // v236: 无论变化多少张卡片，都逐张替换（不再全量重建），避免 grid.innerHTML='' 导致闪屏
     changedSids.forEach(function(sid) {
       var oldCard = existingCards[sid];
       if (!oldCard) return;
