@@ -2353,19 +2353,54 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
       requestAnimationFrame(()=>_gridCheckSentinel(grid,sentinel));
     }
   } else {
-    // v236: 无论变化多少张卡片，都逐张替换（不再全量重建），避免 grid.innerHTML='' 导致闪屏
+    // v242: 逐张替换变化卡片，只对新卡片做后处理，不碰未变化卡片的动画状态
+    var newCards = [];
     changedSids.forEach(function(sid) {
       var oldCard = existingCards[sid];
       if (!oldCard) return;
       var s = _gridStudents.find(function(st) { return st.id == sid; });
       if (!s) return;
+      // 继承旧卡片的视口状态，避免动画重启
+      var wasInViewport = oldCard.classList.contains('in-viewport');
+      var oldDelay = oldCard.style.animationDelay;
+      var oldDuration = oldCard.style.animationDuration;
       var temp = document.createElement('div');
       temp.innerHTML = _generateStudentCardHTML(s);
       var newCard = temp.firstElementChild;
-      if (newCard) oldCard.replaceWith(newCard);
+      if (newCard) {
+        // 恢复旧卡片的动画参数，保持与周围卡片同步
+        if (oldDelay) newCard.style.animationDelay = oldDelay;
+        if (oldDuration) newCard.style.animationDuration = oldDuration;
+        if (wasInViewport) newCard.classList.add('in-viewport');
+        oldCard.replaceWith(newCard);
+        newCards.push(newCard);
+      }
     });
-    _gridRenderedCount = _gridStudents.length; // 标记全部已渲染
-    _applyGridBatchPostProcess();
+    _gridRenderedCount = _gridStudents.length;
+    // v242: 只对新卡片做必要的后处理（心跳监听、拖拽绑定），不重新随机化所有卡片动画
+    if (newCards.length > 0) {
+      if (typeof attachCardHeartListeners === 'function') attachCardHeartListeners();
+      if (typeof bindPetCardDrag === 'function') bindPetCardDrag();
+      // 观察新卡片的视口状态
+      if (_cardViewportObserver) {
+        newCards.forEach(function(card) { _cardViewportObserver.observe(card); });
+      }
+      // 学生视图：隐藏非本人的操作按钮
+      if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+        var myId = currentUser.studentId.toString();
+        newCards.forEach(function(card) {
+          var onclick = card.getAttribute('onclick') || '';
+          if (onclick.indexOf("'" + myId + "'") === -1 && onclick.indexOf('"' + myId + '"') === -1) {
+            card.querySelectorAll('button').forEach(function(btn) {
+              var btnOnclick = btn.getAttribute('onclick') || '';
+              if (btnOnclick.indexOf('showChangePetModal') !== -1 || btnOnclick.indexOf('showSwitchPetModal') !== -1 || btnOnclick.indexOf('renamePet') !== -1) {
+                btn.style.display = 'none';
+              }
+            });
+          }
+        });
+      }
+    }
   }
 }
 function _gridCheckSentinel(grid,sentinel){
