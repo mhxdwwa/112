@@ -1,6 +1,7 @@
 /**
  * POST /api/logs/append — 追加操作日志
  * v221: INSERT 到 operation_logs 独立表（替代 read-modify-write classes.operation_logs_json）
+ * v222: 修复时间戳UTC格式处理 - 确保所有时间戳都有正确的时区标记
  */
 import { jsonResponse, handleOptions, checkEnv, sbRequest, genId } from '../../_utils.js';
 
