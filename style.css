@@ -654,10 +654,10 @@ body.modal-open .deco-corner{
 .music-name-inline{font-size:11px;color:#885a5a;white-space:nowrap;max-width:0;opacity:0;overflow:hidden;transition:all 0.3s;}
 .music-panel-inline.expanded .music-name-inline{max-width:100px;opacity:1;margin-left:3px;}
 
-/* v248: 制作者悬浮框 - 固定在页面右下角 */
+/* v250: 制作者悬浮框 - 固定在页面右下角 */
 .credit-float-fixed{
   position:fixed;
-  right:30px;
+  right:10px;
   bottom:20px;
   background:rgba(255,250,245,0.92);
   padding:12px 20px;
@@ -1068,12 +1068,33 @@ body.modal-open .deco-corner{
   .credit-float{
     display:none;
   }
-  /* v246: 移动端隐藏固定悬浮元素 */
+  /* v250: 移动端显示固定悬浮元素，调整位置和大小 */
   .credit-float-fixed{
-    display:none;
+    font-size:11px;
+    padding:8px 14px;
+    right:8px;
+    bottom:8px;
   }
   .music-panel-fixed{
-    display:none;
+    left:8px;
+    bottom:8px;
+    gap:6px;
+  }
+  .music-toggle-fixed{
+    width:36px;
+    height:36px;
+    font-size:15px;
+  }
+  .music-expand-btn-fixed{
+    width:20px;
+    height:20px;
+    font-size:9px;
+  }
+  .music-vol-slider-fixed{
+    width:50px;
+  }
+  .music-name-fixed{
+    font-size:9px;
   }
   .music-panel-inline{
     padding:3px 8px;
