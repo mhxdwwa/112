@@ -40,6 +40,8 @@ function scheduleRender(flags) {
     if (f & _RF_PK) { if(typeof renderPKPage==='function') renderPKPage(); }
     if (f & _RF_CLASSLIST) renderClassList();
     if (f & _RF_JH) { if(typeof renderJianghuPage==='function') renderJianghuPage(); }
+    // v262: 渲染完成后同步哈希，防止 _doSmartRefresh 重复渲染
+    if (typeof _syncRenderedDataHash === 'function') _syncRenderedDataHash();
   });
 }
 function scheduleAllRenders() {

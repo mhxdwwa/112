@@ -3170,6 +3170,10 @@ var _smartRefreshInProgress = false;
 var _smartRefreshPending = false;
 // v261: 数据快照哈希 —— 用于检测 refresh 后数据是否真的变了，没变就跳过重渲染（消除闪屏/跳动）
 var _lastRenderedDataHash = null;
+// v262: 供 app.js 调用 —— Realtime 渲染后同步哈希，防止 _doSmartRefresh 重复渲染
+function _syncRenderedDataHash() {
+  _lastRenderedDataHash = _computeClassesDataHash();
+}
 function _computeClassesDataHash() {
   // v261: 快速哈希 —— 覆盖所有会影响 UI 显示的关键字段
   // 与 app.js _studentDataHash 对齐，确保任何卡片级变化都能被检测到
