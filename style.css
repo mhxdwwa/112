@@ -653,6 +653,157 @@ body.modal-open .deco-corner{
 .music-name-inline{font-size:11px;color:#885a5a;white-space:nowrap;max-width:0;opacity:0;overflow:hidden;transition:all 0.3s;}
 .music-panel-inline.expanded .music-name-inline{max-width:100px;opacity:1;margin-left:3px;}
 
+/* v246: 制作者悬浮框 - 固定在页面左侧 */
+.credit-float-fixed{
+  position:fixed;
+  left:20px;
+  top:50%;
+  transform:translateY(-50%);
+  background:rgba(255,250,245,0.92);
+  padding:12px 20px;
+  border-radius:50px;
+  border:1.5px solid rgba(255,210,200,0.6);
+  box-shadow:0 8px 24px rgba(255,180,160,0.25);
+  font-size:14px;
+  font-weight:700;
+  color:#a04050;
+  z-index:998;
+  pointer-events:none;
+  animation:creditFloatGentle 6s ease-in-out infinite;
+  will-change:transform;
+}
+@keyframes creditFloatGentle{
+  0%,100%{transform:translateY(-50%) translateX(0);}
+  50%{transform:translateY(-50%) translateX(5px);}
+}
+
+/* v246: 音乐控制面板 - 固定在页面右侧 */
+.music-panel-fixed{
+  position:fixed;
+  right:20px;
+  top:50%;
+  transform:translateY(-50%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  z-index:998;
+}
+.music-toggle-fixed{
+  width:44px;
+  height:44px;
+  border-radius:50%;
+  border:none;
+  cursor:pointer;
+  background:linear-gradient(135deg,#ff9e9e,#ffb999);
+  color:white;
+  font-size:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 4px 12px rgba(255,150,120,0.35);
+  transition:all 0.2s;
+}
+.music-toggle-fixed:hover{
+  transform:scale(1.1);
+  box-shadow:0 6px 16px rgba(255,150,120,0.45);
+}
+.music-toggle-fixed:active{
+  transform:scale(0.95);
+}
+.music-toggle-fixed.playing{
+  animation:musicPulseFixed 2s ease-in-out infinite;
+}
+@keyframes musicPulseFixed{
+  0%,100%{box-shadow:0 4px 12px rgba(255,150,120,0.35);}
+  50%{box-shadow:0 4px 20px rgba(255,150,120,0.6),0 0 30px rgba(255,150,120,0.3);}
+}
+.music-expand-btn-fixed{
+  width:24px;
+  height:24px;
+  border-radius:50%;
+  border:none;
+  cursor:pointer;
+  background:rgba(255,255,255,0.9);
+  color:#aa6666;
+  font-size:11px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:all 0.2s;
+  box-shadow:0 2px 6px rgba(255,150,120,0.2);
+}
+.music-expand-btn-fixed:hover{
+  background:#fff;
+  transform:scale(1.1);
+}
+.music-expand-btn-fixed.open{
+  transform:rotate(180deg);
+}
+.music-vol-wrap-fixed{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  max-height:0;
+  opacity:0;
+  overflow:hidden;
+  transition:all 0.3s;
+}
+.music-panel-fixed.expanded .music-vol-wrap-fixed{
+  max-height:80px;
+  opacity:1;
+}
+.music-vol-icon-fixed{
+  font-size:16px;
+  cursor:pointer;
+  user-select:none;
+}
+.music-vol-slider-fixed{
+  -webkit-appearance:none;
+  appearance:none;
+  width:6px;
+  height:60px;
+  background:linear-gradient(180deg,#ff9e9e,#ffb999);
+  border-radius:3px;
+  outline:none;
+  cursor:pointer;
+  writing-mode:bt-lr;
+  -webkit-appearance:slider-vertical;
+}
+.music-vol-slider-fixed::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background:#fff;
+  border:2px solid #ff9e9e;
+  box-shadow:0 2px 4px rgba(255,150,120,0.3);
+  cursor:pointer;
+}
+.music-vol-slider-fixed::-moz-range-thumb{
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background:#fff;
+  border:2px solid #ff9e9e;
+  box-shadow:0 2px 4px rgba(255,150,120,0.3);
+  cursor:pointer;
+}
+.music-name-fixed{
+  font-size:10px;
+  color:#885a5a;
+  white-space:nowrap;
+  max-height:0;
+  opacity:0;
+  overflow:hidden;
+  transition:all 0.3s;
+}
+.music-panel-fixed.expanded .music-name-fixed{
+  max-height:20px;
+  opacity:1;
+}
+
 /* ===== 全局装饰美化 ===== */
 /* 浮动装饰角标 */
 .deco-corner{position:fixed;pointer-events:none;z-index:0;opacity:0.08;}
@@ -918,6 +1069,13 @@ body.modal-open .deco-corner{
     font-size:13px;
   }
   .credit-float{
+    display:none;
+  }
+  /* v246: 移动端隐藏固定悬浮元素 */
+  .credit-float-fixed{
+    display:none;
+  }
+  .music-panel-fixed{
     display:none;
   }
   .music-panel-inline{
