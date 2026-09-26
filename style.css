@@ -24,6 +24,11 @@
  * ║    Tier 2 动画全部禁用                                 ║
  * ║    Tier 1 & Tier 1.5 动画完整保留                      ║
  * ║    backdrop-filter 全部禁用                            ║
+ * ║                                                      ║
+ * ║  v231 视口动画优化：                                   ║
+ * ║    不在视口内的宠物卡片（.home-pet-card:not(.in-viewport)）║
+ * ║    所有动画自动暂停，滚动回来后恢复。                    ║
+ * ║    由 app.js 中的 IntersectionObserver 控制 .in-viewport 类。║
  * ╚══════════════════════════════════════════════════════╝
  */
 
@@ -85,6 +90,14 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
   50%{transform:translateY(-5px)}
 }
 .home-pet-card{width:100%;height:280px;position:relative;overflow:visible;animation:petFloat 4s ease-in-out infinite;animation-delay:var(--card-float-delay,0s);contain:layout style paint;}
+/* v231: 视口外卡片暂停所有动画，节省 GPU/CPU 资源 */
+.home-pet-card:not(.in-viewport),
+.home-pet-card:not(.in-viewport) *,
+.home-pet-card:not(.in-viewport) *::before,
+.home-pet-card:not(.in-viewport) *::after{
+  animation-play-state:paused !important;
+  transition:none !important;
+}
 .home-pet-inner{width:100%;height:100%;background:linear-gradient(170deg,#ffffff 0%,#fdfaf8 50%,#faf5f2 100%);border-radius:22px;border:2px solid #e8d5cc;transition:border-color 0.4s, box-shadow 0.4s;cursor:pointer;box-shadow:0 4px 20px rgba(255,180,160,0.18), 0 1px 3px rgba(0,0,0,0.04), 0 1px 0 rgba(255,255,255,0.8) inset;display:flex;flex-direction:column;position:relative;overflow:hidden;}
 .home-pet-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#e8637a,#f07b68,#f5a054);border-radius:24px 24px 0 0;z-index:0;}
 .home-pet-card:hover{transition:transform 0.2s ease;}

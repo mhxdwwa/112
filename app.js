@@ -2178,6 +2178,27 @@ let _gridStudents=[], _gridRenderedCount=0;
 const _GRID_BATCH_SIZE=12;
 let _gridObserver=null, _gridBatchBusy=false;
 
+/* v231: 视口动画控制器 — 只让可见卡片运行动画 */
+let _cardViewportObserver = null;
+function _initCardViewportObserver() {
+  if (_cardViewportObserver) _cardViewportObserver.disconnect();
+  _cardViewportObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-viewport');
+      } else {
+        entry.target.classList.remove('in-viewport');
+      }
+    });
+  }, { rootMargin: '50px' });
+}
+function _observeAllCards() {
+  if (!_cardViewportObserver) _initCardViewportObserver();
+  document.querySelectorAll('.home-pet-card').forEach(function(card) {
+    _cardViewportObserver.observe(card);
+  });
+}
+
 /* 快速计算学生数据哈希，用于 DOM diff 判断卡片是否需要更新 */
 function _studentDataHash(s) {
   // v219: 加入装备道具信息，否则装备/卸下道具后 hash 不变，卡片不会重新渲染
@@ -2245,10 +2266,14 @@ function _applyGridBatchPostProcess(){
       }
     });
   }
+  /* v231: 观察所有卡片，控制视口内动画 */
+  _observeAllCards();
 }
 
 function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if(_gridObserver){_gridObserver.disconnect();_gridObserver=null;}
+  /* v231: 重建时断开视口观察器，批次渲染后会重新观察 */
+  if(_cardViewportObserver){_cardViewportObserver.disconnect();}
   const oldSentinel=document.getElementById('grid-scroll-sentinel');if(oldSentinel)oldSentinel.remove();
   // 控制排序按钮可见性（仅教师可见，包括移动端）
   var _sortBtn = document.getElementById('sortPetsBtn');
