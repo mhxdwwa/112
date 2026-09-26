@@ -9,10 +9,10 @@
   
   // 书籍列表（直接配置，无需API）
   var BOOKS_LIST = [
-    { name: '七年级上册数学课本', file: '七年级上册数学课本.pdf', size: '5.1MB' },
-    { name: '七年级下册数学课本', file: '七年级下册数学课本.pdf', size: '13MB' },
-    { name: '八年级上册数学课本', file: '八年级上册数学课本.pdf', size: '4.0MB' },
-    { name: '八年级下册数学课本', file: '八年级下册数学课本.pdf', size: '4.4MB' }
+    { name: '七年级上册数学课本', file: '七年级上册数学课本.pdf', size: '16MB' },
+    { name: '七年级下册数学课本', file: '七年级下册数学课本.pdf', size: '24MB' },
+    { name: '八年级上册数学课本', file: '八年级上册数学课本.pdf', size: '9.6MB' },
+    { name: '八年级下册数学课本', file: '八年级下册数学课本.pdf', size: '18MB' }
   ];
   
   // 渲染图书馆页面
