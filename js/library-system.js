@@ -4,8 +4,8 @@
 (function() {
   'use strict';
 
-  // 书籍列表配置 - 从阿里云OSS加载PDF
-  var BOOKS_REPO = 'https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com/books';
+  // 书籍列表配置 - 从仓库本地加载PDF（Cloudflare Pages CDN）
+  var BOOKS_REPO = 'books';
   
   // 书籍列表（直接配置，无需API）
   var BOOKS_LIST = [
