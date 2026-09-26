@@ -213,7 +213,7 @@ body.modal-open .deco-corner{
 .modal-action-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:20px 0;}
 .modal-btn{padding:12px;border:none;border-radius:18px;color:white;cursor:pointer;text-align:center;transition:all 0.3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 4px 12px rgba(0,0,0,0.08);}
 .modal-btn:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 8px 20px rgba(0,0,0,0.12);}
-.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,200,190,0.35);backdrop-filter:blur(3px) saturate(110%);-webkit-backdrop-filter:blur(3px) saturate(110%);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;animation:fadeIn 0.3s ease;will-change:opacity;transform:translateZ(0);}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,200,190,0.65);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;animation:fadeIn 0.3s ease;}
 .modal{background:#fffcf9;border-radius:36px;padding:30px;max-width:1100px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(255,150,130,0.25), 0 10px 20px rgba(0,0,0,0.06), 0 2px 0 rgba(255,255,255,0.6) inset;border:2px solid rgba(255,225,215,0.8);animation:modalEnter 0.4s cubic-bezier(.34,1.56,.64,1);}
 .modal.large{max-width:1200px;width:95%;}
 .modal.pk-fullscreen{max-width:100vw;width:100vw;height:100vh;max-height:100vh;padding:0;border-radius:0;overflow:hidden;display:flex;flex-direction:column;background:#000;border:none;box-shadow:none;}
