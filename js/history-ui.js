@@ -294,6 +294,7 @@ function toggleDateGroup(dateKey) {
 }
 
 // v68: Build single log item HTML (extracted for reuse)
+// v173: 修复时区显示问题 - 确保时间正确显示为北京时间
 function _buildHistoryLogItem(log, isCurrentMonth, isStudentView) {
   // 修复时区问题：确保时间戳正确解析为UTC并转换为北京时间
   let time;
