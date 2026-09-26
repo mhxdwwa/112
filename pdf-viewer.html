@@ -100,43 +100,38 @@ var renderingPages = {};
 var pageWrappers = {};
 
 // ========== 加载 PDF ==========
+// v256: 使用PDF.js原生流式加载（Range Request），第一页秒开
+// 不再下载完整文件，而是按需加载，边看边下载
 function loadPDF(url) {
   var loadingText = document.getElementById('loading-text');
 
-  // 使用 fetch 手动下载 PDF 数据，避免 CORS/Range 问题
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', url, true);
-  xhr.responseType = 'arraybuffer';
-  xhr.onprogress = function(e) {
-    if (e.total > 0) {
-      var pct = Math.round(e.loaded / e.total * 100);
+  // 使用PDF.js原生URL加载，支持HTTP Range请求
+  // PDF.js会自动按需下载，不需要先下载完整文件
+  var loadingTask = pdfjsLib.getDocument({
+    url: url,
+    rangeChunkSize: 65536, // 64KB chunks for progressive loading
+    disableStream: false,
+    disableRange: false
+  });
+
+  // 监听加载进度
+  loadingTask.onProgress = function(progressData) {
+    if (progressData.total > 0) {
+      var pct = Math.round(progressData.loaded / progressData.total * 100);
       loadingText.textContent = '正在加载文档... ' + pct + '%';
     }
   };
-  xhr.onload = function() {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      var data = new Uint8Array(xhr.response);
-      loadingText.textContent = '正在解析文档...';
-      pdfjsLib.getDocument({data: data}).promise.then(function(pdf) {
-        pdfDoc = pdf;
-        totalPages = pdf.numPages;
-        document.getElementById('loading-overlay').classList.add('hidden');
-        document.getElementById('page-info').textContent = '共 ' + totalPages + ' 页';
-        initViewer();
-      }).catch(function(err) {
-        console.error('PDF parse error:', err);
-        showError();
-      });
-    } else {
-      console.error('XHR error:', xhr.status);
-      showError();
-    }
-  };
-  xhr.onerror = function() {
-    console.error('XHR network error');
+
+  loadingTask.promise.then(function(pdf) {
+    pdfDoc = pdf;
+    totalPages = pdf.numPages;
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('page-info').textContent = '共 ' + totalPages + ' 页';
+    initViewer();
+  }).catch(function(err) {
+    console.error('PDF load error:', err);
     showError();
-  };
-  xhr.send();
+  });
 }
 
 // ========== 初始化视图 ==========
