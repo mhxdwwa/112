@@ -99,6 +99,7 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
   transition:none !important;
 }
 /* v231: 模态框打开时暂停背景所有动画 */
+body.modal-open::before,
 body.modal-open .content-container,
 body.modal-open .content-container *,
 body.modal-open .content-container *::before,
