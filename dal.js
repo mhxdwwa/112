@@ -3168,6 +3168,33 @@ function _immediateRefreshFromSupabase() {
 // v103: Refresh lock — prevent concurrent smart refreshes that cause duplicate queries
 var _smartRefreshInProgress = false;
 var _smartRefreshPending = false;
+// v261: 数据快照哈希 —— 用于检测 refresh 后数据是否真的变了，没变就跳过重渲染（消除闪屏/跳动）
+var _lastRenderedDataHash = null;
+function _computeClassesDataHash() {
+  // v261: 快速哈希 —— 覆盖所有会影响 UI 显示的关键字段
+  // 与 app.js _studentDataHash 对齐，确保任何卡片级变化都能被检测到
+  var parts = [];
+  if (!classesData || !Array.isArray(classesData)) return 'empty';
+  for (var i = 0; i < classesData.length; i++) {
+    var cls = classesData[i];
+    var clsPart = (cls.id || '') + ':' + (cls.name || '') + ':' + (cls.students ? cls.students.length : 0);
+    if (cls.students) {
+      for (var j = 0; j < cls.students.length; j++) {
+        var s = cls.students[j];
+        var p = (typeof getActivePet === 'function') ? getActivePet(s) : (s.pets && s.pets.length > 0 ? s.pets[0] : null);
+        clsPart += '|' + (s.id||'') + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (s.pets?s.pets.length:0);
+        if (p) {
+          var feedDate = p.lastFeedDate ? p.lastFeedDate.substring(0, 10) : '';
+          clsPart += '_' + (p.id||'') + '_' + (p.name||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + feedDate + '_' + (p.nickname||'');
+        } else {
+          clsPart += '_np';
+        }
+      }
+    }
+    parts.push(clsPart);
+  }
+  return parts.join('//');
+}
 
 function _doSmartRefresh() {
   // v103: If a refresh is already in progress, skip this one.
@@ -3180,6 +3207,8 @@ function _doSmartRefresh() {
     return;
   }
   _smartRefreshInProgress = true;
+  // v261: 在拉取数据前记录当前数据哈希，拉取后对比，没变就跳过重渲染
+  var hashBefore = _computeClassesDataHash();
   console.log('[DAL] Starting smart refresh...');
   _smartRefreshFromSupabase().then(function() {
     // Also reload operation logs from Supabase to keep history up to date
@@ -3199,10 +3228,17 @@ function _doSmartRefresh() {
     // v15: Ensure app.js alias is synced after loading logs
     if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
     
-    // Re-render the UI with merged data
-    if (typeof renderClassList === 'function') renderClassList();
-    // scheduleAllRenders already includes PK + Jianghu renders, no need to call them again
-    if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    // v261: 对比数据哈希 —— 如果数据没变，跳过所有重渲染（消除周期性跳动）
+    var hashAfter = _computeClassesDataHash();
+    if (hashAfter === hashBefore && _lastRenderedDataHash === hashBefore) {
+      console.log('[DAL] v261 Data unchanged since last render — skipping UI re-render (no jump)');
+    } else {
+      _lastRenderedDataHash = hashAfter;
+      // Re-render the UI with merged data
+      if (typeof renderClassList === 'function') renderClassList();
+      // scheduleAllRenders already includes PK + Jianghu renders, no need to call them again
+      if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+    }
     // v53: Debounce history modal refresh to avoid flickering (max once per 3s)
     if (typeof refreshHistoryModalIfOpen === 'function') {
       clearTimeout(window._historyRefreshDebounce);

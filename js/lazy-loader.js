@@ -10,7 +10,7 @@
     'pk-battle':       { src: 'js/pk-battle.js?v=205' },
     'class-pk':        { src: 'js/class-pk.js?v=205' },
     'jianghu':         { src: 'js/jianghu.js?v=171', deps: ['pk-battle'] },
-    'rankings':        { src: 'js/rankings.js?v=136' },
+    'rankings':        { src: 'js/rankings.js?v=261' },
     'library':         { src: 'js/library-system.js?v=260' },
 
     // --- 弹窗/按钮模块 ---

@@ -1,3 +1,12 @@
+// v261: 排行榜数据哈希 —— 数据没变时跳过重渲染（消除跳动）
+var _lastRankingHash = null;
+function _computeRankingHash(allList, totalStudents, hasPetCount, classId) {
+  var parts = [classId, totalStudents, hasPetCount];
+  for (var i = 0; i < Math.min(allList.length, 20); i++) {
+    parts.push(allList[i].name + ':' + allList[i].totalGrowth);
+  }
+  return parts.join('|');
+}
 function renderClassTopThree(){
   const container=document.getElementById('classTopThree');
   const fullListEl=document.getElementById('fullRankList');
@@ -15,6 +24,9 @@ function renderClassTopThree(){
 
   const emptyHint=document.getElementById('honorEmptyHint');
   if(allList.length===0){
+    // v261: 空列表也需要检查是否已经是空状态
+    if (_lastRankingHash === 'empty_' + currentClassId) return;
+    _lastRankingHash = 'empty_' + currentClassId;
     container.innerHTML='';
     if(fullListEl)fullListEl.innerHTML='';
     if(statsBar)statsBar.innerHTML='';
@@ -23,9 +35,16 @@ function renderClassTopThree(){
   }
   if(emptyHint)emptyHint.style.display='none';
 
-  const maxGrowth=allList[0]?.totalGrowth||1;
+  // v261: 快速路径 —— 排行数据没变，跳过 DOM 重建
   const totalStudents=cur.students.length;
   const hasPetCount=cur.students.filter(s=>s.pets&&s.pets.length>0).length;
+  var newRankHash = _computeRankingHash(allList, totalStudents, hasPetCount, currentClassId);
+  if (newRankHash === _lastRankingHash) {
+    return;
+  }
+  _lastRankingHash = newRankHash;
+
+  const maxGrowth=allList[0]?.totalGrowth||1;
   const totalGrowthAll=allList.reduce((s,x)=>s+x.totalGrowth,0);
 
   /* 统计横幅 */

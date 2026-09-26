@@ -1224,7 +1224,37 @@ function showClassDataManagerModal(){
   html += '</div>';
   showModal('⚙️ 班级数据管理', html, [{text:'关闭',onclick:'closeModal()'}], true);
 }
-function renderClassList(){ const c=document.getElementById('classListContainer'); if(!c){console.warn('[DAL] renderClassList: classListContainer not found');return;} const hiddenIds=getHiddenClassIds(); const visibleClasses=classesData.filter(cls=>!hiddenIds.includes(String(cls.id))); if(visibleClasses.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">'+(classesData.length===0?'暂无班级，点击新建':'所有班级已隐藏<br><span style="font-size:12px;color:#999;">点击"隐藏班级"可显示</span>')+'</div>';return;} c.innerHTML=''; visibleClasses.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);}); _updateSnackRequestBadge();}
+// v261: 班级列表增量渲染 —— 数据没变时只更新 active 状态，不销毁 DOM（消除跳动）
+var _lastClassListHash = null;
+function _computeClassListHash(visibleClasses) {
+  // v261: 包含 currentClassId，因为切换班级时 active 状态需要更新
+  var parts = ['cur:' + currentClassId];
+  for (var i = 0; i < visibleClasses.length; i++) {
+    var cls = visibleClasses[i];
+    parts.push(cls.id + ':' + (cls.name||'') + ':' + (cls.students?cls.students.length:0) + ':' + (cls.students?cls.students.reduce(function(s,stu){return s+(stu.pets?.length||0);},0):0));
+  }
+  return parts.join('|');
+}
+function renderClassList(){ const c=document.getElementById('classListContainer'); if(!c){console.warn('[DAL] renderClassList: classListContainer not found');return;} const hiddenIds=getHiddenClassIds(); const visibleClasses=classesData.filter(cls=>!hiddenIds.includes(String(cls.id))); if(visibleClasses.length===0){c.innerHTML='<div style="text-align:center;padding:20px;">'+(classesData.length===0?'暂无班级，点击新建':'所有班级已隐藏<br><span style="font-size:12px;color:#999;">点击"隐藏班级"可显示</span>')+'</div>';_lastClassListHash=null;return;}
+  // v261: 快速路径 —— 班级列表结构没变，只更新 active 状态
+  var newHash = _computeClassListHash(visibleClasses);
+  if (newHash === _lastClassListHash) {
+    // 只同步 active 状态，不碰 DOM 结构
+    var existingCards = c.querySelectorAll('.class-card');
+    existingCards.forEach(function(card) {
+      var idx = +card.dataset.classIdx;
+      var cls = visibleClasses[idx];
+      if (cls) {
+        var shouldBeActive = currentClassId === cls.id;
+        if (shouldBeActive && !card.classList.contains('active')) card.classList.add('active');
+        else if (!shouldBeActive && card.classList.contains('active')) card.classList.remove('active');
+      }
+    });
+    _updateSnackRequestBadge();
+    return;
+  }
+  _lastClassListHash = newHash;
+  c.innerHTML=''; visibleClasses.forEach((cls,idx)=>{const card=document.createElement('div');card.className=`class-card ${currentClassId===cls.id?'active':''}`;card.draggable=true;card.dataset.classIdx=idx;card.innerHTML=`<button class="delete-class-btn" onclick="event.stopPropagation(); deleteClass('${cls.id}')">×</button><div class="class-name">${esc(cls.name)}</div><div style="display:flex;gap:15px;"><div>👨‍🎓 ${cls.students.length}</div><div>🐕 ${cls.students.reduce((s,stu)=>s+(stu.pets?.length||0),0)}</div></div>`;card.onclick=()=>{selectClass(cls.id);};card.addEventListener('dragstart',classDragStart);card.addEventListener('dragend',classDragEnd);card.addEventListener('dragover',classDragOver);card.addEventListener('dragleave',classDragLeave);card.addEventListener('drop',classDrop);c.appendChild(card);}); _updateSnackRequestBadge();}
 function _updateSnackRequestBadge(){const badge=document.getElementById('snackRequestBadge');if(!badge)return;if(typeof getPendingSnackRequestCount!=='function')return;const count=getPendingSnackRequestCount();if(count>0){badge.style.display='inline-block';badge.textContent=count;}else{badge.style.display='none';}}
 let classDragIdx=null;
 function classDragStart(e){classDragIdx=+this.dataset.classIdx;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';}
