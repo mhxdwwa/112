@@ -2208,8 +2208,10 @@ function _studentDataHash(s) {
   }
   var p = getActivePet(s);
   if (!p) return s.id + '_nopet_' + (s.coins||0) + '_' + (s.xiandan||0) + '_eq:' + eqStr;
+  // v243: 只取 lastFeedDate 的日期部分（YYYY-MM-DD），避免毫秒级差异导致不必要的卡片替换
+  var feedDate = p.lastFeedDate ? p.lastFeedDate.substring(0, 10) : '';
   // v220: 加入 p.name（宠物种类），否则换宠物后 hash 不变，卡片不更新
-  return s.id + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (p.id||'') + '_' + (p.name||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + (p.lastFeedDate||'') + '_' + (p.nickname||'') + '_' + (s.pets?s.pets.length:0) + '_eq:' + eqStr;
+  return s.id + '_' + (s.coins||0) + '_' + (s.xiandan||0) + '_' + (p.id||'') + '_' + (p.name||'') + '_' + (p.growth||0) + '_' + (p.level||0) + '_' + (p.isDead?'d':'a') + '_' + feedDate + '_' + (p.nickname||'') + '_' + (s.pets?s.pets.length:0) + '_eq:' + eqStr;
 }
 
 function _generateStudentCardHTML(s){
