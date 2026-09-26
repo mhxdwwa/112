@@ -2356,42 +2356,34 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
       requestAnimationFrame(()=>_gridCheckSentinel(grid,sentinel));
     }
   } else {
-    // v242: 逐张替换变化卡片，只对新卡片做后处理，不碰未变化卡片的动画状态
-    var newCards = [];
+    // v246: 只替换卡片子内容，保持 .home-pet-card 元素本身不动
+    // petFloat 动画运行在 .home-pet-card 上，不替换元素 = 动画不重启 = 无闪屏
+    var updatedCards = [];
     changedSids.forEach(function(sid) {
       var oldCard = existingCards[sid];
       if (!oldCard) return;
       var s = _gridStudents.find(function(st) { return st.id == sid; });
       if (!s) return;
-      // 继承旧卡片的视口状态，避免动画重启
-      var wasInViewport = oldCard.classList.contains('in-viewport');
-      var oldDelay = oldCard.style.animationDelay;
-      var oldDuration = oldCard.style.animationDuration;
       var temp = document.createElement('div');
       temp.innerHTML = _generateStudentCardHTML(s);
       var newCard = temp.firstElementChild;
       if (newCard) {
-        // 恢复旧卡片的动画参数，保持与周围卡片同步
-        if (oldDelay) newCard.style.animationDelay = oldDelay;
-        if (oldDuration) newCard.style.animationDuration = oldDuration;
-        if (wasInViewport) newCard.classList.add('in-viewport');
-        oldCard.replaceWith(newCard);
-        newCards.push(newCard);
+        // 只更新 hash 和子内容，.home-pet-card 元素保留原位
+        oldCard.dataset.hash = newCard.dataset.hash;
+        oldCard.innerHTML = newCard.innerHTML;
+        updatedCards.push(oldCard);
       }
     });
     _gridRenderedCount = _gridStudents.length;
-    // v242: 只对新卡片做必要的后处理（心跳监听、拖拽绑定），不重新随机化所有卡片动画
-    if (newCards.length > 0) {
+    // v246: 对更新后的卡片做必要的后处理
+    if (updatedCards.length > 0) {
       if (typeof attachCardHeartListeners === 'function') attachCardHeartListeners();
       if (typeof bindPetCardDrag === 'function') bindPetCardDrag();
-      // 观察新卡片的视口状态
-      if (_cardViewportObserver) {
-        newCards.forEach(function(card) { _cardViewportObserver.observe(card); });
-      }
+      // v246: 卡片元素没变，视口观察器不需要重新 observe
       // 学生视图：隐藏非本人的操作按钮
       if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
         var myId = currentUser.studentId.toString();
-        newCards.forEach(function(card) {
+        updatedCards.forEach(function(card) {
           var onclick = card.getAttribute('onclick') || '';
           if (onclick.indexOf("'" + myId + "'") === -1 && onclick.indexOf('"' + myId + '"') === -1) {
             card.querySelectorAll('button').forEach(function(btn) {
