@@ -8950,6 +8950,18 @@ cvs.addEventListener('touchstart',e=>{
             if(gx>=upX&&gx<=upX+BF_BTN&&gy>=upY&&gy<=upY+BF_BTN){P.moveUp=true;activeTouches[tid]='up2';continue;}
             if(gx>=dnX&&gx<=dnX+BF_BTN&&gy>=dnY&&gy<=dnY+BF_BTN){P.moveDown=true;activeTouches[tid]='down2';continue;}
         }
+        // v262: 被最终怪兽打败后，bossDefeatReward 所有阶段都支持方向键移动（与键盘行为一致）
+        if(state==='bossDefeatReward' && (bossDefeatRewardPhase===0 || bossDefeatRewardPhase===3)){
+            const half=BF_BTN/2;
+            const upX=BF_CX-half, upY=BF_CY-half-BF_BTN-BF_GAP;
+            const dnX=BF_CX-half, dnY=BF_CY+half+BF_GAP;
+            const ltX=BF_CX-half-BF_BTN-BF_GAP, ltY=BF_CY-half;
+            const rtX=BF_CX+half+BF_GAP, rtY=BF_CY-half;
+            if(gx>=ltX&&gx<=ltX+BF_BTN&&gy>=ltY&&gy<=ltY+BF_BTN){P.moveLeft=true;activeTouches[tid]='left';continue;}
+            if(gx>=rtX&&gx<=rtX+BF_BTN&&gy>=rtY&&gy<=rtY+BF_BTN){P.moveRight=true;activeTouches[tid]='right';continue;}
+            if(gx>=upX&&gx<=upX+BF_BTN&&gy>=upY&&gy<=upY+BF_BTN){P.moveUp=true;activeTouches[tid]='up2';continue;}
+            if(gx>=dnX&&gx<=dnX+BF_BTN&&gy>=dnY&&gy<=dnY+BF_BTN){P.moveDown=true;activeTouches[tid]='down2';continue;}
+        }
         if(state==='bossDefeatReward' && bossDefeatRewardPhase===3 && bossDefeatShowContinue){
             if(gx>=300&&gx<=500&&gy>=320&&gy<=370){
                 startTransitionRoom();

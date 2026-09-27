@@ -11,9 +11,14 @@ function hasPKQualificationToday(studentId) {
   let total = 0;
   const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡', '取金阁', '小猪快跑', '宠物消消乐'];
   var logs = getOpLogs();
+  // v262: 去重机制 —— 按 log.id 去重，避免同一条记录被重复计算
+  var seenIds = {};
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
     if (log.reverted) continue;
+    // v262: 跳过重复的日志ID
+    if (log.id && seenIds[log.id]) continue;
+    if (log.id) seenIds[log.id] = true;
     const logDate = new Date(log.timestamp).toDateString();
     if (logDate !== today) continue;
     if (log.studentId && log.studentId.toString() === studentId.toString() && log.coinDelta > 0 && pkValidTypes.includes(log.actionType)) {
