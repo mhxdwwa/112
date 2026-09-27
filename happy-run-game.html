@@ -667,11 +667,22 @@ function handleQuizAnswer(correct) {
             clearRevivalState(); // v70: 复活结束，清除状态
         }
     } else {
-        // 答错：禁用该选项，保持在答题界面
+        // v270: 答错：禁用该选项，答错2次则复活失败
         playSound('hit');
         quizDisabledOptions.push(quizAnsweredIdx);
         saveRevivalState(); // v70: 保存状态（答错也要保存，防止刷新丢失）
-        setTimeout(function(){ quizAnswered = false; }, 300);
+        
+        if (quizDisabledOptions.length >= 2) {
+            // v270: 答错2次，复活失败，不获得爱心
+            setTimeout(function(){
+                quizRevivalActive = false;
+                quizRevivalFailed = true;
+                state = 'over';
+                clearRevivalState();
+            }, 500);
+        } else {
+            setTimeout(function(){ quizAnswered = false; }, 300);
+        }
     }
 }
 
@@ -919,7 +930,8 @@ function die(){
         bossDefeated=false;
         // v268: 战败也计算分数（被boss击败也算通关）
         calcLevelScore();
-        if(currentLevel>maxUnlockedLevel) maxUnlockedLevel=currentLevel;
+        // v270: 战败也算通关，解锁下一关卡
+        if(currentLevel >= maxUnlockedLevel) maxUnlockedLevel = currentLevel + 1;
         saveLevelProgress();
         playSound('die');
         // Clear boss fight elements
