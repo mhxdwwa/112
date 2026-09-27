@@ -3,33 +3,67 @@ let jhSelectedStudentId = null;
 
 function getTodayCoinGain(studentId) {
   const today = new Date().toDateString();
-  let total = 0;
-  // v15: Always read from window.operationLogs for cross-script consistency
   const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡', '取金阁', '小猪快跑', '宠物消消乐'];
   var logs = getOpLogs();
-  // v262: 去重机制 —— 按 log.id 去重，避免同一条记录被重复计算
   var seenIds = {};
-  // v264: 内容去重 —— 按 (studentId + actionType + 5分钟时间桶 + coinDelta) 去重
-  // 使用5分钟时间桶，捕获ID不同但内容相同的重复日志（乐观日志+服务器日志）
-  var seenContent = {};
+
+  // v265: 余额反推法 —— 不再依赖日志coinDelta求和（会被重复的乐观日志干扰）
+  // 原理：student.coins 是准确的当前余额，通过快照中的 coinsBefore 反推今日合格获得量
+  // 公式：qualifyingGain = currentCoins - prevBalance - nonQualifyingChange
+  var currentCoins = null;
+  var prevBalance = null; // 今日第一个合格操作的 coinsBefore
+  var nonQualifyingChange = 0; // 今日所有不合格操作的 coinDelta 之和
+  var qualifyingLogSum = 0; // 回退用：合格日志 coinDelta 之和
+  var hasOptimisticWithoutSnapshot = false;
+
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
     if (log.reverted) continue;
-    // v262: 跳过重复的日志ID
     if (log.id && seenIds[log.id]) continue;
     if (log.id) seenIds[log.id] = true;
     const logDate = new Date(log.timestamp).toDateString();
     if (logDate !== today) continue;
-    if (log.studentId && log.studentId.toString() === studentId.toString() && log.coinDelta > 0 && jhValidTypes.includes(log.actionType)) {
-      // v264: 使用5分钟时间桶去重，避免毫秒/秒级时间差异导致无法匹配
-      const tsBucket = Math.floor(new Date(log.timestamp).getTime() / 300000); // 5分钟桶
-      const contentKey = `${log.studentId}|${log.actionType}|${tsBucket}|${log.coinDelta}`;
-      if (seenContent[contentKey]) continue;
-      seenContent[contentKey] = true;
-      total += log.coinDelta;
+    if (!log.studentId || log.studentId.toString() !== studentId.toString()) continue;
+
+    const isQualifying = jhValidTypes.includes(log.actionType);
+
+    if (isQualifying) {
+      qualifyingLogSum += log.coinDelta;
+      // 检测是否存在无快照的乐观日志（服务器日志尚未到达）
+      if (log._apiOptimistic && !log.snapshot) {
+        hasOptimisticWithoutSnapshot = true;
+      }
+      // 从有快照的合格日志中取最早的 coinsBefore
+      if (log.snapshot && log.snapshot.coinsBefore !== undefined) {
+        if (prevBalance === null) {
+          prevBalance = log.snapshot.coinsBefore;
+        }
+      }
+    } else {
+      // 不合格操作（江湖胜负、PK、商店等）：只计有快照的日志，避免重复计算
+      if (log.snapshot) {
+        nonQualifyingChange += (log.coinDelta || 0);
+      }
     }
   }
-  return total;
+
+  // 获取学生当前余额（始终准确）
+  if (typeof classesData !== 'undefined' && typeof currentClassId !== 'undefined') {
+    var cur = classesData.find(function(c) { return c.id === currentClassId; });
+    if (cur) {
+      var stu = cur.students.find(function(s) { return s.id.toString() === studentId.toString(); });
+      if (stu) currentCoins = stu.coins;
+    }
+  }
+
+  // 优先使用余额反推法（需要有快照支撑）
+  if (prevBalance !== null && currentCoins !== null) {
+    var result = currentCoins - prevBalance - nonQualifyingChange;
+    return Math.max(0, result);
+  }
+
+  // 回退：无快照时（服务器日志尚未到达），用日志求和（极端情况下可能不精确）
+  return Math.max(0, qualifyingLogSum);
 }
 
 // v170: hasPKQualificationToday 已迁移到 pk-battle.js（避免按需加载时未定义导致PK页面崩溃）

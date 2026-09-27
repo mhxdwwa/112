@@ -8,32 +8,56 @@ let pkState = {
 // 之前放在 jianghu.js 会导致按需加载 pk-battle 时 hasPKQualificationToday 未定义，PK 页面崩溃）
 function hasPKQualificationToday(studentId) {
   const today = new Date().toDateString();
-  let total = 0;
   const pkValidTypes = ['奖惩', '批量奖惩', '每日打卡', '全班打卡', '取金阁', '小猪快跑', '宠物消消乐'];
   var logs = getOpLogs();
-  // v262: 去重机制 —— 按 log.id 去重，避免同一条记录被重复计算
   var seenIds = {};
-  // v264: 内容去重 —— 按 (studentId + actionType + 5分钟时间桶 + coinDelta) 去重
-  // 使用5分钟时间桶，捕获ID不同但内容相同的重复日志（乐观日志+服务器日志）
-  var seenContent = {};
+
+  // v265: 余额反推法 —— 与 getTodayCoinGain 相同逻辑
+  var currentCoins = null;
+  var prevBalance = null;
+  var nonQualifyingChange = 0;
+  var qualifyingLogSum = 0;
+
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
     if (log.reverted) continue;
-    // v262: 跳过重复的日志ID
     if (log.id && seenIds[log.id]) continue;
     if (log.id) seenIds[log.id] = true;
     const logDate = new Date(log.timestamp).toDateString();
     if (logDate !== today) continue;
-    if (log.studentId && log.studentId.toString() === studentId.toString() && log.coinDelta > 0 && pkValidTypes.includes(log.actionType)) {
-      // v264: 使用5分钟时间桶去重，避免毫秒/秒级时间差异导致无法匹配
-      const tsBucket = Math.floor(new Date(log.timestamp).getTime() / 300000); // 5分钟桶
-      const contentKey = `${log.studentId}|${log.actionType}|${tsBucket}|${log.coinDelta}`;
-      if (seenContent[contentKey]) continue;
-      seenContent[contentKey] = true;
-      total += log.coinDelta;
+    if (!log.studentId || log.studentId.toString() !== studentId.toString()) continue;
+
+    const isQualifying = pkValidTypes.includes(log.actionType);
+
+    if (isQualifying) {
+      qualifyingLogSum += log.coinDelta;
+      if (log.snapshot && log.snapshot.coinsBefore !== undefined) {
+        if (prevBalance === null) {
+          prevBalance = log.snapshot.coinsBefore;
+        }
+      }
+    } else {
+      if (log.snapshot) {
+        nonQualifyingChange += (log.coinDelta || 0);
+      }
     }
   }
-  return total >= 5;
+
+  if (typeof classesData !== 'undefined' && typeof currentClassId !== 'undefined') {
+    var cur = classesData.find(function(c) { return c.id === currentClassId; });
+    if (cur) {
+      var stu = cur.students.find(function(s) { return s.id.toString() === studentId.toString(); });
+      if (stu) currentCoins = stu.coins;
+    }
+  }
+
+  var total;
+  if (prevBalance !== null && currentCoins !== null) {
+    total = currentCoins - prevBalance - nonQualifyingChange;
+  } else {
+    total = qualifyingLogSum;
+  }
+  return Math.max(0, total) >= 5;
 }
 
 function resetDailyPkCountIfNeeded(student) {
