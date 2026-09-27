@@ -2694,6 +2694,18 @@ function updateBossReward(){
                 silverBalance = totalSilverEarned;
                 saveLevelProgress(); // Save immediately to prevent data loss
             }
+            // v267: 弹出"继续"按钮时立即记录本局游戏结果
+            parent.postMessage({type:'happyrun-log-result', data:{
+                maxLevel: maxUnlockedLevel,
+                levelScores: levelHighScores,
+                levelBestCoins: levelBestCoins,
+                totalSilver: totalSilverEarned,
+                silverBalance: silverBalance,
+                petGold: petGoldCoins,
+                ownedChars: ownedCharacters,
+                bossKillBonus: bossKillBonusClaimed,
+                levelsFirstCompleted: levelsFirstCompleted
+            }}, '*');
         }
     }
     // Phase 3: All collected, show continue button
@@ -2835,6 +2847,18 @@ function updateBossDefeatReward(){
             bossDefeatRewardPhase=3;
             bossDefeatRewardTimer=0;
             bossDefeatShowContinue=true;
+            // v267: 弹出"继续"按钮时立即记录本局游戏结果
+            parent.postMessage({type:'happyrun-log-result', data:{
+                maxLevel: maxUnlockedLevel,
+                levelScores: levelHighScores,
+                levelBestCoins: levelBestCoins,
+                totalSilver: totalSilverEarned,
+                silverBalance: silverBalance,
+                petGold: petGoldCoins,
+                ownedChars: ownedCharacters,
+                bossKillBonus: bossKillBonusClaimed,
+                levelsFirstCompleted: levelsFirstCompleted
+            }}, '*');
         }
     }
     // Phase 3: Show continue button

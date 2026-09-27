@@ -140,64 +140,59 @@
       });
     }
 
-    // === v265: 记录操作日志（仅在通关关卡时记录） ===
-    if (typeof recordAction === 'function') {
-      var newMaxLevel = gameData.maxLevel || 1;
-      var newTotalSilver = gameData.totalSilver || 0;
-      var newPetGold = gameData.petGold || 0;
-      var newLevelScores = gameData.levelScores || {};
-      var newLevelBestCoins = gameData.levelBestCoins || {};
-      var newLevelsFirstCompleted = gameData.levelsFirstCompleted || {};
+    // v267: 操作日志已移至 logGameResult()，仅在点击"继续"按钮时记录
+  }
 
-      // Use the last logged snapshot as baseline (or old state if first time)
-      var baselineMaxLevel = _lastLogSnapshot ? _lastLogSnapshot.maxLevel : oldMaxLevel;
-      var baselineTotalSilver = _lastLogSnapshot ? _lastLogSnapshot.totalSilver : oldTotalSilver;
-      var baselinePetGold = _lastLogSnapshot ? _lastLogSnapshot.petGold : oldPetGold;
-      var baselineLevelBestCoins = _lastLogSnapshot ? _lastLogSnapshot.levelBestCoins : (qs.happyRunLevelBestCoins || {});
-      var baselineLevelsFirstCompleted = _lastLogSnapshot ? _lastLogSnapshot.levelsFirstCompleted : (qs.happyRunLevelsFirstCompleted || {});
+  // === v267: 记录游戏结果（仅在点击"继续"按钮时调用） ===
+  function logGameResult(gameData) {
+    if (typeof recordAction !== 'function') return;
+    var student = getCurrentStudent();
+    if (!student) return;
 
-      // 检测新通关的关卡（首次通关才会获得金币）
-      var newlyCompletedLevels = [];
-      Object.keys(newLevelsFirstCompleted).forEach(function(lvKey) {
-        if (!baselineLevelsFirstCompleted[lvKey]) {
-          newlyCompletedLevels.push(parseInt(lvKey));
-        }
-      });
+    var newMaxLevel = gameData.maxLevel || 1;
+    var newTotalSilver = gameData.totalSilver || 0;
+    var newPetGold = gameData.petGold || 0;
+    var newLevelBestCoins = gameData.levelBestCoins || {};
+    var newLevelsFirstCompleted = gameData.levelsFirstCompleted || {};
 
-      // 只有在有新通关的关卡时才记录日志
-      if (newlyCompletedLevels.length > 0) {
-        newlyCompletedLevels.sort(function(a, b) { return a - b; });
+    // 使用上次记录时的快照作为基准
+    var baselineLevelsFirstCompleted = _lastLogSnapshot ? _lastLogSnapshot.levelsFirstCompleted : {};
+    var baselineTotalSilver = _lastLogSnapshot ? _lastLogSnapshot.totalSilver : 0;
+    var baselinePetGold = _lastLogSnapshot ? _lastLogSnapshot.petGold : 0;
 
-        // 计算本次通关获得的银币（本次银币 - 上次记录时的银币）
-        var silverGained = newTotalSilver - baselineTotalSilver;
+    // 检测新通关的关卡（首次通关才会获得金币）
+    var newlyCompletedLevels = [];
+    Object.keys(newLevelsFirstCompleted).forEach(function(lvKey) {
+      if (!baselineLevelsFirstCompleted[lvKey]) {
+        newlyCompletedLevels.push(parseInt(lvKey));
+      }
+    });
 
-        // 计算本次通关获得的金币（本次金币 - 上次记录时的金币）
-        var goldGained = newPetGold - baselinePetGold;
+    // 只有在有新通关的关卡时才记录日志
+    if (newlyCompletedLevels.length > 0) {
+      newlyCompletedLevels.sort(function(a, b) { return a - b; });
 
-        // 构建日志消息：通关第X关，获得Y金币，获得Z银币，总银币W，总分V
-        var completedLevel = newlyCompletedLevels[0]; // 取第一个通关的关卡
-        var levelSilver = newLevelBestCoins[completedLevel] || 0; // 该关卡的银币数
-        var msg = '快乐跑一跑：通关第' + completedLevel + '关，获得' + goldGained + '金币，获得' + silverGained + '银币，总银币' + newTotalSilver + '，总分' + newTotalSilver;
+      var silverGained = newTotalSilver - baselineTotalSilver;
+      var goldGained = newPetGold - baselinePetGold;
 
-        var student = getCurrentStudent();
-        if (student) {
-          recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
-          if (typeof triggerRealtimeSync === 'function') {
-            triggerRealtimeSync();
-          }
-        }
+      var completedLevel = newlyCompletedLevels[0];
+      var msg = '快乐跑一跑：通关第' + completedLevel + '关，获得' + goldGained + '金币，获得' + silverGained + '银币，总银币' + newTotalSilver + '，总分' + newTotalSilver;
 
-        // 更新快照
-        _lastLogSnapshot = {
-          maxLevel: newMaxLevel,
-          totalSilver: newTotalSilver,
-          petGold: newPetGold,
-          levelScores: JSON.parse(JSON.stringify(newLevelScores)),
-          levelBestCoins: JSON.parse(JSON.stringify(newLevelBestCoins)),
-          levelsFirstCompleted: JSON.parse(JSON.stringify(newLevelsFirstCompleted))
-        };
+      recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
+      if (typeof triggerRealtimeSync === 'function') {
+        triggerRealtimeSync();
       }
     }
+
+    // 无论是否有新通关，都更新快照（防止重复记录）
+    _lastLogSnapshot = {
+      maxLevel: newMaxLevel,
+      totalSilver: newTotalSilver,
+      petGold: newPetGold,
+      levelScores: JSON.parse(JSON.stringify(gameData.levelScores || {})),
+      levelBestCoins: JSON.parse(JSON.stringify(newLevelBestCoins)),
+      levelsFirstCompleted: JSON.parse(JSON.stringify(newLevelsFirstCompleted))
+    };
   }
 
   // === 从题库中随机获取一道题 ===
@@ -473,7 +468,7 @@
     container.appendChild(wrapper);
 
     // 加载游戏 HTML
-    gameIframe.src = 'happy-run-game.html?v=266';
+    gameIframe.src = 'happy-run-game.html?v=267';
 
     // 监听游戏加载完成
     gameIframe.onload = function() {
@@ -523,6 +518,11 @@
       // 游戏请求保存数据
       if (d.type === 'happyrun-save') {
         saveHappyRunData(d.data);
+      }
+
+      // v267: 游戏点击"继续"按钮 - 记录本局游戏结果
+      if (d.type === 'happyrun-log-result') {
+        logGameResult(d.data);
       }
 
       // 游戏开始 - 进入全屏模式（所有设备）
