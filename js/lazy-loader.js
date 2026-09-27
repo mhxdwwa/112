@@ -7,9 +7,9 @@
   // 模块注册表：id → { src, deps, init }
   var _registry = {
     // --- 导航页模块 ---
-    'pk-battle':       { src: 'js/pk-battle.js?v=263' },
+    'pk-battle':       { src: 'js/pk-battle.js?v=264' },
     'class-pk':        { src: 'js/class-pk.js?v=205' },
-    'jianghu':         { src: 'js/jianghu.js?v=263', deps: ['pk-battle'] },
+    'jianghu':         { src: 'js/jianghu.js?v=264', deps: ['pk-battle'] },
     'rankings':        { src: 'js/rankings.js?v=261' },
     'library':         { src: 'js/library-system.js?v=260' },
 
@@ -22,7 +22,7 @@
     'quiz':            { src: 'quiz.js?v=166', deps: ['quiz-bank'] },
     'pig-run':         { src: 'pig-run.js?v=166' },
     'match3':          { src: 'match3.js?v=166' },
-    'happy-run':       { src: 'happy-run.js?v=166' }
+    'happy-run':       { src: 'happy-run.js?v=264' }
   };
 
   // 已加载/正在加载的模块
