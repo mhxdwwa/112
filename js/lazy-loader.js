@@ -22,7 +22,7 @@
     'quiz':            { src: 'quiz.js?v=166', deps: ['quiz-bank'] },
     'pig-run':         { src: 'pig-run.js?v=166' },
     'match3':          { src: 'match3.js?v=166' },
-    'happy-run':       { src: 'happy-run.js?v=264' }
+    'happy-run':       { src: 'happy-run.js?v=265' }
   };
 
   // 已加载/正在加载的模块

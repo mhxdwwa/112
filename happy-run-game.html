@@ -477,6 +477,7 @@ let petGoldCoins=0;
 let silverBalance=0;
 let ownedCharacters=[0];
 let bossKillBonusClaimed={};
+let levelsFirstCompleted={}; // v265: Track which levels have been completed for first-time gold reward
 
 window.addEventListener('message', function(e) {
     var d = e.data;
@@ -490,6 +491,7 @@ window.addEventListener('message', function(e) {
         petGoldCoins = d.data.petGold || 0;
         ownedCharacters = d.data.ownedChars || [0];
         bossKillBonusClaimed = d.data.bossKillBonus || {};
+        levelsFirstCompleted = d.data.levelsFirstCompleted || {}; // v265: Load first-time completion tracking
     }
     if (d.type === 'happyrun-quiz-answer') {
         handleQuizAnswer(d.data.correct);
@@ -510,7 +512,8 @@ function saveLevelProgress(){
         silverBalance: silverBalance,
         petGold: petGoldCoins,
         ownedChars: ownedCharacters,
-        bossKillBonus: bossKillBonusClaimed
+        bossKillBonus: bossKillBonusClaimed,
+        levelsFirstCompleted: levelsFirstCompleted // v265: Save first-time completion tracking
     }}, '*');
 }
 
@@ -1963,8 +1966,13 @@ function updateBossFight(){
             bossDefeated = true;
             calcLevelScore();
             if(currentLevel >= maxUnlockedLevel){ maxUnlockedLevel = currentLevel + 1; }
-            var bossGoldReward = 2;
-            petGoldCoins += bossGoldReward;
+            // v265: Only give pet gold on first completion of this level
+            var bossGoldReward = 0;
+            if(!levelsFirstCompleted[currentLevel]) {
+                bossGoldReward = 2;
+                petGoldCoins += bossGoldReward;
+                levelsFirstCompleted[currentLevel] = true;
+            }
             bossKillBonusClaimed[currentLevel] = true;
             saveLevelProgress(); // Single save after all state updates
             playSound('powerup');
@@ -1972,7 +1980,7 @@ function updateBossFight(){
             bossObstacles=[];
             P.moveLeft=P.moveRight=P.moveUp=P.moveDown=false;
             state='bossReward'; bossRewardPhase=0; bossRewardTimer=0;
-            bossRewardText='🎉 击杀BOSS! +2宠物金币 | 随机宠物金币待结算';
+            bossRewardText = bossGoldReward > 0 ? '🎉 击杀BOSS! +2宠物金币 | 随机宠物金币待结算' : '🎉 击杀BOSS! | 随机宠物金币待结算';
             bossRewardChest.visible=false; bossRewardChest.collected=false;
             bossRewardItems=[]; bossRewardShowContinue=false;
             return;
@@ -2387,9 +2395,13 @@ function updateBossFight(){
                 if(currentLevel >= maxUnlockedLevel){
                     maxUnlockedLevel = currentLevel + 1;
                 }
-                // Award pet gold coins for boss kill
-                var bossGoldReward2 = 2;
-                petGoldCoins += bossGoldReward2;
+                // v265: Only give pet gold on first completion of this level
+                var bossGoldReward2 = 0;
+                if(!levelsFirstCompleted[currentLevel]) {
+                    bossGoldReward2 = 2;
+                    petGoldCoins += bossGoldReward2;
+                    levelsFirstCompleted[currentLevel] = true;
+                }
                 bossKillBonusClaimed[currentLevel] = true;
                 saveLevelProgress(); // Single save after all state updates
                 playSound('powerup');
@@ -2403,7 +2415,7 @@ function updateBossFight(){
                 state='bossReward';
                 bossRewardPhase=0;
                 bossRewardTimer=0;
-                bossRewardText='🎉 击杀BOSS! +2宠物金币 | 随机宠物金币待结算';
+                bossRewardText = bossGoldReward2 > 0 ? '🎉 击杀BOSS! +2宠物金币 | 随机宠物金币待结算' : '🎉 击杀BOSS! | 随机宠物金币待结算';
                 bossRewardChest.visible=false;
                 bossRewardChest.collected=false;
                 bossRewardItems=[];
@@ -2476,9 +2488,14 @@ function updateTransitionRoom(){
     
     // Check if walked through right door
     if(transRoomX >= 730){
-        // Award random pet gold coins for clearing level (3-6)
-        var petGoldReward = 3 + Math.floor(Math.random() * 4); // 3-6
-        petGoldCoins += petGoldReward;
+        // v265: Only give pet gold on first completion of this level
+        var completedLevel = currentLevel;
+        var petGoldReward = 0;
+        if(!levelsFirstCompleted[completedLevel]) {
+            petGoldReward = 3 + Math.floor(Math.random() * 4); // 3-6
+            petGoldCoins += petGoldReward;
+            levelsFirstCompleted[completedLevel] = true;
+        }
         saveLevelProgress();
         // Level complete, start next level
         currentLevel++;

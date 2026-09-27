@@ -51,7 +51,8 @@
       silverBalance: qs.happyRunSilverBalance || 0,
       petGold: qs.happyRunPetGold || 0,
       ownedChars: qs.happyRunOwnedChars || [0],
-      bossKillBonus: qs.happyRunBossKillBonus || {}
+      bossKillBonus: qs.happyRunBossKillBonus || {},
+      levelsFirstCompleted: qs.happyRunLevelsFirstCompleted || {} // v265: Load first-time completion tracking
     };
   }
 
@@ -64,7 +65,8 @@
       silverBalance: 0,
       petGold: 0,
       ownedChars: [0],
-      bossKillBonus: {}
+      bossKillBonus: {},
+      levelsFirstCompleted: {} // v265: First-time completion tracking
     };
   }
 
@@ -91,6 +93,7 @@
     qs.happyRunPetGold = gameData.petGold || 0;
     qs.happyRunOwnedChars = gameData.ownedChars || [0];
     qs.happyRunBossKillBonus = gameData.bossKillBonus || {};
+    qs.happyRunLevelsFirstCompleted = gameData.levelsFirstCompleted || {}; // v265: Save first-time completion tracking
 
     // 更新排行榜用的总分（总银币数）
     qs.happyRunTotalScore = gameData.totalSilver || 0;
@@ -137,88 +140,62 @@
       });
     }
 
-    // === 记录操作日志（防抖合并，每个关卡只记录一条） ===
+    // === v265: 记录操作日志（仅在通关关卡时记录） ===
     if (typeof recordAction === 'function') {
-      var changes = [];
       var newMaxLevel = gameData.maxLevel || 1;
       var newTotalSilver = gameData.totalSilver || 0;
       var newPetGold = gameData.petGold || 0;
       var newLevelScores = gameData.levelScores || {};
-      var newOwnedChars = gameData.ownedChars || [0];
+      var newLevelBestCoins = gameData.levelBestCoins || {};
+      var newLevelsFirstCompleted = gameData.levelsFirstCompleted || {};
 
       // Use the last logged snapshot as baseline (or old state if first time)
       var baselineMaxLevel = _lastLogSnapshot ? _lastLogSnapshot.maxLevel : oldMaxLevel;
       var baselineTotalSilver = _lastLogSnapshot ? _lastLogSnapshot.totalSilver : oldTotalSilver;
       var baselinePetGold = _lastLogSnapshot ? _lastLogSnapshot.petGold : oldPetGold;
-      var baselineLevelScores = _lastLogSnapshot ? _lastLogSnapshot.levelScores : oldLevelScores;
-      var baselineOwnedChars = _lastLogSnapshot ? _lastLogSnapshot.ownedChars : oldOwnedChars;
+      var baselineLevelBestCoins = _lastLogSnapshot ? _lastLogSnapshot.levelBestCoins : (qs.happyRunLevelBestCoins || {});
+      var baselineLevelsFirstCompleted = _lastLogSnapshot ? _lastLogSnapshot.levelsFirstCompleted : (qs.happyRunLevelsFirstCompleted || {});
 
-      // 检测新解锁的关卡
-      if (newMaxLevel > baselineMaxLevel) {
-        for (var lv = baselineMaxLevel + 1; lv <= newMaxLevel; lv++) {
-          var score = newLevelScores[lv] || 0;
-          changes.push('解锁第' + lv + '关(' + score + '分)');
-        }
-      }
-
-      // 检测刷新的高分
-      Object.keys(newLevelScores).forEach(function(lvKey) {
-        var lv = parseInt(lvKey);
-        var newScore = newLevelScores[lvKey] || 0;
-        var oldScore = (baselineLevelScores[lvKey]) || 0;
-        if (lv <= baselineMaxLevel && newScore > oldScore) {
-          changes.push('第' + lv + '关提高' + (newScore - oldScore) + '分');
+      // 检测新通关的关卡（首次通关才会获得金币）
+      var newlyCompletedLevels = [];
+      Object.keys(newLevelsFirstCompleted).forEach(function(lvKey) {
+        if (!baselineLevelsFirstCompleted[lvKey]) {
+          newlyCompletedLevels.push(parseInt(lvKey));
         }
       });
 
-      // 检测银币变化
-      var silverDiff = newTotalSilver - baselineTotalSilver;
-      if (silverDiff > 0) {
-        changes.push('+' + silverDiff + '银币');
-      }
+      // 只有在有新通关的关卡时才记录日志
+      if (newlyCompletedLevels.length > 0) {
+        newlyCompletedLevels.sort(function(a, b) { return a - b; });
 
-      // 检测宠物金币变化
-      var goldDiff = newPetGold - baselinePetGold;
-      if (goldDiff > 0) {
-        changes.push('+' + goldDiff + '宠物金币');
-      }
+        // 计算本次通关获得的银币（本次银币 - 上次记录时的银币）
+        var silverGained = newTotalSilver - baselineTotalSilver;
 
-      // 检测新购买的角色
-      if (newOwnedChars.length > baselineOwnedChars.length) {
-        var newChars = newOwnedChars.filter(function(c) { return baselineOwnedChars.indexOf(c) === -1; });
-        if (newChars.length > 0) {
-          changes.push('解锁' + newChars.length + '个角色');
+        // 计算本次通关获得的金币（本次金币 - 上次记录时的金币）
+        var goldGained = newPetGold - baselinePetGold;
+
+        // 构建日志消息：通关第X关，获得Y金币，获得Z银币，总银币W，总分V
+        var completedLevel = newlyCompletedLevels[0]; // 取第一个通关的关卡
+        var levelSilver = newLevelBestCoins[completedLevel] || 0; // 该关卡的银币数
+        var msg = '快乐跑一跑：通关第' + completedLevel + '关，获得' + goldGained + '金币，获得' + silverGained + '银币，总银币' + newTotalSilver + '，总分' + newTotalSilver;
+
+        var student = getCurrentStudent();
+        if (student) {
+          recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
+          if (typeof triggerRealtimeSync === 'function') {
+            triggerRealtimeSync();
+          }
         }
-      }
 
-      // 如果有变化，累积到待记录队列并更新快照
-      if (changes.length > 0) {
-        _pendingLogChanges = _pendingLogChanges.concat(changes);
-        // Update snapshot to current state
+        // 更新快照
         _lastLogSnapshot = {
           maxLevel: newMaxLevel,
           totalSilver: newTotalSilver,
           petGold: newPetGold,
           levelScores: JSON.parse(JSON.stringify(newLevelScores)),
-          ownedChars: newOwnedChars.slice()
+          levelBestCoins: JSON.parse(JSON.stringify(newLevelBestCoins)),
+          levelsFirstCompleted: JSON.parse(JSON.stringify(newLevelsFirstCompleted))
         };
-        
-        // Debounce: wait 1 second before flushing to log
-        // This merges multiple rapid saves into a single log entry
-        if (_actionLogTimer) clearTimeout(_actionLogTimer);
-        _actionLogTimer = setTimeout(function() {
-          if (_pendingLogChanges.length > 0) {
-            var student = getCurrentStudent();
-            if (student) {
-              var msg = '快乐跑一跑：' + _pendingLogChanges.join('，') + '，总分:' + (gameData.totalSilver || 0);
-              recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
-              if (typeof triggerRealtimeSync === 'function') {
-                triggerRealtimeSync();
-              }
-            }
-            _pendingLogChanges = [];
-          }
-        }, 1000);
       }
     }
   }
@@ -496,7 +473,7 @@
     container.appendChild(wrapper);
 
     // 加载游戏 HTML
-    gameIframe.src = 'happy-run-game.html?v=264';
+    gameIframe.src = 'happy-run-game.html?v=265';
 
     // 监听游戏加载完成
     gameIframe.onload = function() {
