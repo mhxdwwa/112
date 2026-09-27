@@ -1290,8 +1290,9 @@ function _mergeLoadedLogs(allLogs) {
   var serverLogIds = {};
   allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
   
-  // v159: 去重乐观日志 — 当服务器日志到达时，移除匹配的 _apiOptimistic 本地日志
-  // 匹配规则：studentId + actionType + 时间戳相差<10秒
+  // v264: 去重乐观日志 — 当服务器日志到达时，移除匹配的 _apiOptimistic 本地日志
+  // 匹配规则：studentId + actionType + coinDelta + 时间戳相差<5分钟
+  // 之前v159只匹配10秒，实际网络延迟可达36秒+，导致乐观日志无法被清除
   var optimisticToRemove = {};
   (window.operationLogs || []).forEach(function(local) {
     if (!local._apiOptimistic) return;
@@ -1299,7 +1300,8 @@ function _mergeLoadedLogs(allLogs) {
       var server = allLogs[i];
       if (server.studentId && server.studentId.toString() === local.studentId.toString()
           && server.actionType === local.actionType
-          && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 10000) {
+          && server.coinDelta === local.coinDelta
+          && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 300000) {
         optimisticToRemove[local.id] = true;
         break;
       }
@@ -1309,7 +1311,7 @@ function _mergeLoadedLogs(allLogs) {
   var localOnly = [];
   var localUnsynced = [];
   (window.operationLogs || []).forEach(function(l) {
-    if (optimisticToRemove[l.id]) return; // v159: 跳过已被服务器日志覆盖的乐观日志
+    if (optimisticToRemove[l.id]) return; // v264: 跳过已被服务器日志覆盖的乐观日志
     if (!serverLogIds[l.id]) {
       localOnly.push(l);
     }
@@ -1331,8 +1333,33 @@ function _mergeLoadedLogs(allLogs) {
     return (b.timestamp || '').localeCompare(a.timestamp || '');
   });
 
+  // v264: 二次清理 — 移除仍有残留的乐观日志（有匹配服务器日志的）
+  // 这处理了 _synced: true 的乐观日志逃过第一轮去重的情况
+  var serverLogsForCleanup = window.operationLogs.filter(function(l) { return !l._apiOptimistic; });
+  var secondPassRemove = {};
+  window.operationLogs.forEach(function(local) {
+    if (!local._apiOptimistic) return;
+    if (secondPassRemove[local.id]) return;
+    for (var i = 0; i < serverLogsForCleanup.length; i++) {
+      var server = serverLogsForCleanup[i];
+      if (server.studentId && server.studentId.toString() === local.studentId.toString()
+          && server.actionType === local.actionType
+          && server.coinDelta === local.coinDelta
+          && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 300000) {
+        secondPassRemove[local.id] = true;
+        break;
+      }
+    }
+  });
+  if (Object.keys(secondPassRemove).length > 0) {
+    window.operationLogs = window.operationLogs.filter(function(l) {
+      return !secondPassRemove[l.id];
+    });
+    console.log('[DAL] v264 Second-pass cleanup removed ' + Object.keys(secondPassRemove).length + ' stale optimistic logs');
+  }
+
   try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-  console.log('[DAL] v159 Loaded ' + allLogs.length + ' logs, ' + localOnly.length + ' local-only preserved, ' + Object.keys(optimisticToRemove).length + ' optimistic deduped');
+  console.log('[DAL] v264 Loaded ' + allLogs.length + ' logs, ' + localOnly.length + ' local-only preserved, ' + Object.keys(optimisticToRemove).length + ' optimistic deduped');
 }
 
 // v221: Load operation logs from operation_logs 独立表
@@ -1431,7 +1458,8 @@ function _loadOperationLogs() {
     var serverLogIds = {};
     allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
     
-    // v159: 去重乐观日志 — 当服务器日志到达时，移除匹配的 _apiOptimistic 本地日志
+    // v264: 去重乐观日志 — 当服务器日志到达时，移除匹配的 _apiOptimistic 本地日志
+    // 匹配规则：studentId + actionType + coinDelta + 时间戳相差<5分钟
     var optimisticToRemove2 = {};
     (window.operationLogs || []).forEach(function(local) {
       if (!local._apiOptimistic) return;
@@ -1439,7 +1467,8 @@ function _loadOperationLogs() {
         var server = allLogs[i];
         if (server.studentId && server.studentId.toString() === local.studentId.toString()
             && server.actionType === local.actionType
-            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 10000) {
+            && server.coinDelta === local.coinDelta
+            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 300000) {
           optimisticToRemove2[local.id] = true;
           break;
         }
@@ -1449,7 +1478,7 @@ function _loadOperationLogs() {
     var localOnly = [];
     var localUnsynced = [];
     (window.operationLogs || []).forEach(function(l) {
-      if (optimisticToRemove2[l.id]) return; // v159: 跳过已被服务器日志覆盖的乐观日志
+      if (optimisticToRemove2[l.id]) return; // v264: 跳过已被服务器日志覆盖的乐观日志
       if (!serverLogIds[l.id]) {
         // Local log not on server — preserve it regardless of _synced status
         localOnly.push(l);
@@ -1473,9 +1502,33 @@ function _loadOperationLogs() {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
 
+    // v264: 二次清理 — 移除仍有残留的乐观日志（有匹配服务器日志的）
+    var serverLogsForCleanup2 = window.operationLogs.filter(function(l) { return !l._apiOptimistic; });
+    var secondPassRemove2 = {};
+    window.operationLogs.forEach(function(local) {
+      if (!local._apiOptimistic) return;
+      if (secondPassRemove2[local.id]) return;
+      for (var i = 0; i < serverLogsForCleanup2.length; i++) {
+        var server = serverLogsForCleanup2[i];
+        if (server.studentId && server.studentId.toString() === local.studentId.toString()
+            && server.actionType === local.actionType
+            && server.coinDelta === local.coinDelta
+            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 300000) {
+          secondPassRemove2[local.id] = true;
+          break;
+        }
+      }
+    });
+    if (Object.keys(secondPassRemove2).length > 0) {
+      window.operationLogs = window.operationLogs.filter(function(l) {
+        return !secondPassRemove2[l.id];
+      });
+      console.log('[DAL] v264 Second-pass cleanup removed ' + Object.keys(secondPassRemove2).length + ' stale optimistic logs');
+    }
+
     // Backup to localStorage
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v105 Loaded ' + allLogs.length + ' logs from Supabase, ' + localOnly.length + ' local-only preserved (' + localUnsynced.length + ' unsynced)');
+    console.log('[DAL] v264 Loaded ' + allLogs.length + ' logs from Supabase, ' + localOnly.length + ' local-only preserved (' + localUnsynced.length + ' unsynced)');
 
     // v114: For STUDENTS, also read their own pending_logs_json.
     // Students write to students.pending_logs_json (they CANNOT write to classes table — RLS blocks).
@@ -1701,7 +1754,7 @@ function _loadOperationLogsAfterMerge(classIds) {
     // Preserve local-only logs
     var serverLogIds = {};
     allLogs.forEach(function(l) { serverLogIds[l.id] = true; });
-    // v159: 去重乐观日志
+    // v264: 去重乐观日志 — 匹配规则：studentId + actionType + coinDelta + 时间戳相差<5分钟
     var optimisticToRemove3 = {};
     (window.operationLogs || []).forEach(function(local) {
       if (!local._apiOptimistic) return;
@@ -1709,7 +1762,8 @@ function _loadOperationLogsAfterMerge(classIds) {
         var server = allLogs[i];
         if (server.studentId && server.studentId.toString() === local.studentId.toString()
             && server.actionType === local.actionType
-            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 10000) {
+            && server.coinDelta === local.coinDelta
+            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 300000) {
           optimisticToRemove3[local.id] = true;
           break;
         }
@@ -1720,8 +1774,30 @@ function _loadOperationLogsAfterMerge(classIds) {
     window.operationLogs.sort(function(a, b) {
       return (b.timestamp || '').localeCompare(a.timestamp || '');
     });
+    // v264: 二次清理
+    var serverLogsForCleanup3 = window.operationLogs.filter(function(l) { return !l._apiOptimistic; });
+    var secondPassRemove3 = {};
+    window.operationLogs.forEach(function(local) {
+      if (!local._apiOptimistic) return;
+      if (secondPassRemove3[local.id]) return;
+      for (var i = 0; i < serverLogsForCleanup3.length; i++) {
+        var server = serverLogsForCleanup3[i];
+        if (server.studentId && server.studentId.toString() === local.studentId.toString()
+            && server.actionType === local.actionType
+            && server.coinDelta === local.coinDelta
+            && Math.abs(new Date(server.timestamp) - new Date(local.timestamp)) < 300000) {
+          secondPassRemove3[local.id] = true;
+          break;
+        }
+      }
+    });
+    if (Object.keys(secondPassRemove3).length > 0) {
+      window.operationLogs = window.operationLogs.filter(function(l) {
+        return !secondPassRemove3[l.id];
+      });
+    }
     try { localStorage.setItem('operationLogs', JSON.stringify(window.operationLogs)); } catch(e) {}
-    console.log('[DAL] v111 Re-loaded ' + allLogs.length + ' logs after merge');
+    console.log('[DAL] v264 Re-loaded ' + allLogs.length + ' logs after merge');
   });
 }
 

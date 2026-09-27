@@ -7,9 +7,10 @@ function getTodayCoinGain(studentId) {
   // v15: Always read from window.operationLogs for cross-script consistency
   const jhValidTypes = ['全班打卡', '批量奖惩', '奖惩', '每日打卡', '取金阁', '小猪快跑', '宠物消消乐'];
   var logs = getOpLogs();
-  // v262: 去重机制 —— 按 log.id 去重，避免同一条记录被重复计算（API模式下可能出现本地+服务器重复记录）
+  // v262: 去重机制 —— 按 log.id 去重，避免同一条记录被重复计算
   var seenIds = {};
-  // v264: 内容去重 —— 按 (studentId + actionType + timestamp + coinDelta) 去重，捕获ID不同但内容相同的重复日志
+  // v264: 内容去重 —— 按 (studentId + actionType + 5分钟时间桶 + coinDelta) 去重
+  // 使用5分钟时间桶，捕获ID不同但内容相同的重复日志（乐观日志+服务器日志）
   var seenContent = {};
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
@@ -20,10 +21,9 @@ function getTodayCoinGain(studentId) {
     const logDate = new Date(log.timestamp).toDateString();
     if (logDate !== today) continue;
     if (log.studentId && log.studentId.toString() === studentId.toString() && log.coinDelta > 0 && jhValidTypes.includes(log.actionType)) {
-      // v264: 内容去重键 —— 使用 studentId + actionType + timestamp(秒级) + coinDelta
-      // 时间戳精确到秒，避免毫秒差异导致无法匹配
-      const tsSec = Math.floor(new Date(log.timestamp).getTime() / 1000);
-      const contentKey = `${log.studentId}|${log.actionType}|${tsSec}|${log.coinDelta}`;
+      // v264: 使用5分钟时间桶去重，避免毫秒/秒级时间差异导致无法匹配
+      const tsBucket = Math.floor(new Date(log.timestamp).getTime() / 300000); // 5分钟桶
+      const contentKey = `${log.studentId}|${log.actionType}|${tsBucket}|${log.coinDelta}`;
       if (seenContent[contentKey]) continue;
       seenContent[contentKey] = true;
       total += log.coinDelta;
