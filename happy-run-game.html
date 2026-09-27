@@ -1023,6 +1023,7 @@ function initBoss(){
     const obstacleCount = 3 + Math.floor(currentLevel/3);
     // Generate stone slab obstacles (flat floating platforms) - these don't block ground movement
     for(let i=0; i<obstacleCount; i++){
+        // v267: 石板从x=150开始生成，避开左下角角色出生点
         bossObstacles.push({
             x: 150 + i*150 + Math.random()*50,
             y: 150 + Math.random()*150,
@@ -1042,11 +1043,12 @@ function initBoss(){
     for(let i=0; i<boxCount; i++){
         const bw = 35 + Math.random()*20;
         const bh = 35 + Math.random()*25;
-        let bx = 80 + i*160 + Math.random()*60;
+        // v267: 箱子从x=130开始生成，避开左下角角色出生点
+        let bx = 130 + i*150 + Math.random()*60;
         const by = GY - bh;
         
-        // Ensure not too close to left wall
-        bx = Math.max(60, bx);
+        // v267: 确保不靠近左下角角色出生点
+        bx = Math.max(130, bx);
         // Ensure not too close to right wall
         bx = Math.min(720 - bw, bx);
         
@@ -1100,14 +1102,23 @@ function initBoss(){
     // Check if any ground obstacle is too close to both walls or creates tight corners
     for(const obs of bossObstacles){
         if(obs.type === 'box' || obs.type === 'stone'){
-            // Ensure at least 50px from left wall
-            if(obs.x < 50) obs.x = 50;
+            // v267: 确保不靠近左下角角色出生点（安全区域x<120）
+            if(obs.x < 130) obs.x = 130;
             // Ensure at least 50px from right wall (accounting for obstacle width)
             if(obs.x + obs.w > 750) obs.x = 750 - obs.w;
         }
     }
     
-    P.x=150;P.y=GY-PH;
+    // v267: 清除角色出生点附近的障碍物，防止卡住
+    const safeZoneX = 120; // 安全区域宽度
+    const safeZoneY = GY - 80; // 安全区域高度
+    bossObstacles = bossObstacles.filter(obs => {
+        // 保留不在安全区域内的障碍物
+        return obs.x > safeZoneX || obs.y + obs.h < safeZoneY;
+    });
+    
+    // v267: 角色出现在游戏网页最左下角
+    P.x=20;P.y=GY-PH;
     P.vx=0;P.vy=0;
     P.gnd=true;
     if(wingTimer <= 0) wingTimer = 720;
@@ -2847,6 +2858,13 @@ function updateBossDefeatReward(){
             bossDefeatRewardPhase=3;
             bossDefeatRewardTimer=0;
             bossDefeatShowContinue=true;
+            // v267: 战败奖励也要更新银币记录，否则日志不会记录
+            if(!levelBestCoins[currentLevel] || coinCount > levelBestCoins[currentLevel]){
+                levelBestCoins[currentLevel] = coinCount;
+                recalcSilver();
+                silverBalance = totalSilverEarned;
+                saveLevelProgress();
+            }
             // v267: 弹出"继续"按钮时立即记录本局游戏结果
             parent.postMessage({type:'happyrun-log-result', data:{
                 maxLevel: maxUnlockedLevel,
