@@ -11,7 +11,7 @@ export const onRequestPost = async ({ request, env }) => {
   if (envErr) return envErr;
 
   const body = await request.json();
-  const { classId, logId, reverted, coinDelta, studentId, petUpdates = [] } = body;
+  const { classId, logId, reverted, coinDelta, studentId, petUpdates = [], shopItemUpdates = null } = body;
 
   if (!classId || !logId || studentId === undefined) {
     return jsonResponse({ error: 'Missing required fields' }, 400);
@@ -38,6 +38,38 @@ export const onRequestPost = async ({ request, env }) => {
   for (const pu of petUpdates) {
     if (pu.petId && pu.updates) {
       await sbUpdate(env, 'pets', pu.updates, `id=eq.${pu.petId}`);
+    }
+  }
+
+  // 2b. v273: 撤销商店购买 — 移除道具
+  if (shopItemUpdates && shopItemUpdates.itemId) {
+    const stuR = await sbSelectSingle(env, 'students', `id=eq.${studentId}&select=shop_items,equipped_items`);
+    if (stuR.data && stuR.data.length > 0) {
+      const stu = stuR.data[0];
+      // 解析 shop_items
+      let shopItems = [];
+      if (stu.shop_items) {
+        if (typeof stu.shop_items === 'string') { try { shopItems = JSON.parse(stu.shop_items); } catch(_) { shopItems = []; } }
+        else if (Array.isArray(stu.shop_items)) { shopItems = stu.shop_items; }
+      }
+      // 移除道具
+      const idx = shopItems.indexOf(shopItemUpdates.itemId);
+      if (idx !== -1) shopItems.splice(idx, 1);
+
+      // 解析 equipped_items 并移除
+      let equippedItems = {};
+      if (stu.equipped_items) {
+        if (typeof stu.equipped_items === 'string') { try { equippedItems = JSON.parse(stu.equipped_items); } catch(_) { equippedItems = {}; } }
+        else if (typeof stu.equipped_items === 'object') { equippedItems = stu.equipped_items; }
+      }
+      for (const cat of Object.keys(equippedItems)) {
+        if (equippedItems[cat] === shopItemUpdates.itemId) delete equippedItems[cat];
+      }
+
+      await sbUpdate(env, 'students', {
+        shop_items: JSON.stringify(shopItems),
+        equipped_items: JSON.stringify(equippedItems)
+      }, `id=eq.${studentId}`);
     }
   }
 

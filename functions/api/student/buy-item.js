@@ -39,7 +39,7 @@ export const onRequestPost = async ({ request, env }) => {
     // 1. 读取学生当前数据
     const stuR = await sbSelectSingle(
       env, 'students',
-      `id=eq.${sid}&select=id,coins,shop_items,equipped_items`
+      `id=eq.${sid}&select=id,coins,shop_items,equipped_items,active_pet_id`
     );
     if (stuR.error || !stuR.data || stuR.data.length === 0) {
       console.error('[buy-item] Student not found:', sid, stuR.error);
@@ -48,6 +48,18 @@ export const onRequestPost = async ({ request, env }) => {
 
     const stu = stuR.data[0];
     const currentCoins = stu.coins || 0;
+
+    // 1b. 查询活跃宠物的当前成长值（用于撤销时恢复）
+    var petGrowthBefore = null;
+    var petIdForLog = null;
+    var activePetId = stu.active_pet_id || null;
+    if (activePetId) {
+      var petR = await sbSelectSingle(env, 'pets', `id=eq.${activePetId}&select=id,growth`);
+      if (petR.data && petR.data.length > 0) {
+        petGrowthBefore = petR.data[0].growth || 0;
+        petIdForLog = activePetId;
+      }
+    }
 
     // 2. 解析 shop_items
     let shopItems = [];
@@ -120,8 +132,10 @@ export const onRequestPost = async ({ request, env }) => {
         details: '购买「' + (itemName || itemId) + '」',
         coin_delta: -p,
         exp_delta: 0,
-        pet_id: null,
-        snapshot: { coinsBefore: currentCoins, coinsAfter: newCoins },
+        pet_id: petIdForLog,
+        snapshot: petGrowthBefore !== null
+          ? { coinsBefore: currentCoins, coinsAfter: newCoins, growthBefore: petGrowthBefore, growthAfter: petGrowthBefore }
+          : { coinsBefore: currentCoins, coinsAfter: newCoins },
         extra: { shopItemId: itemId },
         full_snapshot: null,
         reverted: false,

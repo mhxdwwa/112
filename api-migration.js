@@ -480,14 +480,15 @@
    * v149: 发送服务端所需的全部字段
    */
   function revertLogViaApi(params) {
-    // params: { classId, logId, reverted, coinDelta, studentId, petUpdates }
+    // params: { classId, logId, reverted, coinDelta, studentId, petUpdates, shopItemUpdates }
     return apiRequest('/logs/revert', {
       classId: params.classId,
       logId: params.logId,
       reverted: params.reverted !== undefined ? params.reverted : true,
       coinDelta: params.coinDelta || 0,
       studentId: params.studentId,
-      petUpdates: params.petUpdates || []
+      petUpdates: params.petUpdates || [],
+      shopItemUpdates: params.shopItemUpdates || null
     }).then(function(result) {
       if (result.ok) {
         console.log('[API] log revert ok:', params.logId);

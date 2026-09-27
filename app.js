@@ -1141,9 +1141,15 @@ function revertToLog(logId){
     if(log.petId && log.snapshot && log.snapshot.growthBefore !== undefined){
       petUpdates.push({ petId: log.petId, updates: { growth: log.snapshot.growthBefore } });
     }
+    // v273: 商店购买撤销 — 同步道具移除到服务器
+    var shopItemUpdates = null;
+    if(log.extra && log.extra.shopItemId){
+      shopItemUpdates = { itemId: log.extra.shopItemId };
+    }
     window.ApiMigration.revertLog({
       classId: currentClassId, logId: log.id, reverted: true,
-      coinDelta: reverseDelta, studentId: log.studentId, petUpdates: petUpdates
+      coinDelta: reverseDelta, studentId: log.studentId, petUpdates: petUpdates,
+      shopItemUpdates: shopItemUpdates
     });
   }
   scheduleAllRenders();
