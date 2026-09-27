@@ -473,7 +473,7 @@
     container.appendChild(wrapper);
 
     // 加载游戏 HTML
-    gameIframe.src = 'happy-run-game.html?v=265';
+    gameIframe.src = 'happy-run-game.html?v=266';
 
     // 监听游戏加载完成
     gameIframe.onload = function() {

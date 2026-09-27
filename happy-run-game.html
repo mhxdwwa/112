@@ -2686,6 +2686,14 @@ function updateBossReward(){
             bossRewardPhase=3;
             bossRewardTimer=0;
             bossRewardShowContinue=true;
+            // v265: After collecting all boss reward coins, update levelBestCoins
+            // This ensures silver coins from the reward chest are included
+            if(!levelBestCoins[currentLevel] || coinCount > levelBestCoins[currentLevel]){
+                levelBestCoins[currentLevel] = coinCount;
+                recalcSilver();
+                silverBalance = totalSilverEarned;
+                saveLevelProgress(); // Save immediately to prevent data loss
+            }
         }
     }
     // Phase 3: All collected, show continue button
