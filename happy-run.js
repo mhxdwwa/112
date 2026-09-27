@@ -11,6 +11,7 @@
   var _actionLogTimer = null; // 操作日志防抖定时器
   var _pendingLogChanges = []; // 累积的日志变更
   var _lastLogSnapshot = null; // 上次记录日志时的状态快照
+  var _sessionBaseline = null; // v268: 本次游戏会话的初始值（用于计算收益）
   var _gameWrapper = null; // 游戏容器引用
   var _isGameFullscreen = false; // 游戏是否处于全屏模式
   var _savedWrapperStyle = ''; // 保存wrapper原始样式
@@ -143,7 +144,7 @@
     // v267: 操作日志已移至 logGameResult()，仅在点击"继续"按钮时记录
   }
 
-  // === v267: 记录游戏结果（在弹出"继续"按钮时调用） ===
+  // === v268: 记录游戏结果（在弹出"继续"按钮时调用） ===
   // 记录本局游戏所得的金币、银币、总分
   function logGameResult(gameData) {
     if (typeof recordAction !== 'function') return;
@@ -154,19 +155,19 @@
     var newPetGold = gameData.petGold || 0;
     var newMaxLevel = gameData.maxLevel || 1;
 
-    // v267: 如果 _lastLogSnapshot 是 null（页面刷新后），从学生数据加载基准值
-    if (!_lastLogSnapshot) {
+    // v268: 使用游戏会话开始时的基准值（不受中间save影响）
+    if (!_sessionBaseline) {
+      // 如果基准不存在（异常情况），从学生数据加载
       var qs = student.quizState || {};
-      _lastLogSnapshot = {
-        maxLevel: qs.happyRunMaxLevel || 1,
+      _sessionBaseline = {
         totalSilver: qs.happyRunTotalSilver || 0,
         petGold: qs.happyRunPetGold || 0
       };
     }
 
     // 计算本局游戏所得
-    var baselineTotalSilver = _lastLogSnapshot.totalSilver || 0;
-    var baselinePetGold = _lastLogSnapshot.petGold || 0;
+    var baselineTotalSilver = _sessionBaseline.totalSilver || 0;
+    var baselinePetGold = _sessionBaseline.petGold || 0;
     var silverGained = newTotalSilver - baselineTotalSilver;
     var goldGained = newPetGold - baselinePetGold;
 
@@ -178,14 +179,13 @@
       if (typeof triggerRealtimeSync === 'function') {
         triggerRealtimeSync();
       }
-    }
 
-    // 更新快照
-    _lastLogSnapshot = {
-      maxLevel: newMaxLevel,
-      totalSilver: newTotalSilver,
-      petGold: newPetGold
-    };
+      // 记录成功后更新基准（防止重复记录）
+      _sessionBaseline = {
+        totalSilver: newTotalSilver,
+        petGold: newPetGold
+      };
+    }
   }
 
   // === 从题库中随机获取一道题 ===
@@ -461,7 +461,7 @@
     container.appendChild(wrapper);
 
     // 加载游戏 HTML
-    gameIframe.src = 'happy-run-game.html?v=268';
+    gameIframe.src = 'happy-run-game.html?v=269';
 
     // 监听游戏加载完成
     gameIframe.onload = function() {
@@ -471,6 +471,11 @@
       gameIframe.style.opacity = '1';
       // 发送初始化数据
       var data = loadHappyRunData();
+      // v268: 记录本次游戏会话的初始值作为基准（防止中间save覆盖）
+      _sessionBaseline = {
+        totalSilver: data.totalSilver || 0,
+        petGold: data.petGold || 0
+      };
       gameIframe.contentWindow.postMessage({
         type: 'happyrun-init',
         data: data
