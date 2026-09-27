@@ -9,6 +9,8 @@ function getTodayCoinGain(studentId) {
   var logs = getOpLogs();
   // v262: 去重机制 —— 按 log.id 去重，避免同一条记录被重复计算（API模式下可能出现本地+服务器重复记录）
   var seenIds = {};
+  // v264: 内容去重 —— 按 (studentId + actionType + timestamp + coinDelta) 去重，捕获ID不同但内容相同的重复日志
+  var seenContent = {};
   for (let i = logs.length - 1; i >= 0; i--) {
     const log = logs[i];
     if (log.reverted) continue;
@@ -18,6 +20,12 @@ function getTodayCoinGain(studentId) {
     const logDate = new Date(log.timestamp).toDateString();
     if (logDate !== today) continue;
     if (log.studentId && log.studentId.toString() === studentId.toString() && log.coinDelta > 0 && jhValidTypes.includes(log.actionType)) {
+      // v264: 内容去重键 —— 使用 studentId + actionType + timestamp(秒级) + coinDelta
+      // 时间戳精确到秒，避免毫秒差异导致无法匹配
+      const tsSec = Math.floor(new Date(log.timestamp).getTime() / 1000);
+      const contentKey = `${log.studentId}|${log.actionType}|${tsSec}|${log.coinDelta}`;
+      if (seenContent[contentKey]) continue;
+      seenContent[contentKey] = true;
       total += log.coinDelta;
     }
   }
