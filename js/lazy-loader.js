@@ -7,9 +7,9 @@
   // 模块注册表：id → { src, deps, init }
   var _registry = {
     // --- 导航页模块 ---
-    'pk-battle':       { src: 'js/pk-battle.js?v=265' },
+    'pk-battle':       { src: 'js/pk-battle.js?v=266' },
     'class-pk':        { src: 'js/class-pk.js?v=205' },
-    'jianghu':         { src: 'js/jianghu.js?v=265', deps: ['pk-battle'] },
+    'jianghu':         { src: 'js/jianghu.js?v=266', deps: ['pk-battle'] },
     'rankings':        { src: 'js/rankings.js?v=261' },
     'library':         { src: 'js/library-system.js?v=260' },
 
