@@ -11,7 +11,6 @@
   var _actionLogTimer = null; // 操作日志防抖定时器
   var _pendingLogChanges = []; // 累积的日志变更
   var _lastLogSnapshot = null; // 上次记录日志时的状态快照
-  var _sessionBaseline = null; // v268: 本次游戏会话的初始值（用于计算收益）
   var _gameWrapper = null; // 游戏容器引用
   var _isGameFullscreen = false; // 游戏是否处于全屏模式
   var _savedWrapperStyle = ''; // 保存wrapper原始样式
@@ -144,47 +143,23 @@
     // v267: 操作日志已移至 logGameResult()，仅在点击"继续"按钮时记录
   }
 
-  // === v268: 记录游戏结果（在弹出"继续"按钮时调用） ===
-  // 记录本局游戏所得的金币、银币、总分
+  // === v269: 记录游戏结果（在弹出"继续"按钮时调用） ===
+  // 无条件记录本局游戏数据
   function logGameResult(gameData) {
     if (typeof recordAction !== 'function') return;
     var student = getCurrentStudent();
     if (!student) return;
 
-    var newTotalSilver = gameData.totalSilver || 0;
-    var newPetGold = gameData.petGold || 0;
-    var newMaxLevel = gameData.maxLevel || 1;
+    var totalSilver = gameData.totalSilver || 0;
+    var petGold = gameData.petGold || 0;
+    var maxLevel = gameData.maxLevel || 1;
 
-    // v268: 使用游戏会话开始时的基准值（不受中间save影响）
-    if (!_sessionBaseline) {
-      // 如果基准不存在（异常情况），从学生数据加载
-      var qs = student.quizState || {};
-      _sessionBaseline = {
-        totalSilver: qs.happyRunTotalSilver || 0,
-        petGold: qs.happyRunPetGold || 0
-      };
-    }
+    // v269: 无条件记录，不做收益判断
+    var msg = '快乐跑一跑：金币' + petGold + '，银币' + totalSilver + '，最高关卡' + maxLevel;
 
-    // 计算本局游戏所得
-    var baselineTotalSilver = _sessionBaseline.totalSilver || 0;
-    var baselinePetGold = _sessionBaseline.petGold || 0;
-    var silverGained = newTotalSilver - baselineTotalSilver;
-    var goldGained = newPetGold - baselinePetGold;
-
-    // 只有当本局有收益时才记录（避免重复记录）
-    if (silverGained > 0 || goldGained > 0) {
-      var msg = '快乐跑一跑：获得' + goldGained + '金币，获得' + silverGained + '银币，总银币' + newTotalSilver + '，最高关卡' + newMaxLevel;
-
-      recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
-      if (typeof triggerRealtimeSync === 'function') {
-        triggerRealtimeSync();
-      }
-
-      // 记录成功后更新基准（防止重复记录）
-      _sessionBaseline = {
-        totalSilver: newTotalSilver,
-        petGold: newPetGold
-      };
+    recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
+    if (typeof triggerRealtimeSync === 'function') {
+      triggerRealtimeSync();
     }
   }
 
@@ -471,11 +446,6 @@
       gameIframe.style.opacity = '1';
       // 发送初始化数据
       var data = loadHappyRunData();
-      // v268: 记录本次游戏会话的初始值作为基准（防止中间save覆盖）
-      _sessionBaseline = {
-        totalSilver: data.totalSilver || 0,
-        petGold: data.petGold || 0
-      };
       gameIframe.contentWindow.postMessage({
         type: 'happyrun-init',
         data: data
