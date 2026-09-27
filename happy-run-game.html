@@ -917,7 +917,8 @@ function die(){
         // Boss fight defeat - go to defeat reward phase
         lives=1;
         bossDefeated=false;
-        // Don't calcLevelScore on death - no coin/score recording
+        // v268: 战败也计算分数（被boss击败也算通关）
+        calcLevelScore();
         if(currentLevel>maxUnlockedLevel) maxUnlockedLevel=currentLevel;
         saveLevelProgress();
         playSound('die');
