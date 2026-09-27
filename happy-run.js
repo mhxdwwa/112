@@ -143,19 +143,20 @@
     // v267: 操作日志已移至 logGameResult()，仅在点击"继续"按钮时记录
   }
 
-  // === v269: 记录游戏结果（在弹出"继续"按钮时调用） ===
+  // === v270: 记录游戏结果（在弹出"继续"按钮时调用） ===
   // 无条件记录本局游戏数据
   function logGameResult(gameData) {
     if (typeof recordAction !== 'function') return;
     var student = getCurrentStudent();
     if (!student) return;
 
-    var totalSilver = gameData.totalSilver || 0;
-    var petGold = gameData.petGold || 0;
-    var maxLevel = gameData.maxLevel || 1;
+    // v270: 使用本局获得的数据，而不是累计总数
+    var sessionSilver = gameData.sessionSilverGain || 0;
+    var sessionGold = gameData.sessionGoldGain || 0;
+    var completedLevel = gameData.sessionCompletedLevel || 1;
 
-    // v269: 无条件记录，不做收益判断
-    var msg = '快乐跑一跑：金币' + petGold + '，银币' + totalSilver + '，最高关卡' + maxLevel;
+    // v270: 显示本局获得的数量，如果是二次通关且没有新增则显示0
+    var msg = '快乐跑一跑：金币' + sessionGold + '，银币' + sessionSilver + '，最高关卡' + completedLevel;
 
     recordAction(student.id, student.name, '快乐跑一跑', msg, 0, 0, null);
     if (typeof triggerRealtimeSync === 'function') {
@@ -436,7 +437,7 @@
     container.appendChild(wrapper);
 
     // 加载游戏 HTML
-    gameIframe.src = 'happy-run-game.html?v=270';
+    gameIframe.src = 'happy-run-game.html?v=271';
 
     // 监听游戏加载完成
     gameIframe.onload = function() {

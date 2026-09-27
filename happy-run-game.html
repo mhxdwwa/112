@@ -479,6 +479,11 @@ let ownedCharacters=[0];
 let bossKillBonusClaimed={};
 let levelsFirstCompleted={}; // v265: Track which levels have been completed for first-time gold reward
 
+// v270: 追踪本局开始前的状态，用于计算本局获得的数量
+let sessionStartSilver = 0;
+let sessionStartGold = 0;
+let sessionBossEntryGold = 0; // v270: 进入boss房间时获得的随机金币
+
 window.addEventListener('message', function(e) {
     var d = e.data;
     if (!d || !d.type) return;
@@ -603,6 +608,10 @@ function startGame(fromLevel){
     quizRevivalActive=false; quizDisabledOptions=[];
     quizRevivalsUsedThisLevel=0; // 重置当前关卡复活次数
     clearRevivalState(); // v70: 开始新游戏时清除复活状态
+    // v270: 记录本局开始前的状态
+    sessionStartSilver = totalSilverEarned;
+    sessionStartGold = petGoldCoins;
+    sessionBossEntryGold = 0;
 }
 
 function restartFromLevel(){ startGame(currentLevel); }
@@ -1135,6 +1144,9 @@ function initBoss(){
     P.vx=0;P.vy=0;
     P.gnd=true;
     if(wingTimer <= 0) wingTimer = 720;
+    // v270: 进入boss房间获得随机金币(3-6个)
+    sessionBossEntryGold = 3 + Math.floor(Math.random() * 4);
+    petGoldCoins += sessionBossEntryGold;
     state='bossFight';
 }
 
@@ -2718,7 +2730,7 @@ function updateBossReward(){
                 silverBalance = totalSilverEarned;
                 saveLevelProgress(); // Save immediately to prevent data loss
             }
-            // v267: 弹出"继续"按钮时立即记录本局游戏结果
+            // v270: 弹出"继续"按钮时立即记录本局游戏结果
             parent.postMessage({type:'happyrun-log-result', data:{
                 maxLevel: maxUnlockedLevel,
                 levelScores: levelHighScores,
@@ -2728,7 +2740,11 @@ function updateBossReward(){
                 petGold: petGoldCoins,
                 ownedChars: ownedCharacters,
                 bossKillBonus: bossKillBonusClaimed,
-                levelsFirstCompleted: levelsFirstCompleted
+                levelsFirstCompleted: levelsFirstCompleted,
+                // v270: 本局获得的数据
+                sessionSilverGain: Math.max(0, totalSilverEarned - sessionStartSilver),
+                sessionGoldGain: Math.max(0, petGoldCoins - sessionStartGold),
+                sessionCompletedLevel: maxUnlockedLevel - 1 // 通关的关卡，不是解锁的关卡
             }}, '*');
         }
     }
@@ -2878,7 +2894,7 @@ function updateBossDefeatReward(){
                 silverBalance = totalSilverEarned;
                 saveLevelProgress();
             }
-            // v267: 弹出"继续"按钮时立即记录本局游戏结果
+            // v270: 弹出"继续"按钮时立即记录本局游戏结果
             parent.postMessage({type:'happyrun-log-result', data:{
                 maxLevel: maxUnlockedLevel,
                 levelScores: levelHighScores,
@@ -2888,7 +2904,11 @@ function updateBossDefeatReward(){
                 petGold: petGoldCoins,
                 ownedChars: ownedCharacters,
                 bossKillBonus: bossKillBonusClaimed,
-                levelsFirstCompleted: levelsFirstCompleted
+                levelsFirstCompleted: levelsFirstCompleted,
+                // v270: 本局获得的数据
+                sessionSilverGain: Math.max(0, totalSilverEarned - sessionStartSilver),
+                sessionGoldGain: Math.max(0, petGoldCoins - sessionStartGold),
+                sessionCompletedLevel: maxUnlockedLevel - 1 // 通关的关卡，不是解锁的关卡
             }}, '*');
         }
     }
