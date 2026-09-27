@@ -293,15 +293,17 @@
     _gameWrapper.style.overflow = 'hidden';
 
     // 4. 如果是竖屏，旋转wrapper为横屏
+    // v264: 使用CSS单位而非像素值，避免视口变化导致尺寸错误
     if (isMobilePortrait()) {
-      var vw = window.innerWidth;
-      var vh = window.innerHeight;
-      _gameWrapper.style.width = vh + 'px';
-      _gameWrapper.style.height = vw + 'px';
+      // 旋转后，视觉宽度=wrapper高度，视觉高度=wrapper宽度
+      // 所以设置 width=100vh(视觉高度), height=100vw(视觉宽度)
+      _gameWrapper.style.width = '100vh';
+      _gameWrapper.style.height = '100vw';
       _gameWrapper.style.transform = 'rotate(90deg)';
       _gameWrapper.style.transformOrigin = 'center center';
-      _gameWrapper.style.left = ((vw - vh) / 2) + 'px';
-      _gameWrapper.style.top = ((vh - vw) / 2) + 'px';
+      // 使用calc()居中，自动适应视口变化
+      _gameWrapper.style.left = 'calc((100vw - 100vh) / 2)';
+      _gameWrapper.style.top = 'calc((100vh - 100vw) / 2)';
     }
 
     // 5. 确保iframe填满wrapper
@@ -382,15 +384,14 @@
         }
       } else if (_isGameFullscreen && window.innerWidth <= window.innerHeight) {
         // 切回竖屏，保持全屏但旋转为横屏显示
+        // v264: 使用CSS单位而非像素值，避免视口变化导致尺寸错误
         if (_gameWrapper) {
-          var vw = window.innerWidth;
-          var vh = window.innerHeight;
-          _gameWrapper.style.width = vh + 'px';
-          _gameWrapper.style.height = vw + 'px';
+          _gameWrapper.style.width = '100vh';
+          _gameWrapper.style.height = '100vw';
           _gameWrapper.style.transform = 'rotate(90deg)';
           _gameWrapper.style.transformOrigin = 'center center';
-          _gameWrapper.style.left = ((vw - vh) / 2) + 'px';
-          _gameWrapper.style.top = ((vh - vw) / 2) + 'px';
+          _gameWrapper.style.left = 'calc((100vw - 100vh) / 2)';
+          _gameWrapper.style.top = 'calc((100vh - 100vw) / 2)';
         }
         // 再次尝试锁定横屏
         if (screen.orientation && screen.orientation.lock) {
@@ -401,15 +402,25 @@
   }
 
   function _onResizeCheck() {
-    // v227: 移动端跳过 — 移动端原生全屏后视口变为横屏，
-    // 但 CSS 旋转仍然需要保持（旋转产生的视觉横屏 innerWidth > innerHeight
-    // 与物理横屏无法区分）。桌面端无 CSS 旋转，此检查安全。
-    if (isMobileDevice()) return;
-    if (_isGameFullscreen && window.innerWidth > window.innerHeight) {
-      // 横屏状态，确保wrapper正确
-      if (_gameWrapper && !_gameWrapper.style.transform) {
-        _gameWrapper.style.width = '100vw';
-        _gameWrapper.style.height = '100vh';
+    // v264: 移动端也需要监听resize，更新wrapper尺寸
+    if (_isGameFullscreen) {
+      if (_gameWrapper) {
+        if (window.innerWidth > window.innerHeight) {
+          // 横屏状态
+          _gameWrapper.style.transform = '';
+          _gameWrapper.style.width = '100vw';
+          _gameWrapper.style.height = '100vh';
+          _gameWrapper.style.left = '0';
+          _gameWrapper.style.top = '0';
+        } else {
+          // 竖屏状态，旋转为横屏
+          _gameWrapper.style.width = '100vh';
+          _gameWrapper.style.height = '100vw';
+          _gameWrapper.style.transform = 'rotate(90deg)';
+          _gameWrapper.style.transformOrigin = 'center center';
+          _gameWrapper.style.left = 'calc((100vw - 100vh) / 2)';
+          _gameWrapper.style.top = 'calc((100vh - 100vw) / 2)';
+        }
       }
     }
   }
@@ -505,10 +516,13 @@
     setupMessageListener();
     
     // 窗口大小变化时重新计算游戏尺寸
+    // v264: 全屏模式下跳过，避免覆盖全屏样式
     var resizeTimer;
     window.addEventListener('resize', function() {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function() {
+        // 全屏模式下不调整wrapper尺寸（由enterGameFullscreen和_onResizeCheck处理）
+        if (_isGameFullscreen) return;
         if (wrapper && wrapper.parentNode) {
           var newWidth = Math.min(container.offsetWidth || window.innerWidth * 0.9, 1200);
           var newHeight = Math.round(newWidth * 90 / 185);
