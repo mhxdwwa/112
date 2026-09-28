@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v277 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步
+// ========== 作业岛系统 v280 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送
 (function() {
   'use strict';
 
@@ -7,6 +7,106 @@
   var API_BASE = '/api/homework';
   var _syncingToCloud = false;
   var _cloudDataLoaded = false;
+
+  // ========== Supabase Realtime 配置 ==========
+  var SUPABASE_URL = 'https://xbygooadskfqllnhwmet.supabase.co';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
+  var _realtimeChannel = null;
+  var _realtimeInitialized = false;
+
+  // 初始化 Supabase Realtime 订阅
+  function initRealtime() {
+    if (_realtimeInitialized || !window.supabase || !window.supabase.createClient) {
+      console.warn('[homework realtime] Supabase client not available');
+      return;
+    }
+    
+    try {
+      var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      
+      // 订阅 homework_submissions 表的 INSERT 事件
+      _realtimeChannel = supabase
+        .channel('homework-submissions-changes')
+        .on('postgres_changes', 
+          { event: 'INSERT', schema: 'public', table: 'homework_submissions' },
+          function(payload) {
+            console.log('[homework realtime] 新提交:', payload.new);
+            handleNewSubmission(payload.new);
+          }
+        )
+        .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'homework_submissions' },
+          function(payload) {
+            console.log('[homework realtime] 提交更新:', payload.new);
+            handleSubmissionUpdate(payload.new);
+          }
+        )
+        .subscribe(function(status) {
+          console.log('[homework realtime] 订阅状态:', status);
+          if (status === 'SUBSCRIBED') {
+            _realtimeInitialized = true;
+            console.log('[homework realtime] ✓ 已连接，实时同步已启用');
+          }
+        });
+    } catch (err) {
+      console.warn('[homework realtime] 初始化失败:', err);
+    }
+  }
+
+  // 处理新提交
+  function handleNewSubmission(newSub) {
+    // 检查是否已存在（避免重复）
+    var exists = homeworkSubmissions.find(function(s) { return s.id === newSub.id; });
+    if (exists) return;
+    
+    // 添加到本地数据
+    var sub = {
+      id: newSub.id,
+      homeworkId: newSub.homework_id,
+      studentId: newSub.student_id,
+      studentName: newSub.student_name || '',
+      image: newSub.image,
+      gradedImage: newSub.graded_image,
+      graded: !!newSub.graded_at,
+      grade: newSub.grade || '',
+      coins: newSub.coins_awarded || 0,
+      comment: newSub.comment || '',
+      submittedAt: newSub.submitted_at,
+      gradedAt: newSub.graded_at
+    };
+    
+    homeworkSubmissions.push(sub);
+    saveData();
+    
+    // 如果当前在查看提交批改页面，刷新列表
+    if (_currentTab === 'submissions') {
+      showNotification('📬 新提交: ' + (sub.studentName || '学生') + ' 提交了作业', 'success');
+      if (typeof loadHomeworkSubmissions === 'function') {
+        loadHomeworkSubmissions();
+      }
+    }
+  }
+
+  // 处理提交更新（批改完成）
+  function handleSubmissionUpdate(updatedSub) {
+    var existing = homeworkSubmissions.find(function(s) { return s.id === updatedSub.id; });
+    if (!existing) return;
+    
+    // 更新本地数据
+    existing.graded = !!updatedSub.graded_at;
+    existing.grade = updatedSub.grade || '';
+    existing.coins = updatedSub.coins_awarded || 0;
+    existing.comment = updatedSub.comment || '';
+    existing.gradedImage = updatedSub.graded_image;
+    existing.gradedAt = updatedSub.graded_at;
+    
+    saveData();
+    
+    // 刷新视图
+    if (_currentTab === 'submissions' && typeof loadHomeworkSubmissions === 'function') {
+      loadHomeworkSubmissions();
+    }
+  }
 
   // ========== 数据存储 ==========
   var homeworkTiers = JSON.parse(localStorage.getItem('homeworkTiers') || '{}');
@@ -43,6 +143,68 @@
 
   // ========== 工具函数 ==========
   function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+
+  // ========== 图片压缩函数 ==========
+  // 压缩图片到目标大小（默认400KB），使用Canvas + JPEG质量调节
+  function compressImage(dataUrl, targetSizeKB, callback) {
+    targetSizeKB = targetSizeKB || 400;
+    var targetBytes = targetSizeKB * 1024;
+    
+    var img = new Image();
+    img.onload = function() {
+      // 计算缩放比例 - 如果图片太大，先缩小尺寸
+      var maxDimension = 1600; // 最大边长
+      var scale = 1;
+      if (img.width > maxDimension || img.height > maxDimension) {
+        scale = maxDimension / Math.max(img.width, img.height);
+      }
+      
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      var ctx = canvas.getContext('2d');
+      
+      // 绘制图片（白色背景，避免JPEG透明区域变黑）
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // 逐步降低质量直到满足目标大小
+      var quality = 0.85; // 起始质量
+      var minQuality = 0.3; // 最低质量
+      var step = 0.1;
+      
+      function tryCompress(q) {
+        var result = canvas.toDataURL('image/jpeg', q);
+        var size = Math.round((result.length * 3) / 4); // 估算base64解码后大小
+        
+        if (size <= targetBytes || q <= minQuality) {
+          // 满足要求或已到最低质量
+          console.log('[compressImage] 压缩完成: 质量=' + q.toFixed(2) + 
+                      ', 大小=' + Math.round(size/1024) + 'KB' +
+                      ', 尺寸=' + canvas.width + 'x' + canvas.height);
+          callback(result);
+        } else {
+          // 降低质量重试
+          tryCompress(Math.max(minQuality, q - step));
+        }
+      }
+      
+      tryCompress(quality);
+    };
+    img.onerror = function() {
+      console.warn('[compressImage] 图片加载失败，使用原图');
+      callback(dataUrl);
+    };
+    img.src = dataUrl;
+  }
+
+  // 同步版本的压缩（返回Promise）
+  function compressImageAsync(dataUrl, targetSizeKB) {
+    return new Promise(function(resolve) {
+      compressImage(dataUrl, targetSizeKB, resolve);
+    });
+  }
 
   // ========== API 调用函数 ==========
   async function apiRequest(method, endpoint, data) {
@@ -271,6 +433,11 @@
       return;
     }
     
+    // 初始化 Realtime 订阅（教师端）
+    if (!_realtimeInitialized) {
+      initRealtime();
+    }
+    
     // 首次加载时从云端同步数据
     if (!_cloudDataLoaded && currentClassId) {
       loadFromCloud().then(function() {
@@ -399,13 +566,20 @@
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function(e) {
-      _studentUploadedImage = e.target.result;
       var uploadArea = document.getElementById('studentImageUpload');
       if (uploadArea) {
-        uploadArea.innerHTML = '<img src="' + _studentUploadedImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">';
-        uploadArea.style.borderStyle = 'solid';
-        uploadArea.style.padding = '10px';
+        uploadArea.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
+      // 压缩图片到400KB
+      compressImage(e.target.result, 400, function(compressed) {
+        _studentUploadedImage = compressed;
+        if (uploadArea) {
+          uploadArea.innerHTML = '<img src="' + _studentUploadedImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
+            '<div style="font-size:11px;color:#22c55e;margin-top:5px;">✓ 已压缩 (~' + Math.round(compressed.length * 3 / 4 / 1024) + 'KB)</div>';
+          uploadArea.style.borderStyle = 'solid';
+          uploadArea.style.padding = '10px';
+        }
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -745,13 +919,20 @@
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function(e) {
-      _currentHomeworkImage = e.target.result;
       var upload = document.getElementById('hwImageUpload');
       if (upload) {
-        upload.innerHTML = '<img src="' + _currentHomeworkImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">';
-        upload.style.borderStyle = 'solid';
-        upload.style.padding = '10px';
+        upload.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
+      // 压缩图片到400KB
+      compressImage(e.target.result, 400, function(compressed) {
+        _currentHomeworkImage = compressed;
+        if (upload) {
+          upload.innerHTML = '<img src="' + _currentHomeworkImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
+            '<div style="font-size:11px;color:#22c55e;margin-top:5px;">✓ 已压缩 (~' + Math.round(compressed.length * 3 / 4 / 1024) + 'KB)</div>';
+          upload.style.borderStyle = 'solid';
+          upload.style.padding = '10px';
+        }
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -918,13 +1099,20 @@
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function(e) {
-      _currentSubmitImage = e.target.result;
       var upload = document.getElementById('submitImageUpload');
       if (upload) {
-        upload.innerHTML = '<img src="' + _currentSubmitImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">';
-        upload.style.borderStyle = 'solid';
-        upload.style.padding = '10px';
+        upload.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
+      // 压缩图片到400KB
+      compressImage(e.target.result, 400, function(compressed) {
+        _currentSubmitImage = compressed;
+        if (upload) {
+          upload.innerHTML = '<img src="' + _currentSubmitImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
+            '<div style="font-size:11px;color:#22c55e;margin-top:5px;">✓ 已压缩 (~' + Math.round(compressed.length * 3 / 4 / 1024) + 'KB)</div>';
+          upload.style.borderStyle = 'solid';
+          upload.style.padding = '10px';
+        }
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -1267,38 +1455,41 @@
     var coins = GRADE_COINS[grade] || 10;
     var student = getStudentById(sub.studentId);
 
-    // 更新提交记录
-    sub.graded = true;
-    sub.grade = grade;
-    sub.coins = coins;
-    sub.gradedImage = annotatedImage;
-    sub.gradedAt = new Date().toISOString();
+    // 压缩批阅后的图片到400KB
+    compressImage(annotatedImage, 400, function(compressedImage) {
+      // 更新提交记录
+      sub.graded = true;
+      sub.grade = grade;
+      sub.coins = coins;
+      sub.gradedImage = compressedImage;
+      sub.gradedAt = new Date().toISOString();
 
-    // 发放金币
-    if (student && typeof changeStudentCoins === 'function') {
-      var oldCoins = sub._prevCoins || 0;
-      var delta = coins - oldCoins;
-      if (delta !== 0) {
-        changeStudentCoins(student, delta, '作业批改', '评分' + grade, 0, null, {
-          type: 'homework_grade', homeworkId: sub.homeworkId, grade: grade
-        });
+      // 发放金币
+      if (student && typeof changeStudentCoins === 'function') {
+        var oldCoins = sub._prevCoins || 0;
+        var delta = coins - oldCoins;
+        if (delta !== 0) {
+          changeStudentCoins(student, delta, '作业批改', '评分' + grade, 0, null, {
+            type: 'homework_grade', homeworkId: sub.homeworkId, grade: grade
+          });
+        }
+        sub._prevCoins = coins;
       }
-      sub._prevCoins = coins;
-    }
 
-    saveData();
-    _pendingGrade = null;
+      saveData();
+      _pendingGrade = null;
 
-    // 同步到云端
-    syncGradeToCloud(sub.id, annotatedImage, grade, coins, sub.comment || '');
+      // 同步到云端
+      syncGradeToCloud(sub.id, compressedImage, grade, coins, sub.comment || '');
 
-    // 关闭画布
-    window.closeGradingCanvas();
-    showNotification('已批改: ' + grade + '，+' + coins + ' 金币', 'success');
-    // 刷新列表
-    if (typeof loadHomeworkSubmissions === 'function') {
-      setTimeout(loadHomeworkSubmissions, 300);
-    }
+      // 关闭画布
+      window.closeGradingCanvas();
+      showNotification('已批改: ' + grade + '，+' + coins + ' 金币 (图片已压缩~' + Math.round(compressedImage.length * 3 / 4 / 1024) + 'KB)', 'success');
+      // 刷新列表
+      if (typeof loadHomeworkSubmissions === 'function') {
+        setTimeout(loadHomeworkSubmissions, 300);
+      }
+    });
   };
 
   // ========== 样式注入 ==========
@@ -1306,5 +1497,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v279');
+  console.log('[homework-system] 作业岛系统已加载 v280 - 图片压缩 + 实时同步');
 })();
