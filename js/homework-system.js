@@ -625,10 +625,13 @@
     _syncingToCloud = false;
   }
 
-  // 删除云端作业
+  // 删除云端作业（级联删除提交记录）
   async function deleteHomeworkFromCloud(hwId) {
     if (!currentClassId) return;
     try {
+      // 先删除该作业的所有提交记录
+      await apiRequest('DELETE', '/submissions?homework_id=' + hwId);
+      // 再删除作业本身
       await apiRequest('DELETE', '?id=' + hwId);
     } catch (err) {
       console.warn('[homework] deleteHomeworkFromCloud error:', err);
@@ -677,6 +680,15 @@
     
     // 学生端或强制重载时，忽略 _cloudDataLoaded 标志
     if (_cloudDataLoaded && !forceReload && !_isStudentView) return;
+    
+    // 强制重载时，先清空本地缓存，避免显示过期数据
+    if (forceReload) {
+      console.log('[homework] forceReload: clearing stale local data');
+      homeworkList = [];
+      homeworkSubmissions = [];
+      localStorage.removeItem('homeworkList');
+      localStorage.removeItem('homeworkSubmissions');
+    }
     
     console.log('[homework] Loading cloud data for classId:', loadClassId, 'isStudent:', _isStudentView);
     
@@ -2711,5 +2723,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v293 - 修复旧作业清理 + 学生端强制刷新');
+  console.log('[homework-system] 作业岛系统已加载 v294 - 修复旧作业清理 + 级联删除提交 + 学生端强制刷新');
 })();

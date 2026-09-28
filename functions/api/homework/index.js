@@ -71,13 +71,27 @@ export const onRequestPost = async ({ request, env }) => {
     const cid = parseInt(class_id);
     const hwId = id || genId();
 
-    // 1. 删除该层级的旧作业（级联删除提交记录）
-    const delResult = await sbDelete(env, 'homework', `class_id=eq.${cid}&tier=eq.${tier}`);
-    if (delResult.error) {
-      console.warn('[homework POST] Delete old homework warning:', delResult.error);
+    // 1. 查找该层级的旧作业
+    const oldHwResult = await sbRequest(env, 'GET', 'homework', {
+      query: `select=id&class_id=eq.${cid}&tier=eq.${tier}`
+    });
+
+    if (oldHwResult.data && oldHwResult.data.length > 0) {
+      const oldHwIds = oldHwResult.data.map(h => h.id);
+
+      // 2. 删除旧作业的所有提交记录
+      for (const oldId of oldHwIds) {
+        await sbDelete(env, 'homework_submissions', `homework_id=eq.${oldId}`);
+      }
+
+      // 3. 删除旧作业
+      const delResult = await sbDelete(env, 'homework', `class_id=eq.${cid}&tier=eq.${tier}`);
+      if (delResult.error) {
+        console.warn('[homework POST] Delete old homework warning:', delResult.error);
+      }
     }
 
-    // 2. 插入新作业
+    // 4. 插入新作业
     const insertResult = await sbRequest(env, 'POST', 'homework', {
       body: [{
         id: hwId,
@@ -98,7 +112,7 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({
       ok: true,
       id: hwId,
-      message: '作业已发布（旧作业已替换）'
+      message: '作业已发布（旧作业及提交已清理）'
     });
   } catch (err) {
     console.error('[homework POST] Unexpected error:', err);
@@ -106,7 +120,7 @@ export const onRequestPost = async ({ request, env }) => {
   }
 };
 
-// DELETE — 删除作业
+// DELETE — 删除作业（级联删除提交记录）
 export const onRequestDelete = async ({ request, env }) => {
   const envErr = checkEnv(env);
   if (envErr) return envErr;
@@ -119,14 +133,23 @@ export const onRequestDelete = async ({ request, env }) => {
   }
 
   try {
-    // 删除作业（级联删除提交记录）
+    // 1. 先删除该作业的所有提交记录
+    const subsResult = await sbRequest(env, 'GET', 'homework_submissions', {
+      query: `select=id&homework_id=eq.${id}`
+    });
+    if (subsResult.data && subsResult.data.length > 0) {
+      await sbDelete(env, 'homework_submissions', `homework_id=eq.${id}`);
+      console.log(`[homework DELETE] Deleted ${subsResult.data.length} submissions for homework ${id}`);
+    }
+
+    // 2. 删除作业
     const result = await sbDelete(env, 'homework', `id=eq.${id}`);
     if (result.error) {
       console.error('[homework DELETE] Error:', result.error);
       return jsonResponse({ error: 'Delete failed', details: result.error }, 500);
     }
 
-    return jsonResponse({ ok: true, message: '作业已删除' });
+    return jsonResponse({ ok: true, message: '作业及提交已删除' });
   } catch (err) {
     console.error('[homework DELETE] Unexpected error:', err);
     return jsonResponse({ error: err.message || 'Unexpected error' }, 500);
