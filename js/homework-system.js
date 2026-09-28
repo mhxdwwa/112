@@ -461,7 +461,7 @@
   }
 
   // ========== Supabase Storage 工具函数 ==========
-  var STORAGE_BUCKET = '作业图片';
+  var STORAGE_BUCKET = 'homework-images';
 
   // 判断字符串是否为 URL（而非 base64）
   function isImageUrl(str) {
