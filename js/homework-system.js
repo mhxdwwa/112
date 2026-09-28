@@ -1022,10 +1022,12 @@
       html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>';
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>';
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
-      var stuColors = ['#000000','#ef4444','#3b82f6','#22c55e','#f59e0b'];
+      var stuColors = ['#000000','#3b82f6'];
       stuColors.forEach(function(c) {
         html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:18px;height:18px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === '#000000' ? '#667eea' : 'rgba(255,255,255,0.3)') + ';flex-shrink:0;"></div>';
       });
+      html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
+      html += '<input type="range" id="stuDrawLineWidth" min="1" max="10" value="3" oninput="setStudentDrawLineWidth(this.value)" style="width:60px;height:16px;cursor:pointer;accent-color:#667eea;">';
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
       html += '<button onclick="zoomStudentCanvas(1.3)" style="width:24px;height:24px;background:transparent;color:white;border:none;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🔍</button>';
       html += '<button onclick="zoomStudentCanvas(0.77)" style="width:24px;height:24px;background:transparent;color:white;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🔎</button>';
