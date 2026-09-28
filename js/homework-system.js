@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v281 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端)
+// ========== 作业岛系统 v282 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护
 (function() {
   'use strict';
 
@@ -441,24 +441,34 @@
   // 从云端加载数据
   async function loadFromCloud(classIdOverride, forceReload) {
     var loadClassId = classIdOverride || currentClassId;
-    if (!loadClassId) return;
+    if (!loadClassId) {
+      console.warn('[homework] loadFromCloud: no classId available');
+      return;
+    }
     
     // 学生端或强制重载时，忽略 _cloudDataLoaded 标志
     if (_cloudDataLoaded && !forceReload && !_isStudentView) return;
     
+    console.log('[homework] Loading cloud data for classId:', loadClassId, 'isStudent:', _isStudentView);
+    
     try {
       // 加载分层数据
       var tiersRes = await apiRequest('GET', '/tiers?class_id=' + parseInt(loadClassId));
+      console.log('[homework] Tiers response:', tiersRes);
       if (tiersRes.ok && tiersRes.data) {
         homeworkTiers = {};
         tiersRes.data.forEach(function(t) {
           homeworkTiers[String(t.student_id)] = t.tier;
         });
         localStorage.setItem('homeworkTiers', JSON.stringify(homeworkTiers));
+        console.log('[homework] Loaded tiers:', homeworkTiers);
+      } else {
+        console.warn('[homework] Failed to load tiers:', tiersRes);
       }
 
       // 加载作业列表
       var hwRes = await apiRequest('GET', '?class_id=' + parseInt(loadClassId));
+      console.log('[homework] Homework response:', hwRes);
       if (hwRes.ok && hwRes.data) {
         homeworkList = hwRes.data.map(function(h) {
           return {
@@ -471,6 +481,9 @@
           };
         });
         localStorage.setItem('homeworkList', JSON.stringify(homeworkList));
+        console.log('[homework] Loaded homework list:', homeworkList.length, 'items');
+      } else {
+        console.warn('[homework] Failed to load homework:', hwRes);
       }
 
       // 加载提交记录
@@ -499,12 +512,13 @@
         }
         homeworkSubmissions = allSubs;
         localStorage.setItem('homeworkSubmissions', JSON.stringify(homeworkSubmissions));
+        console.log('[homework] Loaded submissions:', homeworkSubmissions.length, 'items');
       }
 
       _cloudDataLoaded = true;
-      console.log('[homework] Cloud data loaded for classId:', loadClassId);
+      console.log('[homework] Cloud data loaded successfully for classId:', loadClassId);
     } catch (err) {
-      console.warn('[homework] loadFromCloud error:', err);
+      console.error('[homework] loadFromCloud error:', err);
     }
   }
 
@@ -604,25 +618,34 @@
 
   // ========== 学生视图渲染 ==========
   function renderStudentView(container, studentId, classId) {
-    // 获取学生所在层级
+    // 获取学生所在层级（内部使用，不显示给学生）
     var myTier = homeworkTiers[String(studentId)];
     
     var html = '<div style="text-align:center;padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;margin-bottom:20px;color:white;">';
     html += '<div style="font-size:24px;margin-bottom:8px;">📝 我的作业</div>';
     html += '<div style="font-size:14px;opacity:0.9;">' + esc(currentUser.studentName || '同学') + '</div>';
-    if (myTier) {
-      html += '<div style="margin-top:8px;padding:4px 12px;background:rgba(255,255,255,0.2);border-radius:20px;display:inline-block;font-size:12px;">' + TIER_NAMES[myTier] + '</div>';
-    } else {
-      html += '<div style="margin-top:8px;font-size:12px;opacity:0.7;">暂未分层</div>';
-    }
+    // 不显示层级信息，保护学生自尊心
     html += '</div>';
     
+    // 如果没有分层，尝试显示所有作业（降级模式）
     if (!myTier) {
-      html += '<div class="hw-card" style="text-align:center;padding:40px 20px;">';
-      html += '<div style="font-size:48px;margin-bottom:15px;">📋</div>';
-      html += '<div style="color:#666;">老师还没有给你分配层级</div>';
-      html += '<div style="font-size:13px;color:#999;margin-top:8px;">请联系老师将你加入分层</div>';
-      html += '</div>';
+      // 检查是否有任何作业
+      if (homeworkList.length === 0) {
+        html += '<div class="hw-card" style="text-align:center;padding:40px 20px;">';
+        html += '<div style="font-size:48px;margin-bottom:15px;">📋</div>';
+        html += '<div style="color:#666;">老师还没有布置作业</div>';
+        html += '<div style="font-size:13px;color:#999;margin-top:8px;">请稍后再来查看</div>';
+        html += '<button onclick="refreshStudentHomework()" style="margin-top:15px;padding:10px 20px;background:#667eea;color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">🔄 刷新</button>';
+        html += '</div>';
+      } else {
+        // 有作业但没有分层，显示第一个作业（降级模式）
+        html += '<div style="padding:10px;background:#fff3cd;border-radius:10px;margin-bottom:15px;font-size:12px;color:#856404;">';
+        html += '⚠️ 数据同步中，显示最新作业';
+        html += '</div>';
+        
+        var fallbackHomework = homeworkList[0]; // 显示最新的作业
+        html += renderHomeworkCard(fallbackHomework, studentId);
+      }
       container.innerHTML = html;
       return;
     }
@@ -634,14 +657,21 @@
       html += '<div class="hw-card" style="text-align:center;padding:40px 20px;">';
       html += '<div style="font-size:48px;margin-bottom:15px;">📭</div>';
       html += '<div style="color:#666;">暂无作业</div>';
-      html += '<div style="font-size:13px;color:#999;margin-top:8px;">老师还没有布置作业</div>';
+      html += '<div style="font-size:13px;color:#999;margin-top:8px;">老师还没有布置作业，请稍后再来</div>';
+      html += '<button onclick="refreshStudentHomework()" style="margin-top:15px;padding:10px 20px;background:#667eea;color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">🔄 刷新</button>';
       html += '</div>';
       container.innerHTML = html;
       return;
     }
     
-    // 显示作业
-    html += '<div class="hw-card">';
+    // 显示作业（不显示层级标签）
+    html += renderHomeworkCard(myHomework, studentId);
+    container.innerHTML = html;
+  }
+  
+  // 渲染作业卡片（包括提交状态）
+  function renderHomeworkCard(myHomework, studentId) {
+    var html = '<div class="hw-card">';
     html += '<div class="hw-card-title">📖 当前作业</div>';
     html += '<div style="font-size:18px;font-weight:700;color:#333;margin-bottom:10px;">' + esc(myHomework.title) + '</div>';
     html += '<div style="font-size:12px;color:#888;margin-bottom:15px;">发布于 ' + new Date(myHomework.createdAt).toLocaleDateString() + '</div>';
@@ -655,7 +685,7 @@
     
     // 检查是否已提交
     var mySubmission = homeworkSubmissions.find(function(s) { 
-      return s.homeworkId === myHomework.id && s.studentId === studentId; 
+      return s.homeworkId === myHomework.id && String(s.studentId) === String(studentId); 
     });
     
     if (!mySubmission) {
@@ -710,8 +740,27 @@
       html += '</div>';
     }
     
-    container.innerHTML = html;
+    return html;
   }
+  
+  // 学生手动刷新作业数据
+  window.refreshStudentHomework = function() {
+    var container = document.getElementById('homeworkContent');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;">' +
+      '<div style="font-size:48px;margin-bottom:15px;">⏳</div>' +
+      '<div style="color:#666;font-size:14px;">正在刷新...</div></div>';
+    
+    var myStudentId = parseInt(currentUser.studentId);
+    var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+    
+    // 强制重新加载数据
+    _cloudDataLoaded = false;
+    loadFromCloud(myClassId, true).then(function() {
+      renderStudentView(container, myStudentId, myClassId);
+    });
+  };
 
   // 学生上传图片
   var _studentUploadedImage = null;
@@ -1651,5 +1700,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v281 - 图片压缩 + 师生双端实时同步');
+  console.log('[homework-system] 作业岛系统已加载 v282 - 图片压缩 + 师生双端实时同步 + 学生隐私保护');
 })();
