@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v289 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目1000KB/答案500KB) + 实时推送(师生双端) + 学生隐私保护 + 学生直接在题目上书写(移动端重试机制) + 自定义金币 + 分层数据即时加载
+// ========== 作业岛系统 v290 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
 
@@ -259,6 +259,8 @@
   var _gradingSubId = null;
   var _gradeCanvas = null;
   var _gradeCtx = null;
+  var _gradeOverlayCanvas = null;
+  var _gradeOverlayCtx = null;
   var _gradeImg = null;
   var _drawColor = '#ef4444';
   var _drawTool = 'pen'; // pen | eraser | text
@@ -333,6 +335,85 @@
     };
     img.onerror = function() {
       console.warn('[compressImage] 图片加载失败，使用原图');
+      callback(dataUrl);
+    };
+    img.src = dataUrl;
+  }
+
+  // ========== 图片增强函数（接收端使用） ==========
+  // 对压缩后的图片进行锐化和对比度增强，让文字更清晰
+  function enhanceImageForDisplay(dataUrl, callback) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      var ctx = canvas.getContext('2d');
+      
+      // 绘制原图
+      ctx.drawImage(img, 0, 0);
+      
+      // 获取图像数据
+      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var data = imageData.data;
+      
+      // 1. 对比度增强（让文字更清晰）
+      var contrast = 1.15; // 对比度系数
+      var intercept = 128 * (1 - contrast);
+      for (var i = 0; i < data.length; i += 4) {
+        data[i] = data[i] * contrast + intercept;     // R
+        data[i+1] = data[i+1] * contrast + intercept; // G
+        data[i+2] = data[i+2] * contrast + intercept; // B
+      }
+      
+      // 2. 简单锐化（增强边缘）
+      var sharpened = new Uint8ClampedArray(data.length);
+      var w = canvas.width;
+      for (var y = 1; y < canvas.height - 1; y++) {
+        for (var x = 1; x < w - 1; x++) {
+          var idx = (y * w + x) * 4;
+          for (var c = 0; c < 3; c++) {
+            // 锐化卷积核：中心5，四周-1
+            var val = 5 * data[idx + c]
+              - data[((y-1) * w + x) * 4 + c]
+              - data[((y+1) * w + x) * 4 + c]
+              - data[(y * w + (x-1)) * 4 + c]
+              - data[(y * w + (x+1)) * 4 + c];
+            sharpened[idx + c] = Math.max(0, Math.min(255, val));
+          }
+          sharpened[idx + 3] = data[idx + 3]; // Alpha
+        }
+      }
+      
+      // 复制边缘像素
+      for (var x = 0; x < w; x++) {
+        var topIdx = x * 4;
+        var botIdx = ((canvas.height - 1) * w + x) * 4;
+        for (var c = 0; c < 4; c++) {
+          sharpened[topIdx + c] = data[topIdx + c];
+          sharpened[botIdx + c] = data[botIdx + c];
+        }
+      }
+      for (var y = 0; y < canvas.height; y++) {
+        var leftIdx = (y * w) * 4;
+        var rightIdx = (y * w + w - 1) * 4;
+        for (var c = 0; c < 4; c++) {
+          sharpened[leftIdx + c] = data[leftIdx + c];
+          sharpened[rightIdx + c] = data[rightIdx + c];
+        }
+      }
+      
+      // 应用增强后的数据
+      var enhancedData = new ImageData(sharpened, canvas.width, canvas.height);
+      ctx.putImageData(enhancedData, 0, 0);
+      
+      // 输出增强后的图片
+      var result = canvas.toDataURL('image/jpeg', 0.95);
+      console.log('[enhanceImage] 图片增强完成，尺寸=' + canvas.width + 'x' + canvas.height);
+      callback(result);
+    };
+    img.onerror = function() {
+      console.warn('[enhanceImage] 图片加载失败，使用原图');
       callback(dataUrl);
     };
     img.src = dataUrl;
@@ -772,10 +853,11 @@
       html += '<button onclick="resetStudentCanvasZoom()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">↺</button>';
       html += '<button onclick="clearStudentCanvas()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🗑 清除</button>';
       html += '</div>';
-      // 画布容器（老师的题目图片作为底图）
-      html += '<div id="studentCanvasContainer" style="width:100%;overflow:auto;border-radius:8px;border:2px solid #e9ecef;background:#f8f9fa;-webkit-overflow-scrolling:touch;">';
+      // 画布容器（老师的题目图片作为底图 + 透明叠加层用于书写）
+      html += '<div id="studentCanvasContainer" style="width:100%;overflow:auto;border-radius:8px;border:2px solid #e9ecef;background:#f8f9fa;-webkit-overflow-scrolling:touch;position:relative;">';
       if (myHomework.image) {
         html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;" data-homework-image="' + myHomework.image + '"></canvas>';
+        html += '<canvas id="studentOverlayCanvas" style="position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;"></canvas>';
       } else {
         html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;"></canvas>';
         html += '<div style="padding:30px;text-align:center;color:#999;font-size:13px;">本题没有图片</div>';
@@ -863,6 +945,8 @@
   // ========== 学生画布书写功能 ==========
   var _stuCanvas = null;
   var _stuCtx = null;
+  var _stuOverlayCanvas = null; // 透明叠加层，用于书写
+  var _stuOverlayCtx = null;
   var _stuImg = null;
   var _stuDrawColor = '#000000';
   var _stuDrawTool = 'pen';
@@ -896,49 +980,57 @@
     initStudentCanvas(imageDataUrl);
   }
 
-  // 初始化学生画布
+  // 初始化学生画布（双层：底图 + 透明叠加层）
   function initStudentCanvas(imageDataUrl) {
     var canvas = document.getElementById('studentCanvas');
-    if (!canvas) return;
+    var overlayCanvas = document.getElementById('studentOverlayCanvas');
+    if (!canvas || !overlayCanvas) return;
     _stuCanvas = canvas;
     _stuCtx = canvas.getContext('2d');
+    _stuOverlayCanvas = overlayCanvas;
+    _stuOverlayCtx = overlayCanvas.getContext('2d');
 
-    var img = new Image();
-    img.onload = function() {
-      _stuImg = img;
-      // 计算基础尺寸 - 适应屏幕宽度
-      var container = document.getElementById('studentCanvasContainer');
-      var maxW = container ? container.clientWidth - 4 : Math.min(window.innerWidth - 60, 600);
-      var scale = maxW / img.width;
-      if (scale > 1) scale = 1;
-      _stuBaseWidth = img.width * scale;
-      _stuBaseHeight = img.height * scale;
-      _stuZoom = 1;
-      
-      // 设置画布尺寸
-      canvas.width = _stuBaseWidth;
-      canvas.height = _stuBaseHeight;
-      
-      // 绘制底图
-      _stuCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      
-      // 绑定绘制事件
-      canvas.addEventListener('mousedown', onStuCanvasDown);
-      canvas.addEventListener('mousemove', onStuCanvasMove);
-      canvas.addEventListener('mouseup', onStuCanvasUp);
-      canvas.addEventListener('mouseleave', onStuCanvasUp);
-      canvas.addEventListener('touchstart', onStuCanvasTouchStart, { passive: false });
-      canvas.addEventListener('touchmove', onStuCanvasTouchMove, { passive: false });
-      canvas.addEventListener('touchend', onStuCanvasTouchEnd);
-    };
-    img.src = imageDataUrl;
+    // 先增强图片（锐化+对比度），让文字更清晰
+    enhanceImageForDisplay(imageDataUrl, function(enhancedImageUrl) {
+      var img = new Image();
+      img.onload = function() {
+        _stuImg = img;
+        // 计算基础尺寸 - 适应屏幕宽度
+        var container = document.getElementById('studentCanvasContainer');
+        var maxW = container ? container.clientWidth - 4 : Math.min(window.innerWidth - 60, 600);
+        var scale = maxW / img.width;
+        if (scale > 1) scale = 1;
+        _stuBaseWidth = img.width * scale;
+        _stuBaseHeight = img.height * scale;
+        _stuZoom = 1;
+        
+        // 设置底图画布尺寸并绘制增强后的底图
+        canvas.width = _stuBaseWidth;
+        canvas.height = _stuBaseHeight;
+        _stuCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // 设置叠加层画布尺寸（透明）
+        overlayCanvas.width = _stuBaseWidth;
+        overlayCanvas.height = _stuBaseHeight;
+        
+        // 绑定绘制事件到叠加层（而不是底图）
+        overlayCanvas.addEventListener('mousedown', onStuCanvasDown);
+        overlayCanvas.addEventListener('mousemove', onStuCanvasMove);
+        overlayCanvas.addEventListener('mouseup', onStuCanvasUp);
+        overlayCanvas.addEventListener('mouseleave', onStuCanvasUp);
+        overlayCanvas.addEventListener('touchstart', onStuCanvasTouchStart, { passive: false });
+        overlayCanvas.addEventListener('touchmove', onStuCanvasTouchMove, { passive: false });
+        overlayCanvas.addEventListener('touchend', onStuCanvasTouchEnd);
+      };
+      img.src = enhancedImageUrl;
+    });
   }
 
   function getStuCanvasPos(e) {
-    var rect = _stuCanvas.getBoundingClientRect();
+    var rect = _stuOverlayCanvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) * (_stuCanvas.width / rect.width),
-      y: (e.clientY - rect.top) * (_stuCanvas.height / rect.height)
+      x: (e.clientX - rect.left) * (_stuOverlayCanvas.width / rect.width),
+      y: (e.clientY - rect.top) * (_stuOverlayCanvas.height / rect.height)
     };
   }
 
@@ -1023,27 +1115,37 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  // 应用缩放
+  // 应用缩放（同时缩放底图和叠加层）
   function applyStudentZoom(newZoom) {
-    if (!_stuCanvas || !_stuImg || !_stuCtx) return;
+    if (!_stuCanvas || !_stuImg || !_stuCtx || !_stuOverlayCanvas) return;
     
     _stuZoom = newZoom;
     var newWidth = Math.round(_stuBaseWidth * _stuZoom);
     var newHeight = Math.round(_stuBaseHeight * _stuZoom);
     
-    // 保存当前图像
-    var tempCanvas = document.createElement('canvas');
-    tempCanvas.width = _stuCanvas.width;
-    tempCanvas.height = _stuCanvas.height;
-    var tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(_stuCanvas, 0, 0);
+    // 保存底图当前内容
+    var tempBaseCanvas = document.createElement('canvas');
+    tempBaseCanvas.width = _stuCanvas.width;
+    tempBaseCanvas.height = _stuCanvas.height;
+    var tempBaseCtx = tempBaseCanvas.getContext('2d');
+    tempBaseCtx.drawImage(_stuCanvas, 0, 0);
     
-    // 调整画布尺寸
+    // 保存叠加层当前内容
+    var tempOverlayCanvas = document.createElement('canvas');
+    tempOverlayCanvas.width = _stuOverlayCanvas.width;
+    tempOverlayCanvas.height = _stuOverlayCanvas.height;
+    var tempOverlayCtx = tempOverlayCanvas.getContext('2d');
+    tempOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0);
+    
+    // 调整两个画布尺寸
     _stuCanvas.width = newWidth;
     _stuCanvas.height = newHeight;
+    _stuOverlayCanvas.width = newWidth;
+    _stuOverlayCanvas.height = newHeight;
     
     // 重新绘制（缩放图像）
-    _stuCtx.drawImage(tempCanvas, 0, 0, newWidth, newHeight);
+    _stuCtx.drawImage(tempBaseCanvas, 0, 0, newWidth, newHeight);
+    _stuOverlayCtx.drawImage(tempOverlayCanvas, 0, 0, newWidth, newHeight);
   }
 
   // 按钮缩放
@@ -1060,17 +1162,32 @@
   };
 
   function drawStuLine(x1, y1, x2, y2) {
-    if (!_stuCtx) return;
-    _stuCtx.beginPath();
-    _stuCtx.moveTo(x1, y1);
-    _stuCtx.lineTo(x2, y2);
-    _stuCtx.strokeStyle = _stuDrawTool === 'eraser' ? '#ffffff' : _stuDrawColor;
-    // 根据缩放调整线宽
-    var lineWidth = (_stuDrawTool === 'eraser' ? _stuDrawLineWidth * 4 : _stuDrawLineWidth) * _stuZoom;
-    _stuCtx.lineWidth = lineWidth;
-    _stuCtx.lineCap = 'round';
-    _stuCtx.lineJoin = 'round';
-    _stuCtx.stroke();
+    if (!_stuOverlayCtx) return;
+    
+    if (_stuDrawTool === 'eraser') {
+      // 橡皮擦：使用 destination-out 只擦除叠加层上的内容，不影响底图
+      _stuOverlayCtx.globalCompositeOperation = 'destination-out';
+      _stuOverlayCtx.beginPath();
+      _stuOverlayCtx.moveTo(x1, y1);
+      _stuOverlayCtx.lineTo(x2, y2);
+      _stuOverlayCtx.strokeStyle = 'rgba(0,0,0,1)';
+      _stuOverlayCtx.lineWidth = _stuDrawLineWidth * 4 * _stuZoom;
+      _stuOverlayCtx.lineCap = 'round';
+      _stuOverlayCtx.lineJoin = 'round';
+      _stuOverlayCtx.stroke();
+      _stuOverlayCtx.globalCompositeOperation = 'source-over'; // 恢复默认
+    } else {
+      // 画笔：正常绘制在叠加层上
+      _stuOverlayCtx.globalCompositeOperation = 'source-over';
+      _stuOverlayCtx.beginPath();
+      _stuOverlayCtx.moveTo(x1, y1);
+      _stuOverlayCtx.lineTo(x2, y2);
+      _stuOverlayCtx.strokeStyle = _stuDrawColor;
+      _stuOverlayCtx.lineWidth = _stuDrawLineWidth * _stuZoom;
+      _stuOverlayCtx.lineCap = 'round';
+      _stuOverlayCtx.lineJoin = 'round';
+      _stuOverlayCtx.stroke();
+    }
   }
 
   window.setStudentDrawTool = function(tool) {
@@ -1090,8 +1207,8 @@
         penBtn.style.color = '#ccc';
       }
     }
-    if (_stuCanvas) {
-      _stuCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+    if (_stuOverlayCanvas) {
+      _stuOverlayCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
     }
   };
 
@@ -1110,10 +1227,10 @@
   };
 
   window.clearStudentCanvas = function() {
-    if (!_stuCanvas || !_stuImg) return;
+    if (!_stuOverlayCanvas || !_stuImg) return;
     if (!confirm('确定清除所有书写内容？')) return;
-    _stuCtx.clearRect(0, 0, _stuCanvas.width, _stuCanvas.height);
-    _stuCtx.drawImage(_stuImg, 0, 0, _stuCanvas.width, _stuCanvas.height);
+    // 只清除叠加层（书写内容），底图保持不变
+    _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
   };
 
   // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
@@ -1129,8 +1246,10 @@
     // 绘制原始底图（老师的题目图片）
     exportCtx.drawImage(_stuImg, 0, 0);
     
-    // 将当前画布上的书写痕迹缩放到原始尺寸并叠加
-    exportCtx.drawImage(_stuCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+    // 将叠加层（书写痕迹）缩放到原始尺寸并叠加
+    if (_stuOverlayCanvas) {
+      exportCtx.drawImage(_stuOverlayCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+    }
     
     return exportCanvas.toDataURL('image/jpeg', 0.92);
   }
@@ -1146,7 +1265,7 @@
       if (preview) {
         preview.innerHTML = '<div style="font-size:12px;color:#6b7280;">⏳ 压缩中...</div>';
       }
-      compressImage(e.target.result, 500, function(compressed) {
+      compressImage(e.target.result, 400, function(compressed) {
         _studentExtraImage = compressed;
         if (preview) {
           preview.innerHTML = '<img src="' + _studentExtraImage + '" style="max-width:100%;max-height:120px;border-radius:8px;">' +
@@ -1184,8 +1303,8 @@
         // 已经足够小，直接使用
         submitToServer(imageData);
       } else {
-      // 压缩最终图像到500KB（学生提交的答案，节省流量）
-      compressImage(imageData, 500, function(compressedFinal) {
+      // 压缩最终图像到400KB（学生提交的答案，接收端会增强）
+      compressImage(imageData, 400, function(compressedFinal) {
           submitToServer(compressedFinal);
         });
       }
@@ -1573,8 +1692,8 @@
       if (upload) {
         upload.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
-      // 压缩图片到1000KB（题目图片，保证文字清晰可读）
-      compressImage(e.target.result, 1000, function(compressed) {
+      // 压缩图片到600KB（题目图片，接收端会增强）
+      compressImage(e.target.result, 600, function(compressed) {
         _currentHomeworkImage = compressed;
         if (upload) {
           upload.innerHTML = '<img src="' + _currentHomeworkImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
@@ -1753,8 +1872,8 @@
       if (upload) {
         upload.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
-      // 压缩图片到500KB（教师代提交，节省流量）
-      compressImage(e.target.result, 500, function(compressed) {
+      // 压缩图片到400KB（教师代提交，接收端会增强）
+      compressImage(e.target.result, 400, function(compressed) {
         _currentSubmitImage = compressed;
         if (upload) {
           upload.innerHTML = '<img src="' + _currentSubmitImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
@@ -1834,9 +1953,10 @@
     html += '<button onclick="clearCanvas()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🗑 清除</button>';
     html += '</div>';
 
-    // 画布区域
-    html += '<div id="canvasContainer" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:10px;background:#2a2a3a;">';
-    html += '<canvas id="gradingCanvas" style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:crosshair;touch-action:none;"></canvas>';
+    // 画布区域（双层：底图 + 透明叠加层用于批注）
+    html += '<div id="canvasContainer" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:10px;background:#2a2a3a;position:relative;">';
+    html += '<canvas id="gradingCanvas" style="border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:crosshair;touch-action:none;"></canvas>';
+    html += '<canvas id="gradingOverlayCanvas" style="position:absolute;border-radius:8px;cursor:crosshair;touch-action:none;pointer-events:auto;"></canvas>';
     html += '</div>';
 
     // 底部评分栏
@@ -1869,59 +1989,70 @@
 
   function initGradingCanvas(sub) {
     var canvas = document.getElementById('gradingCanvas');
-    if (!canvas) return;
+    var overlayCanvas = document.getElementById('gradingOverlayCanvas');
+    if (!canvas || !overlayCanvas) return;
     _gradeCanvas = canvas;
     _gradeCtx = canvas.getContext('2d');
+    _gradeOverlayCanvas = overlayCanvas;
+    _gradeOverlayCtx = overlayCanvas.getContext('2d');
 
-    var img = new Image();
-    img.onload = function() {
-      _gradeImg = img;
-      // 计算画布尺寸 - 限制最大宽度
-      var maxW = Math.min(window.innerWidth - 40, 800);
-      var scale = maxW / img.width;
-      if (scale > 1) scale = 1;
-      _canvasScale = scale;
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      // 绘制底图
-      _gradeCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      // 如果有已保存的批阅图层，叠加
-      if (sub.gradedImage) {
-        var overlay2 = new Image();
-        overlay2.onload = function() {
-          _gradeCtx.drawImage(overlay2, 0, 0, canvas.width, canvas.height);
-          _markClean = false;
-        };
-        overlay2.src = sub.gradedImage;
-      }
-    };
-    img.src = sub.image;
+    // 先增强图片（锐化+对比度），让文字更清晰
+    enhanceImageForDisplay(sub.image, function(enhancedImageUrl) {
+      var img = new Image();
+      img.onload = function() {
+        _gradeImg = img;
+        // 计算画布尺寸 - 限制最大宽度
+        var maxW = Math.min(window.innerWidth - 40, 800);
+        var scale = maxW / img.width;
+        if (scale > 1) scale = 1;
+        _canvasScale = scale;
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        // 绘制增强后的底图
+        _gradeCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // 设置叠加层画布尺寸（透明）
+        overlayCanvas.width = canvas.width;
+        overlayCanvas.height = canvas.height;
+        
+        // 如果有已保存的批阅图层，叠加到叠加层
+        if (sub.gradedImage) {
+          var overlay2 = new Image();
+          overlay2.onload = function() {
+            _gradeOverlayCtx.drawImage(overlay2, 0, 0, overlayCanvas.width, overlayCanvas.height);
+            _markClean = false;
+          };
+          overlay2.src = sub.gradedImage;
+        }
+      };
+      img.src = enhancedImageUrl;
+    });
 
-    // 绑定绘制事件
-    canvas.addEventListener('mousedown', onCanvasDown);
-    canvas.addEventListener('mousemove', onCanvasMove);
-    canvas.addEventListener('mouseup', onCanvasUp);
-    canvas.addEventListener('mouseleave', onCanvasUp);
-    // 触摸事件
-    canvas.addEventListener('touchstart', onCanvasTouchDown, { passive: false });
-    canvas.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onCanvasUp);
+    // 绑定绘制事件到叠加层（而不是底图）
+    overlayCanvas.addEventListener('mousedown', onCanvasDown);
+    overlayCanvas.addEventListener('mousemove', onCanvasMove);
+    overlayCanvas.addEventListener('mouseup', onCanvasUp);
+    overlayCanvas.addEventListener('mouseleave', onCanvasUp);
+    // 触摸事件（绑定到叠加层）
+    overlayCanvas.addEventListener('touchstart', onCanvasTouchDown, { passive: false });
+    overlayCanvas.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
+    overlayCanvas.addEventListener('touchend', onCanvasUp);
   }
 
   var _markClean = true;
   var _undoStack = [];
 
   function saveCanvasState() {
-    if (!_gradeCanvas) return;
-    _undoStack.push(_gradeCanvas.toDataURL());
+    if (!_gradeOverlayCanvas) return;
+    _undoStack.push(_gradeOverlayCanvas.toDataURL());
     if (_undoStack.length > 20) _undoStack.shift();
   }
 
   function getCanvasPos(e) {
-    var rect = _gradeCanvas.getBoundingClientRect();
+    var rect = _gradeOverlayCanvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) * (_gradeCanvas.width / rect.width),
-      y: (e.clientY - rect.top) * (_gradeCanvas.height / rect.height)
+      x: (e.clientX - rect.left) * (_gradeOverlayCanvas.width / rect.width),
+      y: (e.clientY - rect.top) * (_gradeOverlayCanvas.height / rect.height)
     };
   }
 
@@ -1931,9 +2062,9 @@
       var text = prompt('输入批注文字:');
       if (text && text.trim()) {
         saveCanvasState();
-        _gradeCtx.font = 'bold ' + Math.max(16, _drawLineWidth * 5) + 'px sans-serif';
-        _gradeCtx.fillStyle = _drawColor;
-        _gradeCtx.fillText(text, pos.x, pos.y);
+        _gradeOverlayCtx.font = 'bold ' + Math.max(16, _drawLineWidth * 5) + 'px sans-serif';
+        _gradeOverlayCtx.fillStyle = _drawColor;
+        _gradeOverlayCtx.fillText(text, pos.x, pos.y);
         _markClean = false;
       }
       return;
@@ -1976,15 +2107,32 @@
   }
 
   function drawLine(x1, y1, x2, y2) {
-    if (!_gradeCtx) return;
-    _gradeCtx.beginPath();
-    _gradeCtx.moveTo(x1, y1);
-    _gradeCtx.lineTo(x2, y2);
-    _gradeCtx.strokeStyle = _drawTool === 'eraser' ? '#ffffff' : _drawColor;
-    _gradeCtx.lineWidth = _drawTool === 'eraser' ? _drawLineWidth * 4 : _drawLineWidth;
-    _gradeCtx.lineCap = 'round';
-    _gradeCtx.lineJoin = 'round';
-    _gradeCtx.stroke();
+    if (!_gradeOverlayCtx) return;
+    
+    if (_drawTool === 'eraser') {
+      // 橡皮擦：使用 destination-out 只擦除叠加层上的内容，不影响底图
+      _gradeOverlayCtx.globalCompositeOperation = 'destination-out';
+      _gradeOverlayCtx.beginPath();
+      _gradeOverlayCtx.moveTo(x1, y1);
+      _gradeOverlayCtx.lineTo(x2, y2);
+      _gradeOverlayCtx.strokeStyle = 'rgba(0,0,0,1)';
+      _gradeOverlayCtx.lineWidth = _drawLineWidth * 4;
+      _gradeOverlayCtx.lineCap = 'round';
+      _gradeOverlayCtx.lineJoin = 'round';
+      _gradeOverlayCtx.stroke();
+      _gradeOverlayCtx.globalCompositeOperation = 'source-over'; // 恢复默认
+    } else {
+      // 画笔：正常绘制在叠加层上
+      _gradeOverlayCtx.globalCompositeOperation = 'source-over';
+      _gradeOverlayCtx.beginPath();
+      _gradeOverlayCtx.moveTo(x1, y1);
+      _gradeOverlayCtx.lineTo(x2, y2);
+      _gradeOverlayCtx.strokeStyle = _drawColor;
+      _gradeOverlayCtx.lineWidth = _drawLineWidth;
+      _gradeOverlayCtx.lineCap = 'round';
+      _gradeOverlayCtx.lineJoin = 'round';
+      _gradeOverlayCtx.stroke();
+    }
     _markClean = false;
   }
 
@@ -2003,9 +2151,9 @@
         }
       }
     });
-    // 更新画布光标
-    if (_gradeCanvas) {
-      _gradeCanvas.style.cursor = tool === 'text' ? 'text' : (tool === 'eraser' ? 'cell' : 'crosshair');
+    // 更新画布光标（使用叠加层）
+    if (_gradeOverlayCanvas) {
+      _gradeOverlayCanvas.style.cursor = tool === 'text' ? 'text' : (tool === 'eraser' ? 'cell' : 'crosshair');
     }
   };
 
@@ -2025,11 +2173,11 @@
   };
 
   window.clearCanvas = function() {
-    if (!_gradeCanvas || !_gradeImg) return;
+    if (!_gradeOverlayCanvas) return;
     if (!confirm('确定清除所有批注？')) return;
     saveCanvasState();
-    _gradeCtx.clearRect(0, 0, _gradeCanvas.width, _gradeCanvas.height);
-    _gradeCtx.drawImage(_gradeImg, 0, 0, _gradeCanvas.width, _gradeCanvas.height);
+    // 只清除叠加层（批注内容），底图保持不变
+    _gradeOverlayCtx.clearRect(0, 0, _gradeOverlayCanvas.width, _gradeOverlayCanvas.height);
     _markClean = true;
   };
 
@@ -2039,8 +2187,9 @@
     _gradingSubId = null;
     _gradeCanvas = null;
     _gradeCtx = null;
+    _gradeOverlayCanvas = null;
+    _gradeOverlayCtx = null;
     _gradeImg = null;
-    _undoStack = [];
   };
 
   window.selectGradeAndSave = function(grade) {
@@ -2060,24 +2209,24 @@
         btn.querySelector('span').style.color = '#666';
       }
     });
-    // 在画布上打上等级标记
-    if (_gradeCanvas && _gradeCtx) {
-      var w = _gradeCanvas.width;
-      var h = _gradeCanvas.height;
+    // 在叠加层上打上等级标记
+    if (_gradeOverlayCanvas && _gradeOverlayCtx) {
+      var w = _gradeOverlayCanvas.width;
+      var h = _gradeOverlayCanvas.height;
       // 画等级标签
-      _gradeCtx.save();
+      _gradeOverlayCtx.save();
       var tagW = 80 * _canvasScale, tagH = 36 * _canvasScale;
       var tagX = w - tagW - 10, tagY = 10;
-      _gradeCtx.fillStyle = GRADE_COLORS[grade] || '#666';
-      _gradeCtx.beginPath();
-      _gradeCtx.roundRect(tagX, tagY, tagW, tagH, 8 * _canvasScale);
-      _gradeCtx.fill();
-      _gradeCtx.fillStyle = 'white';
-      _gradeCtx.font = 'bold ' + (18 * _canvasScale) + 'px sans-serif';
-      _gradeCtx.textAlign = 'center';
-      _gradeCtx.textBaseline = 'middle';
-      _gradeCtx.fillText(grade, tagX + tagW / 2, tagY + tagH / 2);
-      _gradeCtx.restore();
+      _gradeOverlayCtx.fillStyle = GRADE_COLORS[grade] || '#666';
+      _gradeOverlayCtx.beginPath();
+      _gradeOverlayCtx.roundRect(tagX, tagY, tagW, tagH, 8 * _canvasScale);
+      _gradeOverlayCtx.fill();
+      _gradeOverlayCtx.fillStyle = 'white';
+      _gradeOverlayCtx.font = 'bold ' + (18 * _canvasScale) + 'px sans-serif';
+      _gradeOverlayCtx.textAlign = 'center';
+      _gradeOverlayCtx.textBaseline = 'middle';
+      _gradeOverlayCtx.fillText(grade, tagX + tagW / 2, tagY + tagH / 2);
+      _gradeOverlayCtx.restore();
     }
     // 自动保存
     _pendingGrade = grade;
@@ -2086,25 +2235,24 @@
   var _pendingGrade = null;
 
   window.saveGradingImage = function() {
-    if (!_gradingSubId || !_gradeCanvas) return;
+    if (!_gradingSubId || !_gradeCanvas || !_gradeOverlayCanvas) return;
     var sub = homeworkSubmissions.find(function(s) { return s.id === _gradingSubId; });
     if (!sub) return;
 
-    // 导出画布为图片（只导出批注层 - 不含底图）
-    // 先获取完整画布图像
-    var fullDataUrl = _gradeCanvas.toDataURL('image/png');
-
-    // 创建纯批注层
+    // 创建完整画布：底图 + 批注层
     var annotCanvas = document.createElement('canvas');
     annotCanvas.width = _gradeCanvas.width;
     annotCanvas.height = _gradeCanvas.height;
     var annotCtx = annotCanvas.getContext('2d');
+    
     // 绘制底图
     if (_gradeImg) {
       annotCtx.drawImage(_gradeImg, 0, 0, annotCanvas.width, annotCanvas.height);
     }
-    // 在上面叠加当前批注
-    annotCtx.drawImage(_gradeCanvas, 0, 0);
+    
+    // 在上面叠加批注层（透明叠加层的内容）
+    annotCtx.drawImage(_gradeOverlayCanvas, 0, 0);
+    
     var annotatedImage = annotCanvas.toDataURL('image/png');
 
     // 评分
@@ -2121,8 +2269,8 @@
     
     var student = getStudentById(sub.studentId);
 
-    // 压缩批阅后的图片到500KB（节省流量，批注仍清晰）
-    compressImage(annotatedImage, 500, function(compressedImage) {
+    // 压缩批阅后的图片到400KB（接收端会增强）
+    compressImage(annotatedImage, 400, function(compressedImage) {
       // 更新提交记录
       sub.graded = true;
       sub.grade = grade;
