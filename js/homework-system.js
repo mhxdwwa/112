@@ -242,6 +242,28 @@
   window.renderHomeworkPage = function() {
     var container = document.getElementById('homeworkContent');
     if (!container) return;
+    
+    // 检查是否是学生视图
+    var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+    
+    if (isStudentView) {
+      // 学生视图
+      var myStudentId = parseInt(currentUser.studentId);
+      var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+      
+      // 首次加载时从云端同步数据
+      if (!_cloudDataLoaded && myClassId) {
+        currentClassId = myClassId; // 临时设置以便 loadFromCloud 工作
+        loadFromCloud().then(function() {
+          renderStudentView(container, myStudentId, myClassId);
+        });
+      } else {
+        renderStudentView(container, myStudentId, myClassId);
+      }
+      return;
+    }
+    
+    // 教师视图
     var students = getCurrentStudents();
     if (students.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999;">' +
@@ -258,6 +280,172 @@
     } else {
       renderHomeworkPageContent(container, students);
     }
+  };
+
+  // ========== 学生视图渲染 ==========
+  function renderStudentView(container, studentId, classId) {
+    // 获取学生所在层级
+    var myTier = homeworkTiers[String(studentId)];
+    
+    var html = '<div style="text-align:center;padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;margin-bottom:20px;color:white;">';
+    html += '<div style="font-size:24px;margin-bottom:8px;">📝 我的作业</div>';
+    html += '<div style="font-size:14px;opacity:0.9;">' + esc(currentUser.studentName || '同学') + '</div>';
+    if (myTier) {
+      html += '<div style="margin-top:8px;padding:4px 12px;background:rgba(255,255,255,0.2);border-radius:20px;display:inline-block;font-size:12px;">' + TIER_NAMES[myTier] + '</div>';
+    } else {
+      html += '<div style="margin-top:8px;font-size:12px;opacity:0.7;">暂未分层</div>';
+    }
+    html += '</div>';
+    
+    if (!myTier) {
+      html += '<div class="hw-card" style="text-align:center;padding:40px 20px;">';
+      html += '<div style="font-size:48px;margin-bottom:15px;">📋</div>';
+      html += '<div style="color:#666;">老师还没有给你分配层级</div>';
+      html += '<div style="font-size:13px;color:#999;margin-top:8px;">请联系老师将你加入分层</div>';
+      html += '</div>';
+      container.innerHTML = html;
+      return;
+    }
+    
+    // 获取该层级的作业
+    var myHomework = homeworkList.find(function(h) { return h.tier === myTier; });
+    
+    if (!myHomework) {
+      html += '<div class="hw-card" style="text-align:center;padding:40px 20px;">';
+      html += '<div style="font-size:48px;margin-bottom:15px;">📭</div>';
+      html += '<div style="color:#666;">暂无作业</div>';
+      html += '<div style="font-size:13px;color:#999;margin-top:8px;">老师还没有布置作业</div>';
+      html += '</div>';
+      container.innerHTML = html;
+      return;
+    }
+    
+    // 显示作业
+    html += '<div class="hw-card">';
+    html += '<div class="hw-card-title">📖 当前作业</div>';
+    html += '<div style="font-size:18px;font-weight:700;color:#333;margin-bottom:10px;">' + esc(myHomework.title) + '</div>';
+    html += '<div style="font-size:12px;color:#888;margin-bottom:15px;">发布于 ' + new Date(myHomework.createdAt).toLocaleDateString() + '</div>';
+    if (myHomework.description) {
+      html += '<div style="padding:12px;background:#f8f9fa;border-radius:10px;margin-bottom:15px;font-size:14px;color:#555;">' + esc(myHomework.description) + '</div>';
+    }
+    if (myHomework.image) {
+      html += '<div style="margin-bottom:15px;"><img src="' + myHomework.image + '" style="width:100%;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);"></div>';
+    }
+    html += '</div>';
+    
+    // 检查是否已提交
+    var mySubmission = homeworkSubmissions.find(function(s) { 
+      return s.homeworkId === myHomework.id && s.studentId === studentId; 
+    });
+    
+    if (!mySubmission) {
+      // 未提交 - 显示提交按钮
+      html += '<div class="hw-card">';
+      html += '<div class="hw-card-title">📤 提交作业</div>';
+      html += '<div style="font-size:13px;color:#666;margin-bottom:15px;">完成后拍照上传</div>';
+      html += '<div id="studentSubmitArea">';
+      html += '<div id="studentImageUpload" onclick="document.getElementById(\'studentImageInput\').click()" style="border:2px dashed #d1d5db;border-radius:12px;padding:30px;text-align:center;cursor:pointer;margin-bottom:15px;">';
+      html += '<div style="color:#6b7280;font-size:14px;">📷 点击拍照或上传作业</div></div>';
+      html += '<input type="file" id="studentImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleStudentImageUpload(event)">';
+      html += '<button onclick="studentSubmitHomework(\'' + myHomework.id + '\',' + studentId + ')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;">提交作业</button>';
+      html += '</div>';
+      html += '</div>';
+    } else if (!mySubmission.graded) {
+      // 已提交但未批改
+      html += '<div class="hw-card" style="background:linear-gradient(135deg,#fff3cd,#ffe69c);border:2px solid #ffc107;">';
+      html += '<div style="display:flex;align-items:center;gap:12px;">';
+      html += '<div style="font-size:36px;">⏳</div>';
+      html += '<div>';
+      html += '<div style="font-weight:700;color:#856404;">已提交，等待批改</div>';
+      html += '<div style="font-size:13px;color:#856404;margin-top:4px;">提交时间: ' + new Date(mySubmission.submittedAt).toLocaleString() + '</div>';
+      html += '</div></div>';
+      if (mySubmission.image) {
+        html += '<div style="margin-top:15px;"><img src="' + mySubmission.image + '" style="width:100%;border-radius:10px;opacity:0.8;"></div>';
+      }
+      html += '</div>';
+    } else {
+      // 已批改
+      html += '<div class="hw-card" style="background:linear-gradient(135deg,#d4edda,#c3e6cb);border:2px solid #28a745;">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;">';
+      html += '<div style="display:flex;align-items:center;gap:12px;">';
+      html += '<div style="font-size:36px;">✅</div>';
+      html += '<div>';
+      html += '<div style="font-weight:700;color:#155724;">已批改</div>';
+      html += '<div style="font-size:13px;color:#155724;margin-top:4px;">批改时间: ' + new Date(mySubmission.gradedAt).toLocaleString() + '</div>';
+      html += '</div></div>';
+      html += '<div style="text-align:right;">';
+      html += '<div style="font-size:24px;font-weight:800;color:' + (GRADE_COLORS[mySubmission.grade] || '#666') + ';">' + mySubmission.grade + '</div>';
+      html += '<div style="font-size:14px;color:#f59e0b;font-weight:700;">+' + mySubmission.coins + ' 金币</div>';
+      html += '</div></div>';
+      if (mySubmission.comment) {
+        html += '<div style="padding:12px;background:rgba(255,255,255,0.7);border-radius:10px;margin-bottom:15px;font-size:14px;color:#333;">';
+        html += '<div style="font-weight:600;margin-bottom:4px;">老师评语:</div>';
+        html += esc(mySubmission.comment);
+        html += '</div>';
+      }
+      if (mySubmission.gradedImage) {
+        html += '<div style="margin-top:10px;"><div style="font-size:13px;font-weight:600;color:#155724;margin-bottom:8px;">批阅详情:</div>';
+        html += '<img src="' + mySubmission.gradedImage + '" style="width:100%;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.15);"></div>';
+      }
+      html += '</div>';
+    }
+    
+    container.innerHTML = html;
+  }
+
+  // 学生上传图片
+  var _studentUploadedImage = null;
+  window.handleStudentImageUpload = function(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      _studentUploadedImage = e.target.result;
+      var uploadArea = document.getElementById('studentImageUpload');
+      if (uploadArea) {
+        uploadArea.innerHTML = '<img src="' + _studentUploadedImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">';
+        uploadArea.style.borderStyle = 'solid';
+        uploadArea.style.padding = '10px';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 学生提交作业
+  window.studentSubmitHomework = function(homeworkId, studentId) {
+    if (!_studentUploadedImage) {
+      showNotification('请先上传作业图片', 'error');
+      return;
+    }
+    
+    var student = getStudentById(studentId);
+    var newSub = {
+      id: generateId(),
+      homeworkId: homeworkId,
+      studentId: studentId,
+      studentName: student ? student.name : (currentUser.studentName || ''),
+      image: _studentUploadedImage,
+      graded: false,
+      grade: '',
+      coins: 0,
+      comment: '',
+      gradedImage: null,
+      submittedAt: new Date().toISOString()
+    };
+    
+    homeworkSubmissions.push(newSub);
+    saveData();
+    _studentUploadedImage = null;
+    
+    // 同步到云端
+    syncSubmissionToCloud(newSub);
+    
+    showNotification('作业已提交，等待老师批改', 'success');
+    
+    // 刷新页面
+    setTimeout(function() {
+      window.renderHomeworkPage();
+    }, 500);
   };
 
   function renderHomeworkPageContent(container, students) {
@@ -1092,7 +1280,7 @@
       var oldCoins = sub._prevCoins || 0;
       var delta = coins - oldCoins;
       if (delta !== 0) {
-        changeStudentCoins(student, delta, '作业批改-' + grade, {
+        changeStudentCoins(student, delta, '作业批改', '评分' + grade, 0, null, {
           type: 'homework_grade', homeworkId: sub.homeworkId, grade: grade
         });
       }
@@ -1119,5 +1307,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v277');
+  console.log('[homework-system] 作业岛系统已加载 v278');
 })();
