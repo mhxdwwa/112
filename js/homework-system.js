@@ -1,7 +1,12 @@
-// ========== 作业岛系统 v275 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币
+// ========== 作业岛系统 v277 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步
 (function() {
   'use strict';
+
+  // ========== API 配置 ==========
+  var API_BASE = '/api/homework';
+  var _syncingToCloud = false;
+  var _cloudDataLoaded = false;
 
   // ========== 数据存储 ==========
   var homeworkTiers = JSON.parse(localStorage.getItem('homeworkTiers') || '{}');
@@ -38,6 +43,168 @@
 
   // ========== 工具函数 ==========
   function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+
+  // ========== API 调用函数 ==========
+  async function apiRequest(method, endpoint, data) {
+    try {
+      var opts = {
+        method: method,
+        headers: { 'Content-Type': 'application/json' }
+      };
+      if (data && method !== 'GET') {
+        opts.body = JSON.stringify(data);
+      }
+      var url = API_BASE + endpoint;
+      var res = await fetch(url, opts);
+      return await res.json();
+    } catch (err) {
+      console.warn('[homework API] Error:', err);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  // 同步分层数据到云端
+  async function syncTiersToCloud(updates) {
+    if (!currentClassId || _syncingToCloud) return;
+    _syncingToCloud = true;
+    try {
+      await apiRequest('POST', '/tiers', {
+        class_id: parseInt(currentClassId),
+        updates: updates
+      });
+    } catch (err) {
+      console.warn('[homework] syncTiersToCloud error:', err);
+    }
+    _syncingToCloud = false;
+  }
+
+  // 同步作业到云端
+  async function syncHomeworkToCloud(hw) {
+    if (!currentClassId || _syncingToCloud) return;
+    _syncingToCloud = true;
+    try {
+      await apiRequest('POST', '', {
+        id: hw.id,
+        class_id: parseInt(currentClassId),
+        tier: hw.tier,
+        title: hw.title,
+        description: hw.description || '',
+        image: hw.image
+      });
+    } catch (err) {
+      console.warn('[homework] syncHomeworkToCloud error:', err);
+    }
+    _syncingToCloud = false;
+  }
+
+  // 删除云端作业
+  async function deleteHomeworkFromCloud(hwId) {
+    if (!currentClassId) return;
+    try {
+      await apiRequest('DELETE', '?id=' + hwId);
+    } catch (err) {
+      console.warn('[homework] deleteHomeworkFromCloud error:', err);
+    }
+  }
+
+  // 同步提交到云端
+  async function syncSubmissionToCloud(sub) {
+    if (!currentClassId || _syncingToCloud) return;
+    _syncingToCloud = true;
+    try {
+      await apiRequest('POST', '/submissions', {
+        id: sub.id,
+        homework_id: sub.homeworkId,
+        student_id: parseInt(sub.studentId),
+        student_name: sub.studentName || '',
+        image: sub.image
+      });
+    } catch (err) {
+      console.warn('[homework] syncSubmissionToCloud error:', err);
+    }
+    _syncingToCloud = false;
+  }
+
+  // 同步批改到云端
+  async function syncGradeToCloud(subId, gradedImage, grade, coins, comment) {
+    if (!currentClassId) return;
+    try {
+      await apiRequest('PATCH', '/submissions?id=' + subId, {
+        gradedImage: gradedImage,
+        grade: grade,
+        coins_awarded: coins,
+        comment: comment || ''
+      });
+    } catch (err) {
+      console.warn('[homework] syncGradeToCloud error:', err);
+    }
+  }
+
+  // 从云端加载数据
+  async function loadFromCloud() {
+    if (!currentClassId || _cloudDataLoaded) return;
+    
+    try {
+      // 加载分层数据
+      var tiersRes = await apiRequest('GET', '/tiers?class_id=' + parseInt(currentClassId));
+      if (tiersRes.ok && tiersRes.data) {
+        homeworkTiers = {};
+        tiersRes.data.forEach(function(t) {
+          homeworkTiers[String(t.student_id)] = t.tier;
+        });
+        localStorage.setItem('homeworkTiers', JSON.stringify(homeworkTiers));
+      }
+
+      // 加载作业列表
+      var hwRes = await apiRequest('GET', '?class_id=' + parseInt(currentClassId));
+      if (hwRes.ok && hwRes.data) {
+        homeworkList = hwRes.data.map(function(h) {
+          return {
+            id: h.id,
+            title: h.title,
+            tier: h.tier,
+            description: h.description,
+            image: h.image,
+            createdAt: h.created_at
+          };
+        });
+        localStorage.setItem('homeworkList', JSON.stringify(homeworkList));
+      }
+
+      // 加载提交记录
+      if (homeworkList.length > 0) {
+        var allSubs = [];
+        for (var i = 0; i < homeworkList.length; i++) {
+          var subRes = await apiRequest('GET', '/submissions?homework_id=' + homeworkList[i].id);
+          if (subRes.ok && subRes.data) {
+            allSubs = allSubs.concat(subRes.data.map(function(s) {
+              return {
+                id: s.id,
+                homeworkId: s.homework_id,
+                studentId: s.student_id,
+                studentName: s.student_name,
+                image: s.image,
+                gradedImage: s.graded_image,
+                graded: !!s.graded_at,
+                grade: s.grade || '',
+                coins: s.coins_awarded || 0,
+                comment: s.comment || '',
+                submittedAt: s.submitted_at,
+                gradedAt: s.graded_at
+              };
+            }));
+          }
+        }
+        homeworkSubmissions = allSubs;
+        localStorage.setItem('homeworkSubmissions', JSON.stringify(homeworkSubmissions));
+      }
+
+      _cloudDataLoaded = true;
+      console.log('[homework] Cloud data loaded');
+    } catch (err) {
+      console.warn('[homework] loadFromCloud error:', err);
+    }
+  }
 
   function saveData() {
     localStorage.setItem('homeworkTiers', JSON.stringify(homeworkTiers));
@@ -82,6 +249,18 @@
         '<div style="font-size:16px;">请先在宠物管理中添加学生和班级</div></div>';
       return;
     }
+    
+    // 首次加载时从云端同步数据
+    if (!_cloudDataLoaded && currentClassId) {
+      loadFromCloud().then(function() {
+        renderHomeworkPageContent(container, students);
+      });
+    } else {
+      renderHomeworkPageContent(container, students);
+    }
+  };
+
+  function renderHomeworkPageContent(container, students) {
     var html = renderButtonBar();
     html += '<div id="hwPanelContent">';
     if (_currentTab === 'manage') {
@@ -95,7 +274,7 @@
     }
     html += '</div>';
     container.innerHTML = html;
-  };
+  }
 
   // ========== 按钮式功能栏 ==========
   function renderButtonBar() {
@@ -264,14 +443,17 @@
   };
 
   window.saveTierEdit = function(tier) {
+    var updates = [];
     var addCount = 0, removeCount = 0;
     Object.keys(_tierEditSelections).forEach(function(sid) {
       var action = _tierEditSelections[sid];
       if (action === 'add') {
         homeworkTiers[sid] = tier;
+        updates.push({ student_id: parseInt(sid), tier: tier, action: 'add' });
         addCount++;
       } else if (action === 'remove') {
         delete homeworkTiers[sid];
+        updates.push({ student_id: parseInt(sid), action: 'remove' });
         removeCount++;
       }
     });
@@ -284,6 +466,12 @@
     if (removeCount > 0) parts.push('移除 ' + removeCount + ' 人');
     if (parts.length > 0) msg += '：' + parts.join('，');
     showNotification(msg, 'success');
+    
+    // 同步到云端
+    if (updates.length > 0) {
+      syncTiersToCloud(updates);
+    }
+    
     renderHomeworkPage();
   };
 
@@ -395,13 +583,16 @@
       var oldHwId = existingHw.id;
       homeworkList = homeworkList.filter(function(h) { return h.id !== oldHwId; });
       homeworkSubmissions = homeworkSubmissions.filter(function(s) { return s.homeworkId !== oldHwId; });
+      // 删除云端旧作业
+      deleteHomeworkFromCloud(oldHwId);
     }
     
     // 发布新作业
-    homeworkList.push({
+    var newHw = {
       id: generateId(), title: title, tier: tier, description: desc,
       image: _currentHomeworkImage, createdAt: new Date().toISOString()
-    });
+    };
+    homeworkList.push(newHw);
     saveData();
     _currentHomeworkImage = null;
     
@@ -410,6 +601,10 @@
       msg += '（已替换该层级的旧作业）';
     }
     showNotification(msg, 'success');
+    
+    // 同步到云端
+    syncHomeworkToCloud(newHw);
+    
     renderHomeworkPage();
   };
 
@@ -419,6 +614,10 @@
     homeworkSubmissions = homeworkSubmissions.filter(function(s) { return s.homeworkId !== id; });
     saveData();
     showNotification('已删除作业', 'info');
+    
+    // 删除云端作业
+    deleteHomeworkFromCloud(id);
+    
     renderHomeworkPage();
   };
 
@@ -545,14 +744,21 @@
 
   window.submitHomework = function() {
     if (!_currentSubmitImage) { showNotification('请先上传作业图片', 'error'); return; }
-    homeworkSubmissions.push({
+    var student = getStudentById(_currentSubmitStudentId);
+    var newSub = {
       id: generateId(), homeworkId: _currentSubmitHomeworkId, studentId: _currentSubmitStudentId,
+      studentName: student ? student.name : '',
       image: _currentSubmitImage, graded: false, grade: '', coins: 0, comment: '',
       gradedImage: null, submittedAt: new Date().toISOString()
-    });
+    };
+    homeworkSubmissions.push(newSub);
     saveData();
     closeModal();
     showNotification('作业已提交', 'success');
+    
+    // 同步到云端
+    syncSubmissionToCloud(newSub);
+    
     loadHomeworkSubmissions();
   };
 
@@ -896,6 +1102,9 @@
     saveData();
     _pendingGrade = null;
 
+    // 同步到云端
+    syncGradeToCloud(sub.id, annotatedImage, grade, coins, sub.comment || '');
+
     // 关闭画布
     window.closeGradingCanvas();
     showNotification('已批改: ' + grade + '，+' + coins + ' 金币', 'success');
@@ -910,5 +1119,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v275');
+  console.log('[homework-system] 作业岛系统已加载 v277');
 })();
