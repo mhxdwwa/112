@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v291 ==========
+// ========== 作业岛系统 v311 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v305';
+  var HW_DATA_VERSION = 'v311';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -285,6 +285,7 @@
   var _gradeTouches = [];
   var _gradeInitialPinchDistance = 0;
   var _gradeInitialZoom = 1;
+  var _gradeTouchActive = false; // 标记触摸活跃（防止合成鼠标事件干扰）
 
   // 评分等级 → 金币 (新标准)
   var GRADE_COINS = { 'A+': 70, 'A': 50, 'B+': 30, 'B': 20, 'C': 10 };
@@ -1136,6 +1137,7 @@
   var _stuInitialPinchDistance = 0;
   var _stuInitialZoom = 1;
   var _studentUploadedImage = null; // 兼容：保留旧变量
+  var _stuTouchActive = false; // 标记触摸是否活跃（防止合成鼠标事件干扰）
 
   // 带重试的画布初始化（移动端DOM渲染可能较慢）
   function initStudentCanvasWithRetry(imageDataUrl, retryCount) {
@@ -1224,7 +1226,8 @@
   }
 
   function onStuCanvasDown(e) {
-    if (_stuDrawTool === 'move') return; // 移动模式：不拦截鼠标
+    if (_stuDrawTool === 'move') return;
+    if (_stuTouchActive) return; // 触摸活跃时忽略鼠标事件（防止合成事件画线）
     _stuIsDrawing = true;
     var pos = getStuCanvasPos(e);
     _stuLastX = pos.x;
@@ -1232,7 +1235,8 @@
   }
 
   function onStuCanvasMove(e) {
-    if (_stuDrawTool === 'move' || !_stuIsDrawing) return; // 移动模式：不拦截鼠标
+    if (_stuDrawTool === 'move' || !_stuIsDrawing) return;
+    if (_stuTouchActive) return; // 触摸活跃时忽略鼠标事件
     var pos = getStuCanvasPos(e);
     drawStuLine(_stuLastX, _stuLastY, pos.x, pos.y);
     _stuLastX = pos.x;
@@ -1247,6 +1251,7 @@
   function onStuCanvasTouchStart(e) {
     if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
+    _stuTouchActive = true; // 标记触摸活跃
     _stuTouches = Array.from(e.touches);
     
     if (_stuTouches.length === 2) {
@@ -1255,10 +1260,12 @@
       _stuInitialZoom = _stuZoom;
       _stuIsDrawing = false; // 双指时不绘制
     } else if (_stuTouches.length === 1) {
-      // 单指 - 开始绘制
+      // 单指 - 直接记录坐标（不转换MouseEvent）
       var touch = _stuTouches[0];
-      var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
-      onStuCanvasDown(mouseEvent);
+      var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      _stuIsDrawing = true;
+      _stuLastX = pos.x;
+      _stuLastY = pos.y;
     }
   }
 
@@ -1279,10 +1286,21 @@
         applyStudentZoom(newZoom);
       }
     } else if (touches.length === 1 && _stuIsDrawing) {
-      // 单指绘制
+      // 单指绘制 - 直接处理坐标
       var touch = touches[0];
-      var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
-      onStuCanvasMove(mouseEvent);
+      var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      // 防止跳跃画线
+      var dx = pos.x - _stuLastX, dy = pos.y - _stuLastY;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      var maxJump = _stuOverlayCanvas.width * 0.3;
+      if (dist > maxJump) {
+        _stuLastX = pos.x;
+        _stuLastY = pos.y;
+        return;
+      }
+      drawStuLine(_stuLastX, _stuLastY, pos.x, pos.y);
+      _stuLastX = pos.x;
+      _stuLastY = pos.y;
     }
   }
 
@@ -1290,7 +1308,11 @@
     if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
     if (e.touches.length === 0) {
       _stuIsDrawing = false;
+      _stuLastX = -1; // 重置，防止下次从旧位置画线
+      _stuLastY = -1;
       _stuTouches = [];
+      // 延迟重置触摸标记（等待合成鼠标事件过去）
+      setTimeout(function() { _stuTouchActive = false; }, 300);
     } else if (e.touches.length === 1) {
       // 从双指变为单指，重新开始绘制
       _stuIsDrawing = true;
@@ -1308,7 +1330,7 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  // 应用缩放（从原图重绘，避免模糊）
+  // 应用缩放（使用CSS尺寸变化，不改变canvas buffer，防止丢失笔迹）
   function applyStudentZoom(newZoom) {
     if (!_stuCanvas || !_stuImg || !_stuCtx || !_stuOverlayCanvas) return;
     
@@ -1316,28 +1338,13 @@
     var newWidth = Math.round(_stuBaseWidth * _stuZoom);
     var newHeight = Math.round(_stuBaseHeight * _stuZoom);
     
-    // 保存叠加层当前内容（手写内容）
-    var tempOverlayCanvas = document.createElement('canvas');
-    tempOverlayCanvas.width = _stuOverlayCanvas.width;
-    tempOverlayCanvas.height = _stuOverlayCanvas.height;
-    var tempOverlayCtx = tempOverlayCanvas.getContext('2d');
-    tempOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0);
-    
-    // 调整底图画布尺寸（buffer + CSS）
-    _stuCanvas.width = newWidth;
-    _stuCanvas.height = newHeight;
+    // 只改变CSS显示尺寸，不改变canvas.width/height（避免清空画布丢失笔迹）
     _stuCanvas.style.width = newWidth + 'px';
     _stuCanvas.style.height = newHeight + 'px';
-    
-    // 从原始图片重绘底图（避免多次缩放导致的模糊）
-    _stuCtx.drawImage(_stuImg, 0, 0, newWidth, newHeight);
-    
-    // 调整叠加层尺寸并重绘手写内容
-    _stuOverlayCanvas.width = newWidth;
-    _stuOverlayCanvas.height = newHeight;
     _stuOverlayCanvas.style.width = newWidth + 'px';
     _stuOverlayCanvas.style.height = newHeight + 'px';
-    _stuOverlayCtx.drawImage(tempOverlayCanvas, 0, 0, newWidth, newHeight);
+    
+    // 更新叠加层内部坐标映射（getStuCanvasPos使用getBoundingClientRect，自动适配）
   }
 
   // 按钮缩放
@@ -1363,7 +1370,7 @@
       _stuOverlayCtx.moveTo(x1, y1);
       _stuOverlayCtx.lineTo(x2, y2);
       _stuOverlayCtx.strokeStyle = 'rgba(0,0,0,1)';
-      _stuOverlayCtx.lineWidth = _stuDrawLineWidth * 4 * _stuZoom;
+      _stuOverlayCtx.lineWidth = _stuDrawLineWidth * 4;
       _stuOverlayCtx.lineCap = 'round';
       _stuOverlayCtx.lineJoin = 'round';
       _stuOverlayCtx.stroke();
@@ -1375,7 +1382,7 @@
       _stuOverlayCtx.moveTo(x1, y1);
       _stuOverlayCtx.lineTo(x2, y2);
       _stuOverlayCtx.strokeStyle = _stuDrawColor;
-      _stuOverlayCtx.lineWidth = _stuDrawLineWidth * _stuZoom;
+      _stuOverlayCtx.lineWidth = _stuDrawLineWidth;
       _stuOverlayCtx.lineCap = 'round';
       _stuOverlayCtx.lineJoin = 'round';
       _stuOverlayCtx.stroke();
@@ -1460,6 +1467,7 @@
   var _stuFsHomeworkId = '';
   var _stuFsStudentId = 0;
   var _stuFsRotated = false; // true = image rotated 90° CW to fill portrait screen
+  var _stuFsTouchActive = false; // 标记触摸活跃（防止合成鼠标事件干扰）
 
   window.enterStudentFullscreen = function() {
     if (_stuFullscreenActive || !_stuImg) return;
@@ -1670,12 +1678,14 @@
 
   function fsDown(e) {
     if (_stuFsDrawTool === 'move') return;
+    if (_stuFsTouchActive) return; // 触摸活跃时忽略鼠标事件
     _stuFsDrawing = true;
     var p = fsGetPos(e);
     _stuFsLastX = p.x; _stuFsLastY = p.y;
   }
   function fsMove(e) {
     if (_stuFsDrawTool === 'move' || !_stuFsDrawing) return;
+    if (_stuFsTouchActive) return; // 触摸活跃时忽略鼠标事件
     var p = fsGetPos(e);
     // 防止从旧位置画长线：如果距离过大，重置起点
     var dx = p.x - _stuFsLastX, dy = p.y - _stuFsLastY;
@@ -1689,6 +1699,7 @@
     _stuFsLastX = p.x; _stuFsLastY = p.y;
   }
   function fsUp() { 
+    if (_stuFsTouchActive) return; // 触摸活跃时忽略鼠标事件
     _stuFsDrawing = false;
     _stuFsLastX = -1; _stuFsLastY = -1; // 重置，防止下次触摸从旧位置画线
   }
@@ -1696,6 +1707,7 @@
   function fsTouchStart(e) {
     if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸，让容器原生滚动
     e.preventDefault();
+    _stuFsTouchActive = true; // 标记触摸活跃
     var ts = Array.from(e.touches);
     if (ts.length === 2) {
       _stuFsPinchDist = Math.sqrt(Math.pow(ts[0].clientX-ts[1].clientX,2)+Math.pow(ts[0].clientY-ts[1].clientY,2));
@@ -1734,6 +1746,8 @@
     if (e.touches.length === 0) { 
       _stuFsDrawing = false;
       _stuFsLastX = -1; _stuFsLastY = -1; // 重置，防止下次触摸从旧位置画线
+      // 延迟重置触摸标记（等待合成鼠标事件过去）
+      setTimeout(function() { _stuFsTouchActive = false; }, 300);
     }
     else if (e.touches.length === 1) {
       _stuFsDrawing = true;
@@ -2840,7 +2854,8 @@
   }
 
   function onCanvasDown(e) {
-    if (_drawTool === 'move') return; // 移动模式：不拦截鼠标
+    if (_drawTool === 'move') return;
+    if (_gradeTouchActive) return; // 触摸活跃时忽略鼠标事件
     if (_drawTool === 'text') {
       var pos = getCanvasPos(e);
       var text = prompt('输入批注文字:');
@@ -2861,7 +2876,8 @@
   }
 
   function onCanvasMove(e) {
-    if (_drawTool === 'move' || !_isDrawing) return; // 移动模式：不拦截鼠标
+    if (_drawTool === 'move' || !_isDrawing) return;
+    if (_gradeTouchActive) return; // 触摸活跃时忽略鼠标事件
     var pos = getCanvasPos(e);
     drawLine(_lastX, _lastY, pos.x, pos.y);
     _lastX = pos.x;
@@ -2869,27 +2885,15 @@
   }
 
   function onCanvasUp() {
+    if (_gradeTouchActive) return; // 触摸活跃时忽略鼠标事件
     _isDrawing = false;
   }
 
-  function onCanvasTouchDown(e) {
-    e.preventDefault();
-    var touch = e.touches[0];
-    var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
-    onCanvasDown(mouseEvent);
-  }
-
-  function onCanvasTouchMove(e) {
-    e.preventDefault();
-    var touch = e.touches[0];
-    var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
-    onCanvasMove(mouseEvent);
-  }
-
-  // 批阅画布触摸事件 - 支持双指缩放
+  // 批阅画布触摸事件 - 支持双指缩放（直接处理坐标，不转换MouseEvent）
   function onGradingTouchStart(e) {
     if (_drawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
+    _gradeTouchActive = true; // 标记触摸活跃
     _gradeTouches = Array.from(e.touches);
     
     if (_gradeTouches.length === 2) {
@@ -2898,10 +2902,13 @@
       _gradeInitialZoom = _gradeZoom;
       _isDrawing = false; // 双指时不绘制
     } else if (_gradeTouches.length === 1) {
-      // 单指 - 开始绘制
+      // 单指 - 直接记录坐标
       var touch = _gradeTouches[0];
-      var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
-      onCanvasDown(mouseEvent);
+      var pos = getCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      _isDrawing = true;
+      saveCanvasState();
+      _lastX = pos.x;
+      _lastY = pos.y;
     }
   }
 
@@ -2921,10 +2928,21 @@
         applyGradingZoom(newZoom);
       }
     } else if (touches.length === 1 && _isDrawing) {
-      // 单指绘制
+      // 单指绘制 - 直接处理坐标
       var touch = touches[0];
-      var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
-      onCanvasMove(mouseEvent);
+      var pos = getCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      // 防止跳跃画线
+      var dx = pos.x - _lastX, dy = pos.y - _lastY;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      var maxJump = _gradeOverlayCanvas.width * 0.3;
+      if (dist > maxJump) {
+        _lastX = pos.x;
+        _lastY = pos.y;
+        return;
+      }
+      drawLine(_lastX, _lastY, pos.x, pos.y);
+      _lastX = pos.x;
+      _lastY = pos.y;
     }
   }
 
@@ -2932,7 +2950,11 @@
     if (_drawTool === 'move') return; // 移动模式：不拦截触摸
     if (e.touches.length === 0) {
       _isDrawing = false;
+      _lastX = -1; // 重置，防止下次从旧位置画线
+      _lastY = -1;
       _gradeTouches = [];
+      // 延迟重置触摸标记（等待合成鼠标事件过去）
+      setTimeout(function() { _gradeTouchActive = false; }, 300);
     } else if (e.touches.length === 1) {
       // 从双指变为单指，重新开始绘制
       _isDrawing = true;
@@ -2949,7 +2971,7 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  // 应用批阅画布缩放
+  // 应用批阅画布缩放（使用CSS尺寸变化，不改变canvas buffer，防止丢失笔迹）
   function applyGradingZoom(newZoom) {
     if (!_gradeCanvas || !_gradeImg || !_gradeCtx || !_gradeOverlayCanvas) return;
     
@@ -2957,33 +2979,11 @@
     var newWidth = Math.round(_gradeBaseWidth * _gradeZoom);
     var newHeight = Math.round(_gradeBaseHeight * _gradeZoom);
     
-    // 保存底图当前内容
-    var tempBaseCanvas = document.createElement('canvas');
-    tempBaseCanvas.width = _gradeCanvas.width;
-    tempBaseCanvas.height = _gradeCanvas.height;
-    var tempBaseCtx = tempBaseCanvas.getContext('2d');
-    tempBaseCtx.drawImage(_gradeCanvas, 0, 0);
-    
-    // 保存叠加层当前内容
-    var tempOverlayCanvas = document.createElement('canvas');
-    tempOverlayCanvas.width = _gradeOverlayCanvas.width;
-    tempOverlayCanvas.height = _gradeOverlayCanvas.height;
-    var tempOverlayCtx = tempOverlayCanvas.getContext('2d');
-    tempOverlayCtx.drawImage(_gradeOverlayCanvas, 0, 0);
-    
-    // 调整两个画布尺寸（buffer + CSS）
-    _gradeCanvas.width = newWidth;
-    _gradeCanvas.height = newHeight;
+    // 只改变CSS显示尺寸，不改变canvas.width/height（避免清空画布丢失笔迹）
     _gradeCanvas.style.width = newWidth + 'px';
     _gradeCanvas.style.height = newHeight + 'px';
-    _gradeOverlayCanvas.width = newWidth;
-    _gradeOverlayCanvas.height = newHeight;
     _gradeOverlayCanvas.style.width = newWidth + 'px';
     _gradeOverlayCanvas.style.height = newHeight + 'px';
-    
-    // 重新绘制（缩放图像）
-    _gradeCtx.drawImage(tempBaseCanvas, 0, 0, newWidth, newHeight);
-    _gradeOverlayCtx.drawImage(tempOverlayCanvas, 0, 0, newWidth, newHeight);
   }
 
   // 按钮缩放
