@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v288 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目800KB/答案500KB) + 实时推送(师生双端) + 学生隐私保护 + 学生直接在题目上书写 + 自定义金币 + 分层数据即时加载
+// ========== 作业岛系统 v289 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目1000KB/答案500KB) + 实时推送(师生双端) + 学生隐私保护 + 学生直接在题目上书写(移动端重试机制) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
 
@@ -792,12 +792,12 @@
       html += '</div>';
       html += '<button onclick="studentSubmitHomework(\'' + myHomework.id + '\',' + studentId + ')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;margin-top:15px;">📤 提交作业</button>';
       html += '</div>';
-      // 延迟初始化画布（等 DOM 渲染完成）
+      // 延迟初始化画布（等 DOM 渲染完成）- 移动端需要更长时间
       setTimeout(function() {
         if (myHomework.image) {
-          initStudentCanvas(myHomework.image);
+          initStudentCanvasWithRetry(myHomework.image, 0);
         }
-      }, 200);
+      }, 300);
     } else if (!mySubmission.graded) {
       // 已提交但未批改
       html += '<div class="hw-card" style="background:linear-gradient(135deg,#fff3cd,#ffe69c);border:2px solid #ffc107;">';
@@ -877,6 +877,24 @@
   var _stuInitialPinchDistance = 0;
   var _stuInitialZoom = 1;
   var _studentUploadedImage = null; // 兼容：保留旧变量
+
+  // 带重试的画布初始化（移动端DOM渲染可能较慢）
+  function initStudentCanvasWithRetry(imageDataUrl, retryCount) {
+    var canvas = document.getElementById('studentCanvas');
+    if (!canvas) {
+      if (retryCount < 10) {
+        // 最多重试10次，每次间隔200ms
+        setTimeout(function() {
+          initStudentCanvasWithRetry(imageDataUrl, retryCount + 1);
+        }, 200);
+      } else {
+        console.warn('[homework] 画布初始化失败：找不到 studentCanvas 元素');
+      }
+      return;
+    }
+    // 找到画布，开始初始化
+    initStudentCanvas(imageDataUrl);
+  }
 
   // 初始化学生画布
   function initStudentCanvas(imageDataUrl) {
@@ -1555,8 +1573,8 @@
       if (upload) {
         upload.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
-      // 压缩图片到800KB（保证题目图片清晰可读）
-      compressImage(e.target.result, 800, function(compressed) {
+      // 压缩图片到1000KB（题目图片，保证文字清晰可读）
+      compressImage(e.target.result, 1000, function(compressed) {
         _currentHomeworkImage = compressed;
         if (upload) {
           upload.innerHTML = '<img src="' + _currentHomeworkImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
