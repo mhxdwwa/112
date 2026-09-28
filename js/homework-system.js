@@ -314,9 +314,12 @@
 
     html += '<div class="hw-form-group"><label class="hw-form-label">分发层级</label>';
     html += '<select id="hwTier" style="width:100%;padding:12px;border:2px solid #e9ecef;border-radius:10px;font-size:14px;box-sizing:border-box;">';
-    html += '<option value="A">A层 - 基础组</option>';
-    html += '<option value="B">B层 - 提高组</option>';
-    html += '<option value="C">C层 - 拓展组</option>';
+    ['A', 'B', 'C'].forEach(function(t) {
+      var existing = homeworkList.find(function(h) { return h.tier === t; });
+      var label = TIER_NAMES[t];
+      if (existing) label += ' (已有作业，发布将替换)';
+      html += '<option value="' + t + '">' + label + '</option>';
+    });
     html += '</select></div>';
 
     html += '<div class="hw-form-group"><label class="hw-form-label">作业图片</label>';
@@ -384,13 +387,29 @@
     var desc = document.getElementById('hwDesc').value.trim();
     if (!title) { showNotification('请输入作业标题', 'error'); return; }
     if (!_currentHomeworkImage) { showNotification('请上传作业图片', 'error'); return; }
+    
+    // 查找该层级是否已有作业
+    var existingHw = homeworkList.find(function(h) { return h.tier === tier; });
+    if (existingHw) {
+      // 删除旧作业及其所有提交记录
+      var oldHwId = existingHw.id;
+      homeworkList = homeworkList.filter(function(h) { return h.id !== oldHwId; });
+      homeworkSubmissions = homeworkSubmissions.filter(function(s) { return s.homeworkId !== oldHwId; });
+    }
+    
+    // 发布新作业
     homeworkList.push({
       id: generateId(), title: title, tier: tier, description: desc,
       image: _currentHomeworkImage, createdAt: new Date().toISOString()
     });
     saveData();
     _currentHomeworkImage = null;
-    showNotification('作业已发布', 'success');
+    
+    var msg = '作业已发布';
+    if (existingHw) {
+      msg += '（已替换该层级的旧作业）';
+    }
+    showNotification(msg, 'success');
     renderHomeworkPage();
   };
 
