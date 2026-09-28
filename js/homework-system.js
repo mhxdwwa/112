@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v284 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 学生画布书写 + 自定义金币
+// ========== 作业岛系统 v285 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 学生画布书写(支持缩放) + 自定义金币
 (function() {
   'use strict';
 
@@ -731,7 +731,7 @@
       html += '<input type="file" id="studentImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleStudentImageUpload(event)">';
       // 画布编辑区域（上传后显示）
       html += '<div id="studentCanvasEditor" style="display:none;margin-bottom:15px;">';
-      html += '<div style="font-size:13px;font-weight:600;color:#555;margin-bottom:8px;">✏️ 在图片上书写答案</div>';
+      html += '<div style="font-size:13px;font-weight:600;color:#555;margin-bottom:8px;">✏️ 在图片上书写答案（支持双指缩放）</div>';
       html += '<div id="studentCanvasToolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px;">';
       html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="padding:6px 12px;background:#667eea;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✏️ 画笔</button>';
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="padding:6px 12px;background:#444;color:#ccc;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🧹 橡皮</button>';
@@ -745,9 +745,18 @@
       html += '<select id="stuDrawLineWidth" onchange="setStudentDrawLineWidth(this.value)" style="padding:4px 8px;background:white;border:1px solid #ddd;border-radius:6px;font-size:11px;">';
       html += '<option value="2">细</option><option value="3" selected>中</option><option value="5">粗</option>';
       html += '</select>';
+      html += '<span style="width:1px;height:20px;background:#ddd;margin:0 4px;"></span>';
+      // 缩放按钮
+      html += '<button onclick="zoomStudentCanvas(1.2)" style="padding:6px 10px;background:#3b82f6;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🔍+</button>';
+      html += '<button onclick="zoomStudentCanvas(0.8)" style="padding:6px 10px;background:#3b82f6;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🔍-</button>';
+      html += '<button onclick="resetStudentCanvasZoom()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">↺</button>';
       html += '<button onclick="clearStudentCanvas()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🗑 清除</button>';
       html += '</div>';
-      html += '<canvas id="studentCanvas" style="width:100%;border-radius:8px;border:2px solid #e9ecef;cursor:crosshair;touch-action:none;"></canvas>';
+      // 画布容器（支持滚动和缩放）
+      html += '<div id="studentCanvasContainer" style="width:100%;overflow:auto;border-radius:8px;border:2px solid #e9ecef;background:#f8f9fa;-webkit-overflow-scrolling:touch;">';
+      html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;"></canvas>';
+      html += '</div>';
+      html += '<div style="font-size:11px;color:#888;margin-top:5px;text-align:center;">💡 双指捏合可缩放图片，拖动可移动查看</div>';
       html += '</div>';
       html += '<button onclick="studentSubmitHomework(\'' + myHomework.id + '\',' + studentId + ')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;">提交作业</button>';
       html += '</div>';
@@ -824,6 +833,12 @@
   var _stuIsDrawing = false;
   var _stuLastX = 0;
   var _stuLastY = 0;
+  var _stuZoom = 1;
+  var _stuBaseWidth = 0;
+  var _stuBaseHeight = 0;
+  var _stuTouches = []; // 用于双指缩放
+  var _stuInitialPinchDistance = 0;
+  var _stuInitialZoom = 1;
 
   // 初始化学生画布
   function initStudentCanvas(imageDataUrl) {
@@ -835,13 +850,19 @@
     var img = new Image();
     img.onload = function() {
       _stuImg = img;
-      // 计算画布尺寸 - 适应容器宽度
-      var container = canvas.parentElement;
+      // 计算基础尺寸 - 适应屏幕宽度
+      var container = document.getElementById('studentCanvasContainer');
       var maxW = container ? container.clientWidth - 4 : Math.min(window.innerWidth - 60, 600);
       var scale = maxW / img.width;
       if (scale > 1) scale = 1;
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
+      _stuBaseWidth = img.width * scale;
+      _stuBaseHeight = img.height * scale;
+      _stuZoom = 1;
+      
+      // 设置画布尺寸
+      canvas.width = _stuBaseWidth;
+      canvas.height = _stuBaseHeight;
+      
       // 绘制底图
       _stuCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
       
@@ -854,9 +875,9 @@
       canvas.addEventListener('mousemove', onStuCanvasMove);
       canvas.addEventListener('mouseup', onStuCanvasUp);
       canvas.addEventListener('mouseleave', onStuCanvasUp);
-      canvas.addEventListener('touchstart', onStuCanvasTouchDown, { passive: false });
+      canvas.addEventListener('touchstart', onStuCanvasTouchStart, { passive: false });
       canvas.addEventListener('touchmove', onStuCanvasTouchMove, { passive: false });
-      canvas.addEventListener('touchend', onStuCanvasUp);
+      canvas.addEventListener('touchend', onStuCanvasTouchEnd);
     };
     img.src = imageDataUrl;
   }
@@ -888,19 +909,103 @@
     _stuIsDrawing = false;
   }
 
-  function onStuCanvasTouchDown(e) {
+  // 触摸开始 - 支持双指缩放
+  function onStuCanvasTouchStart(e) {
     e.preventDefault();
-    var touch = e.touches[0];
-    var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
-    onStuCanvasDown(mouseEvent);
+    _stuTouches = Array.from(e.touches);
+    
+    if (_stuTouches.length === 2) {
+      // 双指 - 记录初始距离用于缩放
+      _stuInitialPinchDistance = getTouchDistance(_stuTouches[0], _stuTouches[1]);
+      _stuInitialZoom = _stuZoom;
+      _stuIsDrawing = false; // 双指时不绘制
+    } else if (_stuTouches.length === 1) {
+      // 单指 - 开始绘制
+      var touch = _stuTouches[0];
+      var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
+      onStuCanvasDown(mouseEvent);
+    }
   }
 
+  // 触摸移动 - 支持双指缩放
   function onStuCanvasTouchMove(e) {
     e.preventDefault();
-    var touch = e.touches[0];
-    var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
-    onStuCanvasMove(mouseEvent);
+    var touches = Array.from(e.touches);
+    
+    if (touches.length === 2) {
+      // 双指缩放
+      var currentDistance = getTouchDistance(touches[0], touches[1]);
+      var zoomRatio = currentDistance / _stuInitialPinchDistance;
+      var newZoom = _stuInitialZoom * zoomRatio;
+      
+      // 限制缩放范围 0.5x - 4x
+      if (newZoom >= 0.5 && newZoom <= 4) {
+        applyStudentZoom(newZoom);
+      }
+    } else if (touches.length === 1 && _stuIsDrawing) {
+      // 单指绘制
+      var touch = touches[0];
+      var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
+      onStuCanvasMove(mouseEvent);
+    }
   }
+
+  function onStuCanvasTouchEnd(e) {
+    if (e.touches.length === 0) {
+      _stuIsDrawing = false;
+      _stuTouches = [];
+    } else if (e.touches.length === 1) {
+      // 从双指变为单指，重新开始绘制
+      _stuIsDrawing = true;
+      var touch = e.touches[0];
+      var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      _stuLastX = pos.x;
+      _stuLastY = pos.y;
+    }
+  }
+
+  // 计算两个触摸点之间的距离
+  function getTouchDistance(t1, t2) {
+    var dx = t1.clientX - t2.clientX;
+    var dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // 应用缩放
+  function applyStudentZoom(newZoom) {
+    if (!_stuCanvas || !_stuImg || !_stuCtx) return;
+    
+    _stuZoom = newZoom;
+    var newWidth = Math.round(_stuBaseWidth * _stuZoom);
+    var newHeight = Math.round(_stuBaseHeight * _stuZoom);
+    
+    // 保存当前图像
+    var tempCanvas = document.createElement('canvas');
+    tempCanvas.width = _stuCanvas.width;
+    tempCanvas.height = _stuCanvas.height;
+    var tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(_stuCanvas, 0, 0);
+    
+    // 调整画布尺寸
+    _stuCanvas.width = newWidth;
+    _stuCanvas.height = newHeight;
+    
+    // 重新绘制（缩放图像）
+    _stuCtx.drawImage(tempCanvas, 0, 0, newWidth, newHeight);
+  }
+
+  // 按钮缩放
+  window.zoomStudentCanvas = function(factor) {
+    var newZoom = _stuZoom * factor;
+    if (newZoom >= 0.5 && newZoom <= 4) {
+      applyStudentZoom(newZoom);
+    }
+  };
+
+  // 重置缩放
+  window.resetStudentCanvasZoom = function() {
+    applyStudentZoom(1);
+  };
 
   function drawStuLine(x1, y1, x2, y2) {
     if (!_stuCtx) return;
@@ -908,7 +1013,9 @@
     _stuCtx.moveTo(x1, y1);
     _stuCtx.lineTo(x2, y2);
     _stuCtx.strokeStyle = _stuDrawTool === 'eraser' ? '#ffffff' : _stuDrawColor;
-    _stuCtx.lineWidth = _stuDrawTool === 'eraser' ? _stuDrawLineWidth * 4 : _stuDrawLineWidth;
+    // 根据缩放调整线宽
+    var lineWidth = (_stuDrawTool === 'eraser' ? _stuDrawLineWidth * 4 : _stuDrawLineWidth) * _stuZoom;
+    _stuCtx.lineWidth = lineWidth;
     _stuCtx.lineCap = 'round';
     _stuCtx.lineJoin = 'round';
     _stuCtx.stroke();
@@ -957,7 +1064,24 @@
     _stuCtx.drawImage(_stuImg, 0, 0, _stuCanvas.width, _stuCanvas.height);
   };
 
-  // 导出学生画布图像（包含底图+书写痕迹）
+  // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
+  function exportStudentCanvasImage() {
+    if (!_stuCanvas || !_stuImg) return _studentUploadedImage;
+    
+    // 创建原始尺寸的画布
+    var exportCanvas = document.createElement('canvas');
+    exportCanvas.width = _stuImg.width;
+    exportCanvas.height = _stuImg.height;
+    var exportCtx = exportCanvas.getContext('2d');
+    
+    // 绘制原始底图
+    exportCtx.drawImage(_stuImg, 0, 0);
+    
+    // 将当前画布内容缩放到原始尺寸并叠加
+    exportCtx.drawImage(_stuCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+    
+    return exportCanvas.toDataURL('image/jpeg', 0.85);
+  }
   function exportStudentCanvasImage() {
     if (!_stuCanvas) return _studentUploadedImage;
     return _stuCanvas.toDataURL('image/jpeg', 0.85);
@@ -1937,5 +2061,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v284 - 学生画布书写 + 教师自定义金币');
+  console.log('[homework-system] 作业岛系统已加载 v285 - 学生画布支持双指缩放');
 })();
