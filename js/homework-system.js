@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v302';
+  var HW_DATA_VERSION = 'v303';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
