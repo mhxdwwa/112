@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v285 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 学生画布书写(支持缩放) + 自定义金币
+// ========== 作业岛系统 v286 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 学生直接在题目上书写(无需上传) + 自定义金币
 (function() {
   'use strict';
 
@@ -710,9 +710,6 @@
     if (myHomework.description) {
       html += '<div style="padding:12px;background:#f8f9fa;border-radius:10px;margin-bottom:15px;font-size:14px;color:#555;">' + esc(myHomework.description) + '</div>';
     }
-    if (myHomework.image) {
-      html += '<div style="margin-bottom:15px;"><img src="' + myHomework.image + '" style="width:100%;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);"></div>';
-    }
     html += '</div>';
     
     // 检查是否已提交
@@ -721,18 +718,12 @@
     });
     
     if (!mySubmission) {
-      // 未提交 - 显示提交按钮（带画布书写功能）
+      // 未提交 - 直接在老师题目上书写（画布即题目）
       html += '<div class="hw-card">';
-      html += '<div class="hw-card-title">📤 提交作业</div>';
-      html += '<div style="font-size:13px;color:#666;margin-bottom:15px;">拍照上传后可以在图片上书写答案</div>';
-      html += '<div id="studentSubmitArea">';
-      html += '<div id="studentImageUpload" onclick="document.getElementById(\'studentImageInput\').click()" style="border:2px dashed #d1d5db;border-radius:12px;padding:30px;text-align:center;cursor:pointer;margin-bottom:15px;">';
-      html += '<div style="color:#6b7280;font-size:14px;">📷 点击拍照或上传作业</div></div>';
-      html += '<input type="file" id="studentImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleStudentImageUpload(event)">';
-      // 画布编辑区域（上传后显示）
-      html += '<div id="studentCanvasEditor" style="display:none;margin-bottom:15px;">';
-      html += '<div style="font-size:13px;font-weight:600;color:#555;margin-bottom:8px;">✏️ 在图片上书写答案（支持双指缩放）</div>';
-      html += '<div id="studentCanvasToolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px;">';
+      html += '<div class="hw-card-title">✏️ 在题目上书写答案</div>';
+      html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">直接在老师的题目图片上书写答案，写好后点击提交</div>';
+      // 画布工具栏（始终可见）
+      html += '<div id="studentCanvasToolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px;background:#f0f4ff;border-radius:10px;border:1px solid #e0e7ff;">';
       html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="padding:6px 12px;background:#667eea;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✏️ 画笔</button>';
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="padding:6px 12px;background:#444;color:#ccc;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🧹 橡皮</button>';
       html += '<span style="width:1px;height:20px;background:#ddd;margin:0 4px;"></span>';
@@ -752,15 +743,32 @@
       html += '<button onclick="resetStudentCanvasZoom()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">↺</button>';
       html += '<button onclick="clearStudentCanvas()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🗑 清除</button>';
       html += '</div>';
-      // 画布容器（支持滚动和缩放）
+      // 画布容器（老师的题目图片作为底图）
       html += '<div id="studentCanvasContainer" style="width:100%;overflow:auto;border-radius:8px;border:2px solid #e9ecef;background:#f8f9fa;-webkit-overflow-scrolling:touch;">';
-      html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;"></canvas>';
+      if (myHomework.image) {
+        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;" data-homework-image="' + myHomework.image + '"></canvas>';
+      } else {
+        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;"></canvas>';
+        html += '<div style="padding:30px;text-align:center;color:#999;font-size:13px;">本题没有图片</div>';
+      }
       html += '</div>';
-      html += '<div style="font-size:11px;color:#888;margin-top:5px;text-align:center;">💡 双指捏合可缩放图片，拖动可移动查看</div>';
+      html += '<div style="font-size:11px;color:#888;margin-top:5px;text-align:center;">💡 双指捏合可缩放，单指书写答案</div>';
+      // 可选：额外上传照片（如答题纸）
+      html += '<div style="margin-top:12px;">';
+      html += '<div onclick="document.getElementById(\'studentImageInput\').click()" style="border:1px dashed #d1d5db;border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:12px;color:#999;">';
+      html += '📷 可选：额外拍照上传答题纸（附加在答案后面）';
       html += '</div>';
-      html += '<button onclick="studentSubmitHomework(\'' + myHomework.id + '\',' + studentId + ')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;">提交作业</button>';
+      html += '<input type="file" id="studentImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleStudentExtraUpload(event)">';
+      html += '<div id="studentExtraUploadPreview" style="margin-top:8px;"></div>';
       html += '</div>';
+      html += '<button onclick="studentSubmitHomework(\'' + myHomework.id + '\',' + studentId + ')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;margin-top:15px;">📤 提交作业</button>';
       html += '</div>';
+      // 延迟初始化画布（等 DOM 渲染完成）
+      setTimeout(function() {
+        if (myHomework.image) {
+          initStudentCanvas(myHomework.image);
+        }
+      }, 200);
     } else if (!mySubmission.graded) {
       // 已提交但未批改
       html += '<div class="hw-card" style="background:linear-gradient(135deg,#fff3cd,#ffe69c);border:2px solid #ffc107;">';
@@ -839,6 +847,7 @@
   var _stuTouches = []; // 用于双指缩放
   var _stuInitialPinchDistance = 0;
   var _stuInitialZoom = 1;
+  var _studentUploadedImage = null; // 兼容：保留旧变量
 
   // 初始化学生画布
   function initStudentCanvas(imageDataUrl) {
@@ -865,10 +874,6 @@
       
       // 绘制底图
       _stuCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      
-      // 显示画布编辑器
-      var editor = document.getElementById('studentCanvasEditor');
-      if (editor) editor.style.display = 'block';
       
       // 绑定绘制事件
       canvas.addEventListener('mousedown', onStuCanvasDown);
@@ -1066,7 +1071,7 @@
 
   // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
   function exportStudentCanvasImage() {
-    if (!_stuCanvas || !_stuImg) return _studentUploadedImage;
+    if (!_stuCanvas || !_stuImg) return _studentUploadedImage || null;
     
     // 创建原始尺寸的画布
     var exportCanvas = document.createElement('canvas');
@@ -1074,93 +1079,139 @@
     exportCanvas.height = _stuImg.height;
     var exportCtx = exportCanvas.getContext('2d');
     
-    // 绘制原始底图
+    // 绘制原始底图（老师的题目图片）
     exportCtx.drawImage(_stuImg, 0, 0);
     
-    // 将当前画布内容缩放到原始尺寸并叠加
+    // 将当前画布上的书写痕迹缩放到原始尺寸并叠加
     exportCtx.drawImage(_stuCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
     
     return exportCanvas.toDataURL('image/jpeg', 0.85);
   }
-  function exportStudentCanvasImage() {
-    if (!_stuCanvas) return _studentUploadedImage;
-    return _stuCanvas.toDataURL('image/jpeg', 0.85);
-  }
 
-  // 学生上传图片
-  var _studentUploadedImage = null;
-  window.handleStudentImageUpload = function(event) {
+  // 学生可选上传额外照片（答题纸）
+  var _studentExtraImage = null;
+  window.handleStudentExtraUpload = function(event) {
     var file = event.target.files[0];
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function(e) {
-      var uploadArea = document.getElementById('studentImageUpload');
-      if (uploadArea) {
-        uploadArea.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
+      var preview = document.getElementById('studentExtraUploadPreview');
+      if (preview) {
+        preview.innerHTML = '<div style="font-size:12px;color:#6b7280;">⏳ 压缩中...</div>';
       }
-      // 压缩图片到400KB
       compressImage(e.target.result, 400, function(compressed) {
-        _studentUploadedImage = compressed;
-        if (uploadArea) {
-          uploadArea.innerHTML = '<img src="' + _studentUploadedImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
-            '<div style="font-size:11px;color:#22c55e;margin-top:5px;">✓ 已压缩 (~' + Math.round(compressed.length * 3 / 4 / 1024) + 'KB) - 可在下方画布上书写</div>';
-          uploadArea.style.borderStyle = 'solid';
-          uploadArea.style.padding = '10px';
+        _studentExtraImage = compressed;
+        if (preview) {
+          preview.innerHTML = '<img src="' + _studentExtraImage + '" style="max-width:100%;max-height:120px;border-radius:8px;">' +
+            '<div style="font-size:11px;color:#22c55e;margin-top:3px;">✓ 已压缩 (~' + Math.round(compressed.length * 3 / 4 / 1024) + 'KB)</div>';
         }
-        // 初始化画布
-        setTimeout(function() {
-          initStudentCanvas(compressed);
-        }, 100);
       });
     };
     reader.readAsDataURL(file);
   };
 
-  // 学生提交作业
+  // 学生提交作业（直接在老师题目上书写后提交）
   window.studentSubmitHomework = function(homeworkId, studentId) {
-    if (!_studentUploadedImage) {
-      showNotification('请先上传作业图片', 'error');
+    // 导出画布图像（老师题目+学生书写痕迹）
+    var finalImage = exportStudentCanvasImage();
+    
+    // 如果没有画布内容（题目无图片），检查是否有额外上传的照片
+    if (!finalImage && !_studentExtraImage) {
+      showNotification('请在题目上书写答案或拍照上传', 'error');
       return;
     }
     
-    // 导出画布图像（包含书写痕迹）
-    var finalImage = exportStudentCanvasImage();
+    // 如果有额外上传的照片，拼接在一起
+    var submitImages = [finalImage];
+    if (_studentExtraImage) {
+      submitImages.push(_studentExtraImage);
+    }
     
-    // 压缩最终图像
-    compressImage(finalImage, 400, function(compressedFinal) {
-      var student = getStudentById(studentId);
-      var newSub = {
-        id: generateId(),
-        homeworkId: homeworkId,
-        studentId: studentId,
-        studentName: student ? student.name : (currentUser.studentName || ''),
-        image: compressedFinal,
-        graded: false,
-        grade: '',
-        coins: 0,
-        comment: '',
-        gradedImage: null,
-        submittedAt: new Date().toISOString()
-      };
-      
-      homeworkSubmissions.push(newSub);
-      saveData();
-      _studentUploadedImage = null;
-      _stuCanvas = null;
-      _stuCtx = null;
-      _stuImg = null;
-      
-      // 同步到云端
-      syncSubmissionToCloud(newSub);
-      
-      showNotification('作业已提交，等待老师批改', 'success');
-      
-      // 刷新页面
-      setTimeout(function() {
-        window.renderHomeworkPage();
-      }, 500);
-    });
+    // 合并所有图片（如果有额外的话）
+    var imageToSubmit = submitImages.length === 1 ? submitImages[0] : null;
+    
+    function doSubmit(imageData) {
+      // 压缩最终图像
+      compressImage(imageData, 400, function(compressedFinal) {
+        var student = getStudentById(studentId);
+        var newSub = {
+          id: generateId(),
+          homeworkId: homeworkId,
+          studentId: studentId,
+          studentName: student ? student.name : (currentUser.studentName || ''),
+          image: compressedFinal,
+          graded: false,
+          grade: '',
+          coins: 0,
+          comment: '',
+          gradedImage: null,
+          submittedAt: new Date().toISOString()
+        };
+        
+        homeworkSubmissions.push(newSub);
+        saveData();
+        _studentUploadedImage = null;
+        _studentExtraImage = null;
+        _stuCanvas = null;
+        _stuCtx = null;
+        _stuImg = null;
+        
+        // 同步到云端
+        syncSubmissionToCloud(newSub);
+        
+        showNotification('作业已提交，等待老师批改', 'success');
+        
+        // 刷新页面
+        setTimeout(function() {
+          window.renderHomeworkPage();
+        }, 500);
+      });
+    }
+    
+    if (imageToSubmit) {
+      doSubmit(imageToSubmit);
+    } else {
+      // 多张图片合并为一张（上下拼接）
+      mergeImagesVertical(submitImages, function(merged) {
+        doSubmit(merged);
+      });
+    }
   };
+  
+  // 垂直合并多张图片
+  function mergeImagesVertical(imageUrls, callback) {
+    var images = [];
+    var loaded = 0;
+    imageUrls.forEach(function(url, i) {
+      var img = new Image();
+      img.onload = function() {
+        images[i] = img;
+        loaded++;
+        if (loaded === imageUrls.length) {
+          // 计算合并尺寸
+          var maxW = 0;
+          var totalH = 0;
+          images.forEach(function(im) {
+            if (im.width > maxW) maxW = im.width;
+            totalH += im.height;
+          });
+          var mergeCanvas = document.createElement('canvas');
+          mergeCanvas.width = maxW;
+          mergeCanvas.height = totalH;
+          var mergeCtx = mergeCanvas.getContext('2d');
+          mergeCtx.fillStyle = '#ffffff';
+          mergeCtx.fillRect(0, 0, maxW, totalH);
+          var y = 0;
+          images.forEach(function(im) {
+            mergeCtx.drawImage(im, 0, y, im.width, im.height);
+            y += im.height;
+          });
+          callback(mergeCanvas.toDataURL('image/jpeg', 0.85));
+        }
+      };
+      img.src = url;
+    });
+  }
 
   function renderHomeworkPageContent(container, students) {
     var html = renderButtonBar();

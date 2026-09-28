@@ -12,7 +12,7 @@
     'jianghu':         { src: 'js/jianghu.js?v=266', deps: ['pk-battle'] },
     'rankings':        { src: 'js/rankings.js?v=261' },
     'library':         { src: 'js/library-system.js?v=260' },
-    'homework-system': { src: 'js/homework-system.js?v=285' },
+    'homework-system': { src: 'js/homework-system.js?v=286' },
 
     // --- 弹窗/按钮模块 ---
     'snack-system':    { src: 'js/snack-system.js?v=201' },
