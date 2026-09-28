@@ -11,9 +11,10 @@
     document.querySelectorAll('.quiz-tab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.quiz-tab-content').forEach(function(c) { c.classList.remove('active'); });
     var tabs = document.querySelectorAll('.quiz-tab');
-    var idx = tabName === 'daily' ? 0 : tabName === 'pigrun' ? 1 : tabName === 'match3' ? 2 : 3;
+    // v274: 作业岛标签在最前面（index 0），其他标签顺延
+    var idx = tabName === 'homework' ? 0 : tabName === 'daily' ? 1 : tabName === 'pigrun' ? 2 : tabName === 'match3' ? 3 : 4;
     if (tabs[idx]) tabs[idx].classList.add('active');
-    var contentId = tabName === 'daily' ? 'quizDailyContent' : tabName === 'pigrun' ? 'quizPigRunContent' : tabName === 'match3' ? 'quizMatch3Content' : 'quizHappyRunContent';
+    var contentId = tabName === 'homework' ? 'quizHomeworkContent' : tabName === 'daily' ? 'quizDailyContent' : tabName === 'pigrun' ? 'quizPigRunContent' : tabName === 'match3' ? 'quizMatch3Content' : 'quizHappyRunContent';
     var content = document.getElementById(contentId);
     if (content) content.classList.add('active');
     

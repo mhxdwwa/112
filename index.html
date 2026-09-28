@@ -161,10 +161,16 @@ setTimeout(function() { window._hideDalLoading(); }, 5000);
   <div class="paw-deco" style="bottom:40px;right:80px;--paw-rot:-30deg;font-size:28px;">🐾</div>
   <!-- 取金阁两栏标签 -->
   <div class="quiz-tabs">
+    <div class="quiz-tab" onclick="playClickSound();switchQuizTab('homework');lazyCall('homework-system','renderHomeworkPage')">📝 作业岛</div>
     <div class="quiz-tab active" onclick="playClickSound();switchQuizTab('daily')">📝 每日一练</div>
     <div class="quiz-tab" onclick="playClickSound();switchQuizTab('pigrun')">🐷 小猪快跑</div>
     <div class="quiz-tab" onclick="playClickSound();switchQuizTab('match3')">🧩 宠物消消乐</div>
     <div class="quiz-tab" onclick="playClickSound();switchQuizTab('happyrun')">🏃 快乐跑一跑</div>
+  </div>
+  <div class="quiz-tab-content" id="quizHomeworkContent">
+    <div id="homeworkContent">
+      <div style="text-align:center;padding:40px;color:#999;">加载中...</div>
+    </div>
   </div>
   <div class="quiz-tab-content active" id="quizDailyContent">
     <div id="quizContent"></div>
@@ -222,7 +228,7 @@ setTimeout(function() { window._hideDalLoading(); }, 5000);
   <script defer src="app.js?v=273"></script>
   <script defer src="js/heart-effect.js?v=2"></script>
   <script defer src="js/bgm-system.js?v=2"></script>
-  <script defer src="js/lazy-loader.js?v=271"></script>
+  <script defer src="js/lazy-loader.js?v=274"></script>
   <!-- v136: 以下模块改为按需加载（用户点击时动态加载） -->
    <!-- pk-battle, class-pk, jianghu, snack-system, history-ui,
         pet-modal, rankings, library-system,
