@@ -109,7 +109,7 @@
 
   // 同步提交到云端
   async function syncSubmissionToCloud(sub) {
-    if (!currentClassId || _syncingToCloud) return;
+    if (_syncingToCloud) return;
     _syncingToCloud = true;
     try {
       await apiRequest('POST', '/submissions', {
@@ -127,7 +127,6 @@
 
   // 同步批改到云端
   async function syncGradeToCloud(subId, gradedImage, grade, coins, comment) {
-    if (!currentClassId) return;
     try {
       await apiRequest('PATCH', '/submissions?id=' + subId, {
         gradedImage: gradedImage,
@@ -141,12 +140,13 @@
   }
 
   // 从云端加载数据
-  async function loadFromCloud() {
-    if (!currentClassId || _cloudDataLoaded) return;
+  async function loadFromCloud(classIdOverride) {
+    var loadClassId = classIdOverride || currentClassId;
+    if (!loadClassId || _cloudDataLoaded) return;
     
     try {
       // 加载分层数据
-      var tiersRes = await apiRequest('GET', '/tiers?class_id=' + parseInt(currentClassId));
+      var tiersRes = await apiRequest('GET', '/tiers?class_id=' + parseInt(loadClassId));
       if (tiersRes.ok && tiersRes.data) {
         homeworkTiers = {};
         tiersRes.data.forEach(function(t) {
@@ -156,7 +156,7 @@
       }
 
       // 加载作业列表
-      var hwRes = await apiRequest('GET', '?class_id=' + parseInt(currentClassId));
+      var hwRes = await apiRequest('GET', '?class_id=' + parseInt(loadClassId));
       if (hwRes.ok && hwRes.data) {
         homeworkList = hwRes.data.map(function(h) {
           return {
@@ -200,7 +200,7 @@
       }
 
       _cloudDataLoaded = true;
-      console.log('[homework] Cloud data loaded');
+      console.log('[homework] Cloud data loaded for classId:', loadClassId);
     } catch (err) {
       console.warn('[homework] loadFromCloud error:', err);
     }
@@ -253,8 +253,7 @@
       
       // 首次加载时从云端同步数据
       if (!_cloudDataLoaded && myClassId) {
-        currentClassId = myClassId; // 临时设置以便 loadFromCloud 工作
-        loadFromCloud().then(function() {
+        loadFromCloud(myClassId).then(function() {
           renderStudentView(container, myStudentId, myClassId);
         });
       } else {
@@ -1307,5 +1306,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v278');
+  console.log('[homework-system] 作业岛系统已加载 v279');
 })();
