@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v303';
+  var HW_DATA_VERSION = 'v304';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -1021,6 +1021,7 @@
       html += '<div id="studentCanvasToolbar" style="display:flex;align-items:center;justify-content:center;gap:3px;margin-top:8px;padding:5px 6px;background:rgba(30,30,30,0.85);border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">';
       html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>';
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>';
+      html += '<button id="stuToolFullscreen" onclick="enterStudentFullscreen()" style="width:26px;height:26px;background:transparent;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">⛶</button>';
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
       var stuColors = ['#000000','#3b82f6'];
       stuColors.forEach(function(c) {
@@ -1414,6 +1415,360 @@
     if (!confirm('确定清除所有书写内容？')) return;
     // 只清除叠加层（书写内容），底图保持不变
     _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+  };
+
+  // 全屏答题功能
+  var _stuFullscreenActive = false;
+  var _stuFullscreenOverlay = null;
+  var _stuFullscreenCanvas = null;
+  var _stuFullscreenOverlayCanvas = null;
+  var _stuFullscreenImg = null;
+  var _stuFullscreenCtx = null;
+  var _stuFullscreenOverlayCtx = null;
+  var _stuFullscreenZoom = 1;
+  var _stuFullscreenBaseWidth = 0;
+  var _stuFullscreenBaseHeight = 0;
+  var _stuFullscreenIsDrawing = false;
+  var _stuFullscreenLastX = 0;
+  var _stuFullscreenLastY = 0;
+  var _stuFullscreenTouches = [];
+  var _stuFullscreenInitialPinchDistance = 0;
+  var _stuFullscreenInitialZoom = 1;
+  var _stuFullscreenHomeworkId = '';
+  var _stuFullscreenStudentId = 0;
+
+  window.enterStudentFullscreen = function() {
+    if (_stuFullscreenActive) return;
+    _stuFullscreenActive = true;
+    
+    // 获取当前作业信息
+    var hwCard = document.querySelector('.hw-card');
+    if (!hwCard) return;
+    var submitBtn = hwCard.querySelector('button[onclick*="studentSubmitHomework"]');
+    if (submitBtn) {
+      var onclickStr = submitBtn.getAttribute('onclick');
+      var match = onclickStr.match(/studentSubmitHomework\('([^']+)',(\d+)\)/);
+      if (match) {
+        _stuFullscreenHomeworkId = match[1];
+        _stuFullscreenStudentId = parseInt(match[2]);
+      }
+    }
+    
+    // 创建全屏覆盖层
+    var overlay = document.createElement('div');
+    overlay.id = 'stuFullscreenOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000;z-index:9999;display:flex;flex-direction:column;';
+    
+    // 顶部工具栏
+    var toolbar = document.createElement('div');
+    toolbar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(30,30,30,0.95);flex-shrink:0;';
+    
+    // 左侧：工具按钮
+    var leftTools = document.createElement('div');
+    leftTools.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    leftTools.innerHTML = '<button id="stuFsToolPen" onclick="setFullscreenDrawTool(\'pen\')" style="width:32px;height:32px;background:#667eea;color:white;border:none;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✏️</button>' +
+      '<button id="stuFsToolEraser" onclick="setFullscreenDrawTool(\'eraser\')" style="width:32px;height:32px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🧹</button>' +
+      '<span style="width:1px;height:20px;background:rgba(255,255,255,0.2);margin:0 2px;"></span>' +
+      '<div onclick="setFullscreenDrawColor(\'#000000\')" class="stu-fs-color-btn" data-color="#000000" style="width:22px;height:22px;border-radius:50%;background:#000;cursor:pointer;border:2px solid #667eea;flex-shrink:0;"></div>' +
+      '<div onclick="setFullscreenDrawColor(\'#3b82f6\')" class="stu-fs-color-btn" data-color="#3b82f6" style="width:22px;height:22px;border-radius:50%;background:#3b82f6;cursor:pointer;border:2px solid rgba(255,255,255,0.3);flex-shrink:0;"></div>' +
+      '<span style="width:1px;height:20px;background:rgba(255,255,255,0.2);margin:0 2px;"></span>' +
+      '<input type="range" id="stuFsDrawLineWidth" min="1" max="10" value="3" oninput="setFullscreenDrawLineWidth(this.value)" style="width:70px;height:18px;cursor:pointer;accent-color:#667eea;">' +
+      '<span style="width:1px;height:20px;background:rgba(255,255,255,0.2);margin:0 2px;"></span>' +
+      '<button onclick="zoomFullscreenCanvas(1.3)" style="width:30px;height:30px;background:transparent;color:white;border:none;border-radius:50%;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🔍</button>' +
+      '<button onclick="zoomFullscreenCanvas(0.77)" style="width:30px;height:30px;background:transparent;color:white;border:none;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🔎</button>' +
+      '<button onclick="resetFullscreenCanvasZoom()" style="width:30px;height:30px;background:transparent;color:white;border:none;border-radius:50%;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">↺</button>' +
+      '<button onclick="clearFullscreenCanvas()" style="width:30px;height:30px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🗑</button>';
+    
+    // 右侧：退出按钮
+    var rightTools = document.createElement('div');
+    rightTools.innerHTML = '<button onclick="exitStudentFullscreen()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">退出并提交</button>';
+    
+    toolbar.appendChild(leftTools);
+    toolbar.appendChild(rightTools);
+    
+    // 画布容器
+    var canvasContainer = document.createElement('div');
+    canvasContainer.style.cssText = 'flex:1;overflow:auto;position:relative;-webkit-overflow-scrolling:touch;';
+    
+    // 底图画布
+    var canvas = document.createElement('canvas');
+    canvas.id = 'stuFullscreenCanvas';
+    canvas.style.cssText = 'display:block;cursor:crosshair;touch-action:none;pointer-events:none;';
+    
+    // 叠加层画布
+    var overlayCanvas = document.createElement('canvas');
+    overlayCanvas.id = 'stuFullscreenOverlayCanvas';
+    overlayCanvas.style.cssText = 'position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;';
+    
+    canvasContainer.appendChild(canvas);
+    canvasContainer.appendChild(overlayCanvas);
+    
+    overlay.appendChild(toolbar);
+    overlay.appendChild(canvasContainer);
+    document.body.appendChild(overlay);
+    
+    _stuFullscreenOverlay = overlay;
+    _stuFullscreenCanvas = canvas;
+    _stuFullscreenOverlayCanvas = overlayCanvas;
+    _stuFullscreenCtx = canvas.getContext('2d');
+    _stuFullscreenOverlayCtx = overlayCanvas.getContext('2d');
+    
+    // 初始化全屏画布
+    initFullscreenCanvas();
+  };
+
+  function initFullscreenCanvas() {
+    if (!_stuImg) return;
+    
+    _stuFullscreenImg = _stuImg;
+    var img = _stuImg;
+    
+    // 使用视口尺寸计算画布大小
+    var viewportWidth = window.innerWidth;
+    var viewportHeight = window.innerHeight - 60; // 减去工具栏高度
+    
+    var scale = Math.min(viewportWidth / img.width, viewportHeight / img.height);
+    if (scale > 1) scale = 1;
+    
+    _stuFullscreenBaseWidth = Math.round(img.width * scale);
+    _stuFullscreenBaseHeight = Math.round(img.height * scale);
+    _stuFullscreenZoom = 1;
+    
+    // 设置画布尺寸
+    _stuFullscreenCanvas.width = _stuFullscreenBaseWidth;
+    _stuFullscreenCanvas.height = _stuFullscreenBaseHeight;
+    _stuFullscreenCanvas.style.width = _stuFullscreenBaseWidth + 'px';
+    _stuFullscreenCanvas.style.height = _stuFullscreenBaseHeight + 'px';
+    _stuFullscreenCtx.drawImage(img, 0, 0, _stuFullscreenBaseWidth, _stuFullscreenBaseHeight);
+    
+    // 设置叠加层画布尺寸
+    _stuFullscreenOverlayCanvas.width = _stuFullscreenBaseWidth;
+    _stuFullscreenOverlayCanvas.height = _stuFullscreenBaseHeight;
+    _stuFullscreenOverlayCanvas.style.width = _stuFullscreenBaseWidth + 'px';
+    _stuFullscreenOverlayCanvas.style.height = _stuFullscreenBaseHeight + 'px';
+    _stuFullscreenOverlayCtx.clearRect(0, 0, _stuFullscreenBaseWidth, _stuFullscreenBaseHeight);
+    
+    // 绑定事件
+    _stuFullscreenOverlayCanvas.addEventListener('mousedown', onFullscreenCanvasDown);
+    _stuFullscreenOverlayCanvas.addEventListener('mousemove', onFullscreenCanvasMove);
+    _stuFullscreenOverlayCanvas.addEventListener('mouseup', onFullscreenCanvasUp);
+    _stuFullscreenOverlayCanvas.addEventListener('mouseleave', onFullscreenCanvasUp);
+    _stuFullscreenOverlayCanvas.addEventListener('touchstart', onFullscreenCanvasTouchStart, { passive: false });
+    _stuFullscreenOverlayCanvas.addEventListener('touchmove', onFullscreenCanvasTouchMove, { passive: false });
+    _stuFullscreenOverlayCanvas.addEventListener('touchend', onFullscreenCanvasTouchEnd);
+  }
+
+  function getFullscreenCanvasPos(e) {
+    var rect = _stuFullscreenOverlayCanvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (_stuFullscreenOverlayCanvas.width / rect.width),
+      y: (e.clientY - rect.top) * (_stuFullscreenOverlayCanvas.height / rect.height)
+    };
+  }
+
+  function onFullscreenCanvasDown(e) {
+    _stuFullscreenIsDrawing = true;
+    var pos = getFullscreenCanvasPos(e);
+    _stuFullscreenLastX = pos.x;
+    _stuFullscreenLastY = pos.y;
+  }
+
+  function onFullscreenCanvasMove(e) {
+    if (!_stuFullscreenIsDrawing) return;
+    var pos = getFullscreenCanvasPos(e);
+    drawFullscreenLine(_stuFullscreenLastX, _stuFullscreenLastY, pos.x, pos.y);
+    _stuFullscreenLastX = pos.x;
+    _stuFullscreenLastY = pos.y;
+  }
+
+  function onFullscreenCanvasUp() {
+    _stuFullscreenIsDrawing = false;
+  }
+
+  function onFullscreenCanvasTouchStart(e) {
+    e.preventDefault();
+    _stuFullscreenTouches = Array.from(e.touches);
+    
+    if (_stuFullscreenTouches.length === 2) {
+      _stuFullscreenInitialPinchDistance = getTouchDistance(_stuFullscreenTouches[0], _stuFullscreenTouches[1]);
+      _stuFullscreenInitialZoom = _stuFullscreenZoom;
+      _stuFullscreenIsDrawing = false;
+    } else if (_stuFullscreenTouches.length === 1) {
+      var touch = _stuFullscreenTouches[0];
+      var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
+      onFullscreenCanvasDown(mouseEvent);
+    }
+  }
+
+  function onFullscreenCanvasTouchMove(e) {
+    e.preventDefault();
+    var touches = Array.from(e.touches);
+    
+    if (touches.length === 2) {
+      var currentDistance = getTouchDistance(touches[0], touches[1]);
+      var zoomRatio = currentDistance / _stuFullscreenInitialPinchDistance;
+      var newZoom = _stuFullscreenInitialZoom * zoomRatio;
+      
+      if (newZoom >= 0.5 && newZoom <= 6) {
+        applyFullscreenZoom(newZoom);
+      }
+    } else if (touches.length === 1 && _stuFullscreenIsDrawing) {
+      var touch = touches[0];
+      var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
+      onFullscreenCanvasMove(mouseEvent);
+    }
+  }
+
+  function onFullscreenCanvasTouchEnd(e) {
+    if (e.touches.length === 0) {
+      _stuFullscreenIsDrawing = false;
+      _stuFullscreenTouches = [];
+    } else if (e.touches.length === 1) {
+      _stuFullscreenIsDrawing = true;
+      var touch = e.touches[0];
+      var pos = getFullscreenCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      _stuFullscreenLastX = pos.x;
+      _stuFullscreenLastY = pos.y;
+    }
+  }
+
+  function drawFullscreenLine(x1, y1, x2, y2) {
+    if (!_stuFullscreenOverlayCtx) return;
+    
+    var drawTool = document.getElementById('stuFsToolEraser').style.background !== 'transparent' ? 'eraser' : 'pen';
+    
+    if (drawTool === 'eraser') {
+      _stuFullscreenOverlayCtx.globalCompositeOperation = 'destination-out';
+      _stuFullscreenOverlayCtx.beginPath();
+      _stuFullscreenOverlayCtx.moveTo(x1, y1);
+      _stuFullscreenOverlayCtx.lineTo(x2, y2);
+      _stuFullscreenOverlayCtx.strokeStyle = 'rgba(0,0,0,1)';
+      _stuFullscreenOverlayCtx.lineWidth = _stuDrawLineWidth * 4 * _stuFullscreenZoom;
+      _stuFullscreenOverlayCtx.lineCap = 'round';
+      _stuFullscreenOverlayCtx.lineJoin = 'round';
+      _stuFullscreenOverlayCtx.stroke();
+    } else {
+      _stuFullscreenOverlayCtx.globalCompositeOperation = 'source-over';
+      _stuFullscreenOverlayCtx.beginPath();
+      _stuFullscreenOverlayCtx.moveTo(x1, y1);
+      _stuFullscreenOverlayCtx.lineTo(x2, y2);
+      _stuFullscreenOverlayCtx.strokeStyle = _stuDrawColor;
+      _stuFullscreenOverlayCtx.lineWidth = _stuDrawLineWidth * _stuFullscreenZoom;
+      _stuFullscreenOverlayCtx.lineCap = 'round';
+      _stuFullscreenOverlayCtx.lineJoin = 'round';
+      _stuFullscreenOverlayCtx.stroke();
+    }
+  }
+
+  function applyFullscreenZoom(newZoom) {
+    if (!_stuFullscreenCanvas || !_stuFullscreenImg || !_stuFullscreenCtx || !_stuFullscreenOverlayCanvas) return;
+    
+    _stuFullscreenZoom = newZoom;
+    var newWidth = Math.round(_stuFullscreenBaseWidth * _stuFullscreenZoom);
+    var newHeight = Math.round(_stuFullscreenBaseHeight * _stuFullscreenZoom);
+    
+    // 保存叠加层当前内容
+    var tempOverlayCanvas = document.createElement('canvas');
+    tempOverlayCanvas.width = _stuFullscreenOverlayCanvas.width;
+    tempOverlayCanvas.height = _stuFullscreenOverlayCanvas.height;
+    var tempOverlayCtx = tempOverlayCanvas.getContext('2d');
+    tempOverlayCtx.drawImage(_stuFullscreenOverlayCanvas, 0, 0);
+    
+    // 调整底图画布尺寸
+    _stuFullscreenCanvas.width = newWidth;
+    _stuFullscreenCanvas.height = newHeight;
+    _stuFullscreenCanvas.style.width = newWidth + 'px';
+    _stuFullscreenCanvas.style.height = newHeight + 'px';
+    
+    // 从原始图片重绘底图
+    _stuFullscreenCtx.drawImage(_stuFullscreenImg, 0, 0, newWidth, newHeight);
+    
+    // 调整叠加层尺寸并重绘手写内容
+    _stuFullscreenOverlayCanvas.width = newWidth;
+    _stuFullscreenOverlayCanvas.height = newHeight;
+    _stuFullscreenOverlayCanvas.style.width = newWidth + 'px';
+    _stuFullscreenOverlayCanvas.style.height = newHeight + 'px';
+    _stuFullscreenOverlayCtx.drawImage(tempOverlayCanvas, 0, 0, newWidth, newHeight);
+  }
+
+  window.zoomFullscreenCanvas = function(factor) {
+    var newZoom = _stuFullscreenZoom * factor;
+    if (newZoom >= 0.5 && newZoom <= 6) {
+      applyFullscreenZoom(newZoom);
+    }
+  };
+
+  window.resetFullscreenCanvasZoom = function() {
+    applyFullscreenZoom(1);
+  };
+
+  window.clearFullscreenCanvas = function() {
+    if (!_stuFullscreenOverlayCanvas || !_stuFullscreenImg) return;
+    if (!confirm('确定清除所有书写内容？')) return;
+    _stuFullscreenOverlayCtx.clearRect(0, 0, _stuFullscreenOverlayCanvas.width, _stuFullscreenOverlayCanvas.height);
+  };
+
+  window.setFullscreenDrawTool = function(tool) {
+    var penBtn = document.getElementById('stuFsToolPen');
+    var eraserBtn = document.getElementById('stuFsToolEraser');
+    if (penBtn && eraserBtn) {
+      if (tool === 'pen') {
+        penBtn.style.background = '#667eea';
+        penBtn.style.color = 'white';
+        eraserBtn.style.background = 'transparent';
+        eraserBtn.style.color = '#ccc';
+      } else {
+        eraserBtn.style.background = '#667eea';
+        eraserBtn.style.color = 'white';
+        penBtn.style.background = 'transparent';
+        penBtn.style.color = '#ccc';
+      }
+    }
+    if (_stuFullscreenOverlayCanvas) {
+      _stuFullscreenOverlayCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+    }
+  };
+
+  window.setFullscreenDrawColor = function(color) {
+    _stuDrawColor = color;
+    setFullscreenDrawTool('pen');
+    var btns = document.querySelectorAll('.stu-fs-color-btn');
+    btns.forEach(function(btn) {
+      btn.style.border = '2px solid ' + (btn.getAttribute('data-color') === color ? '#667eea' : 'rgba(255,255,255,0.3)');
+    });
+  };
+
+  window.setFullscreenDrawLineWidth = function(w) {
+    _stuDrawLineWidth = parseInt(w) || 3;
+  };
+
+  window.exitStudentFullscreen = function() {
+    if (!_stuFullscreenActive) return;
+    
+    // 将全屏画布的书写内容同步回普通画布
+    if (_stuFullscreenOverlayCanvas && _stuOverlayCanvas && _stuOverlayCtx) {
+      // 清空普通画布的叠加层
+      _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      // 将全屏的书写内容绘制到普通画布
+      _stuOverlayCtx.drawImage(_stuFullscreenOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+    }
+    
+    // 移除全屏覆盖层
+    if (_stuFullscreenOverlay) {
+      document.body.removeChild(_stuFullscreenOverlay);
+    }
+    
+    _stuFullscreenActive = false;
+    _stuFullscreenOverlay = null;
+    _stuFullscreenCanvas = null;
+    _stuFullscreenOverlayCanvas = null;
+    _stuFullscreenCtx = null;
+    _stuFullscreenOverlayCtx = null;
+    
+    // 自动提交作业
+    if (_stuFullscreenHomeworkId && _stuFullscreenStudentId) {
+      studentSubmitHomework(_stuFullscreenHomeworkId, _stuFullscreenStudentId);
+    }
   };
 
   // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
