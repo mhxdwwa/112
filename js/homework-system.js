@@ -842,7 +842,8 @@
       }
       
       // 从云端同步数据，确保分层数据加载完成后再渲染
-      loadFromCloud(myClassId).then(function() {
+      // 学生端每次进入都强制重新加载，确保看到最新作业
+      loadFromCloud(myClassId, true).then(function() {
         renderStudentView(container, myStudentId, myClassId);
       });
       
@@ -1895,17 +1896,37 @@
     // 查找该层级是否已有作业
     var existingHw = homeworkList.find(function(h) { return h.tier === tier; });
     if (existingHw) {
-      // 删除旧作业及其所有提交记录
       var oldHwId = existingHw.id;
-      // 如果旧作业图片是 Storage URL，删除 Storage 文件
-      if (isImageUrl(existingHw.image)) {
-        var oldPath = getStoragePathFromUrl(existingHw.image);
-        if (oldPath) deleteImageFromStorage(oldPath);
+      showNotification('正在清理旧作业...', 'info');
+      
+      // 1. 删除旧作业的所有提交图片（Storage）
+      var oldSubs = homeworkSubmissions.filter(function(s) { return s.homeworkId === oldHwId; });
+      for (var i = 0; i < oldSubs.length; i++) {
+        var sub = oldSubs[i];
+        // 删除学生提交图片
+        if (sub.image && isImageUrl(sub.image)) {
+          var subPath = getStoragePathFromUrl(sub.image);
+          if (subPath) await deleteImageFromStorage(subPath);
+        }
+        // 删除教师批阅图片
+        if (sub.gradedImage && isImageUrl(sub.gradedImage)) {
+          var gradedPath = getStoragePathFromUrl(sub.gradedImage);
+          if (gradedPath) await deleteImageFromStorage(gradedPath);
+        }
       }
+      
+      // 2. 删除旧作业图片（Storage）
+      if (existingHw.image && isImageUrl(existingHw.image)) {
+        var oldPath = getStoragePathFromUrl(existingHw.image);
+        if (oldPath) await deleteImageFromStorage(oldPath);
+      }
+      
+      // 3. 从云端删除旧作业及其提交记录
+      await deleteHomeworkFromCloud(oldHwId);
+      
+      // 4. 本地清理
       homeworkList = homeworkList.filter(function(h) { return h.id !== oldHwId; });
       homeworkSubmissions = homeworkSubmissions.filter(function(s) { return s.homeworkId !== oldHwId; });
-      // 删除云端旧作业
-      deleteHomeworkFromCloud(oldHwId);
     }
     
     // 生成新作业 ID
@@ -1943,20 +1964,42 @@
     showNotification(msg, 'success');
     
     // 同步到云端
-    syncHomeworkToCloud(newHw);
+    await syncHomeworkToCloud(newHw);
     
     renderHomeworkPage();
   };
 
-  window.deleteHomework = function(id) {
+  window.deleteHomework = async function(id) {
     if (!confirm('确定删除该作业？相关提交也会被删除。')) return;
+    
+    // 删除该作业的所有提交图片（Storage）
+    var subs = homeworkSubmissions.filter(function(s) { return s.homeworkId === id; });
+    for (var i = 0; i < subs.length; i++) {
+      var sub = subs[i];
+      if (sub.image && isImageUrl(sub.image)) {
+        var subPath = getStoragePathFromUrl(sub.image);
+        if (subPath) await deleteImageFromStorage(subPath);
+      }
+      if (sub.gradedImage && isImageUrl(sub.gradedImage)) {
+        var gradedPath = getStoragePathFromUrl(sub.gradedImage);
+        if (gradedPath) await deleteImageFromStorage(gradedPath);
+      }
+    }
+    
+    // 删除作业图片（Storage）
+    var hw = homeworkList.find(function(h) { return h.id === id; });
+    if (hw && hw.image && isImageUrl(hw.image)) {
+      var hwPath = getStoragePathFromUrl(hw.image);
+      if (hwPath) await deleteImageFromStorage(hwPath);
+    }
+    
     homeworkList = homeworkList.filter(function(h) { return h.id !== id; });
     homeworkSubmissions = homeworkSubmissions.filter(function(s) { return s.homeworkId !== id; });
     saveData();
     showNotification('已删除作业', 'info');
     
-    // 删除云端作业
-    deleteHomeworkFromCloud(id);
+    // 删除云端作业（级联删除提交记录）
+    await deleteHomeworkFromCloud(id);
     
     renderHomeworkPage();
   };
@@ -2668,5 +2711,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v292 - 双层画布修复 + 移动端优化 + 批阅缩放');
+  console.log('[homework-system] 作业岛系统已加载 v293 - 修复旧作业清理 + 学生端强制刷新');
 })();
