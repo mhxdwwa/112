@@ -1,10 +1,10 @@
 # Cloudflare Pages 缓存策略
 # 解决 JS/CSS/HTML 文件缓存1年不更新的问题
 
-# HTML 文件 - 只缓存10分钟，确保内容及时更新
-# v256: 添加 unsafe-eval 支持 PDF.js
+# HTML 文件 - 不缓存，确保每次加载最新 JS
+# v294: 改为 no-cache，解决学生端看到旧作业的问题
 /*.html
-  Cache-Control: public, max-age=600, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com https://xbygooadskfqllnhwmet.supabase.co data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
 
 # PDF 文件 - 设置正确的 MIME 类型和缓存
@@ -26,13 +26,13 @@
   Content-Type: application/pdf
   Access-Control-Allow-Origin: *
 
-# JavaScript 文件 - 只缓存10分钟
+# JavaScript 文件 - 缓存1分钟，版本号确保更新
 /*.js
-  Cache-Control: public, max-age=600, must-revalidate
+  Cache-Control: public, max-age=60, must-revalidate
 
-# CSS 文件 - 只缓存10分钟
+# CSS 文件 - 缓存1分钟
 /*.css
-  Cache-Control: public, max-age=600, must-revalidate
+  Cache-Control: public, max-age=60, must-revalidate
 
 # JSON 数据文件 - 只缓存5分钟
 /*.json
