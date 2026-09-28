@@ -1453,6 +1453,7 @@
   var _stuFsDrawTool = 'pen';
   var _stuFsHomeworkId = '';
   var _stuFsStudentId = 0;
+  var _stuFsRotated = false; // true = image rotated 90° CW to fill portrait screen
 
   window.enterStudentFullscreen = function() {
     if (_stuFullscreenActive || !_stuImg) return;
@@ -1472,6 +1473,7 @@
 
     // 画布滚动容器（占满全屏，除了工具栏）
     var cc = document.createElement('div');
+    cc.id = 'stuFsScrollContainer';
     cc.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:auto;-webkit-overflow-scrolling:touch;';
 
     // 内层容器（用于撑开滚动高度）
@@ -1481,11 +1483,11 @@
 
     // 底图画布
     var baseC = document.createElement('canvas');
-    baseC.style.cssText = 'display:block;width:100%;height:auto;';
+    baseC.style.cssText = 'display:block;';
 
     // 叠加层画布（覆盖在底图上）
     var overC = document.createElement('canvas');
-    overC.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;';
+    overC.style.cssText = 'position:absolute;top:0;left:0;display:block;';
 
     inner.appendChild(baseC);
     inner.appendChild(overC);
@@ -1497,6 +1499,7 @@
     tb.innerHTML =
       '<button id="fsPen" onclick="fsSetTool(\'pen\')" style="width:32px;height:32px;background:#667eea;color:white;border:none;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>' +
       '<button id="fsEra" onclick="fsSetTool(\'eraser\')" style="width:32px;height:32px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>' +
+      '<button id="fsMove" onclick="fsSetTool(\'move\')" title="移动" style="width:32px;height:32px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✋</button>' +
       '<span style="width:1px;height:22px;background:rgba(255,255,255,0.15);margin:0 3px;flex-shrink:0;"></span>' +
       '<div onclick="fsSetColor(\'#000000\')" class="fs-clr" data-color="#000000" style="width:22px;height:22px;border-radius:50%;background:#000;border:2px solid #667eea;cursor:pointer;flex-shrink:0;"></div>' +
       '<div onclick="fsSetColor(\'#3b82f6\')" class="fs-clr" data-color="#3b82f6" style="width:22px;height:22px;border-radius:50%;background:#3b82f6;border:2px solid rgba(255,255,255,0.3);cursor:pointer;flex-shrink:0;"></div>' +
@@ -1508,7 +1511,8 @@
       '<button onclick="fsResetZoom()" style="width:30px;height:30px;background:transparent;color:white;border:none;font-size:14px;cursor:pointer;flex-shrink:0;">↺</button>' +
       '<button onclick="fsClear()" style="width:30px;height:30px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🗑</button>' +
       '<span style="width:1px;height:22px;background:rgba(255,255,255,0.15);margin:0 3px;flex-shrink:0;"></span>' +
-      '<button onclick="exitStudentFullscreen()" style="padding:6px 12px;background:#22c55e;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">提交</button>';
+      '<button onclick="exitStudentFullscreen()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">退出</button>' +
+      '<button onclick="fsSubmitAndExit()" style="padding:6px 10px;background:#22c55e;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">提交</button>';
 
     el.appendChild(cc);
     el.appendChild(tb);
@@ -1523,6 +1527,38 @@
     // 初始化全屏画布
     fsInitCanvas();
 
+    // 同步普通画布已有的手写内容到全屏画布
+    if (_stuOverlayCanvas && _stuOverlayCtx) {
+      var hasContent = false;
+      try {
+        var data = _stuOverlayCtx.getImageData(0, 0, 1, 1).data;
+        hasContent = data[0] !== 0 || data[1] !== 0 || data[2] !== 0 || data[3] !== 0;
+      } catch(e) {}
+      if (!hasContent) {
+        // 检查更多像素
+        try {
+          var w = _stuOverlayCanvas.width, h = _stuOverlayCanvas.height;
+          var sampleData = _stuOverlayCtx.getImageData(Math.floor(w/2), Math.floor(h/2), 1, 1).data;
+          hasContent = sampleData[3] > 0;
+        } catch(e) {}
+      }
+      if (hasContent) {
+        if (_stuFsRotated) {
+          // 旋转90° CW 同步到全屏画布
+          var tmpC = document.createElement('canvas');
+          tmpC.width = _stuFsCanvas.width;
+          tmpC.height = _stuFsCanvas.height;
+          var tmpCtx = tmpC.getContext('2d');
+          tmpCtx.translate(tmpC.width / 2, tmpC.height / 2);
+          tmpCtx.rotate(Math.PI / 2);
+          tmpCtx.drawImage(_stuOverlayCanvas, -_stuOverlayCanvas.width / 2, -_stuOverlayCanvas.height / 2);
+          _stuFsOverlayCtx.drawImage(tmpC, 0, 0, _stuFsCanvas.width, _stuFsCanvas.height);
+        } else {
+          _stuFsOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuFsCanvas.width, _stuFsCanvas.height);
+        }
+      }
+    }
+
     // 绑定事件到叠加层
     overC.addEventListener('mousedown', fsDown);
     overC.addEventListener('mousemove', fsMove);
@@ -1535,44 +1571,96 @@
 
   function fsInitCanvas() {
     var img = _stuImg;
+    var screenW = window.innerWidth;
+    var screenH = window.innerHeight - 50; // 减去工具栏高度
 
-    // 使用图片原始分辨率作为画布分辨率
-    // CSS width:100% 会自动缩放显示，保证清晰度
-    _stuFsBaseW = img.width;
-    _stuFsBaseH = img.height;
+    // 判断是否需要旋转：横屏图片旋转90°铺满竖屏
+    _stuFsRotated = (img.width > img.height);
     _stuFsZoom = 1;
 
-    // 设置 inner 容器尺寸（CSS像素，用于撑开滚动区域）
+    // 计算画布内部尺寸和显示尺寸
+    var canvasW, canvasH, displayW, displayH;
+
+    if (_stuFsRotated) {
+      // 横屏图片：旋转90° CW，让图片长边沿屏幕长边
+      // 画布内部尺寸 = 图片尺寸（不交换），绘制时旋转
+      canvasW = img.width;
+      canvasH = img.height;
+      // 旋转后视觉尺寸：宽=img.height, 高=img.width
+      // 按屏幕尺寸等比缩放，尽量铺满
+      var scaleByW = screenW / img.height; // 视觉宽 = img.height
+      var scaleByH = screenH / img.width;  // 视觉高 = img.width
+      var scale = Math.min(scaleByW, scaleByH);
+      displayW = Math.round(img.height * scale); // 视觉宽
+      displayH = Math.round(img.width * scale);  // 视觉高
+    } else {
+      // 竖屏图片：正常放置，铺满屏幕宽度
+      canvasW = img.width;
+      canvasH = img.height;
+      var scale = screenW / img.width;
+      if (scale > 1) scale = 1;
+      displayW = Math.round(img.width * scale);
+      displayH = Math.round(img.height * scale);
+    }
+
+    _stuFsBaseW = canvasW;
+    _stuFsBaseH = canvasH;
+
+    // 设置 inner 容器尺寸
     var inner = document.getElementById('stuFsInner');
-    var displayW = window.innerWidth;
-    var displayH = Math.round(img.height * (displayW / img.width));
     if (inner) {
       inner.style.width = displayW + 'px';
       inner.style.height = displayH + 'px';
     }
 
-    // 底图画布：内部高分辨率，CSS 缩放显示
-    _stuFsCanvas.width = _stuFsBaseW;
-    _stuFsCanvas.height = _stuFsBaseH;
+    // 底图画布
+    _stuFsCanvas.width = canvasW;
+    _stuFsCanvas.height = canvasH;
     _stuFsCanvas.style.width = displayW + 'px';
     _stuFsCanvas.style.height = displayH + 'px';
-    _stuFsCtx.drawImage(img, 0, 0, _stuFsBaseW, _stuFsBaseH);
 
-    // 叠加层画布：与底图相同的内部尺寸
-    _stuFsOverlayCanvas.width = _stuFsBaseW;
-    _stuFsOverlayCanvas.height = _stuFsBaseH;
+    if (_stuFsRotated) {
+      // 横屏图片：旋转90° CW 绘制
+      _stuFsCtx.save();
+      _stuFsCtx.translate(canvasW / 2, canvasH / 2);
+      _stuFsCtx.rotate(Math.PI / 2);
+      _stuFsCtx.drawImage(img, -canvasH / 2, -canvasW / 2, canvasH, canvasW);
+      _stuFsCtx.restore();
+    } else {
+      _stuFsCtx.drawImage(img, 0, 0, canvasW, canvasH);
+    }
+
+    // 叠加层画布
+    _stuFsOverlayCanvas.width = canvasW;
+    _stuFsOverlayCanvas.height = canvasH;
     _stuFsOverlayCanvas.style.width = displayW + 'px';
     _stuFsOverlayCanvas.style.height = displayH + 'px';
-    _stuFsOverlayCtx.clearRect(0, 0, _stuFsBaseW, _stuFsBaseH);
+    _stuFsOverlayCtx.clearRect(0, 0, canvasW, canvasH);
   }
 
   function fsGetPos(e) {
     var rect = _stuFsOverlayCanvas.getBoundingClientRect();
-    // 将屏幕坐标映射到画布内部分辨率
-    return {
-      x: (e.clientX - rect.left) * (_stuFsOverlayCanvas.width / rect.width),
-      y: (e.clientY - rect.top) * (_stuFsOverlayCanvas.height / rect.height)
-    };
+    var sx = e.clientX - rect.left; // screen X within displayed canvas
+    var sy = e.clientY - rect.top;  // screen Y within displayed canvas
+
+    if (_stuFsRotated) {
+      // 90° CW rotation mapping:
+      // canvas buffer is imgW x imgH, displayed as displayW x displayH
+      // where displayW corresponds to imgH (rotated) and displayH to imgW
+      var displayW = rect.width;
+      var displayH = rect.height;
+      var cw = _stuFsOverlayCanvas.width;  // = imgW
+      var ch = _stuFsOverlayCanvas.height; // = imgH
+      return {
+        x: (cw / displayH) * sy,
+        y: cw * (1 - sx / displayW)
+      };
+    } else {
+      return {
+        x: sx * (_stuFsOverlayCanvas.width / rect.width),
+        y: sy * (_stuFsOverlayCanvas.height / rect.height)
+      };
+    }
   }
 
   function fsDown(e) {
@@ -1655,9 +1743,21 @@
     if (!_stuFsCanvas || !_stuFsOverlayCanvas || !_stuFsCtx || !_stuFsOverlayCtx || !_stuImg) return;
     _stuFsZoom = nz;
 
-    // 计算新的CSS显示尺寸（内部分辨率不变）
-    var displayW = Math.round(window.innerWidth * nz);
-    var displayH = Math.round(_stuFsBaseH * (displayW / _stuFsBaseW));
+    // 计算新的CSS显示尺寸
+    var displayW, displayH;
+    if (_stuFsRotated) {
+      // 旋转模式：从基准尺寸乘以新zoom
+      var screenW = window.innerWidth;
+      var screenH = window.innerHeight - 50;
+      var scaleByW = screenW / _stuImg.height;
+      var scaleByH = screenH / _stuImg.width;
+      var baseScaleFactor = Math.min(scaleByW, scaleByH);
+      displayW = Math.round(_stuImg.height * baseScaleFactor * nz);
+      displayH = Math.round(_stuImg.width * baseScaleFactor * nz);
+    } else {
+      displayW = Math.round(window.innerWidth * nz);
+      displayH = Math.round(_stuFsBaseH * (displayW / _stuFsBaseW));
+    }
 
     var inner = document.getElementById('stuFsInner');
     if (inner) {
@@ -1680,10 +1780,26 @@
   };
   window.fsSetTool = function(t) {
     _stuFsDrawTool = t;
-    var pb = document.getElementById('fsPen'), eb = document.getElementById('fsEra');
-    if (pb && eb) {
-      if (t === 'pen') { pb.style.background='#667eea'; pb.style.color='white'; eb.style.background='transparent'; eb.style.color='#ccc'; }
-      else { eb.style.background='#667eea'; eb.style.color='white'; pb.style.background='transparent'; pb.style.color='#ccc'; }
+    var pb = document.getElementById('fsPen'), eb = document.getElementById('fsEra'), mb = document.getElementById('fsMove');
+    // Reset all
+    if (pb) { pb.style.background='transparent'; pb.style.color='#ccc'; }
+    if (eb) { eb.style.background='transparent'; eb.style.color='#ccc'; }
+    if (mb) { mb.style.background='transparent'; mb.style.color='#ccc'; }
+    // Highlight active
+    if (t === 'pen' && pb) { pb.style.background='#667eea'; pb.style.color='white'; }
+    else if (t === 'eraser' && eb) { eb.style.background='#667eea'; eb.style.color='white'; }
+    else if (t === 'move' && mb) { mb.style.background='#667eea'; mb.style.color='white'; }
+    // Move mode: disable overlay pointer-events so container handles scroll/pan
+    if (_stuFsOverlayCanvas) {
+      if (t === 'move') {
+        _stuFsOverlayCanvas.style.pointerEvents = 'none';
+        var sc = document.getElementById('stuFsScrollContainer');
+        if (sc) { sc.style.cursor = 'grab'; }
+      } else {
+        _stuFsOverlayCanvas.style.pointerEvents = 'auto';
+        var sc = document.getElementById('stuFsScrollContainer');
+        if (sc) { sc.style.cursor = 'default'; }
+      }
     }
   };
   window.fsSetColor = function(c) {
@@ -1701,9 +1817,19 @@
     // 将全屏书写内容同步回普通画布
     if (_stuFsOverlayCanvas && _stuOverlayCanvas && _stuOverlayCtx && _stuImg) {
       _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
-      // 全屏画布内部分辨率是原图尺寸，普通画布是缩放后的尺寸
-      // 需要将全屏手写内容缩放到普通画布尺寸
-      _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      if (_stuFsRotated) {
+        // 全屏画布内容是旋转过的，需要反向旋转90°（CCW）再缩放回普通画布尺寸
+        var tempC = document.createElement('canvas');
+        tempC.width = _stuOverlayCanvas.width;
+        tempC.height = _stuOverlayCanvas.height;
+        var tempCtx = tempC.getContext('2d');
+        tempCtx.translate(tempC.width / 2, tempC.height / 2);
+        tempCtx.rotate(-Math.PI / 2); // 反向旋转
+        tempCtx.drawImage(_stuFsOverlayCanvas, -_stuFsOverlayCanvas.height / 2, -_stuFsOverlayCanvas.width / 2, _stuFsOverlayCanvas.height, _stuFsOverlayCanvas.width);
+        _stuOverlayCtx.drawImage(tempC, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      } else {
+        _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      }
     }
 
     // 移除全屏层
@@ -1713,10 +1839,18 @@
     _stuFullscreenActive = false;
     _stuFsOverlay = null; _stuFsCanvas = null; _stuFsOverlayCanvas = null;
     _stuFsCtx = null; _stuFsOverlayCtx = null;
+    // 不自动提交，用户需要手动点击提交按钮
+  };
 
-    // 自动提交
-    if (_stuFsHomeworkId && _stuFsStudentId) {
-      studentSubmitHomework(_stuFsHomeworkId, _stuFsStudentId);
+  // 全屏提交并退出：先退出全屏（同步笔迹），然后提交
+  window.fsSubmitAndExit = function() {
+    var hwId = _stuFsHomeworkId;
+    var stuId = _stuFsStudentId;
+    // 先退出全屏（同步笔迹到普通画布）
+    exitStudentFullscreen();
+    // 然后提交
+    if (hwId && stuId) {
+      studentSubmitHomework(hwId, stuId);
     }
   };
 
@@ -1736,6 +1870,39 @@
     // 将叠加层（书写痕迹）缩放到原始尺寸并叠加
     if (_stuOverlayCanvas) {
       exportCtx.drawImage(_stuOverlayCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+    }
+    
+    var fmt = getImageFormat();
+    return exportCanvas.toDataURL(fmt, 0.92);
+  }
+
+  // 从全屏画布导出图像（处理旋转情况）
+  function exportFsCanvasImage() {
+    if (!_stuFsCanvas || !_stuImg) return null;
+    
+    var exportCanvas = document.createElement('canvas');
+    exportCanvas.width = _stuImg.width;
+    exportCanvas.height = _stuImg.height;
+    var exportCtx = exportCanvas.getContext('2d');
+    
+    // 绘制原始底图
+    exportCtx.drawImage(_stuImg, 0, 0);
+    
+    // 叠加手写内容
+    if (_stuFsOverlayCanvas) {
+      if (_stuFsRotated) {
+        // 反向旋转90°（CCW）还原到正常方向
+        var tempC = document.createElement('canvas');
+        tempC.width = _stuImg.width;
+        tempC.height = _stuImg.height;
+        var tempCtx = tempC.getContext('2d');
+        tempCtx.translate(tempC.width / 2, tempC.height / 2);
+        tempCtx.rotate(-Math.PI / 2);
+        tempCtx.drawImage(_stuFsOverlayCanvas, -_stuFsOverlayCanvas.height / 2, -_stuFsOverlayCanvas.width / 2, _stuFsOverlayCanvas.height, _stuFsOverlayCanvas.width);
+        exportCtx.drawImage(tempC, 0, 0);
+      } else {
+        exportCtx.drawImage(_stuFsOverlayCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+      }
     }
     
     var fmt = getImageFormat();
