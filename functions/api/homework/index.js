@@ -14,7 +14,7 @@
  *   image: string (base64)
  * }
  */
-import { jsonResponse, handleOptions, checkEnv, sbRequest, sbSelect, sbDelete, genId } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbRequest, sbSelect, sbDelete, genId, deleteStorageFiles } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -79,12 +79,44 @@ export const onRequestPost = async ({ request, env }) => {
     if (oldHwResult.data && oldHwResult.data.length > 0) {
       const oldHwIds = oldHwResult.data.map(h => h.id);
 
-      // 2. 删除旧作业的所有提交记录
+      // 2. 收集所有需要删除的 Storage 文件路径
+      const storageUrls = [];
+
+      // 2a. 旧作业的题目图片
+      const oldHwFull = await sbRequest(env, 'GET', 'homework', {
+        query: `select=id,image&class_id=eq.${cid}&tier=eq.${tier}`
+      });
+      if (oldHwFull.data) {
+        for (const hw of oldHwFull.data) {
+          if (hw.image) storageUrls.push(hw.image);
+        }
+      }
+
+      // 2b. 旧作业的所有提交图片（学生答案 + 教师批阅）
+      for (const oldId of oldHwIds) {
+        const subsResult = await sbRequest(env, 'GET', 'homework_submissions', {
+          query: `select=id,image,graded_image&homework_id=eq.${oldId}`
+        });
+        if (subsResult.data) {
+          for (const sub of subsResult.data) {
+            if (sub.image) storageUrls.push(sub.image);
+            if (sub.graded_image) storageUrls.push(sub.graded_image);
+          }
+        }
+      }
+
+      // 3. 删除 Storage 文件
+      if (storageUrls.length > 0) {
+        const deleted = await deleteStorageFiles(env, storageUrls);
+        console.log(`[homework POST] 已删除 ${deleted}/${storageUrls.length} 个 Storage 文件`);
+      }
+
+      // 4. 删除旧作业的所有提交记录
       for (const oldId of oldHwIds) {
         await sbDelete(env, 'homework_submissions', `homework_id=eq.${oldId}`);
       }
 
-      // 3. 删除旧作业
+      // 5. 删除旧作业
       const delResult = await sbDelete(env, 'homework', `class_id=eq.${cid}&tier=eq.${tier}`);
       if (delResult.error) {
         console.warn('[homework POST] Delete old homework warning:', delResult.error);
@@ -133,23 +165,53 @@ export const onRequestDelete = async ({ request, env }) => {
   }
 
   try {
-    // 1. 先删除该作业的所有提交记录
-    const subsResult = await sbRequest(env, 'GET', 'homework_submissions', {
-      query: `select=id&homework_id=eq.${id}`
+    // 1. 收集所有需要删除的 Storage 文件路径
+    const storageUrls = [];
+
+    // 1a. 作业本身的图片
+    const hwResult = await sbRequest(env, 'GET', 'homework', {
+      query: `select=id,image&id=eq.${id}`
     });
-    if (subsResult.data && subsResult.data.length > 0) {
-      await sbDelete(env, 'homework_submissions', `homework_id=eq.${id}`);
-      console.log(`[homework DELETE] Deleted ${subsResult.data.length} submissions for homework ${id}`);
+    if (hwResult.data) {
+      for (const hw of hwResult.data) {
+        if (hw.image) storageUrls.push(hw.image);
+      }
     }
 
-    // 2. 删除作业
+    // 1b. 该作业的所有提交图片（学生答案 + 教师批阅）
+    const subsResult = await sbRequest(env, 'GET', 'homework_submissions', {
+      query: `select=id,image,graded_image&homework_id=eq.${id}`
+    });
+    if (subsResult.data) {
+      for (const sub of subsResult.data) {
+        if (sub.image) storageUrls.push(sub.image);
+        if (sub.graded_image) storageUrls.push(sub.graded_image);
+      }
+    }
+
+    // 2. 删除 Storage 文件
+    if (storageUrls.length > 0) {
+      const deleted = await deleteStorageFiles(env, storageUrls);
+      console.log(`[homework DELETE] 已删除 ${deleted}/${storageUrls.length} 个 Storage 文件`);
+    }
+
+    // 3. 删除该作业的所有提交记录
+    const subsDelResult = await sbRequest(env, 'GET', 'homework_submissions', {
+      query: `select=id&homework_id=eq.${id}`
+    });
+    if (subsDelResult.data && subsDelResult.data.length > 0) {
+      await sbDelete(env, 'homework_submissions', `homework_id=eq.${id}`);
+      console.log(`[homework DELETE] Deleted ${subsDelResult.data.length} submissions for homework ${id}`);
+    }
+
+    // 4. 删除作业
     const result = await sbDelete(env, 'homework', `id=eq.${id}`);
     if (result.error) {
       console.error('[homework DELETE] Error:', result.error);
       return jsonResponse({ error: 'Delete failed', details: result.error }, 500);
     }
 
-    return jsonResponse({ ok: true, message: '作业及提交已删除' });
+    return jsonResponse({ ok: true, message: '作业及提交已删除（含 Storage 文件）' });
   } catch (err) {
     console.error('[homework DELETE] Unexpected error:', err);
     return jsonResponse({ error: err.message || 'Unexpected error' }, 500);

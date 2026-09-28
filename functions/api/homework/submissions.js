@@ -21,7 +21,7 @@
  *   comment: string
  * }
  */
-import { jsonResponse, handleOptions, checkEnv, sbRequest, sbDelete, genId } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbRequest, sbDelete, genId, deleteStorageFiles } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
 
@@ -177,13 +177,32 @@ export const onRequestDelete = async ({ request, env }) => {
       filter = `homework_id=eq.${homeworkId}`;
     }
 
+    // 1. 先查询要删除的提交记录，获取 Storage 文件路径
+    const subsResult = await sbRequest(env, 'GET', 'homework_submissions', {
+      query: `select=id,image,graded_image&${filter}`
+    });
+    const storageUrls = [];
+    if (subsResult.data) {
+      for (const sub of subsResult.data) {
+        if (sub.image) storageUrls.push(sub.image);
+        if (sub.graded_image) storageUrls.push(sub.graded_image);
+      }
+    }
+
+    // 2. 删除 Storage 文件
+    if (storageUrls.length > 0) {
+      const deleted = await deleteStorageFiles(env, storageUrls);
+      console.log(`[submissions DELETE] 已删除 ${deleted}/${storageUrls.length} 个 Storage 文件`);
+    }
+
+    // 3. 删除数据库记录
     const result = await sbDelete(env, 'homework_submissions', filter);
     if (result.error) {
       console.error('[submissions DELETE] Error:', result.error);
       return jsonResponse({ error: 'Delete failed', details: result.error }, 500);
     }
 
-    return jsonResponse({ ok: true, message: '已删除' });
+    return jsonResponse({ ok: true, message: '已删除（含 Storage 文件）' });
   } catch (err) {
     console.error('[submissions DELETE] Unexpected error:', err);
     return jsonResponse({ error: err.message || 'Unexpected error' }, 500);

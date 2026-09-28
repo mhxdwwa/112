@@ -87,3 +87,75 @@ export function checkEnv(env) {
   }
   return null;
 }
+
+// --- Supabase Storage 工具函数 ---
+
+const STORAGE_BUCKET = 'homework-images';
+
+/**
+ * 从 Storage URL 中提取存储路径
+ * URL 格式: {SUPABASE_URL}/storage/v1/object/public/homework-images/{path}
+ * 返回: {path} 或 null
+ */
+export function extractStoragePath(url, supabaseUrl) {
+  if (!url || typeof url !== 'string') return null;
+  // 只处理 Storage URL（http/https 开头）
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return null;
+  
+  const marker = '/storage/v1/object/public/' + STORAGE_BUCKET + '/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) {
+    // 也尝试非 public 路径
+    const marker2 = '/storage/v1/object/' + STORAGE_BUCKET + '/';
+    const idx2 = url.indexOf(marker2);
+    if (idx2 === -1) return null;
+    return url.substring(idx2 + marker2.length);
+  }
+  return url.substring(idx + marker.length);
+}
+
+/**
+ * 从 Supabase Storage 删除单个文件
+ * 返回 Promise<boolean>
+ */
+export async function deleteStorageFile(env, path) {
+  if (!path) return false;
+  try {
+    const url = env.SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path;
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': 'Bearer ' + env.SUPABASE_SERVICE_KEY,
+      }
+    });
+    if (res.ok) {
+      console.log('[Storage] 删除成功:', path);
+      return true;
+    } else {
+      const errText = await res.text().catch(() => '');
+      console.warn('[Storage] 删除失败:', path, res.status, errText);
+      return false;
+    }
+  } catch (err) {
+    console.warn('[Storage] 删除异常:', path, err.message);
+    return false;
+  }
+}
+
+/**
+ * 批量删除 Storage 文件（从 URL 列表中提取路径并删除）
+ * urls: 字符串数组，每个是 Storage URL 或 null
+ * 返回 Promise<number> 成功删除的数量
+ */
+export async function deleteStorageFiles(env, urls) {
+  let count = 0;
+  for (const url of urls) {
+    const path = extractStoragePath(url, env.SUPABASE_URL);
+    if (path) {
+      const ok = await deleteStorageFile(env, path);
+      if (ok) count++;
+    }
+  }
+  return count;
+}
