@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v280 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送
+// ========== 作业岛系统 v281 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端)
 (function() {
   'use strict';
 
@@ -13,47 +13,184 @@
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
   var _realtimeChannel = null;
   var _realtimeInitialized = false;
+  var _realtimeRetryCount = 0;
+  var _realtimeMaxRetries = 3;
+  var _isStudentView = false;
+  var _currentStudentId = null;
+
+  // 确保 Supabase Realtime 已开启（通过 REST API 检查并提示）
+  async function ensureRealtimeEnabled() {
+    try {
+      // 尝试订阅来测试 realtime 是否可用
+      var testChannel = 'test-realtime-' + Date.now();
+      var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      
+      // 如果订阅成功，说明 realtime 已开启
+      var channel = supabase.channel(testChannel)
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'homework_submissions' },
+          function() {}
+        )
+        .subscribe(function(status, err) {
+          if (status === 'SUBSCRIBED') {
+            console.log('[homework realtime] ✓ Realtime 已启用');
+            channel.unsubscribe();
+          } else if (status === 'CHANNEL_ERROR') {
+            console.warn('[homework realtime] ⚠ Realtime 可能未开启，请在 Supabase Dashboard 中启用 homework_submissions 表的 Realtime');
+            console.warn('[homework realtime] 步骤: Dashboard → Database → Replication → 开启 homework_submissions');
+            channel.unsubscribe();
+          }
+        });
+      
+      // 5秒后如果还没连接成功，取消测试
+      setTimeout(function() {
+        try { channel.unsubscribe(); } catch(e) {}
+      }, 5000);
+    } catch (err) {
+      console.warn('[homework realtime] 检查失败:', err);
+    }
+  }
 
   // 初始化 Supabase Realtime 订阅
-  function initRealtime() {
-    if (_realtimeInitialized || !window.supabase || !window.supabase.createClient) {
-      console.warn('[homework realtime] Supabase client not available');
+  function initRealtime(isStudent, studentId) {
+    if (_realtimeInitialized) return;
+    
+    _isStudentView = isStudent || false;
+    _currentStudentId = studentId || null;
+    
+    if (!window.supabase || !window.supabase.createClient) {
+      console.warn('[homework realtime] Supabase client not available, will retry...');
+      // 延迟重试
+      if (_realtimeRetryCount < _realtimeMaxRetries) {
+        _realtimeRetryCount++;
+        setTimeout(function() { initRealtime(isStudent, studentId); }, 2000);
+      }
       return;
     }
     
     try {
       var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       
-      // 订阅 homework_submissions 表的 INSERT 事件
-      _realtimeChannel = supabase
-        .channel('homework-submissions-changes')
-        .on('postgres_changes', 
-          { event: 'INSERT', schema: 'public', table: 'homework_submissions' },
-          function(payload) {
-            console.log('[homework realtime] 新提交:', payload.new);
-            handleNewSubmission(payload.new);
+      // 创建频道
+      var channelName = 'homework-changes-' + (isStudent ? 'student-' + studentId : 'teacher') + '-' + Date.now();
+      _realtimeChannel = supabase.channel(channelName);
+      
+      if (isStudent) {
+        // 学生端：只监听 UPDATE 事件（教师批改完成）
+        _realtimeChannel = _realtimeChannel
+          .on('postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'homework_submissions' },
+            function(payload) {
+              console.log('[homework realtime] 学生收到批改通知:', payload.new);
+              handleStudentGradedNotification(payload.new);
+            }
+          );
+      } else {
+        // 教师端：监听 INSERT 和 UPDATE 事件
+        _realtimeChannel = _realtimeChannel
+          .on('postgres_changes', 
+            { event: 'INSERT', schema: 'public', table: 'homework_submissions' },
+            function(payload) {
+              console.log('[homework realtime] 新提交:', payload.new);
+              handleNewSubmission(payload.new);
+            }
+          )
+          .on('postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'homework_submissions' },
+            function(payload) {
+              console.log('[homework realtime] 提交更新:', payload.new);
+              handleSubmissionUpdate(payload.new);
+            }
+          );
+      }
+      
+      _realtimeChannel.subscribe(function(status, err) {
+        console.log('[homework realtime] 订阅状态:', status);
+        if (status === 'SUBSCRIBED') {
+          _realtimeInitialized = true;
+          _realtimeRetryCount = 0;
+          console.log('[homework realtime] ✓ 已连接，实时同步已启用 (' + (isStudent ? '学生端' : '教师端') + ')');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('[homework realtime] 连接失败:', err);
+          // 断线重连
+          if (_realtimeRetryCount < _realtimeMaxRetries) {
+            _realtimeRetryCount++;
+            console.log('[homework realtime] 尝试重连 (' + _realtimeRetryCount + '/' + _realtimeMaxRetries + ')...');
+            setTimeout(function() {
+              _realtimeInitialized = false;
+              initRealtime(isStudent, studentId);
+            }, 3000);
           }
-        )
-        .on('postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'homework_submissions' },
-          function(payload) {
-            console.log('[homework realtime] 提交更新:', payload.new);
-            handleSubmissionUpdate(payload.new);
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[homework realtime] 连接超时');
+          if (_realtimeRetryCount < _realtimeMaxRetries) {
+            _realtimeRetryCount++;
+            setTimeout(function() {
+              _realtimeInitialized = false;
+              initRealtime(isStudent, studentId);
+            }, 3000);
           }
-        )
-        .subscribe(function(status) {
-          console.log('[homework realtime] 订阅状态:', status);
-          if (status === 'SUBSCRIBED') {
-            _realtimeInitialized = true;
-            console.log('[homework realtime] ✓ 已连接，实时同步已启用');
-          }
-        });
+        }
+      });
     } catch (err) {
       console.warn('[homework realtime] 初始化失败:', err);
     }
   }
 
-  // 处理新提交
+  // 学生端：处理教师批改通知
+  function handleStudentGradedNotification(updatedSub) {
+    // 检查是否是我的提交
+    if (_currentStudentId && updatedSub.student_id !== parseInt(_currentStudentId)) {
+      return; // 不是我的提交，忽略
+    }
+    
+    // 检查是否已批改
+    if (!updatedSub.graded_at) return;
+    
+    // 更新本地数据
+    var existing = homeworkSubmissions.find(function(s) { return s.id === updatedSub.id; });
+    if (existing) {
+      existing.graded = true;
+      existing.grade = updatedSub.grade || '';
+      existing.coins = updatedSub.coins_awarded || 0;
+      existing.comment = updatedSub.comment || '';
+      existing.gradedImage = updatedSub.graded_image;
+      existing.gradedAt = updatedSub.graded_at;
+    } else {
+      // 如果本地没有这条记录，从云端数据创建
+      var newSub = {
+        id: updatedSub.id,
+        homeworkId: updatedSub.homework_id,
+        studentId: updatedSub.student_id,
+        studentName: updatedSub.student_name || '',
+        image: updatedSub.image,
+        gradedImage: updatedSub.graded_image,
+        graded: true,
+        grade: updatedSub.grade || '',
+        coins: updatedSub.coins_awarded || 0,
+        comment: updatedSub.comment || '',
+        submittedAt: updatedSub.submitted_at,
+        gradedAt: updatedSub.graded_at
+      };
+      homeworkSubmissions.push(newSub);
+    }
+    
+    saveData();
+    
+    // 显示通知并刷新视图
+    var grade = updatedSub.grade || '';
+    var coins = updatedSub.coins_awarded || 0;
+    showNotification('🎉 作业已批改: ' + grade + '，获得 ' + coins + ' 金币！', 'success');
+    
+    // 刷新学生视图
+    var container = document.getElementById('homeworkContent');
+    if (container && _currentStudentId) {
+      var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+      renderStudentView(container, parseInt(_currentStudentId), myClassId);
+    }
+  }
+
+  // 处理新提交（教师端）
   function handleNewSubmission(newSub) {
     // 检查是否已存在（避免重复）
     var exists = homeworkSubmissions.find(function(s) { return s.id === newSub.id; });
@@ -87,7 +224,7 @@
     }
   }
 
-  // 处理提交更新（批改完成）
+  // 处理提交更新（教师端）
   function handleSubmissionUpdate(updatedSub) {
     var existing = homeworkSubmissions.find(function(s) { return s.id === updatedSub.id; });
     if (!existing) return;
@@ -302,9 +439,12 @@
   }
 
   // 从云端加载数据
-  async function loadFromCloud(classIdOverride) {
+  async function loadFromCloud(classIdOverride, forceReload) {
     var loadClassId = classIdOverride || currentClassId;
-    if (!loadClassId || _cloudDataLoaded) return;
+    if (!loadClassId) return;
+    
+    // 学生端或强制重载时，忽略 _cloudDataLoaded 标志
+    if (_cloudDataLoaded && !forceReload && !_isStudentView) return;
     
     try {
       // 加载分层数据
@@ -413,8 +553,20 @@
       var myStudentId = parseInt(currentUser.studentId);
       var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
       
-      // 首次加载时从云端同步数据
-      if (!_cloudDataLoaded && myClassId) {
+      // 初始化学生端 Realtime 订阅
+      if (!_realtimeInitialized) {
+        initRealtime(true, myStudentId);
+      }
+      
+      // 显示加载中状态
+      if (!_cloudDataLoaded) {
+        container.innerHTML = '<div style="text-align:center;padding:60px 20px;">' +
+          '<div style="font-size:48px;margin-bottom:15px;">⏳</div>' +
+          '<div style="color:#666;font-size:14px;">正在加载作业数据...</div></div>';
+      }
+      
+      // 从云端同步数据，确保分层数据加载完成后再渲染
+      if (myClassId) {
         loadFromCloud(myClassId).then(function() {
           renderStudentView(container, myStudentId, myClassId);
         });
@@ -433,9 +585,11 @@
       return;
     }
     
-    // 初始化 Realtime 订阅（教师端）
+    // 初始化教师端 Realtime 订阅
     if (!_realtimeInitialized) {
-      initRealtime();
+      initRealtime(false, null);
+      // 检查 Realtime 是否已启用
+      ensureRealtimeEnabled();
     }
     
     // 首次加载时从云端同步数据
@@ -1497,5 +1651,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v280 - 图片压缩 + 实时同步');
+  console.log('[homework-system] 作业岛系统已加载 v281 - 图片压缩 + 师生双端实时同步');
 })();
