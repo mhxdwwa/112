@@ -1480,7 +1480,7 @@
     // 画布滚动容器（占满全屏，除了工具栏）
     var cc = document.createElement('div');
     cc.id = 'stuFsScrollContainer';
-    cc.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:none;';
+    cc.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:40px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:none;';
 
     // 内层容器（用于撑开滚动高度）
     var inner = document.createElement('div');
@@ -1501,23 +1501,23 @@
 
     // 底部工具栏（固定）
     var tb = document.createElement('div');
-    tb.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:center;gap:4px;padding:0 8px;background:rgba(20,20,20,0.95);border-top:1px solid #333;';
+    tb.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:40px;display:flex;align-items:center;justify-content:center;gap:3px;padding:0 6px;background:rgba(20,20,20,0.95);border-top:1px solid #333;';
     tb.innerHTML =
-      '<button id="fsPen" onclick="fsSetTool(\'pen\')" style="width:32px;height:32px;background:#667eea;color:white;border:none;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>' +
-      '<button id="fsEra" onclick="fsSetTool(\'eraser\')" style="width:32px;height:32px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>' +
-      '<button id="fsMove" onclick="fsSetTool(\'move\')" title="移动" style="width:32px;height:32px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✋</button>' +
-      '<span style="width:1px;height:22px;background:rgba(255,255,255,0.15);margin:0 3px;flex-shrink:0;"></span>' +
-      '<div onclick="fsSetColor(\'#000000\')" class="fs-clr" data-color="#000000" style="width:22px;height:22px;border-radius:50%;background:#000;border:2px solid #667eea;cursor:pointer;flex-shrink:0;"></div>' +
-      '<div onclick="fsSetColor(\'#3b82f6\')" class="fs-clr" data-color="#3b82f6" style="width:22px;height:22px;border-radius:50%;background:#3b82f6;border:2px solid rgba(255,255,255,0.3);cursor:pointer;flex-shrink:0;"></div>' +
-      '<span style="width:1px;height:22px;background:rgba(255,255,255,0.15);margin:0 3px;flex-shrink:0;"></span>' +
-      '<input type="range" id="fsLineWidth" min="1" max="10" value="' + _stuDrawLineWidth + '" oninput="fsSetWidth(this.value)" style="width:55px;height:18px;cursor:pointer;accent-color:#667eea;flex-shrink:0;">' +
-      '<span style="width:1px;height:22px;background:rgba(255,255,255,0.15);margin:0 3px;flex-shrink:0;"></span>' +
-      '<button onclick="fsZoom(1.4)" style="width:30px;height:30px;background:transparent;color:white;border:none;font-size:14px;cursor:pointer;flex-shrink:0;">🔍</button>' +
-      '<button onclick="fsZoom(0.71)" style="width:30px;height:30px;background:transparent;color:white;border:none;font-size:12px;cursor:pointer;flex-shrink:0;">🔎</button>' +
-      '<button onclick="fsResetZoom()" style="width:30px;height:30px;background:transparent;color:white;border:none;font-size:14px;cursor:pointer;flex-shrink:0;">↺</button>' +
-      '<button onclick="fsClear()" style="width:30px;height:30px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🗑</button>' +
-      '<span style="width:1px;height:22px;background:rgba(255,255,255,0.15);margin:0 3px;flex-shrink:0;"></span>' +
-      '<button onclick="exitStudentFullscreen()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">退出</button>';
+      '<button id="fsPen" onclick="fsSetTool(\'pen\')" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>' +
+      '<button id="fsEra" onclick="fsSetTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>' +
+      '<button id="fsMove" onclick="fsSetTool(\'move\')" title="移动" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✋</button>' +
+      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
+      '<div onclick="fsSetColor(\'#000000\')" class="fs-clr" data-color="#000000" style="width:18px;height:18px;border-radius:50%;background:#000;border:2px solid #667eea;cursor:pointer;flex-shrink:0;"></div>' +
+      '<div onclick="fsSetColor(\'#3b82f6\')" class="fs-clr" data-color="#3b82f6" style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:2px solid rgba(255,255,255,0.3);cursor:pointer;flex-shrink:0;"></div>' +
+      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
+      '<input type="range" id="fsLineWidth" min="1" max="10" value="' + _stuDrawLineWidth + '" oninput="fsSetWidth(this.value)" style="width:45px;height:14px;cursor:pointer;accent-color:#667eea;flex-shrink:0;">' +
+      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
+      '<button onclick="fsZoom(1.4)" style="width:24px;height:24px;background:transparent;color:white;border:none;font-size:11px;cursor:pointer;flex-shrink:0;">🔍</button>' +
+      '<button onclick="fsZoom(0.71)" style="width:24px;height:24px;background:transparent;color:white;border:none;font-size:10px;cursor:pointer;flex-shrink:0;">🔎</button>' +
+      '<button onclick="fsResetZoom()" style="width:24px;height:24px;background:transparent;color:white;border:none;font-size:11px;cursor:pointer;flex-shrink:0;">↺</button>' +
+      '<button onclick="fsClear()" style="width:24px;height:24px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🗑</button>' +
+      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
+      '<button onclick="exitStudentFullscreen()" style="padding:4px 8px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">退出</button>';
 
     el.appendChild(cc);
     el.appendChild(tb);
@@ -1577,7 +1577,7 @@
   function fsInitCanvas() {
     var img = _stuImg;
     var screenW = window.innerWidth;
-    var screenH = window.innerHeight - 50; // 减去工具栏高度
+    var screenH = window.innerHeight - 40; // 减去工具栏高度
 
     // 判断是否需要旋转：横屏图片旋转90°铺满竖屏
     _stuFsRotated = (img.width > img.height);
@@ -1677,10 +1677,21 @@
   function fsMove(e) {
     if (_stuFsDrawTool === 'move' || !_stuFsDrawing) return;
     var p = fsGetPos(e);
+    // 防止从旧位置画长线：如果距离过大，重置起点
+    var dx = p.x - _stuFsLastX, dy = p.y - _stuFsLastY;
+    var dist = Math.sqrt(dx*dx + dy*dy);
+    var maxJump = _stuFsOverlayCanvas.width * 0.3; // 最大允许跳跃30%画布宽度
+    if (dist > maxJump) {
+      _stuFsLastX = p.x; _stuFsLastY = p.y;
+      return;
+    }
     fsDrawLine(_stuFsLastX, _stuFsLastY, p.x, p.y);
     _stuFsLastX = p.x; _stuFsLastY = p.y;
   }
-  function fsUp() { _stuFsDrawing = false; }
+  function fsUp() { 
+    _stuFsDrawing = false;
+    _stuFsLastX = -1; _stuFsLastY = -1; // 重置，防止下次触摸从旧位置画线
+  }
 
   function fsTouchStart(e) {
     if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸，让容器原生滚动
@@ -1706,13 +1717,24 @@
       if (nz >= 0.5 && nz <= 8) fsApplyZoom(nz);
     } else if (ts.length === 1 && _stuFsDrawing) {
       var p = fsGetPos({ clientX: ts[0].clientX, clientY: ts[0].clientY });
+      // 防止从旧位置画长线
+      var dx = p.x - _stuFsLastX, dy = p.y - _stuFsLastY;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      var maxJump = _stuFsOverlayCanvas.width * 0.3;
+      if (dist > maxJump) {
+        _stuFsLastX = p.x; _stuFsLastY = p.y;
+        return;
+      }
       fsDrawLine(_stuFsLastX, _stuFsLastY, p.x, p.y);
       _stuFsLastX = p.x; _stuFsLastY = p.y;
     }
   }
   function fsTouchEnd(e) {
     if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸
-    if (e.touches.length === 0) { _stuFsDrawing = false; }
+    if (e.touches.length === 0) { 
+      _stuFsDrawing = false;
+      _stuFsLastX = -1; _stuFsLastY = -1; // 重置，防止下次触摸从旧位置画线
+    }
     else if (e.touches.length === 1) {
       _stuFsDrawing = true;
       var p = fsGetPos({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
@@ -1757,7 +1779,7 @@
     if (_stuFsRotated) {
       // 旋转模式：从基准尺寸乘以新zoom
       var screenW = window.innerWidth;
-      var screenH = window.innerHeight - 50;
+      var screenH = window.innerHeight - 40; // 减去工具栏高度
       var scaleByW = screenW / _stuImg.height;
       var scaleByH = screenH / _stuImg.width;
       var baseScaleFactor = Math.min(scaleByW, scaleByH);
