@@ -1005,28 +1005,7 @@
       // 未提交 - 直接在老师题目上书写（画布即题目）
       html += '<div class="hw-card">';
       html += '<div class="hw-card-title">✏️ 在题目上书写答案</div>';
-      html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">直接在老师的题目图片上书写答案，写好后点击提交</div>';
-      // 画布工具栏（始终可见，移动端优化）
-      html += '<div id="studentCanvasToolbar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:linear-gradient(135deg,#e0e7ff,#f0f4ff);border-radius:12px;border:2px solid #c7d2fe;box-shadow:0 2px 8px rgba(102,126,234,0.15);position:sticky;top:0;z-index:10;">';
-      html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="padding:8px 14px;background:#667eea;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:44px;min-height:36px;">✏️ 画笔</button>';
-      html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="padding:8px 14px;background:#444;color:#ccc;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:44px;min-height:36px;">🧹 橡皮</button>';
-      html += '<span style="width:1px;height:24px;background:#c7d2fe;margin:0 4px;"></span>';
-      // 颜色选择
-      var stuColors = ['#000000','#ef4444','#3b82f6','#22c55e','#f59e0b'];
-      stuColors.forEach(function(c) {
-        html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:28px;height:28px;border-radius:50%;background:' + c + ';cursor:pointer;border:3px solid ' + (c === '#000000' ? '#667eea' : 'transparent') + ';box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>';
-      });
-      html += '<span style="width:1px;height:24px;background:#c7d2fe;margin:0 4px;"></span>';
-      html += '<select id="stuDrawLineWidth" onchange="setStudentDrawLineWidth(this.value)" style="padding:6px 10px;background:white;border:2px solid #c7d2fe;border-radius:8px;font-size:13px;font-weight:600;min-height:36px;">';
-      html += '<option value="2">细</option><option value="3" selected>中</option><option value="5">粗</option>';
-      html += '</select>';
-      html += '<span style="width:1px;height:24px;background:#c7d2fe;margin:0 4px;"></span>';
-      // 缩放按钮
-      html += '<button onclick="zoomStudentCanvas(1.2)" style="padding:8px 12px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:36px;min-height:36px;">🔍+</button>';
-      html += '<button onclick="zoomStudentCanvas(0.8)" style="padding:8px 12px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:36px;min-height:36px;">🔍-</button>';
-      html += '<button onclick="resetStudentCanvasZoom()" style="padding:8px 12px;background:#6b7280;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:36px;min-height:36px;">↺</button>';
-      html += '<button onclick="clearStudentCanvas()" style="padding:8px 14px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:44px;min-height:36px;">🗑 清除</button>';
-      html += '</div>';
+      html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">直接在题目上作答或者作业本写好拍照作答</div>';
       // 画布容器（老师的题目图片作为底图 + 透明叠加层用于书写）
       html += '<div id="studentCanvasContainer" style="width:100%;overflow:auto;border-radius:8px;border:2px solid #e9ecef;background:#f8f9fa;-webkit-overflow-scrolling:touch;position:relative;">';
       if (myHomework.image) {
@@ -1036,6 +1015,21 @@
         html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;"></canvas>';
         html += '<div style="padding:30px;text-align:center;color:#999;font-size:13px;">本题没有图片</div>';
       }
+      // 浮动工具栏（画布内底部，紧凑设计）
+      html += '<div id="studentCanvasToolbar" style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:4px;padding:5px 8px;background:rgba(30,30,30,0.85);border-radius:20px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(0,0,0,0.3);">';
+      html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="width:30px;height:30px;background:#667eea;color:white;border:none;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✏️</button>';
+      html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:30px;height:30px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🧹</button>';
+      html += '<span style="width:1px;height:18px;background:rgba(255,255,255,0.2);margin:0 2px;"></span>';
+      var stuColors = ['#000000','#ef4444','#3b82f6','#22c55e','#f59e0b'];
+      stuColors.forEach(function(c) {
+        html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:20px;height:20px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === '#000000' ? '#667eea' : 'rgba(255,255,255,0.3)') + ';flex-shrink:0;"></div>';
+      });
+      html += '<span style="width:1px;height:18px;background:rgba(255,255,255,0.2);margin:0 2px;"></span>';
+      html += '<button onclick="zoomStudentCanvas(1.3)" style="width:28px;height:28px;background:transparent;color:white;border:none;border-radius:50%;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🔍</button>';
+      html += '<button onclick="zoomStudentCanvas(0.77)" style="width:28px;height:28px;background:transparent;color:white;border:none;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🔎</button>';
+      html += '<button onclick="resetStudentCanvasZoom()" style="width:28px;height:28px;background:transparent;color:white;border:none;border-radius:50%;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">↺</button>';
+      html += '<button onclick="clearStudentCanvas()" style="width:28px;height:28px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">🗑</button>';
+      html += '</div>';
       html += '</div>';
       html += '<div style="font-size:11px;color:#888;margin-top:5px;text-align:center;">💡 双指捏合可缩放，单指书写答案</div>';
       // 可选：额外上传照片（如答题纸）
@@ -1262,8 +1256,8 @@
       var zoomRatio = currentDistance / _stuInitialPinchDistance;
       var newZoom = _stuInitialZoom * zoomRatio;
       
-      // 限制缩放范围 0.5x - 4x
-      if (newZoom >= 0.5 && newZoom <= 4) {
+      // 限制缩放范围 0.5x - 6x
+      if (newZoom >= 0.5 && newZoom <= 6) {
         applyStudentZoom(newZoom);
       }
     } else if (touches.length === 1 && _stuIsDrawing) {
@@ -1295,7 +1289,7 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  // 应用缩放（同时缩放底图和叠加层）
+  // 应用缩放（从原图重绘，避免模糊）
   function applyStudentZoom(newZoom) {
     if (!_stuCanvas || !_stuImg || !_stuCtx || !_stuOverlayCanvas) return;
     
@@ -1303,39 +1297,34 @@
     var newWidth = Math.round(_stuBaseWidth * _stuZoom);
     var newHeight = Math.round(_stuBaseHeight * _stuZoom);
     
-    // 保存底图当前内容
-    var tempBaseCanvas = document.createElement('canvas');
-    tempBaseCanvas.width = _stuCanvas.width;
-    tempBaseCanvas.height = _stuCanvas.height;
-    var tempBaseCtx = tempBaseCanvas.getContext('2d');
-    tempBaseCtx.drawImage(_stuCanvas, 0, 0);
-    
-    // 保存叠加层当前内容
+    // 保存叠加层当前内容（手写内容）
     var tempOverlayCanvas = document.createElement('canvas');
     tempOverlayCanvas.width = _stuOverlayCanvas.width;
     tempOverlayCanvas.height = _stuOverlayCanvas.height;
     var tempOverlayCtx = tempOverlayCanvas.getContext('2d');
     tempOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0);
     
-    // 调整两个画布尺寸（buffer + CSS）
+    // 调整底图画布尺寸（buffer + CSS）
     _stuCanvas.width = newWidth;
     _stuCanvas.height = newHeight;
     _stuCanvas.style.width = newWidth + 'px';
     _stuCanvas.style.height = newHeight + 'px';
+    
+    // 从原始图片重绘底图（避免多次缩放导致的模糊）
+    _stuCtx.drawImage(_stuImg, 0, 0, newWidth, newHeight);
+    
+    // 调整叠加层尺寸并重绘手写内容
     _stuOverlayCanvas.width = newWidth;
     _stuOverlayCanvas.height = newHeight;
     _stuOverlayCanvas.style.width = newWidth + 'px';
     _stuOverlayCanvas.style.height = newHeight + 'px';
-    
-    // 重新绘制（缩放图像）
-    _stuCtx.drawImage(tempBaseCanvas, 0, 0, newWidth, newHeight);
     _stuOverlayCtx.drawImage(tempOverlayCanvas, 0, 0, newWidth, newHeight);
   }
 
   // 按钮缩放
   window.zoomStudentCanvas = function(factor) {
     var newZoom = _stuZoom * factor;
-    if (newZoom >= 0.5 && newZoom <= 4) {
+    if (newZoom >= 0.5 && newZoom <= 6) {
       applyStudentZoom(newZoom);
     }
   };
@@ -1382,12 +1371,12 @@
       if (tool === 'pen') {
         penBtn.style.background = '#667eea';
         penBtn.style.color = 'white';
-        eraserBtn.style.background = '#444';
+        eraserBtn.style.background = 'transparent';
         eraserBtn.style.color = '#ccc';
       } else {
         eraserBtn.style.background = '#667eea';
         eraserBtn.style.color = 'white';
-        penBtn.style.background = '#444';
+        penBtn.style.background = 'transparent';
         penBtn.style.color = '#ccc';
       }
     }
@@ -1402,7 +1391,7 @@
     window.setStudentDrawTool('pen');
     var btns = document.querySelectorAll('.stu-pen-color-btn');
     btns.forEach(function(btn) {
-      btn.style.border = '2px solid ' + (btn.getAttribute('data-color') === color ? '#667eea' : 'transparent');
+      btn.style.border = '2px solid ' + (btn.getAttribute('data-color') === color ? '#667eea' : 'rgba(255,255,255,0.3)');
     });
   };
 
