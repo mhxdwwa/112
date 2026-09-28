@@ -26,9 +26,10 @@
   Content-Type: application/pdf
   Access-Control-Allow-Origin: *
 
-# JavaScript 文件 - 缓存1分钟，版本号确保更新
+# JavaScript 文件 - 不缓存，确保每次加载最新代码
+# v300: 改为 no-cache，彻底解决移动端缓存旧JS的问题
 /*.js
-  Cache-Control: public, max-age=60, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
 
 # CSS 文件 - 缓存1分钟
 /*.css
