@@ -21,7 +21,7 @@
     // --- 游戏模块 ---
     'quiz-bank':       { src: 'quiz-bank.js?v=2' },
     'quiz':            { src: 'quiz.js?v=166', deps: ['quiz-bank'] },
-    'pig-run':         { src: 'pig-run.js?v=166' },
+    'pig-run':         { src: 'pig-run.js?v=274' },
     'match3':          { src: 'match3.js?v=166' },
     'happy-run':       { src: 'happy-run.js?v=269' }
   };
