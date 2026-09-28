@@ -1021,6 +1021,7 @@
       html += '<div id="studentCanvasToolbar" style="display:flex;align-items:center;justify-content:center;gap:3px;margin-top:8px;padding:5px 6px;background:rgba(30,30,30,0.85);border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">';
       html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>';
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>';
+      html += '<button id="stuToolMove" onclick="setStudentDrawTool(\'move\')" title="移动图片" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✋</button>';
       // 全屏按钮（仅移动端显示）
       if (window.innerWidth <= 768) {
         html += '<button id="stuToolFullscreen" onclick="enterStudentFullscreen()" style="width:26px;height:26px;background:transparent;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">⛶</button>';
@@ -1381,21 +1382,35 @@
     _stuDrawTool = tool;
     var penBtn = document.getElementById('stuToolPen');
     var eraserBtn = document.getElementById('stuToolEraser');
-    if (penBtn && eraserBtn) {
-      if (tool === 'pen') {
-        penBtn.style.background = '#667eea';
-        penBtn.style.color = 'white';
-        eraserBtn.style.background = 'transparent';
-        eraserBtn.style.color = '#ccc';
-      } else {
-        eraserBtn.style.background = '#667eea';
-        eraserBtn.style.color = 'white';
-        penBtn.style.background = 'transparent';
-        penBtn.style.color = '#ccc';
-      }
+    var moveBtn = document.getElementById('stuToolMove');
+    // Reset all tool buttons
+    if (penBtn) { penBtn.style.background = 'transparent'; penBtn.style.color = '#ccc'; }
+    if (eraserBtn) { eraserBtn.style.background = 'transparent'; eraserBtn.style.color = '#ccc'; }
+    if (moveBtn) { moveBtn.style.background = 'transparent'; moveBtn.style.color = '#ccc'; }
+    // Highlight active tool
+    if (tool === 'pen' && penBtn) {
+      penBtn.style.background = '#667eea';
+      penBtn.style.color = 'white';
+    } else if (tool === 'eraser' && eraserBtn) {
+      eraserBtn.style.background = '#667eea';
+      eraserBtn.style.color = 'white';
+    } else if (tool === 'move' && moveBtn) {
+      moveBtn.style.background = '#667eea';
+      moveBtn.style.color = 'white';
     }
+    // Move mode: disable overlay pointer-events so container handles scroll/pan
     if (_stuOverlayCanvas) {
-      _stuOverlayCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+      if (tool === 'move') {
+        _stuOverlayCanvas.style.pointerEvents = 'none';
+        _stuOverlayCanvas.style.cursor = 'default';
+        var container = document.getElementById('studentCanvasContainer');
+        if (container) { container.style.cursor = 'grab'; }
+      } else {
+        _stuOverlayCanvas.style.pointerEvents = 'auto';
+        _stuOverlayCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+        var container = document.getElementById('studentCanvasContainer');
+        if (container) { container.style.cursor = 'default'; }
+      }
     }
   };
 
@@ -2499,6 +2514,7 @@
     html += '<button id="toolPen" onclick="setDrawTool(\'pen\')" style="padding:6px 12px;background:#667eea;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">✏️ 画笔</button>';
     html += '<button id="toolEraser" onclick="setDrawTool(\'eraser\')" style="padding:6px 12px;background:#444;color:#ccc;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🧹 橡皮</button>';
     html += '<button id="toolText" onclick="setDrawTool(\'text\')" style="padding:6px 12px;background:#444;color:#ccc;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">⌨️ 打字</button>';
+    html += '<button id="toolMove" onclick="setDrawTool(\'move\')" title="移动图片" style="padding:6px 12px;background:#444;color:#ccc;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">✋ 移动</button>';
     html += '<span style="width:1px;height:24px;background:#444;margin:0 4px;"></span>';
     // 颜色选择
     PEN_COLORS.forEach(function(c) {
@@ -2824,7 +2840,7 @@
 
   window.setDrawTool = function(tool) {
     _drawTool = tool;
-    var tools = ['Pen', 'Eraser', 'Text'];
+    var tools = ['Pen', 'Eraser', 'Text', 'Move'];
     tools.forEach(function(t) {
       var btn = document.getElementById('tool' + t);
       if (btn) {
@@ -2837,9 +2853,19 @@
         }
       }
     });
-    // 更新画布光标（使用叠加层）
+    // Move mode: disable overlay pointer-events so container handles scroll/pan
     if (_gradeOverlayCanvas) {
-      _gradeOverlayCanvas.style.cursor = tool === 'text' ? 'text' : (tool === 'eraser' ? 'cell' : 'crosshair');
+      if (tool === 'move') {
+        _gradeOverlayCanvas.style.pointerEvents = 'none';
+        _gradeOverlayCanvas.style.cursor = 'default';
+        var container = document.getElementById('canvasContainer');
+        if (container) { container.style.cursor = 'grab'; }
+      } else {
+        _gradeOverlayCanvas.style.pointerEvents = 'auto';
+        _gradeOverlayCanvas.style.cursor = tool === 'text' ? 'text' : (tool === 'eraser' ? 'cell' : 'crosshair');
+        var container = document.getElementById('canvasContainer');
+        if (container) { container.style.cursor = 'default'; }
+      }
     }
   };
 
