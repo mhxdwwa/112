@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v311 ==========
+// ========== 作业岛系统 v312 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v311';
+  var HW_DATA_VERSION = 'v312';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -1023,10 +1023,8 @@
       html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>';
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>';
       html += '<button id="stuToolMove" onclick="setStudentDrawTool(\'move\')" title="移动图片" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✋</button>';
-      // 全屏按钮（仅移动端显示）
-      if (window.innerWidth <= 768) {
-        html += '<button id="stuToolFullscreen" onclick="enterStudentFullscreen()" style="width:26px;height:26px;background:transparent;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">⛶</button>';
-      }
+      // 全屏按钮
+      html += '<button id="stuToolFullscreen" onclick="enterStudentFullscreen()" title="全屏答题" style="width:26px;height:26px;background:transparent;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">⛶</button>';
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
       var stuColors = ['#000000','#3b82f6'];
       stuColors.forEach(function(c) {
@@ -1448,26 +1446,44 @@
     _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
   };
 
-  // 全屏答题功能（仅移动端）
+  // ========== 全屏答题功能 ==========
   var _stuFullscreenActive = false;
   var _stuFsOverlay = null;
-  var _stuFsCanvas = null;
-  var _stuFsOverlayCanvas = null;
+  var _stuFsCanvas = null;      // 底图画布
+  var _stuFsOverlayCanvas = null; // 叠加层画布（书写用）
   var _stuFsCtx = null;
   var _stuFsOverlayCtx = null;
   var _stuFsZoom = 1;
-  var _stuFsBaseW = 0;
-  var _stuFsBaseH = 0;
+  var _stuFsBaseW = 0;   // 画布buffer宽度（=图片宽度）
+  var _stuFsBaseH = 0;   // 画布buffer高度（=图片高度）
+  var _stuFsDispW = 0;   // 画布CSS显示宽度
+  var _stuFsDispH = 0;   // 画布CSS显示高度
   var _stuFsDrawing = false;
-  var _stuFsLastX = 0;
-  var _stuFsLastY = 0;
+  var _stuFsLastX = -1;
+  var _stuFsLastY = -1;
   var _stuFsPinchDist = 0;
   var _stuFsPinchZoom = 1;
   var _stuFsDrawTool = 'pen';
   var _stuFsHomeworkId = '';
   var _stuFsStudentId = 0;
-  var _stuFsRotated = false; // true = image rotated 90° CW to fill portrait screen
-  var _stuFsTouchActive = false; // 标记触摸活跃（防止合成鼠标事件干扰）
+  var _stuFsRotated = false;
+  var _stuFsTouchActive = false;
+  var _stuFsCachedRect = null; // 缓存的getBoundingClientRect，防止触摸时返回错误值
+  var _stuFsBodyTouchHandler = null; // body上的touch阻止处理器
+
+  // 全屏：阻止body上所有默认触摸行为（防止浏览器手势干扰书写）
+  function _fsPreventBodyTouch() {
+    _stuFsBodyTouchHandler = function(e) { e.preventDefault(); };
+    document.body.addEventListener('touchstart', _stuFsBodyTouchHandler, { passive: false, capture: true });
+    document.body.addEventListener('touchmove', _stuFsBodyTouchHandler, { passive: false, capture: true });
+  }
+  function _fsRestoreBodyTouch() {
+    if (_stuFsBodyTouchHandler) {
+      document.body.removeEventListener('touchstart', _stuFsBodyTouchHandler, { capture: true });
+      document.body.removeEventListener('touchmove', _stuFsBodyTouchHandler, { capture: true });
+      _stuFsBodyTouchHandler = null;
+    }
+  }
 
   window.enterStudentFullscreen = function() {
     if (_stuFullscreenActive || !_stuImg) return;
@@ -1480,34 +1496,37 @@
       if (m) { _stuFsHomeworkId = m[1]; _stuFsStudentId = parseInt(m[2]); }
     }
 
+    // 阻止body上所有默认触摸行为（防止浏览器手势干扰）
+    _fsPreventBodyTouch();
+
     // 创建全屏层
     var el = document.createElement('div');
     el.id = 'stuFsLayer';
-    el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:99999;';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:99999;overflow:hidden;';
 
-    // 画布滚动容器（占满全屏，除了工具栏）
+    // 画布滚动容器
     var cc = document.createElement('div');
     cc.id = 'stuFsScrollContainer';
     cc.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:40px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:none;';
 
-    // 内层容器（用于撑开滚动高度）
+    // 内层容器（撑开滚动区域）
     var inner = document.createElement('div');
     inner.id = 'stuFsInner';
     inner.style.cssText = 'position:relative;';
 
     // 底图画布
     var baseC = document.createElement('canvas');
-    baseC.style.cssText = 'display:block;';
+    baseC.style.cssText = 'display:block;touch-action:none;';
 
-    // 叠加层画布（覆盖在底图上）
+    // 叠加层画布
     var overC = document.createElement('canvas');
-    overC.style.cssText = 'position:absolute;top:0;left:0;display:block;';
+    overC.style.cssText = 'position:absolute;top:0;left:0;display:block;touch-action:none;';
 
     inner.appendChild(baseC);
     inner.appendChild(overC);
     cc.appendChild(inner);
 
-    // 底部工具栏（固定）
+    // 底部工具栏
     var tb = document.createElement('div');
     tb.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:40px;display:flex;align-items:center;justify-content:center;gap:3px;padding:0 6px;background:rgba(20,20,20,0.95);border-top:1px solid #333;';
     tb.innerHTML =
@@ -1540,24 +1559,10 @@
     // 初始化全屏画布
     fsInitCanvas();
 
-    // 同步普通画布已有的手写内容到全屏画布
+    // 始终同步普通画布已有的手写内容到全屏画布（不管有没有内容都同步，确保不丢失）
     if (_stuOverlayCanvas && _stuOverlayCtx) {
-      var hasContent = false;
       try {
-        var data = _stuOverlayCtx.getImageData(0, 0, 1, 1).data;
-        hasContent = data[0] !== 0 || data[1] !== 0 || data[2] !== 0 || data[3] !== 0;
-      } catch(e) {}
-      if (!hasContent) {
-        // 检查更多像素
-        try {
-          var w = _stuOverlayCanvas.width, h = _stuOverlayCanvas.height;
-          var sampleData = _stuOverlayCtx.getImageData(Math.floor(w/2), Math.floor(h/2), 1, 1).data;
-          hasContent = sampleData[3] > 0;
-        } catch(e) {}
-      }
-      if (hasContent) {
         if (_stuFsRotated) {
-          // 旋转90° CW 同步到全屏画布
           var tmpC = document.createElement('canvas');
           tmpC.width = _stuFsCanvas.width;
           tmpC.height = _stuFsCanvas.height;
@@ -1565,21 +1570,22 @@
           tmpCtx.translate(tmpC.width / 2, tmpC.height / 2);
           tmpCtx.rotate(Math.PI / 2);
           tmpCtx.drawImage(_stuOverlayCanvas, -_stuOverlayCanvas.width / 2, -_stuOverlayCanvas.height / 2);
-          _stuFsOverlayCtx.drawImage(tmpC, 0, 0, _stuFsCanvas.width, _stuFsCanvas.height);
+          _stuFsOverlayCtx.drawImage(tmpC, 0, 0);
         } else {
           _stuFsOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuFsCanvas.width, _stuFsCanvas.height);
         }
-      }
+      } catch(e) { console.warn('[fs] sync-in failed:', e); }
     }
 
     // 绑定事件到叠加层
+    overC.addEventListener('touchstart', fsTouchStart, { passive: false });
+    overC.addEventListener('touchmove', fsTouchMove, { passive: false });
+    overC.addEventListener('touchend', fsTouchEnd, { passive: false });
+    overC.addEventListener('touchcancel', fsTouchEnd, { passive: false });
     overC.addEventListener('mousedown', fsDown);
     overC.addEventListener('mousemove', fsMove);
     overC.addEventListener('mouseup', fsUp);
     overC.addEventListener('mouseleave', fsUp);
-    overC.addEventListener('touchstart', fsTouchStart, { passive: false });
-    overC.addEventListener('touchmove', fsTouchMove, { passive: false });
-    overC.addEventListener('touchend', fsTouchEnd);
   };
 
   function fsInitCanvas() {
@@ -1591,12 +1597,11 @@
     _stuFsRotated = (img.width > img.height);
     _stuFsZoom = 1;
 
-    // 计算画布内部尺寸和显示尺寸
+    // 计算画布buffer尺寸和CSS显示尺寸
     var canvasW, canvasH, displayW, displayH;
 
     if (_stuFsRotated) {
       // 横屏图片：旋转90° CW，让图片长边沿屏幕长边
-      // 画布内部尺寸 = 图片尺寸（不交换），绘制时旋转
       canvasW = img.width;
       canvasH = img.height;
       // 旋转后视觉尺寸：宽=img.height, 高=img.width
@@ -1607,17 +1612,21 @@
       displayW = Math.round(img.height * scale); // 视觉宽
       displayH = Math.round(img.width * scale);  // 视觉高
     } else {
-      // 竖屏图片：正常放置，铺满屏幕宽度
+      // 竖屏图片：正常放置，尽量铺满屏幕
       canvasW = img.width;
       canvasH = img.height;
-      var scale = screenW / img.width;
-      if (scale > 1) scale = 1;
+      // 同时考虑宽度和高度，让图片尽量铺满屏幕
+      var scaleByW = screenW / img.width;
+      var scaleByH = screenH / img.height;
+      var scale = Math.min(scaleByW, scaleByH);
       displayW = Math.round(img.width * scale);
       displayH = Math.round(img.height * scale);
     }
 
     _stuFsBaseW = canvasW;
     _stuFsBaseH = canvasH;
+    _stuFsDispW = displayW;
+    _stuFsDispH = displayH;
 
     // 设置 inner 容器尺寸
     var inner = document.getElementById('stuFsInner');
@@ -1652,18 +1661,17 @@
   }
 
   function fsGetPos(e) {
-    var rect = _stuFsOverlayCanvas.getBoundingClientRect();
-    var sx = e.clientX - rect.left; // screen X within displayed canvas
-    var sy = e.clientY - rect.top;  // screen Y within displayed canvas
+    // 使用缓存的rect，防止触摸时getBoundingClientRect返回错误值
+    var rect = _stuFsCachedRect || _stuFsOverlayCanvas.getBoundingClientRect();
+    var sx = e.clientX - rect.left;
+    var sy = e.clientY - rect.top;
 
     if (_stuFsRotated) {
-      // 90° CW rotation mapping:
-      // canvas buffer is imgW x imgH, displayed as displayW x displayH
-      // where displayW corresponds to imgH (rotated) and displayH to imgW
+      // 90° CW rotation mapping
       var displayW = rect.width;
       var displayH = rect.height;
-      var cw = _stuFsOverlayCanvas.width;  // = imgW
-      var ch = _stuFsOverlayCanvas.height; // = imgH
+      var cw = _stuFsOverlayCanvas.width;
+      var ch = _stuFsOverlayCanvas.height;
       return {
         x: (cw / displayH) * sy,
         y: cw * (1 - sx / displayW)
@@ -1678,49 +1686,60 @@
 
   function fsDown(e) {
     if (_stuFsDrawTool === 'move') return;
-    if (_stuFsTouchActive) return; // 触摸活跃时忽略鼠标事件
+    if (_stuFsTouchActive) return;
     _stuFsDrawing = true;
+    _stuFsCachedRect = _stuFsOverlayCanvas.getBoundingClientRect(); // 缓存rect
     var p = fsGetPos(e);
-    _stuFsLastX = p.x; _stuFsLastY = p.y;
+    _stuFsLastX = p.x;
+    _stuFsLastY = p.y;
   }
+
   function fsMove(e) {
     if (_stuFsDrawTool === 'move' || !_stuFsDrawing) return;
-    if (_stuFsTouchActive) return; // 触摸活跃时忽略鼠标事件
+    if (_stuFsTouchActive) return;
     var p = fsGetPos(e);
-    // 防止从旧位置画长线：如果距离过大，重置起点
+    // 防止跳跃画线
     var dx = p.x - _stuFsLastX, dy = p.y - _stuFsLastY;
     var dist = Math.sqrt(dx*dx + dy*dy);
-    var maxJump = _stuFsOverlayCanvas.width * 0.3; // 最大允许跳跃30%画布宽度
+    var maxJump = _stuFsOverlayCanvas.width * 0.3;
     if (dist > maxJump) {
-      _stuFsLastX = p.x; _stuFsLastY = p.y;
+      _stuFsLastX = p.x;
+      _stuFsLastY = p.y;
       return;
     }
     fsDrawLine(_stuFsLastX, _stuFsLastY, p.x, p.y);
-    _stuFsLastX = p.x; _stuFsLastY = p.y;
+    _stuFsLastX = p.x;
+    _stuFsLastY = p.y;
   }
-  function fsUp() { 
-    if (_stuFsTouchActive) return; // 触摸活跃时忽略鼠标事件
+
+  function fsUp() {
+    if (_stuFsTouchActive) return;
     _stuFsDrawing = false;
-    _stuFsLastX = -1; _stuFsLastY = -1; // 重置，防止下次触摸从旧位置画线
+    _stuFsLastX = -1;
+    _stuFsLastY = -1;
+    _stuFsCachedRect = null;
   }
 
   function fsTouchStart(e) {
-    if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸，让容器原生滚动
+    if (_stuFsDrawTool === 'move') return;
     e.preventDefault();
-    _stuFsTouchActive = true; // 标记触摸活跃
+    _stuFsTouchActive = true;
+    _stuFsDrawing = true;
+    _stuFsCachedRect = _stuFsOverlayCanvas.getBoundingClientRect(); // 缓存rect
     var ts = Array.from(e.touches);
     if (ts.length === 2) {
       _stuFsPinchDist = Math.sqrt(Math.pow(ts[0].clientX-ts[1].clientX,2)+Math.pow(ts[0].clientY-ts[1].clientY,2));
       _stuFsPinchZoom = _stuFsZoom;
       _stuFsDrawing = false;
     } else if (ts.length === 1) {
-      _stuFsDrawing = true;
       var p = fsGetPos({ clientX: ts[0].clientX, clientY: ts[0].clientY });
-      _stuFsLastX = p.x; _stuFsLastY = p.y;
+      _stuFsLastX = p.x;
+      _stuFsLastY = p.y;
     }
   }
+
   function fsTouchMove(e) {
-    if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸
+    if (_stuFsDrawTool === 'move') return;
     e.preventDefault();
     var ts = Array.from(e.touches);
     if (ts.length === 2) {
@@ -1729,30 +1748,35 @@
       if (nz >= 0.5 && nz <= 8) fsApplyZoom(nz);
     } else if (ts.length === 1 && _stuFsDrawing) {
       var p = fsGetPos({ clientX: ts[0].clientX, clientY: ts[0].clientY });
-      // 防止从旧位置画长线
+      // 防止跳跃画线
       var dx = p.x - _stuFsLastX, dy = p.y - _stuFsLastY;
       var dist = Math.sqrt(dx*dx + dy*dy);
       var maxJump = _stuFsOverlayCanvas.width * 0.3;
       if (dist > maxJump) {
-        _stuFsLastX = p.x; _stuFsLastY = p.y;
+        _stuFsLastX = p.x;
+        _stuFsLastY = p.y;
         return;
       }
       fsDrawLine(_stuFsLastX, _stuFsLastY, p.x, p.y);
-      _stuFsLastX = p.x; _stuFsLastY = p.y;
+      _stuFsLastX = p.x;
+      _stuFsLastY = p.y;
     }
   }
+
   function fsTouchEnd(e) {
-    if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸
-    if (e.touches.length === 0) { 
+    if (_stuFsDrawTool === 'move') return;
+    if (e.touches.length === 0) {
       _stuFsDrawing = false;
-      _stuFsLastX = -1; _stuFsLastY = -1; // 重置，防止下次触摸从旧位置画线
-      // 延迟重置触摸标记（等待合成鼠标事件过去）
-      setTimeout(function() { _stuFsTouchActive = false; }, 300);
-    }
-    else if (e.touches.length === 1) {
+      _stuFsLastX = -1;
+      _stuFsLastY = -1;
+      _stuFsCachedRect = null;
+      setTimeout(function() { _stuFsTouchActive = false; }, 400);
+    } else if (e.touches.length === 1) {
       _stuFsDrawing = true;
+      _stuFsCachedRect = _stuFsOverlayCanvas.getBoundingClientRect();
       var p = fsGetPos({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
-      _stuFsLastX = p.x; _stuFsLastY = p.y;
+      _stuFsLastX = p.x;
+      _stuFsLastY = p.y;
     }
   }
 
@@ -1860,21 +1884,50 @@
   window.exitStudentFullscreen = function() {
     if (!_stuFullscreenActive) return;
 
+    // 恢复body触摸处理
+    _fsRestoreBodyTouch();
+
     // 将全屏书写内容同步回普通画布
     if (_stuFsOverlayCanvas && _stuOverlayCanvas && _stuOverlayCtx && _stuImg) {
-      _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
-      if (_stuFsRotated) {
-        // 全屏画布内容是旋转过的，需要反向旋转90°（CCW）再缩放回普通画布尺寸
-        var tempC = document.createElement('canvas');
-        tempC.width = _stuOverlayCanvas.width;
-        tempC.height = _stuOverlayCanvas.height;
-        var tempCtx = tempC.getContext('2d');
-        tempCtx.translate(tempC.width / 2, tempC.height / 2);
-        tempCtx.rotate(-Math.PI / 2); // 反向旋转
-        tempCtx.drawImage(_stuFsOverlayCanvas, -_stuFsOverlayCanvas.height / 2, -_stuFsOverlayCanvas.width / 2, _stuFsOverlayCanvas.height, _stuFsOverlayCanvas.width);
-        _stuOverlayCtx.drawImage(tempC, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
-      } else {
-        _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      // 检查全屏叠加层是否有内容
+      var hasContent = false;
+      try {
+        var w = _stuFsOverlayCanvas.width, h = _stuFsOverlayCanvas.height;
+        // 检查多个点
+        var points = [
+          [Math.floor(w/4), Math.floor(h/4)],
+          [Math.floor(w/2), Math.floor(h/2)],
+          [Math.floor(3*w/4), Math.floor(3*h/4)],
+          [Math.floor(w/2), Math.floor(h/4)],
+          [Math.floor(w/4), Math.floor(h/2)]
+        ];
+        for (var i = 0; i < points.length; i++) {
+          var data = _stuFsOverlayCtx.getImageData(points[i][0], points[i][1], 1, 1).data;
+          if (data[3] > 0) {
+            hasContent = true;
+            break;
+          }
+        }
+      } catch(e) {}
+
+      if (hasContent) {
+        // 清空普通画布叠加层
+        _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+        
+        if (_stuFsRotated) {
+          // 全屏画布内容是旋转过的，需要反向旋转90°（CCW）再缩放回普通画布尺寸
+          var tempC = document.createElement('canvas');
+          tempC.width = _stuOverlayCanvas.width;
+          tempC.height = _stuOverlayCanvas.height;
+          var tempCtx = tempC.getContext('2d');
+          tempCtx.translate(tempC.width / 2, tempC.height / 2);
+          tempCtx.rotate(-Math.PI / 2); // 反向旋转
+          tempCtx.drawImage(_stuFsOverlayCanvas, -_stuFsOverlayCanvas.height / 2, -_stuFsOverlayCanvas.width / 2, _stuFsOverlayCanvas.height, _stuFsOverlayCanvas.width);
+          _stuOverlayCtx.drawImage(tempC, 0, 0);
+        } else {
+          // 直接绘制，让浏览器自动缩放
+          _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+        }
       }
     }
 
@@ -1885,6 +1938,7 @@
     _stuFullscreenActive = false;
     _stuFsOverlay = null; _stuFsCanvas = null; _stuFsOverlayCanvas = null;
     _stuFsCtx = null; _stuFsOverlayCtx = null;
+    _stuFsCachedRect = null;
     // 不自动提交，用户需要手动点击提交按钮
   };
 
