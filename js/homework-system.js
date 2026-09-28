@@ -269,6 +269,12 @@
   var _lastX = 0;
   var _lastY = 0;
   var _canvasScale = 1;
+  var _gradeZoom = 1;
+  var _gradeBaseWidth = 0;
+  var _gradeBaseHeight = 0;
+  var _gradeTouches = [];
+  var _gradeInitialPinchDistance = 0;
+  var _gradeInitialZoom = 1;
 
   // 评分等级 → 金币 (新标准)
   var GRADE_COINS = { 'A+': 70, 'A': 50, 'B+': 30, 'B': 20, 'C': 10 };
@@ -972,32 +978,32 @@
       html += '<div class="hw-card">';
       html += '<div class="hw-card-title">✏️ 在题目上书写答案</div>';
       html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">直接在老师的题目图片上书写答案，写好后点击提交</div>';
-      // 画布工具栏（始终可见）
-      html += '<div id="studentCanvasToolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px;background:#f0f4ff;border-radius:10px;border:1px solid #e0e7ff;">';
-      html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="padding:6px 12px;background:#667eea;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✏️ 画笔</button>';
-      html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="padding:6px 12px;background:#444;color:#ccc;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🧹 橡皮</button>';
-      html += '<span style="width:1px;height:20px;background:#ddd;margin:0 4px;"></span>';
+      // 画布工具栏（始终可见，移动端优化）
+      html += '<div id="studentCanvasToolbar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:linear-gradient(135deg,#e0e7ff,#f0f4ff);border-radius:12px;border:2px solid #c7d2fe;box-shadow:0 2px 8px rgba(102,126,234,0.15);position:sticky;top:0;z-index:10;">';
+      html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="padding:8px 14px;background:#667eea;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:44px;min-height:36px;">✏️ 画笔</button>';
+      html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="padding:8px 14px;background:#444;color:#ccc;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:44px;min-height:36px;">🧹 橡皮</button>';
+      html += '<span style="width:1px;height:24px;background:#c7d2fe;margin:0 4px;"></span>';
       // 颜色选择
       var stuColors = ['#000000','#ef4444','#3b82f6','#22c55e','#f59e0b'];
       stuColors.forEach(function(c) {
-        html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:22px;height:22px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === '#000000' ? '#667eea' : 'transparent') + ';"></div>';
+        html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:28px;height:28px;border-radius:50%;background:' + c + ';cursor:pointer;border:3px solid ' + (c === '#000000' ? '#667eea' : 'transparent') + ';box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>';
       });
-      html += '<span style="width:1px;height:20px;background:#ddd;margin:0 4px;"></span>';
-      html += '<select id="stuDrawLineWidth" onchange="setStudentDrawLineWidth(this.value)" style="padding:4px 8px;background:white;border:1px solid #ddd;border-radius:6px;font-size:11px;">';
+      html += '<span style="width:1px;height:24px;background:#c7d2fe;margin:0 4px;"></span>';
+      html += '<select id="stuDrawLineWidth" onchange="setStudentDrawLineWidth(this.value)" style="padding:6px 10px;background:white;border:2px solid #c7d2fe;border-radius:8px;font-size:13px;font-weight:600;min-height:36px;">';
       html += '<option value="2">细</option><option value="3" selected>中</option><option value="5">粗</option>';
       html += '</select>';
-      html += '<span style="width:1px;height:20px;background:#ddd;margin:0 4px;"></span>';
+      html += '<span style="width:1px;height:24px;background:#c7d2fe;margin:0 4px;"></span>';
       // 缩放按钮
-      html += '<button onclick="zoomStudentCanvas(1.2)" style="padding:6px 10px;background:#3b82f6;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🔍+</button>';
-      html += '<button onclick="zoomStudentCanvas(0.8)" style="padding:6px 10px;background:#3b82f6;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🔍-</button>';
-      html += '<button onclick="resetStudentCanvasZoom()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">↺</button>';
-      html += '<button onclick="clearStudentCanvas()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🗑 清除</button>';
+      html += '<button onclick="zoomStudentCanvas(1.2)" style="padding:8px 12px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:36px;min-height:36px;">🔍+</button>';
+      html += '<button onclick="zoomStudentCanvas(0.8)" style="padding:8px 12px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:36px;min-height:36px;">🔍-</button>';
+      html += '<button onclick="resetStudentCanvasZoom()" style="padding:8px 12px;background:#6b7280;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:36px;min-height:36px;">↺</button>';
+      html += '<button onclick="clearStudentCanvas()" style="padding:8px 14px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;min-width:44px;min-height:36px;">🗑 清除</button>';
       html += '</div>';
       // 画布容器（老师的题目图片作为底图 + 透明叠加层用于书写）
       html += '<div id="studentCanvasContainer" style="width:100%;overflow:auto;border-radius:8px;border:2px solid #e9ecef;background:#f8f9fa;-webkit-overflow-scrolling:touch;position:relative;">';
       if (myHomework.image) {
-        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;" data-homework-image="' + myHomework.image + '"></canvas>';
-        html += '<canvas id="studentOverlayCanvas" style="position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;"></canvas>';
+        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;pointer-events:none;" data-homework-image="' + myHomework.image + '"></canvas>';
+        html += '<canvas id="studentOverlayCanvas" style="position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
       } else {
         html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;"></canvas>';
         html += '<div style="padding:30px;text-align:center;color:#999;font-size:13px;">本题没有图片</div>';
@@ -1140,18 +1146,24 @@
         var maxW = container ? container.clientWidth - 4 : Math.min(window.innerWidth - 60, 600);
         var scale = maxW / img.width;
         if (scale > 1) scale = 1;
-        _stuBaseWidth = img.width * scale;
-        _stuBaseHeight = img.height * scale;
+        _stuBaseWidth = Math.round(img.width * scale);
+        _stuBaseHeight = Math.round(img.height * scale);
         _stuZoom = 1;
         
         // 设置底图画布尺寸并绘制增强后的底图
         canvas.width = _stuBaseWidth;
         canvas.height = _stuBaseHeight;
+        canvas.style.width = _stuBaseWidth + 'px';
+        canvas.style.height = _stuBaseHeight + 'px';
         _stuCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
         
-        // 设置叠加层画布尺寸（透明）
+        // 设置叠加层画布尺寸（透明）- 确保与底图完全对齐
         overlayCanvas.width = _stuBaseWidth;
         overlayCanvas.height = _stuBaseHeight;
+        overlayCanvas.style.width = _stuBaseWidth + 'px';
+        overlayCanvas.style.height = _stuBaseHeight + 'px';
+        // 清空叠加层（确保完全透明）
+        _stuOverlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         
         // 绑定绘制事件到叠加层（而不是底图）
         overlayCanvas.addEventListener('mousedown', onStuCanvasDown);
@@ -1277,11 +1289,15 @@
     var tempOverlayCtx = tempOverlayCanvas.getContext('2d');
     tempOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0);
     
-    // 调整两个画布尺寸
+    // 调整两个画布尺寸（buffer + CSS）
     _stuCanvas.width = newWidth;
     _stuCanvas.height = newHeight;
+    _stuCanvas.style.width = newWidth + 'px';
+    _stuCanvas.style.height = newHeight + 'px';
     _stuOverlayCanvas.width = newWidth;
     _stuOverlayCanvas.height = newHeight;
+    _stuOverlayCanvas.style.width = newWidth + 'px';
+    _stuOverlayCanvas.style.height = newHeight + 'px';
     
     // 重新绘制（缩放图像）
     _stuCtx.drawImage(tempBaseCanvas, 0, 0, newWidth, newHeight);
@@ -2136,15 +2152,21 @@
     html += '<option value="2">细</option><option value="3" selected>中</option><option value="5">粗</option><option value="8">特粗</option>';
     html += '</select>';
     html += '<span style="width:1px;height:24px;background:#444;margin:0 4px;"></span>';
+    // 缩放按钮
+    html += '<button onclick="zoomGradingCanvas(1.3)" style="padding:6px 10px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🔍+</button>';
+    html += '<button onclick="zoomGradingCanvas(0.7)" style="padding:6px 10px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🔍-</button>';
+    html += '<button onclick="resetGradingCanvasZoom()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">↺</button>';
+    html += '<span style="width:1px;height:24px;background:#444;margin:0 4px;"></span>';
     // 清除 & 撤销
     html += '<button onclick="clearCanvas()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🗑 清除</button>';
     html += '</div>';
 
     // 画布区域（双层：底图 + 透明叠加层用于批注）
-    html += '<div id="canvasContainer" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:10px;background:#2a2a3a;position:relative;">';
-    html += '<canvas id="gradingCanvas" style="border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:crosshair;touch-action:none;"></canvas>';
-    html += '<canvas id="gradingOverlayCanvas" style="position:absolute;border-radius:8px;cursor:crosshair;touch-action:none;pointer-events:auto;"></canvas>';
-    html += '</div>';
+    html += '<div id="canvasContainer" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:10px;background:#2a2a3a;position:relative;-webkit-overflow-scrolling:touch;">';
+    html += '<div id="canvasZoomWrapper" style="position:relative;display:inline-block;">';
+    html += '<canvas id="gradingCanvas" style="display:block;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:crosshair;touch-action:none;pointer-events:none;"></canvas>';
+    html += '<canvas id="gradingOverlayCanvas" style="position:absolute;top:0;left:0;display:block;border-radius:8px;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
+    html += '</div></div>';
 
     // 底部评分栏
     html += '<div id="gradingBottom" style="padding:10px 15px;background:#1a1a2e;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;flex-shrink:0;">';
@@ -2182,6 +2204,7 @@
     _gradeCtx = canvas.getContext('2d');
     _gradeOverlayCanvas = overlayCanvas;
     _gradeOverlayCtx = overlayCanvas.getContext('2d');
+    _gradeZoom = 1;
 
     // 先增强图片（锐化+对比度），让文字更清晰
     enhanceImageForDisplay(sub.image, function(enhancedImageUrl) {
@@ -2193,14 +2216,22 @@
         var scale = maxW / img.width;
         if (scale > 1) scale = 1;
         _canvasScale = scale;
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
+        _gradeBaseWidth = Math.round(img.width * scale);
+        _gradeBaseHeight = Math.round(img.height * scale);
+        
+        canvas.width = _gradeBaseWidth;
+        canvas.height = _gradeBaseHeight;
+        canvas.style.width = _gradeBaseWidth + 'px';
+        canvas.style.height = _gradeBaseHeight + 'px';
         // 绘制增强后的底图
         _gradeCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
         
         // 设置叠加层画布尺寸（透明）
-        overlayCanvas.width = canvas.width;
-        overlayCanvas.height = canvas.height;
+        overlayCanvas.width = _gradeBaseWidth;
+        overlayCanvas.height = _gradeBaseHeight;
+        overlayCanvas.style.width = _gradeBaseWidth + 'px';
+        overlayCanvas.style.height = _gradeBaseHeight + 'px';
+        _gradeOverlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         
         // 如果有已保存的批阅图层，叠加到叠加层
         if (sub.gradedImage) {
@@ -2224,10 +2255,10 @@
     overlayCanvas.addEventListener('mousemove', onCanvasMove);
     overlayCanvas.addEventListener('mouseup', onCanvasUp);
     overlayCanvas.addEventListener('mouseleave', onCanvasUp);
-    // 触摸事件（绑定到叠加层）
-    overlayCanvas.addEventListener('touchstart', onCanvasTouchDown, { passive: false });
-    overlayCanvas.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
-    overlayCanvas.addEventListener('touchend', onCanvasUp);
+    // 触摸事件（绑定到叠加层，支持双指缩放）
+    overlayCanvas.addEventListener('touchstart', onGradingTouchStart, { passive: false });
+    overlayCanvas.addEventListener('touchmove', onGradingTouchMove, { passive: false });
+    overlayCanvas.addEventListener('touchend', onGradingTouchEnd);
   }
 
   var _markClean = true;
@@ -2283,11 +2314,7 @@
     e.preventDefault();
     var touch = e.touches[0];
     var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
-    if (_drawTool === 'text') {
-      onCanvasDown(mouseEvent);
-    } else {
-      onCanvasDown(mouseEvent);
-    }
+    onCanvasDown(mouseEvent);
   }
 
   function onCanvasTouchMove(e) {
@@ -2296,6 +2323,116 @@
     var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
     onCanvasMove(mouseEvent);
   }
+
+  // 批阅画布触摸事件 - 支持双指缩放
+  function onGradingTouchStart(e) {
+    e.preventDefault();
+    _gradeTouches = Array.from(e.touches);
+    
+    if (_gradeTouches.length === 2) {
+      // 双指 - 记录初始距离用于缩放
+      _gradeInitialPinchDistance = getGradingTouchDistance(_gradeTouches[0], _gradeTouches[1]);
+      _gradeInitialZoom = _gradeZoom;
+      _isDrawing = false; // 双指时不绘制
+    } else if (_gradeTouches.length === 1) {
+      // 单指 - 开始绘制
+      var touch = _gradeTouches[0];
+      var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
+      onCanvasDown(mouseEvent);
+    }
+  }
+
+  function onGradingTouchMove(e) {
+    e.preventDefault();
+    var touches = Array.from(e.touches);
+    
+    if (touches.length === 2) {
+      // 双指缩放
+      var currentDistance = getGradingTouchDistance(touches[0], touches[1]);
+      var zoomRatio = currentDistance / _gradeInitialPinchDistance;
+      var newZoom = _gradeInitialZoom * zoomRatio;
+      
+      // 限制缩放范围 0.5x - 5x
+      if (newZoom >= 0.5 && newZoom <= 5) {
+        applyGradingZoom(newZoom);
+      }
+    } else if (touches.length === 1 && _isDrawing) {
+      // 单指绘制
+      var touch = touches[0];
+      var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
+      onCanvasMove(mouseEvent);
+    }
+  }
+
+  function onGradingTouchEnd(e) {
+    if (e.touches.length === 0) {
+      _isDrawing = false;
+      _gradeTouches = [];
+    } else if (e.touches.length === 1) {
+      // 从双指变为单指，重新开始绘制
+      _isDrawing = true;
+      var touch = e.touches[0];
+      var pos = getCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      _lastX = pos.x;
+      _lastY = pos.y;
+    }
+  }
+
+  function getGradingTouchDistance(t1, t2) {
+    var dx = t1.clientX - t2.clientX;
+    var dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // 应用批阅画布缩放
+  function applyGradingZoom(newZoom) {
+    if (!_gradeCanvas || !_gradeImg || !_gradeCtx || !_gradeOverlayCanvas) return;
+    
+    _gradeZoom = newZoom;
+    var newWidth = Math.round(_gradeBaseWidth * _gradeZoom);
+    var newHeight = Math.round(_gradeBaseHeight * _gradeZoom);
+    
+    // 保存底图当前内容
+    var tempBaseCanvas = document.createElement('canvas');
+    tempBaseCanvas.width = _gradeCanvas.width;
+    tempBaseCanvas.height = _gradeCanvas.height;
+    var tempBaseCtx = tempBaseCanvas.getContext('2d');
+    tempBaseCtx.drawImage(_gradeCanvas, 0, 0);
+    
+    // 保存叠加层当前内容
+    var tempOverlayCanvas = document.createElement('canvas');
+    tempOverlayCanvas.width = _gradeOverlayCanvas.width;
+    tempOverlayCanvas.height = _gradeOverlayCanvas.height;
+    var tempOverlayCtx = tempOverlayCanvas.getContext('2d');
+    tempOverlayCtx.drawImage(_gradeOverlayCanvas, 0, 0);
+    
+    // 调整两个画布尺寸（buffer + CSS）
+    _gradeCanvas.width = newWidth;
+    _gradeCanvas.height = newHeight;
+    _gradeCanvas.style.width = newWidth + 'px';
+    _gradeCanvas.style.height = newHeight + 'px';
+    _gradeOverlayCanvas.width = newWidth;
+    _gradeOverlayCanvas.height = newHeight;
+    _gradeOverlayCanvas.style.width = newWidth + 'px';
+    _gradeOverlayCanvas.style.height = newHeight + 'px';
+    
+    // 重新绘制（缩放图像）
+    _gradeCtx.drawImage(tempBaseCanvas, 0, 0, newWidth, newHeight);
+    _gradeOverlayCtx.drawImage(tempOverlayCanvas, 0, 0, newWidth, newHeight);
+  }
+
+  // 按钮缩放
+  window.zoomGradingCanvas = function(factor) {
+    var newZoom = _gradeZoom * factor;
+    if (newZoom >= 0.5 && newZoom <= 5) {
+      applyGradingZoom(newZoom);
+    }
+  };
+
+  // 重置缩放
+  window.resetGradingCanvasZoom = function() {
+    applyGradingZoom(1);
+  };
 
   function drawLine(x1, y1, x2, y2) {
     if (!_gradeOverlayCtx) return;
@@ -2381,6 +2518,9 @@
     _gradeOverlayCanvas = null;
     _gradeOverlayCtx = null;
     _gradeImg = null;
+    _gradeZoom = 1;
+    _gradeBaseWidth = 0;
+    _gradeBaseHeight = 0;
   };
 
   window.selectGradeAndSave = function(grade) {
@@ -2528,5 +2668,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v291 - WebP压缩 + Supabase Storage云端图片存储');
+  console.log('[homework-system] 作业岛系统已加载 v292 - 双层画布修复 + 移动端优化 + 批阅缩放');
 })();
