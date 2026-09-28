@@ -1008,7 +1008,7 @@
       html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">直接在题目上作答或者作业本写好拍照作答</div>';
       // 画布容器（老师的题目图片作为底图 + 透明叠加层用于书写）
       // 移动端：突破卡片内边距，让图片占满屏幕宽度
-      html += '<div id="studentCanvasContainer" style="width:calc(100% + 24px);margin-left:-12px;margin-right:-12px;overflow:auto;border-radius:0;border:none;background:#000;-webkit-overflow-scrolling:touch;position:relative;">';
+      html += '<div id="studentCanvasContainer" style="width:calc(100% + 24px);margin-left:-12px;margin-right:-12px;overflow:auto;border-radius:0;border:none;background:#000;-webkit-overflow-scrolling:touch;position:relative;touch-action:none;">';
       if (myHomework.image) {
         html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;pointer-events:none;" data-homework-image="' + myHomework.image + '"></canvas>';
         html += '<canvas id="studentOverlayCanvas" style="position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
@@ -1224,6 +1224,7 @@
   }
 
   function onStuCanvasDown(e) {
+    if (_stuDrawTool === 'move') return; // 移动模式：不拦截鼠标
     _stuIsDrawing = true;
     var pos = getStuCanvasPos(e);
     _stuLastX = pos.x;
@@ -1231,7 +1232,7 @@
   }
 
   function onStuCanvasMove(e) {
-    if (!_stuIsDrawing) return;
+    if (_stuDrawTool === 'move' || !_stuIsDrawing) return; // 移动模式：不拦截鼠标
     var pos = getStuCanvasPos(e);
     drawStuLine(_stuLastX, _stuLastY, pos.x, pos.y);
     _stuLastX = pos.x;
@@ -1244,6 +1245,7 @@
 
   // 触摸开始 - 支持双指缩放
   function onStuCanvasTouchStart(e) {
+    if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
     _stuTouches = Array.from(e.touches);
     
@@ -1262,6 +1264,7 @@
 
   // 触摸移动 - 支持双指缩放
   function onStuCanvasTouchMove(e) {
+    if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
     var touches = Array.from(e.touches);
     
@@ -1284,6 +1287,7 @@
   }
 
   function onStuCanvasTouchEnd(e) {
+    if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
     if (e.touches.length === 0) {
       _stuIsDrawing = false;
       _stuTouches = [];
@@ -1402,14 +1406,16 @@
     if (_stuOverlayCanvas) {
       if (tool === 'move') {
         _stuOverlayCanvas.style.pointerEvents = 'none';
+        _stuOverlayCanvas.style.touchAction = 'auto';
         _stuOverlayCanvas.style.cursor = 'default';
         var container = document.getElementById('studentCanvasContainer');
-        if (container) { container.style.cursor = 'grab'; }
+        if (container) { container.style.cursor = 'grab'; container.style.touchAction = 'pan-x pan-y'; }
       } else {
         _stuOverlayCanvas.style.pointerEvents = 'auto';
+        _stuOverlayCanvas.style.touchAction = 'none';
         _stuOverlayCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
         var container = document.getElementById('studentCanvasContainer');
-        if (container) { container.style.cursor = 'default'; }
+        if (container) { container.style.cursor = 'default'; container.style.touchAction = 'none'; }
       }
     }
   };
@@ -1474,7 +1480,7 @@
     // 画布滚动容器（占满全屏，除了工具栏）
     var cc = document.createElement('div');
     cc.id = 'stuFsScrollContainer';
-    cc.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:auto;-webkit-overflow-scrolling:touch;';
+    cc.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:none;';
 
     // 内层容器（用于撑开滚动高度）
     var inner = document.createElement('div');
@@ -1664,12 +1670,13 @@
   }
 
   function fsDown(e) {
+    if (_stuFsDrawTool === 'move') return;
     _stuFsDrawing = true;
     var p = fsGetPos(e);
     _stuFsLastX = p.x; _stuFsLastY = p.y;
   }
   function fsMove(e) {
-    if (!_stuFsDrawing) return;
+    if (_stuFsDrawTool === 'move' || !_stuFsDrawing) return;
     var p = fsGetPos(e);
     fsDrawLine(_stuFsLastX, _stuFsLastY, p.x, p.y);
     _stuFsLastX = p.x; _stuFsLastY = p.y;
@@ -1677,6 +1684,7 @@
   function fsUp() { _stuFsDrawing = false; }
 
   function fsTouchStart(e) {
+    if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸，让容器原生滚动
     e.preventDefault();
     var ts = Array.from(e.touches);
     if (ts.length === 2) {
@@ -1690,6 +1698,7 @@
     }
   }
   function fsTouchMove(e) {
+    if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
     var ts = Array.from(e.touches);
     if (ts.length === 2) {
@@ -1703,6 +1712,7 @@
     }
   }
   function fsTouchEnd(e) {
+    if (_stuFsDrawTool === 'move') return; // 移动模式：不拦截触摸
     if (e.touches.length === 0) { _stuFsDrawing = false; }
     else if (e.touches.length === 1) {
       _stuFsDrawing = true;
@@ -1791,14 +1801,15 @@
     else if (t === 'move' && mb) { mb.style.background='#667eea'; mb.style.color='white'; }
     // Move mode: disable overlay pointer-events so container handles scroll/pan
     if (_stuFsOverlayCanvas) {
+      var sc = document.getElementById('stuFsScrollContainer');
       if (t === 'move') {
         _stuFsOverlayCanvas.style.pointerEvents = 'none';
-        var sc = document.getElementById('stuFsScrollContainer');
-        if (sc) { sc.style.cursor = 'grab'; }
+        _stuFsOverlayCanvas.style.touchAction = 'auto';
+        if (sc) { sc.style.touchAction = 'pan-x pan-y'; sc.style.cursor = 'grab'; }
       } else {
         _stuFsOverlayCanvas.style.pointerEvents = 'auto';
-        var sc = document.getElementById('stuFsScrollContainer');
-        if (sc) { sc.style.cursor = 'default'; }
+        _stuFsOverlayCanvas.style.touchAction = 'none';
+        if (sc) { sc.style.touchAction = 'none'; sc.style.cursor = 'default'; }
       }
     }
   };
@@ -2703,7 +2714,7 @@
     html += '</div>';
 
     // 画布区域（双层：底图 + 透明叠加层用于批注）
-    html += '<div id="canvasContainer" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:10px;background:#2a2a3a;position:relative;-webkit-overflow-scrolling:touch;">';
+    html += '<div id="canvasContainer" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:10px;background:#2a2a3a;position:relative;-webkit-overflow-scrolling:touch;touch-action:none;">';
     html += '<div id="canvasZoomWrapper" style="position:relative;display:inline-block;">';
     html += '<canvas id="gradingCanvas" style="display:block;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:crosshair;touch-action:none;pointer-events:none;"></canvas>';
     html += '<canvas id="gradingOverlayCanvas" style="position:absolute;top:0;left:0;display:block;border-radius:8px;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
@@ -2820,6 +2831,7 @@
   }
 
   function onCanvasDown(e) {
+    if (_drawTool === 'move') return; // 移动模式：不拦截鼠标
     if (_drawTool === 'text') {
       var pos = getCanvasPos(e);
       var text = prompt('输入批注文字:');
@@ -2840,7 +2852,7 @@
   }
 
   function onCanvasMove(e) {
-    if (!_isDrawing) return;
+    if (_drawTool === 'move' || !_isDrawing) return; // 移动模式：不拦截鼠标
     var pos = getCanvasPos(e);
     drawLine(_lastX, _lastY, pos.x, pos.y);
     _lastX = pos.x;
@@ -2867,6 +2879,7 @@
 
   // 批阅画布触摸事件 - 支持双指缩放
   function onGradingTouchStart(e) {
+    if (_drawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
     _gradeTouches = Array.from(e.touches);
     
@@ -2884,6 +2897,7 @@
   }
 
   function onGradingTouchMove(e) {
+    if (_drawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
     var touches = Array.from(e.touches);
     
@@ -2906,6 +2920,7 @@
   }
 
   function onGradingTouchEnd(e) {
+    if (_drawTool === 'move') return; // 移动模式：不拦截触摸
     if (e.touches.length === 0) {
       _isDrawing = false;
       _gradeTouches = [];
@@ -3024,14 +3039,16 @@
     if (_gradeOverlayCanvas) {
       if (tool === 'move') {
         _gradeOverlayCanvas.style.pointerEvents = 'none';
+        _gradeOverlayCanvas.style.touchAction = 'auto';
         _gradeOverlayCanvas.style.cursor = 'default';
         var container = document.getElementById('canvasContainer');
-        if (container) { container.style.cursor = 'grab'; }
+        if (container) { container.style.cursor = 'grab'; container.style.touchAction = 'pan-x pan-y'; }
       } else {
         _gradeOverlayCanvas.style.pointerEvents = 'auto';
+        _gradeOverlayCanvas.style.touchAction = 'none';
         _gradeOverlayCanvas.style.cursor = tool === 'text' ? 'text' : (tool === 'eraser' ? 'cell' : 'crosshair');
         var container = document.getElementById('canvasContainer');
-        if (container) { container.style.cursor = 'default'; }
+        if (container) { container.style.cursor = 'default'; container.style.touchAction = 'none'; }
       }
     }
   };
