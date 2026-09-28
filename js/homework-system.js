@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v283 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 修复学生端显示问题
+// ========== 作业岛系统 v284 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 学生画布书写 + 自定义金币
 (function() {
   'use strict';
 
@@ -721,14 +721,34 @@
     });
     
     if (!mySubmission) {
-      // 未提交 - 显示提交按钮
+      // 未提交 - 显示提交按钮（带画布书写功能）
       html += '<div class="hw-card">';
       html += '<div class="hw-card-title">📤 提交作业</div>';
-      html += '<div style="font-size:13px;color:#666;margin-bottom:15px;">完成后拍照上传</div>';
+      html += '<div style="font-size:13px;color:#666;margin-bottom:15px;">拍照上传后可以在图片上书写答案</div>';
       html += '<div id="studentSubmitArea">';
       html += '<div id="studentImageUpload" onclick="document.getElementById(\'studentImageInput\').click()" style="border:2px dashed #d1d5db;border-radius:12px;padding:30px;text-align:center;cursor:pointer;margin-bottom:15px;">';
       html += '<div style="color:#6b7280;font-size:14px;">📷 点击拍照或上传作业</div></div>';
       html += '<input type="file" id="studentImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleStudentImageUpload(event)">';
+      // 画布编辑区域（上传后显示）
+      html += '<div id="studentCanvasEditor" style="display:none;margin-bottom:15px;">';
+      html += '<div style="font-size:13px;font-weight:600;color:#555;margin-bottom:8px;">✏️ 在图片上书写答案</div>';
+      html += '<div id="studentCanvasToolbar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px;">';
+      html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="padding:6px 12px;background:#667eea;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✏️ 画笔</button>';
+      html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="padding:6px 12px;background:#444;color:#ccc;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🧹 橡皮</button>';
+      html += '<span style="width:1px;height:20px;background:#ddd;margin:0 4px;"></span>';
+      // 颜色选择
+      var stuColors = ['#000000','#ef4444','#3b82f6','#22c55e','#f59e0b'];
+      stuColors.forEach(function(c) {
+        html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:22px;height:22px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === '#000000' ? '#667eea' : 'transparent') + ';"></div>';
+      });
+      html += '<span style="width:1px;height:20px;background:#ddd;margin:0 4px;"></span>';
+      html += '<select id="stuDrawLineWidth" onchange="setStudentDrawLineWidth(this.value)" style="padding:4px 8px;background:white;border:1px solid #ddd;border-radius:6px;font-size:11px;">';
+      html += '<option value="2">细</option><option value="3" selected>中</option><option value="5">粗</option>';
+      html += '</select>';
+      html += '<button onclick="clearStudentCanvas()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">🗑 清除</button>';
+      html += '</div>';
+      html += '<canvas id="studentCanvas" style="width:100%;border-radius:8px;border:2px solid #e9ecef;cursor:crosshair;touch-action:none;"></canvas>';
+      html += '</div>';
       html += '<button onclick="studentSubmitHomework(\'' + myHomework.id + '\',' + studentId + ')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;">提交作业</button>';
       html += '</div>';
       html += '</div>';
@@ -794,6 +814,155 @@
     });
   };
 
+  // ========== 学生画布书写功能 ==========
+  var _stuCanvas = null;
+  var _stuCtx = null;
+  var _stuImg = null;
+  var _stuDrawColor = '#000000';
+  var _stuDrawTool = 'pen';
+  var _stuDrawLineWidth = 3;
+  var _stuIsDrawing = false;
+  var _stuLastX = 0;
+  var _stuLastY = 0;
+
+  // 初始化学生画布
+  function initStudentCanvas(imageDataUrl) {
+    var canvas = document.getElementById('studentCanvas');
+    if (!canvas) return;
+    _stuCanvas = canvas;
+    _stuCtx = canvas.getContext('2d');
+
+    var img = new Image();
+    img.onload = function() {
+      _stuImg = img;
+      // 计算画布尺寸 - 适应容器宽度
+      var container = canvas.parentElement;
+      var maxW = container ? container.clientWidth - 4 : Math.min(window.innerWidth - 60, 600);
+      var scale = maxW / img.width;
+      if (scale > 1) scale = 1;
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      // 绘制底图
+      _stuCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // 显示画布编辑器
+      var editor = document.getElementById('studentCanvasEditor');
+      if (editor) editor.style.display = 'block';
+      
+      // 绑定绘制事件
+      canvas.addEventListener('mousedown', onStuCanvasDown);
+      canvas.addEventListener('mousemove', onStuCanvasMove);
+      canvas.addEventListener('mouseup', onStuCanvasUp);
+      canvas.addEventListener('mouseleave', onStuCanvasUp);
+      canvas.addEventListener('touchstart', onStuCanvasTouchDown, { passive: false });
+      canvas.addEventListener('touchmove', onStuCanvasTouchMove, { passive: false });
+      canvas.addEventListener('touchend', onStuCanvasUp);
+    };
+    img.src = imageDataUrl;
+  }
+
+  function getStuCanvasPos(e) {
+    var rect = _stuCanvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (_stuCanvas.width / rect.width),
+      y: (e.clientY - rect.top) * (_stuCanvas.height / rect.height)
+    };
+  }
+
+  function onStuCanvasDown(e) {
+    _stuIsDrawing = true;
+    var pos = getStuCanvasPos(e);
+    _stuLastX = pos.x;
+    _stuLastY = pos.y;
+  }
+
+  function onStuCanvasMove(e) {
+    if (!_stuIsDrawing) return;
+    var pos = getStuCanvasPos(e);
+    drawStuLine(_stuLastX, _stuLastY, pos.x, pos.y);
+    _stuLastX = pos.x;
+    _stuLastY = pos.y;
+  }
+
+  function onStuCanvasUp() {
+    _stuIsDrawing = false;
+  }
+
+  function onStuCanvasTouchDown(e) {
+    e.preventDefault();
+    var touch = e.touches[0];
+    var mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
+    onStuCanvasDown(mouseEvent);
+  }
+
+  function onStuCanvasTouchMove(e) {
+    e.preventDefault();
+    var touch = e.touches[0];
+    var mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
+    onStuCanvasMove(mouseEvent);
+  }
+
+  function drawStuLine(x1, y1, x2, y2) {
+    if (!_stuCtx) return;
+    _stuCtx.beginPath();
+    _stuCtx.moveTo(x1, y1);
+    _stuCtx.lineTo(x2, y2);
+    _stuCtx.strokeStyle = _stuDrawTool === 'eraser' ? '#ffffff' : _stuDrawColor;
+    _stuCtx.lineWidth = _stuDrawTool === 'eraser' ? _stuDrawLineWidth * 4 : _stuDrawLineWidth;
+    _stuCtx.lineCap = 'round';
+    _stuCtx.lineJoin = 'round';
+    _stuCtx.stroke();
+  }
+
+  window.setStudentDrawTool = function(tool) {
+    _stuDrawTool = tool;
+    var penBtn = document.getElementById('stuToolPen');
+    var eraserBtn = document.getElementById('stuToolEraser');
+    if (penBtn && eraserBtn) {
+      if (tool === 'pen') {
+        penBtn.style.background = '#667eea';
+        penBtn.style.color = 'white';
+        eraserBtn.style.background = '#444';
+        eraserBtn.style.color = '#ccc';
+      } else {
+        eraserBtn.style.background = '#667eea';
+        eraserBtn.style.color = 'white';
+        penBtn.style.background = '#444';
+        penBtn.style.color = '#ccc';
+      }
+    }
+    if (_stuCanvas) {
+      _stuCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+    }
+  };
+
+  window.setStudentDrawColor = function(color) {
+    _stuDrawColor = color;
+    _stuDrawTool = 'pen';
+    window.setStudentDrawTool('pen');
+    var btns = document.querySelectorAll('.stu-pen-color-btn');
+    btns.forEach(function(btn) {
+      btn.style.border = '2px solid ' + (btn.getAttribute('data-color') === color ? '#667eea' : 'transparent');
+    });
+  };
+
+  window.setStudentDrawLineWidth = function(w) {
+    _stuDrawLineWidth = parseInt(w) || 3;
+  };
+
+  window.clearStudentCanvas = function() {
+    if (!_stuCanvas || !_stuImg) return;
+    if (!confirm('确定清除所有书写内容？')) return;
+    _stuCtx.clearRect(0, 0, _stuCanvas.width, _stuCanvas.height);
+    _stuCtx.drawImage(_stuImg, 0, 0, _stuCanvas.width, _stuCanvas.height);
+  };
+
+  // 导出学生画布图像（包含底图+书写痕迹）
+  function exportStudentCanvasImage() {
+    if (!_stuCanvas) return _studentUploadedImage;
+    return _stuCanvas.toDataURL('image/jpeg', 0.85);
+  }
+
   // 学生上传图片
   var _studentUploadedImage = null;
   window.handleStudentImageUpload = function(event) {
@@ -810,10 +979,14 @@
         _studentUploadedImage = compressed;
         if (uploadArea) {
           uploadArea.innerHTML = '<img src="' + _studentUploadedImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
-            '<div style="font-size:11px;color:#22c55e;margin-top:5px;">✓ 已压缩 (~' + Math.round(compressed.length * 3 / 4 / 1024) + 'KB)</div>';
+            '<div style="font-size:11px;color:#22c55e;margin-top:5px;">✓ 已压缩 (~' + Math.round(compressed.length * 3 / 4 / 1024) + 'KB) - 可在下方画布上书写</div>';
           uploadArea.style.borderStyle = 'solid';
           uploadArea.style.padding = '10px';
         }
+        // 初始化画布
+        setTimeout(function() {
+          initStudentCanvas(compressed);
+        }, 100);
       });
     };
     reader.readAsDataURL(file);
@@ -826,34 +999,43 @@
       return;
     }
     
-    var student = getStudentById(studentId);
-    var newSub = {
-      id: generateId(),
-      homeworkId: homeworkId,
-      studentId: studentId,
-      studentName: student ? student.name : (currentUser.studentName || ''),
-      image: _studentUploadedImage,
-      graded: false,
-      grade: '',
-      coins: 0,
-      comment: '',
-      gradedImage: null,
-      submittedAt: new Date().toISOString()
-    };
+    // 导出画布图像（包含书写痕迹）
+    var finalImage = exportStudentCanvasImage();
     
-    homeworkSubmissions.push(newSub);
-    saveData();
-    _studentUploadedImage = null;
-    
-    // 同步到云端
-    syncSubmissionToCloud(newSub);
-    
-    showNotification('作业已提交，等待老师批改', 'success');
-    
-    // 刷新页面
-    setTimeout(function() {
-      window.renderHomeworkPage();
-    }, 500);
+    // 压缩最终图像
+    compressImage(finalImage, 400, function(compressedFinal) {
+      var student = getStudentById(studentId);
+      var newSub = {
+        id: generateId(),
+        homeworkId: homeworkId,
+        studentId: studentId,
+        studentName: student ? student.name : (currentUser.studentName || ''),
+        image: compressedFinal,
+        graded: false,
+        grade: '',
+        coins: 0,
+        comment: '',
+        gradedImage: null,
+        submittedAt: new Date().toISOString()
+      };
+      
+      homeworkSubmissions.push(newSub);
+      saveData();
+      _studentUploadedImage = null;
+      _stuCanvas = null;
+      _stuCtx = null;
+      _stuImg = null;
+      
+      // 同步到云端
+      syncSubmissionToCloud(newSub);
+      
+      showNotification('作业已提交，等待老师批改', 'success');
+      
+      // 刷新页面
+      setTimeout(function() {
+        window.renderHomeworkPage();
+      }, 500);
+    });
   };
 
   function renderHomeworkPageContent(container, students) {
@@ -1433,6 +1615,13 @@
       html += '<button onclick="selectGradeAndSave(\'' + g + '\')" class="grade-btn" data-grade="' + g + '" style="padding:8px 14px;border:2px solid ' + (isCurrentGrade ? GRADE_COLORS[g] : '#444') + ';background:' + (isCurrentGrade ? GRADE_COLORS[g] : '#2a2a3a') + ';color:' + (isCurrentGrade ? 'white' : '#aaa') + ';border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;">' + g;
       html += '<span style="font-size:10px;display:block;color:' + (isCurrentGrade ? 'rgba(255,255,255,0.8)' : '#666') + ';">+' + GRADE_COINS[g] + '币</span></button>';
     });
+    // 自定义金币输入
+    html += '<span style="width:1px;height:24px;background:#444;margin:0 6px;"></span>';
+    html += '<div style="display:flex;align-items:center;gap:4px;">';
+    html += '<span style="color:#aaa;font-size:11px;">额外金币:</span>';
+    html += '<input type="number" id="customCoinsInput" placeholder="0" value="0" style="width:60px;padding:6px 8px;background:#2a2a3a;border:1px solid #444;border-radius:6px;color:white;font-size:12px;text-align:center;" title="正数奖励，负数扣除">';
+    html += '<span style="color:#666;font-size:10px;">(可负)</span>';
+    html += '</div>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;">';
     html += '<button onclick="saveGradingImage()" style="padding:10px 24px;background:linear-gradient(135deg,#11998e,#38ef7d);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">💾 保存批阅</button>';
@@ -1687,7 +1876,16 @@
 
     // 评分
     var grade = _pendingGrade || sub.grade || 'C';
-    var coins = GRADE_COINS[grade] || 10;
+    var baseCoins = GRADE_COINS[grade] || 10;
+    
+    // 读取自定义金币输入
+    var customCoinsInput = document.getElementById('customCoinsInput');
+    var customCoins = customCoinsInput ? parseInt(customCoinsInput.value) || 0 : 0;
+    var coins = baseCoins + customCoins;
+    
+    // 确保金币不为负数（最少为0）
+    if (coins < 0) coins = 0;
+    
     var student = getStudentById(sub.studentId);
 
     // 压缩批阅后的图片到400KB
@@ -1696,6 +1894,7 @@
       sub.graded = true;
       sub.grade = grade;
       sub.coins = coins;
+      sub.customCoins = customCoins; // 保存自定义金币记录
       sub.gradedImage = compressedImage;
       sub.gradedAt = new Date().toISOString();
 
@@ -1704,8 +1903,12 @@
         var oldCoins = sub._prevCoins || 0;
         var delta = coins - oldCoins;
         if (delta !== 0) {
-          changeStudentCoins(student, delta, '作业批改', '评分' + grade, 0, null, {
-            type: 'homework_grade', homeworkId: sub.homeworkId, grade: grade
+          var reason = '评分' + grade;
+          if (customCoins !== 0) {
+            reason += (customCoins > 0 ? ' +奖励' + customCoins : ' -扣减' + Math.abs(customCoins));
+          }
+          changeStudentCoins(student, delta, '作业批改', reason, 0, null, {
+            type: 'homework_grade', homeworkId: sub.homeworkId, grade: grade, customCoins: customCoins
           });
         }
         sub._prevCoins = coins;
@@ -1719,7 +1922,9 @@
 
       // 关闭画布
       window.closeGradingCanvas();
-      showNotification('已批改: ' + grade + '，+' + coins + ' 金币 (图片已压缩~' + Math.round(compressedImage.length * 3 / 4 / 1024) + 'KB)', 'success');
+      var coinMsg = coins >= 0 ? '+' + coins : coins;
+      var customMsg = customCoins !== 0 ? ' (含自定义' + (customCoins > 0 ? '+' : '') + customCoins + ')' : '';
+      showNotification('已批改: ' + grade + '，' + coinMsg + ' 金币' + customMsg, 'success');
       // 刷新列表
       if (typeof loadHomeworkSubmissions === 'function') {
         setTimeout(loadHomeworkSubmissions, 300);
@@ -1732,5 +1937,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v283 - 修复学生端显示问题');
+  console.log('[homework-system] 作业岛系统已加载 v284 - 学生画布书写 + 教师自定义金币');
 })();
