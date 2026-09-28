@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v282 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护
+// ========== 作业岛系统 v283 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 修复学生端显示问题
 (function() {
   'use strict';
 
@@ -559,13 +559,46 @@
     var container = document.getElementById('homeworkContent');
     if (!container) return;
     
-    // 检查是否是学生视图
-    var isStudentView = typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student';
+    // 检查是否是学生视图（增强检测，兼容各种登录方式）
+    var isStudentView = false;
+    var studentUserType = null;
+    
+    // 优先检查 currentUser（auth-check.js 设置）
+    if (typeof currentUser !== 'undefined' && currentUser) {
+      studentUserType = currentUser.type;
+    }
+    
+    // 如果 currentUser 未设置，从 localStorage 读取
+    if (!studentUserType) {
+      studentUserType = localStorage.getItem('userType');
+    }
+    
+    isStudentView = (studentUserType === 'student');
+    
+    console.log('[homework] renderHomeworkPage - userType:', studentUserType, 'isStudent:', isStudentView);
     
     if (isStudentView) {
-      // 学生视图
-      var myStudentId = parseInt(currentUser.studentId);
-      var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+      // 学生视图 - 只显示"我的作业"，不显示教师管理按钮
+      var myStudentId = null;
+      var myClassId = null;
+      
+      // 获取学生ID和班级ID（优先 currentUser，其次 localStorage）
+      if (typeof currentUser !== 'undefined' && currentUser) {
+        myStudentId = parseInt(currentUser.studentId || localStorage.getItem('studentId') || 0);
+        myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+      } else {
+        myStudentId = parseInt(localStorage.getItem('studentId') || 0);
+        myClassId = parseInt(localStorage.getItem('classId') || 0);
+      }
+      
+      console.log('[homework] Student view - studentId:', myStudentId, 'classId:', myClassId);
+      
+      if (!myStudentId || !myClassId) {
+        container.innerHTML = '<div style="text-align:center;padding:60px 20px;">' +
+          '<div style="font-size:48px;margin-bottom:15px;">⚠️</div>' +
+          '<div style="color:#666;font-size:14px;">登录信息不完整，请重新登录</div></div>';
+        return;
+      }
       
       // 初始化学生端 Realtime 订阅
       if (!_realtimeInitialized) {
@@ -580,17 +613,16 @@
       }
       
       // 从云端同步数据，确保分层数据加载完成后再渲染
-      if (myClassId) {
-        loadFromCloud(myClassId).then(function() {
-          renderStudentView(container, myStudentId, myClassId);
-        });
-      } else {
+      loadFromCloud(myClassId).then(function() {
         renderStudentView(container, myStudentId, myClassId);
-      }
-      return;
+      });
+      
+      return; // 学生视图结束，不执行后面的教师视图代码
     }
     
-    // 教师视图
+    // ========== 教师视图 ==========
+    console.log('[homework] Teacher view');
+    
     var students = getCurrentStudents();
     if (students.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#999;">' +
@@ -1700,5 +1732,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v282 - 图片压缩 + 师生双端实时同步 + 学生隐私保护');
+  console.log('[homework-system] 作业岛系统已加载 v283 - 修复学生端显示问题');
 })();
