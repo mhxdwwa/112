@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v290 ==========
+// ========== 作业岛系统 v291 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -283,14 +283,42 @@
   // ========== 工具函数 ==========
   function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
 
+  // ========== WebP 支持检测 ==========
+  var _supportsWebP = null;
+  function detectWebPSupport() {
+    if (_supportsWebP !== null) return _supportsWebP;
+    try {
+      var c = document.createElement('canvas');
+      c.width = 1;
+      c.height = 1;
+      var d = c.toDataURL('image/webp');
+      _supportsWebP = d.indexOf('data:image/webp') === 0;
+    } catch (e) {
+      _supportsWebP = false;
+    }
+    console.log('[WebP] 浏览器支持:', _supportsWebP);
+    return _supportsWebP;
+  }
+
+  // 获取图片 MIME 类型（WebP 优先，降级 JPEG）
+  function getImageFormat() {
+    return detectWebPSupport() ? 'image/webp' : 'image/jpeg';
+  }
+
+  // 获取图片文件扩展名
+  function getImageExtension() {
+    return detectWebPSupport() ? '.webp' : '.jpg';
+  }
+
   // ========== 图片压缩函数 ==========
-  // 压缩图片到目标大小，使用Canvas + JPEG质量调节
+  // 压缩图片到目标大小，使用Canvas + WebP/JPEG质量调节
   // targetSizeKB: 目标大小(KB)，默认800KB（保证文字清晰可读）
   // maxDimension: 最大边长，默认2400px
   function compressImage(dataUrl, targetSizeKB, callback, maxDimension) {
     targetSizeKB = targetSizeKB || 800;
     maxDimension = maxDimension || 2400;
     var targetBytes = targetSizeKB * 1024;
+    var format = getImageFormat();
     
     var img = new Image();
     img.onload = function() {
@@ -305,7 +333,7 @@
       canvas.height = Math.round(img.height * scale);
       var ctx = canvas.getContext('2d');
       
-      // 绘制图片（白色背景，避免JPEG透明区域变黑）
+      // 绘制图片（白色背景，避免透明区域变黑）
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -316,12 +344,13 @@
       var step = 0.08;
       
       function tryCompress(q) {
-        var result = canvas.toDataURL('image/jpeg', q);
+        var result = canvas.toDataURL(format, q);
         var size = Math.round((result.length * 3) / 4); // 估算base64解码后大小
         
         if (size <= targetBytes || q <= minQuality) {
           // 满足要求或已到最低质量
-          console.log('[compressImage] 压缩完成: 质量=' + q.toFixed(2) + 
+          console.log('[compressImage] 压缩完成: 格式=' + format +
+                      ', 质量=' + q.toFixed(2) + 
                       ', 大小=' + Math.round(size/1024) + 'KB' +
                       ', 尺寸=' + canvas.width + 'x' + canvas.height);
           callback(result);
@@ -344,6 +373,10 @@
   // 对压缩后的图片进行锐化和对比度增强，让文字更清晰
   function enhanceImageForDisplay(dataUrl, callback) {
     var img = new Image();
+    // 跨域图片需要设置 crossOrigin（Storage URL）
+    if (isImageUrl(dataUrl)) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = function() {
       var canvas = document.createElement('canvas');
       canvas.width = img.width;
@@ -407,9 +440,10 @@
       var enhancedData = new ImageData(sharpened, canvas.width, canvas.height);
       ctx.putImageData(enhancedData, 0, 0);
       
-      // 输出增强后的图片
-      var result = canvas.toDataURL('image/jpeg', 0.95);
-      console.log('[enhanceImage] 图片增强完成，尺寸=' + canvas.width + 'x' + canvas.height);
+      // 输出增强后的图片（WebP 优先）
+      var fmt = getImageFormat();
+      var result = canvas.toDataURL(fmt, 0.95);
+      console.log('[enhanceImage] 图片增强完成，格式=' + fmt + '，尺寸=' + canvas.width + 'x' + canvas.height);
       callback(result);
     };
     img.onerror = function() {
@@ -424,6 +458,112 @@
     return new Promise(function(resolve) {
       compressImage(dataUrl, targetSizeKB, resolve);
     });
+  }
+
+  // ========== Supabase Storage 工具函数 ==========
+  var STORAGE_BUCKET = 'homework-images';
+
+  // 判断字符串是否为 URL（而非 base64）
+  function isImageUrl(str) {
+    return str && (str.indexOf('http://') === 0 || str.indexOf('https://') === 0);
+  }
+
+  // 判断字符串是否为 base64 数据
+  function isBase64Image(str) {
+    return str && str.indexOf('data:image') === 0;
+  }
+
+  // dataURL 转 Blob
+  function dataURLtoBlob(dataURL) {
+    var parts = dataURL.split(',');
+    var mimeMatch = parts[0].match(/:(.*?);/);
+    var mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    var bstr = atob(parts[1]);
+    var n = bstr.length;
+    var u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  }
+
+  // 上传图片到 Supabase Storage，返回公开 URL
+  // path: 存储路径，如 'hw/123/abc.webp'
+  // 返回 Promise<string|null>，null 表示上传失败（回退到 base64）
+  function uploadImageToStorage(dataURL, path) {
+    return new Promise(function(resolve) {
+      try {
+        var blob = dataURLtoBlob(dataURL);
+        var url = SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path;
+        
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Content-Type': blob.type || 'image/jpeg',
+            'x-upsert': 'true'
+          },
+          body: blob
+        }).then(function(res) {
+          if (res.ok) {
+            var publicUrl = SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path;
+            console.log('[Storage] 上传成功:', publicUrl);
+            resolve(publicUrl);
+          } else {
+            res.json().then(function(err) {
+              console.warn('[Storage] 上传失败:', err);
+              resolve(null);
+            }).catch(function() {
+              console.warn('[Storage] 上传失败: HTTP', res.status);
+              resolve(null);
+            });
+          }
+        }).catch(function(err) {
+          console.warn('[Storage] 上传错误:', err.message);
+          resolve(null);
+        });
+      } catch (err) {
+        console.warn('[Storage] 转换错误:', err.message);
+        resolve(null);
+      }
+    });
+  }
+
+  // 从 Supabase Storage 删除图片
+  function deleteImageFromStorage(path) {
+    return new Promise(function(resolve) {
+      try {
+        var url = SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + path;
+        fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+          }
+        }).then(function(res) {
+          if (res.ok) {
+            console.log('[Storage] 删除成功:', path);
+          } else {
+            console.warn('[Storage] 删除失败:', path, res.status);
+          }
+          resolve(res.ok);
+        }).catch(function(err) {
+          console.warn('[Storage] 删除错误:', err.message);
+          resolve(false);
+        });
+      } catch (err) {
+        console.warn('[Storage] 删除异常:', err.message);
+        resolve(false);
+      }
+    });
+  }
+
+  // 从 URL 中提取 Storage 路径（用于删除）
+  function getStoragePathFromUrl(url) {
+    var prefix = SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/';
+    if (url && url.indexOf(prefix) === 0) {
+      return url.substring(prefix.length);
+    }
+    return null;
   }
 
   // ========== API 调用函数 ==========
@@ -1251,7 +1391,8 @@
       exportCtx.drawImage(_stuOverlayCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
     }
     
-    return exportCanvas.toDataURL('image/jpeg', 0.92);
+    var fmt = getImageFormat();
+    return exportCanvas.toDataURL(fmt, 0.92);
   }
 
   // 学生可选上传额外照片（答题纸）
@@ -1303,21 +1444,36 @@
         // 已经足够小，直接使用
         submitToServer(imageData);
       } else {
-      // 压缩最终图像到400KB（学生提交的答案，接收端会增强）
-      compressImage(imageData, 400, function(compressedFinal) {
+        // 压缩最终图像到400KB（学生提交的答案，接收端会增强）
+        compressImage(imageData, 400, function(compressedFinal) {
           submitToServer(compressedFinal);
         });
       }
     }
     
-    function submitToServer(imageData) {
+    async function submitToServer(imageData) {
+      var subId = generateId();
+      
+      // 尝试上传到 Storage（失败则回退到 base64）
+      showNotification('正在提交...', 'info');
+      var ext = getImageExtension();
+      var storagePath = 'sub/' + homeworkId + '/' + subId + ext;
+      var imageUrl = await uploadImageToStorage(imageData, storagePath);
+      var finalImageData = imageUrl || imageData;
+      
+      if (imageUrl) {
+        console.log('[homework] 学生答案已上传到 Storage:', imageUrl);
+      } else {
+        console.log('[homework] Storage 上传失败，使用 base64 存储');
+      }
+      
       var student = getStudentById(studentId);
       var newSub = {
-        id: generateId(),
+        id: subId,
         homeworkId: homeworkId,
         studentId: studentId,
         studentName: student ? student.name : (currentUser.studentName || ''),
-        image: imageData,
+        image: finalImageData,
         graded: false,
         grade: '',
         coins: 0,
@@ -1337,7 +1493,9 @@
       // 同步到云端
       syncSubmissionToCloud(newSub);
       
-      showNotification('作业已提交，等待老师批改', 'success');
+      var msg = '作业已提交，等待老师批改';
+      if (imageUrl) msg += ' (云端存储)';
+      showNotification(msg, 'success');
       
       // 刷新页面
       setTimeout(function() {
@@ -1361,6 +1519,10 @@
     var loaded = 0;
     imageUrls.forEach(function(url, i) {
       var img = new Image();
+      // 跨域图片需要设置 crossOrigin（Storage URL）
+      if (isImageUrl(url)) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = function() {
         images[i] = img;
         loaded++;
@@ -1383,7 +1545,8 @@
             mergeCtx.drawImage(im, 0, y, im.width, im.height);
             y += im.height;
           });
-          callback(mergeCanvas.toDataURL('image/jpeg', 0.85));
+          var fmt = getImageFormat();
+          callback(mergeCanvas.toDataURL(fmt, 0.85));
         }
       };
       img.src = url;
@@ -1706,7 +1869,7 @@
     reader.readAsDataURL(file);
   };
 
-  window.publishHomework = function() {
+  window.publishHomework = async function() {
     var title = document.getElementById('hwTitle').value.trim();
     var tier = document.getElementById('hwTier').value;
     var desc = document.getElementById('hwDesc').value.trim();
@@ -1718,16 +1881,37 @@
     if (existingHw) {
       // 删除旧作业及其所有提交记录
       var oldHwId = existingHw.id;
+      // 如果旧作业图片是 Storage URL，删除 Storage 文件
+      if (isImageUrl(existingHw.image)) {
+        var oldPath = getStoragePathFromUrl(existingHw.image);
+        if (oldPath) deleteImageFromStorage(oldPath);
+      }
       homeworkList = homeworkList.filter(function(h) { return h.id !== oldHwId; });
       homeworkSubmissions = homeworkSubmissions.filter(function(s) { return s.homeworkId !== oldHwId; });
       // 删除云端旧作业
       deleteHomeworkFromCloud(oldHwId);
     }
     
+    // 生成新作业 ID
+    var newHwId = generateId();
+    
+    // 尝试上传到 Storage（失败则回退到 base64）
+    showNotification('正在保存图片...', 'info');
+    var ext = getImageExtension();
+    var storagePath = 'hw/' + currentClassId + '/' + newHwId + ext;
+    var imageUrl = await uploadImageToStorage(_currentHomeworkImage, storagePath);
+    var finalImage = imageUrl || _currentHomeworkImage;
+    
+    if (imageUrl) {
+      console.log('[homework] 题目图片已上传到 Storage:', imageUrl);
+    } else {
+      console.log('[homework] Storage 上传失败，使用 base64 存储');
+    }
+    
     // 发布新作业
     var newHw = {
-      id: generateId(), title: title, tier: tier, description: desc,
-      image: _currentHomeworkImage, createdAt: new Date().toISOString()
+      id: newHwId, title: title, tier: tier, description: desc,
+      image: finalImage, createdAt: new Date().toISOString()
     };
     homeworkList.push(newHw);
     saveData();
@@ -1736,6 +1920,9 @@
     var msg = '作业已发布';
     if (existingHw) {
       msg += '（已替换该层级的旧作业）';
+    }
+    if (imageUrl) {
+      msg += ' (云端存储)';
     }
     showNotification(msg, 'success');
     
@@ -2018,6 +2205,10 @@
         // 如果有已保存的批阅图层，叠加到叠加层
         if (sub.gradedImage) {
           var overlay2 = new Image();
+          // 跨域图片需要设置 crossOrigin（Storage URL）
+          if (isImageUrl(sub.gradedImage)) {
+            overlay2.crossOrigin = 'anonymous';
+          }
           overlay2.onload = function() {
             _gradeOverlayCtx.drawImage(overlay2, 0, 0, overlayCanvas.width, overlayCanvas.height);
             _markClean = false;
@@ -2270,13 +2461,31 @@
     var student = getStudentById(sub.studentId);
 
     // 压缩批阅后的图片到400KB（接收端会增强）
-    compressImage(annotatedImage, 400, function(compressedImage) {
+    compressImage(annotatedImage, 400, async function(compressedImage) {
+      // 尝试上传到 Storage（失败则回退到 base64）
+      var ext = getImageExtension();
+      var storagePath = 'graded/' + sub.id + ext;
+      var imageUrl = await uploadImageToStorage(compressedImage, storagePath);
+      var finalGraded = imageUrl || compressedImage;
+      
+      if (imageUrl) {
+        console.log('[homework] 批阅图片已上传到 Storage:', imageUrl);
+      } else {
+        console.log('[homework] Storage 上传失败，使用 base64 存储');
+      }
+      
+      // 如果旧批阅图片是 Storage URL，删除它
+      if (sub.gradedImage && isImageUrl(sub.gradedImage)) {
+        var oldPath = getStoragePathFromUrl(sub.gradedImage);
+        if (oldPath) deleteImageFromStorage(oldPath);
+      }
+      
       // 更新提交记录
       sub.graded = true;
       sub.grade = grade;
       sub.coins = coins;
       sub.customCoins = customCoins; // 保存自定义金币记录
-      sub.gradedImage = compressedImage;
+      sub.gradedImage = finalGraded;
       sub.gradedAt = new Date().toISOString();
 
       // 发放金币
@@ -2299,13 +2508,14 @@
       _pendingGrade = null;
 
       // 同步到云端
-      syncGradeToCloud(sub.id, compressedImage, grade, coins, sub.comment || '');
+      syncGradeToCloud(sub.id, finalGraded, grade, coins, sub.comment || '');
 
       // 关闭画布
       window.closeGradingCanvas();
       var coinMsg = coins >= 0 ? '+' + coins : coins;
       var customMsg = customCoins !== 0 ? ' (含自定义' + (customCoins > 0 ? '+' : '') + customCoins + ')' : '';
-      showNotification('已批改: ' + grade + '，' + coinMsg + ' 金币' + customMsg, 'success');
+      var storageMsg = imageUrl ? ' (云端存储)' : '';
+      showNotification('已批改: ' + grade + '，' + coinMsg + ' 金币' + customMsg + storageMsg, 'success');
       // 刷新列表
       if (typeof loadHomeworkSubmissions === 'function') {
         setTimeout(loadHomeworkSubmissions, 300);
@@ -2318,5 +2528,5 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v285 - 学生画布支持双指缩放');
+  console.log('[homework-system] 作业岛系统已加载 v291 - WebP压缩 + Supabase Storage云端图片存储');
 })();
