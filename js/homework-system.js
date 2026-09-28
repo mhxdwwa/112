@@ -1,5 +1,5 @@
-// ========== 作业岛系统 v286 ==========
-// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩 + 实时推送(师生双端) + 学生隐私保护 + 学生直接在题目上书写(无需上传) + 自定义金币
+// ========== 作业岛系统 v287 ==========
+// 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 图片压缩(800KB/2400px) + 实时推送(师生双端) + 学生隐私保护 + 学生直接在题目上书写(无需上传) + 自定义金币
 (function() {
   'use strict';
 
@@ -282,15 +282,16 @@
   function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
 
   // ========== 图片压缩函数 ==========
-  // 压缩图片到目标大小（默认400KB），使用Canvas + JPEG质量调节
+  // 压缩图片到目标大小，使用Canvas + JPEG质量调节
+  // targetSizeKB: 目标大小(KB)，默认800KB（保证文字清晰可读）
   function compressImage(dataUrl, targetSizeKB, callback) {
-    targetSizeKB = targetSizeKB || 400;
+    targetSizeKB = targetSizeKB || 800;
     var targetBytes = targetSizeKB * 1024;
     
     var img = new Image();
     img.onload = function() {
-      // 计算缩放比例 - 如果图片太大，先缩小尺寸
-      var maxDimension = 1600; // 最大边长
+      // 计算缩放比例 - 保留足够分辨率以保证文字清晰
+      var maxDimension = 2400; // 最大边长（保证文字清晰可读）
       var scale = 1;
       if (img.width > maxDimension || img.height > maxDimension) {
         scale = maxDimension / Math.max(img.width, img.height);
@@ -307,9 +308,9 @@
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       
       // 逐步降低质量直到满足目标大小
-      var quality = 0.85; // 起始质量
-      var minQuality = 0.3; // 最低质量
-      var step = 0.1;
+      var quality = 0.88; // 起始质量（较高，保证清晰度）
+      var minQuality = 0.5; // 最低质量（不低于0.5，否则文字模糊）
+      var step = 0.08;
       
       function tryCompress(q) {
         var result = canvas.toDataURL('image/jpeg', q);
@@ -1085,7 +1086,7 @@
     // 将当前画布上的书写痕迹缩放到原始尺寸并叠加
     exportCtx.drawImage(_stuCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
     
-    return exportCanvas.toDataURL('image/jpeg', 0.85);
+    return exportCanvas.toDataURL('image/jpeg', 0.92);
   }
 
   // 学生可选上传额外照片（答题纸）
@@ -1099,7 +1100,7 @@
       if (preview) {
         preview.innerHTML = '<div style="font-size:12px;color:#6b7280;">⏳ 压缩中...</div>';
       }
-      compressImage(e.target.result, 400, function(compressed) {
+      compressImage(e.target.result, 800, function(compressed) {
         _studentExtraImage = compressed;
         if (preview) {
           preview.innerHTML = '<img src="' + _studentExtraImage + '" style="max-width:100%;max-height:120px;border-radius:8px;">' +
@@ -1131,41 +1132,52 @@
     var imageToSubmit = submitImages.length === 1 ? submitImages[0] : null;
     
     function doSubmit(imageData) {
-      // 压缩最终图像
-      compressImage(imageData, 400, function(compressedFinal) {
-        var student = getStudentById(studentId);
-        var newSub = {
-          id: generateId(),
-          homeworkId: homeworkId,
-          studentId: studentId,
-          studentName: student ? student.name : (currentUser.studentName || ''),
-          image: compressedFinal,
-          graded: false,
-          grade: '',
-          coins: 0,
-          comment: '',
-          gradedImage: null,
-          submittedAt: new Date().toISOString()
-        };
-        
-        homeworkSubmissions.push(newSub);
-        saveData();
-        _studentUploadedImage = null;
-        _studentExtraImage = null;
-        _stuCanvas = null;
-        _stuCtx = null;
-        _stuImg = null;
-        
-        // 同步到云端
-        syncSubmissionToCloud(newSub);
-        
-        showNotification('作业已提交，等待老师批改', 'success');
-        
-        // 刷新页面
-        setTimeout(function() {
-          window.renderHomeworkPage();
-        }, 500);
-      });
+      // 检查图像大小，如果已经小于800KB则跳过压缩
+      var estimatedSize = Math.round((imageData.length * 3) / 4);
+      if (estimatedSize <= 800 * 1024) {
+        // 已经足够小，直接使用
+        submitToServer(imageData);
+      } else {
+        // 需要压缩到800KB
+        compressImage(imageData, 800, function(compressedFinal) {
+          submitToServer(compressedFinal);
+        });
+      }
+    }
+    
+    function submitToServer(imageData) {
+      var student = getStudentById(studentId);
+      var newSub = {
+        id: generateId(),
+        homeworkId: homeworkId,
+        studentId: studentId,
+        studentName: student ? student.name : (currentUser.studentName || ''),
+        image: imageData,
+        graded: false,
+        grade: '',
+        coins: 0,
+        comment: '',
+        gradedImage: null,
+        submittedAt: new Date().toISOString()
+      };
+      
+      homeworkSubmissions.push(newSub);
+      saveData();
+      _studentUploadedImage = null;
+      _studentExtraImage = null;
+      _stuCanvas = null;
+      _stuCtx = null;
+      _stuImg = null;
+      
+      // 同步到云端
+      syncSubmissionToCloud(newSub);
+      
+      showNotification('作业已提交，等待老师批改', 'success');
+      
+      // 刷新页面
+      setTimeout(function() {
+        window.renderHomeworkPage();
+      }, 500);
     }
     
     if (imageToSubmit) {
@@ -1515,8 +1527,8 @@
       if (upload) {
         upload.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
-      // 压缩图片到400KB
-      compressImage(e.target.result, 400, function(compressed) {
+      // 压缩图片到800KB（保证题目图片清晰可读）
+      compressImage(e.target.result, 800, function(compressed) {
         _currentHomeworkImage = compressed;
         if (upload) {
           upload.innerHTML = '<img src="' + _currentHomeworkImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
@@ -1695,8 +1707,8 @@
       if (upload) {
         upload.innerHTML = '<div style="color:#667eea;font-size:13px;">⏳ 压缩图片中...</div>';
       }
-      // 压缩图片到400KB
-      compressImage(e.target.result, 400, function(compressed) {
+      // 压缩图片到800KB（保证清晰可读）
+      compressImage(e.target.result, 800, function(compressed) {
         _currentSubmitImage = compressed;
         if (upload) {
           upload.innerHTML = '<img src="' + _currentSubmitImage + '" style="max-width:100%;max-height:200px;border-radius:8px;">' +
@@ -2063,8 +2075,8 @@
     
     var student = getStudentById(sub.studentId);
 
-    // 压缩批阅后的图片到400KB
-    compressImage(annotatedImage, 400, function(compressedImage) {
+    // 压缩批阅后的图片到800KB（保证批注清晰）
+    compressImage(annotatedImage, 800, function(compressedImage) {
       // 更新提交记录
       sub.graded = true;
       sub.grade = grade;
