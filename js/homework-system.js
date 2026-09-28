@@ -1517,8 +1517,7 @@
       '<button onclick="fsResetZoom()" style="width:30px;height:30px;background:transparent;color:white;border:none;font-size:14px;cursor:pointer;flex-shrink:0;">↺</button>' +
       '<button onclick="fsClear()" style="width:30px;height:30px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🗑</button>' +
       '<span style="width:1px;height:22px;background:rgba(255,255,255,0.15);margin:0 3px;flex-shrink:0;"></span>' +
-      '<button onclick="exitStudentFullscreen()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">退出</button>' +
-      '<button onclick="fsSubmitAndExit()" style="padding:6px 10px;background:#22c55e;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">提交</button>';
+      '<button onclick="exitStudentFullscreen()" style="padding:6px 10px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">退出</button>';
 
     el.appendChild(cc);
     el.appendChild(tb);
@@ -1851,18 +1850,6 @@
     _stuFsOverlay = null; _stuFsCanvas = null; _stuFsOverlayCanvas = null;
     _stuFsCtx = null; _stuFsOverlayCtx = null;
     // 不自动提交，用户需要手动点击提交按钮
-  };
-
-  // 全屏提交并退出：先退出全屏（同步笔迹），然后提交
-  window.fsSubmitAndExit = function() {
-    var hwId = _stuFsHomeworkId;
-    var stuId = _stuFsStudentId;
-    // 先退出全屏（同步笔迹到普通画布）
-    exitStudentFullscreen();
-    // 然后提交
-    if (hwId && stuId) {
-      studentSubmitHomework(hwId, stuId);
-    }
   };
 
   // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
