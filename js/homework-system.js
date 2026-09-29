@@ -1190,6 +1190,27 @@
     if (!_stuWriteModeActive) return;
     _stuWriteModeActive = false;
     
+    // 将笔迹合并到底图中，让查看模式也能看到
+    if (_stuCanvas && _stuOverlayCanvas && _stuCtx && _stuOverlayCtx) {
+      // 将叠加层（笔迹）绘制到底图画布上
+      _stuCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuCanvas.width, _stuCanvas.height);
+      // 清空叠加层
+      _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      // 将合并后的底图导出为数据URL，更新查看模式的图片
+      var mergedImageUrl = _stuCanvas.toDataURL(getImageFormat(), 0.92);
+      var viewImg = document.getElementById('studentViewImage');
+      if (viewImg) {
+        viewImg.src = mergedImageUrl;
+      }
+      // 更新 _stuImg 为合并后的图片，以便下次进入手写模式时使用
+      var newImg = new Image();
+      newImg.src = mergedImageUrl;
+      _stuImg = newImg;
+      // 重置叠加层引用，下次进入手写模式时会重新初始化
+      _stuOverlayCanvas = null;
+      _stuOverlayCtx = null;
+    }
+    
     // 切换容器显示
     var viewContainer = document.getElementById('studentViewContainer');
     var writeContainer = document.getElementById('studentWriteContainer');
@@ -1203,8 +1224,6 @@
     if (writeBtn) writeBtn.style.display = 'flex';
     if (saveBtn) saveBtn.style.display = 'none';
     if (writeTools) writeTools.style.display = 'none';
-    
-    // 笔迹已保存在canvas中，下次进入手写模式会重新加载
   };
 
   // 初始化手写画布（只初始化一次，保留已有笔迹）
