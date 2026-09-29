@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v316 ==========
+// ========== 作业岛系统 v317 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v316';
+  var HW_DATA_VERSION = 'v317';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -1038,7 +1038,7 @@
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>';
       html += '</span>';
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
-      var stuColors = ['#000000','#3b82f6'];
+      var stuColors = ['#000000','#3b82f6','#22c55e'];
       stuColors.forEach(function(c) {
         html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:18px;height:18px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === '#000000' ? '#667eea' : 'rgba(255,255,255,0.3)') + ';flex-shrink:0;"></div>';
       });
@@ -1515,7 +1515,10 @@
     var tb = document.getElementById('stuFsToolbar');
     if (tb) {
       tb.innerHTML =
-        '<button id="fsEraBtn" onclick="toggleFsEraser()" style="padding:8px 12px;background:#444;color:#ccc;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🧹</button>' +
+        '<div onclick="setFsDrawColor(\'#000000\')" class="fs-pen-color-btn" data-color="#000000" style="width:22px;height:22px;border-radius:50%;background:#000;cursor:pointer;border:2px solid ' + (_stuDrawColor === '#000000' ? '#667eea' : 'rgba(255,255,255,0.3)') + ';flex-shrink:0;"></div>' +
+        '<div onclick="setFsDrawColor(\'#3b82f6\')" class="fs-pen-color-btn" data-color="#3b82f6" style="width:22px;height:22px;border-radius:50%;background:#3b82f6;cursor:pointer;border:2px solid ' + (_stuDrawColor === '#3b82f6' ? '#667eea' : 'rgba(255,255,255,0.3)') + ';flex-shrink:0;"></div>' +
+        '<div onclick="setFsDrawColor(\'#22c55e\')" class="fs-pen-color-btn" data-color="#22c55e" style="width:22px;height:22px;border-radius:50%;background:#22c55e;cursor:pointer;border:2px solid ' + (_stuDrawColor === '#22c55e' ? '#667eea' : 'rgba(255,255,255,0.3)') + ';flex-shrink:0;"></div>' +
+        '<button id="fsEraBtn" onclick="toggleFsEraser()" style="padding:8px 12px;background:' + (_stuDrawTool === 'eraser' ? '#667eea' : '#444') + ';color:' + (_stuDrawTool === 'eraser' ? 'white' : '#ccc') + ';border:none;border-radius:6px;font-size:13px;cursor:pointer;">🧹</button>' +
         '<button onclick="clearFsCanvas()" style="padding:8px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🗑</button>' +
         '<button onclick="resetFsTransform()" style="padding:8px 12px;background:#444;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">↺</button>' +
         '<button onclick="exitFsWriteMode()" style="padding:8px 16px;background:#22c55e;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">💾 保存</button>';
@@ -1739,6 +1742,20 @@
       _stuDrawTool = 'eraser';
       if (btn) { btn.style.background = '#667eea'; btn.style.color = 'white'; }
     }
+  };
+
+  // 设置全屏画笔颜色
+  window.setFsDrawColor = function(color) {
+    _stuDrawColor = color;
+    _stuDrawTool = 'pen';
+    // 更新颜色按钮高亮
+    var btns = document.querySelectorAll('.fs-pen-color-btn');
+    btns.forEach(function(btn) {
+      btn.style.border = '2px solid ' + (btn.getAttribute('data-color') === color ? '#667eea' : 'rgba(255,255,255,0.3)');
+    });
+    // 取消橡皮擦高亮
+    var eraBtn = document.getElementById('fsEraBtn');
+    if (eraBtn) { eraBtn.style.background = '#444'; eraBtn.style.color = '#ccc'; }
   };
 
   // 清除全屏画布
