@@ -1202,10 +1202,10 @@
       if (viewImg) {
         viewImg.src = mergedImageUrl;
       }
-      // 更新 _stuImg 为合并后的图片，以便下次进入手写模式时使用
+      // 重新加载 _stuImg，确保图片完全解码后再使用
       var newImg = new Image();
+      newImg.onload = function() { _stuImg = newImg; };
       newImg.src = mergedImageUrl;
-      _stuImg = newImg;
       // 重置叠加层引用，下次进入手写模式时会重新初始化
       _stuOverlayCanvas = null;
       _stuOverlayCtx = null;
@@ -1234,6 +1234,14 @@
     var canvas = document.getElementById('studentCanvas');
     var overlayCanvas = document.getElementById('studentOverlayCanvas');
     if (!canvas || !overlayCanvas || !_stuImg) return;
+    
+    // 如果图片还没有加载完成（比如刚从 dataURL 创建的 Image），等待加载
+    if (!_stuImg.width || !_stuImg.height) {
+      _stuImg.onload = function() {
+        initStudentCanvasForWrite();
+      };
+      return;
+    }
     
     _stuCanvas = canvas;
     _stuCtx = canvas.getContext('2d');
@@ -1521,15 +1529,6 @@
     // 初始化全屏手写画布
     initFsWriteCanvas();
 
-    // 同步普通画布的笔迹到全屏画布
-    if (_stuOverlayCanvas && _stuOverlayCtx && _stuFsOverlayCtx) {
-      try {
-        _stuFsOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuFsOverlayCanvas.width, _stuFsOverlayCanvas.height);
-      } catch(e) {
-        console.warn('[fs] sync to fullscreen failed:', e);
-      }
-    }
-
     // 更新工具栏
     var tb = document.getElementById('stuFsToolbar');
     if (tb) {
@@ -1547,6 +1546,15 @@
   // 初始化全屏手写画布
   function initFsWriteCanvas() {
     var img = _stuImg;
+    
+    // 如果图片还没有加载完成（比如刚从 dataURL 创建的 Image），等待加载
+    if (!img.width || !img.height) {
+      img.onload = function() {
+        initFsWriteCanvas();
+      };
+      return;
+    }
+    
     var screenW = window.innerWidth;
     var screenH = window.innerHeight - 50;
 
@@ -1588,6 +1596,15 @@
     _stuFsOverlayCanvas.addEventListener('mousedown', onFsMouseDown);
     _stuFsOverlayCanvas.addEventListener('mousemove', onFsMouseMove);
     _stuFsOverlayCanvas.addEventListener('mouseup', onFsMouseUp);
+    
+    // 同步普通画布的笔迹到全屏画布（如果图片是异步加载的，这里才能正确同步）
+    if (_stuOverlayCanvas && _stuOverlayCtx && _stuFsOverlayCtx) {
+      try {
+        _stuFsOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuFsOverlayCanvas.width, _stuFsOverlayCanvas.height);
+      } catch(e) {
+        console.warn('[fs] sync to fullscreen failed:', e);
+      }
+    }
   }
 
   // 更新CSS transform
@@ -1811,10 +1828,10 @@
         _stuCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuCanvas.width, _stuCanvas.height);
         _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
         mergedImageUrl = _stuCanvas.toDataURL(getImageFormat(), 0.92);
-        // 更新 _stuImg 为合并后的图片
+        // 重新加载 _stuImg，确保图片完全解码后再使用
         var newImg = new Image();
+        newImg.onload = function() { _stuImg = newImg; };
         newImg.src = mergedImageUrl;
-        _stuImg = newImg;
         // 重置叠加层引用，下次进入手写模式时会重新初始化
         _stuOverlayCanvas = null;
         _stuOverlayCtx = null;
