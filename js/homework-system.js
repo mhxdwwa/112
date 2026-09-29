@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v314 ==========
+// ========== 作业岛系统 v315 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v314';
+  var HW_DATA_VERSION = 'v315';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -1377,21 +1377,32 @@
     _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
   };
 
-  // ========== 全屏查看 + 全屏手写功能 ==========
+  // ========== 全屏查看 + 全屏手写功能（iOS相册标记风格）==========
   var _stuFullscreenActive = false;
   var _stuFsOverlay = null;
-  var _stuFsWriteMode = false; // 是否处于全屏手写模式
+  var _stuFsWriteMode = false;
   var _stuFsCanvas = null;
   var _stuFsOverlayCanvas = null;
   var _stuFsCtx = null;
   var _stuFsOverlayCtx = null;
-  var _stuFsImg = null; // 全屏查看时的原生img
+  var _stuFsImg = null;
   var _stuFsBaseW = 0;
   var _stuFsBaseH = 0;
   var _stuFsDrawing = false;
   var _stuFsLastX = -1;
   var _stuFsLastY = -1;
   var _stuFsTouchActive = false;
+  
+  // iOS相册风格：双指缩放/平移
+  var _stuFsPinchStartDist = 0;
+  var _stuFsPinchStartScale = 1;
+  var _stuFsCurrentScale = 1;
+  var _stuFsTranslateX = 0;
+  var _stuFsTranslateY = 0;
+  var _stuFsPinchStartTransX = 0;
+  var _stuFsPinchStartTransY = 0;
+  var _stuFsPinchCenterX = 0;
+  var _stuFsPinchCenterY = 0;
 
   // 全屏查看（原生img，支持原生手势缩放/平移）
   window.enterStudentFullscreen = function() {
@@ -1433,10 +1444,15 @@
     _stuFsOverlay = el;
   };
 
-  // 进入全屏手写模式
+  // 进入全屏手写模式（iOS相册标记风格）
   window.enterFsWriteMode = function() {
     if (_stuFsWriteMode || !_stuImg) return;
     _stuFsWriteMode = true;
+
+    // 重置缩放/平移状态
+    _stuFsCurrentScale = 1;
+    _stuFsTranslateX = 0;
+    _stuFsTranslateY = 0;
 
     // 隐藏图片容器
     var imgContainer = document.getElementById('stuFsImgContainer');
@@ -1445,7 +1461,12 @@
     // 创建手写容器
     var writeContainer = document.createElement('div');
     writeContainer.id = 'stuFsWriteContainer';
-    writeContainer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;';
+    writeContainer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:hidden;background:#000;';
+
+    // 变换层（用于CSS transform缩放/平移）
+    var transformLayer = document.createElement('div');
+    transformLayer.id = 'stuFsTransformLayer';
+    transformLayer.style.cssText = 'position:absolute;top:50%;left:50%;transform-origin:0 0;';
 
     // 底图画布
     var baseC = document.createElement('canvas');
@@ -1457,8 +1478,9 @@
     overC.id = 'stuFsOverlayCanvas';
     overC.style.cssText = 'position:absolute;top:0;left:0;display:block;touch-action:none;';
 
-    writeContainer.appendChild(baseC);
-    writeContainer.appendChild(overC);
+    transformLayer.appendChild(baseC);
+    transformLayer.appendChild(overC);
+    writeContainer.appendChild(transformLayer);
 
     // 插入到全屏层
     var fsLayer = document.getElementById('stuFsLayer');
@@ -1478,6 +1500,7 @@
       tb.innerHTML =
         '<button id="fsEraBtn" onclick="toggleFsEraser()" style="padding:8px 12px;background:#444;color:#ccc;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🧹</button>' +
         '<button onclick="clearFsCanvas()" style="padding:8px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🗑</button>' +
+        '<button onclick="resetFsTransform()" style="padding:8px 12px;background:#444;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">↺</button>' +
         '<button onclick="exitFsWriteMode()" style="padding:8px 16px;background:#22c55e;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">💾 保存</button>';
     }
   };
@@ -1486,7 +1509,7 @@
   function initFsWriteCanvas() {
     var img = _stuImg;
     var screenW = window.innerWidth;
-    var screenH = window.innerHeight - 50; // 减去工具栏高度
+    var screenH = window.innerHeight - 50;
 
     // 计算画布尺寸（尽量铺满屏幕）
     var scaleByW = screenW / img.width;
@@ -1512,6 +1535,13 @@
     _stuFsOverlayCanvas.style.height = canvasH + 'px';
     _stuFsOverlayCtx.clearRect(0, 0, canvasW, canvasH);
 
+    // 居中显示
+    var transformLayer = document.getElementById('stuFsTransformLayer');
+    if (transformLayer) {
+      transformLayer.style.marginLeft = (-canvasW / 2) + 'px';
+      transformLayer.style.marginTop = (-canvasH / 2) + 'px';
+    }
+
     // 绑定触摸事件
     _stuFsOverlayCanvas.addEventListener('touchstart', onFsTouchStart, { passive: false });
     _stuFsOverlayCanvas.addEventListener('touchmove', onFsTouchMove, { passive: false });
@@ -1521,44 +1551,109 @@
     _stuFsOverlayCanvas.addEventListener('mouseup', onFsMouseUp);
   }
 
-  // 全屏手写触摸事件
+  // 更新CSS transform
+  function updateFsTransform() {
+    var transformLayer = document.getElementById('stuFsTransformLayer');
+    if (transformLayer) {
+      transformLayer.style.transform = 'translate(' + _stuFsTranslateX + 'px, ' + _stuFsTranslateY + 'px) scale(' + _stuFsCurrentScale + ')';
+    }
+  }
+
+  // 重置缩放/平移
+  window.resetFsTransform = function() {
+    _stuFsCurrentScale = 1;
+    _stuFsTranslateX = 0;
+    _stuFsTranslateY = 0;
+    updateFsTransform();
+  };
+
+  // iOS相册风格触摸事件：单指书写，双指缩放/平移
   function onFsTouchStart(e) {
     e.preventDefault();
     _stuFsTouchActive = true;
-    _stuFsDrawing = true;
-    var touch = e.touches[0];
-    var pos = getFsCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
-    _stuFsLastX = pos.x;
-    _stuFsLastY = pos.y;
+    var touches = Array.from(e.touches);
+    
+    if (touches.length === 1) {
+      // 单指：开始书写
+      _stuFsDrawing = true;
+      var pos = getFsCanvasPos({ clientX: touches[0].clientX, clientY: touches[0].clientY });
+      _stuFsLastX = pos.x;
+      _stuFsLastY = pos.y;
+    } else if (touches.length === 2) {
+      // 双指：开始缩放/平移
+      _stuFsDrawing = false;
+      _stuFsPinchStartDist = getTouchDistance(touches[0], touches[1]);
+      _stuFsPinchStartScale = _stuFsCurrentScale;
+      _stuFsPinchStartTransX = _stuFsTranslateX;
+      _stuFsPinchStartTransY = _stuFsTranslateY;
+      _stuFsPinchCenterX = (touches[0].clientX + touches[1].clientX) / 2;
+      _stuFsPinchCenterY = (touches[0].clientY + touches[1].clientY) / 2;
+    }
   }
 
   function onFsTouchMove(e) {
     e.preventDefault();
-    if (!_stuFsDrawing) return;
-    var touch = e.touches[0];
-    var pos = getFsCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
-    // 防止跳跃画线
-    var dx = pos.x - _stuFsLastX, dy = pos.y - _stuFsLastY;
-    var dist = Math.sqrt(dx*dx + dy*dy);
-    var maxJump = _stuFsOverlayCanvas.width * 0.3;
-    if (dist > maxJump) {
+    var touches = Array.from(e.touches);
+    
+    if (touches.length === 1 && _stuFsDrawing) {
+      // 单指：书写
+      var pos = getFsCanvasPos({ clientX: touches[0].clientX, clientY: touches[0].clientY });
+      // 防止跳跃画线
+      var dx = pos.x - _stuFsLastX, dy = pos.y - _stuFsLastY;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      var maxJump = _stuFsOverlayCanvas.width * 0.3;
+      if (dist > maxJump) {
+        _stuFsLastX = pos.x;
+        _stuFsLastY = pos.y;
+        return;
+      }
+      drawFsLine(_stuFsLastX, _stuFsLastY, pos.x, pos.y);
       _stuFsLastX = pos.x;
       _stuFsLastY = pos.y;
-      return;
+    } else if (touches.length === 2) {
+      // 双指：缩放 + 平移
+      var currentDist = getTouchDistance(touches[0], touches[1]);
+      var scale = _stuFsPinchStartScale * (currentDist / _stuFsPinchStartDist);
+      
+      // 限制缩放范围
+      if (scale < 0.5) scale = 0.5;
+      if (scale > 5) scale = 5;
+      
+      _stuFsCurrentScale = scale;
+      
+      // 计算平移（以双指中心为基准）
+      var currentCenterX = (touches[0].clientX + touches[1].clientX) / 2;
+      var currentCenterY = (touches[0].clientY + touches[1].clientY) / 2;
+      _stuFsTranslateX = _stuFsPinchStartTransX + (currentCenterX - _stuFsPinchCenterX);
+      _stuFsTranslateY = _stuFsPinchStartTransY + (currentCenterY - _stuFsPinchCenterY);
+      
+      updateFsTransform();
     }
-    drawFsLine(_stuFsLastX, _stuFsLastY, pos.x, pos.y);
-    _stuFsLastX = pos.x;
-    _stuFsLastY = pos.y;
   }
 
   function onFsTouchEnd(e) {
-    _stuFsDrawing = false;
-    _stuFsLastX = -1;
-    _stuFsLastY = -1;
-    setTimeout(function() { _stuFsTouchActive = false; }, 300);
+    if (e.touches.length === 0) {
+      _stuFsDrawing = false;
+      _stuFsLastX = -1;
+      _stuFsLastY = -1;
+      setTimeout(function() { _stuFsTouchActive = false; }, 300);
+    } else if (e.touches.length === 1) {
+      // 从双指变为单指，开始书写
+      _stuFsDrawing = true;
+      var touch = e.touches[0];
+      var pos = getFsCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+      _stuFsLastX = pos.x;
+      _stuFsLastY = pos.y;
+    }
   }
 
-  // 全屏手写鼠标事件
+  function getTouchDistance(t1, t2) {
+    var dx = t1.clientX - t2.clientX;
+    var dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // 全屏手写鼠标事件（桌面端）
   function onFsMouseDown(e) {
     if (_stuFsTouchActive) return;
     _stuFsDrawing = true;
