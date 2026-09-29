@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v313 ==========
+// ========== 作业岛系统 v314 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v313';
+  var HW_DATA_VERSION = 'v314';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -1377,14 +1377,27 @@
     _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
   };
 
-  // ========== 全屏查看功能（iOS相册风格）==========
+  // ========== 全屏查看 + 全屏手写功能 ==========
   var _stuFullscreenActive = false;
   var _stuFsOverlay = null;
+  var _stuFsWriteMode = false; // 是否处于全屏手写模式
+  var _stuFsCanvas = null;
+  var _stuFsOverlayCanvas = null;
+  var _stuFsCtx = null;
+  var _stuFsOverlayCtx = null;
+  var _stuFsImg = null; // 全屏查看时的原生img
+  var _stuFsBaseW = 0;
+  var _stuFsBaseH = 0;
+  var _stuFsDrawing = false;
+  var _stuFsLastX = -1;
+  var _stuFsLastY = -1;
+  var _stuFsTouchActive = false;
 
   // 全屏查看（原生img，支持原生手势缩放/平移）
   window.enterStudentFullscreen = function() {
     if (_stuFullscreenActive || !_stuImg) return;
     _stuFullscreenActive = true;
+    _stuFsWriteMode = false;
 
     // 创建全屏层
     var el = document.createElement('div');
@@ -1394,7 +1407,7 @@
     // 图片容器（支持原生手势）
     var imgContainer = document.createElement('div');
     imgContainer.id = 'stuFsImgContainer';
-    imgContainer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:40px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:manipulation;display:flex;align-items:center;justify-content:center;';
+    imgContainer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:manipulation;display:flex;align-items:center;justify-content:center;';
 
     // 原生img（支持原生缩放/平移）
     var img = document.createElement('img');
@@ -1403,11 +1416,14 @@
     img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;touch-action:manipulation;-webkit-user-drag:none;user-select:none;';
     
     imgContainer.appendChild(img);
+    _stuFsImg = img;
 
     // 底部工具栏
     var tb = document.createElement('div');
-    tb.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:40px;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;background:rgba(20,20,20,0.95);border-top:1px solid #333;';
+    tb.id = 'stuFsToolbar';
+    tb.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;background:rgba(20,20,20,0.95);border-top:1px solid #333;';
     tb.innerHTML =
+      '<button id="fsWriteBtn" onclick="enterFsWriteMode()" style="padding:8px 16px;background:#667eea;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">✏️ 手写</button>' +
       '<button onclick="exitStudentFullscreen()" style="padding:8px 16px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">退出</button>';
 
     el.appendChild(imgContainer);
@@ -1417,9 +1433,251 @@
     _stuFsOverlay = el;
   };
 
+  // 进入全屏手写模式
+  window.enterFsWriteMode = function() {
+    if (_stuFsWriteMode || !_stuImg) return;
+    _stuFsWriteMode = true;
+
+    // 隐藏图片容器
+    var imgContainer = document.getElementById('stuFsImgContainer');
+    if (imgContainer) imgContainer.style.display = 'none';
+
+    // 创建手写容器
+    var writeContainer = document.createElement('div');
+    writeContainer.id = 'stuFsWriteContainer';
+    writeContainer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:50px;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;';
+
+    // 底图画布
+    var baseC = document.createElement('canvas');
+    baseC.id = 'stuFsBaseCanvas';
+    baseC.style.cssText = 'display:block;touch-action:none;';
+
+    // 叠加层画布
+    var overC = document.createElement('canvas');
+    overC.id = 'stuFsOverlayCanvas';
+    overC.style.cssText = 'position:absolute;top:0;left:0;display:block;touch-action:none;';
+
+    writeContainer.appendChild(baseC);
+    writeContainer.appendChild(overC);
+
+    // 插入到全屏层
+    var fsLayer = document.getElementById('stuFsLayer');
+    if (fsLayer) fsLayer.insertBefore(writeContainer, document.getElementById('stuFsToolbar'));
+
+    _stuFsCanvas = baseC;
+    _stuFsOverlayCanvas = overC;
+    _stuFsCtx = baseC.getContext('2d');
+    _stuFsOverlayCtx = overC.getContext('2d');
+
+    // 初始化全屏手写画布
+    initFsWriteCanvas();
+
+    // 更新工具栏
+    var tb = document.getElementById('stuFsToolbar');
+    if (tb) {
+      tb.innerHTML =
+        '<button id="fsEraBtn" onclick="toggleFsEraser()" style="padding:8px 12px;background:#444;color:#ccc;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🧹</button>' +
+        '<button onclick="clearFsCanvas()" style="padding:8px 12px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🗑</button>' +
+        '<button onclick="exitFsWriteMode()" style="padding:8px 16px;background:#22c55e;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">💾 保存</button>';
+    }
+  };
+
+  // 初始化全屏手写画布
+  function initFsWriteCanvas() {
+    var img = _stuImg;
+    var screenW = window.innerWidth;
+    var screenH = window.innerHeight - 50; // 减去工具栏高度
+
+    // 计算画布尺寸（尽量铺满屏幕）
+    var scaleByW = screenW / img.width;
+    var scaleByH = screenH / img.height;
+    var scale = Math.min(scaleByW, scaleByH);
+    var canvasW = Math.round(img.width * scale);
+    var canvasH = Math.round(img.height * scale);
+
+    _stuFsBaseW = canvasW;
+    _stuFsBaseH = canvasH;
+
+    // 设置底图画布
+    _stuFsCanvas.width = canvasW;
+    _stuFsCanvas.height = canvasH;
+    _stuFsCanvas.style.width = canvasW + 'px';
+    _stuFsCanvas.style.height = canvasH + 'px';
+    _stuFsCtx.drawImage(img, 0, 0, canvasW, canvasH);
+
+    // 设置叠加层画布
+    _stuFsOverlayCanvas.width = canvasW;
+    _stuFsOverlayCanvas.height = canvasH;
+    _stuFsOverlayCanvas.style.width = canvasW + 'px';
+    _stuFsOverlayCanvas.style.height = canvasH + 'px';
+    _stuFsOverlayCtx.clearRect(0, 0, canvasW, canvasH);
+
+    // 绑定触摸事件
+    _stuFsOverlayCanvas.addEventListener('touchstart', onFsTouchStart, { passive: false });
+    _stuFsOverlayCanvas.addEventListener('touchmove', onFsTouchMove, { passive: false });
+    _stuFsOverlayCanvas.addEventListener('touchend', onFsTouchEnd);
+    _stuFsOverlayCanvas.addEventListener('mousedown', onFsMouseDown);
+    _stuFsOverlayCanvas.addEventListener('mousemove', onFsMouseMove);
+    _stuFsOverlayCanvas.addEventListener('mouseup', onFsMouseUp);
+  }
+
+  // 全屏手写触摸事件
+  function onFsTouchStart(e) {
+    e.preventDefault();
+    _stuFsTouchActive = true;
+    _stuFsDrawing = true;
+    var touch = e.touches[0];
+    var pos = getFsCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+    _stuFsLastX = pos.x;
+    _stuFsLastY = pos.y;
+  }
+
+  function onFsTouchMove(e) {
+    e.preventDefault();
+    if (!_stuFsDrawing) return;
+    var touch = e.touches[0];
+    var pos = getFsCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+    // 防止跳跃画线
+    var dx = pos.x - _stuFsLastX, dy = pos.y - _stuFsLastY;
+    var dist = Math.sqrt(dx*dx + dy*dy);
+    var maxJump = _stuFsOverlayCanvas.width * 0.3;
+    if (dist > maxJump) {
+      _stuFsLastX = pos.x;
+      _stuFsLastY = pos.y;
+      return;
+    }
+    drawFsLine(_stuFsLastX, _stuFsLastY, pos.x, pos.y);
+    _stuFsLastX = pos.x;
+    _stuFsLastY = pos.y;
+  }
+
+  function onFsTouchEnd(e) {
+    _stuFsDrawing = false;
+    _stuFsLastX = -1;
+    _stuFsLastY = -1;
+    setTimeout(function() { _stuFsTouchActive = false; }, 300);
+  }
+
+  // 全屏手写鼠标事件
+  function onFsMouseDown(e) {
+    if (_stuFsTouchActive) return;
+    _stuFsDrawing = true;
+    var pos = getFsCanvasPos(e);
+    _stuFsLastX = pos.x;
+    _stuFsLastY = pos.y;
+  }
+
+  function onFsMouseMove(e) {
+    if (!_stuFsDrawing || _stuFsTouchActive) return;
+    var pos = getFsCanvasPos(e);
+    drawFsLine(_stuFsLastX, _stuFsLastY, pos.x, pos.y);
+    _stuFsLastX = pos.x;
+    _stuFsLastY = pos.y;
+  }
+
+  function onFsMouseUp() {
+    if (_stuFsTouchActive) return;
+    _stuFsDrawing = false;
+    _stuFsLastX = -1;
+    _stuFsLastY = -1;
+  }
+
+  function getFsCanvasPos(e) {
+    var rect = _stuFsOverlayCanvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (_stuFsOverlayCanvas.width / rect.width),
+      y: (e.clientY - rect.top) * (_stuFsOverlayCanvas.height / rect.height)
+    };
+  }
+
+  function drawFsLine(x1, y1, x2, y2) {
+    if (!_stuFsOverlayCtx) return;
+    
+    if (_stuDrawTool === 'eraser') {
+      _stuFsOverlayCtx.globalCompositeOperation = 'destination-out';
+      _stuFsOverlayCtx.beginPath();
+      _stuFsOverlayCtx.moveTo(x1, y1);
+      _stuFsOverlayCtx.lineTo(x2, y2);
+      _stuFsOverlayCtx.strokeStyle = 'rgba(0,0,0,1)';
+      _stuFsOverlayCtx.lineWidth = _stuDrawLineWidth * 4;
+      _stuFsOverlayCtx.lineCap = 'round';
+      _stuFsOverlayCtx.lineJoin = 'round';
+      _stuFsOverlayCtx.stroke();
+      _stuFsOverlayCtx.globalCompositeOperation = 'source-over';
+    } else {
+      _stuFsOverlayCtx.globalCompositeOperation = 'source-over';
+      _stuFsOverlayCtx.beginPath();
+      _stuFsOverlayCtx.moveTo(x1, y1);
+      _stuFsOverlayCtx.lineTo(x2, y2);
+      _stuFsOverlayCtx.strokeStyle = _stuDrawColor;
+      _stuFsOverlayCtx.lineWidth = _stuDrawLineWidth;
+      _stuFsOverlayCtx.lineCap = 'round';
+      _stuFsOverlayCtx.lineJoin = 'round';
+      _stuFsOverlayCtx.stroke();
+    }
+  }
+
+  // 切换橡皮擦
+  window.toggleFsEraser = function() {
+    var btn = document.getElementById('fsEraBtn');
+    if (_stuDrawTool === 'eraser') {
+      _stuDrawTool = 'pen';
+      if (btn) { btn.style.background = '#444'; btn.style.color = '#ccc'; }
+    } else {
+      _stuDrawTool = 'eraser';
+      if (btn) { btn.style.background = '#667eea'; btn.style.color = 'white'; }
+    }
+  };
+
+  // 清除全屏画布
+  window.clearFsCanvas = function() {
+    if (!_stuFsOverlayCtx) return;
+    if (!confirm('确定清除所有书写内容？')) return;
+    _stuFsOverlayCtx.clearRect(0, 0, _stuFsOverlayCanvas.width, _stuFsOverlayCanvas.height);
+  };
+
+  // 退出全屏手写模式（保存笔迹到普通画布）
+  window.exitFsWriteMode = function() {
+    if (!_stuFsWriteMode) return;
+    _stuFsWriteMode = false;
+
+    // 将全屏手写内容同步回普通画布
+    if (_stuFsOverlayCanvas && _stuOverlayCanvas && _stuOverlayCtx) {
+      _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+    }
+
+    // 移除手写容器
+    var writeContainer = document.getElementById('stuFsWriteContainer');
+    if (writeContainer) writeContainer.remove();
+
+    // 显示图片容器
+    var imgContainer = document.getElementById('stuFsImgContainer');
+    if (imgContainer) imgContainer.style.display = 'flex';
+
+    // 恢复工具栏
+    var tb = document.getElementById('stuFsToolbar');
+    if (tb) {
+      tb.innerHTML =
+        '<button id="fsWriteBtn" onclick="enterFsWriteMode()" style="padding:8px 16px;background:#667eea;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">✏️ 手写</button>' +
+        '<button onclick="exitStudentFullscreen()" style="padding:8px 16px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">退出</button>';
+    }
+
+    // 清理
+    _stuFsCanvas = null;
+    _stuFsOverlayCanvas = null;
+    _stuFsCtx = null;
+    _stuFsOverlayCtx = null;
+  };
+
   // 退出全屏查看
   window.exitStudentFullscreen = function() {
     if (!_stuFullscreenActive) return;
+
+    // 如果处于手写模式，先退出手写模式
+    if (_stuFsWriteMode) {
+      exitFsWriteMode();
+    }
 
     // 移除全屏层
     if (_stuFsOverlay && _stuFsOverlay.parentNode) {
@@ -1427,6 +1685,7 @@
     }
     _stuFullscreenActive = false;
     _stuFsOverlay = null;
+    _stuFsImg = null;
   };
 
   // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
