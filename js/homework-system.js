@@ -1804,18 +1804,49 @@
       }
     }
 
+    // 将笔迹合并到底图中，生成带笔迹的图片
+    var mergedImageUrl = null;
+    if (_stuCanvas && _stuCtx && _stuOverlayCanvas) {
+      try {
+        _stuCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuCanvas.width, _stuCanvas.height);
+        _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+        mergedImageUrl = _stuCanvas.toDataURL(getImageFormat(), 0.92);
+        // 更新 _stuImg 为合并后的图片
+        var newImg = new Image();
+        newImg.src = mergedImageUrl;
+        _stuImg = newImg;
+        // 重置叠加层引用，下次进入手写模式时会重新初始化
+        _stuOverlayCanvas = null;
+        _stuOverlayCtx = null;
+      } catch(e) {
+        console.warn('[fs] merge failed:', e);
+      }
+    }
+
     // 移除手写容器
     var writeContainer = document.getElementById('stuFsWriteContainer');
     if (writeContainer) writeContainer.remove();
 
-    // 只有当用户之前进入了普通手写模式时，才显示普通手写容器
-    // 否则 studentViewContainer 仍然可见，会导致两个图片重叠
+    // 恢复正确的容器显示状态
+    var imgContainer = document.getElementById('stuFsImgContainer');
     if (_stuWriteModeActive) {
+      // 用户之前进入了普通手写模式，显示普通手写容器
       var writeContainerNormal = document.getElementById('studentWriteContainer');
       if (writeContainerNormal) writeContainerNormal.style.display = 'block';
+      if (imgContainer) imgContainer.style.display = 'none';
+    } else {
+      // 用户没有进入普通手写模式，显示全屏图片容器
+      if (imgContainer) imgContainer.style.display = '';
     }
-    var imgContainer = document.getElementById('stuFsImgContainer');
-    if (imgContainer) imgContainer.style.display = 'none';
+
+    // 更新全屏图片元素为合并后的图片（带笔迹）
+    if (mergedImageUrl) {
+      var fsImg = document.getElementById('stuFsImg');
+      if (fsImg) fsImg.src = mergedImageUrl;
+      // 同时更新普通查看模式的图片
+      var viewImg = document.getElementById('studentViewImage');
+      if (viewImg) viewImg.src = mergedImageUrl;
+    }
 
     // 恢复工具栏
     var tb = document.getElementById('stuFsToolbar');
