@@ -3191,9 +3191,9 @@
       sub.gradedImage = finalGraded;
       sub.gradedAt = new Date().toISOString();
 
-      // 发放金币
+      // 发放金币（补差价或扣金币）
       if (student && typeof changeStudentCoins === 'function') {
-        var oldCoins = sub._prevCoins || 0;
+        var oldCoins = sub.coins || 0; // 使用已保存的金币数，而不是内存中的 _prevCoins
         var delta = coins - oldCoins;
         if (delta !== 0) {
           var reason = '评分' + grade;
@@ -3204,7 +3204,6 @@
             type: 'homework_grade', homeworkId: sub.homeworkId, grade: grade, customCoins: customCoins
           });
         }
-        sub._prevCoins = coins;
       }
 
       saveData();
