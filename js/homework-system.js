@@ -1789,9 +1789,12 @@
     var writeContainer = document.getElementById('stuFsWriteContainer');
     if (writeContainer) writeContainer.remove();
 
-    // 显示普通写画布容器（让用户看到笔迹）
-    var writeContainerNormal = document.getElementById('studentWriteContainer');
-    if (writeContainerNormal) writeContainerNormal.style.display = 'block';
+    // 只有当用户之前进入了普通手写模式时，才显示普通手写容器
+    // 否则 studentViewContainer 仍然可见，会导致两个图片重叠
+    if (_stuWriteModeActive) {
+      var writeContainerNormal = document.getElementById('studentWriteContainer');
+      if (writeContainerNormal) writeContainerNormal.style.display = 'block';
+    }
     var imgContainer = document.getElementById('stuFsImgContainer');
     if (imgContainer) imgContainer.style.display = 'none';
 
@@ -1826,6 +1829,15 @@
     _stuFullscreenActive = false;
     _stuFsOverlay = null;
     _stuFsImg = null;
+
+    // 恢复正确的容器显示状态
+    if (_stuWriteModeActive) {
+      // 用户之前进入了普通手写模式，显示手写容器
+      var viewContainer = document.getElementById('studentViewContainer');
+      var writeContainer = document.getElementById('studentWriteContainer');
+      if (viewContainer) viewContainer.style.display = 'none';
+      if (writeContainer) writeContainer.style.display = 'block';
+    }
   };
 
   // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
@@ -2644,8 +2656,8 @@
     html += '</div>';
 
     // 画布区域（双层：底图 + 透明叠加层用于批注）
-    html += '<div id="canvasContainer" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:10px;background:#2a2a3a;position:relative;-webkit-overflow-scrolling:touch;touch-action:none;">';
-    html += '<div id="canvasZoomWrapper" style="position:relative;display:inline-block;">';
+    html += '<div id="canvasContainer" style="flex:1;overflow:auto;padding:10px;background:#2a2a3a;position:relative;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;text-align:center;">';
+    html += '<div id="canvasZoomWrapper" style="position:relative;display:inline-block;margin:20px auto;">';
     html += '<canvas id="gradingCanvas" style="display:block;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:crosshair;touch-action:none;pointer-events:none;"></canvas>';
     html += '<canvas id="gradingOverlayCanvas" style="position:absolute;top:0;left:0;display:block;border-radius:8px;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
     html += '</div></div>';
