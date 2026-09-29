@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v315 ==========
+// ========== 作业岛系统 v316 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v315';
+  var HW_DATA_VERSION = 'v316';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -1207,8 +1207,11 @@
     // 笔迹已保存在canvas中，下次进入手写模式会重新加载
   };
 
-  // 初始化手写画布
+  // 初始化手写画布（只初始化一次，保留已有笔迹）
   function initStudentCanvasForWrite() {
+    // 如果已经初始化过，不要重新初始化（保留已有笔迹）
+    if (_stuOverlayCanvas && _stuOverlayCtx) return;
+    
     var canvas = document.getElementById('studentCanvas');
     var overlayCanvas = document.getElementById('studentOverlayCanvas');
     if (!canvas || !overlayCanvas || !_stuImg) return;
@@ -1454,6 +1457,11 @@
     _stuFsTranslateX = 0;
     _stuFsTranslateY = 0;
 
+    // 确保普通画布的叠加层已初始化（如果用户从未进入过普通手写模式）
+    if (!_stuOverlayCanvas || !_stuOverlayCtx) {
+      initStudentCanvasForWrite();
+    }
+
     // 隐藏图片容器
     var imgContainer = document.getElementById('stuFsImgContainer');
     if (imgContainer) imgContainer.style.display = 'none';
@@ -1493,6 +1501,15 @@
 
     // 初始化全屏手写画布
     initFsWriteCanvas();
+
+    // 同步普通画布的笔迹到全屏画布
+    if (_stuOverlayCanvas && _stuOverlayCtx && _stuFsOverlayCtx) {
+      try {
+        _stuFsOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuFsOverlayCanvas.width, _stuFsOverlayCanvas.height);
+      } catch(e) {
+        console.warn('[fs] sync to fullscreen failed:', e);
+      }
+    }
 
     // 更新工具栏
     var tb = document.getElementById('stuFsToolbar');
@@ -1736,19 +1753,30 @@
     if (!_stuFsWriteMode) return;
     _stuFsWriteMode = false;
 
+    // 确保普通画布的叠加层已初始化
+    if (!_stuOverlayCanvas || !_stuOverlayCtx) {
+      initStudentCanvasForWrite();
+    }
+
     // 将全屏手写内容同步回普通画布
     if (_stuFsOverlayCanvas && _stuOverlayCanvas && _stuOverlayCtx) {
-      _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
-      _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      try {
+        _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+        _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
+      } catch(e) {
+        console.warn('[fs] sync back failed:', e);
+      }
     }
 
     // 移除手写容器
     var writeContainer = document.getElementById('stuFsWriteContainer');
     if (writeContainer) writeContainer.remove();
 
-    // 显示图片容器
+    // 显示普通写画布容器（让用户看到笔迹）
+    var writeContainerNormal = document.getElementById('studentWriteContainer');
+    if (writeContainerNormal) writeContainerNormal.style.display = 'block';
     var imgContainer = document.getElementById('stuFsImgContainer');
-    if (imgContainer) imgContainer.style.display = 'flex';
+    if (imgContainer) imgContainer.style.display = 'none';
 
     // 恢复工具栏
     var tb = document.getElementById('stuFsToolbar');
