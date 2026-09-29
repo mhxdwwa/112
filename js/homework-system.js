@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v312 ==========
+// ========== 作业岛系统 v313 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -247,7 +247,7 @@
 
   // ========== 数据存储 ==========
   // v294: 版本检查 - 如果 localStorage 数据来自旧版本，清空以避免显示过期数据
-  var HW_DATA_VERSION = 'v312';
+  var HW_DATA_VERSION = 'v313';
   if (localStorage.getItem('hwDataVersion') !== HW_DATA_VERSION) {
     console.log('[homework] Data version mismatch, clearing stale localStorage');
     localStorage.removeItem('homeworkList');
@@ -1003,28 +1003,40 @@
     });
     
     if (!mySubmission) {
-      // 未提交 - 直接在老师题目上书写（画布即题目）
+      // 未提交 - iOS相册风格：查看模式 + 手写模式
       html += '<div class="hw-card">';
       html += '<div class="hw-card-title">✏️ 在题目上书写答案</div>';
-      html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">直接在题目上作答或者作业本写好拍照作答</div>';
-      // 画布容器（老师的题目图片作为底图 + 透明叠加层用于书写）
-      // 移动端：突破卡片内边距，让图片占满屏幕宽度
-      html += '<div id="studentCanvasContainer" style="width:calc(100% + 24px);margin-left:-12px;margin-right:-12px;overflow:auto;border-radius:0;border:none;background:#000;-webkit-overflow-scrolling:touch;position:relative;touch-action:none;">';
+      html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">全屏查看题目，点击手写按钮开始答题</div>';
+      
+      // 查看模式容器（原生img，支持原生手势缩放/平移）
+      html += '<div id="studentViewContainer" style="width:calc(100% + 24px);margin-left:-12px;margin-right:-12px;overflow:hidden;border-radius:0;border:none;background:#000;-webkit-overflow-scrolling:touch;position:relative;touch-action:manipulation;">';
       if (myHomework.image) {
-        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;pointer-events:none;" data-homework-image="' + myHomework.image + '"></canvas>';
-        html += '<canvas id="studentOverlayCanvas" style="position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
+        html += '<img id="studentViewImage" src="' + myHomework.image + '" style="display:block;width:100%;height:auto;touch-action:manipulation;-webkit-user-drag:none;user-select:none;" data-homework-image="' + myHomework.image + '">';
       } else {
-        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;"></canvas>';
         html += '<div style="padding:30px;text-align:center;color:#999;font-size:13px;">本题没有图片</div>';
       }
       html += '</div>';
-      // 工具栏（替代原来的提示文字位置，紧凑设计）
+      
+      // 手写模式容器（canvas，默认隐藏）
+      html += '<div id="studentWriteContainer" style="width:calc(100% + 24px);margin-left:-12px;margin-right:-12px;overflow:hidden;border-radius:0;border:none;background:#000;-webkit-overflow-scrolling:touch;position:relative;touch-action:none;display:none;">';
+      if (myHomework.image) {
+        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;pointer-events:none;" data-homework-image="' + myHomework.image + '"></canvas>';
+        html += '<canvas id="studentOverlayCanvas" style="position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
+      }
+      html += '</div>';
+      
+      // 工具栏
       html += '<div id="studentCanvasToolbar" style="display:flex;align-items:center;justify-content:center;gap:3px;margin-top:8px;padding:5px 6px;background:rgba(30,30,30,0.85);border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">';
-      html += '<button id="stuToolPen" onclick="setStudentDrawTool(\'pen\')" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>';
+      // 全屏查看按钮
+      html += '<button id="stuToolFullscreen" onclick="enterStudentFullscreen()" title="全屏查看" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">⛶</button>';
+      // 手写按钮
+      html += '<button id="stuToolWrite" onclick="enterStudentWriteMode()" title="手写答题" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>';
+      // 保存按钮（手写模式下显示）
+      html += '<button id="stuToolSave" onclick="exitStudentWriteMode()" title="保存笔迹" style="width:26px;height:26px;background:#22c55e;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;display:none;">💾</button>';
+      // 手写工具（默认隐藏）
+      html += '<span id="stuWriteTools" style="display:none;">';
       html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>';
-      html += '<button id="stuToolMove" onclick="setStudentDrawTool(\'move\')" title="移动图片" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✋</button>';
-      // 全屏按钮
-      html += '<button id="stuToolFullscreen" onclick="enterStudentFullscreen()" title="全屏答题" style="width:26px;height:26px;background:transparent;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">⛶</button>';
+      html += '</span>';
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
       var stuColors = ['#000000','#3b82f6'];
       stuColors.forEach(function(c) {
@@ -1033,11 +1045,9 @@
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
       html += '<input type="range" id="stuDrawLineWidth" min="1" max="10" value="3" oninput="setStudentDrawLineWidth(this.value)" style="width:60px;height:16px;cursor:pointer;accent-color:#667eea;">';
       html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
-      html += '<button onclick="zoomStudentCanvas(1.3)" style="width:24px;height:24px;background:transparent;color:white;border:none;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🔍</button>';
-      html += '<button onclick="zoomStudentCanvas(0.77)" style="width:24px;height:24px;background:transparent;color:white;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🔎</button>';
-      html += '<button onclick="resetStudentCanvasZoom()" style="width:24px;height:24px;background:transparent;color:white;border:none;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">↺</button>';
-      html += '<button onclick="clearStudentCanvas()" style="width:24px;height:24px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🗑</button>';
+      html += '<button onclick="clearStudentCanvas()" title="清除笔迹" style="width:24px;height:24px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🗑</button>';
       html += '</div>';
+      
       // 可选：额外上传照片（如答题纸）
       html += '<div style="margin-top:12px;">';
       html += '<div onclick="document.getElementById(\'studentImageInput\').click()" style="border:1px dashed #d1d5db;border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:12px;color:#999;">';
@@ -1048,10 +1058,11 @@
       html += '</div>';
       html += '<button onclick="studentSubmitHomework(\'' + myHomework.id + '\',' + studentId + ')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;margin-top:15px;">📤 提交作业</button>';
       html += '</div>';
-      // 延迟初始化画布（等 DOM 渲染完成）- 移动端需要更长时间
+      
+      // 延迟初始化（等 DOM 渲染完成）
       setTimeout(function() {
         if (myHomework.image) {
-          initStudentCanvasWithRetry(myHomework.image, 0);
+          initStudentView(myHomework.image);
         }
       }, 300);
     } else if (!mySubmission.graded) {
@@ -1116,10 +1127,10 @@
     });
   };
 
-  // ========== 学生画布书写功能 ==========
+  // ========== 学生画布书写功能（iOS相册风格）==========
   var _stuCanvas = null;
   var _stuCtx = null;
-  var _stuOverlayCanvas = null; // 透明叠加层，用于书写
+  var _stuOverlayCanvas = null;
   var _stuOverlayCtx = null;
   var _stuImg = null;
   var _stuDrawColor = '#000000';
@@ -1128,91 +1139,115 @@
   var _stuIsDrawing = false;
   var _stuLastX = 0;
   var _stuLastY = 0;
-  var _stuZoom = 1;
   var _stuBaseWidth = 0;
   var _stuBaseHeight = 0;
-  var _stuTouches = []; // 用于双指缩放
-  var _stuInitialPinchDistance = 0;
-  var _stuInitialZoom = 1;
-  var _studentUploadedImage = null; // 兼容：保留旧变量
-  var _stuTouchActive = false; // 标记触摸是否活跃（防止合成鼠标事件干扰）
+  var _studentUploadedImage = null;
+  var _stuTouchActive = false;
+  var _stuWriteModeActive = false; // 是否处于手写模式
 
-  // 带重试的画布初始化（移动端DOM渲染可能较慢）
-  function initStudentCanvasWithRetry(imageDataUrl, retryCount) {
-    var canvas = document.getElementById('studentCanvas');
-    if (!canvas) {
-      if (retryCount < 10) {
-        // 最多重试10次，每次间隔200ms
-        setTimeout(function() {
-          initStudentCanvasWithRetry(imageDataUrl, retryCount + 1);
-        }, 200);
-      } else {
-        console.warn('[homework] 画布初始化失败：找不到 studentCanvas 元素');
-      }
-      return;
-    }
-    // 找到画布，开始初始化
-    initStudentCanvas(imageDataUrl);
-  }
-
-  // 初始化学生画布（双层：底图 + 透明叠加层）
-  function initStudentCanvas(imageDataUrl) {
-    var canvas = document.getElementById('studentCanvas');
-    var overlayCanvas = document.getElementById('studentOverlayCanvas');
-    if (!canvas || !overlayCanvas) return;
-    _stuCanvas = canvas;
-    _stuCtx = canvas.getContext('2d');
-    _stuOverlayCanvas = overlayCanvas;
-    _stuOverlayCtx = overlayCanvas.getContext('2d');
-
-    // 先增强图片（锐化+对比度），让文字更清晰
+  // 初始化学生查看模式（原生img）
+  function initStudentView(imageDataUrl) {
+    // 增强图片（锐化+对比度）
     enhanceImageForDisplay(imageDataUrl, function(enhancedImageUrl) {
       var img = new Image();
       img.onload = function() {
         _stuImg = img;
-        // 计算基础尺寸 - 移动端使用视口宽度，桌面端使用容器宽度
-        var container = document.getElementById('studentCanvasContainer');
-        var isMobile = window.innerWidth <= 768;
-        var maxW;
-        if (isMobile) {
-          // 移动端：使用视口宽度，让图片占满屏幕
-          maxW = window.innerWidth;
-        } else {
-          // 桌面端：使用容器宽度
-          maxW = container ? container.clientWidth : Math.min(window.innerWidth - 60, 800);
+        // 查看模式：原生img，支持原生手势
+        var viewImg = document.getElementById('studentViewImage');
+        if (viewImg) {
+          viewImg.src = enhancedImageUrl;
         }
-        var scale = maxW / img.width;
-        if (scale > 1) scale = 1;
-        _stuBaseWidth = Math.round(img.width * scale);
-        _stuBaseHeight = Math.round(img.height * scale);
-        _stuZoom = 1;
-        
-        // 设置底图画布尺寸并绘制增强后的底图
-        canvas.width = _stuBaseWidth;
-        canvas.height = _stuBaseHeight;
-        canvas.style.width = _stuBaseWidth + 'px';
-        canvas.style.height = _stuBaseHeight + 'px';
-        _stuCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // 设置叠加层画布尺寸（透明）- 确保与底图完全对齐
-        overlayCanvas.width = _stuBaseWidth;
-        overlayCanvas.height = _stuBaseHeight;
-        overlayCanvas.style.width = _stuBaseWidth + 'px';
-        overlayCanvas.style.height = _stuBaseHeight + 'px';
-        // 清空叠加层（确保完全透明）
-        _stuOverlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-        
-        // 绑定绘制事件到叠加层（而不是底图）
-        overlayCanvas.addEventListener('mousedown', onStuCanvasDown);
-        overlayCanvas.addEventListener('mousemove', onStuCanvasMove);
-        overlayCanvas.addEventListener('mouseup', onStuCanvasUp);
-        overlayCanvas.addEventListener('mouseleave', onStuCanvasUp);
-        overlayCanvas.addEventListener('touchstart', onStuCanvasTouchStart, { passive: false });
-        overlayCanvas.addEventListener('touchmove', onStuCanvasTouchMove, { passive: false });
-        overlayCanvas.addEventListener('touchend', onStuCanvasTouchEnd);
       };
       img.src = enhancedImageUrl;
     });
+  }
+
+  // 进入手写模式
+  window.enterStudentWriteMode = function() {
+    if (_stuWriteModeActive || !_stuImg) return;
+    _stuWriteModeActive = true;
+    
+    // 切换容器显示
+    var viewContainer = document.getElementById('studentViewContainer');
+    var writeContainer = document.getElementById('studentWriteContainer');
+    if (viewContainer) viewContainer.style.display = 'none';
+    if (writeContainer) writeContainer.style.display = 'block';
+    
+    // 更新工具栏
+    var writeBtn = document.getElementById('stuToolWrite');
+    var saveBtn = document.getElementById('stuToolSave');
+    var writeTools = document.getElementById('stuToolSave');
+    if (writeBtn) writeBtn.style.display = 'none';
+    if (saveBtn) saveBtn.style.display = 'flex';
+    if (writeTools) writeTools.style.display = 'inline';
+    
+    // 初始化画布
+    initStudentCanvasForWrite();
+  };
+
+  // 退出手写模式（保存笔迹）
+  window.exitStudentWriteMode = function() {
+    if (!_stuWriteModeActive) return;
+    _stuWriteModeActive = false;
+    
+    // 切换容器显示
+    var viewContainer = document.getElementById('studentViewContainer');
+    var writeContainer = document.getElementById('studentWriteContainer');
+    if (viewContainer) viewContainer.style.display = 'block';
+    if (writeContainer) writeContainer.style.display = 'none';
+    
+    // 更新工具栏
+    var writeBtn = document.getElementById('stuToolWrite');
+    var saveBtn = document.getElementById('stuToolSave');
+    var writeTools = document.getElementById('stuToolSave');
+    if (writeBtn) writeBtn.style.display = 'flex';
+    if (saveBtn) saveBtn.style.display = 'none';
+    if (writeTools) writeTools.style.display = 'none';
+    
+    // 笔迹已保存在canvas中，下次进入手写模式会重新加载
+  };
+
+  // 初始化手写画布
+  function initStudentCanvasForWrite() {
+    var canvas = document.getElementById('studentCanvas');
+    var overlayCanvas = document.getElementById('studentOverlayCanvas');
+    if (!canvas || !overlayCanvas || !_stuImg) return;
+    
+    _stuCanvas = canvas;
+    _stuCtx = canvas.getContext('2d');
+    _stuOverlayCanvas = overlayCanvas;
+    _stuOverlayCtx = overlayCanvas.getContext('2d');
+    
+    // 计算画布尺寸（占满屏幕宽度）
+    var container = document.getElementById('studentWriteContainer');
+    var maxW = container ? container.clientWidth : window.innerWidth;
+    var scale = maxW / _stuImg.width;
+    if (scale > 1) scale = 1;
+    _stuBaseWidth = Math.round(_stuImg.width * scale);
+    _stuBaseHeight = Math.round(_stuImg.height * scale);
+    
+    // 设置底图画布
+    canvas.width = _stuBaseWidth;
+    canvas.height = _stuBaseHeight;
+    canvas.style.width = _stuBaseWidth + 'px';
+    canvas.style.height = _stuBaseHeight + 'px';
+    _stuCtx.drawImage(_stuImg, 0, 0, _stuBaseWidth, _stuBaseHeight);
+    
+    // 设置叠加层画布
+    overlayCanvas.width = _stuBaseWidth;
+    overlayCanvas.height = _stuBaseHeight;
+    overlayCanvas.style.width = _stuBaseWidth + 'px';
+    overlayCanvas.style.height = _stuBaseHeight + 'px';
+    _stuOverlayCtx.clearRect(0, 0, _stuBaseWidth, _stuBaseHeight);
+    
+    // 绑定事件
+    overlayCanvas.addEventListener('mousedown', onStuCanvasDown);
+    overlayCanvas.addEventListener('mousemove', onStuCanvasMove);
+    overlayCanvas.addEventListener('mouseup', onStuCanvasUp);
+    overlayCanvas.addEventListener('mouseleave', onStuCanvasUp);
+    overlayCanvas.addEventListener('touchstart', onStuCanvasTouchStart, { passive: false });
+    overlayCanvas.addEventListener('touchmove', onStuCanvasTouchMove, { passive: false });
+    overlayCanvas.addEventListener('touchend', onStuCanvasTouchEnd);
   }
 
   function getStuCanvasPos(e) {
@@ -1224,8 +1259,7 @@
   }
 
   function onStuCanvasDown(e) {
-    if (_stuDrawTool === 'move') return;
-    if (_stuTouchActive) return; // 触摸活跃时忽略鼠标事件（防止合成事件画线）
+    if (_stuTouchActive) return;
     _stuIsDrawing = true;
     var pos = getStuCanvasPos(e);
     _stuLastX = pos.x;
@@ -1233,8 +1267,7 @@
   }
 
   function onStuCanvasMove(e) {
-    if (_stuDrawTool === 'move' || !_stuIsDrawing) return;
-    if (_stuTouchActive) return; // 触摸活跃时忽略鼠标事件
+    if (!_stuIsDrawing || _stuTouchActive) return;
     var pos = getStuCanvasPos(e);
     drawStuLine(_stuLastX, _stuLastY, pos.x, pos.y);
     _stuLastX = pos.x;
@@ -1245,124 +1278,48 @@
     _stuIsDrawing = false;
   }
 
-  // 触摸开始 - 支持双指缩放
+  // 触摸开始
   function onStuCanvasTouchStart(e) {
-    if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
-    _stuTouchActive = true; // 标记触摸活跃
-    _stuTouches = Array.from(e.touches);
-    
-    if (_stuTouches.length === 2) {
-      // 双指 - 记录初始距离用于缩放
-      _stuInitialPinchDistance = getTouchDistance(_stuTouches[0], _stuTouches[1]);
-      _stuInitialZoom = _stuZoom;
-      _stuIsDrawing = false; // 双指时不绘制
-    } else if (_stuTouches.length === 1) {
-      // 单指 - 直接记录坐标（不转换MouseEvent）
-      var touch = _stuTouches[0];
-      var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
-      _stuIsDrawing = true;
-      _stuLastX = pos.x;
-      _stuLastY = pos.y;
-    }
+    _stuTouchActive = true;
+    _stuIsDrawing = true;
+    var touch = e.touches[0];
+    var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+    _stuLastX = pos.x;
+    _stuLastY = pos.y;
   }
 
-  // 触摸移动 - 支持双指缩放
+  // 触摸移动
   function onStuCanvasTouchMove(e) {
-    if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
     e.preventDefault();
-    var touches = Array.from(e.touches);
-    
-    if (touches.length === 2) {
-      // 双指缩放
-      var currentDistance = getTouchDistance(touches[0], touches[1]);
-      var zoomRatio = currentDistance / _stuInitialPinchDistance;
-      var newZoom = _stuInitialZoom * zoomRatio;
-      
-      // 限制缩放范围 0.5x - 6x
-      if (newZoom >= 0.5 && newZoom <= 6) {
-        applyStudentZoom(newZoom);
-      }
-    } else if (touches.length === 1 && _stuIsDrawing) {
-      // 单指绘制 - 直接处理坐标
-      var touch = touches[0];
-      var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
-      // 防止跳跃画线
-      var dx = pos.x - _stuLastX, dy = pos.y - _stuLastY;
-      var dist = Math.sqrt(dx*dx + dy*dy);
-      var maxJump = _stuOverlayCanvas.width * 0.3;
-      if (dist > maxJump) {
-        _stuLastX = pos.x;
-        _stuLastY = pos.y;
-        return;
-      }
-      drawStuLine(_stuLastX, _stuLastY, pos.x, pos.y);
+    if (!_stuIsDrawing) return;
+    var touch = e.touches[0];
+    var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
+    // 防止跳跃画线
+    var dx = pos.x - _stuLastX, dy = pos.y - _stuLastY;
+    var dist = Math.sqrt(dx*dx + dy*dy);
+    var maxJump = _stuOverlayCanvas.width * 0.3;
+    if (dist > maxJump) {
       _stuLastX = pos.x;
       _stuLastY = pos.y;
+      return;
     }
+    drawStuLine(_stuLastX, _stuLastY, pos.x, pos.y);
+    _stuLastX = pos.x;
+    _stuLastY = pos.y;
   }
 
   function onStuCanvasTouchEnd(e) {
-    if (_stuDrawTool === 'move') return; // 移动模式：不拦截触摸
-    if (e.touches.length === 0) {
-      _stuIsDrawing = false;
-      _stuLastX = -1; // 重置，防止下次从旧位置画线
-      _stuLastY = -1;
-      _stuTouches = [];
-      // 延迟重置触摸标记（等待合成鼠标事件过去）
-      setTimeout(function() { _stuTouchActive = false; }, 300);
-    } else if (e.touches.length === 1) {
-      // 从双指变为单指，重新开始绘制
-      _stuIsDrawing = true;
-      var touch = e.touches[0];
-      var pos = getStuCanvasPos({ clientX: touch.clientX, clientY: touch.clientY });
-      _stuLastX = pos.x;
-      _stuLastY = pos.y;
-    }
+    _stuIsDrawing = false;
+    _stuLastX = -1;
+    _stuLastY = -1;
+    setTimeout(function() { _stuTouchActive = false; }, 300);
   }
-
-  // 计算两个触摸点之间的距离
-  function getTouchDistance(t1, t2) {
-    var dx = t1.clientX - t2.clientX;
-    var dy = t1.clientY - t2.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  // 应用缩放（使用CSS尺寸变化，不改变canvas buffer，防止丢失笔迹）
-  function applyStudentZoom(newZoom) {
-    if (!_stuCanvas || !_stuImg || !_stuCtx || !_stuOverlayCanvas) return;
-    
-    _stuZoom = newZoom;
-    var newWidth = Math.round(_stuBaseWidth * _stuZoom);
-    var newHeight = Math.round(_stuBaseHeight * _stuZoom);
-    
-    // 只改变CSS显示尺寸，不改变canvas.width/height（避免清空画布丢失笔迹）
-    _stuCanvas.style.width = newWidth + 'px';
-    _stuCanvas.style.height = newHeight + 'px';
-    _stuOverlayCanvas.style.width = newWidth + 'px';
-    _stuOverlayCanvas.style.height = newHeight + 'px';
-    
-    // 更新叠加层内部坐标映射（getStuCanvasPos使用getBoundingClientRect，自动适配）
-  }
-
-  // 按钮缩放
-  window.zoomStudentCanvas = function(factor) {
-    var newZoom = _stuZoom * factor;
-    if (newZoom >= 0.5 && newZoom <= 6) {
-      applyStudentZoom(newZoom);
-    }
-  };
-
-  // 重置缩放
-  window.resetStudentCanvasZoom = function() {
-    applyStudentZoom(1);
-  };
 
   function drawStuLine(x1, y1, x2, y2) {
     if (!_stuOverlayCtx) return;
     
     if (_stuDrawTool === 'eraser') {
-      // 橡皮擦：使用 destination-out 只擦除叠加层上的内容，不影响底图
       _stuOverlayCtx.globalCompositeOperation = 'destination-out';
       _stuOverlayCtx.beginPath();
       _stuOverlayCtx.moveTo(x1, y1);
@@ -1372,9 +1329,8 @@
       _stuOverlayCtx.lineCap = 'round';
       _stuOverlayCtx.lineJoin = 'round';
       _stuOverlayCtx.stroke();
-      _stuOverlayCtx.globalCompositeOperation = 'source-over'; // 恢复默认
+      _stuOverlayCtx.globalCompositeOperation = 'source-over';
     } else {
-      // 画笔：正常绘制在叠加层上
       _stuOverlayCtx.globalCompositeOperation = 'source-over';
       _stuOverlayCtx.beginPath();
       _stuOverlayCtx.moveTo(x1, y1);
@@ -1389,38 +1345,14 @@
 
   window.setStudentDrawTool = function(tool) {
     _stuDrawTool = tool;
-    var penBtn = document.getElementById('stuToolPen');
     var eraserBtn = document.getElementById('stuToolEraser');
-    var moveBtn = document.getElementById('stuToolMove');
-    // Reset all tool buttons
-    if (penBtn) { penBtn.style.background = 'transparent'; penBtn.style.color = '#ccc'; }
-    if (eraserBtn) { eraserBtn.style.background = 'transparent'; eraserBtn.style.color = '#ccc'; }
-    if (moveBtn) { moveBtn.style.background = 'transparent'; moveBtn.style.color = '#ccc'; }
-    // Highlight active tool
-    if (tool === 'pen' && penBtn) {
-      penBtn.style.background = '#667eea';
-      penBtn.style.color = 'white';
-    } else if (tool === 'eraser' && eraserBtn) {
-      eraserBtn.style.background = '#667eea';
-      eraserBtn.style.color = 'white';
-    } else if (tool === 'move' && moveBtn) {
-      moveBtn.style.background = '#667eea';
-      moveBtn.style.color = 'white';
-    }
-    // Move mode: disable overlay pointer-events so container handles scroll/pan
-    if (_stuOverlayCanvas) {
-      if (tool === 'move') {
-        _stuOverlayCanvas.style.pointerEvents = 'none';
-        _stuOverlayCanvas.style.touchAction = 'auto';
-        _stuOverlayCanvas.style.cursor = 'default';
-        var container = document.getElementById('studentCanvasContainer');
-        if (container) { container.style.cursor = 'grab'; container.style.touchAction = 'pan-x pan-y'; }
+    if (eraserBtn) {
+      if (tool === 'eraser') {
+        eraserBtn.style.background = '#667eea';
+        eraserBtn.style.color = 'white';
       } else {
-        _stuOverlayCanvas.style.pointerEvents = 'auto';
-        _stuOverlayCanvas.style.touchAction = 'none';
-        _stuOverlayCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
-        var container = document.getElementById('studentCanvasContainer');
-        if (container) { container.style.cursor = 'default'; container.style.touchAction = 'none'; }
+        eraserBtn.style.background = 'transparent';
+        eraserBtn.style.color = '#ccc';
       }
     }
   };
@@ -1442,509 +1374,64 @@
   window.clearStudentCanvas = function() {
     if (!_stuOverlayCanvas || !_stuImg) return;
     if (!confirm('确定清除所有书写内容？')) return;
-    // 只清除叠加层（书写内容），底图保持不变
     _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
   };
 
-  // ========== 全屏答题功能 ==========
+  // ========== 全屏查看功能（iOS相册风格）==========
   var _stuFullscreenActive = false;
   var _stuFsOverlay = null;
-  var _stuFsCanvas = null;      // 底图画布
-  var _stuFsOverlayCanvas = null; // 叠加层画布（书写用）
-  var _stuFsCtx = null;
-  var _stuFsOverlayCtx = null;
-  var _stuFsZoom = 1;
-  var _stuFsBaseW = 0;   // 画布buffer宽度（=图片宽度）
-  var _stuFsBaseH = 0;   // 画布buffer高度（=图片高度）
-  var _stuFsDispW = 0;   // 画布CSS显示宽度
-  var _stuFsDispH = 0;   // 画布CSS显示高度
-  var _stuFsDrawing = false;
-  var _stuFsLastX = -1;
-  var _stuFsLastY = -1;
-  var _stuFsPinchDist = 0;
-  var _stuFsPinchZoom = 1;
-  var _stuFsDrawTool = 'pen';
-  var _stuFsHomeworkId = '';
-  var _stuFsStudentId = 0;
-  var _stuFsRotated = false;
-  var _stuFsTouchActive = false;
-  var _stuFsCachedRect = null; // 缓存的getBoundingClientRect，防止触摸时返回错误值
-  var _stuFsBodyTouchHandler = null; // body上的touch阻止处理器
 
-  // 全屏：阻止body上所有默认触摸行为（防止浏览器手势干扰书写）
-  function _fsPreventBodyTouch() {
-    _stuFsBodyTouchHandler = function(e) { e.preventDefault(); };
-    document.body.addEventListener('touchstart', _stuFsBodyTouchHandler, { passive: false, capture: true });
-    document.body.addEventListener('touchmove', _stuFsBodyTouchHandler, { passive: false, capture: true });
-  }
-  function _fsRestoreBodyTouch() {
-    if (_stuFsBodyTouchHandler) {
-      document.body.removeEventListener('touchstart', _stuFsBodyTouchHandler, { capture: true });
-      document.body.removeEventListener('touchmove', _stuFsBodyTouchHandler, { capture: true });
-      _stuFsBodyTouchHandler = null;
-    }
-  }
-
+  // 全屏查看（原生img，支持原生手势缩放/平移）
   window.enterStudentFullscreen = function() {
     if (_stuFullscreenActive || !_stuImg) return;
     _stuFullscreenActive = true;
-
-    // 获取作业ID和学生ID
-    var btns = document.querySelectorAll('button[onclick*="studentSubmitHomework"]');
-    if (btns.length > 0) {
-      var m = btns[0].getAttribute('onclick').match(/studentSubmitHomework\('([^']+)',(\d+)\)/);
-      if (m) { _stuFsHomeworkId = m[1]; _stuFsStudentId = parseInt(m[2]); }
-    }
-
-    // 阻止body上所有默认触摸行为（防止浏览器手势干扰）
-    _fsPreventBodyTouch();
 
     // 创建全屏层
     var el = document.createElement('div');
     el.id = 'stuFsLayer';
     el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:99999;overflow:hidden;';
 
-    // 画布滚动容器
-    var cc = document.createElement('div');
-    cc.id = 'stuFsScrollContainer';
-    cc.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:40px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:none;';
+    // 图片容器（支持原生手势）
+    var imgContainer = document.createElement('div');
+    imgContainer.id = 'stuFsImgContainer';
+    imgContainer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:40px;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:manipulation;display:flex;align-items:center;justify-content:center;';
 
-    // 内层容器（撑开滚动区域）
-    var inner = document.createElement('div');
-    inner.id = 'stuFsInner';
-    inner.style.cssText = 'position:relative;';
-
-    // 底图画布
-    var baseC = document.createElement('canvas');
-    baseC.style.cssText = 'display:block;touch-action:none;';
-
-    // 叠加层画布
-    var overC = document.createElement('canvas');
-    overC.style.cssText = 'position:absolute;top:0;left:0;display:block;touch-action:none;';
-
-    inner.appendChild(baseC);
-    inner.appendChild(overC);
-    cc.appendChild(inner);
+    // 原生img（支持原生缩放/平移）
+    var img = document.createElement('img');
+    img.id = 'stuFsImg';
+    img.src = _stuImg.src;
+    img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;touch-action:manipulation;-webkit-user-drag:none;user-select:none;';
+    
+    imgContainer.appendChild(img);
 
     // 底部工具栏
     var tb = document.createElement('div');
-    tb.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:40px;display:flex;align-items:center;justify-content:center;gap:3px;padding:0 6px;background:rgba(20,20,20,0.95);border-top:1px solid #333;';
+    tb.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:40px;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;background:rgba(20,20,20,0.95);border-top:1px solid #333;';
     tb.innerHTML =
-      '<button id="fsPen" onclick="fsSetTool(\'pen\')" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>' +
-      '<button id="fsEra" onclick="fsSetTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>' +
-      '<button id="fsMove" onclick="fsSetTool(\'move\')" title="移动" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✋</button>' +
-      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
-      '<div onclick="fsSetColor(\'#000000\')" class="fs-clr" data-color="#000000" style="width:18px;height:18px;border-radius:50%;background:#000;border:2px solid #667eea;cursor:pointer;flex-shrink:0;"></div>' +
-      '<div onclick="fsSetColor(\'#3b82f6\')" class="fs-clr" data-color="#3b82f6" style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:2px solid rgba(255,255,255,0.3);cursor:pointer;flex-shrink:0;"></div>' +
-      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
-      '<input type="range" id="fsLineWidth" min="1" max="10" value="' + _stuDrawLineWidth + '" oninput="fsSetWidth(this.value)" style="width:45px;height:14px;cursor:pointer;accent-color:#667eea;flex-shrink:0;">' +
-      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
-      '<button onclick="fsZoom(1.4)" style="width:24px;height:24px;background:transparent;color:white;border:none;font-size:11px;cursor:pointer;flex-shrink:0;">🔍</button>' +
-      '<button onclick="fsZoom(0.71)" style="width:24px;height:24px;background:transparent;color:white;border:none;font-size:10px;cursor:pointer;flex-shrink:0;">🔎</button>' +
-      '<button onclick="fsResetZoom()" style="width:24px;height:24px;background:transparent;color:white;border:none;font-size:11px;cursor:pointer;flex-shrink:0;">↺</button>' +
-      '<button onclick="fsClear()" style="width:24px;height:24px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🗑</button>' +
-      '<span style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0;"></span>' +
-      '<button onclick="exitStudentFullscreen()" style="padding:4px 8px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;">退出</button>';
+      '<button onclick="exitStudentFullscreen()" style="padding:8px 16px;background:#6b7280;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">退出</button>';
 
-    el.appendChild(cc);
+    el.appendChild(imgContainer);
     el.appendChild(tb);
     document.body.appendChild(el);
 
     _stuFsOverlay = el;
-    _stuFsCanvas = baseC;
-    _stuFsOverlayCanvas = overC;
-    _stuFsCtx = baseC.getContext('2d');
-    _stuFsOverlayCtx = overC.getContext('2d');
-
-    // 初始化全屏画布
-    fsInitCanvas();
-
-    // 始终同步普通画布已有的手写内容到全屏画布（不管有没有内容都同步，确保不丢失）
-    if (_stuOverlayCanvas && _stuOverlayCtx) {
-      try {
-        if (_stuFsRotated) {
-          var tmpC = document.createElement('canvas');
-          tmpC.width = _stuFsCanvas.width;
-          tmpC.height = _stuFsCanvas.height;
-          var tmpCtx = tmpC.getContext('2d');
-          tmpCtx.translate(tmpC.width / 2, tmpC.height / 2);
-          tmpCtx.rotate(Math.PI / 2);
-          tmpCtx.drawImage(_stuOverlayCanvas, -_stuOverlayCanvas.width / 2, -_stuOverlayCanvas.height / 2);
-          _stuFsOverlayCtx.drawImage(tmpC, 0, 0);
-        } else {
-          _stuFsOverlayCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuFsCanvas.width, _stuFsCanvas.height);
-        }
-      } catch(e) { console.warn('[fs] sync-in failed:', e); }
-    }
-
-    // 绑定事件到叠加层
-    overC.addEventListener('touchstart', fsTouchStart, { passive: false });
-    overC.addEventListener('touchmove', fsTouchMove, { passive: false });
-    overC.addEventListener('touchend', fsTouchEnd, { passive: false });
-    overC.addEventListener('touchcancel', fsTouchEnd, { passive: false });
-    overC.addEventListener('mousedown', fsDown);
-    overC.addEventListener('mousemove', fsMove);
-    overC.addEventListener('mouseup', fsUp);
-    overC.addEventListener('mouseleave', fsUp);
   };
 
-  function fsInitCanvas() {
-    var img = _stuImg;
-    var screenW = window.innerWidth;
-    var screenH = window.innerHeight - 40; // 减去工具栏高度
-
-    // 判断是否需要旋转：横屏图片旋转90°铺满竖屏
-    _stuFsRotated = (img.width > img.height);
-    _stuFsZoom = 1;
-
-    // 计算画布buffer尺寸和CSS显示尺寸
-    var canvasW, canvasH, displayW, displayH;
-
-    if (_stuFsRotated) {
-      // 横屏图片：旋转90° CW，让图片长边沿屏幕长边
-      canvasW = img.width;
-      canvasH = img.height;
-      // 旋转后视觉尺寸：宽=img.height, 高=img.width
-      // 按屏幕尺寸等比缩放，尽量铺满
-      var scaleByW = screenW / img.height; // 视觉宽 = img.height
-      var scaleByH = screenH / img.width;  // 视觉高 = img.width
-      var scale = Math.min(scaleByW, scaleByH);
-      displayW = Math.round(img.height * scale); // 视觉宽
-      displayH = Math.round(img.width * scale);  // 视觉高
-    } else {
-      // 竖屏图片：正常放置，尽量铺满屏幕
-      canvasW = img.width;
-      canvasH = img.height;
-      // 同时考虑宽度和高度，让图片尽量铺满屏幕
-      var scaleByW = screenW / img.width;
-      var scaleByH = screenH / img.height;
-      var scale = Math.min(scaleByW, scaleByH);
-      displayW = Math.round(img.width * scale);
-      displayH = Math.round(img.height * scale);
-    }
-
-    _stuFsBaseW = canvasW;
-    _stuFsBaseH = canvasH;
-    _stuFsDispW = displayW;
-    _stuFsDispH = displayH;
-
-    // 设置 inner 容器尺寸
-    var inner = document.getElementById('stuFsInner');
-    if (inner) {
-      inner.style.width = displayW + 'px';
-      inner.style.height = displayH + 'px';
-    }
-
-    // 底图画布
-    _stuFsCanvas.width = canvasW;
-    _stuFsCanvas.height = canvasH;
-    _stuFsCanvas.style.width = displayW + 'px';
-    _stuFsCanvas.style.height = displayH + 'px';
-
-    if (_stuFsRotated) {
-      // 横屏图片：旋转90° CW 绘制
-      _stuFsCtx.save();
-      _stuFsCtx.translate(canvasW / 2, canvasH / 2);
-      _stuFsCtx.rotate(Math.PI / 2);
-      _stuFsCtx.drawImage(img, -canvasH / 2, -canvasW / 2, canvasH, canvasW);
-      _stuFsCtx.restore();
-    } else {
-      _stuFsCtx.drawImage(img, 0, 0, canvasW, canvasH);
-    }
-
-    // 叠加层画布
-    _stuFsOverlayCanvas.width = canvasW;
-    _stuFsOverlayCanvas.height = canvasH;
-    _stuFsOverlayCanvas.style.width = displayW + 'px';
-    _stuFsOverlayCanvas.style.height = displayH + 'px';
-    _stuFsOverlayCtx.clearRect(0, 0, canvasW, canvasH);
-  }
-
-  function fsGetPos(e) {
-    // 使用缓存的rect，防止触摸时getBoundingClientRect返回错误值
-    var rect = _stuFsCachedRect || _stuFsOverlayCanvas.getBoundingClientRect();
-    var sx = e.clientX - rect.left;
-    var sy = e.clientY - rect.top;
-
-    if (_stuFsRotated) {
-      // 90° CW rotation mapping
-      var displayW = rect.width;
-      var displayH = rect.height;
-      var cw = _stuFsOverlayCanvas.width;
-      var ch = _stuFsOverlayCanvas.height;
-      return {
-        x: (cw / displayH) * sy,
-        y: cw * (1 - sx / displayW)
-      };
-    } else {
-      return {
-        x: sx * (_stuFsOverlayCanvas.width / rect.width),
-        y: sy * (_stuFsOverlayCanvas.height / rect.height)
-      };
-    }
-  }
-
-  function fsDown(e) {
-    if (_stuFsDrawTool === 'move') return;
-    if (_stuFsTouchActive) return;
-    _stuFsDrawing = true;
-    _stuFsCachedRect = _stuFsOverlayCanvas.getBoundingClientRect(); // 缓存rect
-    var p = fsGetPos(e);
-    _stuFsLastX = p.x;
-    _stuFsLastY = p.y;
-  }
-
-  function fsMove(e) {
-    if (_stuFsDrawTool === 'move' || !_stuFsDrawing) return;
-    if (_stuFsTouchActive) return;
-    var p = fsGetPos(e);
-    // 防止跳跃画线
-    var dx = p.x - _stuFsLastX, dy = p.y - _stuFsLastY;
-    var dist = Math.sqrt(dx*dx + dy*dy);
-    var maxJump = _stuFsOverlayCanvas.width * 0.3;
-    if (dist > maxJump) {
-      _stuFsLastX = p.x;
-      _stuFsLastY = p.y;
-      return;
-    }
-    fsDrawLine(_stuFsLastX, _stuFsLastY, p.x, p.y);
-    _stuFsLastX = p.x;
-    _stuFsLastY = p.y;
-  }
-
-  function fsUp() {
-    if (_stuFsTouchActive) return;
-    _stuFsDrawing = false;
-    _stuFsLastX = -1;
-    _stuFsLastY = -1;
-    _stuFsCachedRect = null;
-  }
-
-  function fsTouchStart(e) {
-    if (_stuFsDrawTool === 'move') return;
-    e.preventDefault();
-    _stuFsTouchActive = true;
-    _stuFsDrawing = true;
-    _stuFsCachedRect = _stuFsOverlayCanvas.getBoundingClientRect(); // 缓存rect
-    var ts = Array.from(e.touches);
-    if (ts.length === 2) {
-      _stuFsPinchDist = Math.sqrt(Math.pow(ts[0].clientX-ts[1].clientX,2)+Math.pow(ts[0].clientY-ts[1].clientY,2));
-      _stuFsPinchZoom = _stuFsZoom;
-      _stuFsDrawing = false;
-    } else if (ts.length === 1) {
-      var p = fsGetPos({ clientX: ts[0].clientX, clientY: ts[0].clientY });
-      _stuFsLastX = p.x;
-      _stuFsLastY = p.y;
-    }
-  }
-
-  function fsTouchMove(e) {
-    if (_stuFsDrawTool === 'move') return;
-    e.preventDefault();
-    var ts = Array.from(e.touches);
-    if (ts.length === 2) {
-      var d = Math.sqrt(Math.pow(ts[0].clientX-ts[1].clientX,2)+Math.pow(ts[0].clientY-ts[1].clientY,2));
-      var nz = _stuFsPinchZoom * (d / _stuFsPinchDist);
-      if (nz >= 0.5 && nz <= 8) fsApplyZoom(nz);
-    } else if (ts.length === 1 && _stuFsDrawing) {
-      var p = fsGetPos({ clientX: ts[0].clientX, clientY: ts[0].clientY });
-      // 防止跳跃画线
-      var dx = p.x - _stuFsLastX, dy = p.y - _stuFsLastY;
-      var dist = Math.sqrt(dx*dx + dy*dy);
-      var maxJump = _stuFsOverlayCanvas.width * 0.3;
-      if (dist > maxJump) {
-        _stuFsLastX = p.x;
-        _stuFsLastY = p.y;
-        return;
-      }
-      fsDrawLine(_stuFsLastX, _stuFsLastY, p.x, p.y);
-      _stuFsLastX = p.x;
-      _stuFsLastY = p.y;
-    }
-  }
-
-  function fsTouchEnd(e) {
-    if (_stuFsDrawTool === 'move') return;
-    if (e.touches.length === 0) {
-      _stuFsDrawing = false;
-      _stuFsLastX = -1;
-      _stuFsLastY = -1;
-      _stuFsCachedRect = null;
-      setTimeout(function() { _stuFsTouchActive = false; }, 400);
-    } else if (e.touches.length === 1) {
-      _stuFsDrawing = true;
-      _stuFsCachedRect = _stuFsOverlayCanvas.getBoundingClientRect();
-      var p = fsGetPos({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
-      _stuFsLastX = p.x;
-      _stuFsLastY = p.y;
-    }
-  }
-
-  function fsDrawLine(x1, y1, x2, y2) {
-    if (!_stuFsOverlayCtx) return;
-    // 计算缩放比例（内部分辨率 / CSS显示尺寸）
-    var scaleRatio = _stuFsOverlayCanvas.width / _stuFsOverlayCanvas.getBoundingClientRect().width;
-    
-    if (_stuFsDrawTool === 'eraser') {
-      _stuFsOverlayCtx.globalCompositeOperation = 'destination-out';
-      _stuFsOverlayCtx.beginPath();
-      _stuFsOverlayCtx.moveTo(x1, y1);
-      _stuFsOverlayCtx.lineTo(x2, y2);
-      _stuFsOverlayCtx.strokeStyle = 'rgba(0,0,0,1)';
-      _stuFsOverlayCtx.lineWidth = _stuDrawLineWidth * 5 * scaleRatio;
-      _stuFsOverlayCtx.lineCap = 'round';
-      _stuFsOverlayCtx.lineJoin = 'round';
-      _stuFsOverlayCtx.stroke();
-    } else {
-      _stuFsOverlayCtx.globalCompositeOperation = 'source-over';
-      _stuFsOverlayCtx.beginPath();
-      _stuFsOverlayCtx.moveTo(x1, y1);
-      _stuFsOverlayCtx.lineTo(x2, y2);
-      _stuFsOverlayCtx.strokeStyle = _stuDrawColor;
-      _stuFsOverlayCtx.lineWidth = _stuDrawLineWidth * 2 * scaleRatio;
-      _stuFsOverlayCtx.lineCap = 'round';
-      _stuFsOverlayCtx.lineJoin = 'round';
-      _stuFsOverlayCtx.stroke();
-    }
-  }
-
-  function fsApplyZoom(nz) {
-    if (!_stuFsCanvas || !_stuFsOverlayCanvas || !_stuFsCtx || !_stuFsOverlayCtx || !_stuImg) return;
-    _stuFsZoom = nz;
-
-    // 计算新的CSS显示尺寸
-    var displayW, displayH;
-    if (_stuFsRotated) {
-      // 旋转模式：从基准尺寸乘以新zoom
-      var screenW = window.innerWidth;
-      var screenH = window.innerHeight - 40; // 减去工具栏高度
-      var scaleByW = screenW / _stuImg.height;
-      var scaleByH = screenH / _stuImg.width;
-      var baseScaleFactor = Math.min(scaleByW, scaleByH);
-      displayW = Math.round(_stuImg.height * baseScaleFactor * nz);
-      displayH = Math.round(_stuImg.width * baseScaleFactor * nz);
-    } else {
-      displayW = Math.round(window.innerWidth * nz);
-      displayH = Math.round(_stuFsBaseH * (displayW / _stuFsBaseW));
-    }
-
-    var inner = document.getElementById('stuFsInner');
-    if (inner) {
-      inner.style.width = displayW + 'px';
-      inner.style.height = displayH + 'px';
-    }
-
-    // 更新CSS显示尺寸（内部buffer不变，保证清晰度）
-    _stuFsCanvas.style.width = displayW + 'px';
-    _stuFsCanvas.style.height = displayH + 'px';
-    _stuFsOverlayCanvas.style.width = displayW + 'px';
-    _stuFsOverlayCanvas.style.height = displayH + 'px';
-  }
-
-  window.fsZoom = function(f) { var nz = _stuFsZoom * f; if (nz >= 0.5 && nz <= 8) fsApplyZoom(nz); };
-  window.fsResetZoom = function() { fsApplyZoom(1); };
-  window.fsClear = function() {
-    if (!_stuFsOverlayCtx) return;
-    _stuFsOverlayCtx.clearRect(0, 0, _stuFsOverlayCanvas.width, _stuFsOverlayCanvas.height);
-  };
-  window.fsSetTool = function(t) {
-    _stuFsDrawTool = t;
-    var pb = document.getElementById('fsPen'), eb = document.getElementById('fsEra'), mb = document.getElementById('fsMove');
-    // Reset all
-    if (pb) { pb.style.background='transparent'; pb.style.color='#ccc'; }
-    if (eb) { eb.style.background='transparent'; eb.style.color='#ccc'; }
-    if (mb) { mb.style.background='transparent'; mb.style.color='#ccc'; }
-    // Highlight active
-    if (t === 'pen' && pb) { pb.style.background='#667eea'; pb.style.color='white'; }
-    else if (t === 'eraser' && eb) { eb.style.background='#667eea'; eb.style.color='white'; }
-    else if (t === 'move' && mb) { mb.style.background='#667eea'; mb.style.color='white'; }
-    // Move mode: disable overlay pointer-events so container handles scroll/pan
-    if (_stuFsOverlayCanvas) {
-      var sc = document.getElementById('stuFsScrollContainer');
-      if (t === 'move') {
-        _stuFsOverlayCanvas.style.pointerEvents = 'none';
-        _stuFsOverlayCanvas.style.touchAction = 'auto';
-        if (sc) { sc.style.touchAction = 'pan-x pan-y'; sc.style.cursor = 'grab'; }
-      } else {
-        _stuFsOverlayCanvas.style.pointerEvents = 'auto';
-        _stuFsOverlayCanvas.style.touchAction = 'none';
-        if (sc) { sc.style.touchAction = 'none'; sc.style.cursor = 'default'; }
-      }
-    }
-  };
-  window.fsSetColor = function(c) {
-    _stuDrawColor = c;
-    fsSetTool('pen');
-    document.querySelectorAll('.fs-clr').forEach(function(b) {
-      b.style.border = '2px solid ' + (b.getAttribute('data-color') === c ? '#667eea' : 'rgba(255,255,255,0.3)');
-    });
-  };
-  window.fsSetWidth = function(w) { _stuDrawLineWidth = parseInt(w) || 3; };
-
+  // 退出全屏查看
   window.exitStudentFullscreen = function() {
     if (!_stuFullscreenActive) return;
-
-    // 恢复body触摸处理
-    _fsRestoreBodyTouch();
-
-    // 将全屏书写内容同步回普通画布
-    if (_stuFsOverlayCanvas && _stuOverlayCanvas && _stuOverlayCtx && _stuImg) {
-      // 检查全屏叠加层是否有内容
-      var hasContent = false;
-      try {
-        var w = _stuFsOverlayCanvas.width, h = _stuFsOverlayCanvas.height;
-        // 检查多个点
-        var points = [
-          [Math.floor(w/4), Math.floor(h/4)],
-          [Math.floor(w/2), Math.floor(h/2)],
-          [Math.floor(3*w/4), Math.floor(3*h/4)],
-          [Math.floor(w/2), Math.floor(h/4)],
-          [Math.floor(w/4), Math.floor(h/2)]
-        ];
-        for (var i = 0; i < points.length; i++) {
-          var data = _stuFsOverlayCtx.getImageData(points[i][0], points[i][1], 1, 1).data;
-          if (data[3] > 0) {
-            hasContent = true;
-            break;
-          }
-        }
-      } catch(e) {}
-
-      if (hasContent) {
-        // 清空普通画布叠加层
-        _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
-        
-        if (_stuFsRotated) {
-          // 全屏画布内容是旋转过的，需要反向旋转90°（CCW）再缩放回普通画布尺寸
-          var tempC = document.createElement('canvas');
-          tempC.width = _stuOverlayCanvas.width;
-          tempC.height = _stuOverlayCanvas.height;
-          var tempCtx = tempC.getContext('2d');
-          tempCtx.translate(tempC.width / 2, tempC.height / 2);
-          tempCtx.rotate(-Math.PI / 2); // 反向旋转
-          tempCtx.drawImage(_stuFsOverlayCanvas, -_stuFsOverlayCanvas.height / 2, -_stuFsOverlayCanvas.width / 2, _stuFsOverlayCanvas.height, _stuFsOverlayCanvas.width);
-          _stuOverlayCtx.drawImage(tempC, 0, 0);
-        } else {
-          // 直接绘制，让浏览器自动缩放
-          _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
-        }
-      }
-    }
 
     // 移除全屏层
     if (_stuFsOverlay && _stuFsOverlay.parentNode) {
       _stuFsOverlay.parentNode.removeChild(_stuFsOverlay);
     }
     _stuFullscreenActive = false;
-    _stuFsOverlay = null; _stuFsCanvas = null; _stuFsOverlayCanvas = null;
-    _stuFsCtx = null; _stuFsOverlayCtx = null;
-    _stuFsCachedRect = null;
-    // 不自动提交，用户需要手动点击提交按钮
+    _stuFsOverlay = null;
   };
 
   // 导出学生画布图像（包含底图+书写痕迹）- 导出原始尺寸
   function exportStudentCanvasImage() {
-    if (!_stuCanvas || !_stuImg) return _studentUploadedImage || null;
+    if (!_stuImg) return _studentUploadedImage || null;
     
     // 创建原始尺寸的画布
     var exportCanvas = document.createElement('canvas');
@@ -1956,41 +1443,8 @@
     exportCtx.drawImage(_stuImg, 0, 0);
     
     // 将叠加层（书写痕迹）缩放到原始尺寸并叠加
-    if (_stuOverlayCanvas) {
+    if (_stuOverlayCanvas && _stuOverlayCtx) {
       exportCtx.drawImage(_stuOverlayCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
-    }
-    
-    var fmt = getImageFormat();
-    return exportCanvas.toDataURL(fmt, 0.92);
-  }
-
-  // 从全屏画布导出图像（处理旋转情况）
-  function exportFsCanvasImage() {
-    if (!_stuFsCanvas || !_stuImg) return null;
-    
-    var exportCanvas = document.createElement('canvas');
-    exportCanvas.width = _stuImg.width;
-    exportCanvas.height = _stuImg.height;
-    var exportCtx = exportCanvas.getContext('2d');
-    
-    // 绘制原始底图
-    exportCtx.drawImage(_stuImg, 0, 0);
-    
-    // 叠加手写内容
-    if (_stuFsOverlayCanvas) {
-      if (_stuFsRotated) {
-        // 反向旋转90°（CCW）还原到正常方向
-        var tempC = document.createElement('canvas');
-        tempC.width = _stuImg.width;
-        tempC.height = _stuImg.height;
-        var tempCtx = tempC.getContext('2d');
-        tempCtx.translate(tempC.width / 2, tempC.height / 2);
-        tempCtx.rotate(-Math.PI / 2);
-        tempCtx.drawImage(_stuFsOverlayCanvas, -_stuFsOverlayCanvas.height / 2, -_stuFsOverlayCanvas.width / 2, _stuFsOverlayCanvas.height, _stuFsOverlayCanvas.width);
-        exportCtx.drawImage(tempC, 0, 0);
-      } else {
-        exportCtx.drawImage(_stuFsOverlayCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
-      }
     }
     
     var fmt = getImageFormat();
