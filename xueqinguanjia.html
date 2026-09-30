@@ -1424,17 +1424,30 @@ function refreshCurrentUserClass() {
   if (!xqCurrentUser) return;
   const name = xqCurrentUser.teacherName;
   
-  // 优先从凭证系统获取最新班级
-  const cred = xqCredentials[name];
-  if (cred && cred.classes && cred.classes.length > 0) {
-    xqCurrentUser.classes = cred.classes;
-  }
+  console.log('[XQ] Refreshing classes for:', name, 'Current classes:', xqCurrentUser.classes);
+  console.log('[XQ] setupTeaching length:', setupTeaching.length);
   
-  // 如果 setupTeaching 有数据，用它来验证/补充
+  // 优先从 setupTeaching 获取最新班级（最权威的数据源）
   if (setupTeaching.length > 0) {
     const roleInfo = getUserRoleInfo(name);
+    console.log('[XQ] roleInfo from setupTeaching:', roleInfo);
     if (roleInfo && roleInfo.classes && roleInfo.classes.length > 0) {
       xqCurrentUser.classes = roleInfo.classes;
+      // 同时更新凭证中的班级信息
+      if (xqCredentials[name]) {
+        xqCredentials[name].classes = roleInfo.classes;
+        xqCredentials[name].role = roleInfo.role;
+        if (roleInfo.subject) xqCredentials[name].subject = roleInfo.subject;
+      }
+    }
+  }
+  
+  // 如果 setupTeaching 没有数据或没找到，尝试从凭证系统获取
+  if (!xqCurrentUser.classes || xqCurrentUser.classes.length === 0) {
+    const cred = xqCredentials[name];
+    if (cred && cred.classes && cred.classes.length > 0) {
+      xqCurrentUser.classes = cred.classes;
+      console.log('[XQ] Using classes from credentials:', cred.classes);
     }
   }
   
@@ -2011,7 +2024,7 @@ const NAV_CONFIG = {
 };
 
 function getDefaultPage() {
-  const map = { leader: 'teach-classes', headteacher: 'teach-classes', teacher: 'my-classes' };
+  const map = { leader: 'teach-classes', headteacher: 'my-class', teacher: 'my-classes' };
   return map[currentRole];
 }
 
@@ -3608,7 +3621,13 @@ function renderAttendanceStats() {
 /* ----- HEADTEACHER: My Class ----- */
 function renderMyClass() {
   const cls = getHeadteacherClass();
-  if (!cls || !STUDENTS[cls]) return emptyStateHtml('暂无班级数据');
+  console.log('[XQ] renderMyClass: cls=', cls, 'xqCurrentUser=', xqCurrentUser);
+  if (!cls) {
+    return emptyStateHtml('未找到您的班级信息。请联系管理员在「学校数据设置」中确认您的班主任分配。');
+  }
+  if (!STUDENTS[cls] || STUDENTS[cls].length === 0) {
+    return emptyStateHtml(`班级 ${cls} 暂无学生数据。请先在「名单管理」中导入学生。`);
+  }
   const sts = STUDENTS[cls];
   const t = sts.length, p = sts.filter(s=>s.status==='present').length,
     l = sts.filter(s=>s.status==='leave').length, a = sts.filter(s=>s.status==='absent').length;
@@ -3922,6 +3941,9 @@ function renderTeachClasses() {
   }
 
   let cards = '';
+  if (Object.keys(classes).length === 0 && currentRole !== 'leader') {
+    return emptyStateHtml('未找到您的班级信息。请联系管理员在「学校数据设置」中确认您的授课分配。');
+  }
   Object.entries(classes).forEach(([cls, subject], index) => {
     const sts = STUDENTS[cls] || [];
     const t = sts.length;
@@ -3983,6 +4005,9 @@ function renderMyClasses() {
 /* ----- TEACHER: Teach Attendance ----- */
 function renderTeachAttendance() {
   const classes = getTeacherClasses();
+  if (!classes || classes.length === 0) {
+    return emptyStateHtml('未找到您的授课班级信息。请联系管理员在「学校数据设置」中确认您的授课分配。');
+  }
   let html = `<div class="tabs" id="teachTabs">`;
   classes.forEach((cls, i) => {
     html += `<div class="tab ${i===0?'active':''}" onclick="switchTeachTab('${cls}',this)">${cls}</div>`;
@@ -6093,16 +6118,14 @@ try {
   }
 } catch (e) {}
 
-// 尝试恢复之前的登录会话
-if (!restoreSession()) {
-  // 没有可恢复的会话，显示登录界面
-  checkLoginState();
-}
-
-// 然后尝试从服务器同步最新凭证
+// 先从服务器同步最新凭证，再恢复会话
 xqLoadCredentials().then(() => {
-  if (!xqCurrentUser) {
-    checkLoginState(); // 仅在未登录时检查状态
+  console.log('[XQ] Credentials loaded from server, users:', Object.keys(xqCredentials).length);
+  
+  // 尝试恢复之前的登录会话
+  if (!restoreSession()) {
+    // 没有可恢复的会话，显示登录界面
+    checkLoginState();
   }
 });
 </script>
