@@ -1019,6 +1019,9 @@ tbody tr:last-child td { border-bottom: none; }
     <div class="setup-tab" data-tab="roles" onclick="switchSetupTab('roles',this)">
       <span style="font-size:16px">👤</span> 职责分配
     </div>
+    <div class="setup-tab" data-tab="cloud" onclick="switchSetupTab('cloud',this)">
+      <span style="font-size:16px">☁️</span> 云端同步
+    </div>
   </div>
   <div class="setup-content" id="setupContent">
     <!-- Rendered by JS -->
@@ -1088,6 +1091,199 @@ tbody tr:last-child td { border-bottom: none; }
 
 <script>
 /* ============================================================
+   SUPABASE API CONFIGURATION
+   ============================================================ */
+const XQ_API_BASE = '/api/xq';
+const XQ_ADMIN_KEY = ''; // 管理员密钥，由管理员在首次使用时设置
+let xqCurrentUser = null; // { teacherId, teacherName, role, classes[] }
+let xqSyncInProgress = false;
+let xqLastSyncTime = 0;
+
+// API 调用封装
+async function xqApi(action, data = {}) {
+  try {
+    const response = await fetch(XQ_API_BASE + '/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return await response.json();
+  } catch (e) {
+    console.error('[XQ API] Error:', e);
+    return { ok: false, error: e.message };
+  }
+}
+
+// 从服务器加载所有配置
+async function xqLoadAllConfig() {
+  if (xqSyncInProgress) return;
+  xqSyncInProgress = true;
+  
+  try {
+    const result = await xqApi('config', { action: 'get' });
+    if (result.ok && result.config) {
+      // 应用配置到本地状态
+      if (result.config.classes) {
+        SCHOOL.importedClasses = result.config.classes.data;
+        SCHOOL.importedClassList = result.config.classes.data?.classList || [];
+      }
+      if (result.config.teaching) {
+        SCHOOL.teacherClasses = result.config.teaching.data?.teacherClasses || {};
+        SCHOOL.headteacherClasses = result.config.teaching.data?.headteacherClasses || {};
+      }
+      if (result.config.roles) {
+        SCHOOL.importedUsers = result.config.roles.data;
+        applyImportedUsers();
+      }
+      // 加载各班学生数据
+      for (const [key, value] of Object.entries(result.config)) {
+        if (key.startsWith('students_')) {
+          const className = key.replace('students_', '');
+          if (value.data && value.data.students) {
+            STUDENTS[className] = value.data.students;
+          }
+        }
+      }
+      // 更新 CLASS_LIST
+      Object.keys(STUDENTS).forEach(cls => {
+        if (!CLASS_LIST.includes(cls)) CLASS_LIST.push(cls);
+      });
+      
+      // 保存到 localStorage 作为缓存
+      saveStudentsToStorage();
+      saveSchoolConfigToStorage();
+      
+      console.log('[XQ] Config loaded from server');
+    }
+  } catch (e) {
+    console.warn('[XQ] Failed to load config from server:', e);
+  } finally {
+    xqSyncInProgress = false;
+    xqLastSyncTime = Date.now();
+  }
+}
+
+// 保存配置到服务器（管理员操作）
+async function xqSaveConfigToServer(configKey, configData) {
+  if (!XQ_ADMIN_KEY) {
+    console.warn('[XQ] No admin key set, cannot save to server');
+    return { ok: false, error: 'No admin key' };
+  }
+  
+  const result = await xqApi('config', {
+    action: 'set',
+    adminKey: XQ_ADMIN_KEY,
+    configKey: configKey,
+    configData: configData,
+    teacherName: xqCurrentUser?.teacherName || 'admin'
+  });
+  
+  return result;
+}
+
+// 批量保存所有配置（管理员操作）
+async function xqSaveAllConfigToServer() {
+  if (!XQ_ADMIN_KEY) {
+    console.warn('[XQ] No admin key set, cannot save to server');
+    return { ok: false, error: 'No admin key' };
+  }
+  
+  const configs = {
+    classes: SCHOOL.importedClasses || {},
+    teaching: {
+      teacherClasses: SCHOOL.teacherClasses || {},
+      headteacherClasses: SCHOOL.headteacherClasses || {}
+    },
+    roles: SCHOOL.importedUsers || {}
+  };
+  
+  const result = await xqApi('config', {
+    action: 'set_all',
+    adminKey: XQ_ADMIN_KEY,
+    configs: configs,
+    teacherName: xqCurrentUser?.teacherName || 'admin'
+  });
+  
+  return result;
+}
+
+// 保存学生数据到服务器
+async function xqSaveStudentsToServer(className) {
+  if (!xqCurrentUser) return { ok: false, error: 'Not logged in' };
+  
+  const students = STUDENTS[className] || [];
+  const result = await xqApi('import', {
+    action: 'students',
+    teacherId: xqCurrentUser.teacherId,
+    teacherName: xqCurrentUser.teacherName,
+    teacherClasses: xqCurrentUser.classes || [],
+    className: className,
+    students: students
+  });
+  
+  return result;
+}
+
+// 批量添加记录到服务器
+async function xqAddRecords(records) {
+  if (!xqCurrentUser) return { ok: false, error: 'Not logged in' };
+  
+  const result = await xqApi('records', {
+    action: 'batch_add',
+    teacherId: xqCurrentUser.teacherId,
+    teacherName: xqCurrentUser.teacherName,
+    records: records
+  });
+  
+  return result;
+}
+
+// 获取记录
+async function xqGetRecords(filters = {}) {
+  const result = await xqApi('records', {
+    action: 'get',
+    ...filters
+  });
+  
+  return result.ok ? (result.records || []) : [];
+}
+
+// 清除学期数据（管理员操作）
+async function xqClearSemesterData() {
+  if (!XQ_ADMIN_KEY) {
+    return { ok: false, error: 'No admin key' };
+  }
+  
+  const result = await xqApi('clear', {
+    action: 'clear_records',
+    adminKey: XQ_ADMIN_KEY,
+    teacherName: xqCurrentUser?.teacherName || 'admin',
+    confirmText: 'CONFIRM_DELETE'
+  });
+  
+  return result;
+}
+
+// 设置管理员密钥
+function xqSetAdminKey(key) {
+  if (key && key.trim()) {
+    localStorage.setItem('xq_admin_key', key.trim());
+    window.XQ_ADMIN_KEY = key.trim();
+    console.log('[XQ] Admin key set');
+    return true;
+  }
+  return false;
+}
+
+// 加载管理员密钥
+function xqLoadAdminKey() {
+  const key = localStorage.getItem('xq_admin_key');
+  if (key) {
+    window.XQ_ADMIN_KEY = key;
+  }
+}
+
+/* ============================================================
    DATA LAYER (Mock)
    ============================================================ */
 const SCHOOL = {
@@ -1109,7 +1305,7 @@ const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '2.0';
+const APP_VERSION = '3.0'; // v3.0: 添加云端同步支持
 
 // Check if localStorage data is from old version, clear if needed
 function checkAppVersion() {
@@ -1130,10 +1326,21 @@ function checkAppVersion() {
 // Run version check before loading data
 checkAppVersion();
 
-// Save students to localStorage
-function saveStudentsToStorage() {
+// Save students to localStorage and sync to server
+function saveStudentsToStorage(className) {
   try {
     localStorage.setItem('school_students_data', JSON.stringify(STUDENTS));
+    
+    // 同步到服务器（如果已登录）
+    if (xqCurrentUser && className) {
+      xqSaveStudentsToServer(className).then(result => {
+        if (result.ok) {
+          console.log('[XQ] Students synced to server for class:', className);
+        } else {
+          console.warn('[XQ] Failed to sync students:', result.error);
+        }
+      });
+    }
   } catch (e) {
     console.warn('Failed to save to localStorage:', e);
   }
@@ -1263,6 +1470,23 @@ function doLogin() {
   currentRole = foundRole;
   USERS[foundRole] = foundUser;
   
+  // 设置当前用户信息（用于 API 调用）
+  let userClasses = [];
+  if (foundRole === 'headteacher') {
+    const htData = SCHOOL.importedUsers?.headteachers?.find(u => u.name === name);
+    userClasses = htData?.classes || [];
+  } else if (foundRole === 'teacher') {
+    const tData = SCHOOL.importedUsers?.teachers?.find(u => u.name === name);
+    userClasses = tData?.classes || [];
+  }
+  
+  xqCurrentUser = {
+    teacherId: name, // 使用姓名作为标识
+    teacherName: name,
+    role: foundRole,
+    classes: userClasses
+  };
+  
   document.getElementById('loginPage').classList.add('hidden');
   document.getElementById('app').classList.add('visible');
   document.getElementById('sidebarAvatar').textContent = foundUser.avatar;
@@ -1270,7 +1494,13 @@ function doLogin() {
   document.getElementById('sidebarRole').textContent = foundUser.role;
   buildSidebar();
   updateDate();
-  navigate(getDefaultPage());
+  
+  // 从服务器加载最新数据
+  xqLoadAllConfig().then(() => {
+    navigate(getDefaultPage());
+  }).catch(() => {
+    navigate(getDefaultPage());
+  });
 }
 
 function doLogout() {
@@ -4368,7 +4598,9 @@ function saveSetupAndBack() {
   if (setupTeaching.length > 0) applyTeachingDataFromSetup();
   if (setupRoles.length > 0) applyRolesData(setupRoles);
   saveSchoolConfigToStorage();
-  showToast('学校数据已保存');
+  
+  const syncMsg = window.XQ_ADMIN_KEY ? '（已同步到云端）' : '（本地保存）';
+  showToast('学校数据已保存' + syncMsg);
   closeSetupPage();
 }
 
@@ -4387,6 +4619,110 @@ function renderSetupContent() {
     content.innerHTML = renderTeachingSetup();
   } else if (currentSetupTab === 'roles') {
     content.innerHTML = renderRolesSetup();
+  } else if (currentSetupTab === 'cloud') {
+    content.innerHTML = renderCloudSetup();
+  }
+}
+
+/* ===== CLOUD SYNC SETUP ===== */
+function renderCloudSetup() {
+  const hasAdminKey = !!window.XQ_ADMIN_KEY;
+  const syncStatus = xqLastSyncTime > 0 
+    ? `上次同步: ${new Date(xqLastSyncTime).toLocaleString('zh-CN')}` 
+    : '尚未同步';
+  
+  return `
+    <div class="setup-panel active">
+      <div class="setup-section">
+        <div class="setup-section-header">
+          <span class="setup-section-title">云端数据同步</span>
+        </div>
+        <div style="padding:20px;background:var(--gray-50);border-radius:var(--radius);margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <div style="width:40px;height:40px;border-radius:10px;background:${hasAdminKey ? 'var(--accent-light)' : 'var(--warning-light)'};display:flex;align-items:center;justify-content:center;font-size:20px">
+              ${hasAdminKey ? '✅' : '⚠️'}
+            </div>
+            <div>
+              <div style="font-weight:600;color:var(--gray-800)">${hasAdminKey ? '已启用云端同步' : '未设置管理员密钥'}</div>
+              <div style="font-size:12px;color:var(--gray-500)">${syncStatus}</div>
+            </div>
+          </div>
+          
+          <div style="background:#fff;padding:16px;border-radius:var(--radius-sm);border:1px solid var(--gray-200)">
+            <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:8px">
+              管理员密钥
+            </label>
+            <div style="display:flex;gap:8px">
+              <input type="password" id="adminKeyInput" placeholder="输入管理员密钥以启用云端同步" 
+                style="flex:1;padding:10px 12px;border:1px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px"
+                value="${hasAdminKey ? '••••••••' : ''}">
+              <button class="toolbar-btn primary" onclick="saveAdminKey()" style="padding:10px 16px;font-size:13px">
+                保存密钥
+              </button>
+            </div>
+            <div style="font-size:11px;color:var(--gray-400);margin-top:8px">
+              管理员密钥用于保护学校配置的写入权限。只有拥有密钥的管理员才能修改学校配置并同步到云端。
+            </div>
+          </div>
+        </div>
+        
+        <div style="padding:16px;background:var(--primary-bg);border-radius:var(--radius);border:1px solid var(--primary-light)">
+          <div style="font-weight:600;color:var(--primary-dark);margin-bottom:8px">💡 使用说明</div>
+          <ul style="font-size:12px;color:var(--gray-600);padding-left:16px;line-height:1.8">
+            <li>设置管理员密钥后，保存的学校数据会自动同步到云端</li>
+            <li>所有老师登录后都能看到云端同步的数据</li>
+            <li>班主任只能修改自己班级的学生记录</li>
+            <li>学期结束时，管理员可以清除学期数据释放空间</li>
+          </ul>
+        </div>
+        
+        ${hasAdminKey ? `
+        <div style="margin-top:16px;padding:16px;background:var(--danger-light);border-radius:var(--radius);border:1px solid #fecaca">
+          <div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠️ 危险操作</div>
+          <button class="toolbar-btn" onclick="clearSemesterData()" style="background:var(--danger);color:#fff;padding:8px 16px;font-size:13px">
+            清除学期数据
+          </button>
+          <span style="font-size:11px;color:var(--gray-500);margin-left:12px">清除所有学生记录（保留配置）</span>
+        </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function saveAdminKey() {
+  const input = document.getElementById('adminKeyInput');
+  const key = input.value.trim();
+  
+  if (!key || key === '••••••••') {
+    showToast('请输入有效的管理员密钥', 'error');
+    return;
+  }
+  
+  if (xqSetAdminKey(key)) {
+    showToast('管理员密钥已保存，云端同步已启用');
+    // 立即同步一次
+    xqSaveAllConfigToServer().then(result => {
+      if (result.ok) {
+        showToast('数据已同步到云端');
+      }
+    });
+  } else {
+    showToast('保存失败', 'error');
+  }
+}
+
+async function clearSemesterData() {
+  if (!confirm('确定要清除本学期所有学生记录吗？此操作不可恢复！')) return;
+  if (!confirm('再次确认：清除后所有考勤、行为、成绩记录将被删除，但学校配置保留。')) return;
+  
+  const result = await xqClearSemesterData();
+  if (result.ok) {
+    showToast(`已清除 ${result.deletedRecords || 0} 条记录`);
+    // 刷新页面
+    setTimeout(() => location.reload(), 1500);
+  } else {
+    showToast('清除失败: ' + (result.error || '未知错误'), 'error');
   }
 }
 
@@ -5101,6 +5437,17 @@ function applyRolesData(data) {
     teachers: teachers.map(r => ({ name: r.name, username: r.username, password: r.password, subject: r.subject, classes: r.classes }))
   };
   
+  applyImportedUsers();
+}
+
+// Apply imported users to USERS and TEACHER_CLASSES
+function applyImportedUsers() {
+  if (!SCHOOL.importedUsers) return;
+  
+  const leaders = SCHOOL.importedUsers.leaders || [];
+  const headteachers = SCHOOL.importedUsers.headteachers || [];
+  const teachers = SCHOOL.importedUsers.teachers || [];
+  
   if (leaders.length > 0) USERS.leader = { name: leaders[0].name, role: '校领导', avatar: leaders[0].name.charAt(0) };
   if (headteachers.length > 0) {
     const ht = headteachers[0];
@@ -5130,6 +5477,17 @@ function saveSchoolConfigToStorage() {
       setupClasses, setupTeaching, setupRoles
     };
     localStorage.setItem('school_config_data', JSON.stringify(config));
+    
+    // 同步到服务器（如果有管理员密钥）
+    if (window.XQ_ADMIN_KEY) {
+      xqSaveAllConfigToServer().then(result => {
+        if (result.ok) {
+          console.log('[XQ] Config synced to server');
+        } else {
+          console.warn('[XQ] Failed to sync config:', result.error);
+        }
+      });
+    }
   } catch (e) { console.warn('Failed to save config:', e); }
 }
 
@@ -5201,6 +5559,7 @@ function extractSubjectName(header) {
 
 // Load config on startup
 loadSchoolConfigFromStorage();
+xqLoadAdminKey(); // 加载管理员密钥
 </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
