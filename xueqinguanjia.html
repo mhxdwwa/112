@@ -990,10 +990,7 @@ tbody tr:last-child td { border-bottom: none; }
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       初始化管理员（吴胜闯）
     </button>
-    <button class="login-import-btn" id="setupBtn" onclick="openSetupPage()" style="display:none">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      学校数据设置
-    </button>
+
     <div id="loginHint" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.06);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.5);text-align:center"></div>
   </div>
 </div>
@@ -1390,7 +1387,7 @@ const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '3.1'; // v3.1: 修复 loadStudentsFromStorage/saveStudentsToStorage 缺失导致页面无法加载
+const APP_VERSION = '3.2'; // v3.2: 优化登录流程，管理员登录后显示功能选择
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -1496,13 +1493,11 @@ function checkLoginState() {
   const loginBtn = document.getElementById('loginBtn');
   const setPwdBtn = document.getElementById('setPasswordBtn');
   const adminInitBtn = document.getElementById('adminInitBtn');
-  const setupBtn = document.getElementById('setupBtn');
   const hint = document.getElementById('loginHint');
   
   // 重置所有按钮
   setPwdBtn.style.display = 'none';
   adminInitBtn.style.display = 'none';
-  setupBtn.style.display = 'none';
   hint.style.display = 'none';
   passField.style.display = 'block';
   loginBtn.style.display = 'block';
@@ -1545,11 +1540,6 @@ function checkLoginState() {
     setPwdBtn.style.display = 'block';
   }
   // 已有密码 → 正常登录流程（显示密码框和登录按钮）
-  
-  // 管理员登录后显示学校数据设置按钮
-  if (name === XQ_ADMIN_NAME && hasPassword) {
-    setupBtn.style.display = 'block';
-  }
 }
 
 // 检查名字是否在导入的教师名单中
@@ -1752,9 +1742,9 @@ function doLogin() {
     buildSidebar();
     updateDate();
     
-    // 管理员登录成功后显示设置按钮
+    // 管理员登录成功后显示选择弹窗
     if (name === XQ_ADMIN_NAME) {
-      document.getElementById('setupBtn').style.display = 'block';
+      document.getElementById('adminChoiceDialog').style.display = 'flex';
     }
     
     // 从服务器加载最新数据
@@ -1764,6 +1754,18 @@ function doLogin() {
       navigate(getDefaultPage());
     });
   });
+}
+
+// 管理员选择：进入学校数据设置
+function adminChooseSetup() {
+  document.getElementById('adminChoiceDialog').style.display = 'none';
+  openSetupPage();
+}
+
+// 管理员选择：进入班级管理
+function adminChooseClass() {
+  document.getElementById('adminChoiceDialog').style.display = 'none';
+  navigate(getDefaultPage());
 }
 
 function doLogout() {
@@ -3469,8 +3471,35 @@ function renderMyClass() {
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="width:10px;height:10px;border-radius:3px;background:var(--danger)"></span>
                 <span style="font-size:13px;color:var(--gray-600)">缺勤 ${a}人</span>
-              </div>
-            </div>
+  </div>
+</div>
+
+<!-- ==================== ADMIN CHOICE DIALOG (管理员登录后选择) ==================== -->
+<div id="adminChoiceDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:36px;width:420px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary),#7C3AED);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">智</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">欢迎，管理员</h2>
+      <p style="font-size:13px;color:var(--gray-500)">请选择要进入的功能模块</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <button onclick="adminChooseSetup()" style="width:100%;padding:16px 20px;border-radius:12px;font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--primary),#3B82F6);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;box-shadow:0 4px 12px rgba(37,99,235,0.2)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        <div>
+          <div>学校数据设置</div>
+          <div style="font-size:12px;font-weight:400;opacity:0.8;margin-top:2px">管理班级、教师、学生数据</div>
+        </div>
+      </button>
+      <button onclick="adminChooseClass()" style="width:100%;padding:16px 20px;border-radius:12px;font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--accent),#10B981);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;box-shadow:0 4px 12px rgba(5,150,105,0.2)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <div>
+          <div>进入班级管理</div>
+          <div style="font-size:12px;font-weight:400;opacity:0.8;margin-top:2px">查看和管理学生在校情况</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
           </div>
         </div>
       </div>
