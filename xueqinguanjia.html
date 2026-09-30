@@ -1356,11 +1356,41 @@ function generateStudents() {
   return {};
 }
 
+// 从 localStorage 加载学生数据
+function loadStudentsFromStorage() {
+  try {
+    const data = localStorage.getItem('xq_students');
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        console.log('[XQ] Students loaded from localStorage, classes:', Object.keys(parsed).length);
+        return parsed;
+      }
+    }
+  } catch (e) { console.warn('[XQ] Failed to load students from localStorage:', e); }
+  return null;
+}
+
+// 保存学生数据到 localStorage
+function saveStudentsToStorage() {
+  try {
+    localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+    
+    // 同步到服务器（如果已登录且有管理员密钥）
+    if (xqCurrentUser && window.XQ_ADMIN_KEY) {
+      // 异步同步，不阻塞主流程
+      Object.keys(STUDENTS).forEach(cls => {
+        xqSaveStudentsToServer(cls).catch(() => {});
+      });
+    }
+  } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
+}
+
 const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '3.0'; // v3.0: 添加云端同步支持
+const APP_VERSION = '3.1'; // v3.1: 修复 loadStudentsFromStorage/saveStudentsToStorage 缺失导致页面无法加载
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -5841,9 +5871,6 @@ function loadSchoolConfigFromStorage() {
   } catch (e) { console.warn('Failed to load config:', e); }
   return false;
 }
-
-// Load config on startup
-loadSchoolConfigFromStorage();
 
 // Helper: Read Excel file and return array of arrays
 function readExcelFile(file, callback) {
