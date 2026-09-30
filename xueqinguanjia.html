@@ -1190,6 +1190,16 @@ async function xqLoadAllConfig() {
         SCHOOL.importedUsers = result.config.roles.data;
         applyImportedUsers();
       }
+      // 恢复 setupTeaching/setupClasses/setupRoles（用于 getUserRoleInfo 等函数）
+      if (result.config.setupTeaching && result.config.setupTeaching.data) {
+        setupTeaching = result.config.setupTeaching.data;
+      }
+      if (result.config.setupClasses && result.config.setupClasses.data) {
+        setupClasses = result.config.setupClasses.data;
+      }
+      if (result.config.setupRoles && result.config.setupRoles.data) {
+        setupRoles = result.config.setupRoles.data;
+      }
       // 加载各班学生数据
       for (const [key, value] of Object.entries(result.config)) {
         if (key.startsWith('students_')) {
@@ -1249,7 +1259,10 @@ async function xqSaveAllConfigToServer() {
       teacherClasses: SCHOOL.teacherClasses || {},
       headteacherClasses: SCHOOL.headteacherClasses || {}
     },
-    roles: SCHOOL.importedUsers || {}
+    roles: SCHOOL.importedUsers || {},
+    setupTeaching: setupTeaching || [],
+    setupClasses: setupClasses || [],
+    setupRoles: setupRoles || []
   };
   
   const result = await xqApi('config', {
@@ -1362,6 +1375,73 @@ const TEACHER_CLASSES = {
 
 // 当前登录用户角色
 let currentRole = null;
+
+// 获取当前班主任用户的班级（从 xqCurrentUser 获取）
+function getHeadteacherClass() {
+  if (!xqCurrentUser || !xqCurrentUser.classes || xqCurrentUser.classes.length === 0) {
+    // 回退：从 TEACHER_CLASSES.headteacher 取第一个
+    const keys = Object.keys(TEACHER_CLASSES.headteacher);
+    return keys.length > 0 ? keys[0] : '';
+  }
+  return xqCurrentUser.classes[0];
+}
+
+// 获取当前科任教师用户的班级列表（从 xqCurrentUser 获取）
+function getTeacherClasses() {
+  if (!xqCurrentUser || !xqCurrentUser.classes || xqCurrentUser.classes.length === 0) {
+    // 回退：从 TEACHER_CLASSES.teacher 取所有
+    return Object.keys(TEACHER_CLASSES.teacher);
+  }
+  return xqCurrentUser.classes;
+}
+
+// 获取当前科任教师在各班级的科目映射 { className: subject }
+function getTeacherClassSubjects() {
+  const result = {};
+  if (!xqCurrentUser || !xqCurrentUser.classes) return result;
+  // 从 setupTeaching 中精确查找当前教师教的科目
+  const name = xqCurrentUser.teacherName;
+  setupTeaching.forEach(t => {
+    if (xqCurrentUser.classes.includes(t.name)) {
+      Object.entries(t.subjects || {}).forEach(([subj, teacher]) => {
+        if (teacher === name) {
+          result[t.name] = subj;
+        }
+      });
+    }
+  });
+  // 回退：如果 setupTeaching 没有，使用 TEACHER_CLASSES
+  xqCurrentUser.classes.forEach(cls => {
+    if (!result[cls] && TEACHER_CLASSES.teacher[cls]) {
+      result[cls] = TEACHER_CLASSES.teacher[cls];
+    }
+  });
+  return result;
+}
+
+// 刷新当前登录用户的班级信息（从最新凭证/setupTeaching数据）
+function refreshCurrentUserClass() {
+  if (!xqCurrentUser) return;
+  const name = xqCurrentUser.teacherName;
+  
+  // 优先从凭证系统获取最新班级
+  const cred = xqCredentials[name];
+  if (cred && cred.classes && cred.classes.length > 0) {
+    xqCurrentUser.classes = cred.classes;
+  }
+  
+  // 如果 setupTeaching 有数据，用它来验证/补充
+  if (setupTeaching.length > 0) {
+    const roleInfo = getUserRoleInfo(name);
+    if (roleInfo && roleInfo.classes && roleInfo.classes.length > 0) {
+      xqCurrentUser.classes = roleInfo.classes;
+    }
+  }
+  
+  // 更新 session 缓存
+  saveSession();
+  console.log('[XQ] User classes refreshed:', name, '->', xqCurrentUser.classes);
+}
 
 const NAMES = [];
 
@@ -1784,8 +1864,11 @@ function doLogin() {
     
     // 从服务器加载最新数据
     xqLoadAllConfig().then(() => {
+      // 重新从凭证/setupTeaching刷新当前用户的班级信息
+      refreshCurrentUserClass();
       navigate(getDefaultPage());
     }).catch(() => {
+      refreshCurrentUserClass();
       navigate(getDefaultPage());
     });
   });
@@ -1839,8 +1922,10 @@ function restoreSession() {
     
     // 从服务器加载最新数据
     xqLoadAllConfig().then(() => {
+      refreshCurrentUserClass();
       navigate(getDefaultPage());
     }).catch(() => {
+      refreshCurrentUserClass();
       navigate(getDefaultPage());
     });
     
@@ -1970,7 +2055,7 @@ function buildSidebar() {
 function getPendingLeaveCount() {
   let count = 0;
   const classes = currentRole === 'leader' ? CLASS_LIST :
-    currentRole === 'headteacher' ? [getHeadteacherClass()] : Object.keys(TEACHER_CLASSES.teacher);
+    currentRole === 'headteacher' ? [getHeadteacherClass()] : getTeacherClasses();
   classes.forEach(cls => {
     if (STUDENTS[cls]) STUDENTS[cls].forEach(s => { if (s.status === 'leave') count++; });
   });
@@ -3141,7 +3226,7 @@ function renderClassSeatingPage() {
 /* ----- LEADER: Leave View (read-only) / HEADTEACHER: Leave Management (editable) ----- */
 function renderLeaveMgmt() {
   const classes = currentRole === 'leader' ? CLASS_LIST :
-    currentRole === 'headteacher' ? [getHeadteacherClass()] : Object.keys(TEACHER_CLASSES.teacher);
+    currentRole === 'headteacher' ? [getHeadteacherClass()] : getTeacherClasses();
   let leaveStudents = [];
   classes.forEach(cls => {
     if (!STUDENTS[cls]) return;
@@ -3828,7 +3913,12 @@ function renderTeachClasses() {
     const htClass = getHeadteacherClass();
     if (htClass) classes[htClass] = '班主任（本班）';
   } else {
-    classes = TEACHER_CLASSES[currentRole] || {};
+    // 科任教师：只显示自己授课的班级
+    classes = {};
+    const classSubjects = getTeacherClassSubjects();
+    getTeacherClasses().forEach(cls => {
+      classes[cls] = classSubjects[cls] || '科任';
+    });
   }
 
   let cards = '';
@@ -3892,7 +3982,7 @@ function renderMyClasses() {
 
 /* ----- TEACHER: Teach Attendance ----- */
 function renderTeachAttendance() {
-  const classes = Object.keys(TEACHER_CLASSES.teacher);
+  const classes = getTeacherClasses();
   let html = `<div class="tabs" id="teachTabs">`;
   classes.forEach((cls, i) => {
     html += `<div class="tab ${i===0?'active':''}" onclick="switchTeachTab('${cls}',this)">${cls}</div>`;
@@ -5844,18 +5934,31 @@ async function applyRolesData(data) {
     }
   }
   
-  // 为班主任和科任教师自动创建凭证（如果没有的话）
+  // 为班主任和科任教师自动创建或更新凭证
   for (const ht of headteachers) {
     if (!xqCredentials[ht.name]) {
       // 自动生成默认密码
       await setUserPassword(ht.name, '123456', 'headteacher', ht.classes, null);
+    } else {
+      // 更新已有凭证的班级和角色信息（保留原密码）
+      xqCredentials[ht.name].role = 'headteacher';
+      xqCredentials[ht.name].classes = ht.classes;
+      xqCredentials[ht.name].updatedAt = new Date().toISOString();
     }
   }
   for (const t of teachers) {
     if (!xqCredentials[t.name]) {
       await setUserPassword(t.name, '123456', 'teacher', t.classes, t.subject);
+    } else {
+      // 更新已有凭证的班级和科目信息（保留原密码）
+      xqCredentials[t.name].role = 'teacher';
+      xqCredentials[t.name].classes = t.classes;
+      xqCredentials[t.name].subject = t.subject;
+      xqCredentials[t.name].updatedAt = new Date().toISOString();
     }
   }
+  // 保存更新后的凭证
+  await xqSaveCredentials();
   
   applyImportedUsers();
 }
