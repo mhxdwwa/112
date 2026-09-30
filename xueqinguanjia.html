@@ -1127,6 +1127,31 @@ tbody tr:last-child td { border-bottom: none; }
   </div>
 </div>
 
+<!-- ==================== ADMIN CHOICE DIALOG (管理员登录后选择) ==================== -->
+<div id="adminChoiceDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:36px;width:420px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary),#7C3AED);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">智</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">欢迎，管理员</h2>
+      <p style="font-size:13px;color:var(--gray-500)">请选择要进入的功能模块</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <button onclick="adminChooseSetup()" style="width:100%;padding:16px 20px;border-radius:12px;font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--primary),#3B82F6);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;box-shadow:0 4px 12px rgba(37,99,235,0.2)">
+        <div>
+          <div>学校数据设置</div>
+          <div style="font-size:12px;font-weight:400;opacity:0.8;margin-top:2px">管理班级、教师、学生数据</div>
+        </div>
+      </button>
+      <button onclick="adminChooseClass()" style="width:100%;padding:16px 20px;border-radius:12px;font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--accent),#10B981);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;box-shadow:0 4px 12px rgba(5,150,105,0.2)">
+        <div>
+          <div>进入班级管理</div>
+          <div style="font-size:12px;font-weight:400;opacity:0.8;margin-top:2px">查看和管理学生在校情况</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== TOAST ==================== -->
 <div class="toast-container" id="toastContainer"></div>
 
@@ -1406,7 +1431,7 @@ const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '3.4'; // v3.4: 添加缓存清除机制，修复管理员选择弹窗
+const APP_VERSION = '3.5'; // v3.5: 修复管理员选择弹窗位置 + 登录会话持久化
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -1723,9 +1748,15 @@ function doLogin() {
     buildSidebar();
     updateDate();
     
-    // 管理员登录成功后显示选择弹窗
+    // 保存登录状态到 localStorage
+    saveSession();
+    
+    // 管理员登录成功后显示选择弹窗（延迟确保 UI 已渲染）
     if (name === XQ_ADMIN_NAME) {
-      document.getElementById('adminChoiceDialog').style.display = 'flex';
+      setTimeout(() => {
+        const dialog = document.getElementById('adminChoiceDialog');
+        if (dialog) dialog.style.display = 'flex';
+      }, 100);
     }
     
     // 从服务器加载最新数据
@@ -1749,7 +1780,70 @@ function adminChooseClass() {
   navigate(getDefaultPage());
 }
 
+// ===== 会话持久化 =====
+function saveSession() {
+  try {
+    const session = {
+      user: xqCurrentUser,
+      role: currentRole,
+      userInfo: USERS[currentRole],
+      timestamp: Date.now()
+    };
+    localStorage.setItem('xq_session', JSON.stringify(session));
+    console.log('[XQ] Session saved:', session.user?.teacherName);
+  } catch (e) { console.warn('[XQ] Failed to save session:', e); }
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem('xq_session');
+    console.log('[XQ] Session cleared');
+  } catch (e) {}
+}
+
+function restoreSession() {
+  try {
+    const data = localStorage.getItem('xq_session');
+    if (!data) return false;
+    const session = JSON.parse(data);
+    if (!session.user || !session.role) return false;
+    
+    // 恢复登录状态
+    currentRole = session.role;
+    xqCurrentUser = session.user;
+    if (session.userInfo) {
+      USERS[session.role] = session.userInfo;
+    }
+    
+    // 更新 UI
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    document.getElementById('sidebarAvatar').textContent = session.userInfo?.avatar || session.user.teacherName.charAt(0);
+    document.getElementById('sidebarName').textContent = session.userInfo?.name || session.user.teacherName;
+    document.getElementById('sidebarRole').textContent = session.userInfo?.role || '';
+    buildSidebar();
+    updateDate();
+    
+    console.log('[XQ] Session restored for:', session.user.teacherName);
+    
+    // 从服务器加载最新数据
+    xqLoadAllConfig().then(() => {
+      navigate(getDefaultPage());
+    }).catch(() => {
+      navigate(getDefaultPage());
+    });
+    
+    return true;
+  } catch (e) {
+    console.warn('[XQ] Failed to restore session:', e);
+    return false;
+  }
+}
+
 function doLogout() {
+  clearSession();
+  currentRole = null;
+  xqCurrentUser = null;
   document.getElementById('app').classList.remove('visible');
   setTimeout(() => {
     document.getElementById('loginPage').classList.remove('hidden');
@@ -3455,32 +3549,6 @@ function renderMyClass() {
   </div>
 </div>
 
-<!-- ==================== ADMIN CHOICE DIALOG (管理员登录后选择) ==================== -->
-<div id="adminChoiceDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:20px;padding:36px;width:420px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3)">
-    <div style="text-align:center;margin-bottom:28px">
-      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary),#7C3AED);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">智</div>
-      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">欢迎，管理员</h2>
-      <p style="font-size:13px;color:var(--gray-500)">请选择要进入的功能模块</p>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <button onclick="adminChooseSetup()" style="width:100%;padding:16px 20px;border-radius:12px;font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--primary),#3B82F6);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;box-shadow:0 4px 12px rgba(37,99,235,0.2)">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-        <div>
-          <div>学校数据设置</div>
-          <div style="font-size:12px;font-weight:400;opacity:0.8;margin-top:2px">管理班级、教师、学生数据</div>
-        </div>
-      </button>
-      <button onclick="adminChooseClass()" style="width:100%;padding:16px 20px;border-radius:12px;font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--accent),#10B981);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;box-shadow:0 4px 12px rgba(5,150,105,0.2)">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <div>
-          <div>进入班级管理</div>
-          <div style="font-size:12px;font-weight:400;opacity:0.8;margin-top:2px">查看和管理学生在校情况</div>
-        </div>
-      </button>
-    </div>
-  </div>
-</div>
           </div>
         </div>
       </div>
@@ -5933,11 +6001,18 @@ try {
     xqCredentials = JSON.parse(cached);
   }
 } catch (e) {}
-checkLoginState(); // 立即检查状态
+
+// 尝试恢复之前的登录会话
+if (!restoreSession()) {
+  // 没有可恢复的会话，显示登录界面
+  checkLoginState();
+}
 
 // 然后尝试从服务器同步最新凭证
 xqLoadCredentials().then(() => {
-  checkLoginState(); // 服务器数据加载后再次检查
+  if (!xqCurrentUser) {
+    checkLoginState(); // 仅在未登录时检查状态
+  }
 });
 </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
