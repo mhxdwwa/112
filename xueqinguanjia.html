@@ -975,43 +975,71 @@ tbody tr:last-child td { border-bottom: none; }
     <p class="login-subtitle">学生在校情况管理平台</p>
     <div class="login-field">
       <label>用户名</label>
-      <input type="text" id="loginUser" placeholder="请输入姓名" oninput="checkAdminAccess()">
+      <input type="text" id="loginUser" placeholder="请输入姓名" oninput="checkLoginState()">
     </div>
-    <div class="login-field">
+    <div class="login-field" id="loginPassField">
       <label>密码</label>
       <input type="password" id="loginPass" placeholder="请输入密码">
     </div>
-    <button class="login-btn" onclick="doLogin()">登 录</button>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">登 录</button>
+    <button class="login-import-btn" id="setPasswordBtn" onclick="showSetPasswordDialog()" style="display:none;background:linear-gradient(135deg,var(--accent),#059669)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      首次使用？点此设置密码
+    </button>
+    <button class="login-import-btn" id="adminInitBtn" onclick="showAdminInitDialog()" style="display:none;background:linear-gradient(135deg,var(--primary),#7C3AED)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      初始化管理员（吴胜闯）
+    </button>
     <button class="login-import-btn" id="setupBtn" onclick="openSetupPage()" style="display:none">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       学校数据设置
     </button>
-    <button class="login-import-btn" id="firstTimeSetupBtn" onclick="showFirstTimeSetup()" style="display:none;background:linear-gradient(135deg,var(--primary),#7C3AED)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      初始化管理员密码
-    </button>
+    <div id="loginHint" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.06);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.5);text-align:center"></div>
   </div>
 </div>
 
-<!-- ==================== FIRST TIME SETUP DIALOG ==================== -->
-<div id="firstTimeDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+<!-- ==================== SET PASSWORD DIALOG (首次设置密码) ==================== -->
+<div id="setPasswordDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:20px;padding:36px;width:400px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3)">
     <div style="text-align:center;margin-bottom:24px">
-      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary),#7C3AED);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">🔐</div>
-      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">初始化管理员密码</h2>
-      <p style="font-size:13px;color:var(--gray-500)">首次使用，请为管理员 <strong>吴胜闯</strong> 设置登录密码</p>
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#059669);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">🔐</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">设置登录密码</h2>
+      <p style="font-size:13px;color:var(--gray-500)">你好 <strong id="setPwdUserName"></strong>，请设置你的登录密码</p>
     </div>
     <div style="margin-bottom:16px">
       <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">设置密码</label>
-      <input type="password" id="firstPass1" placeholder="请输入密码（至少4位）" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+      <input type="password" id="setPwdP1" placeholder="请输入密码（至少4位）" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
     </div>
     <div style="margin-bottom:24px">
       <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">确认密码</label>
-      <input type="password" id="firstPass2" placeholder="请再次输入密码" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+      <input type="password" id="setPwdP2" placeholder="请再次输入密码" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
     </div>
     <div style="display:flex;gap:10px">
-      <button onclick="closeFirstTimeSetup()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:500;background:var(--gray-100);color:var(--gray-600);border:none;cursor:pointer">取消</button>
-      <button onclick="doFirstTimeSetup()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:600;background:linear-gradient(135deg,var(--primary),#7C3AED);color:#fff;border:none;cursor:pointer">确认设置</button>
+      <button onclick="closeSetPasswordDialog()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:500;background:var(--gray-100);color:var(--gray-600);border:none;cursor:pointer">取消</button>
+      <button onclick="doSetPasswordAndLogin()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:600;background:linear-gradient(135deg,var(--accent),#059669);color:#fff;border:none;cursor:pointer">设置并登录</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ADMIN INIT DIALOG (管理员初始化) ==================== -->
+<div id="adminInitDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:36px;width:400px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary),#7C3AED);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">👑</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">初始化管理员</h2>
+      <p style="font-size:13px;color:var(--gray-500)">首次使用，请为管理员 <strong>吴胜闯</strong> 设置密码</p>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">设置密码</label>
+      <input type="password" id="adminInitP1" placeholder="请输入密码（至少4位）" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+    </div>
+    <div style="margin-bottom:24px">
+      <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">确认密码</label>
+      <input type="password" id="adminInitP2" placeholder="请再次输入密码" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeAdminInitDialog()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:500;background:var(--gray-100);color:var(--gray-600);border:none;cursor:pointer">取消</button>
+      <button onclick="doAdminInit()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:600;background:linear-gradient(135deg,var(--primary),#7C3AED);color:#fff;border:none;cursor:pointer">确认设置</button>
     </div>
   </div>
 </div>
@@ -1431,39 +1459,134 @@ async function setUserPassword(name, password, role, classes, subject) {
   return await xqSaveCredentials();
 }
 
-// 检查当前输入的用户名是否是管理员，显示/隐藏设置按钮
-function checkAdminAccess() {
+// 检查输入的用户名是否在教师名单中，决定显示哪些按钮
+function checkLoginState() {
   const name = document.getElementById('loginUser').value.trim();
+  const passField = document.getElementById('loginPassField');
+  const loginBtn = document.getElementById('loginBtn');
+  const setPwdBtn = document.getElementById('setPasswordBtn');
+  const adminInitBtn = document.getElementById('adminInitBtn');
   const setupBtn = document.getElementById('setupBtn');
-  const firstBtn = document.getElementById('firstTimeSetupBtn');
+  const hint = document.getElementById('loginHint');
   
-  // 首次使用：凭证未初始化，显示初始化按钮
+  // 重置所有按钮
+  setPwdBtn.style.display = 'none';
+  adminInitBtn.style.display = 'none';
+  setupBtn.style.display = 'none';
+  hint.style.display = 'none';
+  passField.style.display = 'block';
+  loginBtn.style.display = 'block';
+  
+  // 情况1：系统未初始化（管理员还没设置密码）
   if (!isCredentialsInitialized()) {
-    setupBtn.style.display = 'none';
-    firstBtn.style.display = 'block';
+    passField.style.display = 'none';
+    loginBtn.style.display = 'none';
+    if (name === XQ_ADMIN_NAME) {
+      adminInitBtn.style.display = 'block';
+    }
     return;
   }
   
-  // 凭证已初始化：隐藏首次设置按钮
-  firstBtn.style.display = 'none';
+  // 情况2：系统已初始化
+  // 检查名字是否在教师名单中
+  const isInList = isUserInTeacherList(name);
   
-  // 只有管理员登录后才显示学校数据设置按钮
-  // 这个按钮在登录成功后才会显示，这里先隐藏
-  setupBtn.style.display = 'none';
+  if (!isInList && name) {
+    // 名字不在名单中 → 不允许登录
+    passField.style.display = 'none';
+    loginBtn.style.display = 'none';
+    hint.style.display = 'block';
+    hint.textContent = '该姓名不在教师名单中，请联系管理员导入';
+    return;
+  }
+  
+  if (!name) {
+    // 还没输入名字
+    return;
+  }
+  
+  // 名字在名单中
+  const hasPassword = xqCredentials[name] && xqCredentials[name].passwordHash;
+  
+  if (!hasPassword) {
+    // 首次使用，需要设置密码
+    passField.style.display = 'none';
+    loginBtn.style.display = 'none';
+    setPwdBtn.style.display = 'block';
+  }
+  // 已有密码 → 正常登录流程（显示密码框和登录按钮）
+  
+  // 管理员登录后显示学校数据设置按钮
+  if (name === XQ_ADMIN_NAME && hasPassword) {
+    setupBtn.style.display = 'block';
+  }
 }
 
-// 首次初始化弹窗
-function showFirstTimeSetup() {
-  document.getElementById('firstTimeDialog').style.display = 'flex';
+// 检查名字是否在导入的教师名单中
+function isUserInTeacherList(name) {
+  if (!name) return false;
+  
+  // 管理员始终在名单中
+  if (name === XQ_ADMIN_NAME) return true;
+  
+  // 检查导入的用户数据
+  if (SCHOOL.importedUsers) {
+    const leaders = SCHOOL.importedUsers.leaders || [];
+    const headteachers = SCHOOL.importedUsers.headteachers || [];
+    const teachers = SCHOOL.importedUsers.teachers || [];
+    
+    if (leaders.some(u => u.name === name)) return true;
+    if (headteachers.some(u => u.name === name)) return true;
+    if (teachers.some(u => u.name === name)) return true;
+  }
+  
+  // 也检查凭证系统（如果之前设置过密码，说明在名单中）
+  if (xqCredentials[name]) return true;
+  
+  return false;
 }
 
-function closeFirstTimeSetup() {
-  document.getElementById('firstTimeDialog').style.display = 'none';
+// 获取用户在名单中的角色信息
+function getUserRoleInfo(name) {
+  if (name === XQ_ADMIN_NAME) return { role: 'leader', classes: [], subject: null };
+  
+  if (SCHOOL.importedUsers) {
+    const leaders = SCHOOL.importedUsers.leaders || [];
+    const headteachers = SCHOOL.importedUsers.headteachers || [];
+    const teachers = SCHOOL.importedUsers.teachers || [];
+    
+    const leader = leaders.find(u => u.name === name);
+    if (leader) return { role: 'leader', classes: [], subject: null };
+    
+    const ht = headteachers.find(u => u.name === name);
+    if (ht) return { role: 'headteacher', classes: ht.classes || [], subject: null };
+    
+    const teacher = teachers.find(u => u.name === name);
+    if (teacher) return { role: 'teacher', classes: teacher.classes || [], subject: teacher.subject || null };
+  }
+  
+  return null;
 }
 
-async function doFirstTimeSetup() {
-  const p1 = document.getElementById('firstPass1').value.trim();
-  const p2 = document.getElementById('firstPass2').value.trim();
+// ===== 首次设置密码弹窗 =====
+function showSetPasswordDialog() {
+  const name = document.getElementById('loginUser').value.trim();
+  if (!name || !isUserInTeacherList(name)) {
+    alert('请先输入有效的姓名');
+    return;
+  }
+  document.getElementById('setPwdUserName').textContent = name;
+  document.getElementById('setPasswordDialog').style.display = 'flex';
+}
+
+function closeSetPasswordDialog() {
+  document.getElementById('setPasswordDialog').style.display = 'none';
+}
+
+async function doSetPasswordAndLogin() {
+  const name = document.getElementById('loginUser').value.trim();
+  const p1 = document.getElementById('setPwdP1').value.trim();
+  const p2 = document.getElementById('setPwdP2').value.trim();
   
   if (!p1 || p1.length < 4) {
     alert('密码至少4位');
@@ -1474,18 +1597,61 @@ async function doFirstTimeSetup() {
     return;
   }
   
-  // 设置管理员密码（保存到 localStorage）
+  // 获取角色信息
+  const roleInfo = getUserRoleInfo(name);
+  if (!roleInfo) {
+    alert('该用户不在教师名单中');
+    return;
+  }
+  
+  // 设置密码
+  const result = await setUserPassword(name, p1, roleInfo.role, roleInfo.classes, roleInfo.subject);
+  
+  closeSetPasswordDialog();
+  
+  if (result.ok) {
+    // 设置成功，自动登录
+    document.getElementById('loginPass').value = p1;
+    doLogin();
+  } else {
+    alert('设置失败，请重试');
+  }
+}
+
+// ===== 管理员初始化弹窗 =====
+function showAdminInitDialog() {
+  document.getElementById('adminInitDialog').style.display = 'flex';
+}
+
+function closeAdminInitDialog() {
+  document.getElementById('adminInitDialog').style.display = 'none';
+}
+
+async function doAdminInit() {
+  const p1 = document.getElementById('adminInitP1').value.trim();
+  const p2 = document.getElementById('adminInitP2').value.trim();
+  
+  if (!p1 || p1.length < 4) {
+    alert('密码至少4位');
+    return;
+  }
+  if (p1 !== p2) {
+    alert('两次密码不一致');
+    return;
+  }
+  
+  // 设置管理员密码
   await setUserPassword(XQ_ADMIN_NAME, p1, 'leader', [], null);
   
-  // 自动生成管理员密钥（用于云端同步）
+  // 自动生成管理员密钥
   const adminKey = 'xq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   xqSetAdminKey(adminKey);
   
-  closeFirstTimeSetup();
-  alert('管理员密码设置成功！\n\n请使用管理员账号登录：\n用户名：' + XQ_ADMIN_NAME + '\n密码：您刚才设置的密码');
+  closeAdminInitDialog();
+  alert('管理员初始化成功！\n\n请使用以下信息登录：\n用户名：' + XQ_ADMIN_NAME + '\n密码：您刚才设置的密码\n\n登录后请进入"学校数据设置"导入教师信息。');
   
   // 刷新状态
-  checkAdminAccess();
+  checkLoginState();
 }
 
 function doLogin() {
@@ -1503,14 +1669,14 @@ function doLogin() {
   
   // 如果凭证系统未初始化，提示先初始化
   if (!isCredentialsInitialized()) {
-    alert('系统尚未初始化，请先点击"初始化管理员密码"');
+    alert('系统尚未初始化，请先输入管理员姓名并点击"初始化管理员"');
     return;
   }
   
   // 检查用户是否存在于凭证系统
   const cred = xqCredentials[name];
   if (!cred) {
-    alert('未找到该用户，请联系管理员导入教师信息');
+    alert('该用户尚未设置密码，请输入姓名后点击"首次使用？点此设置密码"');
     return;
   }
   
@@ -1556,7 +1722,7 @@ function doLogin() {
     buildSidebar();
     updateDate();
     
-    // 管理员登录成功后显示设置按钮（在侧边栏）
+    // 管理员登录成功后显示设置按钮
     if (name === XQ_ADMIN_NAME) {
       document.getElementById('setupBtn').style.display = 'block';
     }
@@ -4651,8 +4817,7 @@ let currentSetupTab = 'classes';
 // Open/Close setup page
 function openSetupPage() {
   // 权限检查：只有管理员可以访问
-  const loginName = document.getElementById('loginUser')?.value?.trim();
-  if (loginName !== XQ_ADMIN_NAME) {
+  if (xqCurrentUser?.teacherName !== XQ_ADMIN_NAME) {
     alert('⛔ 权限不足\n\n只有管理员（' + XQ_ADMIN_NAME + '）才能访问学校数据设置。');
     return;
   }
@@ -5727,11 +5892,11 @@ try {
     xqCredentials = JSON.parse(cached);
   }
 } catch (e) {}
-checkAdminAccess(); // 立即显示/隐藏按钮
+checkLoginState(); // 立即检查状态
 
 // 然后尝试从服务器同步最新凭证
 xqLoadCredentials().then(() => {
-  checkAdminAccess(); // 服务器数据加载后再次检查
+  checkLoginState(); // 服务器数据加载后再次检查
 });
 </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
