@@ -975,14 +975,14 @@ tbody tr:last-child td { border-bottom: none; }
     <p class="login-subtitle">学生在校情况管理平台</p>
     <div class="login-field">
       <label>用户名</label>
-      <input type="text" id="loginUser" placeholder="请输入姓名">
+      <input type="text" id="loginUser" placeholder="请输入姓名" oninput="checkAdminAccess()">
     </div>
     <div class="login-field">
       <label>密码</label>
       <input type="password" id="loginPass" placeholder="请输入密码">
     </div>
     <button class="login-btn" onclick="doLogin()">登 录</button>
-    <button class="login-import-btn" onclick="openSetupPage()">
+    <button class="login-import-btn" id="setupBtn" onclick="openSetupPage()" style="display:none">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       学校数据设置
     </button>
@@ -1307,96 +1307,20 @@ const CLASS_LIST = Object.keys(STUDENTS);
 // App version for cache invalidation
 const APP_VERSION = '3.0'; // v3.0: 添加云端同步支持
 
-// Check if localStorage data is from old version, clear if needed
-function checkAppVersion() {
-  try {
-    const savedVersion = localStorage.getItem('school_app_version');
-    if (savedVersion !== APP_VERSION) {
-      // Version changed, clear all cached data
-      localStorage.removeItem('school_students_data');
-      localStorage.removeItem('school_config_data');
-      localStorage.setItem('school_app_version', APP_VERSION);
-      console.log('App version updated, cleared old cached data');
-    }
-  } catch (e) {
-    console.warn('Failed to check app version:', e);
+// 管理员名字（只有此用户可以访问学校数据设置）
+const XQ_ADMIN_NAME = '吴胜闯';
+
+// 检查当前输入的用户名是否是管理员，显示/隐藏设置按钮
+function checkAdminAccess() {
+  const name = document.getElementById('loginUser').value.trim();
+  const setupBtn = document.getElementById('setupBtn');
+  if (name === XQ_ADMIN_NAME) {
+    setupBtn.style.display = 'block';
+  } else {
+    setupBtn.style.display = 'none';
   }
 }
 
-// Run version check before loading data
-checkAppVersion();
-
-// Save students to localStorage and sync to server
-function saveStudentsToStorage(className) {
-  try {
-    localStorage.setItem('school_students_data', JSON.stringify(STUDENTS));
-    
-    // 同步到服务器（如果已登录）
-    if (xqCurrentUser && className) {
-      xqSaveStudentsToServer(className).then(result => {
-        if (result.ok) {
-          console.log('[XQ] Students synced to server for class:', className);
-        } else {
-          console.warn('[XQ] Failed to sync students:', result.error);
-        }
-      });
-    }
-  } catch (e) {
-    console.warn('Failed to save to localStorage:', e);
-  }
-}
-
-// Load students from localStorage
-function loadStudentsFromStorage() {
-  try {
-    const data = localStorage.getItem('school_students_data');
-    if (data) {
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    console.warn('Failed to load from localStorage:', e);
-  }
-  return null;
-}
-
-// Teacher mappings
-const TEACHER_CLASSES = {
-  headteacher: {},
-  teacher: {},
-};
-
-const USERS = {
-  leader: null,
-  headteacher: null,
-  teacher: null,
-};
-
-/* ============================================================
-   STATE
-   ============================================================ */
-let currentRole = 'leader';
-let currentPage = '';
-
-// Helper: get the headteacher's assigned class dynamically
-function getHeadteacherClass() {
-  const htClasses = Object.keys(TEACHER_CLASSES.headteacher);
-  if (htClasses.length > 0) return htClasses[0];
-  // Fallback: first class in CLASS_LIST
-  return CLASS_LIST.length > 0 ? CLASS_LIST[0] : '';
-}
-
-// Helper: empty state message when no data
-function emptyStateHtml(message) {
-  return `<div style="text-align:center;padding:60px 20px;color:var(--gray-400)">
-    <div style="font-size:40px;margin-bottom:16px">📭</div>
-    <div style="font-size:15px;font-weight:500;color:var(--gray-500);margin-bottom:8px">${message || '暂无数据'}</div>
-    <div style="font-size:13px">请先在登录页面点击"学校数据设置"导入班级和学生数据</div>
-  </div>`;
-}
-
-/* ============================================================
-   LOGIN / LOGOUT
-   ============================================================ */
 function doLogin() {
   const name = document.getElementById('loginUser').value.trim();
   const pass = document.getElementById('loginPass').value.trim();
@@ -4583,6 +4507,12 @@ let currentSetupTab = 'classes';
 
 // Open/Close setup page
 function openSetupPage() {
+  // 权限检查：只有管理员可以访问
+  const loginName = document.getElementById('loginUser')?.value?.trim();
+  if (loginName !== XQ_ADMIN_NAME) {
+    alert('⛔ 权限不足\n\n只有管理员（' + XQ_ADMIN_NAME + '）才能访问学校数据设置。');
+    return;
+  }
   document.getElementById('setupPage').classList.add('visible');
   currentSetupTab = 'classes';
   renderSetupContent();
@@ -4593,6 +4523,12 @@ function closeSetupPage() {
 }
 
 function saveSetupAndBack() {
+  // 权限检查：只有管理员可以保存
+  if (xqCurrentUser?.teacherName !== XQ_ADMIN_NAME) {
+    alert('⛔ 权限不足\n\n只有管理员（' + XQ_ADMIN_NAME + '）才能保存学校数据。');
+    return;
+  }
+  
   // Apply all setup data
   if (setupClasses.length > 0) applyClassesData(setupClasses);
   if (setupTeaching.length > 0) applyTeachingDataFromSetup();
