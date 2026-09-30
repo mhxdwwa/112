@@ -1406,7 +1406,7 @@ const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '3.6'; // v3.6: 管理员侧边栏直接显示学校数据设置入口
+const APP_VERSION = '3.7'; // v3.7: 简化职责分配，班主任和科任教师从授课分配自动推导
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -1517,22 +1517,22 @@ function checkLoginState() {
   document.getElementById('loginHint').style.display = 'none';
 }
 
-// 检查名字是否在导入的教师名单中
+// 检查名字是否在教师名单中（从授课分配和职责分配推导）
 function isUserInTeacherList(name) {
   if (!name) return false;
   
   // 管理员始终在名单中
   if (name === XQ_ADMIN_NAME) return true;
   
-  // 检查导入的用户数据
-  if (SCHOOL.importedUsers) {
-    const leaders = SCHOOL.importedUsers.leaders || [];
-    const headteachers = SCHOOL.importedUsers.headteachers || [];
-    const teachers = SCHOOL.importedUsers.teachers || [];
-    
-    if (leaders.some(u => u.name === name)) return true;
-    if (headteachers.some(u => u.name === name)) return true;
-    if (teachers.some(u => u.name === name)) return true;
+  // 检查职责分配中的领导
+  if (setupRoles.some(r => r.role === 'leader' && r.name === name)) return true;
+  
+  // 检查授课分配中的班主任
+  if (setupTeaching.some(t => t.headteacher === name)) return true;
+  
+  // 检查授课分配中的科任教师
+  for (const t of setupTeaching) {
+    if (t.subjects && Object.values(t.subjects).includes(name)) return true;
   }
   
   // 也检查凭证系统（如果之前设置过密码，说明在名单中）
@@ -1541,23 +1541,45 @@ function isUserInTeacherList(name) {
   return false;
 }
 
-// 获取用户在名单中的角色信息
+// 获取用户在名单中的角色信息（从授课分配和职责分配推导）
 function getUserRoleInfo(name) {
   if (name === XQ_ADMIN_NAME) return { role: 'leader', classes: [], subject: null };
   
-  if (SCHOOL.importedUsers) {
-    const leaders = SCHOOL.importedUsers.leaders || [];
-    const headteachers = SCHOOL.importedUsers.headteachers || [];
-    const teachers = SCHOOL.importedUsers.teachers || [];
-    
-    const leader = leaders.find(u => u.name === name);
-    if (leader) return { role: 'leader', classes: [], subject: null };
-    
-    const ht = headteachers.find(u => u.name === name);
-    if (ht) return { role: 'headteacher', classes: ht.classes || [], subject: null };
-    
-    const teacher = teachers.find(u => u.name === name);
-    if (teacher) return { role: 'teacher', classes: teacher.classes || [], subject: teacher.subject || null };
+  // 检查职责分配中的领导
+  const leaderRole = setupRoles.find(r => r.role === 'leader' && r.name === name);
+  if (leaderRole) return { role: 'leader', classes: [], subject: null };
+  
+  // 检查授课分配中的班主任
+  const headteacherClasses = [];
+  setupTeaching.forEach(t => {
+    if (t.headteacher === name) headteacherClasses.push(t.name);
+  });
+  if (headteacherClasses.length > 0) {
+    return { role: 'headteacher', classes: headteacherClasses, subject: null };
+  }
+  
+  // 检查授课分配中的科任教师
+  const teacherInfo = { subjects: new Set(), classes: new Set() };
+  setupTeaching.forEach(t => {
+    Object.entries(t.subjects || {}).forEach(([subj, teacher]) => {
+      if (teacher === name) {
+        teacherInfo.subjects.add(subj);
+        teacherInfo.classes.add(t.name);
+      }
+    });
+  });
+  if (teacherInfo.subjects.size > 0) {
+    return { 
+      role: 'teacher', 
+      classes: Array.from(teacherInfo.classes), 
+      subject: Array.from(teacherInfo.subjects)[0] || null 
+    };
+  }
+  
+  // 检查凭证系统（兼容旧数据）
+  if (xqCredentials[name]) {
+    const cred = xqCredentials[name];
+    return { role: cred.role || 'teacher', classes: cred.classes || [], subject: cred.subject || null };
   }
   
   return null;
@@ -5069,16 +5091,6 @@ function downloadTeachingTemplate() {
   downloadExcel(template, '授课分配模板.xlsx');
 }
 
-function downloadRolesTemplate() {
-  const template = [
-    ['姓名', '角色', '负责班级', '科目'],
-    ['', '校领导', '', ''],
-    ['', '班主任', '', ''],
-    ['', '科任教师', '', '']
-  ];
-  downloadExcel(template, '职责分配模板.xlsx');
-}
-
 function downloadExcel(data, filename) {
   const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();
@@ -5496,27 +5508,32 @@ function importTeachingFromExcel(event) {
   event.target.value = '';
 }
 
-/* ===== ROLES SETUP (职责分配) ===== */
+/* ===== ROLES SETUP (职责分配 - 仅管理领导) ===== */
 function renderRolesSetup() {
+  // 只处理领导角色
   const leaders = setupRoles.filter(r => r.role === 'leader');
-  const headteachers = setupRoles.filter(r => r.role === 'headteacher');
-  const teachers = setupRoles.filter(r => r.role === 'teacher');
   
-  let rows = setupRoles.map((r, i) => {
-    const roleLabel = r.role === 'leader' ? '校领导' : r.role === 'headteacher' ? '班主任' : '科任教师';
-    const roleClass = r.role === 'leader' ? 'purple' : r.role === 'headteacher' ? 'blue' : 'green';
+  // 统计从授课分配推导出的班主任和科任教师数量
+  const headteacherSet = new Set();
+  const teacherSet = new Set();
+  setupTeaching.forEach(t => {
+    if (t.headteacher) headteacherSet.add(t.headteacher);
+    Object.values(t.subjects || {}).forEach(teacher => {
+      if (teacher && teacher !== t.headteacher) teacherSet.add(teacher);
+    });
+  });
+  
+  let rows = leaders.map((r, i) => {
     const hasPassword = xqCredentials[r.name] && xqCredentials[r.name].passwordHash;
     const pwdStatus = hasPassword 
       ? '<span style="color:var(--accent);font-size:11px">✓ 已设置</span>' 
       : '<span style="color:var(--warning);font-size:11px">⚠ 未设置</span>';
     return `<tr>
       <td style="font-weight:500">${r.name}</td>
-      <td><span class="setup-badge ${roleClass}">${roleLabel}</span></td>
-      <td style="font-size:12px;color:var(--gray-600)">${r.classes.join('、') || '-'}</td>
-      <td>${r.subject || '-'}</td>
+      <td><span class="setup-badge purple">校领导</span></td>
       <td>${pwdStatus}</td>
       <td>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '${roleLabel}')">设密码</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '校领导')">设密码</button>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${i})">编辑</button>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${i})">删除</button>
       </td>
@@ -5527,18 +5544,14 @@ function renderRolesSetup() {
     <div class="setup-panel active">
       <div class="setup-section">
         <div class="setup-section-header">
-          <span class="setup-section-title">教师职责分配 (${setupRoles.length}人)</span>
+          <span class="setup-section-title">领导管理 (${leaders.length}人)</span>
           <div style="display:flex;gap:8px;align-items:center">
             <span class="setup-badge purple">校领导 ${leaders.length}</span>
-            <span class="setup-badge blue">班主任 ${headteachers.length}</span>
-            <span class="setup-badge green">科任教师 ${teachers.length}</span>
-            <button class="toolbar-btn ghost" style="font-size:12px;margin-left:8px" onclick="downloadRolesTemplate()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              下载模板
-            </button>
-            <button class="toolbar-btn primary" style="font-size:12px" onclick="showAddRoleModal()">
+            <span class="setup-badge blue">班主任 ${headteacherSet.size}人（来自授课分配）</span>
+            <span class="setup-badge green">科任教师 ${teacherSet.size}人（来自授课分配）</span>
+            <button class="toolbar-btn primary" style="font-size:12px;margin-left:8px" onclick="showAddRoleModal()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              添加教师
+              添加领导
             </button>
             <button class="toolbar-btn ghost" style="font-size:12px;color:var(--danger);border-color:var(--danger)" onclick="clearAllRoles()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -5547,15 +5560,12 @@ function renderRolesSetup() {
           </div>
         </div>
         <div class="setup-section-body">
-          <div class="setup-import-zone">
-            <input type="file" accept=".xlsx,.xls,.csv" onchange="importRolesFromExcel(event)">
-            <div class="setup-import-icon">📥</div>
-            <div class="setup-import-title">点击导入教师职责表</div>
-            <div class="setup-import-hint">支持 Excel 格式，表头需包含"姓名""角色"列</div>
+          <div style="padding:12px 16px;background:var(--primary-bg);border-radius:8px;margin-bottom:12px;font-size:12px;color:#1E40AF">
+            💡 提示：班主任和科任教师从「授课分配」自动识别，无需在此手动添加。此处仅管理校领导。
           </div>
           <table class="setup-table">
-            <thead><tr><th>姓名</th><th>角色</th><th>负责班级</th><th>科目</th><th>密码状态</th><th>操作</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="setup-empty">暂无教师数据，请导入或手动添加</td></tr>'}</tbody>
+            <thead><tr><th>姓名</th><th>角色</th><th>密码状态</th><th>操作</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4" class="setup-empty">暂无领导数据，请添加</td></tr>'}</tbody>
           </table>
         </div>
       </div>
@@ -5564,26 +5574,10 @@ function renderRolesSetup() {
 }
 
 function showAddRoleModal() {
-  showModal('添加教师', `
+  showModal('添加领导', `
     <div class="form-group">
       <label class="form-label">姓名</label>
-      <input class="form-input" id="newRoleName" placeholder="教师姓名">
-    </div>
-    <div class="form-group">
-      <label class="form-label">角色</label>
-      <select class="form-select" id="newRoleType">
-        <option value="leader">校领导</option>
-        <option value="headteacher">班主任</option>
-        <option value="teacher">科任教师</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">负责班级（多个用逗号分隔）</label>
-      <input class="form-input" id="newRoleClasses" placeholder="如：1班,2班">
-    </div>
-    <div class="form-group">
-      <label class="form-label">任教科目</label>
-      <input class="form-input" id="newRoleSubject" placeholder="如：语文">
+      <input class="form-input" id="newRoleName" placeholder="领导姓名">
     </div>
     <div class="form-group">
       <label class="form-label">初始密码</label>
@@ -5595,18 +5589,15 @@ function showAddRoleModal() {
 
 function addRoleRow() {
   const name = document.getElementById('newRoleName').value.trim();
-  const role = document.getElementById('newRoleType').value;
-  const classesStr = document.getElementById('newRoleClasses').value.trim();
-  const subject = document.getElementById('newRoleSubject').value.trim();
   const password = document.getElementById('newRolePassword').value.trim();
   if (!name) { showToast('请输入姓名', 'warning'); return; }
   if (!password || password.length < 4) { showToast('密码至少4位', 'warning'); return; }
   
-  const classes = classesStr ? classesStr.split(/[,，]/).map(s => s.trim()).filter(s => s) : [];
-  setupRoles.push({ name, role, classes, subject, username: name, password: password });
+  // 只添加领导角色
+  setupRoles.push({ name, role: 'leader', classes: [], subject: null, username: name, password: password });
   
   // 立即设置凭证
-  setUserPassword(name, password, role, classes, subject);
+  setUserPassword(name, password, 'leader', [], null);
   
   hideModal();
   renderSetupContent();
@@ -5646,11 +5637,11 @@ async function doSetPassword(name) {
     return;
   }
   
-  // 找到该教师的角色信息
-  const roleData = setupRoles.find(r => r.name === name);
-  const role = roleData?.role || 'teacher';
-  const classes = roleData?.classes || [];
-  const subject = roleData?.subject || null;
+  // 使用新的角色推导逻辑
+  const roleInfo = getUserRoleInfo(name);
+  const role = roleInfo?.role || 'teacher';
+  const classes = roleInfo?.classes || [];
+  const subject = roleInfo?.subject || null;
   
   const result = await setUserPassword(name, p1, role, classes, subject);
   
@@ -5664,58 +5655,51 @@ async function doSetPassword(name) {
 }
 
 function editRoleRow(idx) {
-  const r = setupRoles[idx];
-  showModal('编辑教师', `
+  // 只处理领导角色
+  const r = setupRoles.filter(role => role.role === 'leader')[idx];
+  if (!r) return;
+  showModal('编辑领导', `
     <div class="form-group">
       <label class="form-label">姓名</label>
       <input class="form-input" id="editRoleName" value="${r.name}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">角色</label>
-      <select class="form-select" id="editRoleType">
-        <option value="leader" ${r.role==='leader'?'selected':''}>校领导</option>
-        <option value="headteacher" ${r.role==='headteacher'?'selected':''}>班主任</option>
-        <option value="teacher" ${r.role==='teacher'?'selected':''}>科任教师</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">负责班级（多个用逗号分隔）</label>
-      <input class="form-input" id="editRoleClasses" value="${r.classes.join(',')}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">任教科目</label>
-      <input class="form-input" id="editRoleSubject" value="${r.subject || ''}">
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="saveRoleEdit(${idx})">保存</button>`);
 }
 
 function saveRoleEdit(idx) {
-  setupRoles[idx].name = document.getElementById('editRoleName').value.trim();
-  setupRoles[idx].role = document.getElementById('editRoleType').value;
-  const classesStr = document.getElementById('editRoleClasses').value.trim();
-  setupRoles[idx].classes = classesStr ? classesStr.split(/[,，]/).map(s => s.trim()).filter(s => s) : [];
-  setupRoles[idx].subject = document.getElementById('editRoleSubject').value.trim();
+  const leaders = setupRoles.filter(role => role.role === 'leader');
+  const r = leaders[idx];
+  if (!r) return;
+  r.name = document.getElementById('editRoleName').value.trim();
   hideModal();
   renderSetupContent();
 }
 
 function deleteRoleRow(idx) {
-  setupRoles.splice(idx, 1);
+  // 找到领导数组中的对应索引
+  const leaders = setupRoles.filter(role => role.role === 'leader');
+  const r = leaders[idx];
+  if (!r) return;
+  const actualIdx = setupRoles.indexOf(r);
+  if (actualIdx !== -1) {
+    setupRoles.splice(actualIdx, 1);
+  }
   renderSetupContent();
 }
 
 function clearAllRoles() {
-  if (setupRoles.length === 0) {
-    showToast('当前没有职责分配数据', 'warning');
+  const leaders = setupRoles.filter(r => r.role === 'leader');
+  if (leaders.length === 0) {
+    showToast('当前没有领导数据', 'warning');
     return;
   }
-  showModal('确认清空职责分配数据', `
+  showModal('确认清空领导数据', `
     <div style="padding:16px;background:var(--danger-light);border-radius:8px;border-left:4px solid var(--danger)">
       <div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠ 警告</div>
       <div style="font-size:13px;color:var(--gray-700)">
-        确定要清空所有 <strong>${setupRoles.length}</strong> 位教师的职责分配数据吗？<br>
-        此操作不可撤销，清空后需要重新导入或手动添加。
+        确定要清空所有 <strong>${leaders.length}</strong> 位领导的数据吗？<br>
+        此操作不可撤销，清空后需要重新添加。
       </div>
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
@@ -5723,60 +5707,11 @@ function clearAllRoles() {
 }
 
 function confirmClearAllRoles() {
-  setupRoles = [];
+  // 只清空领导，保留其他数据
+  setupRoles = setupRoles.filter(r => r.role !== 'leader');
   hideModal();
-  showToast('已清空所有职责分配数据');
+  showToast('已清空所有领导数据');
   renderSetupContent();
-}
-
-function importRolesFromExcel(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  readExcelFile(file, function(data) {
-    if (!data || data.length < 2) { showToast('文件内容为空', 'error'); return; }
-    
-    let headerRowIdx = -1;
-    for (let i = 0; i < Math.min(data.length, 10); i++) {
-      const row = data[i].map(c => String(c).trim());
-      if (row.some(c => c.includes('姓名') || c.includes('教师'))) { headerRowIdx = i; break; }
-    }
-    if (headerRowIdx === -1) { showToast('未找到"姓名"列', 'error'); return; }
-    
-    const header = data[headerRowIdx].map(c => String(c).trim());
-    let nameCol = -1, roleCol = -1, classCol = -1, subjectCol = -1;
-    header.forEach((c, i) => {
-      if (c.includes('姓名') || c.includes('教师')) nameCol = i;
-      else if (c.includes('角色') || c.includes('职务')) roleCol = i;
-      else if (c.includes('班级') || c.includes('负责')) classCol = i;
-      else if (c.includes('科目') || c.includes('学科')) subjectCol = i;
-    });
-    
-    const imported = [];
-    for (let i = headerRowIdx + 1; i < data.length; i++) {
-      const row = data[i];
-      const name = String(row[nameCol] || '').trim();
-      if (!name) continue;
-      const roleStr = roleCol >= 0 ? String(row[roleCol] || '').trim() : '';
-      const classes = classCol >= 0 ? String(row[classCol] || '').trim() : '';
-      const subject = subjectCol >= 0 ? String(row[subjectCol] || '').trim() : '';
-      
-      let role = 'teacher';
-      if (roleStr.includes('领导') || roleStr.includes('校长') || roleStr.includes('主任')) role = 'leader';
-      else if (roleStr.includes('班主任')) role = 'headteacher';
-      
-      imported.push({
-        name, role, roleStr,
-        classes: classes ? classes.split(/[,，、\s]+/).filter(c => c) : [],
-        subject, username: name, password: '123456'
-      });
-    }
-    
-    if (imported.length === 0) { showToast('未解析到有效数据', 'error'); return; }
-    setupRoles = setupRoles.concat(imported);
-    showToast(`成功导入 ${imported.length} 位教师`);
-    renderSetupContent();
-  });
-  event.target.value = '';
 }
 
 /* ===== APPLY FUNCTIONS ===== */
@@ -5815,28 +5750,76 @@ function applyClassesData(data) {
   newClassList.forEach(cls => { if (!STUDENTS[cls]) STUDENTS[cls] = []; });
 }
 
-// Apply role assignment data
+// Apply role assignment data - 现在只处理领导，班主任和科任教师从授课分配推导
 async function applyRolesData(data) {
+  // 只处理领导角色
   const leaders = data.filter(r => r.role === 'leader');
-  const headteachers = data.filter(r => r.role === 'headteacher');
-  const teachers = data.filter(r => r.role === 'teacher');
+  
+  // 从授课分配推导班主任和科任教师
+  const headteacherMap = {};
+  const teacherMap = {};
+  
+  setupTeaching.forEach(t => {
+    // 班主任
+    if (t.headteacher) {
+      if (!headteacherMap[t.headteacher]) {
+        headteacherMap[t.headteacher] = [];
+      }
+      headteacherMap[t.headteacher].push(t.name);
+    }
+    
+    // 科任教师
+    Object.entries(t.subjects || {}).forEach(([subj, teacher]) => {
+      if (teacher && teacher !== t.headteacher) {
+        if (!teacherMap[teacher]) {
+          teacherMap[teacher] = { subjects: new Set(), classes: new Set() };
+        }
+        teacherMap[teacher].subjects.add(subj);
+        teacherMap[teacher].classes.add(t.name);
+      }
+    });
+  });
+  
+  // 构建 headteachers 数组
+  const headteachers = Object.entries(headteacherMap).map(([name, classes]) => ({
+    name,
+    username: name,
+    classes
+  }));
+  
+  // 构建 teachers 数组
+  const teachers = Object.entries(teacherMap).map(([name, info]) => ({
+    name,
+    username: name,
+    classes: Array.from(info.classes),
+    subject: Array.from(info.subjects)[0] || null
+  }));
   
   SCHOOL.importedUsers = {
     leaders: leaders.map(r => ({ name: r.name, username: r.username, password: r.password })),
-    headteachers: headteachers.map(r => ({ name: r.name, username: r.username, password: r.password, classes: r.classes })),
-    teachers: teachers.map(r => ({ name: r.name, username: r.username, password: r.password, subject: r.subject, classes: r.classes }))
+    headteachers: headteachers,
+    teachers: teachers
   };
   
-  // 同步凭证到凭证系统（密码哈希存储）
-  for (const user of [...leaders, ...headteachers, ...teachers]) {
+  // 同步领导凭证到凭证系统
+  for (const user of leaders) {
     if (user.name && user.password) {
-      const role = user.role || 'teacher';
-      const classes = user.classes || [];
-      const subject = user.subject || null;
-      // 如果该用户还没有凭证，或者密码已更新，则设置凭证
       if (!xqCredentials[user.name] || xqCredentials[user.name]._needsUpdate) {
-        await setUserPassword(user.name, user.password, role, classes, subject);
+        await setUserPassword(user.name, user.password, 'leader', [], null);
       }
+    }
+  }
+  
+  // 为班主任和科任教师自动创建凭证（如果没有的话）
+  for (const ht of headteachers) {
+    if (!xqCredentials[ht.name]) {
+      // 自动生成默认密码
+      await setUserPassword(ht.name, '123456', 'headteacher', ht.classes, null);
+    }
+  }
+  for (const t of teachers) {
+    if (!xqCredentials[t.name]) {
+      await setUserPassword(t.name, '123456', 'teacher', t.classes, t.subject);
     }
   }
   
