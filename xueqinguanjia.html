@@ -1344,6 +1344,22 @@ const SCHOOL = {
   classesPerGrade: 0,
 };
 
+// 用户角色信息
+const USERS = {
+  leader: null,
+  headteacher: null,
+  teacher: null
+};
+
+// 教师班级映射
+const TEACHER_CLASSES = {
+  headteacher: {},
+  teacher: {}
+};
+
+// 当前登录用户角色
+let currentRole = null;
+
 const NAMES = [];
 
 const STATUS = { present: '在校', absent: '缺勤', leave: '请假', late: '迟到' };
