@@ -978,7 +978,7 @@ tbody tr:last-child td { border-bottom: none; }
     <p class="login-subtitle">学生在校情况管理平台</p>
     <div class="login-field">
       <label>用户名</label>
-      <input type="text" id="loginUser" placeholder="请输入姓名" autocomplete="off">
+      <input type="text" id="loginUser" placeholder="请输入姓名" autocomplete="off" oninput="checkLoginState()">
     </div>
     <div class="login-field" id="loginPassField">
       <label>密码</label>
@@ -1406,7 +1406,7 @@ const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '3.7'; // v3.7: 简化职责分配，班主任和科任教师从授课分配自动推导
+const APP_VERSION = '3.8'; // v3.8: 修复首次设置密码按钮不显示问题
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -1505,16 +1505,40 @@ async function setUserPassword(name, password, role, classes, subject) {
   return await xqSaveCredentials();
 }
 
-// 始终显示用户名+密码+登录，验证放到点击登录时
+// 检查登录状态，动态显示/隐藏按钮
 function checkLoginState() {
   // 密码框和登录按钮始终显示
   document.getElementById('loginPassField').style.display = 'block';
   document.getElementById('loginBtn').style.display = 'block';
   
-  // 隐藏其他按钮和提示
-  document.getElementById('setPasswordBtn').style.display = 'none';
-  document.getElementById('adminInitBtn').style.display = 'none';
-  document.getElementById('loginHint').style.display = 'none';
+  const name = document.getElementById('loginUser').value.trim();
+  const setPasswordBtn = document.getElementById('setPasswordBtn');
+  const adminInitBtn = document.getElementById('adminInitBtn');
+  const loginHint = document.getElementById('loginHint');
+  
+  // 隐藏提示
+  loginHint.style.display = 'none';
+  
+  // 如果系统未初始化（管理员还没设置密码），显示初始化管理员按钮
+  if (!isCredentialsInitialized()) {
+    setPasswordBtn.style.display = 'none';
+    if (name === XQ_ADMIN_NAME) {
+      adminInitBtn.style.display = 'block';
+    } else {
+      adminInitBtn.style.display = 'none';
+    }
+    return;
+  }
+  
+  // 系统已初始化
+  adminInitBtn.style.display = 'none';
+  
+  // 如果用户输入了姓名，且在教师名单中，但还没有设置密码，显示"首次使用"按钮
+  if (name && isUserInTeacherList(name) && !xqCredentials[name]) {
+    setPasswordBtn.style.display = 'block';
+  } else {
+    setPasswordBtn.style.display = 'none';
+  }
 }
 
 // 检查名字是否在教师名单中（从授课分配和职责分配推导）
@@ -1699,7 +1723,9 @@ function doLogin() {
   // 检查用户是否存在于凭证系统
   const cred = xqCredentials[name];
   if (!cred) {
-    alert('该用户尚未设置密码，请输入姓名后点击"首次使用？点此设置密码"');
+    // 显示"首次使用"按钮并提示
+    document.getElementById('setPasswordBtn').style.display = 'block';
+    alert('您尚未设置密码，请点击下方的"首次使用？点此设置密码"按钮来设置您的登录密码。');
     return;
   }
   
