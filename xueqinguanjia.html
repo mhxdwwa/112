@@ -986,6 +986,33 @@ tbody tr:last-child td { border-bottom: none; }
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       学校数据设置
     </button>
+    <button class="login-import-btn" id="firstTimeSetupBtn" onclick="showFirstTimeSetup()" style="display:none;background:linear-gradient(135deg,var(--primary),#7C3AED)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      初始化管理员密码
+    </button>
+  </div>
+</div>
+
+<!-- ==================== FIRST TIME SETUP DIALOG ==================== -->
+<div id="firstTimeDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:36px;width:400px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary),#7C3AED);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">🔐</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">初始化管理员密码</h2>
+      <p style="font-size:13px;color:var(--gray-500)">首次使用，请为管理员 <strong>吴胜闯</strong> 设置登录密码</p>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">设置密码</label>
+      <input type="password" id="firstPass1" placeholder="请输入密码（至少4位）" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+    </div>
+    <div style="margin-bottom:24px">
+      <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">确认密码</label>
+      <input type="password" id="firstPass2" placeholder="请再次输入密码" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeFirstTimeSetup()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:500;background:var(--gray-100);color:var(--gray-600);border:none;cursor:pointer">取消</button>
+      <button onclick="doFirstTimeSetup()" style="flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:600;background:linear-gradient(135deg,var(--primary),#7C3AED);color:#fff;border:none;cursor:pointer">确认设置</button>
+    </div>
   </div>
 </div>
 
@@ -1310,15 +1337,143 @@ const APP_VERSION = '3.0'; // v3.0: 添加云端同步支持
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
 
+/* ============================================================
+   PASSWORD & CREDENTIALS SYSTEM
+   ============================================================ */
+
+// SHA-256 哈希
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 凭证存储: { "吴胜闯": { passwordHash, role, classes, subject }, ... }
+let xqCredentials = {};
+
+// 从服务器加载凭证
+async function xqLoadCredentials() {
+  try {
+    const result = await xqApi('config', { action: 'get' });
+    if (result.ok && result.config && result.config.credentials) {
+      xqCredentials = result.config.credentials.data || {};
+      console.log('[XQ] Credentials loaded, users:', Object.keys(xqCredentials).length);
+    }
+  } catch (e) {
+    console.warn('[XQ] Failed to load credentials:', e);
+  }
+  // 同时从 localStorage 加载作为缓存
+  try {
+    const cached = localStorage.getItem('xq_credentials');
+    if (cached && Object.keys(xqCredentials).length === 0) {
+      xqCredentials = JSON.parse(cached);
+    }
+  } catch (e) {}
+  return xqCredentials;
+}
+
+// 保存凭证到服务器和本地
+async function xqSaveCredentials() {
+  localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
+  if (window.XQ_ADMIN_KEY) {
+    const result = await xqApi('config', {
+      action: 'set',
+      adminKey: window.XQ_ADMIN_KEY,
+      configKey: 'credentials',
+      configData: xqCredentials,
+      teacherName: XQ_ADMIN_NAME
+    });
+    return result;
+  }
+  return { ok: false, error: 'No admin key' };
+}
+
+// 检查凭证系统是否已初始化（至少管理员有密码）
+function isCredentialsInitialized() {
+  return xqCredentials[XQ_ADMIN_NAME] && xqCredentials[XQ_ADMIN_NAME].passwordHash;
+}
+
+// 验证密码
+async function verifyPassword(name, password) {
+  const cred = xqCredentials[name];
+  if (!cred || !cred.passwordHash) return false;
+  const hash = await hashPassword(password);
+  return hash === cred.passwordHash;
+}
+
+// 设置/更新用户密码
+async function setUserPassword(name, password, role, classes, subject) {
+  const hash = await hashPassword(password);
+  xqCredentials[name] = {
+    passwordHash: hash,
+    role: role || 'teacher',
+    classes: classes || [],
+    subject: subject || null,
+    updatedAt: new Date().toISOString()
+  };
+  return await xqSaveCredentials();
+}
+
 // 检查当前输入的用户名是否是管理员，显示/隐藏设置按钮
 function checkAdminAccess() {
   const name = document.getElementById('loginUser').value.trim();
   const setupBtn = document.getElementById('setupBtn');
+  const firstBtn = document.getElementById('firstTimeSetupBtn');
+  
+  // 首次使用：凭证未初始化，显示初始化按钮
+  if (!isCredentialsInitialized()) {
+    setupBtn.style.display = 'none';
+    firstBtn.style.display = 'block';
+    return;
+  }
+  
+  // 凭证已初始化：只有管理员输入正确密码后才显示设置按钮
+  firstBtn.style.display = 'none';
   if (name === XQ_ADMIN_NAME) {
-    setupBtn.style.display = 'block';
+    // 需要验证密码后才显示，先隐藏，等登录成功后再显示
+    setupBtn.style.display = 'none';
   } else {
     setupBtn.style.display = 'none';
   }
+}
+
+// 首次初始化弹窗
+function showFirstTimeSetup() {
+  document.getElementById('firstTimeDialog').style.display = 'flex';
+}
+
+function closeFirstTimeSetup() {
+  document.getElementById('firstTimeDialog').style.display = 'none';
+}
+
+async function doFirstTimeSetup() {
+  const p1 = document.getElementById('firstPass1').value.trim();
+  const p2 = document.getElementById('firstPass2').value.trim();
+  
+  if (!p1 || p1.length < 4) {
+    alert('密码至少4位');
+    return;
+  }
+  if (p1 !== p2) {
+    alert('两次密码不一致');
+    return;
+  }
+  
+  // 设置管理员密码
+  await setUserPassword(XQ_ADMIN_NAME, p1, 'leader', [], null);
+  
+  // 同时需要设置管理员密钥（用于云端同步）
+  // 首次设置时，自动生成一个密钥并保存
+  const adminKey = 'xq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  xqSetAdminKey(adminKey);
+  
+  closeFirstTimeSetup();
+  alert('管理员密码设置成功！\n\n管理员密钥已自动生成并保存。\n\n请使用管理员账号登录。');
+  
+  // 刷新状态
+  checkAdminAccess();
 }
 
 function doLogin() {
@@ -1329,101 +1484,77 @@ function doLogin() {
     alert('请输入姓名');
     return;
   }
-  
-  // Try to find user in imported data
-  let foundRole = null;
-  let foundUser = null;
-  
-  if (SCHOOL.importedUsers) {
-    // Check leaders
-    if (SCHOOL.importedUsers.leaders) {
-      const leader = SCHOOL.importedUsers.leaders.find(u => u.name === name);
-      if (leader) {
-        if (pass && leader.password && leader.password !== pass) {
-          alert('密码错误');
-          return;
-        }
-        foundRole = 'leader';
-        foundUser = { name: leader.name, role: '校领导', avatar: leader.name.charAt(0) };
-      }
-    }
-    // Check headteachers
-    if (!foundRole && SCHOOL.importedUsers.headteachers) {
-      const ht = SCHOOL.importedUsers.headteachers.find(u => u.name === name);
-      if (ht) {
-        if (pass && ht.password && ht.password !== pass) {
-          alert('密码错误');
-          return;
-        }
-        foundRole = 'headteacher';
-        foundUser = { name: ht.name, role: ht.classes.length > 0 ? ht.classes[0] + '班主任' : '班主任', avatar: ht.name.charAt(0) };
-      }
-    }
-    // Check teachers
-    if (!foundRole && SCHOOL.importedUsers.teachers) {
-      const teacher = SCHOOL.importedUsers.teachers.find(u => u.name === name);
-      if (teacher) {
-        if (pass && teacher.password && teacher.password !== pass) {
-          alert('密码错误');
-          return;
-        }
-        foundRole = 'teacher';
-        foundUser = { name: teacher.name, role: teacher.subject ? teacher.subject + '教师' : '科任教师', avatar: teacher.name.charAt(0) };
-      }
-    }
-  }
-  
-  // Fallback to default users if no imported data
-  if (!foundRole) {
-    if (USERS.leader && USERS.leader.name === name) {
-      foundRole = 'leader';
-      foundUser = USERS.leader;
-    } else if (USERS.headteacher && USERS.headteacher.name === name) {
-      foundRole = 'headteacher';
-      foundUser = USERS.headteacher;
-    } else if (USERS.teacher && USERS.teacher.name === name) {
-      foundRole = 'teacher';
-      foundUser = USERS.teacher;
-    }
-  }
-  
-  if (!foundRole) {
-    alert('未找到该用户，请先在学校数据设置中导入教师信息');
+  if (!pass) {
+    alert('请输入密码');
     return;
   }
-  currentRole = foundRole;
-  USERS[foundRole] = foundUser;
   
-  // 设置当前用户信息（用于 API 调用）
-  let userClasses = [];
-  if (foundRole === 'headteacher') {
-    const htData = SCHOOL.importedUsers?.headteachers?.find(u => u.name === name);
-    userClasses = htData?.classes || [];
-  } else if (foundRole === 'teacher') {
-    const tData = SCHOOL.importedUsers?.teachers?.find(u => u.name === name);
-    userClasses = tData?.classes || [];
+  // 如果凭证系统未初始化，提示先初始化
+  if (!isCredentialsInitialized()) {
+    alert('系统尚未初始化，请先点击"初始化管理员密码"');
+    return;
   }
   
-  xqCurrentUser = {
-    teacherId: name, // 使用姓名作为标识
-    teacherName: name,
-    role: foundRole,
-    classes: userClasses
-  };
+  // 检查用户是否存在于凭证系统
+  const cred = xqCredentials[name];
+  if (!cred) {
+    alert('未找到该用户，请联系管理员导入教师信息');
+    return;
+  }
   
-  document.getElementById('loginPage').classList.add('hidden');
-  document.getElementById('app').classList.add('visible');
-  document.getElementById('sidebarAvatar').textContent = foundUser.avatar;
-  document.getElementById('sidebarName').textContent = foundUser.name;
-  document.getElementById('sidebarRole').textContent = foundUser.role;
-  buildSidebar();
-  updateDate();
-  
-  // 从服务器加载最新数据
-  xqLoadAllConfig().then(() => {
-    navigate(getDefaultPage());
-  }).catch(() => {
-    navigate(getDefaultPage());
+  // 验证密码（异步）
+  verifyPassword(name, pass).then(valid => {
+    if (!valid) {
+      alert('密码错误');
+      return;
+    }
+    
+    // 密码正确，确定角色
+    const role = cred.role || 'teacher';
+    let foundRole, foundUser;
+    
+    if (role === 'leader') {
+      foundRole = 'leader';
+      foundUser = { name, role: '校领导', avatar: name.charAt(0) };
+    } else if (role === 'headteacher') {
+      foundRole = 'headteacher';
+      const cls = cred.classes && cred.classes.length > 0 ? cred.classes[0] : '';
+      foundUser = { name, role: cls ? cls + '班主任' : '班主任', avatar: name.charAt(0) };
+    } else {
+      foundRole = 'teacher';
+      const subj = cred.subject || '';
+      foundUser = { name, role: subj ? subj + '教师' : '科任教师', avatar: name.charAt(0) };
+    }
+    
+    currentRole = foundRole;
+    USERS[foundRole] = foundUser;
+    
+    xqCurrentUser = {
+      teacherId: name,
+      teacherName: name,
+      role: foundRole,
+      classes: cred.classes || []
+    };
+    
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    document.getElementById('sidebarAvatar').textContent = foundUser.avatar;
+    document.getElementById('sidebarName').textContent = foundUser.name;
+    document.getElementById('sidebarRole').textContent = foundUser.role;
+    buildSidebar();
+    updateDate();
+    
+    // 管理员登录成功后显示设置按钮（在侧边栏）
+    if (name === XQ_ADMIN_NAME) {
+      document.getElementById('setupBtn').style.display = 'block';
+    }
+    
+    // 从服务器加载最新数据
+    xqLoadAllConfig().then(() => {
+      navigate(getDefaultPage());
+    }).catch(() => {
+      navigate(getDefaultPage());
+    });
   });
 }
 
@@ -5118,12 +5249,18 @@ function renderRolesSetup() {
   let rows = setupRoles.map((r, i) => {
     const roleLabel = r.role === 'leader' ? '校领导' : r.role === 'headteacher' ? '班主任' : '科任教师';
     const roleClass = r.role === 'leader' ? 'purple' : r.role === 'headteacher' ? 'blue' : 'green';
+    const hasPassword = xqCredentials[r.name] && xqCredentials[r.name].passwordHash;
+    const pwdStatus = hasPassword 
+      ? '<span style="color:var(--accent);font-size:11px">✓ 已设置</span>' 
+      : '<span style="color:var(--warning);font-size:11px">⚠ 未设置</span>';
     return `<tr>
       <td style="font-weight:500">${r.name}</td>
       <td><span class="setup-badge ${roleClass}">${roleLabel}</span></td>
       <td style="font-size:12px;color:var(--gray-600)">${r.classes.join('、') || '-'}</td>
       <td>${r.subject || '-'}</td>
+      <td>${pwdStatus}</td>
       <td>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '${roleLabel}')">设密码</button>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${i})">编辑</button>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${i})">删除</button>
       </td>
@@ -5161,8 +5298,8 @@ function renderRolesSetup() {
             <div class="setup-import-hint">支持 Excel 格式，表头需包含"姓名""角色"列</div>
           </div>
           <table class="setup-table">
-            <thead><tr><th>姓名</th><th>角色</th><th>负责班级</th><th>科目</th><th>操作</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="5" class="setup-empty">暂无教师数据，请导入或手动添加</td></tr>'}</tbody>
+            <thead><tr><th>姓名</th><th>角色</th><th>负责班级</th><th>科目</th><th>密码状态</th><th>操作</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" class="setup-empty">暂无教师数据，请导入或手动添加</td></tr>'}</tbody>
           </table>
         </div>
       </div>
@@ -5192,6 +5329,10 @@ function showAddRoleModal() {
       <label class="form-label">任教科目</label>
       <input class="form-input" id="newRoleSubject" placeholder="如：语文">
     </div>
+    <div class="form-group">
+      <label class="form-label">初始密码</label>
+      <input class="form-input" id="newRolePassword" type="password" placeholder="设置登录密码（至少4位）" value="123456">
+    </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="addRoleRow()">添加</button>`);
 }
@@ -5201,12 +5342,69 @@ function addRoleRow() {
   const role = document.getElementById('newRoleType').value;
   const classesStr = document.getElementById('newRoleClasses').value.trim();
   const subject = document.getElementById('newRoleSubject').value.trim();
+  const password = document.getElementById('newRolePassword').value.trim();
   if (!name) { showToast('请输入姓名', 'warning'); return; }
+  if (!password || password.length < 4) { showToast('密码至少4位', 'warning'); return; }
   
   const classes = classesStr ? classesStr.split(/[,，]/).map(s => s.trim()).filter(s => s) : [];
-  setupRoles.push({ name, role, classes, subject, username: name, password: '123456' });
+  setupRoles.push({ name, role, classes, subject, username: name, password: password });
+  
+  // 立即设置凭证
+  setUserPassword(name, password, role, classes, subject);
+  
   hideModal();
   renderSetupContent();
+}
+
+// 设置/修改教师密码弹窗
+function showSetPasswordModal(name, roleLabel) {
+  const hasPassword = xqCredentials[name] && xqCredentials[name].passwordHash;
+  const title = hasPassword ? `修改 ${name} 的密码` : `为 ${name} 设置密码`;
+  
+  showModal(title, `
+    <div style="margin-bottom:16px;padding:12px;background:var(--gray-50);border-radius:8px">
+      <div style="font-size:12px;color:var(--gray-500)">教师：${name}（${roleLabel}）</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">新密码</label>
+      <input class="form-input" id="setPwdPassword" type="password" placeholder="请输入新密码（至少4位）">
+    </div>
+    <div class="form-group">
+      <label class="form-label">确认密码</label>
+      <input class="form-input" id="setPwdConfirm" type="password" placeholder="请再次输入密码">
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+      <button class="toolbar-btn primary" onclick="doSetPassword('${name}')">确认设置</button>`);
+}
+
+async function doSetPassword(name) {
+  const p1 = document.getElementById('setPwdPassword').value.trim();
+  const p2 = document.getElementById('setPwdConfirm').value.trim();
+  
+  if (!p1 || p1.length < 4) {
+    showToast('密码至少4位', 'warning');
+    return;
+  }
+  if (p1 !== p2) {
+    showToast('两次密码不一致', 'warning');
+    return;
+  }
+  
+  // 找到该教师的角色信息
+  const roleData = setupRoles.find(r => r.name === name);
+  const role = roleData?.role || 'teacher';
+  const classes = roleData?.classes || [];
+  const subject = roleData?.subject || null;
+  
+  const result = await setUserPassword(name, p1, role, classes, subject);
+  
+  if (result.ok) {
+    showToast(`已为 ${name} 设置密码`);
+    hideModal();
+    renderSetupContent();
+  } else {
+    showToast('设置失败: ' + (result.error || '未知错误'), 'error');
+  }
 }
 
 function editRoleRow(idx) {
@@ -5362,7 +5560,7 @@ function applyClassesData(data) {
 }
 
 // Apply role assignment data
-function applyRolesData(data) {
+async function applyRolesData(data) {
   const leaders = data.filter(r => r.role === 'leader');
   const headteachers = data.filter(r => r.role === 'headteacher');
   const teachers = data.filter(r => r.role === 'teacher');
@@ -5372,6 +5570,19 @@ function applyRolesData(data) {
     headteachers: headteachers.map(r => ({ name: r.name, username: r.username, password: r.password, classes: r.classes })),
     teachers: teachers.map(r => ({ name: r.name, username: r.username, password: r.password, subject: r.subject, classes: r.classes }))
   };
+  
+  // 同步凭证到凭证系统（密码哈希存储）
+  for (const user of [...leaders, ...headteachers, ...teachers]) {
+    if (user.name && user.password) {
+      const role = user.role || 'teacher';
+      const classes = user.classes || [];
+      const subject = user.subject || null;
+      // 如果该用户还没有凭证，或者密码已更新，则设置凭证
+      if (!xqCredentials[user.name] || xqCredentials[user.name]._needsUpdate) {
+        await setUserPassword(user.name, user.password, role, classes, subject);
+      }
+    }
+  }
   
   applyImportedUsers();
 }
@@ -5496,6 +5707,10 @@ function extractSubjectName(header) {
 // Load config on startup
 loadSchoolConfigFromStorage();
 xqLoadAdminKey(); // 加载管理员密钥
+xqLoadCredentials().then(() => {
+  // 凭证加载完成后检查状态
+  checkAdminAccess();
+});
 </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
