@@ -975,7 +975,7 @@ tbody tr:last-child td { border-bottom: none; }
     <p class="login-subtitle">学生在校情况管理平台</p>
     <div class="login-field">
       <label>用户名</label>
-      <input type="text" id="loginUser" placeholder="请输入姓名" oninput="checkLoginState()">
+      <input type="text" id="loginUser" placeholder="请输入姓名" autocomplete="off">
     </div>
     <div class="login-field" id="loginPassField">
       <label>密码</label>
@@ -1387,7 +1387,7 @@ const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '3.2'; // v3.2: 优化登录流程，管理员登录后显示功能选择
+const APP_VERSION = '3.3'; // v3.3: 简化登录界面，始终显示用户名密码登录
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -1486,60 +1486,16 @@ async function setUserPassword(name, password, role, classes, subject) {
   return await xqSaveCredentials();
 }
 
-// 检查输入的用户名是否在教师名单中，决定显示哪些按钮
+// 始终显示用户名+密码+登录，验证放到点击登录时
 function checkLoginState() {
-  const name = document.getElementById('loginUser').value.trim();
-  const passField = document.getElementById('loginPassField');
-  const loginBtn = document.getElementById('loginBtn');
-  const setPwdBtn = document.getElementById('setPasswordBtn');
-  const adminInitBtn = document.getElementById('adminInitBtn');
-  const hint = document.getElementById('loginHint');
+  // 密码框和登录按钮始终显示
+  document.getElementById('loginPassField').style.display = 'block';
+  document.getElementById('loginBtn').style.display = 'block';
   
-  // 重置所有按钮
-  setPwdBtn.style.display = 'none';
-  adminInitBtn.style.display = 'none';
-  hint.style.display = 'none';
-  passField.style.display = 'block';
-  loginBtn.style.display = 'block';
-  
-  // 情况1：系统未初始化（管理员还没设置密码）
-  if (!isCredentialsInitialized()) {
-    passField.style.display = 'none';
-    loginBtn.style.display = 'none';
-    if (name === XQ_ADMIN_NAME) {
-      adminInitBtn.style.display = 'block';
-    }
-    return;
-  }
-  
-  // 情况2：系统已初始化
-  // 检查名字是否在教师名单中
-  const isInList = isUserInTeacherList(name);
-  
-  if (!isInList && name) {
-    // 名字不在名单中 → 不允许登录
-    passField.style.display = 'none';
-    loginBtn.style.display = 'none';
-    hint.style.display = 'block';
-    hint.textContent = '该姓名不在教师名单中，请联系管理员导入';
-    return;
-  }
-  
-  if (!name) {
-    // 还没输入名字
-    return;
-  }
-  
-  // 名字在名单中
-  const hasPassword = xqCredentials[name] && xqCredentials[name].passwordHash;
-  
-  if (!hasPassword) {
-    // 首次使用，需要设置密码
-    passField.style.display = 'none';
-    loginBtn.style.display = 'none';
-    setPwdBtn.style.display = 'block';
-  }
-  // 已有密码 → 正常登录流程（显示密码框和登录按钮）
+  // 隐藏其他按钮和提示
+  document.getElementById('setPasswordBtn').style.display = 'none';
+  document.getElementById('adminInitBtn').style.display = 'none';
+  document.getElementById('loginHint').style.display = 'none';
 }
 
 // 检查名字是否在导入的教师名单中
@@ -1690,6 +1646,12 @@ function doLogin() {
   // 如果凭证系统未初始化，提示先初始化
   if (!isCredentialsInitialized()) {
     alert('系统尚未初始化，请先输入管理员姓名并点击"初始化管理员"');
+    return;
+  }
+  
+  // 检查用户名是否在教师名单中
+  if (!isUserInTeacherList(name)) {
+    alert('该姓名不在教师名单中，请联系管理员导入');
     return;
   }
   
@@ -5940,6 +5902,10 @@ function extractSubjectName(header) {
 // Load config on startup
 loadSchoolConfigFromStorage();
 xqLoadAdminKey(); // 加载管理员密钥
+
+// 清空输入框，防止浏览器自动填充干扰
+document.getElementById('loginUser').value = '';
+document.getElementById('loginPass').value = '';
 
 // 立即检查本地凭证状态（快速响应）
 try {
