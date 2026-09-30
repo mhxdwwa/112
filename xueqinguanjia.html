@@ -1419,6 +1419,14 @@ function getTeacherClassSubjects() {
   return result;
 }
 
+// 空状态提示
+function emptyStateHtml(message) {
+  return `<div style="text-align:center;padding:60px 20px;color:var(--gray-500)">
+    <div style="font-size:48px;margin-bottom:16px">📭</div>
+    <div style="font-size:15px">${message}</div>
+  </div>`;
+}
+
 // 刷新当前登录用户的班级信息（从最新凭证/setupTeaching数据）
 function refreshCurrentUserClass() {
   if (!xqCurrentUser) return;
