@@ -1353,41 +1353,56 @@ async function hashPassword(password) {
 // 凭证存储: { "吴胜闯": { passwordHash, role, classes, subject }, ... }
 let xqCredentials = {};
 
-// 从服务器加载凭证
+// 从服务器加载凭证（优先服务器，降级到 localStorage）
 async function xqLoadCredentials() {
+  // 先从 localStorage 加载（快速响应）
+  try {
+    const cached = localStorage.getItem('xq_credentials');
+    if (cached) {
+      xqCredentials = JSON.parse(cached);
+      console.log('[XQ] Credentials loaded from localStorage, users:', Object.keys(xqCredentials).length);
+    }
+  } catch (e) {}
+  
+  // 尝试从服务器加载最新数据
   try {
     const result = await xqApi('config', { action: 'get' });
     if (result.ok && result.config && result.config.credentials) {
-      xqCredentials = result.config.credentials.data || {};
-      console.log('[XQ] Credentials loaded, users:', Object.keys(xqCredentials).length);
+      const serverCreds = result.config.credentials.data || {};
+      // 如果服务器有数据，覆盖本地
+      if (Object.keys(serverCreds).length > 0) {
+        xqCredentials = serverCreds;
+        localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
+        console.log('[XQ] Credentials synced from server');
+      }
     }
   } catch (e) {
-    console.warn('[XQ] Failed to load credentials:', e);
+    console.warn('[XQ] Failed to load credentials from server, using localStorage');
   }
-  // 同时从 localStorage 加载作为缓存
-  try {
-    const cached = localStorage.getItem('xq_credentials');
-    if (cached && Object.keys(xqCredentials).length === 0) {
-      xqCredentials = JSON.parse(cached);
-    }
-  } catch (e) {}
   return xqCredentials;
 }
 
 // 保存凭证到服务器和本地
 async function xqSaveCredentials() {
+  // 始终保存到 localStorage
   localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
+  
+  // 尝试同步到服务器（如果有管理员密钥）
   if (window.XQ_ADMIN_KEY) {
-    const result = await xqApi('config', {
-      action: 'set',
-      adminKey: window.XQ_ADMIN_KEY,
-      configKey: 'credentials',
-      configData: xqCredentials,
-      teacherName: XQ_ADMIN_NAME
-    });
-    return result;
+    try {
+      const result = await xqApi('config', {
+        action: 'set',
+        adminKey: window.XQ_ADMIN_KEY,
+        configKey: 'credentials',
+        configData: xqCredentials,
+        teacherName: XQ_ADMIN_NAME
+      });
+      return result;
+    } catch (e) {
+      console.warn('[XQ] Failed to sync credentials to server');
+    }
   }
-  return { ok: false, error: 'No admin key' };
+  return { ok: true }; // localStorage 保存成功
 }
 
 // 检查凭证系统是否已初始化（至少管理员有密码）
@@ -1429,14 +1444,12 @@ function checkAdminAccess() {
     return;
   }
   
-  // 凭证已初始化：只有管理员输入正确密码后才显示设置按钮
+  // 凭证已初始化：隐藏首次设置按钮
   firstBtn.style.display = 'none';
-  if (name === XQ_ADMIN_NAME) {
-    // 需要验证密码后才显示，先隐藏，等登录成功后再显示
-    setupBtn.style.display = 'none';
-  } else {
-    setupBtn.style.display = 'none';
-  }
+  
+  // 只有管理员登录后才显示学校数据设置按钮
+  // 这个按钮在登录成功后才会显示，这里先隐藏
+  setupBtn.style.display = 'none';
 }
 
 // 首次初始化弹窗
@@ -1461,16 +1474,15 @@ async function doFirstTimeSetup() {
     return;
   }
   
-  // 设置管理员密码
+  // 设置管理员密码（保存到 localStorage）
   await setUserPassword(XQ_ADMIN_NAME, p1, 'leader', [], null);
   
-  // 同时需要设置管理员密钥（用于云端同步）
-  // 首次设置时，自动生成一个密钥并保存
+  // 自动生成管理员密钥（用于云端同步）
   const adminKey = 'xq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   xqSetAdminKey(adminKey);
   
   closeFirstTimeSetup();
-  alert('管理员密码设置成功！\n\n管理员密钥已自动生成并保存。\n\n请使用管理员账号登录。');
+  alert('管理员密码设置成功！\n\n请使用管理员账号登录：\n用户名：' + XQ_ADMIN_NAME + '\n密码：您刚才设置的密码');
   
   // 刷新状态
   checkAdminAccess();
@@ -5707,9 +5719,19 @@ function extractSubjectName(header) {
 // Load config on startup
 loadSchoolConfigFromStorage();
 xqLoadAdminKey(); // 加载管理员密钥
+
+// 立即检查本地凭证状态（快速响应）
+try {
+  const cached = localStorage.getItem('xq_credentials');
+  if (cached) {
+    xqCredentials = JSON.parse(cached);
+  }
+} catch (e) {}
+checkAdminAccess(); // 立即显示/隐藏按钮
+
+// 然后尝试从服务器同步最新凭证
 xqLoadCredentials().then(() => {
-  // 凭证加载完成后检查状态
-  checkAdminAccess();
+  checkAdminAccess(); // 服务器数据加载后再次检查
 });
 </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
