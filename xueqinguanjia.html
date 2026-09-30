@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>学勤管家 · 学生在校情况管理系统</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1403,7 +1406,7 @@ const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
 
 // App version for cache invalidation
-const APP_VERSION = '3.3'; // v3.3: 简化登录界面，始终显示用户名密码登录
+const APP_VERSION = '3.4'; // v3.4: 添加缓存清除机制，修复管理员选择弹窗
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
