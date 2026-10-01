@@ -1269,18 +1269,20 @@ async function xqLoadAllConfig() {
         }
       }
       
-      // 加载各班座位布局数据
+      // 加载各班座位布局数据（每个班级独立的配置）
       for (const [key, value] of Object.entries(result.config)) {
         if (key.startsWith('seating_')) {
           const className = key.replace('seating_', '');
           if (validClassNames.has(className) && value.data && value.data.layout) {
             seatLayout[className] = value.data.layout;
-            // 恢复布局配置（使用第一个有数据的班级的配置）
-            if (value.data.cols) seatingCols = value.data.cols;
-            if (value.data.rows) seatingRows = value.data.rows;
-            if (value.data.colGaps) colGaps = value.data.colGaps;
-            if (value.data.colGroups) colGroups = value.data.colGroups;
-            console.log('[XQ] Loaded seating for class:', className, 'layout length:', value.data.layout.length);
+            // 保存该班级的独立配置
+            seatConfig[className] = {
+              cols: value.data.cols || 8,
+              rows: value.data.rows || 7,
+              colGaps: value.data.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+              colGroups: value.data.colGroups || []
+            };
+            console.log('[XQ] Loaded seating for class:', className, 'layout:', value.data.layout.length, 'cols:', seatConfig[className].cols);
           }
         }
       }
@@ -1364,15 +1366,16 @@ async function xqSaveAllConfigToServer() {
     }
   });
   
-  // 保存各班座位布局数据
+  // 保存各班座位布局数据（使用每个班级独立的配置）
   Object.keys(seatLayout).forEach(cls => {
     if (seatLayout[cls] && seatLayout[cls].length > 0) {
+      const cfg = seatConfig[cls] || {};
       configs['seating_' + cls] = {
         layout: seatLayout[cls],
-        cols: seatingCols,
-        rows: seatingRows,
-        colGaps: colGaps,
-        colGroups: colGroups
+        cols: cfg.cols || 8,
+        rows: cfg.rows || 7,
+        colGaps: cfg.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+        colGroups: cfg.colGroups || []
       };
     }
   });
@@ -1785,17 +1788,18 @@ async function saveStudentsToCloud() {
       }
     }
     
-    // 5. 保存座位布局数据（所有老师都可以保存座位）
+    // 5. 保存座位布局数据（每个班级使用独立的配置）
     for (const cls of classesToSave) {
       if (seatLayout[cls] && seatLayout[cls].length > 0) {
-        const seatingConfig = {
+        const cfg = seatConfig[cls] || {};
+        const seatingConfigData = {
           layout: seatLayout[cls],
-          cols: seatingCols,
-          rows: seatingRows,
-          colGaps: colGaps,
-          colGroups: colGroups
+          cols: cfg.cols || 8,
+          rows: cfg.rows || 7,
+          colGaps: cfg.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+          colGroups: cfg.colGroups || []
         };
-        await xqSaveConfigToServer('seating_' + cls, seatingConfig);
+        await xqSaveConfigToServer('seating_' + cls, seatingConfigData);
       }
     }
     
@@ -4075,6 +4079,10 @@ function exportAdminRoster(cls) {
 function renderClassSeatingPage() {
   const cls = currentViewClass || getHeadteacherClass();
   if (!cls || !STUDENTS[cls]) return emptyStateHtml('暂无班级数据');
+  
+  // 加载该班级的座位配置
+  loadSeatConfig(cls);
+  
   const sts = STUDENTS[cls];
   const cols = seatingCols;
   const totalRows = seatingRows > 0 ? seatingRows : Math.ceil(sts.length / cols);
@@ -5716,6 +5724,36 @@ let colGaps = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]; // 每列之间的�
 let colGroups = []; // 列分组，如 [2,2,2,2] 表示每2列为一组，空数组表示不分组
 let dragSourceSlotIdx = null;
 let seatLayout = {}; // 每个班级的座位布局，存储每个位置的学生ID或null
+let seatConfig = {}; // 每个班级的座位配置 { cols, rows, colGaps, colGroups }
+
+// 加载指定班级的座位配置到全局变量
+function loadSeatConfig(cls) {
+  if (!cls) return;
+  if (seatConfig[cls]) {
+    seatingCols = seatConfig[cls].cols || 8;
+    seatingRows = seatConfig[cls].rows || 7;
+    colGaps = seatConfig[cls].colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+    colGroups = seatConfig[cls].colGroups || [];
+  } else {
+    // 首次访问该班级，使用默认值
+    seatingCols = 8;
+    seatingRows = 7;
+    colGaps = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+    colGroups = [];
+    seatConfig[cls] = { cols: seatingCols, rows: seatingRows, colGaps: [...colGaps], colGroups: [...colGroups] };
+  }
+}
+
+// 保存当前全局配置到指定班级
+function saveSeatConfig(cls) {
+  if (!cls) return;
+  seatConfig[cls] = {
+    cols: seatingCols,
+    rows: seatingRows,
+    colGaps: [...colGaps],
+    colGroups: [...colGroups]
+  };
+}
 
 function enterSeatingEdit() {
   seatingEditMode = true;
@@ -5731,40 +5769,38 @@ async function saveSeating() {
   seatingEditMode = false;
   const cls = currentViewClass || getHeadteacherClass();
   
+  // 先保存当前班级的配置到 seatConfig
+  saveSeatConfig(cls);
+  
   // 保存座位布局到本地存储
   try {
     const seatingData = {
       seatLayout: seatLayout[cls] || [],
-      seatingCols: seatingCols,
-      seatingRows: seatingRows,
-      colGaps: colGaps,
-      colGroups: colGroups
+      seatConfig: seatConfig[cls] || {}
     };
     localStorage.setItem('xq_seating_' + cls, JSON.stringify(seatingData));
   } catch (e) {
     console.warn('[XQ] Failed to save seating to localStorage:', e);
   }
   
-  // 同步到云端
+  // 同步到云端（只保存当前班级）
   if (xqCurrentUser) {
     try {
-      const seatingConfig = {};
-      // 保存所有班级的座位布局
-      Object.keys(seatLayout).forEach(c => {
-        if (seatLayout[c] && seatLayout[c].length > 0) {
-          seatingConfig['seating_' + c] = {
-            layout: seatLayout[c],
-            cols: seatingCols,
-            rows: seatingRows,
-            colGaps: colGaps,
-            colGroups: colGroups
-          };
-        }
-      });
+      const configs = {};
+      // 只保存当前班级的座位布局
+      if (seatLayout[cls] && seatLayout[cls].length > 0) {
+        configs['seating_' + cls] = {
+          layout: seatLayout[cls],
+          cols: seatConfig[cls]?.cols || seatingCols,
+          rows: seatConfig[cls]?.rows || seatingRows,
+          colGaps: seatConfig[cls]?.colGaps || colGaps,
+          colGroups: seatConfig[cls]?.colGroups || colGroups
+        };
+      }
       
       const result = await xqApi('config', {
         action: 'set_all',
-        configs: seatingConfig,
+        configs: configs,
         teacherName: xqCurrentUser?.teacherName || ''
       });
       
@@ -5787,19 +5823,26 @@ async function saveSeating() {
 }
 
 function changeSeatCols(val) {
+  const cls = currentViewClass || getHeadteacherClass();
   seatingCols = Math.max(2, Math.min(12, parseInt(val) || 8));
   // 调整 colGaps 数组大小
   while (colGaps.length < seatingCols - 1) colGaps.push(10);
   if (colGaps.length > seatingCols - 1) colGaps.length = seatingCols - 1;
+  // 保存到该班级的配置
+  saveSeatConfig(cls);
   navigate('class-seating');
 }
 
 function changeSeatRows(val) {
+  const cls = currentViewClass || getHeadteacherClass();
   seatingRows = Math.max(1, Math.min(20, parseInt(val) || 7));
+  // 保存到该班级的配置
+  saveSeatConfig(cls);
   navigate('class-seating');
 }
 
 function changeColGrouping(val) {
+  const cls = currentViewClass || getHeadteacherClass();
   const groupSize = Math.max(1, Math.min(seatingCols, parseInt(val) || 1));
   if (groupSize === 1) {
     colGroups = []; // 不分组，每列独立
@@ -5813,6 +5856,8 @@ function changeColGrouping(val) {
       remaining -= size;
     }
   }
+  // 保存到该班级的配置
+  saveSeatConfig(cls);
   navigate('class-seating');
 }
 
@@ -6038,6 +6083,10 @@ function doColResize(e) {
 }
 
 function stopColResize(e) {
+  // 保存当前配置到该班级
+  const cls = currentViewClass || getHeadteacherClass();
+  saveSeatConfig(cls);
+  
   resizingGapIdx = -1;
   document.removeEventListener('mousemove', doColResize);
   document.removeEventListener('mouseup', stopColResize);
