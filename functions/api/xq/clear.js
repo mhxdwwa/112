@@ -7,11 +7,13 @@
  * - clear_all: 清除所有数据（仅管理员）
  * 
  * 权限控制:
- * - 只有管理员可以清除数据
+ * - 只有管理员（吴胜闯）可以清除数据
  */
 import { jsonResponse, handleOptions, checkEnv, sbDelete, sbInsert } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
+
+const ADMIN_NAME = '吴胜闯';
 
 export const onRequestPost = async ({ request, env }) => {
   const envErr = checkEnv(env);
@@ -24,13 +26,13 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { action, adminKey, teacherName, confirmText } = body;
+  const { action, teacherName, confirmText } = body;
 
-  // 验证管理员密钥
-  const isAdmin = adminKey && env.XQ_ADMIN_KEY && adminKey === env.XQ_ADMIN_KEY;
+  // 验证管理员权限（直接检查用户名）
+  const isAdmin = teacherName === ADMIN_NAME;
   
   if (!isAdmin) {
-    return jsonResponse({ error: 'Unauthorized: admin access required' }, 403);
+    return jsonResponse({ error: 'Unauthorized: 只有管理员才能清除数据' }, 403);
   }
 
   // 二次确认

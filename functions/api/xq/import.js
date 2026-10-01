@@ -8,11 +8,13 @@
  * 
  * 权限控制:
  * - 班主任只能导入自己班级的数据
- * - 管理员可以导入任何班级的数据
+ * - 管理员（吴胜闯）可以导入任何班级的数据
  */
 import { jsonResponse, handleOptions, checkEnv, sbInsert, sbSelect } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
+
+const ADMIN_NAME = '吴胜闯';
 
 export const onRequestPost = async ({ request, env }) => {
   const envErr = checkEnv(env);
@@ -25,10 +27,10 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { action, adminKey, teacherId, teacherName, teacherClasses } = body;
+  const { action, teacherId, teacherName, teacherClasses } = body;
 
-  // 验证管理员密钥
-  const isAdmin = adminKey && env.XQ_ADMIN_KEY && adminKey === env.XQ_ADMIN_KEY;
+  // 验证管理员权限（直接检查用户名）
+  const isAdmin = teacherName === ADMIN_NAME;
 
   // 验证班主任班级权限
   function canAccessClass(className) {

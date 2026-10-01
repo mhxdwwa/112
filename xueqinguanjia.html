@@ -1439,6 +1439,30 @@ function getTeacherClassSubjects() {
   return result;
 }
 
+// 检查当前用户是否可以编辑指定班级的数据
+// 班主任可以编辑自己班级的数据，管理员可以编辑所有班级
+function canEditClass(cls) {
+  if (!xqCurrentUser) return false;
+  
+  // 管理员可以编辑所有班级
+  if (isXqAdmin()) return true;
+  
+  // 班主任只能编辑自己班级的数据
+  if (currentRole === 'headteacher') {
+    const myClass = getHeadteacherClass();
+    return cls === myClass;
+  }
+  
+  // 科任教师不能编辑班级数据
+  return false;
+}
+
+// 检查当前用户是否可以编辑当前查看的班级（用于座位表等页面）
+function canEditCurrentViewClass() {
+  const cls = currentViewClass || getHeadteacherClass();
+  return canEditClass(cls);
+}
+
 // 空状态提示
 function emptyStateHtml(message) {
   return `<div style="text-align:center;padding:60px 20px;color:var(--gray-500)">
@@ -1542,12 +1566,21 @@ function saveStudentsToStorage() {
   try {
     localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
     
-    // 同步到服务器（如果已登录且是管理员）
-    if (xqCurrentUser && isXqAdmin()) {
-      // 异步同步，不阻塞主流程
-      Object.keys(STUDENTS).forEach(cls => {
-        xqSaveStudentsToServer(cls).catch(() => {});
-      });
+    // 同步到服务器（如果已登录）
+    // 管理员可以同步所有班级，班主任只能同步自己班级的数据
+    if (xqCurrentUser) {
+      if (isXqAdmin()) {
+        // 管理员：同步所有班级
+        Object.keys(STUDENTS).forEach(cls => {
+          xqSaveStudentsToServer(cls).catch(() => {});
+        });
+      } else if (currentRole === 'headteacher') {
+        // 班主任：只同步自己班级的数据
+        const myClass = getHeadteacherClass();
+        if (myClass && STUDENTS[myClass]) {
+          xqSaveStudentsToServer(myClass).catch(() => {});
+        }
+      }
     }
   } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
 }
@@ -2085,12 +2118,15 @@ const NAV_CONFIG = {
     ]},
   ],
   headteacher: [
+    { section: '本班管理', items: [
+      { id: 'my-class', label: '本班概览', icon: iconGrid },
+      { id: 'class-attendance', label: '考勤管理', icon: iconCheck },
+      { id: 'roster', label: '名单管理', icon: iconUsers },
+      { id: 'leave-register', label: '请假登记', icon: iconFile },
+      { id: 'family-situation', label: '家庭情况', icon: iconUsers },
+    ]},
     { section: '教学', items: [
       { id: 'teach-classes', label: '授课班级', icon: iconUsers },
-    ]},
-    { section: '本班', items: [
-      { id: 'my-class', label: '本班概览', icon: iconGrid },
-      { id: 'family-situation', label: '家庭情况', icon: iconUsers },
     ]},
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
@@ -2497,11 +2533,11 @@ function renderAllClassesView() {
     const l = sts.filter(s => s.status === 'leave').length;
     const a = sts.filter(s => s.status === 'absent').length;
     const r = ((p/t)*100).toFixed(0);
-    const isOwnClass = cls === getHeadteacherClass();
+    const isOwnClass = canEditClass(cls);
     cards += `<div class="class-card" onclick="showClassDetail('${cls}')" style="${isOwnClass ? 'border-color:var(--primary-light);border-width:2px' : ''}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div class="class-card-title">${cls}</div>
-        ${isOwnClass ? '<span style="font-size:11px;background:var(--primary-bg);color:var(--primary);padding:2px 8px;border-radius:4px;font-weight:500">本班</span>' : ''}
+        ${isOwnClass ? '<span style="font-size:11px;background:var(--primary-bg);color:var(--primary);padding:2px 8px;border-radius:4px;font-weight:500">可编辑</span>' : ''}
       </div>
       <div class="class-card-sub">到校率 ${r}%</div>
       <div class="class-card-stats">
@@ -3110,8 +3146,7 @@ function renderClassSeatingPage() {
   const sts = STUDENTS[cls];
   const cols = seatingCols;
   const totalRows = seatingRows > 0 ? seatingRows : Math.ceil(sts.length / cols);
-  const isOwnClass = currentRole === 'headteacher' && cls === getHeadteacherClass();
-  const canEdit = isOwnClass;
+  const canEdit = canEditClass(cls);
 
   // 构建扁平座位数组：null=空位，对象=学生
   const totalSlots = totalRows * cols;

@@ -10,12 +10,14 @@
  * 
  * 权限控制:
  * - 所有老师可以读取所有记录
- * - 班主任只能写入/修改自己的记录（通过 teacher_id 标识）
- * - 管理员可以修改/删除任何记录
+ * - 班主任只能写入/修改自己班级的记录
+ * - 管理员（吴胜闯）可以修改/删除任何记录
  */
 import { jsonResponse, handleOptions, checkEnv, sbSelect, sbInsert, sbUpdate, sbDelete } from '../../_utils.js';
 
 export const onRequestOptions = handleOptions;
+
+const ADMIN_NAME = '吴胜闯';
 
 export const onRequestPost = async ({ request, env }) => {
   const envErr = checkEnv(env);
@@ -28,10 +30,10 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { action, adminKey, teacherId, teacherName } = body;
+  const { action, teacherId, teacherName } = body;
 
-  // 验证管理员密钥
-  const isAdmin = adminKey && env.XQ_ADMIN_KEY && adminKey === env.XQ_ADMIN_KEY;
+  // 验证管理员权限（直接检查用户名）
+  const isAdmin = teacherName === ADMIN_NAME;
 
   // ===== GET: 获取记录 =====
   if (action === 'get') {
