@@ -802,6 +802,16 @@ tbody tr:last-child td { border-bottom: none; }
   to { opacity: 0; transform: translateX(40px); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+}
+
 /* === RESPONSIVE === */
 @media (max-width: 1200px) {
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1246,6 +1256,7 @@ async function xqLoadAllConfig() {
       
       // 保存到 localStorage 作为缓存（不触发服务器同步）
       saveStudentsToStorage();
+      studentsDataChanged = false; // 从服务器加载后重置脏标记
       try {
         const config = {
           SCHOOL: { grades: SCHOOL.grades, teacherClasses: SCHOOL.teacherClasses, headteacherClasses: SCHOOL.headteacherClasses, importedClasses: SCHOOL.importedClasses, importedClassList: SCHOOL.importedClassList, importedUsers: SCHOOL.importedUsers },
@@ -1583,30 +1594,121 @@ function loadStudentsFromStorage() {
   return null;
 }
 
-// 保存学生数据到 localStorage
+// 保存学生数据到 localStorage（仅本地，不上传云端）
+let studentsDataChanged = false; // 标记是否有未保存到云端的更改
+
 function saveStudentsToStorage() {
   try {
     localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+    studentsDataChanged = true; // 标记有未同步的更改
+    updateSaveToCloudButton(); // 更新保存按钮状态
+  } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
+}
+
+// 保存学生数据到云端（手动触发）
+async function saveStudentsToCloud() {
+  if (!xqCurrentUser) { showToast('请先登录', 'error'); return; }
+  if (!isXqAdmin()) { showToast('仅管理员可保存到云端', 'error'); return; }
+  
+  const btn = document.getElementById('saveToCloudBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite"></span> 保存中...';
+  }
+  
+  try {
+    let successCount = 0;
+    let failCount = 0;
+    const classes = Object.keys(STUDENTS);
     
-    // 同步到服务器（如果已登录）
-    // 管理员可以同步所有班级，班主任只能同步自己班级的数据
-    if (xqCurrentUser) {
-      if (isXqAdmin()) {
-        // 管理员：同步所有班级
-        Object.keys(STUDENTS).forEach(cls => {
-          xqSaveStudentsToServer(cls).catch(() => {});
-        });
-      } else if (xqCurrentUser.isHeadteacher || xqCurrentUser.isTeacher) {
-        // 班主任和科任老师：同步自己相关的所有班级
-        const myClasses = xqCurrentUser.allClasses || [];
-        myClasses.forEach(cls => {
-          if (STUDENTS[cls]) {
-            xqSaveStudentsToServer(cls).catch(() => {});
-          }
-        });
+    // 保存所有班级学生数据
+    for (const cls of classes) {
+      if (STUDENTS[cls] && STUDENTS[cls].length > 0) {
+        const result = await xqSaveStudentsToServer(cls);
+        if (result && result.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       }
     }
-  } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
+    
+    // 同时保存班级-年级映射
+    await xqSaveConfigToServer('classGradeMap', classGradeMap);
+    
+    // 保存配置
+    await xqSaveAllConfigToServer();
+    
+    studentsDataChanged = false;
+    updateSaveToCloudButton();
+    
+    if (failCount > 0) {
+      showToast(`保存完成：${successCount} 个班级成功，${failCount} 个失败`, 'warning');
+    } else {
+      showToast(`已成功保存到云端！共 ${successCount} 个班级`, 'success');
+    }
+  } catch (e) {
+    console.error('[XQ] Save to cloud failed:', e);
+    showToast('保存到云端失败：' + e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      updateSaveToCloudButton();
+    }
+  }
+}
+
+// 更新保存按钮状态
+function updateSaveToCloudButton() {
+  const btn = document.getElementById('saveToCloudBtn');
+  if (!btn) return;
+  if (studentsDataChanged) {
+    btn.style.background = 'var(--accent)';
+    btn.style.color = '#fff';
+    btn.style.animation = 'pulse 1.5s infinite';
+    btn.innerHTML = '⬆ 保存到云端（有未保存的更改）';
+  } else {
+    btn.style.background = 'var(--gray-100)';
+    btn.style.color = 'var(--gray-600)';
+    btn.style.animation = '';
+    btn.innerHTML = '✓ 已保存到云端';
+  }
+}
+
+// 批量删除选中的班级
+function batchDeleteSelectedClasses() {
+  const selected = [];
+  document.querySelectorAll('.class-select-checkbox:checked').forEach(cb => {
+    selected.push(cb.dataset.class);
+  });
+  
+  if (selected.length === 0) {
+    showToast('请先勾选要删除的班级', 'warning');
+    return;
+  }
+  
+  const totalStudents = selected.reduce((sum, cls) => sum + (STUDENTS[cls] || []).length, 0);
+  
+  if (!confirm(`确定要彻底删除以下 ${selected.length} 个班级吗？\n\n${selected.join('、')}\n\n共 ${totalStudents} 名学生，删除后班级号也将不存在，此操作不可恢复！`)) {
+    return;
+  }
+  
+  // 删除每个班级
+  selected.forEach(cls => {
+    delete STUDENTS[cls];
+    const idx = CLASS_LIST.indexOf(cls);
+    if (idx >= 0) CLASS_LIST.splice(idx, 1);
+    delete classGradeMap[cls];
+  });
+  setupClasses = setupClasses.filter(c => !selected.includes(c.name));
+  
+  // 仅保存到本地
+  saveStudentsToStorage();
+  saveClassGradeMap();
+  
+  showToast(`已删除 ${selected.length} 个班级（共 ${totalStudents} 名学生），请点击"保存到云端"使更改生效`, 'success');
+  
+  navigate('admin-students');
 }
 
 const STUDENTS = loadStudentsFromStorage() || generateStudents();
@@ -1626,16 +1728,12 @@ function loadClassGradeMap() {
   } catch (e) { console.warn('[XQ] Failed to load class grade map:', e); }
 }
 
-// 保存班级-年级映射
+// 保存班级-年级映射（仅本地）
 function saveClassGradeMap() {
   try {
     localStorage.setItem('xq_class_grade_map', JSON.stringify(classGradeMap));
-    console.log('[XQ] Class grade map saved');
-    
-    // 同步到服务器（如果管理员已登录）
-    if (xqCurrentUser && isXqAdmin()) {
-      xqSaveConfigToServer('classGradeMap', classGradeMap).catch(() => {});
-    }
+    studentsDataChanged = true; // 标记有未同步的更改
+    console.log('[XQ] Class grade map saved locally');
   } catch (e) { console.warn('[XQ] Failed to save class grade map:', e); }
 }
 
@@ -3335,12 +3433,13 @@ function renderAdminStudents() {
     <div class="card anim-in" style="margin-bottom:16px">
       <div class="card-header">
         <span class="card-title">年级分类管理</span>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <select id="gradeAssignSelect" class="toolbar-select" style="font-size:12px;padding:4px 8px">
             <option value="">选择年级...</option>
             ${SCHOOL.grades.map(g => `<option value="${g}">${g}</option>`).join('')}
           </select>
           <button class="toolbar-btn primary" style="font-size:12px;padding:6px 12px" onclick="assignSelectedClassesToGrade()">分配选中班级</button>
+          <button class="toolbar-btn ghost" style="font-size:12px;padding:6px 12px;color:var(--danger);border-color:var(--danger)" onclick="batchDeleteSelectedClasses()">批量删除选中</button>
         </div>
       </div>
       <div class="card-body">
@@ -3348,8 +3447,10 @@ function renderAdminStudents() {
           <div style="font-size:13px;color:#1E40AF;margin-bottom:6px"><strong>操作说明：</strong></div>
           <div style="font-size:12px;color:var(--gray-600);line-height:1.6">
             <div>• 勾选班级前的复选框，选择年级后点击"分配选中班级"</div>
+            <div>• 勾选班级后可点击"批量删除选中"彻底删除多个班级</div>
             <div>• 点击班级卡片可进入该班级学生管理页面</div>
-            <div>• 点击 ✕ 按钮可彻底删除班级（含学生数据）</div>
+            <div>• 点击 ✕ 按钮可删除单个班级</div>
+            <div style="color:var(--accent);font-weight:600;margin-top:4px">• 所有更改需点击底部"保存到云端"按钮才会同步到服务器</div>
           </div>
         </div>
         <div style="margin-bottom:12px">
@@ -3362,7 +3463,7 @@ function renderAdminStudents() {
       </div>
     </div>
     
-    <div class="card anim-in anim-d1">
+    <div class="card anim-in anim-d1" style="margin-bottom:16px">
       <div class="card-header">
         <span class="card-title">上传学生名单</span>
         <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadStudentTemplate()">下载模板</button>
@@ -3384,6 +3485,17 @@ function renderAdminStudents() {
           <div class="setup-import-title">点击上传学生名单文件</div>
           <div class="setup-import-hint">支持 Excel 和 CSV 格式</div>
         </div>
+      </div>
+    </div>
+    
+    <div class="card anim-in anim-d2" style="position:sticky;bottom:0;z-index:10;box-shadow:0 -4px 20px rgba(0,0,0,0.1)">
+      <div class="card-body" style="padding:16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;color:var(--gray-600)">
+          ${studentsDataChanged ? '<span style="color:var(--accent)">● 有未保存到云端的更改</span>' : '<span style="color:var(--accent)">✓ 所有更改已保存到云端</span>'}
+        </div>
+        <button id="saveToCloudBtn" class="toolbar-btn primary" style="font-size:14px;padding:10px 24px;font-weight:600" onclick="saveStudentsToCloud()">
+          ${studentsDataChanged ? '⬆ 保存到云端（有未保存的更改）' : '✓ 已保存到云端'}
+        </button>
       </div>
     </div>
   `;
@@ -3419,10 +3531,10 @@ function assignSelectedClassesToGrade() {
     classGradeMap[cls] = grade;
   });
   
-  // 保存
+  // 仅保存到本地
   saveClassGradeMap();
   
-  showToast(`已将 ${selected.length} 个班级分配到${grade}`, 'success');
+  showToast(`已将 ${selected.length} 个班级分配到${grade}，请点击"保存到云端"使更改生效`, 'success');
   
   // 刷新页面
   navigate('admin-students');
@@ -3566,18 +3678,14 @@ function clearClassStudents(cls) {
   // 3. 从 setupClasses 中移除
   setupClasses = setupClasses.filter(c => c.name !== cls);
   
-  // 4. 保存到本地存储
+  // 4. 从年级映射中移除
+  delete classGradeMap[cls];
+  
+  // 5. 仅保存到本地（不自动同步云端）
   saveStudentsToStorage();
+  saveClassGradeMap();
   
-  // 5. 同步删除服务器端数据
-  xqApi('xq/clear', {
-    action: 'clear_class',
-    className: cls,
-    teacherName: xqCurrentUser?.teacherName || '',
-    confirmText: 'CONFIRM_DELETE'
-  }).catch(() => {});
-  
-  showToast(`已彻底删除班级 ${cls}（含 ${count} 名学生）`, 'success');
+  showToast(`已删除班级 ${cls}（含 ${count} 名学生），请点击"保存到云端"使更改生效`, 'success');
   
   // 刷新页面
   navigate('admin-students');
