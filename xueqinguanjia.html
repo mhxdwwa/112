@@ -1257,11 +1257,13 @@ async function xqLoadAllConfig() {
       if (setupTeaching.length > 0) {
         applyTeachingDataFromSetup();
       }
-      // 加载各班学生数据
+      // 加载各班学生数据（只加载 setupClasses 中存在的班级）
+      const validClassNames = new Set(setupClasses.map(c => c.name));
       for (const [key, value] of Object.entries(result.config)) {
         if (key.startsWith('students_')) {
           const className = key.replace('students_', '');
-          if (value.data && value.data.students) {
+          // 只加载在 setupClasses 中定义的班级数据
+          if (validClassNames.has(className) && value.data && value.data.students) {
             STUDENTS[className] = value.data.students;
           }
         }
