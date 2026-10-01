@@ -239,6 +239,7 @@ a { text-decoration: none; color: inherit; }
 .content { flex: 1; overflow: auto; padding: 24px 28px; display: flex; flex-direction: column; }
 .content.no-scroll { overflow: hidden; }
 .content.no-scroll > .card { flex: 1; min-height: 0; }
+.content:not(.no-scroll) > .card { flex-shrink: 0; }
 
 /* === PAGE SECTIONS === */
 .page { display: none; }
