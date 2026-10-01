@@ -1249,6 +1249,20 @@ async function xqLoadAllConfig() {
           }
         }
       }
+      
+      // 应用待删除的班级（本地删除但未同步到云端的）
+      if (deletedClasses.length > 0) {
+        console.log('[XQ] Applying pending deletions:', deletedClasses);
+        deletedClasses.forEach(cls => {
+          delete STUDENTS[cls];
+          const idx = CLASS_LIST.indexOf(cls);
+          if (idx >= 0) CLASS_LIST.splice(idx, 1);
+          delete classGradeMap[cls];
+        });
+        // 保持 studentsDataChanged = true，提醒用户需要保存
+        studentsDataChanged = true;
+      }
+      
       // 更新 CLASS_LIST
       Object.keys(STUDENTS).forEach(cls => {
         if (!CLASS_LIST.includes(cls)) CLASS_LIST.push(cls);
@@ -1256,7 +1270,9 @@ async function xqLoadAllConfig() {
       
       // 保存到 localStorage 作为缓存（不触发服务器同步）
       saveStudentsToStorage();
-      studentsDataChanged = false; // 从服务器加载后重置脏标记
+      if (deletedClasses.length === 0) {
+        studentsDataChanged = false; // 从服务器加载后重置脏标记（如果没有待删除的）
+      }
       try {
         const config = {
           SCHOOL: { grades: SCHOOL.grades, teacherClasses: SCHOOL.teacherClasses, headteacherClasses: SCHOOL.headteacherClasses, importedClasses: SCHOOL.importedClasses, importedClassList: SCHOOL.importedClassList, importedUsers: SCHOOL.importedUsers },
@@ -1596,13 +1612,26 @@ function loadStudentsFromStorage() {
 
 // 保存学生数据到 localStorage（仅本地，不上传云端）
 let studentsDataChanged = false; // 标记是否有未保存到云端的更改
+let deletedClasses = []; // 记录已删除的班级，等待同步到云端
 
 function saveStudentsToStorage() {
   try {
     localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+    localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses));
     studentsDataChanged = true; // 标记有未同步的更改
     updateSaveToCloudButton(); // 更新保存按钮状态
   } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
+}
+
+// 加载已删除班级列表
+function loadDeletedClasses() {
+  try {
+    const data = localStorage.getItem('xq_deleted_classes');
+    if (data) {
+      deletedClasses = JSON.parse(data);
+      console.log('[XQ] Deleted classes loaded:', deletedClasses.length);
+    }
+  } catch (e) { console.warn('[XQ] Failed to load deleted classes:', e); }
 }
 
 // 保存学生数据到云端（手动触发）
@@ -1619,11 +1648,29 @@ async function saveStudentsToCloud() {
   try {
     let successCount = 0;
     let failCount = 0;
-    const classes = Object.keys(STUDENTS);
+    let deleteCount = 0;
     
-    // 保存所有班级学生数据
+    // 1. 先从服务器删除已删除的班级
+    for (const cls of deletedClasses) {
+      try {
+        const result = await xqApi('xq/clear', {
+          action: 'clear_class',
+          className: cls,
+          teacherName: xqCurrentUser?.teacherName || '',
+          confirmText: 'CONFIRM_DELETE'
+        });
+        if (result && result.ok) {
+          deleteCount++;
+        }
+      } catch (e) {
+        console.warn('[XQ] Failed to delete class from server:', cls, e);
+      }
+    }
+    
+    // 2. 保存所有存在的班级学生数据
+    const classes = Object.keys(STUDENTS);
     for (const cls of classes) {
-      if (STUDENTS[cls] && STUDENTS[cls].length > 0) {
+      if (STUDENTS[cls]) {
         const result = await xqSaveStudentsToServer(cls);
         if (result && result.ok) {
           successCount++;
@@ -1633,20 +1680,24 @@ async function saveStudentsToCloud() {
       }
     }
     
-    // 同时保存班级-年级映射
+    // 3. 保存班级-年级映射
     await xqSaveConfigToServer('classGradeMap', classGradeMap);
     
-    // 保存配置
+    // 4. 保存配置
     await xqSaveAllConfigToServer();
+    
+    // 5. 清空已删除列表
+    deletedClasses = [];
+    localStorage.removeItem('xq_deleted_classes');
     
     studentsDataChanged = false;
     updateSaveToCloudButton();
     
-    if (failCount > 0) {
-      showToast(`保存完成：${successCount} 个班级成功，${failCount} 个失败`, 'warning');
-    } else {
-      showToast(`已成功保存到云端！共 ${successCount} 个班级`, 'success');
-    }
+    let msg = `已保存 ${successCount} 个班级到云端`;
+    if (deleteCount > 0) msg += `，删除 ${deleteCount} 个班级`;
+    if (failCount > 0) msg += `，${failCount} 个失败`;
+    
+    showToast(msg, failCount > 0 ? 'warning' : 'success');
   } catch (e) {
     console.error('[XQ] Save to cloud failed:', e);
     showToast('保存到云端失败：' + e.message, 'error');
@@ -1699,6 +1750,11 @@ function batchDeleteSelectedClasses() {
     const idx = CLASS_LIST.indexOf(cls);
     if (idx >= 0) CLASS_LIST.splice(idx, 1);
     delete classGradeMap[cls];
+    
+    // 记录已删除的班级（等待同步到云端）
+    if (!deletedClasses.includes(cls)) {
+      deletedClasses.push(cls);
+    }
   });
   setupClasses = setupClasses.filter(c => !selected.includes(c.name));
   
@@ -1739,6 +1795,7 @@ function saveClassGradeMap() {
 
 // 初始化加载
 loadClassGradeMap();
+loadDeletedClasses();
 
 // App version for cache invalidation
 const APP_VERSION = '3.9'; // v3.9: 修复设置密码失败问题，确保本地保存成功即视为成功
@@ -3677,7 +3734,12 @@ function clearClassStudents(cls) {
   // 4. 从年级映射中移除
   delete classGradeMap[cls];
   
-  // 5. 仅保存到本地（不自动同步云端）
+  // 5. 记录已删除的班级（等待同步到云端）
+  if (!deletedClasses.includes(cls)) {
+    deletedClasses.push(cls);
+  }
+  
+  // 6. 仅保存到本地（不自动同步云端）
   saveStudentsToStorage();
   saveClassGradeMap();
   
