@@ -1588,12 +1588,14 @@ function saveStudentsToStorage() {
         Object.keys(STUDENTS).forEach(cls => {
           xqSaveStudentsToServer(cls).catch(() => {});
         });
-      } else if (currentRole === 'headteacher') {
-        // 班主任：只同步自己班级的数据
-        const myClass = getHeadteacherClass();
-        if (myClass && STUDENTS[myClass]) {
-          xqSaveStudentsToServer(myClass).catch(() => {});
-        }
+      } else if (xqCurrentUser.isHeadteacher || xqCurrentUser.isTeacher) {
+        // 班主任和科任老师：同步自己相关的所有班级
+        const myClasses = xqCurrentUser.allClasses || [];
+        myClasses.forEach(cls => {
+          if (STUDENTS[cls]) {
+            xqSaveStudentsToServer(cls).catch(() => {});
+          }
+        });
       }
     }
   } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
@@ -3406,7 +3408,7 @@ function renderClassSeatingPage() {
             <button class="toolbar-btn ghost" style="font-size:12px;padding:4px 10px" onclick="showAutoArrangeModal()">自动排列</button>
           ` : ''}
           ${editBtns}
-          <button class="toolbar-btn ghost" style="font-size:12px" onclick="navigate(currentRole === 'leader' ? 'all-classes' : 'teach-classes')">← 返回</button>
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="navigate((xqCurrentUser && xqCurrentUser.isLeader) ? 'all-classes' : 'teach-classes')">← 返回</button>
         </div>
       </div>
     </div>`;
@@ -3414,8 +3416,14 @@ function renderClassSeatingPage() {
 
 /* ----- LEADER: Leave View (read-only) / HEADTEACHER: Leave Management (editable) ----- */
 function renderLeaveMgmt() {
-  const classes = currentRole === 'leader' ? CLASS_LIST :
-    currentRole === 'headteacher' ? [getHeadteacherClass()] : getTeacherClasses();
+  const user = xqCurrentUser || {};
+  let classes;
+  if (user.isLeader) {
+    classes = CLASS_LIST;
+  } else {
+    // 班主任和科任老师：显示所有相关班级
+    classes = user.allClasses || [];
+  }
   let leaveStudents = [];
   classes.forEach(cls => {
     if (!STUDENTS[cls]) return;
@@ -3423,8 +3431,8 @@ function renderLeaveMgmt() {
       if (s.status === 'leave') leaveStudents.push({ ...s, class: cls });
     });
   });
-  const isLeader = currentRole === 'leader';
-  const canEdit = currentRole === 'headteacher';
+  const isLeader = user.isLeader;
+  const canEdit = user.isHeadteacher || isXqAdmin();
   let rows = leaveStudents.map(s => `<tr>
     <td>${s.class}</td>
     <td style="font-weight:500">${s.name}</td>
@@ -3991,7 +3999,8 @@ function showStudentDetail(cls, id) {
   
   // Family type info - only for headteacher and leader
   let familyHtml = '';
-  if ((currentRole === 'headteacher' || currentRole === 'leader') && (s.familyType || s.leftBehind)) {
+  const userForFamily = xqCurrentUser || {};
+  if ((userForFamily.isHeadteacher || userForFamily.isLeader || isXqAdmin()) && (s.familyType || s.leftBehind)) {
     familyHtml = '<div style="margin-top:12px">';
     if (s.familyType) {
       familyHtml += `
@@ -4099,27 +4108,41 @@ function editSeating() {
 /* ----- LEADER/HEADTEACHER/TEACHER: Teach Classes ----- */
 function renderTeachClasses() {
   let classes;
-  if (currentRole === 'leader') {
+  const user = xqCurrentUser || {};
+  
+  if (user.isLeader) {
     // 校领导查看所有班级
     classes = {};
     CLASS_LIST.forEach(cls => { classes[cls] = '全校班级'; });
-  } else if (currentRole === 'headteacher') {
-    classes = {};
-    const htClass = getHeadteacherClass();
-    if (htClass) classes[htClass] = '班主任（本班）';
   } else {
-    // 科任教师：只显示自己授课的班级
+    // 班主任和/或科任老师：显示所有相关班级
     classes = {};
     const classSubjects = getTeacherClassSubjects();
-    getTeacherClasses().forEach(cls => {
-      classes[cls] = classSubjects[cls] || '科任';
-    });
+    
+    // 如果是班主任，先添加班主任班级
+    if (user.isHeadteacher) {
+      const htClasses = user.headteacherClasses || [];
+      htClasses.forEach(cls => {
+        classes[cls] = '班主任（本班）';
+      });
+    }
+    
+    // 如果是科任老师，添加科任班级（不包括已经是班主任的班级）
+    if (user.isTeacher) {
+      const teachClasses = user.teachingClasses || [];
+      teachClasses.forEach(cls => {
+        if (!classes[cls]) {
+          classes[cls] = classSubjects[cls] || '科任';
+        }
+      });
+    }
   }
 
   let cards = '';
-  if (Object.keys(classes).length === 0 && currentRole !== 'leader') {
+  if (Object.keys(classes).length === 0 && !user.isLeader) {
     return emptyStateHtml('未找到您的班级信息。请联系管理员在「学校数据设置」中确认您的授课分配。');
   }
+  const htClassesSet = new Set(user.headteacherClasses || []);
   Object.entries(classes).forEach(([cls, subject], index) => {
     const sts = STUDENTS[cls] || [];
     const t = sts.length;
@@ -4127,7 +4150,7 @@ function renderTeachClasses() {
     const l = sts.filter(s=>s.status==='leave').length;
     const a = sts.filter(s=>s.status==='absent').length;
     const rate = t > 0 ? ((p/t)*100).toFixed(0) : 0;
-    const isOwnClass = currentRole === 'headteacher' && index === 0;
+    const isOwnClass = htClassesSet.has(cls);
     
     cards += `<div class="class-card" onclick="showClassDetail('${cls}')" style="${isOwnClass ? 'border-color:var(--primary-light);border-width:2px' : ''}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -4144,7 +4167,7 @@ function renderTeachClasses() {
     </div>`;
   });
 
-  const showFilter = currentRole === 'leader';
+  const showFilter = user.isLeader;
   return `
     <div class="toolbar">
       ${showFilter ? `
