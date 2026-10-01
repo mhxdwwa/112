@@ -2295,6 +2295,7 @@ function navigate(pageId) {
     'class-seating': '座位表', 'all-classes-view': '全校班级查看',
     'family-situation': '家庭情况', 'family-overview': '全校学生家庭情况',
     'admin-students': '上传学生名单',
+    'admin-class-students': '班级学生管理',
   };
   document.getElementById('headerTitle').textContent = titles[pageId] || '';
   document.getElementById('headerBreadcrumb').textContent = `首页 / ${titles[pageId] || ''}`;
@@ -2328,6 +2329,7 @@ function renderPage(pageId) {
     'family-situation': renderFamilySituation,
     'family-overview': renderFamilyOverview,
     'admin-students': renderAdminStudents,
+    'admin-class-students': renderAdminClassStudents,
   };
   if (renderers[pageId]) content.innerHTML = renderers[pageId]();
 }
@@ -3257,15 +3259,15 @@ function renderAdminStudents() {
         </div>
         
         <div style="margin-top:16px">
-          <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:8px">当前班级学生统计：</div>
+          <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:8px">当前班级学生统计（点击班级可管理学生）：</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
             ${CLASS_LIST.map(cls => {
               const count = (STUDENTS[cls] || []).length;
-              return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+              return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:all 0.2s" onclick="openAdminClassStudents('${cls}')" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
                 <span style="font-size:13px;font-weight:500">${cls}</span>
                 <div style="display:flex;align-items:center;gap:8px">
                   <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
-                  <button onclick="clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级（含班级号和学生数据）">✕</button>
+                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级（含班级号和学生数据）">✕</button>
                 </div>
               </div>`;
             }).join('')}
@@ -3429,6 +3431,205 @@ function clearClassStudents(cls) {
   
   // 刷新页面
   navigate('admin-students');
+}
+
+/* ----- ADMIN: Manage students in a specific class ----- */
+function openAdminClassStudents(cls) {
+  currentViewClass = cls;
+  navigate('admin-class-students');
+}
+
+function renderAdminClassStudents() {
+  const cls = currentViewClass;
+  if (!cls || !STUDENTS[cls]) {
+    return `<div class="card anim-in">
+      <div class="card-body" style="text-align:center;padding:40px">
+        <div style="font-size:48px;margin-bottom:16px">📭</div>
+        <div style="font-size:16px;color:var(--gray-500);margin-bottom:16px">暂无班级数据</div>
+        <button class="toolbar-btn primary" onclick="navigate('admin-students')">返回学生管理</button>
+      </div>
+    </div>`;
+  }
+  
+  const sts = STUDENTS[cls];
+  let rows = sts.map(s => `<tr>
+    <td>${s.seat}</td>
+    <td style="font-weight:500">${s.name}</td>
+    <td>${s.parent || '-'}</td>
+    <td>${s.phone || '-'}</td>
+    <td>
+      <div class="roster-actions">
+        <button class="toolbar-btn ghost" onclick="adminEditStudent('${cls}',${s.id})">编辑</button>
+        <button class="toolbar-btn ghost" style="color:var(--danger)" onclick="adminDeleteStudent('${cls}',${s.id})">删除</button>
+      </div>
+    </td>
+  </tr>`).join('');
+  
+  return `
+    <div class="toolbar anim-in">
+      <button class="toolbar-btn ghost" onclick="navigate('admin-students')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        返回班级列表
+      </button>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn primary" onclick="adminAddStudent('${cls}')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        添加学生
+      </button>
+    </div>
+    <div class="card anim-in anim-d1">
+      <div class="card-header">
+        <span class="card-title">${cls} 学生名单 (${sts.length}人)</span>
+        <button class="toolbar-btn ghost" style="font-size:12px" onclick="exportAdminRoster('${cls}')">导出CSV</button>
+      </div>
+      <div class="card-body no-pad"><div class="table-wrap">
+        <table><thead><tr><th>座号</th><th>姓名</th><th>家长</th><th>电话</th><th>操作</th></tr></thead>
+        <tbody id="adminRosterBody">${rows}</tbody></table>
+      </div></div>
+    </div>`;
+}
+
+function adminAddStudent(cls) {
+  showModal('添加学生到 ' + cls, `
+    <div class="form-group">
+      <label class="form-label">姓名 *</label>
+      <input class="form-input" id="adminNewStudentName" placeholder="请输入学生姓名">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label class="form-label">座号</label>
+        <input class="form-input" id="adminNewStudentSeat" type="number" placeholder="自动分配" value="${(STUDENTS[cls] || []).length + 1}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">家长姓名</label>
+        <input class="form-input" id="adminNewStudentParent" placeholder="选填">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">家长电话</label>
+      <input class="form-input" id="adminNewStudentPhone" placeholder="选填">
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+      <button class="toolbar-btn primary" onclick="doAdminAddStudent('${cls}')">添加</button>`, true);
+}
+
+function doAdminAddStudent(cls) {
+  const name = document.getElementById('adminNewStudentName').value.trim();
+  if (!name) { showToast('请输入学生姓名', 'warning'); return; }
+  
+  if (!STUDENTS[cls]) {
+    STUDENTS[cls] = [];
+    if (!CLASS_LIST.includes(cls)) CLASS_LIST.push(cls);
+  }
+  
+  const maxId = STUDENTS[cls].length > 0 ? Math.max(...STUDENTS[cls].map(s => s.id), 0) : 0;
+  const seat = parseInt(document.getElementById('adminNewStudentSeat').value) || STUDENTS[cls].length + 1;
+  const parent = document.getElementById('adminNewStudentParent').value.trim();
+  const phone = document.getElementById('adminNewStudentPhone').value.trim();
+  
+  STUDENTS[cls].push({
+    id: maxId + 1,
+    seat: seat,
+    name: name,
+    phone: phone,
+    parent: parent,
+    status: 'present',
+    leaveReason: '',
+    leaveNote: '',
+    leaveDays: 0,
+    mark: '',
+    boarding: 'inner',
+    familyType: '',
+    familyNote: '',
+    leftBehind: false,
+    leftBehindNote: '',
+  });
+  
+  saveStudentsToStorage();
+  hideModal();
+  showToast(`已添加学生 ${name}`, 'success');
+  navigate('admin-class-students');
+}
+
+function adminEditStudent(cls, id) {
+  const s = STUDENTS[cls].find(st => st.id === id);
+  if (!s) return;
+  
+  showModal('编辑学生信息', `
+    <div class="form-group">
+      <label class="form-label">姓名 *</label>
+      <input class="form-input" id="adminEditStudentName" value="${s.name}">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label class="form-label">座号</label>
+        <input class="form-input" id="adminEditStudentSeat" type="number" value="${s.seat}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">家长姓名</label>
+        <input class="form-input" id="adminEditStudentParent" value="${s.parent || ''}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">家长电话</label>
+      <input class="form-input" id="adminEditStudentPhone" value="${s.phone || ''}">
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+      <button class="toolbar-btn primary" onclick="doAdminEditStudent('${cls}',${id})">保存</button>`, true);
+}
+
+function doAdminEditStudent(cls, id) {
+  const s = STUDENTS[cls].find(st => st.id === id);
+  if (!s) return;
+  
+  const name = document.getElementById('adminEditStudentName').value.trim();
+  if (!name) { showToast('请输入学生姓名', 'warning'); return; }
+  
+  s.name = name;
+  s.seat = parseInt(document.getElementById('adminEditStudentSeat').value) || s.seat;
+  s.parent = document.getElementById('adminEditStudentParent').value.trim();
+  s.phone = document.getElementById('adminEditStudentPhone').value.trim();
+  
+  saveStudentsToStorage();
+  hideModal();
+  showToast(`已更新学生 ${name} 的信息`, 'success');
+  navigate('admin-class-students');
+}
+
+function adminDeleteStudent(cls, id) {
+  const s = STUDENTS[cls].find(st => st.id === id);
+  if (!s) return;
+  
+  if (!confirm(`确定要删除学生 ${s.name} 吗？\n\n此操作不可恢复！`)) return;
+  
+  STUDENTS[cls] = STUDENTS[cls].filter(st => st.id !== id);
+  
+  // 重新编号座号
+  STUDENTS[cls].forEach((st, idx) => {
+    st.seat = idx + 1;
+  });
+  
+  saveStudentsToStorage();
+  showToast(`已删除学生 ${s.name}`, 'success');
+  navigate('admin-class-students');
+}
+
+function exportAdminRoster(cls) {
+  const sts = STUDENTS[cls] || [];
+  if (sts.length === 0) { showToast('暂无学生数据', 'warning'); return; }
+  
+  let csv = '座号,姓名,家长,电话\n';
+  sts.forEach(s => {
+    csv += `${s.seat},"${s.name}","${s.parent || ''}","${s.phone || ''}"\n`;
+  });
+  
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${cls}_学生名单.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ----- REUSABLE: Seating Chart for Any Class ----- */
