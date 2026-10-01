@@ -238,7 +238,7 @@ a { text-decoration: none; color: inherit; }
 }
 .content { flex: 1; overflow: auto; padding: 24px 28px; display: flex; flex-direction: column; }
 .content.no-scroll { overflow: hidden; }
-.content > .card { flex: 1; min-height: 0; }
+.content.no-scroll > .card { flex: 1; min-height: 0; }
 
 /* === PAGE SECTIONS === */
 .page { display: none; }
@@ -4185,11 +4185,20 @@ function renderPasswordMgmt() {
     });
   }
   
-  // 从 setupTeaching 获取老师
+  // 从 setupTeaching 获取老师（从 subjects 中提取教师名字）
   if (setupTeaching && setupTeaching.length > 0) {
     setupTeaching.forEach(t => {
-      if (t.name && !allTeachers.find(x => x.name === t.name)) {
-        allTeachers.push({ name: t.name, role: 'teacher', title: t.title || '教师' });
+      // 添加班主任
+      if (t.headteacher && !allTeachers.find(x => x.name === t.headteacher)) {
+        allTeachers.push({ name: t.headteacher, role: 'headteacher', title: t.className + '班主任' });
+      }
+      // 从 subjects 中提取科任老师
+      if (t.subjects && typeof t.subjects === 'object') {
+        Object.values(t.subjects).forEach(teacherName => {
+          if (teacherName && !allTeachers.find(x => x.name === teacherName)) {
+            allTeachers.push({ name: teacherName, role: 'teacher', title: t.className + '科任' });
+          }
+        });
       }
     });
   }
