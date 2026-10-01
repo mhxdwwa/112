@@ -1261,31 +1261,20 @@ async function xqLoadAllConfig() {
   }
 }
 
-// 保存配置到服务器（管理员操作）
+// 保存配置到服务器（仅管理员 吴胜闯 可操作）
 async function xqSaveConfigToServer(configKey, configData) {
-  if (!window.XQ_ADMIN_KEY) {
-    console.warn('[XQ] No admin key set, cannot save to server');
-    return { ok: false, error: 'No admin key' };
-  }
-  
   const result = await xqApi('config', {
     action: 'set',
-    adminKey: window.XQ_ADMIN_KEY,
     configKey: configKey,
     configData: configData,
-    teacherName: xqCurrentUser?.teacherName || 'admin'
+    teacherName: xqCurrentUser?.teacherName || ''
   });
   
   return result;
 }
 
-// 批量保存所有配置（管理员操作）
+// 批量保存所有配置（仅管理员 吴胜闯 可操作）
 async function xqSaveAllConfigToServer() {
-  if (!window.XQ_ADMIN_KEY) {
-    console.warn('[XQ] No admin key set, cannot save to server');
-    return { ok: false, error: 'No admin key' };
-  }
-  
   const configs = {
     classes: SCHOOL.importedClasses || {},
     teaching: {
@@ -1295,21 +1284,30 @@ async function xqSaveAllConfigToServer() {
     roles: SCHOOL.importedUsers || {},
     setupTeaching: setupTeaching || [],
     setupClasses: setupClasses || [],
-    setupRoles: setupRoles || []
+    setupRoles: setupRoles || [],
+    credentials: xqCredentials || {}
   };
+  
+  // 同时保存各班学生数据
+  Object.keys(STUDENTS).forEach(cls => {
+    if (STUDENTS[cls] && STUDENTS[cls].length > 0) {
+      configs['students_' + cls] = { students: STUDENTS[cls] };
+    }
+  });
   
   console.log('[XQ] Saving config to server:', {
     classes: Object.keys(configs.classes).length,
     teaching: Object.keys(configs.teaching.teacherClasses).length + ' teacher classes',
     setupTeaching: configs.setupTeaching.length,
-    setupClasses: configs.setupClasses.length
+    setupClasses: configs.setupClasses.length,
+    credentials: Object.keys(configs.credentials).length,
+    studentClasses: Object.keys(STUDENTS).filter(c => STUDENTS[c].length > 0).length
   });
   
   const result = await xqApi('config', {
     action: 'set_all',
-    adminKey: window.XQ_ADMIN_KEY,
     configs: configs,
-    teacherName: xqCurrentUser?.teacherName || 'admin'
+    teacherName: xqCurrentUser?.teacherName || ''
   });
   
   console.log('[XQ] Save result:', result);
@@ -1357,77 +1355,20 @@ async function xqGetRecords(filters = {}) {
   return result.ok ? (result.records || []) : [];
 }
 
-// 清除学期数据（管理员操作）
+// 清除学期数据（仅管理员 吴胜闯 可操作）
 async function xqClearSemesterData() {
-  if (!window.XQ_ADMIN_KEY) {
-    return { ok: false, error: 'No admin key' };
-  }
-  
   const result = await xqApi('clear', {
     action: 'clear_records',
-    adminKey: window.XQ_ADMIN_KEY,
-    teacherName: xqCurrentUser?.teacherName || 'admin',
+    teacherName: xqCurrentUser?.teacherName || '',
     confirmText: 'CONFIRM_DELETE'
   });
   
   return result;
 }
 
-// 设置管理员密钥（同时保存到服务器，实现跨设备同步）
-async function xqSetAdminKey(key) {
-  if (key && key.trim()) {
-    localStorage.setItem('xq_admin_key', key.trim());
-    window.XQ_ADMIN_KEY = key.trim();
-    console.log('[XQ] Admin key set locally');
-    
-    // 同时保存到服务器，这样其他设备登录后也能获取
-    try {
-      const result = await xqApi('config', {
-        action: 'set',
-        adminKey: key.trim(),
-        configKey: 'admin_key',
-        configData: { key: key.trim(), setBy: xqCurrentUser?.teacherName || 'admin' },
-        teacherName: xqCurrentUser?.teacherName || 'admin'
-      });
-      if (result.ok) {
-        console.log('[XQ] Admin key synced to server');
-      } else {
-        console.warn('[XQ] Failed to sync admin key to server:', result.error);
-      }
-    } catch (e) {
-      console.warn('[XQ] Error syncing admin key:', e);
-    }
-    
-    return true;
-  }
-  return false;
-}
-
-// 加载管理员密钥（优先从服务器获取，实现跨设备同步）
-async function xqLoadAdminKey() {
-  // 先从 localStorage 加载（快速响应）
-  const localKey = localStorage.getItem('xq_admin_key');
-  if (localKey) {
-    window.XQ_ADMIN_KEY = localKey;
-    console.log('[XQ] Admin key loaded from localStorage');
-  }
-  
-  // 尝试从服务器获取最新密钥（覆盖本地）
-  try {
-    const result = await xqApi('config', { action: 'get' });
-    if (result.ok && result.config && result.config.admin_key) {
-      const serverKey = result.config.admin_key.data?.key;
-      if (serverKey) {
-        window.XQ_ADMIN_KEY = serverKey;
-        localStorage.setItem('xq_admin_key', serverKey);
-        console.log('[XQ] Admin key synced from server');
-      }
-    }
-  } catch (e) {
-    console.warn('[XQ] Failed to load admin key from server:', e);
-  }
-  
-  return window.XQ_ADMIN_KEY;
+// 管理员身份检查（直接判断用户名）
+function isXqAdmin() {
+  return xqCurrentUser?.teacherName === XQ_ADMIN_NAME;
 }
 
 /* ============================================================
@@ -1601,8 +1542,8 @@ function saveStudentsToStorage() {
   try {
     localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
     
-    // 同步到服务器（如果已登录且有管理员密钥）
-    if (xqCurrentUser && window.XQ_ADMIN_KEY) {
+    // 同步到服务器（如果已登录且是管理员）
+    if (xqCurrentUser && isXqAdmin()) {
       // 异步同步，不阻塞主流程
       Object.keys(STUDENTS).forEach(cls => {
         xqSaveStudentsToServer(cls).catch(() => {});
@@ -1670,17 +1611,15 @@ async function xqSaveCredentials() {
   // 始终保存到 localStorage
   localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
   
-  // 尝试同步到服务器（如果有管理员密钥）
-  if (window.XQ_ADMIN_KEY) {
+  // 同步到服务器（仅管理员可写入）
+  if (isXqAdmin()) {
     try {
       const result = await xqApi('config', {
         action: 'set',
-        adminKey: window.XQ_ADMIN_KEY,
         configKey: 'credentials',
         configData: xqCredentials,
         teacherName: XQ_ADMIN_NAME
       });
-      // 服务器同步结果（无论成功失败，本地已保存成功）
       if (!result.ok) {
         console.warn('[XQ] Failed to sync credentials to server:', result.error);
       }
@@ -1688,7 +1627,7 @@ async function xqSaveCredentials() {
       console.warn('[XQ] Failed to sync credentials to server:', e);
     }
   }
-  return { ok: true }; // localStorage 保存成功即视为成功
+  return { ok: true };
 }
 
 // 检查凭证系统是否已初始化（至少管理员有密码）
@@ -1931,10 +1870,6 @@ async function doAdminInit() {
   
   // 设置管理员密码
   await setUserPassword(XQ_ADMIN_NAME, p1, 'leader', [], null);
-  
-  // 自动生成管理员密钥并保存到服务器
-  const adminKey = 'xq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  await xqSetAdminKey(adminKey);
   
   closeAdminInitDialog();
   alert('管理员初始化成功！\n\n请使用以下信息登录：\n用户名：' + XQ_ADMIN_NAME + '\n密码：您刚才设置的密码\n\n登录后请进入"学校数据设置"导入教师信息。');
@@ -5278,7 +5213,7 @@ function renderSetupContent() {
 
 /* ===== CLOUD SYNC SETUP ===== */
 function renderCloudSetup() {
-  const hasAdminKey = !!window.XQ_ADMIN_KEY;
+  const isAdmin = isXqAdmin();
   const syncStatus = xqLastSyncTime > 0 
     ? `上次同步: ${new Date(xqLastSyncTime).toLocaleString('zh-CN')}` 
     : '尚未同步';
@@ -5291,29 +5226,20 @@ function renderCloudSetup() {
         </div>
         <div style="padding:20px;background:var(--gray-50);border-radius:var(--radius);margin-bottom:16px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <div style="width:40px;height:40px;border-radius:10px;background:${hasAdminKey ? 'var(--accent-light)' : 'var(--warning-light)'};display:flex;align-items:center;justify-content:center;font-size:20px">
-              ${hasAdminKey ? '✅' : '⚠️'}
+            <div style="width:40px;height:40px;border-radius:10px;background:${isAdmin ? 'var(--accent-light)' : 'var(--warning-light)'};display:flex;align-items:center;justify-content:center;font-size:20px">
+              ${isAdmin ? '✅' : '⚠️'}
             </div>
             <div>
-              <div style="font-weight:600;color:var(--gray-800)">${hasAdminKey ? '已启用云端同步' : '未设置管理员密钥'}</div>
+              <div style="font-weight:600;color:var(--gray-800)">${isAdmin ? '管理员模式 — 数据自动同步到云端' : '只读模式 — 数据由管理员同步'}</div>
               <div style="font-size:12px;color:var(--gray-500)">${syncStatus}</div>
             </div>
           </div>
           
           <div style="background:#fff;padding:16px;border-radius:var(--radius-sm);border:1px solid var(--gray-200)">
-            <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:8px">
-              管理员密钥
-            </label>
-            <div style="display:flex;gap:8px">
-              <input type="password" id="adminKeyInput" placeholder="输入管理员密钥以启用云端同步" 
-                style="flex:1;padding:10px 12px;border:1px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px"
-                value="${hasAdminKey ? '••••••••' : ''}">
-              <button class="toolbar-btn primary" onclick="saveAdminKey()" style="padding:10px 16px;font-size:13px">
-                保存密钥
-              </button>
-            </div>
-            <div style="font-size:11px;color:var(--gray-400);margin-top:8px">
-              管理员密钥用于保护学校配置的写入权限。只有拥有密钥的管理员才能修改学校配置并同步到云端。
+            <div style="font-size:13px;color:var(--gray-700);line-height:1.8">
+              ${isAdmin 
+                ? '✓ 您是管理员（吴胜闯），保存的学校数据会自动同步到云端，所有老师都能看到。'
+                : '当前登录用户不是管理员，学校数据由管理员（吴胜闯）统一管理和同步。'}
             </div>
           </div>
         </div>
@@ -5321,14 +5247,14 @@ function renderCloudSetup() {
         <div style="padding:16px;background:var(--primary-bg);border-radius:var(--radius);border:1px solid var(--primary-light)">
           <div style="font-weight:600;color:var(--primary-dark);margin-bottom:8px">💡 使用说明</div>
           <ul style="font-size:12px;color:var(--gray-600);padding-left:16px;line-height:1.8">
-            <li>设置管理员密钥后，保存的学校数据会自动同步到云端</li>
+            <li>管理员保存的学校数据会自动同步到云端</li>
             <li>所有老师登录后都能看到云端同步的数据</li>
             <li>班主任只能修改自己班级的学生记录</li>
-            <li>学期结束时，管理员可以清除学期数据释放空间</li>
+            ${isAdmin ? '<li>学期结束时，可以点击下方按钮清除学期数据</li>' : ''}
           </ul>
         </div>
         
-        ${hasAdminKey ? `
+        ${isAdmin ? `
         <div style="margin-top:16px;padding:16px;background:var(--danger-light);border-radius:var(--radius);border:1px solid #fecaca">
           <div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠️ 危险操作</div>
           <button class="toolbar-btn" onclick="clearSemesterData()" style="background:var(--danger);color:#fff;padding:8px 16px;font-size:13px">
@@ -5340,30 +5266,6 @@ function renderCloudSetup() {
       </div>
     </div>
   `;
-}
-
-async function saveAdminKey() {
-  const input = document.getElementById('adminKeyInput');
-  const key = input.value.trim();
-  
-  if (!key || key === '••••••••') {
-    showToast('请输入有效的管理员密钥', 'error');
-    return;
-  }
-  
-  showToast('正在保存管理员密钥...', 'success');
-  if (await xqSetAdminKey(key)) {
-    showToast('✓ 管理员密钥已保存，云端同步已启用');
-    // 立即同步一次
-    const result = await xqSaveAllConfigToServer();
-    if (result.ok) {
-      showToast('✓ 数据已同步到云端');
-    } else {
-      showToast('⚠ 密钥已保存，但数据同步失败：' + (result.error || ''), 'warning');
-    }
-  } else {
-    showToast('✕ 保存失败', 'error');
-  }
 }
 
 async function clearSemesterData() {
@@ -6186,8 +6088,8 @@ async function saveSchoolConfigToStorage() {
     };
     localStorage.setItem('school_config_data', JSON.stringify(config));
     
-    // 同步到服务器（如果有管理员密钥）
-    if (window.XQ_ADMIN_KEY) {
+    // 同步到服务器（仅管理员可写入）
+    if (isXqAdmin()) {
       const result = await xqSaveAllConfigToServer();
       if (result.ok) {
         console.log('[XQ] Config synced to server');
@@ -6197,8 +6099,8 @@ async function saveSchoolConfigToStorage() {
         return { ok: false, error: result.error, synced: false };
       }
     } else {
-      console.warn('[XQ] No admin key, config saved locally only');
-      return { ok: true, synced: false, error: 'No admin key' };
+      console.warn('[XQ] Not admin, config saved locally only');
+      return { ok: true, synced: false, error: 'Not admin' };
     }
   } catch (e) { 
     console.warn('Failed to save config:', e);
@@ -6286,18 +6188,14 @@ try {
 
 // 先从服务器加载所有配置，再恢复会话或显示登录界面
 (async () => {
-  // 1. 从服务器加载管理员密钥（实现跨设备同步）
-  await xqLoadAdminKey();
-  console.log('[XQ] Admin key loaded:', window.XQ_ADMIN_KEY ? 'yes' : 'no');
-  
-  // 2. 从服务器加载完整配置（包括 setupTeaching、凭证等）
+  // 从服务器加载完整配置（包括 setupTeaching、凭证等）
   // 这样即使没有会话，登录时也能检查教师名单
   await xqLoadAllConfig();
   console.log('[XQ] Config loaded from server');
   console.log('[XQ] setupTeaching length:', setupTeaching.length);
   console.log('[XQ] Credentials loaded, users:', Object.keys(xqCredentials).length);
   
-  // 3. 尝试恢复之前的登录会话
+  // 尝试恢复之前的登录会话
   if (!restoreSession()) {
     // 没有可恢复的会话，显示登录界面
     checkLoginState();
