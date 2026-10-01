@@ -1156,14 +1156,22 @@ let xqLastSyncTime = 0;
 // API 调用封装
 async function xqApi(action, data = {}) {
   try {
+    console.log('[XQ API] Calling:', action, data.action || '');
     const response = await fetch(XQ_API_BASE + '/' + action, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return await response.json();
+    
+    if (!response.ok) {
+      console.error('[XQ API] HTTP error:', response.status, response.statusText);
+    }
+    
+    const result = await response.json();
+    console.log('[XQ API] Response:', action, result.ok ? 'success' : 'failed');
+    return result;
   } catch (e) {
-    console.error('[XQ API] Error:', e);
+    console.error('[XQ API] Error:', action, e);
     return { ok: false, error: e.message };
   }
 }
