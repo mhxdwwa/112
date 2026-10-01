@@ -2433,6 +2433,9 @@ function iconLayout() {
 function iconFile() {
   return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
 }
+function iconLock() {
+  return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+}
 function iconAlert() {
   return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 }
@@ -2501,23 +2504,31 @@ function buildSidebar() {
   if (xqCurrentUser?.teacherName === XQ_ADMIN_NAME) {
     html += `<div class="sidebar-section">`;
     html += `<div class="sidebar-section-title">系统管理</div>`;
+    // 1. 授课班级
+    html += `<div class="sidebar-item" data-page="teach-classes" onclick="navigate('teach-classes')">
+      <span class="sidebar-icon">${iconUsers()}</span>
+      <span>授课班级</span>
+    </div>`;
+    // 2. 学校数据设置
     html += `<div class="sidebar-item" data-page="school-setup" onclick="openSetupPage()">
       <span class="sidebar-icon">${iconSettings()}</span>
       <span>学校数据设置</span>
     </div>`;
-    // 添加管理员学生管理菜单
-    const adminConfig = NAV_CONFIG.admin;
-    adminConfig.forEach(section => {
-      html += `<div class="sidebar-section">`;
-      html += `<div class="sidebar-section-title">${section.section}</div>`;
-      section.items.forEach(item => {
-        html += `<div class="sidebar-item" data-page="${item.id}" onclick="navigate('${item.id}')">
-          <span class="sidebar-icon">${item.icon()}</span>
-          <span>${item.label}</span>
-        </div>`;
-      });
-      html += `</div>`;
-    });
+    // 3. 全校班级查看
+    html += `<div class="sidebar-item" data-page="all-classes-view" onclick="navigate('all-classes-view')">
+      <span class="sidebar-icon">${iconLayout()}</span>
+      <span>全校班级查看</span>
+    </div>`;
+    // 4. 上传学生名单
+    html += `<div class="sidebar-item" data-page="admin-students" onclick="navigate('admin-students')">
+      <span class="sidebar-icon">${iconUsers()}</span>
+      <span>上传学生名单</span>
+    </div>`;
+    // 5. 密码管理
+    html += `<div class="sidebar-item" data-page="password-mgmt" onclick="navigate('password-mgmt')">
+      <span class="sidebar-icon">${iconLock()}</span>
+      <span>密码管理</span>
+    </div>`;
     html += `</div>`;
   }
   
@@ -2621,6 +2632,7 @@ function navigate(pageId) {
     'family-situation': '家庭情况', 'family-overview': '全校学生家庭情况',
     'admin-students': '上传学生名单',
     'admin-class-students': '班级学生管理',
+    'password-mgmt': '密码管理',
   };
   document.getElementById('headerTitle').textContent = titles[pageId] || '';
   document.getElementById('headerBreadcrumb').textContent = `首页 / ${titles[pageId] || ''}`;
@@ -2655,6 +2667,7 @@ function renderPage(pageId) {
     'family-overview': renderFamilyOverview,
     'admin-students': renderAdminStudents,
     'admin-class-students': renderAdminClassStudents,
+    'password-mgmt': renderPasswordMgmt,
   };
   if (renderers[pageId]) content.innerHTML = renderers[pageId]();
 }
@@ -4073,6 +4086,184 @@ function exportAdminRoster(cls) {
   a.download = `${cls}_学生名单.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ----- ADMIN: Password Management ----- */
+function renderPasswordMgmt() {
+  // 获取所有教师（包括领导、班主任、科任老师）
+  const allTeachers = [];
+  
+  // 从 setupRoles 获取领导
+  if (setupRoles && setupRoles.length > 0) {
+    setupRoles.forEach(r => {
+      allTeachers.push({ name: r.name, role: r.role || 'leader', title: r.title || '校领导' });
+    });
+  }
+  
+  // 从 setupTeaching 获取老师
+  if (setupTeaching && setupTeaching.length > 0) {
+    setupTeaching.forEach(t => {
+      if (t.name && !allTeachers.find(x => x.name === t.name)) {
+        allTeachers.push({ name: t.name, role: 'teacher', title: t.title || '教师' });
+      }
+    });
+  }
+  
+  // 从 setupClasses 获取班主任
+  if (setupClasses && setupClasses.length > 0) {
+    setupClasses.forEach(cls => {
+      if (cls.headteacher && !allTeachers.find(x => x.name === cls.headteacher)) {
+        allTeachers.push({ name: cls.headteacher, role: 'headteacher', title: '班主任' });
+      }
+    });
+  }
+  
+  if (allTeachers.length === 0) {
+    return `<div class="card anim-in">
+      <div class="card-body" style="text-align:center;padding:40px">
+        <div style="font-size:48px;margin-bottom:16px">👥</div>
+        <div style="font-size:16px;color:var(--gray-500);margin-bottom:16px">暂无教师数据</div>
+        <div style="font-size:13px;color:var(--gray-400)">请先在"学校数据设置"中导入教师信息</div>
+      </div>
+    </div>`;
+  }
+  
+  // 按角色分组显示
+  const leaders = allTeachers.filter(t => t.role === 'leader');
+  const headteachers = allTeachers.filter(t => t.role === 'headteacher');
+  const teachers = allTeachers.filter(t => t.role === 'teacher');
+  
+  let teacherListHtml = '';
+  
+  if (leaders.length > 0) {
+    teacherListHtml += `<div style="margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--gray-700);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary-light)">校领导 (${leaders.length}人)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">`;
+    leaders.forEach(t => {
+      teacherListHtml += `<label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--gray-200)'">
+        <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:16px;height:16px">
+        <div>
+          <div style="font-weight:500;font-size:13px">${t.name}</div>
+          <div style="font-size:11px;color:var(--gray-500)">${t.title}</div>
+        </div>
+      </label>`;
+    });
+    teacherListHtml += `</div></div>`;
+  }
+  
+  if (headteachers.length > 0) {
+    teacherListHtml += `<div style="margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--gray-700);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--accent-light)">班主任 (${headteachers.length}人)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">`;
+    headteachers.forEach(t => {
+      teacherListHtml += `<label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--accent-light)'" onmouseout="this.style.borderColor='var(--gray-200)'">
+        <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:16px;height:16px">
+        <div>
+          <div style="font-weight:500;font-size:13px">${t.name}</div>
+          <div style="font-size:11px;color:var(--gray-500)">${t.title}</div>
+        </div>
+      </label>`;
+    });
+    teacherListHtml += `</div></div>`;
+  }
+  
+  if (teachers.length > 0) {
+    teacherListHtml += `<div style="margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--gray-700);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--success)">科任老师 (${teachers.length}人)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">`;
+    teachers.forEach(t => {
+      teacherListHtml += `<label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--success)'" onmouseout="this.style.borderColor='var(--gray-200)'">
+        <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:16px;height:16px">
+        <div>
+          <div style="font-weight:500;font-size:13px">${t.name}</div>
+          <div style="font-size:11px;color:var(--gray-500)">${t.title}</div>
+        </div>
+      </label>`;
+    });
+    teacherListHtml += `</div></div>`;
+  }
+  
+  return `
+    <div class="card anim-in">
+      <div class="card-header">
+        <span class="card-title">重置教师密码</span>
+        <div style="display:flex;gap:8px">
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllTeachers(true)">全选</button>
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllTeachers(false)">取消全选</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px">
+          <div style="font-size:13px;color:var(--warning-dark)">
+            <strong>提示：</strong>勾选需要重置密码的教师，点击"重置密码"按钮后，选中教师的密码将被重置为默认密码 <code style="background:#fff;padding:2px 6px;border-radius:4px">123456</code>
+          </div>
+        </div>
+        ${teacherListHtml}
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);display:flex;gap:12px;justify-content:flex-end">
+          <button class="toolbar-btn primary" onclick="resetSelectedPasswords()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            重置选中教师密码
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function selectAllTeachers(select) {
+  document.querySelectorAll('.teacher-reset-checkbox').forEach(cb => {
+    cb.checked = select;
+  });
+}
+
+async function resetSelectedPasswords() {
+  const selected = [];
+  document.querySelectorAll('.teacher-reset-checkbox:checked').forEach(cb => {
+    selected.push(cb.dataset.name);
+  });
+  
+  if (selected.length === 0) {
+    showToast('请先勾选要重置密码的教师', 'warning');
+    return;
+  }
+  
+  if (!confirm(`确定要重置以下 ${selected.length} 位教师的密码吗？\n\n${selected.join('、')}\n\n密码将被重置为：123456`)) {
+    return;
+  }
+  
+  const defaultPassword = '123456';
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (const name of selected) {
+    try {
+      await setUserPassword(name, defaultPassword, null, [], null);
+      successCount++;
+      console.log('[XQ] Password reset for:', name);
+    } catch (e) {
+      failCount++;
+      console.warn('[XQ] Failed to reset password for:', name, e);
+    }
+  }
+  
+  // 同步到云端
+  if (xqCurrentUser && isXqAdmin()) {
+    try {
+      await xqSaveCredentials();
+      console.log('[XQ] Credentials synced to cloud');
+    } catch (e) {
+      console.warn('[XQ] Failed to sync credentials:', e);
+    }
+  }
+  
+  let msg = `已重置 ${successCount} 位教师的密码`;
+  if (failCount > 0) msg += `，${failCount} 位失败`;
+  
+  showToast(msg, failCount > 0 ? 'warning' : 'success');
+  
+  if (successCount > 0) {
+    // 刷新页面
+    setTimeout(() => navigate('password-mgmt'), 1000);
+  }
 }
 
 /* ----- REUSABLE: Seating Chart for Any Class ----- */
@@ -6994,12 +7185,25 @@ function renderRolesSetup() {
 function showAddRoleModal() {
   showModal('添加领导', `
     <div class="form-group">
+      <label class="form-label">职务</label>
+      <select class="form-select" id="newRoleTitle">
+        <option value="校长">校长</option>
+        <option value="副校长">副校长</option>
+        <option value="教导主任">教导主任</option>
+        <option value="政教主任">政教主任</option>
+        <option value="总务主任">总务主任</option>
+        <option value="年级组长">年级组长</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label class="form-label">姓名</label>
       <input class="form-input" id="newRoleName" placeholder="领导姓名">
     </div>
-    <div class="form-group">
-      <label class="form-label">初始密码</label>
-      <input class="form-input" id="newRolePassword" type="password" placeholder="设置登录密码（至少4位）" value="123456">
+    <div style="background:var(--info-light);border:1px solid var(--info);border-radius:8px;padding:10px 14px;margin-top:8px">
+      <div style="font-size:12px;color:var(--info-dark)">
+        <strong>提示：</strong>添加后可在"密码管理"中为该领导设置登录密码。
+      </div>
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="addRoleRow()">添加</button>`);
@@ -7007,18 +7211,15 @@ function showAddRoleModal() {
 
 function addRoleRow() {
   const name = document.getElementById('newRoleName').value.trim();
-  const password = document.getElementById('newRolePassword').value.trim();
+  const title = document.getElementById('newRoleTitle').value;
   if (!name) { showToast('请输入姓名', 'warning'); return; }
-  if (!password || password.length < 4) { showToast('密码至少4位', 'warning'); return; }
   
-  // 只添加领导角色
-  setupRoles.push({ name, role: 'leader', title: '校领导', classes: [], subject: null, username: name, password: password });
-  
-  // 立即设置凭证
-  setUserPassword(name, password, 'leader', [], null);
+  // 只添加领导角色（不设置密码，后续在密码管理中设置）
+  setupRoles.push({ name, role: 'leader', title: title, classes: [], subject: null, username: name });
   
   hideModal();
   renderSetupContent();
+  showToast(`已添加领导：${name}（${title}）`, 'success');
 }
 
 function downloadRolesTemplate() {
