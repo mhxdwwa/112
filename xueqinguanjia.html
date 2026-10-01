@@ -3370,6 +3370,10 @@ function renderAdminStudents() {
     gradeGroups[grade].push(cls);
   });
   
+  // 统计信息
+  const totalClasses = CLASS_LIST.length;
+  const totalStudents = CLASS_LIST.reduce((sum, cls) => sum + (STUDENTS[cls] || []).length, 0);
+  
   // 构建年级分组显示
   let gradeSections = '';
   SCHOOL.grades.forEach(grade => {
@@ -3377,21 +3381,21 @@ function renderAdminStudents() {
     if (classes.length === 0) return;
     
     gradeSections += `
-      <div style="margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:14px;font-weight:600;color:var(--primary)">${grade}</span>
-          <span style="font-size:12px;color:var(--gray-500)">(${classes.length}个班)</span>
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:0 4px">
+          <span style="font-size:13px;font-weight:600;color:var(--primary)">${grade}</span>
+          <span style="font-size:11px;color:var(--gray-500)">(${classes.length}个班)</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">
           ${classes.map(cls => {
             const count = (STUDENTS[cls] || []).length;
-            return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;align-items:center;cursor:pointer;transition:all 0.2s;border-left:3px solid var(--primary)" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
-              <input type="checkbox" class="class-select-checkbox" data-class="${cls}" style="cursor:pointer;margin-right:8px" onclick="event.stopPropagation()">
+            return `<div style="padding:8px 12px;background:var(--gray-50);border-radius:6px;display:flex;align-items:center;cursor:pointer;transition:all 0.15s;border-left:3px solid var(--primary)" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
+              <input type="checkbox" class="class-select-checkbox" data-class="${cls}" style="cursor:pointer;margin-right:6px" onclick="event.stopPropagation()">
               <div style="flex:1;display:flex;justify-content:space-between;align-items:center" onclick="openAdminClassStudents('${cls}')">
-                <span style="font-size:13px;font-weight:500">${cls}</span>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
-                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级">✕</button>
+                <span style="font-size:12px;font-weight:500">${cls}</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:11px;color:var(--gray-500)">${count}人</span>
+                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:1px;color:var(--danger);font-size:12px;opacity:0.6" title="删除该班级" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">✕</button>
                 </div>
               </div>
             </div>`;
@@ -3405,21 +3409,21 @@ function renderAdminStudents() {
   const unclassified = gradeGroups['未分类'] || [];
   if (unclassified.length > 0) {
     gradeSections += `
-      <div style="margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:14px;font-weight:600;color:var(--gray-500)">未分类</span>
-          <span style="font-size:12px;color:var(--gray-400)">(${unclassified.length}个班)</span>
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:0 4px">
+          <span style="font-size:13px;font-weight:600;color:var(--gray-500)">未分类</span>
+          <span style="font-size:11px;color:var(--gray-400)">(${unclassified.length}个班)</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">
           ${unclassified.map(cls => {
             const count = (STUDENTS[cls] || []).length;
-            return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;align-items:center;cursor:pointer;transition:all 0.2s;border-left:3px solid var(--gray-300)" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
-              <input type="checkbox" class="class-select-checkbox" data-class="${cls}" style="cursor:pointer;margin-right:8px" onclick="event.stopPropagation()">
+            return `<div style="padding:8px 12px;background:var(--gray-50);border-radius:6px;display:flex;align-items:center;cursor:pointer;transition:all 0.15s;border-left:3px solid var(--gray-300)" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
+              <input type="checkbox" class="class-select-checkbox" data-class="${cls}" style="cursor:pointer;margin-right:6px" onclick="event.stopPropagation()">
               <div style="flex:1;display:flex;justify-content:space-between;align-items:center" onclick="openAdminClassStudents('${cls}')">
-                <span style="font-size:13px;font-weight:500">${cls}</span>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
-                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级">✕</button>
+                <span style="font-size:12px;font-weight:500">${cls}</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:11px;color:var(--gray-500)">${count}人</span>
+                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:1px;color:var(--danger);font-size:12px;opacity:0.6" title="删除该班级" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">✕</button>
                 </div>
               </div>
             </div>`;
@@ -3430,71 +3434,63 @@ function renderAdminStudents() {
   }
   
   return `
-    <div class="card anim-in" style="margin-bottom:16px">
-      <div class="card-header">
-        <span class="card-title">年级分类管理</span>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select id="gradeAssignSelect" class="toolbar-select" style="font-size:12px;padding:4px 8px">
+    <div class="card anim-in" style="margin-bottom:12px">
+      <div class="card-header" style="padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="card-title" style="font-size:15px">班级列表</span>
+          <span style="font-size:12px;color:var(--gray-500);background:var(--gray-100);padding:2px 8px;border-radius:10px">${totalClasses}个班 · ${totalStudents}人</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <select id="gradeAssignSelect" class="toolbar-select" style="font-size:11px;padding:4px 8px">
             <option value="">选择年级...</option>
             ${SCHOOL.grades.map(g => `<option value="${g}">${g}</option>`).join('')}
           </select>
-          <button class="toolbar-btn primary" style="font-size:12px;padding:6px 12px" onclick="assignSelectedClassesToGrade()">分配选中班级</button>
-          <button class="toolbar-btn ghost" style="font-size:12px;padding:6px 12px;color:var(--danger);border-color:var(--danger)" onclick="batchDeleteSelectedClasses()">批量删除选中</button>
+          <button class="toolbar-btn primary" style="font-size:11px;padding:5px 10px" onclick="assignSelectedClassesToGrade()">分配年级</button>
+          <button class="toolbar-btn ghost" style="font-size:11px;padding:5px 10px;color:var(--danger);border-color:var(--danger)" onclick="batchDeleteSelectedClasses()">批量删除</button>
         </div>
       </div>
-      <div class="card-body">
-        <div style="padding:12px;background:var(--primary-bg);border-radius:8px;margin-bottom:12px">
-          <div style="font-size:13px;color:#1E40AF;margin-bottom:6px"><strong>操作说明：</strong></div>
-          <div style="font-size:12px;color:var(--gray-600);line-height:1.6">
-            <div>• 勾选班级前的复选框，选择年级后点击"分配选中班级"</div>
-            <div>• 勾选班级后可点击"批量删除选中"彻底删除多个班级</div>
-            <div>• 点击班级卡片可进入该班级学生管理页面</div>
-            <div>• 点击 ✕ 按钮可删除单个班级</div>
-            <div style="color:var(--accent);font-weight:600;margin-top:4px">• 所有更改需点击底部"保存到云端"按钮才会同步到服务器</div>
-          </div>
-        </div>
-        <div style="margin-bottom:12px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--gray-700)">
+      <div class="card-body" style="padding:8px 16px 12px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:6px 10px;background:var(--gray-50);border-radius:6px;font-size:11px;color:var(--gray-600)">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
             <input type="checkbox" id="selectAllClasses" onchange="toggleSelectAllClasses(this)" style="cursor:pointer">
-            <span>全选/取消全选</span>
+            <span>全选</span>
           </label>
+          <span style="color:var(--gray-300)">|</span>
+          <span>点击班级进入管理 · ✕删除单个 · 需点击底部"保存到云端"</span>
         </div>
-        ${gradeSections}
+        <div style="max-height:calc(100vh - 320px);overflow-y:auto;padding-right:4px">
+          ${gradeSections || '<div style="text-align:center;color:var(--gray-400);padding:40px">暂无班级数据，请先上传学生名单</div>'}
+        </div>
       </div>
     </div>
     
-    <div class="card anim-in anim-d1" style="margin-bottom:16px">
-      <div class="card-header">
-        <span class="card-title">上传学生名单</span>
-        <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadStudentTemplate()">下载模板</button>
-      </div>
-      <div class="card-body">
-        <div style="padding:16px;background:var(--primary-bg);border-radius:8px;margin-bottom:16px">
-          <div style="font-size:13px;color:#1E40AF;margin-bottom:8px"><strong>格式说明：</strong></div>
-          <div style="font-size:12px;color:var(--gray-600);line-height:1.8">
-            <div>• 列顺序：<strong>班级</strong>、<strong>学生姓名</strong>、家长姓名（可选）、家长电话（可选）</div>
-            <div>• 支持单个班级或整个年级批量上传</div>
-            <div>• 支持 Excel (.xlsx/.xls) 和 CSV 格式</div>
-            <div>• 同名学生会自动跳过，不会重复导入</div>
-          </div>
+    <details class="card anim-in anim-d1" style="margin-bottom:12px">
+      <summary style="padding:12px 16px;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray-700);list-style:none;display:flex;align-items:center;gap:8px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        上传学生名单
+        <span style="font-size:11px;color:var(--gray-400);margin-left:auto">点击展开</span>
+      </summary>
+      <div style="padding:0 16px 16px">
+        <div style="padding:10px;background:var(--gray-50);border-radius:6px;margin-bottom:12px;font-size:11px;color:var(--gray-600);line-height:1.6">
+          <strong>格式：</strong>班级、学生姓名、家长姓名(可选)、家长电话(可选) · 支持Excel/CSV · 同名自动跳过
+          <button class="toolbar-btn ghost" style="font-size:10px;padding:2px 8px;margin-left:8px" onclick="downloadStudentTemplate()">下载模板</button>
         </div>
-        
-        <div class="setup-import-zone" style="margin-bottom:16px">
+        <div class="setup-import-zone">
           <input type="file" accept=".xlsx,.xls,.csv" onchange="importStudentsFromExcel(event)">
           <div class="setup-import-icon">📥</div>
-          <div class="setup-import-title">点击上传学生名单文件</div>
-          <div class="setup-import-hint">支持 Excel 和 CSV 格式</div>
+          <div class="setup-import-title" style="font-size:13px">点击上传学生名单文件</div>
+          <div class="setup-import-hint" style="font-size:11px">支持 Excel 和 CSV 格式</div>
         </div>
       </div>
-    </div>
+    </details>
     
-    <div class="card anim-in anim-d2" style="position:sticky;bottom:0;z-index:10;box-shadow:0 -4px 20px rgba(0,0,0,0.1)">
-      <div class="card-body" style="padding:16px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:13px;color:var(--gray-600)">
-          ${studentsDataChanged ? '<span style="color:var(--accent)">● 有未保存到云端的更改</span>' : '<span style="color:var(--accent)">✓ 所有更改已保存到云端</span>'}
+    <div class="card anim-in anim-d2" style="position:sticky;bottom:0;z-index:10;box-shadow:0 -4px 20px rgba(0,0,0,0.08);border-radius:8px 8px 0 0">
+      <div class="card-body" style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:12px;color:var(--gray-600)">
+          ${studentsDataChanged ? '<span style="color:var(--accent);font-weight:500">● 有未保存的更改</span>' : '<span style="color:var(--accent)">✓ 已保存到云端</span>'}
         </div>
-        <button id="saveToCloudBtn" class="toolbar-btn primary" style="font-size:14px;padding:10px 24px;font-weight:600" onclick="saveStudentsToCloud()">
-          ${studentsDataChanged ? '⬆ 保存到云端（有未保存的更改）' : '✓ 已保存到云端'}
+        <button id="saveToCloudBtn" class="toolbar-btn primary" style="font-size:13px;padding:8px 20px;font-weight:600" onclick="saveStudentsToCloud()">
+          ${studentsDataChanged ? '⬆ 保存到云端' : '✓ 已保存'}
         </button>
       </div>
     </div>
