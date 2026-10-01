@@ -1214,6 +1214,12 @@ async function xqLoadAllConfig() {
       if (result.config.setupRoles && result.config.setupRoles.data) {
         setupRoles = result.config.setupRoles.data;
       }
+      // 加载班级-年级映射
+      if (result.config.classGradeMap && result.config.classGradeMap.data) {
+        classGradeMap = result.config.classGradeMap.data;
+        saveClassGradeMap();
+        console.log('[XQ] Loaded class grade map, entries:', Object.keys(classGradeMap).length);
+      }
       // 加载凭证（credentials）
       if (result.config.credentials && result.config.credentials.data) {
         xqCredentials = result.config.credentials.data;
@@ -1285,7 +1291,8 @@ async function xqSaveAllConfigToServer() {
     setupTeaching: setupTeaching || [],
     setupClasses: setupClasses || [],
     setupRoles: setupRoles || [],
-    credentials: xqCredentials || {}
+    credentials: xqCredentials || {},
+    classGradeMap: classGradeMap || {}
   };
   
   // 同时保存各班学生数据
@@ -1301,6 +1308,7 @@ async function xqSaveAllConfigToServer() {
     setupTeaching: configs.setupTeaching.length,
     setupClasses: configs.setupClasses.length,
     credentials: Object.keys(configs.credentials).length,
+    classGradeMap: Object.keys(configs.classGradeMap).length,
     studentClasses: Object.keys(STUDENTS).filter(c => STUDENTS[c].length > 0).length
   });
   
@@ -1603,6 +1611,36 @@ function saveStudentsToStorage() {
 
 const STUDENTS = loadStudentsFromStorage() || generateStudents();
 const CLASS_LIST = Object.keys(STUDENTS);
+
+// 班级-年级映射: {"25-1": "七年级", "26-1": "八年级", ...}
+let classGradeMap = {};
+
+// 加载班级-年级映射
+function loadClassGradeMap() {
+  try {
+    const saved = localStorage.getItem('xq_class_grade_map');
+    if (saved) {
+      classGradeMap = JSON.parse(saved);
+      console.log('[XQ] Class grade map loaded, entries:', Object.keys(classGradeMap).length);
+    }
+  } catch (e) { console.warn('[XQ] Failed to load class grade map:', e); }
+}
+
+// 保存班级-年级映射
+function saveClassGradeMap() {
+  try {
+    localStorage.setItem('xq_class_grade_map', JSON.stringify(classGradeMap));
+    console.log('[XQ] Class grade map saved');
+    
+    // 同步到服务器（如果管理员已登录）
+    if (xqCurrentUser && isXqAdmin()) {
+      xqSaveConfigToServer('classGradeMap', classGradeMap).catch(() => {});
+    }
+  } catch (e) { console.warn('[XQ] Failed to save class grade map:', e); }
+}
+
+// 初始化加载
+loadClassGradeMap();
 
 // App version for cache invalidation
 const APP_VERSION = '3.9'; // v3.9: 修复设置密码失败问题，确保本地保存成功即视为成功
@@ -3223,18 +3261,107 @@ function showClassFamilyDetail(cls) {
 
 /* ----- ADMIN: Upload Student Lists ----- */
 function renderAdminStudents() {
-  // 获取所有班级，按年级分组
-  const grades = {};
+  // 按年级分组显示班级
+  const gradeGroups = {};
+  SCHOOL.grades.forEach(g => gradeGroups[g] = []);
+  gradeGroups['未分类'] = [];
+  
   CLASS_LIST.forEach(cls => {
-    const match = cls.match(/^(\d+年级|\d+班|.*年级)/);
-    const grade = match ? match[1] : '其他';
-    if (!grades[grade]) grades[grade] = [];
-    grades[grade].push(cls);
+    const grade = classGradeMap[cls] || '未分类';
+    if (!gradeGroups[grade]) gradeGroups[grade] = [];
+    gradeGroups[grade].push(cls);
   });
   
-  let classOptions = CLASS_LIST.map(cls => `<option value="${cls}">${cls}</option>`).join('');
+  // 构建年级分组显示
+  let gradeSections = '';
+  SCHOOL.grades.forEach(grade => {
+    const classes = gradeGroups[grade] || [];
+    if (classes.length === 0) return;
+    
+    gradeSections += `
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:14px;font-weight:600;color:var(--primary)">${grade}</span>
+          <span style="font-size:12px;color:var(--gray-500)">(${classes.length}个班)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+          ${classes.map(cls => {
+            const count = (STUDENTS[cls] || []).length;
+            return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;align-items:center;cursor:pointer;transition:all 0.2s;border-left:3px solid var(--primary)" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
+              <input type="checkbox" class="class-select-checkbox" data-class="${cls}" style="cursor:pointer;margin-right:8px" onclick="event.stopPropagation()">
+              <div style="flex:1;display:flex;justify-content:space-between;align-items:center" onclick="openAdminClassStudents('${cls}')">
+                <span style="font-size:13px;font-weight:500">${cls}</span>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
+                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级">✕</button>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  });
+  
+  // 未分类班级
+  const unclassified = gradeGroups['未分类'] || [];
+  if (unclassified.length > 0) {
+    gradeSections += `
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:14px;font-weight:600;color:var(--gray-500)">未分类</span>
+          <span style="font-size:12px;color:var(--gray-400)">(${unclassified.length}个班)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+          ${unclassified.map(cls => {
+            const count = (STUDENTS[cls] || []).length;
+            return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;align-items:center;cursor:pointer;transition:all 0.2s;border-left:3px solid var(--gray-300)" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
+              <input type="checkbox" class="class-select-checkbox" data-class="${cls}" style="cursor:pointer;margin-right:8px" onclick="event.stopPropagation()">
+              <div style="flex:1;display:flex;justify-content:space-between;align-items:center" onclick="openAdminClassStudents('${cls}')">
+                <span style="font-size:13px;font-weight:500">${cls}</span>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
+                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级">✕</button>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
   
   return `
+    <div class="card anim-in" style="margin-bottom:16px">
+      <div class="card-header">
+        <span class="card-title">年级分类管理</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="gradeAssignSelect" class="toolbar-select" style="font-size:12px;padding:4px 8px">
+            <option value="">选择年级...</option>
+            ${SCHOOL.grades.map(g => `<option value="${g}">${g}</option>`).join('')}
+          </select>
+          <button class="toolbar-btn primary" style="font-size:12px;padding:6px 12px" onclick="assignSelectedClassesToGrade()">分配选中班级</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="padding:12px;background:var(--primary-bg);border-radius:8px;margin-bottom:12px">
+          <div style="font-size:13px;color:#1E40AF;margin-bottom:6px"><strong>操作说明：</strong></div>
+          <div style="font-size:12px;color:var(--gray-600);line-height:1.6">
+            <div>• 勾选班级前的复选框，选择年级后点击"分配选中班级"</div>
+            <div>• 点击班级卡片可进入该班级学生管理页面</div>
+            <div>• 点击 ✕ 按钮可彻底删除班级（含学生数据）</div>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--gray-700)">
+            <input type="checkbox" id="selectAllClasses" onchange="toggleSelectAllClasses(this)" style="cursor:pointer">
+            <span>全选/取消全选</span>
+          </label>
+        </div>
+        ${gradeSections}
+      </div>
+    </div>
+    
     <div class="card anim-in anim-d1">
       <div class="card-header">
         <span class="card-title">上传学生名单</span>
@@ -3257,25 +3384,48 @@ function renderAdminStudents() {
           <div class="setup-import-title">点击上传学生名单文件</div>
           <div class="setup-import-hint">支持 Excel 和 CSV 格式</div>
         </div>
-        
-        <div style="margin-top:16px">
-          <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:8px">当前班级学生统计（点击班级可管理学生）：</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
-            ${CLASS_LIST.map(cls => {
-              const count = (STUDENTS[cls] || []).length;
-              return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:all 0.2s" onclick="openAdminClassStudents('${cls}')" onmouseover="this.style.background='var(--primary-bg)'" onmouseout="this.style.background='var(--gray-50)'">
-                <span style="font-size:13px;font-weight:500">${cls}</span>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
-                  <button onclick="event.stopPropagation();clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级（含班级号和学生数据）">✕</button>
-                </div>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>
       </div>
     </div>
   `;
+}
+
+// 全选/取消全选
+function toggleSelectAllClasses(checkbox) {
+  document.querySelectorAll('.class-select-checkbox').forEach(cb => {
+    cb.checked = checkbox.checked;
+  });
+}
+
+// 分配选中班级到年级
+function assignSelectedClassesToGrade() {
+  const grade = document.getElementById('gradeAssignSelect').value;
+  if (!grade) {
+    showToast('请先选择年级', 'warning');
+    return;
+  }
+  
+  const selected = [];
+  document.querySelectorAll('.class-select-checkbox:checked').forEach(cb => {
+    selected.push(cb.dataset.class);
+  });
+  
+  if (selected.length === 0) {
+    showToast('请先勾选要分配的班级', 'warning');
+    return;
+  }
+  
+  // 更新映射
+  selected.forEach(cls => {
+    classGradeMap[cls] = grade;
+  });
+  
+  // 保存
+  saveClassGradeMap();
+  
+  showToast(`已将 ${selected.length} 个班级分配到${grade}`, 'success');
+  
+  // 刷新页面
+  navigate('admin-students');
 }
 
 function downloadStudentTemplate() {
