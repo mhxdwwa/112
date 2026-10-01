@@ -3307,9 +3307,9 @@ function importStudentsFromExcel(event) {
     
     header.forEach((c, i) => {
       if (c.includes('班级') || c === '班') classCol = i;
-      else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
       else if (c.includes('家长')) parentCol = i;
       else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
+      else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
     });
     
     if (classCol === -1 || nameCol === -1) {
@@ -4198,8 +4198,6 @@ function showStudentDetail(cls, id) {
           <div class="form-group" style="margin:0"><div class="form-label">请假类型</div><div style="font-weight:500">${s.leaveReason || '未填写'}</div></div>
           <div class="form-group" style="margin:0"><div class="form-label">请假天数</div><div style="font-weight:500">${s.leaveDays ? s.leaveDays + ' 天' : '未填写'}</div></div>
           <div class="form-group" style="margin:0;grid-column:1/-1"><div class="form-label">请假原因说明</div><div style="font-weight:500;color:var(--gray-700)">${s.leaveNote || '未填写'}</div></div>
-          <div class="form-group" style="margin:0;grid-column:1/-1"><div class="form-label">家长信息</div><div style="font-weight:500">${s.parent || '未填写'}</div></div>
-          <div class="form-group" style="margin:0;grid-column:1/-1"><div class="form-label">联系电话</div><div style="font-weight:500">${s.phone || '未填写'}</div></div>
         </div>
       </div>
     `;
@@ -4255,35 +4253,41 @@ function showStudentDetail(cls, id) {
     familyHtml += '</div>';
   }
 
-  // Phone info with copy button
-  let phoneHtml = '';
-  if (s.phone) {
-    phoneHtml = `
-      <div style="margin-top:12px;padding:12px 16px;background:var(--primary-bg);border-radius:8px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">联系电话</div>
-            <div style="font-weight:600;font-size:14px;color:var(--gray-800)">${s.phone}</div>
-          </div>
-          <button class="toolbar-btn ghost" style="padding:6px 12px;font-size:12px" onclick="copyPhoneNumber('${s.phone}', this)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            复制
-          </button>
+  // Phone info with copy button (always shown)
+  let phoneHtml = `
+    <div style="margin-top:12px;padding:12px 16px;background:var(--primary-bg);border-radius:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">家长电话</div>
+          <div style="font-weight:600;font-size:14px;color:var(--gray-800)">${s.phone || '未填写'}</div>
         </div>
+        ${s.phone ? `<button class="toolbar-btn ghost" style="padding:6px 12px;font-size:12px" onclick="copyPhoneNumber('${s.phone}', this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          复制
+        </button>` : ''}
       </div>
-    `;
-  }
+    </div>
+  `;
+
+  // Parent info (always shown)
+  let parentHtml = `
+    <div style="margin-top:12px;padding:12px 16px;background:var(--gray-50);border-radius:8px">
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">家长姓名</div>
+      <div style="font-weight:600;font-size:14px;color:var(--gray-800)">${s.parent || '未填写'}</div>
+    </div>
+  `;
 
   showModal(`${s.name} 详细信息`, `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div class="form-group"><div class="form-label">姓名</div><div style="font-weight:500">${s.name}</div></div>
+      <div class="form-group"><div class="form-label">学生姓名</div><div style="font-weight:600;font-size:15px">${s.name}</div></div>
       <div class="form-group"><div class="form-label">座号</div><div>${s.seat}</div></div>
       <div class="form-group"><div class="form-label">班级</div><div style="font-weight:500">${cls}</div></div>
       <div class="form-group"><div class="form-label">当前状态</div><div><span class="badge ${s.status==='present'?'green':s.status==='leave'?'orange':s.status==='absent'?'red':'blue'}">${STATUS[s.status]}</span></div></div>
     </div>
+    ${parentHtml}
     ${phoneHtml}
     ${leaveDetails}
     ${markBoardingHtml}
@@ -4598,9 +4602,9 @@ function handleFileImport(event) {
       
       header.forEach((c, i) => {
         if (c.includes('班级') || c === '班') classCol = i;
-        else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
         else if (c.includes('家长')) parentCol = i;
         else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
+        else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
       });
       
       if (nameCol === -1) {
