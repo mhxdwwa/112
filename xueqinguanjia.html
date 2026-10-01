@@ -3263,7 +3263,10 @@ function renderAdminStudents() {
               const count = (STUDENTS[cls] || []).length;
               return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:13px;font-weight:500">${cls}</span>
-                <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
+                  ${count > 0 ? `<button onclick="clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--gray-400);font-size:14px" title="清空该班级学生数据">✕</button>` : ''}
+                </div>
               </div>`;
             }).join('')}
           </div>
@@ -3392,6 +3395,29 @@ function importStudentsFromExcel(event) {
   });
   
   event.target.value = '';
+}
+
+function clearClassStudents(cls) {
+  const count = (STUDENTS[cls] || []).length;
+  if (count === 0) {
+    showToast(`${cls} 暂无学生数据`, 'warning');
+    return;
+  }
+  
+  if (!confirm(`确定要清空 ${cls} 的所有学生数据吗？\n\n该班级共有 ${count} 名学生，此操作不可恢复！`)) {
+    return;
+  }
+  
+  // 清空该班级学生数据
+  STUDENTS[cls] = [];
+  
+  // 保存到本地存储
+  saveStudentsToStorage();
+  
+  showToast(`已清空 ${cls} 的 ${count} 名学生数据`, 'success');
+  
+  // 刷新页面
+  navigate('admin-students');
 }
 
 /* ----- REUSABLE: Seating Chart for Any Class ----- */
