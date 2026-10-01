@@ -3682,6 +3682,9 @@ function importStudentsFromExcel(event) {
       else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
     });
     
+    console.log('[XQ Import] Header:', header);
+    console.log('[XQ Import] Column mapping: class=', classCol, 'name=', nameCol, 'parent=', parentCol, 'phone=', phoneCol);
+    
     if (classCol === -1 || nameCol === -1) {
       showToast('未找到"班级"或"学生姓名"列', 'error');
       return;
@@ -5176,6 +5179,9 @@ function handleFileImport(event) {
         else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
         else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
       });
+      
+      console.log('[XQ Import] Header:', header);
+      console.log('[XQ Import] Column mapping: class=', classCol, 'name=', nameCol, 'parent=', parentCol, 'phone=', phoneCol);
       
       if (nameCol === -1) {
         showToast('未找到"学生姓名"列', 'error');
