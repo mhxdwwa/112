@@ -1175,6 +1175,7 @@ async function xqApi(action, data = {}) {
     
     if (!response.ok) {
       console.error('[XQ API] HTTP error:', response.status, response.statusText);
+      return { ok: false, error: `HTTP ${response.status}: ${response.statusText}` };
     }
     
     const result = await response.json();
@@ -1676,7 +1677,7 @@ async function saveStudentsToCloud() {
     // 3. 删除服务器上不需要的班级
     for (const cls of classesToDelete) {
       try {
-        const result = await xqApi('xq/clear', {
+        const result = await xqApi('clear', {
           action: 'clear_class',
           className: cls,
           teacherName: xqCurrentUser?.teacherName || '',
