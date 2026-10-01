@@ -1664,7 +1664,8 @@ function loadStudentsFromStorage() {
 
 // 保存学生数据到 localStorage（仅本地，不上传云端）
 let studentsDataChanged = false; // 标记是否有未保存到云端的更改
-let deletedClasses = []; // 记录已删除的班级，等待同步到云端
+let autoSaveCloudTimer = null; // 自动保存到云端的防抖计时器
+const AUTO_SAVE_CLOUD_DELAY = 2000; // 自动保存到云端的延迟时间（毫秒）
 
 function saveStudentsToStorage() {
   try {
@@ -1672,7 +1673,91 @@ function saveStudentsToStorage() {
     localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses));
     studentsDataChanged = true; // 标记有未同步的更改
     updateSaveToCloudButton(); // 更新保存按钮状态
+    
+    // 自动触发云保存（带防抖）
+    scheduleAutoSaveToCloud();
   } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
+}
+
+// 安排自动保存到云端（防抖）
+function scheduleAutoSaveToCloud() {
+  // 清除之前的计时器
+  if (autoSaveCloudTimer) {
+    clearTimeout(autoSaveCloudTimer);
+  }
+  
+  // 设置新的计时器
+  autoSaveCloudTimer = setTimeout(async () => {
+    autoSaveCloudTimer = null;
+    
+    // 只有在有未保存更改时才保存
+    if (!studentsDataChanged) return;
+    
+    // 检查是否有权限保存
+    if (!xqCurrentUser) return;
+    const isAdmin = isXqAdmin();
+    const teacherClasses = getTeacherClasses();
+    const isClassTeacher = teacherClasses.length > 0;
+    if (!isAdmin && !isClassTeacher) return;
+    
+    console.log('[XQ] Auto-saving to cloud...');
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      
+      // 确定要保存的班级列表
+      let classesToSave;
+      if (isAdmin) {
+        classesToSave = Object.keys(STUDENTS);
+      } else {
+        classesToSave = teacherClasses.filter(cls => STUDENTS[cls] && STUDENTS[cls].length > 0);
+      }
+      
+      // 保存班级学生数据
+      for (const cls of classesToSave) {
+        if (STUDENTS[cls]) {
+          const result = await xqSaveStudentsToServer(cls);
+          if (result && result.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        }
+      }
+      
+      // 保存座位布局数据
+      for (const cls of classesToSave) {
+        if (seatLayout[cls] && seatLayout[cls].length > 0) {
+          const cfg = seatConfig[cls] || {};
+          const seatingConfigData = {
+            layout: seatLayout[cls],
+            cols: cfg.cols || 8,
+            rows: cfg.rows || 7,
+            colGaps: cfg.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+            colGroups: cfg.colGroups || []
+          };
+          await xqSaveConfigToServer('seating_' + cls, seatingConfigData);
+        }
+      }
+      
+      // 保存班级-年级映射和全局配置（仅管理员）
+      if (isAdmin) {
+        await xqSaveConfigToServer('classGradeMap', classGradeMap);
+        await xqSaveAllConfigToServer();
+        deletedClasses = [];
+        localStorage.removeItem('xq_deleted_classes');
+      }
+      
+      studentsDataChanged = false;
+      updateSaveToCloudButton();
+      
+      console.log(`[XQ] Auto-save completed: ${successCount} classes saved, ${failCount} failed`);
+    } catch (e) {
+      console.error('[XQ] Auto-save to cloud failed:', e);
+      // 不显示 toast，避免频繁打扰用户
+    }
+  }, AUTO_SAVE_CLOUD_DELAY);
 }
 
 // 加载已删除班级列表
@@ -4553,6 +4638,7 @@ function saveLeaveReason(cls, id) {
   s.leaveReason = document.getElementById('editReasonType').value;
   s.leaveNote = document.getElementById('editReasonDetail').value.trim();
   s.leaveDays = parseFloat(document.getElementById('editReasonDays').value) || s.leaveDays;
+  saveStudentsToStorage();
   hideModal();
   showToast('请假原因已更新');
   navigate('leave-mgmt');
@@ -4572,6 +4658,7 @@ function confirmCancelLeaveInMgmt(cls, id) {
     s.status = 'present';
     s.leaveReason = '';
     s.leaveDays = 0;
+    saveStudentsToStorage();
   }
   hideModal();
   showToast(`${s.name} 已销假`);
@@ -4598,6 +4685,7 @@ function confirmRejectLeave(cls, id) {
     s.status = 'present';
     s.leaveReason = '';
     s.leaveDays = 0;
+    saveStudentsToStorage();
   }
   hideModal();
   showToast('已驳回请假申请');
@@ -5634,6 +5722,7 @@ function saveStudentEdit(cls, id) {
   s.seat = parseInt(document.getElementById('editSeat').value) || s.seat;
   s.phone = document.getElementById('editPhone').value.trim();
   s.parent = document.getElementById('editParent').value.trim();
+  saveStudentsToStorage();
   hideModal();
   showToast('学生信息已更新');
   navigate('roster');
@@ -5652,6 +5741,7 @@ function confirmDeleteStudent(cls, id) {
   if (idx > -1) {
     const name = STUDENTS[cls][idx].name;
     STUDENTS[cls].splice(idx, 1);
+    saveStudentsToStorage();
     hideModal();
     showToast(`已删除学生：${name}`);
     navigate('roster');
