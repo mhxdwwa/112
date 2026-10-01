@@ -1174,11 +1174,27 @@ async function xqApi(action, data = {}) {
     });
     
     if (!response.ok) {
-      console.error('[XQ API] HTTP error:', response.status, response.statusText);
-      return { ok: false, error: `HTTP ${response.status}: ${response.statusText}` };
+      // 尝试读取错误信息，但不依赖 JSON 解析
+      let errorText = `HTTP ${response.status}: ${response.statusText}`;
+      try { errorText = await response.text(); } catch (_) {}
+      console.error('[XQ API] HTTP error:', response.status, response.statusText, errorText);
+      return { ok: false, error: errorText };
     }
     
-    const result = await response.json();
+    // 安全解析 JSON —— 即使 200 OK，响应体也可能无效
+    let result;
+    try {
+      const text = await response.text();
+      if (!text || text.trim() === '') {
+        console.error('[XQ API] Empty response body for:', action);
+        return { ok: false, error: 'Empty response from server' };
+      }
+      result = JSON.parse(text);
+    } catch (parseErr) {
+      console.error('[XQ API] JSON parse error for:', action, parseErr);
+      return { ok: false, error: 'Invalid JSON response from server' };
+    }
+    
     console.log('[XQ API] Response:', action, result.ok ? 'success' : 'failed');
     return result;
   } catch (e) {
@@ -1674,20 +1690,29 @@ async function saveStudentsToCloud() {
     
     console.log('[XQ] Classes to delete from server:', classesToDelete);
     
-    // 3. 删除服务器上不需要的班级
+    // 3. 删除服务器上不需要的班级（两种方式：先删配置键，再删记录）
     for (const cls of classesToDelete) {
       try {
-        const result = await xqApi('clear', {
+        // 方式1：通过 config delete 删除 students_XXX 配置键（最可靠）
+        const configResult = await xqApi('config', {
+          action: 'delete',
+          configKey: 'students_' + cls,
+          teacherName: xqCurrentUser?.teacherName || ''
+        });
+        
+        // 方式2：通过 clear 删除该班级的记录（best effort）
+        const clearResult = await xqApi('clear', {
           action: 'clear_class',
           className: cls,
           teacherName: xqCurrentUser?.teacherName || '',
           confirmText: 'CONFIRM_DELETE'
         });
-        if (result && result.ok) {
+        
+        if ((configResult && configResult.ok) || (clearResult && clearResult.ok)) {
           deleteCount++;
           console.log('[XQ] Deleted class from server:', cls);
         } else {
-          console.warn('[XQ] Failed to delete class from server:', cls, result);
+          console.warn('[XQ] Failed to delete class from server:', cls, 'config:', configResult, 'clear:', clearResult);
         }
       } catch (e) {
         console.warn('[XQ] Failed to delete class from server:', cls, e);
