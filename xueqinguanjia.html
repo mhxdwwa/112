@@ -1269,6 +1269,22 @@ async function xqLoadAllConfig() {
         }
       }
       
+      // 加载各班座位布局数据
+      for (const [key, value] of Object.entries(result.config)) {
+        if (key.startsWith('seating_')) {
+          const className = key.replace('seating_', '');
+          if (validClassNames.has(className) && value.data && value.data.layout) {
+            seatLayout[className] = value.data.layout;
+            // 恢复布局配置（使用第一个有数据的班级的配置）
+            if (value.data.cols) seatingCols = value.data.cols;
+            if (value.data.rows) seatingRows = value.data.rows;
+            if (value.data.colGaps) colGaps = value.data.colGaps;
+            if (value.data.colGroups) colGroups = value.data.colGroups;
+            console.log('[XQ] Loaded seating for class:', className, 'layout length:', value.data.layout.length);
+          }
+        }
+      }
+      
       // 应用待删除的班级（本地删除但未同步到云端的）
       if (deletedClasses.length > 0) {
         console.log('[XQ] Applying pending deletions:', deletedClasses);
@@ -1348,6 +1364,19 @@ async function xqSaveAllConfigToServer() {
     }
   });
   
+  // 保存各班座位布局数据
+  Object.keys(seatLayout).forEach(cls => {
+    if (seatLayout[cls] && seatLayout[cls].length > 0) {
+      configs['seating_' + cls] = {
+        layout: seatLayout[cls],
+        cols: seatingCols,
+        rows: seatingRows,
+        colGaps: colGaps,
+        colGroups: colGroups
+      };
+    }
+  });
+  
   console.log('[XQ] Saving config to server:', {
     classes: Object.keys(configs.classes).length,
     teaching: Object.keys(configs.teaching.teacherClasses).length + ' teacher classes',
@@ -1355,7 +1384,8 @@ async function xqSaveAllConfigToServer() {
     setupClasses: configs.setupClasses.length,
     credentials: Object.keys(configs.credentials).length,
     classGradeMap: Object.keys(configs.classGradeMap).length,
-    studentClasses: Object.keys(STUDENTS).filter(c => STUDENTS[c].length > 0).length
+    studentClasses: Object.keys(STUDENTS).filter(c => STUDENTS[c].length > 0).length,
+    seatingClasses: Object.keys(seatLayout).filter(c => seatLayout[c] && seatLayout[c].length > 0).length
   });
   
   const result = await xqApi('config', {
@@ -1656,7 +1686,16 @@ function loadDeletedClasses() {
 // 保存学生数据到云端（手动触发）
 async function saveStudentsToCloud() {
   if (!xqCurrentUser) { showToast('请先登录', 'error'); return; }
-  if (!isXqAdmin()) { showToast('仅管理员可保存到云端', 'error'); return; }
+  
+  // 管理员可以保存所有数据，班主任/科任老师只能保存自己班级的数据
+  const isAdmin = isXqAdmin();
+  const teacherClasses = getTeacherClasses();
+  const isClassTeacher = teacherClasses.length > 0;
+  
+  if (!isAdmin && !isClassTeacher) {
+    showToast('无权保存到云端', 'error');
+    return;
+  }
   
   const btn = document.getElementById('saveToCloudBtn');
   if (btn) {
@@ -1669,6 +1708,15 @@ async function saveStudentsToCloud() {
     let failCount = 0;
     let deleteCount = 0;
     
+    // 确定要保存的班级列表
+    let classesToSave;
+    if (isAdmin) {
+      classesToSave = Object.keys(STUDENTS);
+    } else {
+      // 非管理员只能保存自己班级的数据
+      classesToSave = teacherClasses.filter(cls => STUDENTS[cls] && STUDENTS[cls].length > 0);
+    }
+    
     // 1. 从服务器获取当前所有配置，找出所有 students_XXX 键
     const serverConfigResult = await xqApi('config', { action: 'get' });
     let serverStudentClasses = [];
@@ -1679,18 +1727,22 @@ async function saveStudentsToCloud() {
       console.log('[XQ] Server has student data for classes:', serverStudentClasses);
     }
     
-    // 2. 找出需要删除的班级（在服务器上但不在本地）
+    // 2. 找出需要删除的班级（仅管理员可以删除班级）
     const localClasses = Object.keys(STUDENTS);
-    const classesToDelete = serverStudentClasses.filter(cls => !localClasses.includes(cls));
-    
-    // 也包含 deletedClasses 中记录的（以防服务器数据不一致）
-    deletedClasses.forEach(cls => {
-      if (!classesToDelete.includes(cls)) {
-        classesToDelete.push(cls);
-      }
-    });
+    let classesToDelete = [];
+    if (isAdmin) {
+      classesToDelete = serverStudentClasses.filter(cls => !localClasses.includes(cls));
+      
+      // 也包含 deletedClasses 中记录的（以防服务器数据不一致）
+      deletedClasses.forEach(cls => {
+        if (!classesToDelete.includes(cls)) {
+          classesToDelete.push(cls);
+        }
+      });
+    }
     
     console.log('[XQ] Classes to delete from server:', classesToDelete);
+    console.log('[XQ] Classes to save to server:', classesToSave);
     
     // 3. 删除服务器上不需要的班级（两种方式：先删配置键，再删记录）
     for (const cls of classesToDelete) {
@@ -1721,8 +1773,8 @@ async function saveStudentsToCloud() {
       }
     }
     
-    // 4. 保存所有存在的班级学生数据
-    for (const cls of localClasses) {
+    // 4. 保存班级学生数据
+    for (const cls of classesToSave) {
       if (STUDENTS[cls]) {
         const result = await xqSaveStudentsToServer(cls);
         if (result && result.ok) {
@@ -1733,15 +1785,29 @@ async function saveStudentsToCloud() {
       }
     }
     
-    // 5. 保存班级-年级映射
-    await xqSaveConfigToServer('classGradeMap', classGradeMap);
+    // 5. 保存座位布局数据（所有老师都可以保存座位）
+    for (const cls of classesToSave) {
+      if (seatLayout[cls] && seatLayout[cls].length > 0) {
+        const seatingConfig = {
+          layout: seatLayout[cls],
+          cols: seatingCols,
+          rows: seatingRows,
+          colGaps: colGaps,
+          colGroups: colGroups
+        };
+        await xqSaveConfigToServer('seating_' + cls, seatingConfig);
+      }
+    }
     
-    // 6. 保存配置
-    await xqSaveAllConfigToServer();
-    
-    // 7. 清空已删除列表
-    deletedClasses = [];
-    localStorage.removeItem('xq_deleted_classes');
+    // 6. 保存班级-年级映射和全局配置（仅管理员）
+    if (isAdmin) {
+      await xqSaveConfigToServer('classGradeMap', classGradeMap);
+      await xqSaveAllConfigToServer();
+      
+      // 清空已删除列表
+      deletedClasses = [];
+      localStorage.removeItem('xq_deleted_classes');
+    }
     
     studentsDataChanged = false;
     updateSaveToCloudButton();
@@ -5661,9 +5727,62 @@ function cancelSeatingEdit() {
   navigate('class-seating');
 }
 
-function saveSeating() {
+async function saveSeating() {
   seatingEditMode = false;
-  showToast('座位表已保存');
+  const cls = currentViewClass || getHeadteacherClass();
+  
+  // 保存座位布局到本地存储
+  try {
+    const seatingData = {
+      seatLayout: seatLayout[cls] || [],
+      seatingCols: seatingCols,
+      seatingRows: seatingRows,
+      colGaps: colGaps,
+      colGroups: colGroups
+    };
+    localStorage.setItem('xq_seating_' + cls, JSON.stringify(seatingData));
+  } catch (e) {
+    console.warn('[XQ] Failed to save seating to localStorage:', e);
+  }
+  
+  // 同步到云端
+  if (xqCurrentUser) {
+    try {
+      const seatingConfig = {};
+      // 保存所有班级的座位布局
+      Object.keys(seatLayout).forEach(c => {
+        if (seatLayout[c] && seatLayout[c].length > 0) {
+          seatingConfig['seating_' + c] = {
+            layout: seatLayout[c],
+            cols: seatingCols,
+            rows: seatingRows,
+            colGaps: colGaps,
+            colGroups: colGroups
+          };
+        }
+      });
+      
+      const result = await xqApi('config', {
+        action: 'set_all',
+        configs: seatingConfig,
+        teacherName: xqCurrentUser?.teacherName || ''
+      });
+      
+      if (result && result.ok) {
+        showToast('座位表已保存到云端', 'success');
+        console.log('[XQ] Seating saved to cloud for class:', cls);
+      } else {
+        showToast('座位表已保存（本地），云端同步失败', 'warning');
+        console.warn('[XQ] Failed to save seating to cloud:', result);
+      }
+    } catch (e) {
+      showToast('座位表已保存（本地），云端同步失败', 'warning');
+      console.warn('[XQ] Failed to save seating to cloud:', e);
+    }
+  } else {
+    showToast('座位表已保存');
+  }
+  
   navigate('class-seating');
 }
 
