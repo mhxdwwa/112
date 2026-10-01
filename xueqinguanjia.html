@@ -4128,60 +4128,23 @@ function renderPasswordMgmt() {
     </div>`;
   }
   
-  // 按角色分组显示
-  const leaders = allTeachers.filter(t => t.role === 'leader');
-  const headteachers = allTeachers.filter(t => t.role === 'headteacher');
-  const teachers = allTeachers.filter(t => t.role === 'teacher');
+  // 按角色排序：领导 > 班主任 > 科任老师
+  const roleOrder = { leader: 1, headteacher: 2, teacher: 3 };
+  allTeachers.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
   
-  let teacherListHtml = '';
-  
-  if (leaders.length > 0) {
-    teacherListHtml += `<div style="margin-bottom:20px">
-      <div style="font-weight:600;font-size:14px;color:var(--gray-700);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary-light)">校领导 (${leaders.length}人)</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">`;
-    leaders.forEach(t => {
-      teacherListHtml += `<label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--gray-200)'">
-        <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:16px;height:16px">
-        <div>
-          <div style="font-weight:500;font-size:13px">${t.name}</div>
-          <div style="font-size:11px;color:var(--gray-500)">${t.title}</div>
-        </div>
-      </label>`;
-    });
-    teacherListHtml += `</div></div>`;
-  }
-  
-  if (headteachers.length > 0) {
-    teacherListHtml += `<div style="margin-bottom:20px">
-      <div style="font-weight:600;font-size:14px;color:var(--gray-700);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--accent-light)">班主任 (${headteachers.length}人)</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">`;
-    headteachers.forEach(t => {
-      teacherListHtml += `<label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--accent-light)'" onmouseout="this.style.borderColor='var(--gray-200)'">
-        <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:16px;height:16px">
-        <div>
-          <div style="font-weight:500;font-size:13px">${t.name}</div>
-          <div style="font-size:11px;color:var(--gray-500)">${t.title}</div>
-        </div>
-      </label>`;
-    });
-    teacherListHtml += `</div></div>`;
-  }
-  
-  if (teachers.length > 0) {
-    teacherListHtml += `<div style="margin-bottom:20px">
-      <div style="font-weight:600;font-size:14px;color:var(--gray-700);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--success)">科任老师 (${teachers.length}人)</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">`;
-    teachers.forEach(t => {
-      teacherListHtml += `<label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--success)'" onmouseout="this.style.borderColor='var(--gray-200)'">
-        <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:16px;height:16px">
-        <div>
-          <div style="font-weight:500;font-size:13px">${t.name}</div>
-          <div style="font-size:11px;color:var(--gray-500)">${t.title}</div>
-        </div>
-      </label>`;
-    });
-    teacherListHtml += `</div></div>`;
-  }
+  // 生成教师列表
+  let teacherListHtml = '<div style="display:flex;flex-direction:column;gap:8px">';
+  allTeachers.forEach(t => {
+    const roleBadge = t.role === 'leader' ? '<span style="font-size:11px;background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:4px;margin-left:8px">领导</span>' :
+                      t.role === 'headteacher' ? '<span style="font-size:11px;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:4px;margin-left:8px">班主任</span>' :
+                      '<span style="font-size:11px;background:var(--gray-100);color:var(--gray-600);padding:2px 8px;border-radius:4px;margin-left:8px">教师</span>';
+    teacherListHtml += `<label style="display:flex;align-items:center;padding:12px 16px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--gray-200)'">
+      <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:18px;height:18px;margin-right:12px">
+      <span style="font-weight:500;font-size:14px">${t.name}</span>
+      ${roleBadge}
+    </label>`;
+  });
+  teacherListHtml += '</div>';
   
   return `
     <div class="card anim-in">
