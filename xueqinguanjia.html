@@ -3677,8 +3677,8 @@ function importStudentsFromExcel(event) {
     
     header.forEach((c, i) => {
       if (c.includes('班级') || c === '班') classCol = i;
-      else if (c.includes('家长')) parentCol = i;
       else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
+      else if (c.includes('家长')) parentCol = i;
       else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
     });
     
@@ -5175,8 +5175,8 @@ function handleFileImport(event) {
       
       header.forEach((c, i) => {
         if (c.includes('班级') || c === '班') classCol = i;
-        else if (c.includes('家长')) parentCol = i;
         else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
+        else if (c.includes('家长')) parentCol = i;
         else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
       });
       
