@@ -1176,19 +1176,24 @@ async function xqLoadAllConfig() {
   
   try {
     const result = await xqApi('config', { action: 'get' });
+    console.log('[XQ] Load config result:', result.ok ? 'success' : 'failed', result.config ? Object.keys(result.config) : 'no config');
+    
     if (result.ok && result.config) {
       // 应用配置到本地状态
       if (result.config.classes) {
         SCHOOL.importedClasses = result.config.classes.data;
         SCHOOL.importedClassList = result.config.classes.data?.classList || [];
+        console.log('[XQ] Loaded classes:', Object.keys(SCHOOL.importedClasses).length);
       }
       if (result.config.teaching) {
         SCHOOL.teacherClasses = result.config.teaching.data?.teacherClasses || {};
         SCHOOL.headteacherClasses = result.config.teaching.data?.headteacherClasses || {};
+        console.log('[XQ] Loaded teaching:', Object.keys(SCHOOL.teacherClasses).length, 'teacher classes');
       }
       if (result.config.roles) {
         SCHOOL.importedUsers = result.config.roles.data;
         applyImportedUsers();
+        console.log('[XQ] Loaded roles');
       }
       // 恢复 setupTeaching/setupClasses/setupRoles（用于 getUserRoleInfo 等函数）
       if (result.config.setupTeaching && result.config.setupTeaching.data) {
@@ -1196,9 +1201,15 @@ async function xqLoadAllConfig() {
       }
       if (result.config.setupClasses && result.config.setupClasses.data) {
         setupClasses = result.config.setupClasses.data;
+        // 应用班级数据，初始化 STUDENTS 结构
+        applyClassesData(setupClasses);
       }
       if (result.config.setupRoles && result.config.setupRoles.data) {
         setupRoles = result.config.setupRoles.data;
+      }
+      // 如果有 setupTeaching，应用授课分配数据
+      if (setupTeaching.length > 0) {
+        applyTeachingDataFromSetup();
       }
       // 加载各班学生数据
       for (const [key, value] of Object.entries(result.config)) {
@@ -1265,6 +1276,13 @@ async function xqSaveAllConfigToServer() {
     setupRoles: setupRoles || []
   };
   
+  console.log('[XQ] Saving config to server:', {
+    classes: Object.keys(configs.classes).length,
+    teaching: Object.keys(configs.teaching.teacherClasses).length + ' teacher classes',
+    setupTeaching: configs.setupTeaching.length,
+    setupClasses: configs.setupClasses.length
+  });
+  
   const result = await xqApi('config', {
     action: 'set_all',
     adminKey: XQ_ADMIN_KEY,
@@ -1272,6 +1290,7 @@ async function xqSaveAllConfigToServer() {
     teacherName: xqCurrentUser?.teacherName || 'admin'
   });
   
+  console.log('[XQ] Save result:', result);
   return result;
 }
 
