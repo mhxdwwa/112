@@ -7043,7 +7043,14 @@ function applyTeachingDataFromSetup() {
 
 // Apply class arrangement data
 function applyClassesData(data) {
-  SCHOOL.grades = [...new Set(data.map(c => c.grade).filter(g => g))];
+  // 保留默认年级，并合并数据中的年级
+  const defaultGrades = ['七年级', '八年级', '九年级'];
+  const dataGrades = [...new Set(data.map(c => c.grade).filter(g => g))];
+  const mergedGrades = [...new Set([...defaultGrades, ...dataGrades])];
+  // 按中文数字排序
+  const gradeOrder = {'七年级': 1, '八年级': 2, '九年级': 3};
+  mergedGrades.sort((a, b) => (gradeOrder[a] || 99) - (gradeOrder[b] || 99));
+  SCHOOL.grades = mergedGrades;
   SCHOOL.importedClassList = data;
   const newClassList = data.map(c => c.name);
   newClassList.forEach(cls => { if (!STUDENTS[cls]) STUDENTS[cls] = []; });
