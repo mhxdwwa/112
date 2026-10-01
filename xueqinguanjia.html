@@ -1149,7 +1149,6 @@ tbody tr:last-child td { border-bottom: none; }
    SUPABASE API CONFIGURATION
    ============================================================ */
 const XQ_API_BASE = '/api/xq';
-const XQ_ADMIN_KEY = ''; // 管理员密钥，由管理员在首次使用时设置
 let xqCurrentUser = null; // { teacherId, teacherName, role, classes[] }
 let xqSyncInProgress = false;
 let xqLastSyncTime = 0;
@@ -1241,14 +1240,14 @@ async function xqLoadAllConfig() {
 
 // 保存配置到服务器（管理员操作）
 async function xqSaveConfigToServer(configKey, configData) {
-  if (!XQ_ADMIN_KEY) {
+  if (!window.XQ_ADMIN_KEY) {
     console.warn('[XQ] No admin key set, cannot save to server');
     return { ok: false, error: 'No admin key' };
   }
   
   const result = await xqApi('config', {
     action: 'set',
-    adminKey: XQ_ADMIN_KEY,
+    adminKey: window.XQ_ADMIN_KEY,
     configKey: configKey,
     configData: configData,
     teacherName: xqCurrentUser?.teacherName || 'admin'
@@ -1259,7 +1258,7 @@ async function xqSaveConfigToServer(configKey, configData) {
 
 // 批量保存所有配置（管理员操作）
 async function xqSaveAllConfigToServer() {
-  if (!XQ_ADMIN_KEY) {
+  if (!window.XQ_ADMIN_KEY) {
     console.warn('[XQ] No admin key set, cannot save to server');
     return { ok: false, error: 'No admin key' };
   }
@@ -1285,7 +1284,7 @@ async function xqSaveAllConfigToServer() {
   
   const result = await xqApi('config', {
     action: 'set_all',
-    adminKey: XQ_ADMIN_KEY,
+    adminKey: window.XQ_ADMIN_KEY,
     configs: configs,
     teacherName: xqCurrentUser?.teacherName || 'admin'
   });
@@ -1337,13 +1336,13 @@ async function xqGetRecords(filters = {}) {
 
 // 清除学期数据（管理员操作）
 async function xqClearSemesterData() {
-  if (!XQ_ADMIN_KEY) {
+  if (!window.XQ_ADMIN_KEY) {
     return { ok: false, error: 'No admin key' };
   }
   
   const result = await xqApi('clear', {
     action: 'clear_records',
-    adminKey: XQ_ADMIN_KEY,
+    adminKey: window.XQ_ADMIN_KEY,
     teacherName: xqCurrentUser?.teacherName || 'admin',
     confirmText: 'CONFIRM_DELETE'
   });
