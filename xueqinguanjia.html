@@ -3265,7 +3265,7 @@ function renderAdminStudents() {
                 <span style="font-size:13px;font-weight:500">${cls}</span>
                 <div style="display:flex;align-items:center;gap:8px">
                   <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
-                  ${count > 0 ? `<button onclick="clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--gray-400);font-size:14px" title="清空该班级学生数据">✕</button>` : ''}
+                  <button onclick="clearClassStudents('${cls}')" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--danger);font-size:14px" title="彻底删除该班级（含班级号和学生数据）">✕</button>
                 </div>
               </div>`;
             }).join('')}
@@ -3399,22 +3399,33 @@ function importStudentsFromExcel(event) {
 
 function clearClassStudents(cls) {
   const count = (STUDENTS[cls] || []).length;
-  if (count === 0) {
-    showToast(`${cls} 暂无学生数据`, 'warning');
+  
+  if (!confirm(`确定要彻底删除班级 ${cls} 吗？\n\n该班级共有 ${count} 名学生，删除后班级号也将不存在，此操作不可恢复！`)) {
     return;
   }
   
-  if (!confirm(`确定要清空 ${cls} 的所有学生数据吗？\n\n该班级共有 ${count} 名学生，此操作不可恢复！`)) {
-    return;
-  }
+  // 1. 删除学生数据
+  delete STUDENTS[cls];
   
-  // 清空该班级学生数据
-  STUDENTS[cls] = [];
+  // 2. 从 CLASS_LIST 中移除
+  const idx = CLASS_LIST.indexOf(cls);
+  if (idx >= 0) CLASS_LIST.splice(idx, 1);
   
-  // 保存到本地存储
+  // 3. 从 setupClasses 中移除
+  setupClasses = setupClasses.filter(c => c.name !== cls);
+  
+  // 4. 保存到本地存储
   saveStudentsToStorage();
   
-  showToast(`已清空 ${cls} 的 ${count} 名学生数据`, 'success');
+  // 5. 同步删除服务器端数据
+  xqApi('xq/clear', {
+    action: 'clear_class',
+    className: cls,
+    teacherName: xqCurrentUser?.teacherName || '',
+    confirmText: 'CONFIRM_DELETE'
+  }).catch(() => {});
+  
+  showToast(`已彻底删除班级 ${cls}（含 ${count} 名学生）`, 'success');
   
   // 刷新页面
   navigate('admin-students');

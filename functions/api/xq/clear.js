@@ -117,5 +117,36 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ ok: true });
   }
 
+  // ===== CLEAR_CLASS: 删除单个班级的所有数据 =====
+  if (action === 'clear_class') {
+    const { className } = body;
+    if (!className) {
+      return jsonResponse({ error: 'Missing className' }, 400);
+    }
+
+    // 删除该班级的学生记录
+    const deleteRecordsResult = await sbDelete(env, 'xq_records', `class_name=eq.${className}`);
+    if (deleteRecordsResult.error) {
+      return jsonResponse({ error: 'Failed to clear class records', details: deleteRecordsResult.error }, 500);
+    }
+
+    // 删除该班级的配置（students_xxx）
+    const deleteConfigResult = await sbDelete(env, 'xq_school_config', `config_key=eq.students_${className}`);
+    if (deleteConfigResult.error) {
+      return jsonResponse({ error: 'Failed to clear class config', details: deleteConfigResult.error }, 500);
+    }
+
+    // 记录操作日志
+    await sbInsert(env, 'xq_operation_logs', [{
+      teacher_id: 'admin',
+      teacher_name: teacherName || 'admin',
+      action_type: 'clear_class',
+      details: `删除班级 ${className}`,
+      record_count: 0
+    }]);
+
+    return jsonResponse({ ok: true, deletedClass: className });
+  }
+
   return jsonResponse({ error: 'Invalid action' }, 400);
 };
