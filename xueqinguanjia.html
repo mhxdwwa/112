@@ -1650,8 +1650,31 @@ async function saveStudentsToCloud() {
     let failCount = 0;
     let deleteCount = 0;
     
-    // 1. 先从服务器删除已删除的班级
-    for (const cls of deletedClasses) {
+    // 1. 从服务器获取当前所有配置，找出所有 students_XXX 键
+    const serverConfigResult = await xqApi('config', { action: 'get' });
+    let serverStudentClasses = [];
+    if (serverConfigResult.ok && serverConfigResult.config) {
+      serverStudentClasses = Object.keys(serverConfigResult.config)
+        .filter(key => key.startsWith('students_'))
+        .map(key => key.replace('students_', ''));
+      console.log('[XQ] Server has student data for classes:', serverStudentClasses);
+    }
+    
+    // 2. 找出需要删除的班级（在服务器上但不在本地）
+    const localClasses = Object.keys(STUDENTS);
+    const classesToDelete = serverStudentClasses.filter(cls => !localClasses.includes(cls));
+    
+    // 也包含 deletedClasses 中记录的（以防服务器数据不一致）
+    deletedClasses.forEach(cls => {
+      if (!classesToDelete.includes(cls)) {
+        classesToDelete.push(cls);
+      }
+    });
+    
+    console.log('[XQ] Classes to delete from server:', classesToDelete);
+    
+    // 3. 删除服务器上不需要的班级
+    for (const cls of classesToDelete) {
       try {
         const result = await xqApi('xq/clear', {
           action: 'clear_class',
@@ -1661,15 +1684,17 @@ async function saveStudentsToCloud() {
         });
         if (result && result.ok) {
           deleteCount++;
+          console.log('[XQ] Deleted class from server:', cls);
+        } else {
+          console.warn('[XQ] Failed to delete class from server:', cls, result);
         }
       } catch (e) {
         console.warn('[XQ] Failed to delete class from server:', cls, e);
       }
     }
     
-    // 2. 保存所有存在的班级学生数据
-    const classes = Object.keys(STUDENTS);
-    for (const cls of classes) {
+    // 4. 保存所有存在的班级学生数据
+    for (const cls of localClasses) {
       if (STUDENTS[cls]) {
         const result = await xqSaveStudentsToServer(cls);
         if (result && result.ok) {
@@ -1680,13 +1705,13 @@ async function saveStudentsToCloud() {
       }
     }
     
-    // 3. 保存班级-年级映射
+    // 5. 保存班级-年级映射
     await xqSaveConfigToServer('classGradeMap', classGradeMap);
     
-    // 4. 保存配置
+    // 6. 保存配置
     await xqSaveAllConfigToServer();
     
-    // 5. 清空已删除列表
+    // 7. 清空已删除列表
     deletedClasses = [];
     localStorage.removeItem('xq_deleted_classes');
     
