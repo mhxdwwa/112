@@ -2148,6 +2148,11 @@ const NAV_CONFIG = {
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
     ]},
   ],
+  admin: [
+    { section: '学生管理', items: [
+      { id: 'admin-students', label: '上传学生名单', icon: iconUsers },
+    ]},
+  ],
 };
 
 function getDefaultPage() {
@@ -2175,6 +2180,19 @@ function buildSidebar() {
       <span class="sidebar-icon">${iconSettings()}</span>
       <span>学校数据设置</span>
     </div>`;
+    // 添加管理员学生管理菜单
+    const adminConfig = NAV_CONFIG.admin;
+    adminConfig.forEach(section => {
+      html += `<div class="sidebar-section">`;
+      html += `<div class="sidebar-section-title">${section.section}</div>`;
+      section.items.forEach(item => {
+        html += `<div class="sidebar-item" data-page="${item.id}" onclick="navigate('${item.id}')">
+          <span class="sidebar-icon">${item.icon()}</span>
+          <span>${item.label}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    });
     html += `</div>`;
   }
   
@@ -2276,6 +2294,7 @@ function navigate(pageId) {
     'roster': '名单管理', 'leave-register': '请假登记',
     'class-seating': '座位表', 'all-classes-view': '全校班级查看',
     'family-situation': '家庭情况', 'family-overview': '全校学生家庭情况',
+    'admin-students': '上传学生名单',
   };
   document.getElementById('headerTitle').textContent = titles[pageId] || '';
   document.getElementById('headerBreadcrumb').textContent = `首页 / ${titles[pageId] || ''}`;
@@ -2308,6 +2327,7 @@ function renderPage(pageId) {
     'all-classes-view': renderAllClassesView,
     'family-situation': renderFamilySituation,
     'family-overview': renderFamilyOverview,
+    'admin-students': renderAdminStudents,
   };
   if (renderers[pageId]) content.innerHTML = renderers[pageId]();
 }
@@ -3197,6 +3217,181 @@ function showClassFamilyDetail(cls) {
       </table>
     </div>
   `, '<button class="toolbar-btn ghost" onclick="hideModal()">关闭</button>', true);
+}
+
+/* ----- ADMIN: Upload Student Lists ----- */
+function renderAdminStudents() {
+  // 获取所有班级，按年级分组
+  const grades = {};
+  CLASS_LIST.forEach(cls => {
+    const match = cls.match(/^(\d+年级|\d+班|.*年级)/);
+    const grade = match ? match[1] : '其他';
+    if (!grades[grade]) grades[grade] = [];
+    grades[grade].push(cls);
+  });
+  
+  let classOptions = CLASS_LIST.map(cls => `<option value="${cls}">${cls}</option>`).join('');
+  
+  return `
+    <div class="card anim-in anim-d1">
+      <div class="card-header">
+        <span class="card-title">上传学生名单</span>
+        <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadStudentTemplate()">下载模板</button>
+      </div>
+      <div class="card-body">
+        <div style="padding:16px;background:var(--primary-bg);border-radius:8px;margin-bottom:16px">
+          <div style="font-size:13px;color:#1E40AF;margin-bottom:8px"><strong>格式说明：</strong></div>
+          <div style="font-size:12px;color:var(--gray-600);line-height:1.8">
+            <div>• 列顺序：<strong>班级</strong>、<strong>学生姓名</strong>、家长姓名（可选）、家长电话（可选）</div>
+            <div>• 支持单个班级或整个年级批量上传</div>
+            <div>• 支持 Excel (.xlsx/.xls) 和 CSV 格式</div>
+            <div>• 同名学生会自动跳过，不会重复导入</div>
+          </div>
+        </div>
+        
+        <div class="setup-import-zone" style="margin-bottom:16px">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="importStudentsFromExcel(event)">
+          <div class="setup-import-icon">📥</div>
+          <div class="setup-import-title">点击上传学生名单文件</div>
+          <div class="setup-import-hint">支持 Excel 和 CSV 格式</div>
+        </div>
+        
+        <div style="margin-top:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:8px">当前班级学生统计：</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+            ${CLASS_LIST.map(cls => {
+              const count = (STUDENTS[cls] || []).length;
+              return `<div style="padding:10px 14px;background:var(--gray-50);border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:13px;font-weight:500">${cls}</span>
+                <span style="font-size:12px;color:var(--gray-500)">${count}人</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function downloadStudentTemplate() {
+  const template = [
+    ['班级', '学生姓名', '家长姓名', '家长电话'],
+    ['25-1', '张三', '张大明', '13800138000'],
+    ['25-1', '李四', '李小红', '13900139000'],
+    ['25-2', '王五', '', ''],
+    ['25-2', '赵六', '赵建国', '13700137000']
+  ];
+  downloadExcel(template, '学生名单模板.xlsx');
+}
+
+function importStudentsFromExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  readExcelFile(file, function(data) {
+    if (!data || data.length < 2) { showToast('文件内容为空', 'error'); return; }
+    
+    // 查找表头行
+    let headerRowIdx = -1;
+    for (let i = 0; i < Math.min(data.length, 10); i++) {
+      const row = data[i].map(c => String(c).trim());
+      if (row.some(c => c.includes('班级') || c.includes('姓名'))) { headerRowIdx = i; break; }
+    }
+    if (headerRowIdx === -1) { showToast('未找到"班级"或"姓名"列', 'error'); return; }
+    
+    const header = data[headerRowIdx].map(c => String(c).trim());
+    let classCol = -1, nameCol = -1, parentCol = -1, phoneCol = -1;
+    
+    header.forEach((c, i) => {
+      if (c.includes('班级') || c === '班') classCol = i;
+      else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
+      else if (c.includes('家长')) parentCol = i;
+      else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
+    });
+    
+    if (classCol === -1 || nameCol === -1) {
+      showToast('未找到"班级"或"学生姓名"列', 'error');
+      return;
+    }
+    
+    // 解析数据
+    let importCount = 0;
+    let skipCount = 0;
+    let classStats = {};
+    
+    for (let i = headerRowIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      const cls = String(row[classCol] || '').trim();
+      const name = String(row[nameCol] || '').trim();
+      const parent = parentCol >= 0 ? String(row[parentCol] || '').trim() : '';
+      const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
+      
+      if (!cls || !name) continue;
+      
+      // 确保班级存在
+      if (!STUDENTS[cls]) {
+        STUDENTS[cls] = [];
+        if (!CLASS_LIST.includes(cls)) CLASS_LIST.push(cls);
+      }
+      
+      // 检查是否已存在同名学生
+      const exists = STUDENTS[cls].find(s => s.name === name);
+      if (exists) {
+        skipCount++;
+        continue;
+      }
+      
+      // 添加学生
+      const maxId = Math.max(...Object.values(STUDENTS).flat().map(s => s.id), 0);
+      const seat = STUDENTS[cls].length + 1;
+      
+      STUDENTS[cls].push({
+        id: maxId + 1,
+        seat: seat,
+        name: name,
+        phone: phone,
+        parent: parent,
+        status: 'present',
+        leaveReason: '',
+        leaveNote: '',
+        leaveDays: 0,
+        mark: '',
+        boarding: 'inner',
+        familyType: '',
+        familyNote: '',
+        leftBehind: false,
+        leftBehindNote: '',
+      });
+      
+      importCount++;
+      classStats[cls] = (classStats[cls] || 0) + 1;
+    }
+    
+    if (importCount === 0) {
+      showToast(skipCount > 0 ? `所有学生已存在，跳过 ${skipCount} 人` : '未解析到有效数据', 'warning');
+      return;
+    }
+    
+    // 保存到本地存储
+    saveStudentsToStorage();
+    
+    // 显示统计
+    let statsHtml = Object.entries(classStats).map(([cls, count]) => 
+      `<div style="display:inline-block;padding:4px 10px;background:var(--gray-50);border-radius:4px;margin:2px;font-size:12px">
+        <strong>${cls}</strong>: ${count}人
+      </div>`
+    ).join('');
+    
+    let msg = `成功导入 <strong style="color:var(--accent)">${importCount}</strong> 名学生`;
+    if (skipCount > 0) msg += `，跳过 ${skipCount} 人（已存在）`;
+    
+    showToast(msg, 'success');
+    
+    // 刷新页面
+    navigate('admin-students');
+  });
+  
+  event.target.value = '';
 }
 
 /* ----- REUSABLE: Seating Chart for Any Class ----- */
@@ -4300,6 +4495,7 @@ function filterRosterRows(input) {
 }
 
 function showImportModal() {
+  const cls = getHeadteacherClass();
   showModal('导入学生名单', `
     <div class="import-tabs">
       <div class="import-tab active" onclick="switchImportTab('file',this)">文件上传</div>
@@ -4307,19 +4503,20 @@ function showImportModal() {
     </div>
     <div id="importFilePanel">
       <div class="import-zone" id="importZone">
-        <input type="file" accept=".csv,.txt,.xlsx" onchange="handleFileImport(event)">
+        <input type="file" accept=".xlsx,.xls,.csv" onchange="handleFileImport(event)">
         <div class="import-zone-icon">📄</div>
         <div class="import-zone-title">点击或拖拽文件到此处</div>
-        <div class="import-zone-hint">支持 CSV、TXT 格式，每行一条记录</div>
+        <div class="import-zone-hint">支持 Excel (.xlsx/.xls) 格式</div>
       </div>
       <div style="margin-top:12px;padding:12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500)">
-        <strong>格式说明：</strong>每行一个学生，字段用逗号分隔<br>
-        格式：座号,姓名,联系电话,家长<br>
-        示例：1,张三,13800138000,张先生
+        <strong>格式说明：</strong><br>
+        列顺序：<strong>班级</strong>、<strong>学生姓名</strong>、家长姓名（可选）、家长电话（可选）<br>
+        班级列必须与当前班级一致（${cls}），否则会被忽略<br>
+        <button class="toolbar-btn ghost" style="font-size:11px;padding:4px 10px;margin-top:8px" onclick="downloadStudentImportTemplate()">下载模板</button>
       </div>
     </div>
     <div id="importPastePanel" style="display:none">
-      <textarea class="paste-area" id="pasteArea" placeholder="粘贴学生名单，每行一条&#10;格式：座号,姓名,联系电话,家长&#10;示例：&#10;1,张三,13800138000,张先生&#10;2,李四,13900139000,李女士"></textarea>
+      <textarea class="paste-area" id="pasteArea" placeholder="粘贴学生名单，每行一条&#10;格式：学生姓名,家长姓名,家长电话&#10;示例：&#10;张三,张大明,13800138000&#10;李四,李小红,13900139000&#10;王五,,"></textarea>
       <div style="margin-top:10px;text-align:right">
         <button class="toolbar-btn primary" onclick="parsePastedData()">解析数据</button>
       </div>
@@ -4340,12 +4537,120 @@ let importData = [];
 function handleFileImport(event) {
   const file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const text = e.target.result;
-    parseImportText(text);
-  };
-  reader.readAsText(file);
+  
+  const cls = getHeadteacherClass();
+  
+  // 检查文件类型
+  const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+  
+  if (isExcel) {
+    // 使用 XLSX 库读取 Excel 文件
+    readExcelFile(file, function(data) {
+      if (!data || data.length < 2) { showToast('文件内容为空', 'error'); return; }
+      
+      // 查找表头行
+      let headerRowIdx = -1;
+      for (let i = 0; i < Math.min(data.length, 10); i++) {
+        const row = data[i].map(c => String(c).trim());
+        if (row.some(c => c.includes('班级') || c.includes('姓名'))) { headerRowIdx = i; break; }
+      }
+      if (headerRowIdx === -1) { showToast('未找到"班级"或"姓名"列', 'error'); return; }
+      
+      const header = data[headerRowIdx].map(c => String(c).trim());
+      let classCol = -1, nameCol = -1, parentCol = -1, phoneCol = -1;
+      
+      header.forEach((c, i) => {
+        if (c.includes('班级') || c === '班') classCol = i;
+        else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
+        else if (c.includes('家长')) parentCol = i;
+        else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
+      });
+      
+      if (nameCol === -1) {
+        showToast('未找到"学生姓名"列', 'error');
+        return;
+      }
+      
+      // 解析数据
+      importData = [];
+      let maxId = Math.max(...Object.values(STUDENTS).flat().map(s => s.id), 0);
+      
+      for (let i = headerRowIdx + 1; i < data.length; i++) {
+        const row = data[i];
+        const fileClass = classCol >= 0 ? String(row[classCol] || '').trim() : '';
+        const name = String(row[nameCol] || '').trim();
+        const parent = parentCol >= 0 ? String(row[parentCol] || '').trim() : '';
+        const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
+        
+        if (!name) continue;
+        
+        // 如果有班级列，检查是否匹配当前班级
+        if (classCol >= 0 && fileClass && fileClass !== cls) {
+          continue; // 跳过不匹配的班级
+        }
+        
+        importData.push({
+          seat: importData.length + 1,
+          name: name,
+          phone: phone,
+          parent: parent,
+          id: ++maxId,
+          status: 'present',
+          leaveReason: '',
+          leaveNote: '',
+          leaveDays: 0,
+          mark: '',
+          boarding: 'inner',
+          familyType: '',
+          familyNote: '',
+          leftBehind: false,
+          leftBehindNote: '',
+        });
+      }
+      
+      if (importData.length === 0) {
+        showToast('未解析到有效数据', 'error');
+        return;
+      }
+      
+      showImportPreview();
+    });
+  } else {
+    // 旧的文本格式处理
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const text = e.target.result;
+      parseImportText(text);
+    };
+    reader.readAsText(file);
+  }
+  
+  event.target.value = '';
+}
+
+function downloadStudentImportTemplate() {
+  const cls = getHeadteacherClass();
+  const template = [
+    ['班级', '学生姓名', '家长姓名', '家长电话'],
+    [cls, '张三', '张大明', '13800138000'],
+    [cls, '李四', '李小红', '13900139000'],
+    [cls, '王五', '', '']
+  ];
+  downloadExcel(template, '学生名单模板.xlsx');
+}
+
+function showImportPreview() {
+  let rows = importData.map(s => `<tr>
+    <td>${s.seat}</td><td style="font-weight:500">${s.name}</td>
+    <td>${s.parent || '-'}</td><td>${s.phone || '-'}</td>
+  </tr>`).join('');
+  document.getElementById('importPreviewArea').innerHTML = `
+    <div class="import-preview">
+      <table><thead><tr><th>座号</th><th>姓名</th><th>家长</th><th>电话</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:var(--gray-500)">共解析 <strong style="color:var(--primary)">${importData.length}</strong> 条记录</div>`;
+  document.getElementById('importConfirmBtn').style.display = '';
 }
 
 function parsePastedData() {
@@ -4360,12 +4665,12 @@ function parseImportText(text) {
   let maxId = Math.max(...Object.values(STUDENTS).flat().map(s => s.id), 0);
   lines.forEach((line, i) => {
     const parts = line.split(/[,，\t]/).map(p => p.trim());
-    if (parts.length >= 2) {
+    if (parts.length >= 1 && parts[0]) {
       importData.push({
-        seat: parseInt(parts[0]) || i + 1,
-        name: parts[1],
+        seat: importData.length + 1,
+        name: parts[0],
+        parent: parts[1] || '',
         phone: parts[2] || '',
-        parent: parts[3] || '',
         id: ++maxId,
         status: 'present',
         leaveReason: '',
@@ -4384,17 +4689,7 @@ function parseImportText(text) {
     showToast('未解析到有效数据', 'error');
     return;
   }
-  let rows = importData.map(s => `<tr>
-    <td>${s.seat}</td><td style="font-weight:500">${s.name}</td>
-    <td>${s.phone || '-'}</td><td>${s.parent || '-'}</td>
-  </tr>`).join('');
-  document.getElementById('importPreviewArea').innerHTML = `
-    <div class="import-preview">
-      <table><thead><tr><th>座号</th><th>姓名</th><th>电话</th><th>家长</th></tr></thead>
-      <tbody>${rows}</tbody></table>
-    </div>
-    <div style="margin-top:8px;font-size:12px;color:var(--gray-500)">共解析 <strong style="color:var(--primary)">${importData.length}</strong> 条记录</div>`;
-  document.getElementById('importConfirmBtn').style.display = '';
+  showImportPreview();
 }
 
 function confirmImport() {
@@ -5857,10 +6152,10 @@ function renderRolesSetup() {
       : '<span style="color:var(--warning);font-size:11px">⚠ 未设置</span>';
     return `<tr>
       <td style="font-weight:500">${r.name}</td>
-      <td><span class="setup-badge purple">校领导</span></td>
+      <td><span class="setup-badge purple">${r.title || '校领导'}</span></td>
       <td>${pwdStatus}</td>
       <td>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '校领导')">设密码</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '${r.title || '校领导'}')">设密码</button>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${i})">编辑</button>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${i})">删除</button>
       </td>
@@ -5876,6 +6171,10 @@ function renderRolesSetup() {
             <span class="setup-badge purple">校领导 ${leaders.length}</span>
             <span class="setup-badge blue">班主任 ${headteacherSet.size}人（来自授课分配）</span>
             <span class="setup-badge green">科任教师 ${teacherSet.size}人（来自授课分配）</span>
+            <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadRolesTemplate()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              下载模板
+            </button>
             <button class="toolbar-btn primary" style="font-size:12px;margin-left:8px" onclick="showAddRoleModal()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               添加领导
@@ -5890,9 +6189,15 @@ function renderRolesSetup() {
           <div style="padding:12px 16px;background:var(--primary-bg);border-radius:8px;margin-bottom:12px;font-size:12px;color:#1E40AF">
             💡 提示：班主任和科任教师从「授课分配」自动识别，无需在此手动添加。此处仅管理校领导。
           </div>
+          <div class="setup-import-zone">
+            <input type="file" accept=".xlsx,.xls,.csv" onchange="importRolesFromExcel(event)">
+            <div class="setup-import-icon">📥</div>
+            <div class="setup-import-title">点击导入领导名单</div>
+            <div class="setup-import-hint">支持 Excel 格式，列：职务、姓名</div>
+          </div>
           <table class="setup-table">
-            <thead><tr><th>姓名</th><th>角色</th><th>密码状态</th><th>操作</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="4" class="setup-empty">暂无领导数据，请添加</td></tr>'}</tbody>
+            <thead><tr><th>姓名</th><th>职务</th><th>密码状态</th><th>操作</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4" class="setup-empty">暂无领导数据，请添加或导入</td></tr>'}</tbody>
           </table>
         </div>
       </div>
@@ -5921,13 +6226,69 @@ function addRoleRow() {
   if (!password || password.length < 4) { showToast('密码至少4位', 'warning'); return; }
   
   // 只添加领导角色
-  setupRoles.push({ name, role: 'leader', classes: [], subject: null, username: name, password: password });
+  setupRoles.push({ name, role: 'leader', title: '校领导', classes: [], subject: null, username: name, password: password });
   
   // 立即设置凭证
   setUserPassword(name, password, 'leader', [], null);
   
   hideModal();
   renderSetupContent();
+}
+
+function downloadRolesTemplate() {
+  const template = [
+    ['职务', '姓名'],
+    ['校长', '张三'],
+    ['副校长', '李四'],
+    ['教导主任', '王五']
+  ];
+  downloadExcel(template, '领导名单模板.xlsx');
+}
+
+function importRolesFromExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  readExcelFile(file, function(data) {
+    if (!data || data.length < 2) { showToast('文件内容为空', 'error'); return; }
+    let headerRowIdx = -1;
+    for (let i = 0; i < Math.min(data.length, 10); i++) {
+      const row = data[i].map(c => String(c).trim());
+      if (row.some(c => c.includes('姓名') || c.includes('职务'))) { headerRowIdx = i; break; }
+    }
+    if (headerRowIdx === -1) { showToast('未找到"姓名"或"职务"列', 'error'); return; }
+    
+    const header = data[headerRowIdx].map(c => String(c).trim());
+    let titleCol = -1, nameCol = -1;
+    header.forEach((c, i) => {
+      if (c.includes('职务') || c.includes('职位') || c.includes('角色')) titleCol = i;
+      else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
+    });
+    
+    if (nameCol === -1) { showToast('未找到"姓名"列', 'error'); return; }
+    
+    let importCount = 0;
+    for (let i = headerRowIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      const name = String(row[nameCol] || '').trim();
+      if (!name) continue;
+      const title = titleCol >= 0 ? String(row[titleCol] || '').trim() : '校领导';
+      
+      // 检查是否已存在
+      const existing = setupRoles.find(r => r.name === name && r.role === 'leader');
+      if (existing) {
+        existing.title = title;
+      } else {
+        setupRoles.push({ name, role: 'leader', title: title, classes: [], subject: null, username: name, password: '123456' });
+        setUserPassword(name, '123456', 'leader', [], null);
+      }
+      importCount++;
+    }
+    
+    if (importCount === 0) { showToast('未解析到有效数据', 'error'); return; }
+    showToast(`成功导入 ${importCount} 位领导`);
+    renderSetupContent();
+  });
+  event.target.value = '';
 }
 
 // 设置/修改教师密码弹窗
