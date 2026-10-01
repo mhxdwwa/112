@@ -1445,7 +1445,7 @@ function emptyStateHtml(message) {
   </div>`;
 }
 
-// 刷新当前登录用户的班级信息（从最新凭证/setupTeaching数据）
+// 刷新当前登录用户的班级和角色信息（从最新凭证/setupTeaching数据）
 function refreshCurrentUserClass() {
   if (!xqCurrentUser) return;
   const name = xqCurrentUser.teacherName;
@@ -1453,15 +1453,44 @@ function refreshCurrentUserClass() {
   console.log('[XQ] Refreshing classes for:', name, 'Current classes:', xqCurrentUser.classes);
   console.log('[XQ] setupTeaching length:', setupTeaching.length);
   
-  // 优先从 setupTeaching 获取最新班级（最权威的数据源）
+  // 优先从 setupTeaching 获取最新班级和角色（最权威的数据源）
   if (setupTeaching.length > 0) {
     const roleInfo = getUserRoleInfo(name);
     console.log('[XQ] roleInfo from setupTeaching:', roleInfo);
-    if (roleInfo && roleInfo.classes && roleInfo.classes.length > 0) {
-      xqCurrentUser.classes = roleInfo.classes;
-      // 同时更新凭证中的班级信息
+    if (roleInfo) {
+      // 更新班级
+      if (roleInfo.classes && roleInfo.classes.length > 0) {
+        xqCurrentUser.classes = roleInfo.classes;
+      }
+      
+      // 对于管理员，更新角色（从 leader 改为 teacher/headteacher）
+      if (name === XQ_ADMIN_NAME && roleInfo.role !== 'leader') {
+        const oldRole = currentRole;
+        currentRole = roleInfo.role;
+        xqCurrentUser.role = roleInfo.role;
+        
+        // 更新用户信息显示
+        let roleText = '';
+        if (roleInfo.role === 'headteacher') {
+          const cls = roleInfo.classes && roleInfo.classes.length > 0 ? roleInfo.classes[0] : '';
+          roleText = cls ? cls + '班主任' : '班主任';
+        } else {
+          const subj = roleInfo.subject || '';
+          roleText = subj ? subj + '教师' : '科任教师';
+        }
+        
+        // 更新 UI
+        document.getElementById('sidebarRole').textContent = roleText;
+        if (USERS[oldRole]) {
+          USERS[oldRole].role = roleText;
+        }
+        
+        console.log('[XQ] Admin role updated:', oldRole, '->', currentRole, roleText);
+      }
+      
+      // 同时更新凭证中的班级和角色信息
       if (xqCredentials[name]) {
-        xqCredentials[name].classes = roleInfo.classes;
+        xqCredentials[name].classes = roleInfo.classes || [];
         xqCredentials[name].role = roleInfo.role;
         if (roleInfo.subject) xqCredentials[name].subject = roleInfo.subject;
       }
@@ -1479,7 +1508,7 @@ function refreshCurrentUserClass() {
   
   // 更新 session 缓存
   saveSession();
-  console.log('[XQ] User classes refreshed:', name, '->', xqCurrentUser.classes);
+  console.log('[XQ] User classes refreshed:', name, '->', xqCurrentUser.classes, 'role:', currentRole);
 }
 
 const NAMES = [];
@@ -1689,9 +1718,40 @@ function isUserInTeacherList(name) {
 
 // 获取用户在名单中的角色信息（从授课分配和职责分配推导）
 function getUserRoleInfo(name) {
-  if (name === XQ_ADMIN_NAME) return { role: 'leader', classes: [], subject: null };
+  // 管理员（吴胜闯）：从授课分配获取教师角色，不从 setupRoles 获取领导角色
+  if (name === XQ_ADMIN_NAME) {
+    // 检查授课分配中的班主任
+    const headteacherClasses = [];
+    setupTeaching.forEach(t => {
+      if (t.headteacher === name) headteacherClasses.push(t.name);
+    });
+    if (headteacherClasses.length > 0) {
+      return { role: 'headteacher', classes: headteacherClasses, subject: null };
+    }
+    
+    // 检查授课分配中的科任教师
+    const teacherInfo = { subjects: new Set(), classes: new Set() };
+    setupTeaching.forEach(t => {
+      Object.entries(t.subjects || {}).forEach(([subj, teacher]) => {
+        if (teacher === name) {
+          teacherInfo.subjects.add(subj);
+          teacherInfo.classes.add(t.name);
+        }
+      });
+    });
+    if (teacherInfo.subjects.size > 0) {
+      return { 
+        role: 'teacher', 
+        classes: Array.from(teacherInfo.classes), 
+        subject: Array.from(teacherInfo.subjects)[0] || null 
+      };
+    }
+    
+    // 如果授课分配中没有，返回默认教师角色
+    return { role: 'teacher', classes: [], subject: null };
+  }
   
-  // 检查职责分配中的领导
+  // 其他用户：检查职责分配中的领导
   const leaderRole = setupRoles.find(r => r.role === 'leader' && r.name === name);
   if (leaderRole) return { role: 'leader', classes: [], subject: null };
   
@@ -1864,7 +1924,15 @@ function doLogin() {
     }
     
     // 密码正确，确定角色
-    const role = cred.role || 'teacher';
+    // 对于管理员，优先从授课分配获取角色（而非凭证中的 leader 角色）
+    let role;
+    if (name === XQ_ADMIN_NAME && setupTeaching.length > 0) {
+      const roleInfo = getUserRoleInfo(name);
+      role = roleInfo ? roleInfo.role : 'teacher';
+    } else {
+      role = cred.role || 'teacher';
+    }
+    
     let foundRole, foundUser;
     
     if (role === 'leader') {
@@ -1903,11 +1971,13 @@ function doLogin() {
     
     // 从服务器加载最新数据
     xqLoadAllConfig().then(() => {
-      // 重新从凭证/setupTeaching刷新当前用户的班级信息
+      // 重新从凭证/setupTeaching刷新当前用户的班级和角色信息
       refreshCurrentUserClass();
+      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
       navigate(getDefaultPage());
     }).catch(() => {
       refreshCurrentUserClass();
+      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
       navigate(getDefaultPage());
     });
   });
@@ -1962,9 +2032,11 @@ function restoreSession() {
     // 从服务器加载最新数据
     xqLoadAllConfig().then(() => {
       refreshCurrentUserClass();
+      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
       navigate(getDefaultPage());
     }).catch(() => {
       refreshCurrentUserClass();
+      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
       navigate(getDefaultPage());
     });
     
