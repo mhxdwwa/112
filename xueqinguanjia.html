@@ -1358,23 +1358,61 @@ async function xqClearSemesterData() {
   return result;
 }
 
-// 设置管理员密钥
-function xqSetAdminKey(key) {
+// 设置管理员密钥（同时保存到服务器，实现跨设备同步）
+async function xqSetAdminKey(key) {
   if (key && key.trim()) {
     localStorage.setItem('xq_admin_key', key.trim());
     window.XQ_ADMIN_KEY = key.trim();
-    console.log('[XQ] Admin key set');
+    console.log('[XQ] Admin key set locally');
+    
+    // 同时保存到服务器，这样其他设备登录后也能获取
+    try {
+      const result = await xqApi('config', {
+        action: 'set',
+        adminKey: key.trim(),
+        configKey: 'admin_key',
+        configData: { key: key.trim(), setBy: xqCurrentUser?.teacherName || 'admin' },
+        teacherName: xqCurrentUser?.teacherName || 'admin'
+      });
+      if (result.ok) {
+        console.log('[XQ] Admin key synced to server');
+      } else {
+        console.warn('[XQ] Failed to sync admin key to server:', result.error);
+      }
+    } catch (e) {
+      console.warn('[XQ] Error syncing admin key:', e);
+    }
+    
     return true;
   }
   return false;
 }
 
-// 加载管理员密钥
-function xqLoadAdminKey() {
-  const key = localStorage.getItem('xq_admin_key');
-  if (key) {
-    window.XQ_ADMIN_KEY = key;
+// 加载管理员密钥（优先从服务器获取，实现跨设备同步）
+async function xqLoadAdminKey() {
+  // 先从 localStorage 加载（快速响应）
+  const localKey = localStorage.getItem('xq_admin_key');
+  if (localKey) {
+    window.XQ_ADMIN_KEY = localKey;
+    console.log('[XQ] Admin key loaded from localStorage');
   }
+  
+  // 尝试从服务器获取最新密钥（覆盖本地）
+  try {
+    const result = await xqApi('config', { action: 'get' });
+    if (result.ok && result.config && result.config.admin_key) {
+      const serverKey = result.config.admin_key.data?.key;
+      if (serverKey) {
+        window.XQ_ADMIN_KEY = serverKey;
+        localStorage.setItem('xq_admin_key', serverKey);
+        console.log('[XQ] Admin key synced from server');
+      }
+    }
+  } catch (e) {
+    console.warn('[XQ] Failed to load admin key from server:', e);
+  }
+  
+  return window.XQ_ADMIN_KEY;
 }
 
 /* ============================================================
@@ -1879,9 +1917,9 @@ async function doAdminInit() {
   // 设置管理员密码
   await setUserPassword(XQ_ADMIN_NAME, p1, 'leader', [], null);
   
-  // 自动生成管理员密钥
+  // 自动生成管理员密钥并保存到服务器
   const adminKey = 'xq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  xqSetAdminKey(adminKey);
+  await xqSetAdminKey(adminKey);
   
   closeAdminInitDialog();
   alert('管理员初始化成功！\n\n请使用以下信息登录：\n用户名：' + XQ_ADMIN_NAME + '\n密码：您刚才设置的密码\n\n登录后请进入"学校数据设置"导入教师信息。');
@@ -5186,7 +5224,7 @@ function closeSetupPage() {
   document.getElementById('setupPage').classList.remove('visible');
 }
 
-function saveSetupAndBack() {
+async function saveSetupAndBack() {
   // 权限检查：只有管理员可以保存
   if (xqCurrentUser?.teacherName !== XQ_ADMIN_NAME) {
     alert('⛔ 权限不足\n\n只有管理员（' + XQ_ADMIN_NAME + '）才能保存学校数据。');
@@ -5196,12 +5234,22 @@ function saveSetupAndBack() {
   // Apply all setup data
   if (setupClasses.length > 0) applyClassesData(setupClasses);
   if (setupTeaching.length > 0) applyTeachingDataFromSetup();
-  if (setupRoles.length > 0) applyRolesData(setupRoles);
-  saveSchoolConfigToStorage();
+  if (setupRoles.length > 0) await applyRolesData(setupRoles);
   
-  const syncMsg = window.XQ_ADMIN_KEY ? '（已同步到云端）' : '（本地保存）';
-  showToast('学校数据已保存' + syncMsg);
-  closeSetupPage();
+  // 等待服务器同步完成
+  showToast('正在保存到云端...', 'success');
+  const result = await saveSchoolConfigToStorage();
+  
+  if (result.synced) {
+    showToast('✓ 学校数据已保存到云端（所有设备可见）');
+    closeSetupPage();
+  } else if (result.ok && !result.synced) {
+    // 本地保存成功但没有同步到服务器
+    showToast('⚠ 数据已保存到本地，但未同步到云端。请检查网络连接。', 'warning');
+    closeSetupPage();
+  } else {
+    showToast('✕ 保存失败：' + (result.error || '未知错误'), 'error');
+  }
 }
 
 function switchSetupTab(tab, el) {
@@ -5290,7 +5338,7 @@ function renderCloudSetup() {
   `;
 }
 
-function saveAdminKey() {
+async function saveAdminKey() {
   const input = document.getElementById('adminKeyInput');
   const key = input.value.trim();
   
@@ -5299,16 +5347,18 @@ function saveAdminKey() {
     return;
   }
   
-  if (xqSetAdminKey(key)) {
-    showToast('管理员密钥已保存，云端同步已启用');
+  showToast('正在保存管理员密钥...', 'success');
+  if (await xqSetAdminKey(key)) {
+    showToast('✓ 管理员密钥已保存，云端同步已启用');
     // 立即同步一次
-    xqSaveAllConfigToServer().then(result => {
-      if (result.ok) {
-        showToast('数据已同步到云端');
-      }
-    });
+    const result = await xqSaveAllConfigToServer();
+    if (result.ok) {
+      showToast('✓ 数据已同步到云端');
+    } else {
+      showToast('⚠ 密钥已保存，但数据同步失败：' + (result.error || ''), 'warning');
+    }
   } else {
-    showToast('保存失败', 'error');
+    showToast('✕ 保存失败', 'error');
   }
 }
 
@@ -6123,7 +6173,7 @@ function applyImportedUsers() {
 }
 
 // Save/Load school config
-function saveSchoolConfigToStorage() {
+async function saveSchoolConfigToStorage() {
   try {
     const config = {
       SCHOOL: { grades: SCHOOL.grades, teacherClasses: SCHOOL.teacherClasses, headteacherClasses: SCHOOL.headteacherClasses, importedClasses: SCHOOL.importedClasses, importedClassList: SCHOOL.importedClassList, importedUsers: SCHOOL.importedUsers },
@@ -6134,15 +6184,22 @@ function saveSchoolConfigToStorage() {
     
     // 同步到服务器（如果有管理员密钥）
     if (window.XQ_ADMIN_KEY) {
-      xqSaveAllConfigToServer().then(result => {
-        if (result.ok) {
-          console.log('[XQ] Config synced to server');
-        } else {
-          console.warn('[XQ] Failed to sync config:', result.error);
-        }
-      });
+      const result = await xqSaveAllConfigToServer();
+      if (result.ok) {
+        console.log('[XQ] Config synced to server');
+        return { ok: true, synced: true };
+      } else {
+        console.warn('[XQ] Failed to sync config:', result.error);
+        return { ok: false, error: result.error, synced: false };
+      }
+    } else {
+      console.warn('[XQ] No admin key, config saved locally only');
+      return { ok: true, synced: false, error: 'No admin key' };
     }
-  } catch (e) { console.warn('Failed to save config:', e); }
+  } catch (e) { 
+    console.warn('Failed to save config:', e);
+    return { ok: false, error: e.message, synced: false };
+  }
 }
 
 function loadSchoolConfigFromStorage() {
@@ -6210,7 +6267,6 @@ function extractSubjectName(header) {
 
 // Load config on startup
 loadSchoolConfigFromStorage();
-xqLoadAdminKey(); // 加载管理员密钥
 
 // 清空输入框，防止浏览器自动填充干扰
 document.getElementById('loginUser').value = '';
@@ -6224,16 +6280,22 @@ try {
   }
 } catch (e) {}
 
-// 先从服务器同步最新凭证，再恢复会话
-xqLoadCredentials().then(() => {
+// 先从服务器加载管理员密钥和凭证，再恢复会话
+(async () => {
+  // 1. 从服务器加载管理员密钥（实现跨设备同步）
+  await xqLoadAdminKey();
+  console.log('[XQ] Admin key loaded:', window.XQ_ADMIN_KEY ? 'yes' : 'no');
+  
+  // 2. 从服务器同步最新凭证
+  await xqLoadCredentials();
   console.log('[XQ] Credentials loaded from server, users:', Object.keys(xqCredentials).length);
   
-  // 尝试恢复之前的登录会话
+  // 3. 尝试恢复之前的登录会话
   if (!restoreSession()) {
     // 没有可恢复的会话，显示登录界面
     checkLoginState();
   }
-});
+})();
 </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
