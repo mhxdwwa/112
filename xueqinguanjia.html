@@ -1214,6 +1214,12 @@ async function xqLoadAllConfig() {
       if (result.config.setupRoles && result.config.setupRoles.data) {
         setupRoles = result.config.setupRoles.data;
       }
+      // 加载凭证（credentials）
+      if (result.config.credentials && result.config.credentials.data) {
+        xqCredentials = result.config.credentials.data;
+        localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
+        console.log('[XQ] Loaded credentials, users:', Object.keys(xqCredentials).length);
+      }
       // 如果有 setupTeaching，应用授课分配数据
       if (setupTeaching.length > 0) {
         applyTeachingDataFromSetup();
@@ -1232,9 +1238,18 @@ async function xqLoadAllConfig() {
         if (!CLASS_LIST.includes(cls)) CLASS_LIST.push(cls);
       });
       
-      // 保存到 localStorage 作为缓存
+      // 保存到 localStorage 作为缓存（不触发服务器同步）
       saveStudentsToStorage();
-      saveSchoolConfigToStorage();
+      try {
+        const config = {
+          SCHOOL: { grades: SCHOOL.grades, teacherClasses: SCHOOL.teacherClasses, headteacherClasses: SCHOOL.headteacherClasses, importedClasses: SCHOOL.importedClasses, importedClassList: SCHOOL.importedClassList, importedUsers: SCHOOL.importedUsers },
+          USERS: USERS, TEACHER_CLASSES: TEACHER_CLASSES,
+          setupClasses, setupTeaching, setupRoles
+        };
+        localStorage.setItem('school_config_data', JSON.stringify(config));
+      } catch (e) {
+        console.warn('Failed to save config to localStorage:', e);
+      }
       
       console.log('[XQ] Config loaded from server');
     }
@@ -2015,17 +2030,11 @@ function doLogin() {
     // 保存登录状态到 localStorage
     saveSession();
     
-    // 从服务器加载最新数据
-    xqLoadAllConfig().then(() => {
-      // 重新从凭证/setupTeaching刷新当前用户的班级和角色信息
-      refreshCurrentUserClass();
-      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
-      navigate(getDefaultPage());
-    }).catch(() => {
-      refreshCurrentUserClass();
-      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
-      navigate(getDefaultPage());
-    });
+    // 配置已在启动时加载，无需再次加载
+    // 直接刷新用户信息并导航
+    refreshCurrentUserClass();
+    buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
+    navigate(getDefaultPage());
   });
 }
 
@@ -2075,16 +2084,11 @@ function restoreSession() {
     
     console.log('[XQ] Session restored for:', session.user.teacherName);
     
-    // 从服务器加载最新数据
-    xqLoadAllConfig().then(() => {
-      refreshCurrentUserClass();
-      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
-      navigate(getDefaultPage());
-    }).catch(() => {
-      refreshCurrentUserClass();
-      buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
-      navigate(getDefaultPage());
-    });
+    // 配置已在启动时加载，无需再次加载
+    // 直接刷新用户信息并导航
+    refreshCurrentUserClass();
+    buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
+    navigate(getDefaultPage());
     
     return true;
   } catch (e) {
@@ -6280,15 +6284,18 @@ try {
   }
 } catch (e) {}
 
-// 先从服务器加载管理员密钥和凭证，再恢复会话
+// 先从服务器加载所有配置，再恢复会话或显示登录界面
 (async () => {
   // 1. 从服务器加载管理员密钥（实现跨设备同步）
   await xqLoadAdminKey();
   console.log('[XQ] Admin key loaded:', window.XQ_ADMIN_KEY ? 'yes' : 'no');
   
-  // 2. 从服务器同步最新凭证
-  await xqLoadCredentials();
-  console.log('[XQ] Credentials loaded from server, users:', Object.keys(xqCredentials).length);
+  // 2. 从服务器加载完整配置（包括 setupTeaching、凭证等）
+  // 这样即使没有会话，登录时也能检查教师名单
+  await xqLoadAllConfig();
+  console.log('[XQ] Config loaded from server');
+  console.log('[XQ] setupTeaching length:', setupTeaching.length);
+  console.log('[XQ] Credentials loaded, users:', Object.keys(xqCredentials).length);
   
   // 3. 尝试恢复之前的登录会话
   if (!restoreSession()) {
