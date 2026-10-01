@@ -5182,35 +5182,31 @@ function editSeating() {
 
 /* ----- LEADER/HEADTEACHER/TEACHER: Teach Classes ----- */
 function renderTeachClasses() {
-  let classes;
+  let classes = {};
   const user = xqCurrentUser || {};
+  const classSubjects = getTeacherClassSubjects();
   
-  if (user.isLeader) {
-    // 校领导查看所有班级
-    classes = {};
-    CLASS_LIST.forEach(cls => { classes[cls] = '全校班级'; });
-  } else {
-    // 班主任和/或科任老师：显示所有相关班级
-    classes = {};
-    const classSubjects = getTeacherClassSubjects();
-    
-    // 如果是班主任，先添加班主任班级
-    if (user.isHeadteacher) {
-      const htClasses = user.headteacherClasses || [];
-      htClasses.forEach(cls => {
-        classes[cls] = '班主任（本班）';
-      });
-    }
-    
-    // 如果是科任老师，添加科任班级（不包括已经是班主任的班级）
-    if (user.isTeacher) {
-      const teachClasses = user.teachingClasses || [];
-      teachClasses.forEach(cls => {
-        if (!classes[cls]) {
-          classes[cls] = classSubjects[cls] || '科任';
-        }
-      });
-    }
+  // 如果是班主任，先添加班主任班级
+  if (user.isHeadteacher) {
+    const htClasses = user.headteacherClasses || [];
+    htClasses.forEach(cls => {
+      classes[cls] = '班主任（本班）';
+    });
+  }
+  
+  // 如果是科任老师，添加科任班级（不包括已经是班主任的班级）
+  if (user.isTeacher) {
+    const teachClasses = user.teachingClasses || [];
+    teachClasses.forEach(cls => {
+      if (!classes[cls]) {
+        classes[cls] = classSubjects[cls] || '科任';
+      }
+    });
+  }
+  
+  // 领导如果没有分配授课班级，显示提示
+  if (user.isLeader && Object.keys(classes).length === 0) {
+    return emptyStateHtml('未找到您的授课班级信息。请联系管理员在「学校数据设置」中确认您的授课分配。');
   }
 
   let cards = '';
@@ -5242,7 +5238,7 @@ function renderTeachClasses() {
     </div>`;
   });
 
-  const showFilter = user.isLeader;
+  const showFilter = Object.keys(classes).length > 3;
   return `
     <div class="toolbar">
       ${showFilter ? `
