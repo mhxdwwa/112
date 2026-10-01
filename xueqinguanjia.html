@@ -1765,17 +1765,26 @@ async function saveStudentsToCloud() {
 // 更新保存按钮状态
 function updateSaveToCloudButton() {
   const btn = document.getElementById('saveToCloudBtn');
+  const statusText = document.getElementById('saveStatusText');
   if (!btn) return;
   if (studentsDataChanged) {
     btn.style.background = 'var(--accent)';
     btn.style.color = '#fff';
     btn.style.animation = 'pulse 1.5s infinite';
-    btn.innerHTML = '⬆ 保存到云端（有未保存的更改）';
+    btn.innerHTML = '保存到云端';
+    if (statusText) {
+      statusText.style.color = 'var(--accent)';
+      statusText.innerHTML = '● 有未保存更改';
+    }
   } else {
     btn.style.background = 'var(--gray-100)';
     btn.style.color = 'var(--gray-600)';
     btn.style.animation = '';
-    btn.innerHTML = '✓ 已保存到云端';
+    btn.innerHTML = '已保存';
+    if (statusText) {
+      statusText.style.color = 'var(--gray-500)';
+      statusText.innerHTML = '✓ 已同步';
+    }
   }
 }
 
@@ -3546,16 +3555,22 @@ function renderAdminStudents() {
   return `
     <div class="card anim-in" style="margin-bottom:12px">
       <div class="card-header" style="padding:12px 16px">
-        <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span class="card-title" style="font-size:15px">班级列表</span>
           <span style="font-size:12px;color:var(--gray-500);background:var(--gray-100);padding:2px 8px;border-radius:10px">${totalClasses}个班 · ${totalStudents}人</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span id="saveStatusText" style="font-size:11px;color:var(--gray-500)">${studentsDataChanged ? '● 有未保存更改' : '✓ 已同步'}</span>
+            <button id="saveToCloudBtn" class="toolbar-btn primary" style="font-size:11px;padding:4px 12px" onclick="saveStudentsToCloud()">
+              ${studentsDataChanged ? '保存到云端' : '已保存'}
+            </button>
+          </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">
           <select id="gradeAssignSelect" class="toolbar-select" style="font-size:11px;padding:4px 8px">
             <option value="">选择年级...</option>
             ${SCHOOL.grades.map(g => `<option value="${g}">${g}</option>`).join('')}
           </select>
-          <button class="toolbar-btn primary" style="font-size:11px;padding:5px 10px" onclick="assignSelectedClassesToGrade()">分配年级</button>
+          <button class="toolbar-btn ghost" style="font-size:11px;padding:5px 10px" onclick="assignSelectedClassesToGrade()">分配年级</button>
           <button class="toolbar-btn ghost" style="font-size:11px;padding:5px 10px;color:var(--danger);border-color:var(--danger)" onclick="batchDeleteSelectedClasses()">批量删除</button>
         </div>
       </div>
@@ -3566,7 +3581,7 @@ function renderAdminStudents() {
             <span>全选</span>
           </label>
           <span style="color:var(--gray-300)">|</span>
-          <span>点击班级进入管理 · ✕删除单个 · 需点击底部"保存到云端"</span>
+          <span>点击班级进入管理 · ✕删除单个</span>
         </div>
         <div style="max-height:60vh;overflow-y:auto;padding-right:4px">
           ${gradeSections || '<div style="text-align:center;color:var(--gray-400);padding:40px">暂无班级数据，请先上传学生名单</div>'}
@@ -3587,23 +3602,9 @@ function renderAdminStudents() {
         </div>
         <div class="setup-import-zone">
           <input type="file" accept=".xlsx,.xls,.csv" onchange="importStudentsFromExcel(event)">
-          <div class="setup-import-icon">📥</div>
-          <div class="setup-import-title" style="font-size:13px">点击上传学生名单文件</div>
-          <div class="setup-import-hint" style="font-size:11px">支持 Excel 和 CSV 格式</div>
         </div>
       </div>
     </details>
-    
-    <div class="card anim-in anim-d2" style="position:sticky;bottom:0;z-index:10;box-shadow:0 -4px 20px rgba(0,0,0,0.08);border-radius:8px 8px 0 0">
-      <div class="card-body" style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:12px;color:var(--gray-600)">
-          ${studentsDataChanged ? '<span style="color:var(--accent);font-weight:500">● 有未保存的更改</span>' : '<span style="color:var(--accent)">✓ 已保存到云端</span>'}
-        </div>
-        <button id="saveToCloudBtn" class="toolbar-btn primary" style="font-size:13px;padding:8px 20px;font-weight:600" onclick="saveStudentsToCloud()">
-          ${studentsDataChanged ? '⬆ 保存到云端' : '✓ 已保存'}
-        </button>
-      </div>
-    </div>
   `;
 }
 
