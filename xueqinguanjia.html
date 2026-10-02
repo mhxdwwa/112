@@ -191,6 +191,7 @@ a { text-decoration: none; color: inherit; }
 .sidebar-user {
   padding: 16px; border-top: 1px solid rgba(255,255,255,0.06);
   display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
 }
 .sidebar-avatar {
   width: 36px; height: 36px; border-radius: 10px;
@@ -835,9 +836,22 @@ tbody tr:last-child td { border-bottom: none; }
     transform: translateX(-100%);
     transition: transform 0.3s ease;
     width: 260px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
   .sidebar.mobile-open {
     transform: translateX(0);
+  }
+  .sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidebar-user {
+    flex-shrink: 0;
+    background: var(--gray-900);
+    border-top: 1px solid rgba(255,255,255,0.1);
   }
   .sidebar-overlay {
     display: none;
@@ -2850,9 +2864,9 @@ function buildSidebar() {
     });
   }
   
-  // 如果是科任老师（且不是班主任，避免重复显示授课班级），显示科任老师菜单
-  // 班主任已经在上面显示了"教学"部分，所以这里只处理纯科任老师
-  if (user.isTeacher && !user.isHeadteacher) {
+  // 如果是科任老师（且不是班主任或领导，避免重复显示授课班级），显示科任老师菜单
+  // 班主任和领导已经在上面显示了"授课班级"，所以这里只处理纯科任老师
+  if (user.isTeacher && !user.isHeadteacher && !user.isLeader) {
     const config = NAV_CONFIG.teacher;
     config.forEach(section => {
       html += `<div class="sidebar-section">`;
@@ -3077,13 +3091,21 @@ function renderDrillDownInline(type) {
   const colorVar = type === 'leave' ? 'var(--warning)' : type === 'absent' ? 'var(--danger)' : 'var(--primary)';
   const bgLight = type === 'leave' ? 'var(--warning-light)' : type === 'absent' ? 'var(--danger-light)' : 'var(--primary-bg)';
 
+  // 按年级分组（使用 classGradeMap）
+  const gradeGroups = {};
+  CLASS_LIST.forEach(cls => {
+    const grade = classGradeMap[cls] || '未分类';
+    if (!gradeGroups[grade]) gradeGroups[grade] = [];
+    gradeGroups[grade].push(cls);
+  });
+
   // Collect all students by grade → class
   let allHtml = '';
-  SCHOOL.grades.forEach(g => {
+  Object.keys(gradeGroups).sort().forEach(g => {
     let gradeCount = 0;
     let classSections = '';
 
-    CLASS_LIST.filter(c => c.startsWith(g)).forEach(cls => {
+    gradeGroups[g].forEach(cls => {
       let students = [];
       STUDENTS[cls].forEach(s => {
         if (s.status === type) {
