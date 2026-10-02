@@ -719,8 +719,11 @@ tbody tr:last-child td { border-bottom: none; }
   opacity: 0.5; transform: scale(0.95);
 }
 .seat.drag-over {
-  box-shadow: 0 0 0 3px var(--primary);
+  outline: 3px solid #e53e3e;
+  outline-offset: -1px;
+  box-shadow: 0 0 8px rgba(229, 62, 62, 0.4);
   transform: scale(1.08);
+  transition: transform 0.15s ease, outline 0.15s ease, box-shadow 0.15s ease;
 }
 .seat-edit-bar {
   display: flex; align-items: center; gap: 10px; justify-content: center;
