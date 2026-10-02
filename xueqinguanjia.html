@@ -819,6 +819,192 @@ tbody tr:last-child td { border-bottom: none; }
   .grid-2, .grid-2-1, .grid-1-2 { grid-template-columns: 1fr; }
 }
 
+/* ========================================
+   MOBILE RESPONSIVE (手机浏览器适配)
+   ======================================== */
+@media (max-width: 768px) {
+  /* === 基础布局 === */
+  html { font-size: 13px; }
+  body { overflow: auto; height: auto; }
+  .app { flex-direction: column; height: auto; min-height: 100vh; }
+
+  /* === 侧边栏：默认隐藏，作为抽屉滑出 === */
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    width: 260px;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,0.5);
+  }
+  .sidebar-overlay.visible { display: block; }
+
+  /* === 汉堡菜单按钮 === */
+  .mobile-menu-btn {
+    display: flex !important;
+    width: 36px; height: 36px;
+    align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* === 头部简化 === */
+  .header {
+    height: 52px;
+    padding: 0 12px;
+  }
+  .header-title { font-size: 15px; }
+  .header-breadcrumb { display: none; }
+  .header-date { display: none; }
+  .header-left { gap: 8px; }
+
+  /* === 内容区域 === */
+  .content {
+    padding: 12px;
+    overflow: auto;
+  }
+
+  /* === 统计卡片：单列 === */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .stat-card { padding: 12px; }
+  .stat-value { font-size: 22px; }
+  .stat-label { font-size: 11px; }
+
+  /* === 卡片 === */
+  .card { margin-bottom: 12px; }
+  .card-header { padding: 12px 14px; }
+  .card-body { padding: 12px 14px; }
+  .card-title { font-size: 14px; }
+
+  /* === 座位表页面：垂直布局 === */
+  .card:has(#seatingFlexWrapper),
+  .card:has(.seating-podium) {
+    overflow: visible !important;
+  }
+
+  /* === 表格：横向滚动 === */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { font-size: 12px; }
+  table th, table td { padding: 8px 6px; white-space: nowrap; }
+
+  /* === 工具栏 === */
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0;
+  }
+  .toolbar-btn { font-size: 12px !important; padding: 6px 10px !important; }
+
+  /* === 网格布局 === */
+  .grid-2, .grid-2-1, .grid-1-2 { grid-template-columns: 1fr; }
+
+  /* === 模态框 === */
+  .modal-content {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: 90vh;
+    margin: 5vh auto;
+  }
+  .import-modal { width: 95vw !important; }
+
+  /* === 表单 === */
+  .form-group { margin-bottom: 12px; }
+  .form-input, .form-select, .form-textarea { font-size: 14px; }
+
+  /* === 徽章/标签 === */
+  .badge { font-size: 11px; padding: 2px 8px; }
+
+  /* === 登录页 === */
+  .login-card { width: 90vw; max-width: 400px; padding: 32px 24px; }
+}
+
+/* === 座位表移动端专用布局 === */
+@media (max-width: 768px) {
+  /* 座位表主容器改为垂直布局 */
+  .card > div:has(#seatingFlexWrapper) {
+    flex-direction: column !important;
+    padding: 10px !important;
+    gap: 10px !important;
+    overflow: visible !important;
+  }
+
+  /* 统计信息：横向排列在顶部 */
+  .card > div > div:has(> div[style*="text-align:center"]) {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 0 !important;
+    gap: 6px !important;
+    order: -1;
+  }
+  .card > div > div:has(> div[style*="text-align:center"]) > div {
+    flex: 1 !important;
+    min-width: 60px !important;
+    padding: 6px 4px !important;
+  }
+  .card > div > div:has(> div[style*="text-align:center"]) > div > div:first-child {
+    font-size: 9px !important;
+  }
+  .card > div > div:has(> div[style*="text-align:center"]) > div > div:nth-child(2) {
+    font-size: 15px !important;
+  }
+
+  /* 座位表中间区域 */
+  .card > div > div:has(#seatingFlexWrapper) {
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* 右侧控制按钮：移到底部 */
+  .card > div > div:last-child {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 8px 0 0 !important;
+    gap: 6px !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* 座位格子缩小 */
+  .seat-name { font-size: 12px !important; }
+  .seat-num { font-size: 10px !important; }
+  .seat { padding: 3px 2px !important; }
+  .seating-grid { gap: 4px !important; }
+
+  /* 讲台 */
+  .seating-podium {
+    font-size: 12px !important;
+    padding: 6px 16px !important;
+    margin-top: 8px !important;
+  }
+
+  /* 图例 */
+  .seat-legend {
+    flex-wrap: wrap;
+    gap: 6px !important;
+    font-size: 10px !important;
+  }
+}
+
 /* === LOGIN IMPORT BUTTON === */
 .login-import-btn {
   width: 100%; padding: 11px; margin-top: 12px;
@@ -1096,8 +1282,10 @@ tbody tr:last-child td { border-bottom: none; }
 
 <!-- ==================== APP ==================== -->
 <div class="app" id="app">
+  <!-- SIDEBAR OVERLAY (mobile) -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
   <!-- SIDEBAR -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div class="sidebar-brand-icon">智</div>
       <span class="sidebar-brand-text">学勤管家</span>
@@ -1121,6 +1309,9 @@ tbody tr:last-child td { border-bottom: none; }
   <div class="main">
     <header class="header">
       <div class="header-left">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()" style="display:none">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
         <h1 class="header-title" id="headerTitle">全校概览</h1>
         <span class="header-breadcrumb" id="headerBreadcrumb">首页 / 全校概览</span>
       </div>
@@ -2702,6 +2893,26 @@ function getAnomalyCount() {
   return count;
 }
 
+// === 移动端侧边栏切换 ===
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const isOpen = sidebar.classList.contains('mobile-open');
+  if (isOpen) {
+    closeMobileSidebar();
+  } else {
+    sidebar.classList.add('mobile-open');
+    overlay.classList.add('visible');
+  }
+}
+
+function closeMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  sidebar.classList.remove('mobile-open');
+  overlay.classList.remove('visible');
+}
+
 function navigate(pageId) {
   currentPage = pageId;
   document.querySelectorAll('.sidebar-item').forEach(el => {
@@ -2727,6 +2938,8 @@ function navigate(pageId) {
   const isSeatingPage = (pageId === 'seating' || pageId === 'class-seating');
   contentEl.classList.toggle('no-scroll', isSeatingPage);
   renderPage(pageId);
+  // 移动端：切换页面后关闭侧边栏
+  closeMobileSidebar();
 }
 
 /* ============================================================
