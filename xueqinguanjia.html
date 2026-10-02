@@ -4608,8 +4608,8 @@ function renderClassSeatingPage() {
       const markBadge = s.mark ? `<span class="seat-mark-badge" title="标记: ${s.mark}">!</span>` : '';
       const boardingBadge = s.boarding === 'outer' ? `<span class="seat-boarding-badge" title="外宿">🏠</span>` : '';
       const titleText = `${s.name} - ${STATUS[s.status]}${s.mark ? ' [标记:'+s.mark+']' : ''}${s.boarding === 'outer' ? ' [外宿]' : ' [内宿]'}`;
-      seats += `<div class="seat ${statusCls} ${editCls} ${outerCls}" data-slot="${i}" data-sid="${s.id}"
-        ${seatingEditMode && canEdit ? `draggable="true" ondragstart="onSeatDragStart(event,${i})" ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})" ondragend="onSeatDragEnd(event)"` :
+      seats += `<div class="seat ${statusCls} ${editCls} ${outerCls}" data-slot="${i}" data-sid="${s.id}" data-slot-idx="${i}"
+        ${seatingEditMode && canEdit ? `draggable="true" ondragstart="onSeatDragStart(event,${i})" ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})" ondragend="onSeatDragEnd(event)" ontouchstart="onSeatTouchStart(event,${i})" ontouchmove="onSeatTouchMove(event)" ontouchend="onSeatTouchEnd(event)"` :
         `onclick="showStudentDetail('${cls}',${s.id})"`}
         title="${titleText}">
         ${markBadge}${boardingBadge}
@@ -4617,8 +4617,8 @@ function renderClassSeatingPage() {
         <span class="seat-num">${s.seat}号</span>
       </div>`;
     } else {
-      seats += `<div class="seat empty" data-slot="${i}"
-        ${seatingEditMode && canEdit ? `ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})"` : ''}>
+      seats += `<div class="seat empty" data-slot="${i}" data-slot-idx="${i}"
+        ${seatingEditMode && canEdit ? `ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})" ontouchstart="onSeatTouchStart(event,${i})" ontouchmove="onSeatTouchMove(event)" ontouchend="onSeatTouchEnd(event)"` : ''}>
         <span class="seat-name">空</span></div>`;
     }
   }
@@ -4683,8 +4683,8 @@ function renderClassSeatingPage() {
         const markBadge = s.mark ? `<span class="seat-mark-badge" title="标记: ${s.mark}">!</span>` : '';
         const boardingBadge = s.boarding === 'outer' ? `<span class="seat-boarding-badge" title="外宿">🏠</span>` : '';
         const titleText = `${s.name} - ${STATUS[s.status]}`;
-        flexRows += `<div class="seat ${statusCls} ${editCls} ${outerCls}" data-slot="${i}" data-sid="${s.id}" style="flex:1;min-width:0"
-          ${seatingEditMode && canEdit ? `draggable="true" ondragstart="onSeatDragStart(event,${i})" ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})" ondragend="onSeatDragEnd(event)"` :
+        flexRows += `<div class="seat ${statusCls} ${editCls} ${outerCls}" data-slot="${i}" data-sid="${s.id}" data-slot-idx="${i}" style="flex:1;min-width:0"
+          ${seatingEditMode && canEdit ? `draggable="true" ondragstart="onSeatDragStart(event,${i})" ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})" ondragend="onSeatDragEnd(event)" ontouchstart="onSeatTouchStart(event,${i})" ontouchmove="onSeatTouchMove(event)" ontouchend="onSeatTouchEnd(event)"` :
           `onclick="showStudentDetail('${cls}',${s.id})"`}
           title="${titleText}">
           ${markBadge}${boardingBadge}
@@ -4692,8 +4692,8 @@ function renderClassSeatingPage() {
           <span class="seat-num">${s.seat}号</span>
         </div>`;
       } else {
-        flexRows += `<div class="seat empty" data-slot="${i}" style="flex:1;min-width:0"
-          ${seatingEditMode && canEdit ? `ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})"` : ''}>
+        flexRows += `<div class="seat empty" data-slot="${i}" data-slot-idx="${i}" style="flex:1;min-width:0"
+          ${seatingEditMode && canEdit ? `ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})" ontouchstart="onSeatTouchStart(event,${i})" ontouchmove="onSeatTouchMove(event)" ontouchend="onSeatTouchEnd(event)"` : ''}>
           <span class="seat-name">空</span></div>`;
       }
 
@@ -6533,6 +6533,147 @@ function onSeatDragEnd(e) {
   document.querySelectorAll('.seat.dragging, .seat.drag-over').forEach(s => {
     s.classList.remove('dragging', 'drag-over');
   });
+}
+
+/* ----- Touch Drag & Drop for Mobile ----- */
+let touchDragSourceSlotIdx = null;
+let touchDragElement = null;
+let touchDragClone = null;
+let touchStartX = 0;
+let touchStartY = 0;
+
+function onSeatTouchStart(e, slotIdx) {
+  if (!seatingEditMode) return;
+  
+  const touch = e.touches[0];
+  touchStartX = touch.clientX;
+  touchStartY = touch.clientY;
+  touchDragSourceSlotIdx = slotIdx;
+  touchDragElement = e.target.closest('.seat');
+  
+  // Prevent scrolling while dragging
+  e.preventDefault();
+}
+
+function onSeatTouchMove(e) {
+  if (touchDragSourceSlotIdx === null || !touchDragElement) return;
+  
+  const touch = e.touches[0];
+  const deltaX = Math.abs(touch.clientX - touchStartX);
+  const deltaY = Math.abs(touch.clientY - touchStartY);
+  
+  // Only start dragging after moving a bit
+  if (!touchDragClone && (deltaX > 10 || deltaY > 10)) {
+    // Create a floating clone
+    touchDragClone = touchDragElement.cloneNode(true);
+    touchDragClone.style.position = 'fixed';
+    touchDragClone.style.zIndex = '9999';
+    touchDragClone.style.pointerEvents = 'none';
+    touchDragClone.style.opacity = '0.8';
+    touchDragClone.style.width = touchDragElement.offsetWidth + 'px';
+    touchDragClone.style.height = touchDragElement.offsetHeight + 'px';
+    touchDragClone.style.transform = 'scale(1.1)';
+    touchDragClone.style.boxShadow = '0 8px 20px rgba(0,0,0,0.3)';
+    document.body.appendChild(touchDragClone);
+    
+    touchDragElement.style.opacity = '0.3';
+  }
+  
+  if (touchDragClone) {
+    // Move the clone
+    touchDragClone.style.left = (touch.clientX - touchDragClone.offsetWidth / 2) + 'px';
+    touchDragClone.style.top = (touch.clientY - touchDragClone.offsetHeight / 2) + 'px';
+    
+    // Highlight the seat under the finger
+    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+    const seatBelow = elementBelow ? elementBelow.closest('.seat') : null;
+    
+    document.querySelectorAll('.seat.drag-over').forEach(s => s.classList.remove('drag-over'));
+    if (seatBelow && seatBelow !== touchDragElement) {
+      seatBelow.classList.add('drag-over');
+    }
+    
+    e.preventDefault();
+  }
+}
+
+function onSeatTouchEnd(e) {
+  if (touchDragSourceSlotIdx === null) return;
+  
+  if (touchDragClone) {
+    // Get the touch position from the last touch
+    const touch = e.changedTouches[0];
+    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+    const targetSeat = elementBelow ? elementBelow.closest('.seat') : null;
+    
+    if (targetSeat && targetSeat !== touchDragElement) {
+      // Find the target slot index
+      const targetSlotIdx = parseInt(targetSeat.dataset.slotIdx);
+      if (!isNaN(targetSlotIdx)) {
+        // Perform the swap
+        const cls = currentViewClass || getHeadteacherClass();
+        const sts = STUDENTS[cls];
+        const cols = seatingCols;
+        const totalRows = seatingRows > 0 ? seatingRows : Math.ceil(sts.length / cols);
+        const totalSlots = totalRows * cols;
+        
+        // Ensure layout is initialized
+        if (!seatLayout[cls] || seatLayout[cls].length !== totalSlots) {
+          const studentCount = sts.length;
+          const emptyCount = Math.max(0, totalSlots - studentCount);
+          seatLayout[cls] = [];
+          for (let i = 0; i < emptyCount; i++) seatLayout[cls].push(null);
+          for (let i = 0; i < studentCount; i++) seatLayout[cls].push(sts[i].id);
+        }
+        
+        // Swap positions
+        const temp = seatLayout[cls][touchDragSourceSlotIdx];
+        seatLayout[cls][touchDragSourceSlotIdx] = seatLayout[cls][targetSlotIdx];
+        seatLayout[cls][targetSlotIdx] = temp;
+        
+        // Update seat numbers
+        let seatNum = 1;
+        for (let i = 0; i < totalSlots; i++) {
+          const studentId = seatLayout[cls][i];
+          if (studentId !== null) {
+            const student = sts.find(s => s.id === studentId);
+            if (student) student.seat = seatNum++;
+          }
+        }
+        
+        saveStudentsToStorage();
+        
+        // Clean up and refresh
+        if (touchDragClone) {
+          touchDragClone.remove();
+          touchDragClone = null;
+        }
+        if (touchDragElement) {
+          touchDragElement.style.opacity = '';
+        }
+        document.querySelectorAll('.seat.drag-over').forEach(s => s.classList.remove('drag-over'));
+        
+        touchDragSourceSlotIdx = null;
+        touchDragElement = null;
+        
+        navigate('class-seating');
+        return;
+      }
+    }
+  }
+  
+  // Clean up if no swap
+  if (touchDragClone) {
+    touchDragClone.remove();
+    touchDragClone = null;
+  }
+  if (touchDragElement) {
+    touchDragElement.style.opacity = '';
+  }
+  document.querySelectorAll('.seat.drag-over').forEach(s => s.classList.remove('drag-over'));
+  
+  touchDragSourceSlotIdx = null;
+  touchDragElement = null;
 }
 
 /* ----- Column Gap Resize ----- */
