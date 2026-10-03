@@ -2191,7 +2191,8 @@
       _activeTierEdit = tier;
       _tierEditSelections = {};
     }
-    renderHomeworkPage();
+    // 只刷新面板，不重新渲染整个页面（避免闪屏）
+    refreshHomeworkPanel();
   };
 
   function renderTierEditPanel(tier) {
@@ -2248,6 +2249,14 @@
     return html;
   }
 
+  // 轻量刷新：只重新渲染面板内容，不触发云端同步等重操作
+  function refreshHomeworkPanel() {
+    var container = document.getElementById('homeworkContent');
+    if (!container) return;
+    var students = getCurrentStudents();
+    renderHomeworkPageContent(container, students);
+  }
+
   window.toggleTierStudent = function(studentId) {
     var sid = String(studentId);
     var currentTier = homeworkTiers[sid];
@@ -2266,7 +2275,8 @@
         _tierEditSelections[sid] = 'add';
       }
     }
-    renderHomeworkPage();
+    // 只刷新面板，不重新渲染整个页面（避免闪屏）
+    refreshHomeworkPanel();
   };
 
   window.saveTierEdit = function(tier) {
