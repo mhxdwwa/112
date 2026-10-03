@@ -6803,81 +6803,70 @@ function printSeating() {
     }
   }
   
-  // Get current date
-  const now = new Date();
-  const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
-  
   // Calculate group boundaries (same as screen)
   const groupBoundaries = [];
+  const groupSizes = [];
   if (colGroups.length > 0) {
     let cumCol = 0;
     for (const groupSize of colGroups) {
       cumCol += groupSize;
+      groupSizes.push(groupSize);
       if (cumCol < cols) groupBoundaries.push(cumCol - 1);
     }
   }
   const gapSet = new Set(groupBoundaries);
+  const numGaps = gapSet.size;
   
-  // Calculate column widths for portrait A4
-  // A4 portrait: 11906 DXA wide, margins 1080 DXA each side = 9746 DXA content
-  // Total gap columns = gapSet.size, each gap = 600 DXA (visible gap)
-  const gapDxa = 600;
-  const totalGapWidth = gapSet.size * gapDxa;
-  const seatColCount = cols;
-  const availableForSeats = 9746 - totalGapWidth;
-  const seatColWidth = Math.floor(availableForSeats / seatColCount);
+  // === Column width calculation ===
+  // A4 portrait: 11906 DXA, margins 1440 top/bottom, 1800 left/right
+  // Content width = 11906 - 1800 - 1800 = 8306 DXA
+  // Use same table width as reference template
+  const TABLE_W = 8306;
+  const GAP_W = 480; // ~8.5mm visible gap between groups
+  const totalGapW = numGaps * GAP_W;
+  const seatColW = Math.floor((TABLE_W - totalGapW) / cols);
   
-  // Build gridCol definitions
-  let gridCols = '';
-  for (let col = 0; col < cols; col++) {
-    gridCols += '<w:gridCol w:w="' + seatColWidth + '"/>';
-    if (gapSet.has(col)) {
-      gridCols += '<w:gridCol w:w="' + gapDxa + '"/>';
-    }
+  // Build actual column widths array (seat + gap alternating)
+  const colWidths = [];
+  for (let c = 0; c < cols; c++) {
+    colWidths.push(seatColW);
+    if (gapSet.has(c)) colWidths.push(GAP_W);
+  }
+  const totalTableCols = colWidths.length;
+  // Fix rounding on last column
+  const usedW = colWidths.reduce((a, b) => a + b, 0);
+  colWidths[colWidths.length - 1] += TABLE_W - usedW;
+  
+  // Build gridCol XML
+  let gridColsXml = '';
+  for (const w of colWidths) {
+    gridColsXml += '<w:gridCol w:w="' + w + '"/>';
   }
   
-  // Cell template for a normal seat cell
-  function seatCellXml(name, width) {
-    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>' +
-      '<w:p><w:pPr><w:jc w:val="center"/><w:textAlignment w:val="center"/>' +
-      '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312" w:cs="\u4eff\u5b8b_GB2312"/>' +
-      '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr></w:pPr>' +
-      '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312" w:cs="\u4eff\u5b8b_GB2312"/>' +
-      '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>' +
-      '<w:t>' + name + '</w:t></w:r></w:p></w:tc>';
-  }
+  // Font settings
+  const FONT = '\u4eff\u5b8b_GB2312';
+  const SZ = '32'; // 三号 = 16pt
   
-  // Cell template for gap column (borderless, merged vertically)
-  function gapCellXml(isFirstRow) {
-    if (isFirstRow) {
-      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="restart"/>' +
-        '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' +
-        '<w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tcBorders></w:tcPr>' +
-        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
-    } else {
-      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="continue"/>' +
-        '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' +
-        '<w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tcBorders></w:tcPr>' +
-        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
-    }
-  }
+  // Border XML for data cells (single black border)
+  const dataBorderXml = '<w:tcBorders>' +
+    '<w:top w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
+    '<w:left w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
+    '<w:bottom w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
+    '<w:right w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
+    '</w:tcBorders>';
   
-  // Cell template for gap column (borderless, merged vertically)
-  function gapCellXml(isFirstRow) {
-    if (isFirstRow) {
-      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="restart"/>' +
-        '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders></w:tcPr>' +
-        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
-    } else {
-      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="continue"/></w:tcPr>' +
-        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
-    }
-  }
+  // Border XML for gap cells (NO borders - creates visible white space)
+  const gapBorderXml = '<w:tcBorders>' +
+    '<w:top w:val="nil"/>' +
+    '<w:left w:val="nil"/>' +
+    '<w:bottom w:val="nil"/>' +
+    '<w:right w:val="nil"/>' +
+    '</w:tcBorders>';
   
-  // Table properties (matching template)
+  // Table properties
   const tblPr = '<w:tblPr>' +
     '<w:tblStyle w:val="3"/>' +
-    '<w:tblW w:w="0" w:type="auto"/>' +
+    '<w:tblW w:w="' + TABLE_W + '" w:type="dxa"/>' +
     '<w:jc w:val="center"/>' +
     '<w:tblBorders>' +
     '<w:top w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
@@ -6905,18 +6894,47 @@ function printSeating() {
     '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>' +
     '</w:tblPrEx>';
   
-  // Build table rows
+  // Seat cell XML
+  function seatCell(name, width) {
+    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/>' +
+      dataBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
+      '<w:p><w:pPr><w:jc w:val="center"/><w:textAlignment w:val="center"/>' +
+      '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr>' +
+      '<w:t>' + (name || '') + '</w:t></w:r></w:p></w:tc>';
+  }
+  
+  // Gap cell XML (no borders, vMerge for spanning rows)
+  function gapCell(width, isFirstRow) {
+    const vm = isFirstRow ? '<w:vMerge w:val="restart"/>' : '<w:vMerge w:val="continue"/>';
+    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/>' +
+      vm + gapBorderXml + '</w:tcPr>' +
+      '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
+  }
+  
+  // Empty gap cell for label row (no vMerge)
+  function emptyGapCell(width) {
+    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/>' +
+      gapBorderXml + '</w:tcPr>' +
+      '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
+  }
+  
+  // Build data rows
   let rowsXml = '';
   for (let row = 0; row < totalRows; row++) {
     let rowCells = '';
-    for (let col = 0; col < cols; col++) {
-      const i = row * cols + col;
+    let colIdx = 0;
+    for (let c = 0; c < cols; c++) {
+      const i = row * cols + c;
       const s = seatSlots[i];
       const name = s ? s.name : '';
-      rowCells += seatCellXml(name, seatColWidth);
-      // Add gap cell after this column if it's a boundary
-      if (gapSet.has(col)) {
-        rowCells += gapCellXml(row === 0);
+      rowCells += seatCell(name, colWidths[colIdx]);
+      colIdx++;
+      if (gapSet.has(c)) {
+        rowCells += gapCell(colWidths[colIdx], row === 0);
+        colIdx++;
       }
     }
     rowsXml += '<w:tr>' + tblPrEx +
@@ -6924,37 +6942,55 @@ function printSeating() {
       rowCells + '</w:tr>';
   }
   
-  // Build podium row (merged cell spanning all columns)
-  const totalTableCols = cols + gapSet.size;
+  // Build group label row
+  let labelCells = '';
+  let colIdx = 0;
+  let groupStart = 0;
+  for (let g = 0; g < groupSizes.length; g++) {
+    const gSize = groupSizes[g];
+    // Sum widths for this group's columns
+    let groupWidth = 0;
+    for (let c = 0; c < gSize; c++) {
+      groupWidth += colWidths[colIdx];
+      colIdx++;
+    }
+    // Group label cell spanning group columns
+    labelCells += '<w:tc><w:tcPr><w:tcW w:w="' + groupWidth + '" w:type="dxa"/>' +
+      '<w:gridSpan w:val="' + gSize + '"/>' +
+      dataBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
+      '<w:p><w:pPr><w:jc w:val="center"/>' +
+      '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr>' +
+      '<w:t>\u7b2c ' + (g + 1) + ' \u7ec4</w:t></w:r></w:p></w:tc>';
+    
+    // Gap after group (except last)
+    if (g < groupSizes.length - 1) {
+      labelCells += emptyGapCell(colWidths[colIdx]);
+      colIdx++;
+    }
+  }
+  rowsXml += '<w:tr>' + tblPrEx +
+    '<w:trPr><w:trHeight w:val="1000" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
+    labelCells + '</w:tr>';
+  
+  // Podium row (merged across all columns)
+  let podiumWidth = colWidths.reduce((a, b) => a + b, 0);
   let podiumRow = '<w:tr>' + tblPrEx +
-    '<w:trPr><w:trHeight w:val="800" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
-    '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/><w:gridSpan w:val="' + totalTableCols + '"/>' +
-    '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders>' +
-    '<w:vAlign w:val="center"/></w:tcPr>' +
+    '<w:trPr><w:trHeight w:val="1680" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:tcW w:w="' + podiumWidth + '" w:type="dxa"/>' +
+    '<w:gridSpan w:val="' + totalTableCols + '"/>' +
+    dataBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
     '<w:p><w:pPr><w:jc w:val="center"/>' +
-    '<w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
-    '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr></w:pPr>' +
-    '<w:r><w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
-    '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr><w:t>\u8bb2 \u53f0</w:t></w:r></w:p></w:tc></w:tr>';
+    '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+    '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+    '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr>' +
+    '<w:t>\u8bb2     \u53f0</w:t></w:r></w:p></w:tc></w:tr>';
   
   // Full table XML
-  const tableXml = '<w:tbl>' + tblPr + '<w:tblGrid>' + gridCols + '</w:tblGrid>' + rowsXml + podiumRow + '</w:tbl>';
-  
-  // Title paragraph
-  const titleXml = '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="200"/>' +
-    '<w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
-    '<w:b/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr></w:pPr>' +
-    '<w:r><w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
-    '<w:b/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr>' +
-    '<w:t>' + cls + ' \u5ea7\u4f4d\u8868</w:t></w:r></w:p>';
-  
-  // Date paragraph
-  const dateXml = '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="400"/>' +
-    '<w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
-    '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:pPr>' +
-    '<w:r><w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
-    '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>' +
-    '<w:t>' + dateStr + '</w:t></w:r></w:p>';
+  const tableXml = '<w:tbl>' + tblPr + '<w:tblGrid>' + gridColsXml + '</w:tblGrid>' + rowsXml + podiumRow + '</w:tbl>';
   
   // Assemble full document XML
   const docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -6974,11 +7010,10 @@ function printSeating() {
     'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
     'xmlns:wpsCustomData="http://www.wps.cn/officeDocument/2013/wpsCustomData" ' +
     'mc:Ignorable="w14 w15 wp14">' +
-    '<w:body>' +
-    titleXml + dateXml + tableXml +
+    '<w:body>' + tableXml +
     '<w:sectPr>' +
     '<w:pgSz w:w="11906" w:h="16838"/>' +
-    '<w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/>' +
+    '<w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800" w:header="851" w:footer="992" w:gutter="0"/>' +
     '</w:sectPr>' +
     '</w:body></w:document>';
   
