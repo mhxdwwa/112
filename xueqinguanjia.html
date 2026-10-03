@@ -428,7 +428,6 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .seat:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 2; }
 .seat-name { font-weight: 600; font-size: 16px; line-height: 1.3; text-align: center; word-break: break-all; }
-.seat-num { font-size: 13px; opacity: 0.85; margin-top: 2px; }
 .seat-legend {
   display: flex; gap: 12px; justify-content: center;
   font-size: 11px; color: var(--gray-500);
@@ -1007,7 +1006,6 @@ tbody tr:last-child td { border-bottom: none; }
 
   /* 座位格子缩小 */
   .seat-name { font-size: 12px !important; }
-  .seat-num { font-size: 10px !important; }
   .seat { padding: 3px 2px !important; }
   .seating-grid { gap: 4px !important; }
 
@@ -6822,8 +6820,8 @@ function printSeating() {
   
   // Calculate column widths for portrait A4
   // A4 portrait: 11906 DXA wide, margins 1080 DXA each side = 9746 DXA content
-  // Total gap columns = gapSet.size, each gap = 322 DXA (like template)
-  const gapDxa = 322;
+  // Total gap columns = gapSet.size, each gap = 600 DXA (wider for better visibility)
+  const gapDxa = 600;
   const totalGapWidth = gapSet.size * gapDxa;
   const seatColCount = cols;
   const availableForSeats = 9746 - totalGapWidth;
