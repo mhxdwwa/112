@@ -2129,7 +2129,8 @@
     _currentTab = (_currentTab === tab) ? null : tab;
     _activeTierEdit = null;
     _tierEditSelections = {};
-    renderHomeworkPage();
+    // 只刷新面板，不重新渲染整个页面（避免闪屏）
+    refreshHomeworkPanel();
   };
 
   // ========== 分层管理 ==========
