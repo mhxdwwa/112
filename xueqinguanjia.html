@@ -4811,8 +4811,8 @@ function renderClassSeatingPage() {
           ` : ''}
           ${editBtns}
           <button class="toolbar-btn ghost" style="font-size:12px" onclick="printSeating()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            打印座位表</button>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            导出Word</button>
           <button class="toolbar-btn ghost" style="font-size:12px" onclick="navigate((xqCurrentUser && xqCurrentUser.isLeader) ? 'all-classes' : 'teach-classes')">← 返回</button>
         </div>
       </div>
@@ -6781,7 +6781,7 @@ function stopColResize(e) {
 // Keep old editSeating as alias
 function editSeating() { enterSeatingEdit(); }
 
-/* ----- Print Seating Chart ----- */
+/* ----- Export Seating Chart as Word ----- */
 function printSeating() {
   const cls = currentViewClass || getHeadteacherClass();
   if (!cls || !STUDENTS[cls]) {
@@ -6810,7 +6810,7 @@ function printSeating() {
   const now = new Date();
   const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
   
-  // Calculate group boundaries for column gaps (same logic as screen rendering)
+  // Calculate group boundaries (same as screen)
   const groupBoundaries = new Set();
   if (colGroups.length > 0) {
     let cumCol = 0;
@@ -6820,66 +6820,73 @@ function printSeating() {
     }
   }
   
-  // Build grid rows matching screen layout exactly
-  let gridHtml = '';
+  // Calculate cell width for portrait A4
+  // A4 portrait: 210mm width, margins 15mm each side = 180mm content = ~510pt
+  // Subtract gap cells (12pt each), divide remaining by cols
+  let gapCount = groupBoundaries.size;
+  let availableWidth = 510 - (gapCount * 12);
+  let cellWidth = Math.floor(availableWidth / cols);
+  
+  // Build table rows for Word
+  let tableHtml = '';
   for (let row = 0; row < totalRows; row++) {
-    gridHtml += '<div class="print-row">';
+    tableHtml += '<tr>';
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
       const s = seatSlots[i];
       if (s) {
-        gridHtml += '<div class="print-seat"><div class="print-seat-name">' + s.name + '</div><div class="print-seat-num">' + s.seat + '号</div></div>';
+        tableHtml += '<td style="border:1px solid #999;padding:6px 4px;text-align:center;vertical-align:middle;width:' + cellWidth + 'pt">' +
+          '<div style="font-size:11pt;font-weight:bold;margin-bottom:2px">' + s.name + '</div>' +
+          '<div style="font-size:9pt;color:#666">' + s.seat + '号</div></td>';
       } else {
-        gridHtml += '<div class="print-seat empty"><div class="print-seat-name">空</div></div>';
+        tableHtml += '<td style="border:1px solid #ccc;padding:6px 4px;text-align:center;vertical-align:middle;background:#f9f9f9;width:' + cellWidth + 'pt">' +
+          '<div style="font-size:11pt;color:#999">空</div></td>';
       }
-      // Add group gap after this column if it's a boundary
-      if (col < cols - 1) {
-        if (groupBoundaries.has(col)) {
-          gridHtml += '<div class="print-group-gap"></div>';
-        } else {
-          gridHtml += '<div class="print-col-gap"></div>';
-        }
+      // Add gap cell if this is a group boundary
+      if (col < cols - 1 && groupBoundaries.has(col)) {
+        tableHtml += '<td style="border:none;width:12pt" rowspan="' + totalRows + '"></td>';
       }
     }
-    gridHtml += '</div>';
+    tableHtml += '</tr>';
   }
   
-  // Build HTML for print - podium at BOTTOM like screen
-  let printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + cls + ' 座位表</title><style>' +
-    '@page { size: A4 landscape; margin: 10mm; }' +
-    '* { box-sizing: border-box; margin: 0; padding: 0; }' +
-    'body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #333; display: flex; flex-direction: column; height: 100vh; }' +
-    '.print-header { text-align: center; margin-bottom: 10px; flex-shrink: 0; }' +
-    '.print-title { font-size: 20px; font-weight: 700; color: #2563EB; margin-bottom: 4px; }' +
-    '.print-subtitle { font-size: 12px; color: #888; }' +
-    '.print-container { flex: 1; display: flex; flex-direction: column; justify-content: center; }' +
-    '.print-row { display: flex; margin-bottom: 3px; }' +
-    '.print-seat { flex: 1; border: 1.5px solid #ccc; border-radius: 3px; padding: 4px 2px; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fff; }' +
-    '.print-seat.empty { background: #fafafa; border-color: #e0e0e0; }' +
-    '.print-seat-name { font-size: 11px; font-weight: 600; line-height: 1.2; }' +
-    '.print-seat-num { font-size: 9px; color: #999; }' +
-    '.print-col-gap { width: 3px; flex-shrink: 0; }' +
-    '.print-group-gap { width: 14px; flex-shrink: 0; }' +
-    '.print-podium { text-align: center; font-size: 14px; font-weight: 600; color: #666; padding: 6px; background: #f0f0f0; border-radius: 4px; margin-top: 10px; letter-spacing: 8px; flex-shrink: 0; }' +
-    '.print-footer { margin-top: 8px; text-align: center; font-size: 9px; color: #bbb; flex-shrink: 0; }' +
-    '@media print { body { padding: 0; height: auto; } }' +
-    '</style></head><body>' +
-    '<div class="print-header"><div class="print-title">' + cls + ' 座位表</div><div class="print-subtitle">' + dateStr + '</div></div>' +
-    '<div class="print-container">' + gridHtml + '</div>' +
-    '<div class="print-podium">讲 台</div>' +
-    '<div class="print-footer">学勤管家 | ' + now.toLocaleString('zh-CN') + '</div>' +
-    '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>' +
-    '</body></html>';
+  // Build Word-compatible HTML
+  let wordHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:w="urn:schemas-microsoft-com:office:word" ' +
+    'xmlns="http://www.w3.org/TR/REC-html40">' +
+    '<head><meta charset="UTF-8">' +
+    '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->' +
+    '<style>' +
+    '@page { size: 210mm 297mm; margin: 1.5cm 1.5cm 1.5cm 1.5cm; }' +
+    '@page Section1 { mso-header-margin:.5in; mso-footer-margin:.5in; mso-page-orientation:portrait; }' +
+    'div.Section1 { page:Section1; }' +
+    'body { font-family: "宋体", SimSun, serif; font-size: 12pt; }' +
+    'table { border-collapse: collapse; width: 100%; }' +
+    'td { font-family: "宋体", SimSun, serif; }' +
+    '.title { text-align: center; font-size: 18pt; font-weight: bold; color: #2563EB; margin-bottom: 6pt; }' +
+    '.subtitle { text-align: center; font-size: 10pt; color: #888; margin-bottom: 12pt; }' +
+    '.podium { text-align: center; font-size: 14pt; font-weight: bold; color: #666; padding: 8pt; background: #f0f0f0; border: 1px solid #ccc; margin-top: 12pt; letter-spacing: 8pt; }' +
+    '.footer { text-align: center; font-size: 8pt; color: #bbb; margin-top: 8pt; }' +
+    '</style></head><body><div class="Section1">' +
+    '<div class="title">' + cls + ' 座位表</div>' +
+    '<div class="subtitle">' + dateStr + '</div>' +
+    '<table>' + tableHtml + '</table>' +
+    '<div class="podium">讲 台</div>' +
+    '<div class="footer">学勤管家 | ' + now.toLocaleString('zh-CN') + '</div>' +
+    '</div></body></html>';
   
-  // Open print window
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    showToast('无法打开打印窗口，请检查浏览器设置', 'error');
-    return;
-  }
+  // Download as .doc file
+  const blob = new Blob([wordHtml], { type: 'application/msword;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cls + '_座位表.doc';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
   
-  printWindow.document.write(printHtml);
-  printWindow.document.close();
+  showToast('座位表已导出为Word文件');
 }
 
 /* ============================================================
