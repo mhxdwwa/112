@@ -6820,7 +6820,7 @@ function printSeating() {
   
   // Calculate column widths for portrait A4
   // A4 portrait: 11906 DXA wide, margins 1080 DXA each side = 9746 DXA content
-  // Total gap columns = gapSet.size, each gap = 600 DXA (wider for better visibility)
+  // Total gap columns = gapSet.size, each gap = 600 DXA (visible gap)
   const gapDxa = 600;
   const totalGapWidth = gapSet.size * gapDxa;
   const seatColCount = cols;
@@ -6841,10 +6841,25 @@ function printSeating() {
     return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>' +
       '<w:p><w:pPr><w:jc w:val="center"/><w:textAlignment w:val="center"/>' +
       '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312" w:cs="\u4eff\u5b8b_GB2312"/>' +
-      '<w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr></w:pPr>' +
+      '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr></w:pPr>' +
       '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312" w:cs="\u4eff\u5b8b_GB2312"/>' +
-      '<w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr>' +
+      '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>' +
       '<w:t>' + name + '</w:t></w:r></w:p></w:tc>';
+  }
+  
+  // Cell template for gap column (borderless, merged vertically)
+  function gapCellXml(isFirstRow) {
+    if (isFirstRow) {
+      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="restart"/>' +
+        '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' +
+        '<w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tcBorders></w:tcPr>' +
+        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
+    } else {
+      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="continue"/>' +
+        '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' +
+        '<w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tcBorders></w:tcPr>' +
+        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
+    }
   }
   
   // Cell template for gap column (borderless, merged vertically)
