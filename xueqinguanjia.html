@@ -1526,6 +1526,14 @@ async function xqLoadAllConfig() {
             console.log('[XQ] Loaded seating for class:', className, 'layout:', value.data.layout.length, 'cols:', seatConfig[className].cols);
           }
         }
+        // 加载班干部数据
+        if (key.startsWith('cadres_')) {
+          const className = key.replace('cadres_', '');
+          if (validClassNames.has(className) && value.data) {
+            CLASS_CADRES[className] = value.data;
+            console.log('[XQ] Loaded cadres for class:', className, Object.keys(value.data).length, 'positions');
+          }
+        }
       }
       
       // 应用待删除的班级（本地删除但未同步到云端的）
@@ -1982,6 +1990,13 @@ function scheduleAutoSaveToCloud() {
         }
       }
       
+      // 保存班干部数据
+      for (const cls of classesToSave) {
+        if (CLASS_CADRES[cls] && Object.keys(CLASS_CADRES[cls]).length > 0) {
+          await xqSaveConfigToServer('cadres_' + cls, CLASS_CADRES[cls]);
+        }
+      }
+      
       // 保存班级-年级映射和全局配置（仅管理员）
       if (isAdmin) {
         await xqSaveConfigToServer('classGradeMap', classGradeMap);
@@ -2129,6 +2144,13 @@ async function saveStudentsToCloud() {
       }
     }
     
+    // 5.5 保存班干部数据
+    for (const cls of classesToSave) {
+      if (CLASS_CADRES[cls] && Object.keys(CLASS_CADRES[cls]).length > 0) {
+        await xqSaveConfigToServer('cadres_' + cls, CLASS_CADRES[cls]);
+      }
+    }
+    
     // 6. 保存班级-年级映射和全局配置（仅管理员）
     if (isAdmin) {
       await xqSaveConfigToServer('classGradeMap', classGradeMap);
@@ -2254,6 +2276,41 @@ function saveClassGradeMap() {
 // 初始化加载
 loadClassGradeMap();
 loadDeletedClasses();
+
+// 班干部数据：{ "26-1": { "班长": "张三", "纪律委员": "李四", ... } }
+let CLASS_CADRES = {};
+
+// 加载班干部数据
+function loadClassCadres() {
+  try {
+    const saved = localStorage.getItem('xq_class_cadres');
+    if (saved) {
+      CLASS_CADRES = JSON.parse(saved);
+      console.log('[XQ] Class cadres loaded:', Object.keys(CLASS_CADRES).length, 'classes');
+    }
+  } catch (e) { console.warn('[XQ] Failed to load class cadres:', e); }
+}
+
+// 保存班干部数据到本地
+function saveClassCadres() {
+  try {
+    localStorage.setItem('xq_class_cadres', JSON.stringify(CLASS_CADRES));
+    studentsDataChanged = true;
+    console.log('[XQ] Class cadres saved locally');
+  } catch (e) { console.warn('[XQ] Failed to save class cadres:', e); }
+}
+
+// 保存班干部数据到云端
+async function saveClassCadresToCloud(cls) {
+  if (!cls || !CLASS_CADRES[cls]) return;
+  try {
+    await xqSaveConfigToServer('cadres_' + cls, CLASS_CADRES[cls]);
+    console.log('[XQ] Class cadres saved to cloud for:', cls);
+  } catch (e) { console.warn('[XQ] Failed to save class cadres to cloud:', e); }
+}
+
+// 初始化加载班干部数据
+loadClassCadres();
 
 // App version for cache invalidation
 const APP_VERSION = '3.9'; // v3.9: 修复设置密码失败问题，确保本地保存成功即视为成功
@@ -2782,6 +2839,7 @@ const NAV_CONFIG = {
   headteacher: [
     { section: '本班管理', items: [
       { id: 'my-class', label: '本班概览', icon: iconGrid },
+      { id: 'class-cadres', label: '班干部编辑', icon: iconUsers },
       { id: 'class-attendance', label: '考勤管理', icon: iconCheck },
       { id: 'roster', label: '名单管理', icon: iconUsers },
       { id: 'leave-register', label: '请假登记', icon: iconFile },
@@ -2972,7 +3030,7 @@ function navigate(pageId) {
   const titles = {
     'overview': '全校到校情况', 'all-classes': '班级详情',
     'leave-mgmt': '请假查看', 'attendance-stats': '学生考勤',
-    'my-class': '本班概览', 'class-attendance': '考勤管理',
+    'my-class': '本班概览', 'class-cadres': '班干部编辑', 'class-attendance': '考勤管理',
     'seating': '座位表', 'teach-classes': '授课班级',
     'my-classes': '授课班级', 'teach-attendance': '学生考勤',
     'roster': '名单管理', 'leave-register': '请假登记',
@@ -3004,6 +3062,7 @@ function renderPage(pageId) {
     'leave-mgmt': renderLeaveMgmt,
     'attendance-stats': renderAttendanceStats,
     'my-class': renderMyClass,
+    'class-cadres': renderClassCadres,
     'class-attendance': renderClassAttendance,
     'seating': renderSeating,
     'teach-classes': renderTeachClasses,
@@ -4596,6 +4655,24 @@ async function resetSelectedPasswords() {
   }
 }
 
+// Helper: Render cadre info for seating chart podium
+function renderCadreInfo(cls, side) {
+  if (!CLASS_CADRES[cls] || Object.keys(CLASS_CADRES[cls]).length === 0) return '';
+  
+  const cadres = Object.entries(CLASS_CADRES[cls]);
+  if (cadres.length === 0) return '';
+  
+  // Split cadres between left and right sides
+  const halfLen = Math.ceil(cadres.length / 2);
+  const displayCadres = side === 'left' ? cadres.slice(0, halfLen) : cadres.slice(halfLen);
+  
+  if (displayCadres.length === 0) return '';
+  
+  return displayCadres.map(([pos, name]) => 
+    `<div style="margin:2px 0"><span style="font-weight:500">${pos}：</span>${name}</div>`
+  ).join('');
+}
+
 /* ----- REUSABLE: Seating Chart for Any Class ----- */
 function renderClassSeatingPage() {
   const cls = currentViewClass || getHeadteacherClass();
@@ -4781,7 +4858,15 @@ function renderClassSeatingPage() {
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;overflow:hidden">
           ${editBar}
           <div id="seatingFlexWrapper" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">${flexRows}</div>
-          <div class="seating-podium" style="margin-top:12px;flex-shrink:0">讲 台</div>
+          <div style="margin-top:12px;flex-shrink:0;display:flex;align-items:center;gap:16px">
+            <div style="flex:1;text-align:right;font-size:13px;color:var(--gray-600)">
+              ${renderCadreInfo(cls, 'left')}
+            </div>
+            <div class="seating-podium" style="flex-shrink:0">讲 台</div>
+            <div style="flex:1;text-align:left;font-size:13px;color:var(--gray-600)">
+              ${renderCadreInfo(cls, 'right')}
+            </div>
+          </div>
           <div class="seat-legend" style="margin-top:8px;flex-shrink:0">
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#8BC34A,#7CB342);border:1px solid rgba(139,195,74,0.4)"></div>在校</div>
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#FFB74D,#FFA726);border:1px solid rgba(255,152,0,0.3)"></div>请假</div>
@@ -5286,6 +5371,128 @@ function renderMyClass() {
         </div>
       </div>
     </div>`;
+}
+
+/* ----- HEADTEACHER: Class Cadres Editor ----- */
+function renderClassCadres() {
+  const cls = getHeadteacherClass();
+  if (!cls) {
+    return emptyStateHtml('未找到您的班级信息。请联系管理员在「学校数据设置」中确认您的班主任分配。');
+  }
+  if (!STUDENTS[cls] || STUDENTS[cls].length === 0) {
+    return emptyStateHtml(`班级 ${cls} 暂无学生数据。请先在「名单管理」中导入学生。`);
+  }
+  
+  // Initialize cadres for this class if not exists
+  if (!CLASS_CADRES[cls]) {
+    CLASS_CADRES[cls] = {};
+  }
+  
+  // Default cadre positions
+  const defaultPositions = ['班长', '副班长', '学习委员', '纪律委员', '体育委员', '文艺委员', '劳动委员', '生活委员'];
+  
+  // Get student names for dropdown
+  const studentNames = STUDENTS[cls].map(s => s.name).sort();
+  
+  // Build cadre rows
+  let cadreRows = '';
+  const positions = Object.keys(CLASS_CADRES[cls]).length > 0 
+    ? Object.keys(CLASS_CADRES[cls]) 
+    : defaultPositions;
+  
+  for (const pos of positions) {
+    const currentStudent = CLASS_CADRES[cls][pos] || '';
+    cadreRows += `
+      <tr>
+        <td style="font-weight:500;width:120px">${pos}</td>
+        <td>
+          <select class="toolbar-select" style="width:100%;padding:8px 12px" data-position="${pos}" onchange="updateCadre('${cls}','${pos}',this.value)">
+            <option value="">-- 请选择 --</option>
+            ${studentNames.map(name => `<option value="${name}" ${name === currentStudent ? 'selected' : ''}>${name}</option>`).join('')}
+          </select>
+        </td>
+        <td style="width:80px">
+          <button class="toolbar-btn ghost" style="padding:6px 12px;font-size:12px;color:var(--danger)" onclick="removeCadrePosition('${pos}')">删除</button>
+        </td>
+      </tr>`;
+  }
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span style="font-size:14px;color:var(--gray-600)">为班级设置班干部，信息将显示在座位表讲台两侧</span>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn primary" onclick="addCadrePosition()">+ 添加职务</button>
+      <button class="toolbar-btn ghost" onclick="saveClassCadres();saveClassCadresToCloud('${cls}');showToast('班干部信息已保存','success')">保存</button>
+    </div>
+    <div class="card">
+      <div class="card-body no-pad">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:120px">职务</th>
+                <th>学生</th>
+                <th style="width:80px">操作</th>
+              </tr>
+            </thead>
+            <tbody id="cadreTableBody">
+              ${cadreRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+function updateCadre(cls, position, studentName) {
+  if (!CLASS_CADRES[cls]) CLASS_CADRES[cls] = {};
+  if (studentName) {
+    CLASS_CADRES[cls][position] = studentName;
+  } else {
+    delete CLASS_CADRES[cls][position];
+  }
+  saveClassCadres();
+}
+
+function addCadrePosition() {
+  showModal('添加职务', `
+    <div class="form-group">
+      <label class="form-label">职务名称</label>
+      <input type="text" class="form-input" id="newCadrePosition" placeholder="如：宣传委员、组织委员等">
+    </div>
+  `, `
+    <button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+    <button class="toolbar-btn primary" onclick="confirmAddCadrePosition()">添加</button>
+  `);
+}
+
+function confirmAddCadrePosition() {
+  const pos = document.getElementById('newCadrePosition').value.trim();
+  if (!pos) {
+    showToast('请输入职务名称', 'warning');
+    return;
+  }
+  const cls = getHeadteacherClass();
+  if (!CLASS_CADRES[cls]) CLASS_CADRES[cls] = {};
+  if (CLASS_CADRES[cls][pos]) {
+    showToast('该职务已存在', 'warning');
+    return;
+  }
+  CLASS_CADRES[cls][pos] = '';
+  saveClassCadres();
+  hideModal();
+  navigate('class-cadres');
+}
+
+function removeCadrePosition(position) {
+  const cls = getHeadteacherClass();
+  if (CLASS_CADRES[cls] && CLASS_CADRES[cls][position]) {
+    delete CLASS_CADRES[cls][position];
+    saveClassCadres();
+    navigate('class-cadres');
+  }
 }
 
 /* ----- HEADTEACHER: Class Attendance ----- */
@@ -6975,7 +7182,37 @@ function printSeating() {
     '<w:trPr><w:trHeight w:val="1000" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
     labelCells + '</w:tr>';
   
-  // Podium row (merged across all columns)
+  // Build cadre info for podium row
+  let leftCadreXml = '';
+  let rightCadreXml = '';
+  if (CLASS_CADRES[cls] && Object.keys(CLASS_CADRES[cls]).length > 0) {
+    const cadres = Object.entries(CLASS_CADRES[cls]);
+    const halfLen = Math.ceil(cadres.length / 2);
+    const leftCadres = cadres.slice(0, halfLen);
+    const rightCadres = cadres.slice(halfLen);
+    
+    // Build left cadre paragraphs
+    for (const [pos, name] of leftCadres) {
+      leftCadreXml += '<w:p><w:pPr><w:jc w:val="right"/>' +
+        '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+        '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr></w:pPr>' +
+        '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+        '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr>' +
+        '<w:t>' + pos + '\uff1a' + name + '</w:t></w:r></w:p>';
+    }
+    
+    // Build right cadre paragraphs
+    for (const [pos, name] of rightCadres) {
+      rightCadreXml += '<w:p><w:pPr><w:jc w:val="left"/>' +
+        '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+        '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr></w:pPr>' +
+        '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
+        '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr>' +
+        '<w:t>' + pos + '\uff1a' + name + '</w:t></w:r></w:p>';
+    }
+  }
+  
+  // Podium row with cadre info on both sides
   let podiumWidth = colWidths.reduce((a, b) => a + b, 0);
   let podiumRow = '<w:tr>' + tblPrEx +
     '<w:trPr><w:trHeight w:val="1680" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
@@ -6987,7 +7224,9 @@ function printSeating() {
     '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr></w:pPr>' +
     '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
     '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr>' +
-    '<w:t>\u8bb2     \u53f0</w:t></w:r></w:p></w:tc></w:tr>';
+    '<w:t>\u8bb2     \u53f0</w:t></w:r></w:p>' +
+    leftCadreXml + rightCadreXml +
+    '</w:tc></w:tr>';
   
   // Full table XML
   const tableXml = '<w:tbl>' + tblPr + '<w:tblGrid>' + gridColsXml + '</w:tblGrid>' + rowsXml + podiumRow + '</w:tbl>';
