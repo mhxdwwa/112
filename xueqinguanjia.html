@@ -7182,81 +7182,19 @@ function printSeating() {
     '<w:trPr><w:trHeight w:val="1000" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
     labelCells + '</w:tr>';
   
-  // Podium row: 3 cells - [left cadres] [讲台] [right cadres]
-  // Split table width into 3 parts
-  let podiumTotalW = colWidths.reduce((a, b) => a + b, 0);
-  let podiumLeftW = Math.floor(podiumTotalW * 0.33);
-  let podiumCenterW = Math.floor(podiumTotalW * 0.34);
-  let podiumRightW = podiumTotalW - podiumLeftW - podiumCenterW;
-  
-  // Cadre font: 4号 = 14pt = sz 28
-  const CADRE_SZ = '28';
-  
-  // Build left cadre paragraphs (right-aligned)
-  let leftCadreXml = '';
-  // Build right cadre paragraphs (left-aligned)
-  let rightCadreXml = '';
-  if (CLASS_CADRES[cls] && Object.keys(CLASS_CADRES[cls]).length > 0) {
-    const cadres = Object.entries(CLASS_CADRES[cls]);
-    const halfLen = Math.ceil(cadres.length / 2);
-    const leftCadres = cadres.slice(0, halfLen);
-    const rightCadres = cadres.slice(halfLen);
-    
-    for (const [pos, name] of leftCadres) {
-      leftCadreXml += '<w:p><w:pPr><w:jc w:val="right"/>' +
-        '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-        '<w:sz w:val="' + CADRE_SZ + '"/><w:szCs w:val="' + CADRE_SZ + '"/></w:rPr></w:pPr>' +
-        '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-        '<w:sz w:val="' + CADRE_SZ + '"/><w:szCs w:val="' + CADRE_SZ + '"/></w:rPr>' +
-        '<w:t>' + pos + '\uff1a' + name + '</w:t></w:r></w:p>';
-    }
-    
-    for (const [pos, name] of rightCadres) {
-      rightCadreXml += '<w:p><w:pPr><w:jc w:val="left"/>' +
-        '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-        '<w:sz w:val="' + CADRE_SZ + '"/><w:szCs w:val="' + CADRE_SZ + '"/></w:rPr></w:pPr>' +
-        '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-        '<w:sz w:val="' + CADRE_SZ + '"/><w:szCs w:val="' + CADRE_SZ + '"/></w:rPr>' +
-        '<w:t>' + pos + '\uff1a' + name + '</w:t></w:r></w:p>';
-    }
-  }
-  
-  // No-border XML for cadre cells
-  const noBorderXml = '<w:tcBorders>' +
-    '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' +
-    '</w:tcBorders>';
-  
-  // 讲台 border (same as data cells)
-  const podiumBorderXml = '<w:tcBorders>' +
-    '<w:top w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
-    '<w:left w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
-    '<w:bottom w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
-    '<w:right w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
-    '</w:tcBorders>';
-  
+  // Podium row (merged across all columns)
+  let podiumWidth = colWidths.reduce((a, b) => a + b, 0);
   let podiumRow = '<w:tr>' + tblPrEx +
-    '<w:trPr><w:trHeight w:val="1200" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
-    // Left cell: cadres (right-aligned, no border)
-    '<w:tc><w:tcPr><w:tcW w:w="' + podiumLeftW + '" w:type="dxa"/>' +
-    noBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
-    (leftCadreXml || '<w:p><w:pPr><w:jc w:val="right"/></w:pPr></w:p>') +
-    '</w:tc>' +
-    // Center cell: 讲台 (centered, with border)
-    '<w:tc><w:tcPr><w:tcW w:w="' + podiumCenterW + '" w:type="dxa"/>' +
-    podiumBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
+    '<w:trPr><w:trHeight w:val="1680" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:tcW w:w="' + podiumWidth + '" w:type="dxa"/>' +
+    '<w:gridSpan w:val="' + totalTableCols + '"/>' +
+    dataBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
     '<w:p><w:pPr><w:jc w:val="center"/>' +
     '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
     '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr></w:pPr>' +
     '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
     '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr>' +
-    '<w:t>\u8bb2     \u53f0</w:t></w:r></w:p>' +
-    '</w:tc>' +
-    // Right cell: cadres (left-aligned, no border)
-    '<w:tc><w:tcPr><w:tcW w:w="' + podiumRightW + '" w:type="dxa"/>' +
-    noBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
-    (rightCadreXml || '<w:p><w:pPr><w:jc w:val="left"/></w:pPr></w:p>') +
-    '</w:tc>' +
-    '</w:tr>';
+    '<w:t>\u8bb2     \u53f0</w:t></w:r></w:p></w:tc></w:tr>';
   
   // Full table XML
   const tableXml = '<w:tbl>' + tblPr + '<w:tblGrid>' + gridColsXml + '</w:tblGrid>' + rowsXml + podiumRow + '</w:tbl>';
