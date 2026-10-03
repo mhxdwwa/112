@@ -4653,7 +4653,6 @@ function renderClassSeatingPage() {
         title="${titleText}">
         ${markBadge}${boardingBadge}
         <span class="seat-name">${s.name}</span>
-        <span class="seat-num">${s.seat}号</span>
       </div>`;
     } else {
       seats += `<div class="seat empty" data-slot="${i}" data-slot-idx="${i}"
@@ -4728,7 +4727,6 @@ function renderClassSeatingPage() {
           title="${titleText}">
           ${markBadge}${boardingBadge}
           <span class="seat-name">${s.name}</span>
-          <span class="seat-num">${s.seat}号</span>
         </div>`;
       } else {
         flexRows += `<div class="seat empty" data-slot="${i}" data-slot-idx="${i}" style="flex:1;min-width:0"
