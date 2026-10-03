@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 /* === CSS VARIABLES === */
 :root {
@@ -6811,82 +6812,196 @@ function printSeating() {
   const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
   
   // Calculate group boundaries (same as screen)
-  const groupBoundaries = new Set();
+  const groupBoundaries = [];
   if (colGroups.length > 0) {
     let cumCol = 0;
     for (const groupSize of colGroups) {
       cumCol += groupSize;
-      if (cumCol < cols) groupBoundaries.add(cumCol - 1);
+      if (cumCol < cols) groupBoundaries.push(cumCol - 1);
+    }
+  }
+  const gapSet = new Set(groupBoundaries);
+  
+  // Calculate column widths for portrait A4
+  // A4 portrait: 11906 DXA wide, margins 1080 DXA each side = 9746 DXA content
+  // Total gap columns = gapSet.size, each gap = 322 DXA (like template)
+  const gapDxa = 322;
+  const totalGapWidth = gapSet.size * gapDxa;
+  const seatColCount = cols;
+  const availableForSeats = 9746 - totalGapWidth;
+  const seatColWidth = Math.floor(availableForSeats / seatColCount);
+  
+  // Build gridCol definitions
+  let gridCols = '';
+  for (let col = 0; col < cols; col++) {
+    gridCols += '<w:gridCol w:w="' + seatColWidth + '"/>';
+    if (gapSet.has(col)) {
+      gridCols += '<w:gridCol w:w="' + gapDxa + '"/>';
     }
   }
   
-  // Calculate cell width for portrait A4
-  // A4 portrait: 210mm width, margins 15mm each side = 180mm content = ~510pt
-  // Subtract gap cells (12pt each), divide remaining by cols
-  let gapCount = groupBoundaries.size;
-  let availableWidth = 510 - (gapCount * 12);
-  let cellWidth = Math.floor(availableWidth / cols);
+  // Cell template for a normal seat cell
+  function seatCellXml(name, width) {
+    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>' +
+      '<w:p><w:pPr><w:jc w:val="center"/><w:textAlignment w:val="center"/>' +
+      '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312" w:cs="\u4eff\u5b8b_GB2312"/>' +
+      '<w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312" w:cs="\u4eff\u5b8b_GB2312"/>' +
+      '<w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr>' +
+      '<w:t>' + name + '</w:t></w:r></w:p></w:tc>';
+  }
   
-  // Build table rows for Word
-  let tableHtml = '';
+  // Cell template for gap column (borderless, merged vertically)
+  function gapCellXml(isFirstRow) {
+    if (isFirstRow) {
+      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="restart"/>' +
+        '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders></w:tcPr>' +
+        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
+    } else {
+      return '<w:tc><w:tcPr><w:tcW w:w="' + gapDxa + '" w:type="dxa"/><w:vMerge w:val="continue"/></w:tcPr>' +
+        '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
+    }
+  }
+  
+  // Table properties (matching template)
+  const tblPr = '<w:tblPr>' +
+    '<w:tblStyle w:val="3"/>' +
+    '<w:tblW w:w="0" w:type="auto"/>' +
+    '<w:jc w:val="center"/>' +
+    '<w:tblBorders>' +
+    '<w:top w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:left w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:bottom w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:right w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:insideH w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:insideV w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '</w:tblBorders>' +
+    '<w:tblLayout w:type="autofit"/>' +
+    '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>' +
+    '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>' +
+    '</w:tblPr>';
+  
+  const tblPrEx = '<w:tblPrEx>' +
+    '<w:tblBorders>' +
+    '<w:top w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:left w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:bottom w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:right w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:insideH w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '<w:insideV w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
+    '</w:tblBorders>' +
+    '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>' +
+    '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>' +
+    '</w:tblPrEx>';
+  
+  // Build table rows
+  let rowsXml = '';
   for (let row = 0; row < totalRows; row++) {
-    tableHtml += '<tr>';
+    let rowCells = '';
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
       const s = seatSlots[i];
-      if (s) {
-        tableHtml += '<td style="border:1px solid #999;padding:6px 4px;text-align:center;vertical-align:middle;width:' + cellWidth + 'pt">' +
-          '<div style="font-size:11pt;font-weight:bold;margin-bottom:2px">' + s.name + '</div>' +
-          '<div style="font-size:9pt;color:#666">' + s.seat + '号</div></td>';
-      } else {
-        tableHtml += '<td style="border:1px solid #ccc;padding:6px 4px;text-align:center;vertical-align:middle;background:#f9f9f9;width:' + cellWidth + 'pt">' +
-          '<div style="font-size:11pt;color:#999">空</div></td>';
-      }
-      // Add gap cell if this is a group boundary
-      if (col < cols - 1 && groupBoundaries.has(col)) {
-        tableHtml += '<td style="border:none;width:12pt" rowspan="' + totalRows + '"></td>';
+      const name = s ? s.name : '';
+      rowCells += seatCellXml(name, seatColWidth);
+      // Add gap cell after this column if it's a boundary
+      if (gapSet.has(col)) {
+        rowCells += gapCellXml(row === 0);
       }
     }
-    tableHtml += '</tr>';
+    rowsXml += '<w:tr>' + tblPrEx +
+      '<w:trPr><w:trHeight w:val="1274" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
+      rowCells + '</w:tr>';
   }
   
-  // Build Word-compatible HTML
-  let wordHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
-    'xmlns:w="urn:schemas-microsoft-com:office:word" ' +
-    'xmlns="http://www.w3.org/TR/REC-html40">' +
-    '<head><meta charset="UTF-8">' +
-    '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->' +
-    '<style>' +
-    '@page { size: 210mm 297mm; margin: 1.5cm 1.5cm 1.5cm 1.5cm; }' +
-    '@page Section1 { mso-header-margin:.5in; mso-footer-margin:.5in; mso-page-orientation:portrait; }' +
-    'div.Section1 { page:Section1; }' +
-    'body { font-family: "宋体", SimSun, serif; font-size: 12pt; }' +
-    'table { border-collapse: collapse; width: 100%; }' +
-    'td { font-family: "宋体", SimSun, serif; }' +
-    '.title { text-align: center; font-size: 18pt; font-weight: bold; color: #2563EB; margin-bottom: 6pt; }' +
-    '.subtitle { text-align: center; font-size: 10pt; color: #888; margin-bottom: 12pt; }' +
-    '.podium { text-align: center; font-size: 14pt; font-weight: bold; color: #666; padding: 8pt; background: #f0f0f0; border: 1px solid #ccc; margin-top: 12pt; letter-spacing: 8pt; }' +
-    '.footer { text-align: center; font-size: 8pt; color: #bbb; margin-top: 8pt; }' +
-    '</style></head><body><div class="Section1">' +
-    '<div class="title">' + cls + ' 座位表</div>' +
-    '<div class="subtitle">' + dateStr + '</div>' +
-    '<table>' + tableHtml + '</table>' +
-    '<div class="podium">讲 台</div>' +
-    '<div class="footer">学勤管家 | ' + now.toLocaleString('zh-CN') + '</div>' +
-    '</div></body></html>';
+  // Build podium row (merged cell spanning all columns)
+  const totalTableCols = cols + gapSet.size;
+  let podiumRow = '<w:tr>' + tblPrEx +
+    '<w:trPr><w:trHeight w:val="800" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/><w:gridSpan w:val="' + totalTableCols + '"/>' +
+    '<w:tcBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders>' +
+    '<w:vAlign w:val="center"/></w:tcPr>' +
+    '<w:p><w:pPr><w:jc w:val="center"/>' +
+    '<w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
+    '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
+    '<w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr><w:t>\u8bb2 \u53f0</w:t></w:r></w:p></w:tc></w:tr>';
   
-  // Download as .doc file
-  const blob = new Blob([wordHtml], { type: 'application/msword;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = cls + '_座位表.doc';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Full table XML
+  const tableXml = '<w:tbl>' + tblPr + '<w:tblGrid>' + gridCols + '</w:tblGrid>' + rowsXml + podiumRow + '</w:tbl>';
   
-  showToast('座位表已导出为Word文件');
+  // Title paragraph
+  const titleXml = '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="200"/>' +
+    '<w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
+    '<w:b/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
+    '<w:b/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr>' +
+    '<w:t>' + cls + ' \u5ea7\u4f4d\u8868</w:t></w:r></w:p>';
+  
+  // Date paragraph
+  const dateXml = '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="400"/>' +
+    '<w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
+    '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="\u4eff\u5b8b_GB2312" w:hAnsi="\u4eff\u5b8b_GB2312" w:eastAsia="\u4eff\u5b8b_GB2312"/>' +
+    '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>' +
+    '<w:t>' + dateStr + '</w:t></w:r></w:p>';
+  
+  // Assemble full document XML
+  const docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+    'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" ' +
+    'xmlns:v="urn:schemas-microsoft-com:vml" ' +
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" ' +
+    'xmlns:w10="urn:schemas-microsoft-com:office:word" ' +
+    'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" ' +
+    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" ' +
+    'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
+    'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
+    'xmlns:wpsCustomData="http://www.wps.cn/officeDocument/2013/wpsCustomData" ' +
+    'mc:Ignorable="w14 w15 wp14">' +
+    '<w:body>' +
+    titleXml + dateXml + tableXml +
+    '<w:sectPr>' +
+    '<w:pgSz w:w="11906" w:h="16838"/>' +
+    '<w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/>' +
+    '</w:sectPr>' +
+    '</w:body></w:document>';
+  
+  // Build content_types and rels
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+    '</Types>';
+  
+  const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+    '</Relationships>';
+  
+  // Create ZIP file
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypes);
+  zip.file('_rels/.rels', rels);
+  zip.file('word/document.xml', docXml);
+  
+  zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+    .then(function(blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = cls + '_\u5ea7\u4f4d\u8868.docx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('\u5ea7\u4f4d\u8868\u5df2\u5bfc\u51fa\u4e3aWord\u6587\u4ef6');
+    });
 }
 
 /* ============================================================
