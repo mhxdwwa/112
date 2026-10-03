@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v323 ==========
+// ========== 作业岛系统 v324 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -2308,7 +2308,7 @@
     if (countEl) countEl.textContent = '已选 ' + selCount + ' 人';
   };
 
-  window.saveTierEdit = function(tier) {
+  window.saveTierEdit = async function(tier) {
     var updates = [];
     var addCount = 0, removeCount = 0;
     Object.keys(_tierEditSelections).forEach(function(sid) {
@@ -2333,9 +2333,9 @@
     if (parts.length > 0) msg += '：' + parts.join('，');
     showNotification(msg, 'success');
     
-    // 同步到云端
+    // 先同步到云端，等完成后再刷新页面（防止 loadFromCloud 用旧数据覆盖）
     if (updates.length > 0) {
-      syncTiersToCloud(updates);
+      await syncTiersToCloud(updates);
     }
     
     renderHomeworkPage();
