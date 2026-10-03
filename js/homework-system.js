@@ -2214,7 +2214,7 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
     html += '<div style="font-weight:700;color:' + TIER_COLORS[tier] + ';">编辑 ' + TIER_NAMES[tier] + ' 名单</div>';
     var selCount = Object.keys(_tierEditSelections).filter(function(k) { return _tierEditSelections[k]; }).length;
-    html += '<div style="font-size:12px;color:#888;">已选 ' + selCount + ' 人</div>';
+    html += '<div id="hwTierSelCount" style="font-size:12px;color:#888;">已选 ' + selCount + ' 人</div>';
     html += '</div>';
 
     // 当前层内成员
@@ -2223,8 +2223,9 @@
       html += '<div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:600;">当前层内成员（点击移除）</div>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
       currentMembers.forEach(function(s) {
-        html += '<div class="hw-student-chip selected" onclick="toggleTierStudent(\'' + s.id + '\')" style="background:#fee2e2;border-color:#ef4444;color:#991b1b;">';
-        html += esc(s.name) + ' ✕</div>';
+        var isMarkedRemove = _tierEditSelections[String(s.id)] === 'remove';
+        html += '<div class="hw-student-chip" onclick="toggleTierStudent(\'' + s.id + '\', this)" style="background:#fee2e2;border-color:' + (isMarkedRemove ? '#ef4444' : '#fca5a5') + ';color:' + (isMarkedRemove ? '#991b1b' : '#b91c1c') + ';cursor:pointer;">';
+        html += esc(s.name) + (isMarkedRemove ? ' ✕' : '') + '</div>';
       });
       html += '</div></div>';
     }
@@ -2237,7 +2238,7 @@
       html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
       unassigned.forEach(function(s) {
         var selected = _tierEditSelections[String(s.id)];
-        html += '<div class="hw-student-chip' + (selected ? ' selected' : '') + '" onclick="toggleTierStudent(\'' + s.id + '\')" style="background:' + (selected ? '#e0e7ff' : 'white') + ';">';
+        html += '<div class="hw-student-chip" onclick="toggleTierStudent(\'' + s.id + '\', this)" style="background:' + (selected ? '#e0e7ff' : 'white') + ';cursor:pointer;">';
         html += esc(s.name) + '</div>';
       });
       html += '</div></div>';
@@ -2262,37 +2263,7 @@
     renderHomeworkPageContent(container, students);
   }
 
-  // 分层编辑局部刷新：只更新编辑面板和总览，不重建整个页面
-  function refreshTierEditView() {
-    if (!_activeTierEdit) return;
-    // 更新编辑面板
-    var editPanel = document.getElementById('hwTierEditPanel');
-    if (editPanel) {
-      editPanel.innerHTML = renderTierEditPanel(_activeTierEdit);
-    }
-    // 更新总览
-    var overview = document.getElementById('hwTierOverview');
-    if (overview) {
-      overview.innerHTML = renderTierOverview();
-    }
-    // 更新层级按钮的人数（找到对应的按钮并更新数字）
-    var students = getCurrentStudents();
-    var tierCounts = { 'A': 0, 'B': 0, 'C': 0, 'none': 0 };
-    students.forEach(function(s) {
-      var t = homeworkTiers[String(s.id)];
-      if (t && tierCounts[t] !== undefined) tierCounts[t]++;
-      else tierCounts['none']++;
-    });
-    // 刷新层级按钮中的数字
-    var tierBtns = document.querySelectorAll('#hwPanelContent .hw-card > div > div[style*="flex:1"]');
-    // 简单方案：直接更新所有包含层级数字的元素
-    ['A', 'B', 'C'].forEach(function(t) {
-      var els = document.querySelectorAll('[data-tier-count="' + t + '"]');
-      els.forEach(function(el) { el.textContent = tierCounts[t]; });
-    });
-  }
-
-  window.toggleTierStudent = function(studentId) {
+  window.toggleTierStudent = function(studentId, el) {
     var sid = String(studentId);
     var currentTier = homeworkTiers[sid];
     // 如果是当前编辑层的已有成员 → 标记为移除
@@ -2310,8 +2281,31 @@
         _tierEditSelections[sid] = 'add';
       }
     }
-    // 局部刷新分层编辑区域，不重建整个页面（避免闪屏和状态丢失）
-    refreshTierEditView();
+
+    // 只改当前按钮样式，不重新渲染任何区域
+    var isSelected = !!_tierEditSelections[sid];
+    if (currentTier === _activeTierEdit) {
+      // 当前层成员：选中=红色标记移除，未选=恢复原样
+      if (isSelected) {
+        el.style.background = '#fee2e2';
+        el.style.borderColor = '#ef4444';
+        el.style.color = '#991b1b';
+        el.textContent = el.textContent.replace(/\s*$/, '') + ' ✕';
+      } else {
+        el.style.background = '#fee2e2';
+        el.style.borderColor = '#fca5a5';
+        el.style.color = '#b91c1c';
+        el.textContent = el.textContent.replace(' ✕', '');
+      }
+    } else {
+      // 未分层学生：选中=蓝色，未选=白色
+      el.style.background = isSelected ? '#e0e7ff' : 'white';
+    }
+
+    // 更新已选计数
+    var selCount = Object.keys(_tierEditSelections).filter(function(k) { return _tierEditSelections[k]; }).length;
+    var countEl = document.getElementById('hwTierSelCount');
+    if (countEl) countEl.textContent = '已选 ' + selCount + ' 人';
   };
 
   window.saveTierEdit = function(tier) {
