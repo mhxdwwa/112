@@ -2160,7 +2160,7 @@
       }
       html += '">';
       html += '<div style="font-weight:700;color:' + TIER_COLORS[t] + ';font-size:15px;">' + TIER_NAMES[t] + '</div>';
-      html += '<div style="font-size:24px;font-weight:800;margin-top:4px;color:' + TIER_COLORS[t] + ';">' + tierCounts[t] + '</div>';
+      html += '<div data-tier-count="' + t + '" style="font-size:24px;font-weight:800;margin-top:4px;color:' + TIER_COLORS[t] + ';">' + tierCounts[t] + '</div>';
       html += '<div style="font-size:11px;color:#888;margin-top:2px;">' + (isActive ? '编辑中...' : '点击管理') + '</div>';
       html += '</button>';
     });
@@ -2174,11 +2174,15 @@
 
     // 如果正在编辑某个层级
     if (_activeTierEdit) {
+      html += '<div id="hwTierEditPanel">';
       html += renderTierEditPanel(_activeTierEdit);
+      html += '</div>';
     }
 
     // 已分层学生总览
+    html += '<div id="hwTierOverview">';
     html += renderTierOverview();
+    html += '</div>';
 
     html += '</div>';
     return html;
@@ -2258,6 +2262,36 @@
     renderHomeworkPageContent(container, students);
   }
 
+  // 分层编辑局部刷新：只更新编辑面板和总览，不重建整个页面
+  function refreshTierEditView() {
+    if (!_activeTierEdit) return;
+    // 更新编辑面板
+    var editPanel = document.getElementById('hwTierEditPanel');
+    if (editPanel) {
+      editPanel.innerHTML = renderTierEditPanel(_activeTierEdit);
+    }
+    // 更新总览
+    var overview = document.getElementById('hwTierOverview');
+    if (overview) {
+      overview.innerHTML = renderTierOverview();
+    }
+    // 更新层级按钮的人数（找到对应的按钮并更新数字）
+    var students = getCurrentStudents();
+    var tierCounts = { 'A': 0, 'B': 0, 'C': 0, 'none': 0 };
+    students.forEach(function(s) {
+      var t = homeworkTiers[String(s.id)];
+      if (t && tierCounts[t] !== undefined) tierCounts[t]++;
+      else tierCounts['none']++;
+    });
+    // 刷新层级按钮中的数字
+    var tierBtns = document.querySelectorAll('#hwPanelContent .hw-card > div > div[style*="flex:1"]');
+    // 简单方案：直接更新所有包含层级数字的元素
+    ['A', 'B', 'C'].forEach(function(t) {
+      var els = document.querySelectorAll('[data-tier-count="' + t + '"]');
+      els.forEach(function(el) { el.textContent = tierCounts[t]; });
+    });
+  }
+
   window.toggleTierStudent = function(studentId) {
     var sid = String(studentId);
     var currentTier = homeworkTiers[sid];
@@ -2276,8 +2310,8 @@
         _tierEditSelections[sid] = 'add';
       }
     }
-    // 只刷新面板，不重新渲染整个页面（避免闪屏）
-    refreshHomeworkPanel();
+    // 局部刷新分层编辑区域，不重建整个页面（避免闪屏和状态丢失）
+    refreshTierEditView();
   };
 
   window.saveTierEdit = function(tier) {
