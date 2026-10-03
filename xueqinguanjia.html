@@ -6806,260 +6806,66 @@ function printSeating() {
     }
   }
   
-  // Stats
-  const total = sts.length;
-  const present = sts.filter(s => s.status === 'present').length;
-  const leave = sts.filter(s => s.status === 'leave').length;
-  const absent = sts.filter(s => s.status === 'absent').length;
-  const late = sts.filter(s => s.status === 'late').length;
-  const rate = ((present / total) * 100).toFixed(1);
-  
   // Get current date
   const now = new Date();
   const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
   
-  // Build HTML for print
-  let printHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${cls} 座位表</title>
-  <style>
-    @page {
-      size: A4 landscape;
-      margin: 15mm;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
-      padding: 0;
-      color: #333;
-    }
-    .print-header {
-      text-align: center;
-      margin-bottom: 20px;
-      border-bottom: 2px solid #2563EB;
-      padding-bottom: 15px;
-    }
-    .print-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: #2563EB;
-      margin-bottom: 8px;
-    }
-    .print-subtitle {
-      font-size: 14px;
-      color: #666;
-    }
-    .print-stats {
-      display: flex;
-      justify-content: center;
-      gap: 30px;
-      margin: 15px 0;
-      font-size: 13px;
-    }
-    .print-stat-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .print-stat-label {
-      color: #666;
-    }
-    .print-stat-value {
-      font-weight: 700;
-      font-size: 16px;
-    }
-    .print-stat-value.green { color: #059669; }
-    .print-stat-value.orange { color: #D97706; }
-    .print-stat-value.red { color: #DC2626; }
-    .print-stat-value.blue { color: #2563EB; }
-    .seating-container {
-      margin: 20px auto;
-    }
-    .podium {
-      text-align: center;
-      font-size: 16px;
-      font-weight: 600;
-      color: #666;
-      padding: 10px;
-      background: #f5f5f5;
-      border-radius: 6px;
-      margin-bottom: 20px;
-      letter-spacing: 8px;
-    }
-    .seating-grid {
-      display: grid;
-      grid-template-columns: repeat(${cols}, 1fr);
-      gap: 8px;
-      margin-bottom: 15px;
-    }
-    .seat {
-      border: 2px solid #e0e0e0;
-      border-radius: 6px;
-      padding: 8px 4px;
-      text-align: center;
-      min-height: 50px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background: #fff;
-    }
-    .seat.present {
-      background: #f0fdf4;
-      border-color: #86efac;
-    }
-    .seat.leave {
-      background: #fffbeb;
-      border-color: #fcd34d;
-    }
-    .seat.absent {
-      background: #fef2f2;
-      border-color: #fca5a5;
-    }
-    .seat.late {
-      background: #eff6ff;
-      border-color: #93c5fd;
-    }
-    .seat.empty {
-      background: #f9fafb;
-      border-color: #e5e7eb;
-      color: #9ca3af;
-    }
-    .seat-name {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 2px;
-      word-break: break-all;
-    }
-    .seat-num {
-      font-size: 11px;
-      color: #666;
-    }
-    .seat-mark {
-      color: #dc2626;
-      font-weight: 700;
-      font-size: 12px;
-    }
-    .legend {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      margin-top: 20px;
-      font-size: 12px;
-      color: #666;
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .legend-dot {
-      width: 16px;
-      height: 16px;
-      border-radius: 3px;
-      border: 1px solid #ccc;
-    }
-    .legend-dot.present { background: #f0fdf4; border-color: #86efac; }
-    .legend-dot.leave { background: #fffbeb; border-color: #fcd34d; }
-    .legend-dot.absent { background: #fef2f2; border-color: #fca5a5; }
-    .legend-dot.late { background: #eff6ff; border-color: #93c5fd; }
-    .legend-dot.empty { background: #f9fafb; border-color: #e5e7eb; }
-    .footer {
-      margin-top: 30px;
-      text-align: center;
-      font-size: 11px;
-      color: #999;
-      border-top: 1px solid #e0e0e0;
-      padding-top: 10px;
-    }
-    @media print {
-      body { padding: 0; }
-    }
-  </style>
-</head>
-<body>
-  <div class="print-header">
-    <div class="print-title">${cls} 座位表</div>
-    <div class="print-subtitle">打印日期：${dateStr}</div>
-    <div class="print-stats">
-      <div class="print-stat-item">
-        <span class="print-stat-label">总人数：</span>
-        <span class="print-stat-value">${total}</span>
-      </div>
-      <div class="print-stat-item">
-        <span class="print-stat-label">在校：</span>
-        <span class="print-stat-value green">${present}</span>
-      </div>
-      <div class="print-stat-item">
-        <span class="print-stat-label">请假：</span>
-        <span class="print-stat-value orange">${leave}</span>
-      </div>
-      <div class="print-stat-item">
-        <span class="print-stat-label">缺勤：</span>
-        <span class="print-stat-value red">${absent}</span>
-      </div>
-      <div class="print-stat-item">
-        <span class="print-stat-label">迟到：</span>
-        <span class="print-stat-value blue">${late}</span>
-      </div>
-      <div class="print-stat-item">
-        <span class="print-stat-label">出勤率：</span>
-        <span class="print-stat-value green">${rate}%</span>
-      </div>
-    </div>
-  </div>
-  
-  <div class="seating-container">
-    <div class="podium">讲 台</div>
-    <div class="seating-grid">
-`;
-  
-  // Add seats
-  for (let i = 0; i < totalSlots; i++) {
-    const s = seatSlots[i];
-    if (s) {
-      const statusCls = s.status === 'present' ? 'present' : s.status === 'leave' ? 'leave' : s.status === 'absent' ? 'absent' : s.status === 'late' ? 'late' : 'present';
-      const markBadge = s.mark ? '<span class="seat-mark">!</span>' : '';
-      printHtml += `
-      <div class="seat ${statusCls}">
-        <div class="seat-name">${s.name} ${markBadge}</div>
-        <div class="seat-num">${s.seat}号</div>
-      </div>`;
-    } else {
-      printHtml += `
-      <div class="seat empty">
-        <div class="seat-name">空</div>
-      </div>`;
+  // Calculate group boundaries for column gaps
+  const groupBoundaries = new Set();
+  if (colGroups.length > 0) {
+    let cumCol = 0;
+    for (const groupSize of colGroups) {
+      cumCol += groupSize;
+      if (cumCol < cols) groupBoundaries.add(cumCol - 1);
     }
   }
   
-  printHtml += `
-    </div>
-    <div class="legend">
-      <div class="legend-item"><div class="legend-dot present"></div>在校</div>
-      <div class="legend-item"><div class="legend-dot leave"></div>请假</div>
-      <div class="legend-item"><div class="legend-dot absent"></div>缺勤</div>
-      <div class="legend-item"><div class="legend-dot late"></div>迟到</div>
-      <div class="legend-item"><div class="legend-dot empty"></div>空位</div>
-    </div>
-  </div>
+  // Build grid HTML with proper group gaps
+  let gridHtml = '';
+  for (let row = 0; row < totalRows; row++) {
+    gridHtml += '<div class="print-row">';
+    for (let col = 0; col < cols; col++) {
+      const i = row * cols + col;
+      const s = seatSlots[i];
+      if (s) {
+        gridHtml += '<div class="print-seat"><div class="print-seat-name">' + s.name + '</div><div class="print-seat-num">' + s.seat + '号</div></div>';
+      } else {
+        gridHtml += '<div class="print-seat empty"><div class="print-seat-name">空</div></div>';
+      }
+      // Add group gap after this column if it's a boundary
+      if (col < cols - 1 && groupBoundaries.has(col)) {
+        gridHtml += '<div class="print-group-gap"></div>';
+      }
+    }
+    gridHtml += '</div>';
+  }
   
-  <div class="footer">
-    学勤管家 · 学生在校情况管理系统 | 打印时间：${now.toLocaleString('zh-CN')}
-  </div>
-  
-  <script>
-    window.onload = function() {
-      setTimeout(function() {
-        window.print();
-      }, 300);
-    };
-  <\/script>
-</body>
-</html>`;
+  // Build HTML for print
+  let printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + cls + ' 座位表</title><style>' +
+    '@page { size: A4 landscape; margin: 12mm; }' +
+    '* { box-sizing: border-box; margin: 0; padding: 0; }' +
+    'body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #333; }' +
+    '.print-header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #2563EB; padding-bottom: 12px; }' +
+    '.print-title { font-size: 22px; font-weight: 700; color: #2563EB; margin-bottom: 6px; }' +
+    '.print-subtitle { font-size: 13px; color: #666; }' +
+    '.print-container { margin: 0 auto; }' +
+    '.print-podium { text-align: center; font-size: 15px; font-weight: 600; color: #666; padding: 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 16px; letter-spacing: 8px; }' +
+    '.print-row { display: flex; gap: 4px; margin-bottom: 4px; }' +
+    '.print-seat { flex: 1; border: 1.5px solid #d0d0d0; border-radius: 4px; padding: 6px 2px; text-align: center; min-height: 38px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fff; }' +
+    '.print-seat.empty { background: #fafafa; border-color: #e5e5e5; }' +
+    '.print-seat-name { font-size: 12px; font-weight: 600; line-height: 1.3; word-break: break-all; }' +
+    '.print-seat-num { font-size: 10px; color: #888; margin-top: 1px; }' +
+    '.print-group-gap { width: 12px; flex-shrink: 0; }' +
+    '.print-footer { margin-top: 20px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #e0e0e0; padding-top: 8px; }' +
+    '@media print { body { padding: 0; } }' +
+    '</style></head><body>' +
+    '<div class="print-header"><div class="print-title">' + cls + ' 座位表</div><div class="print-subtitle">打印日期：' + dateStr + '</div></div>' +
+    '<div class="print-container"><div class="print-podium">讲 台</div>' +
+    gridHtml +
+    '</div>' +
+    '<div class="print-footer">学勤管家 · 学生在校情况管理系统 | 打印时间：' + now.toLocaleString('zh-CN') + '</div>' +
+    '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>' +
+    '</body></html>';
   
   // Open print window
   const printWindow = window.open('', '_blank');
