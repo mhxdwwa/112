@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v324 ==========
+// ========== 作业岛系统 v325 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -3222,6 +3222,9 @@
         if (oldPath) deleteImageFromStorage(oldPath);
       }
       
+      // 先保存旧金币数，用于计算差价
+      var oldCoins = sub.coins || 0;
+      
       // 更新提交记录
       sub.graded = true;
       sub.grade = grade;
@@ -3232,7 +3235,6 @@
 
       // 发放金币（补差价或扣金币）
       if (student && typeof changeStudentCoins === 'function') {
-        var oldCoins = sub.coins || 0; // 使用已保存的金币数，而不是内存中的 _prevCoins
         var delta = coins - oldCoins;
         if (delta !== 0) {
           var reason = '评分' + grade;
