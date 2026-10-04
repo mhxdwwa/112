@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v325 ==========
+// ========== 作业岛系统 v326 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -774,8 +774,70 @@
 
       _cloudDataLoaded = true;
       console.log('[homework] Cloud data loaded successfully for classId:', loadClassId);
+      
+      // v325: 补发历史批阅金币（修复之前bug导致未发放的金币）
+      backfillHomeworkCoins();
     } catch (err) {
       console.error('[homework] loadFromCloud error:', err);
+    }
+  }
+
+  // v325: 补发历史批阅金币
+  function backfillHomeworkCoins() {
+    if (!currentClassId) return;
+    var students = getCurrentStudents();
+    if (students.length === 0) return;
+    
+    var backfilled = 0;
+    var gradedSubmissions = homeworkSubmissions.filter(function(s) { return s.graded && s.grade; });
+    
+    // 获取所有操作日志
+    var allLogs = window.operationLogs || [];
+    
+    gradedSubmissions.forEach(function(sub) {
+      var student = getStudentById(sub.studentId);
+      if (!student) return;
+      
+      // 检查是否已有补发标记
+      var backfillKey = 'hw_backfill_' + sub.id;
+      if (localStorage.getItem(backfillKey)) return;
+      
+      // 计算应发金币
+      var expectedCoins = GRADE_COINS[sub.grade] || 10;
+      var customCoins = sub.customCoins || 0;
+      var totalExpected = expectedCoins + customCoins;
+      if (totalExpected < 0) totalExpected = 0;
+      
+      // 检查操作日志中是否有该作业的金币记录
+      var hasHomeworkLog = allLogs.some(function(log) {
+        return log.extra && log.extra.type === 'homework_grade' && log.extra.homeworkId === sub.homeworkId && log.studentId === sub.studentId;
+      });
+      
+      // 如果没有金币记录，补发
+      if (!hasHomeworkLog && typeof changeStudentCoins === 'function') {
+        var reason = '补发:评分' + sub.grade;
+        if (customCoins !== 0) {
+          reason += (customCoins > 0 ? ' +奖励' + customCoins : ' -扣减' + Math.abs(customCoins));
+        }
+        changeStudentCoins(student, totalExpected, '作业批改补发', reason, 0, null, {
+          type: 'homework_grade', homeworkId: sub.homeworkId, grade: sub.grade, customCoins: customCoins
+        });
+        localStorage.setItem(backfillKey, '1');
+        backfilled++;
+        console.log('[homework] 补发金币:', student.name, sub.grade, totalExpected, '金币');
+      } else {
+        // 标记已处理，避免重复检查
+        localStorage.setItem(backfillKey, '1');
+      }
+    });
+    
+    if (backfilled > 0) {
+      console.log('[homework] 共补发', backfilled, '条记录的金币');
+      showNotification('已补发 ' + backfilled + ' 条作业批阅的金币', 'success');
+      // 保存班级数据
+      if (typeof saveClassData === 'function') {
+        saveClassData('coins');
+      }
     }
   }
 
