@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v331 ==========
+// ========== 作业岛系统 v332 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -137,20 +137,70 @@
     }
   }
 
-  // 学生端：处理教师批改通知
+  // 学生端：处理教师批改/退回通知
   function handleStudentGradedNotification(updatedSub) {
     // 检查是否是我的提交
     if (_currentStudentId && updatedSub.student_id !== parseInt(_currentStudentId)) {
       return; // 不是我的提交，忽略
     }
     
-    // 检查是否已批改
-    if (!updatedSub.graded_at) return;
+    var existing = homeworkSubmissions.find(function(s) { return s.id === updatedSub.id; });
+    
+    // 情况1：作业被退回
+    if (updatedSub.returned === true) {
+      if (existing) {
+        existing.returned = true;
+        existing.returnReason = updatedSub.return_reason || '';
+        existing.graded = false;
+        existing.grade = '';
+        existing.coins = 0;
+        existing.gradedImage = '';
+        existing.gradedAt = '';
+      } else {
+        // 本地没有记录，创建一条退回记录
+        var returnSub = {
+          id: updatedSub.id,
+          homeworkId: updatedSub.homework_id,
+          studentId: updatedSub.student_id,
+          studentName: updatedSub.student_name || '',
+          image: updatedSub.image,
+          gradedImage: '',
+          graded: false,
+          grade: '',
+          coins: 0,
+          comment: '',
+          submittedAt: updatedSub.submitted_at,
+          gradedAt: '',
+          returned: true,
+          returnReason: updatedSub.return_reason || ''
+        };
+        homeworkSubmissions.push(returnSub);
+      }
+      
+      saveData();
+      
+      // 显示退回通知
+      var reason = updatedSub.return_reason || '';
+      showNotification('↩️ 作业被退回' + (reason ? '：' + reason : '，请重写'), 'warning');
+      
+      // 刷新学生视图
+      var container = document.getElementById('homeworkContent');
+      if (container && _currentStudentId) {
+        var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+        renderStudentView(container, parseInt(_currentStudentId), myClassId);
+        _updateHomeworkBadge();
+      }
+      return;
+    }
+    
+    // 情况2：作业已批改
+    if (!updatedSub.graded_at) return; // 既不是退回也不是批改，忽略
     
     // 更新本地数据
-    var existing = homeworkSubmissions.find(function(s) { return s.id === updatedSub.id; });
     if (existing) {
       existing.graded = true;
+      existing.returned = false;
+      existing.returnReason = '';
       existing.grade = updatedSub.grade || '';
       existing.coins = updatedSub.coins_awarded || 0;
       existing.comment = updatedSub.comment || '';
@@ -170,7 +220,9 @@
         coins: updatedSub.coins_awarded || 0,
         comment: updatedSub.comment || '',
         submittedAt: updatedSub.submitted_at,
-        gradedAt: updatedSub.graded_at
+        gradedAt: updatedSub.graded_at,
+        returned: false,
+        returnReason: ''
       };
       homeworkSubmissions.push(newSub);
     }
@@ -187,7 +239,6 @@
     if (container && _currentStudentId) {
       var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
       renderStudentView(container, parseInt(_currentStudentId), myClassId);
-      // 更新作业提醒感叹号
       _updateHomeworkBadge();
     }
   }
@@ -238,12 +289,55 @@
     existing.comment = updatedSub.comment || '';
     existing.gradedImage = updatedSub.graded_image;
     existing.gradedAt = updatedSub.graded_at;
+    existing.returned = !!updatedSub.returned;
+    existing.returnReason = updatedSub.return_reason || '';
     
     saveData();
     
     // 刷新视图
     if (_currentTab === 'submissions' && typeof loadHomeworkSubmissions === 'function') {
       loadHomeworkSubmissions();
+    }
+  }
+
+  // ========== 学生端轮询机制 ==========
+  var _studentPollingInterval = null;
+  var _studentPollingCount = 0;
+  
+  // 启动学生端轮询（每15秒检查一次云端更新）
+  function _startStudentPolling(classId, studentId) {
+    if (_studentPollingInterval) return; // 已在轮询
+    
+    _studentPollingCount = 0;
+    _studentPollingInterval = setInterval(function() {
+      _studentPollingCount++;
+      
+      // 最多轮询20次（5分钟），之后停止
+      if (_studentPollingCount > 20) {
+        _stopStudentPolling();
+        return;
+      }
+      
+      // 从云端加载最新数据
+      loadFromCloud(classId, true).then(function() {
+        var container = document.getElementById('homeworkContent');
+        if (container && _isStudentView) {
+          renderStudentView(container, studentId, classId);
+          _updateHomeworkBadge();
+        }
+      });
+    }, 15000); // 15秒
+    
+    console.log('[homework] 学生端轮询已启动（每15秒检查一次）');
+  }
+  
+  // 停止学生端轮询
+  function _stopStudentPolling() {
+    if (_studentPollingInterval) {
+      clearInterval(_studentPollingInterval);
+      _studentPollingInterval = null;
+      _studentPollingCount = 0;
+      console.log('[homework] 学生端轮询已停止');
     }
   }
 
@@ -976,6 +1070,8 @@
         _markHomeworkGradedAsViewed();
         // 更新作业提醒感叹号
         _updateHomeworkBadge();
+        // 启动轮询机制（确保即使Realtime不工作也能收到更新）
+        _startStudentPolling(myClassId, myStudentId);
       });
       
       return; // 学生视图结束，不执行后面的教师视图代码
