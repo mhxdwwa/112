@@ -304,4 +304,61 @@ checkLogin().then(function() {
   if (currentUser && typeof window._onAuthReady === 'function') {
     window._onAuthReady();
   }
+  
+  // v335: 立即检查作业感叹号（使用localStorage缓存数据）
+  // 这样学生登录后无需进入取金阁就能看到感叹号
+  if (currentUser && currentUser.type === 'student') {
+    setTimeout(function() {
+      try {
+        var homeworkTiers = JSON.parse(localStorage.getItem('homeworkTiers') || '{}');
+        var homeworkList = JSON.parse(localStorage.getItem('homeworkList') || '[]');
+        var homeworkSubmissions = JSON.parse(localStorage.getItem('homeworkSubmissions') || '[]');
+        var viewedGradedAt = parseInt(localStorage.getItem('hwViewedGradedAt') || '0');
+        
+        var myStudentId = parseInt(currentUser.studentId || localStorage.getItem('studentId') || 0);
+        var myTier = homeworkTiers[String(myStudentId)];
+        
+        if (myTier) {
+          var myHomework = homeworkList.find(function(h) { return h.tier === myTier; });
+          if (myHomework) {
+            var mySubmission = homeworkSubmissions.find(function(s) {
+              return s.homeworkId === myHomework.id && String(s.studentId) === String(myStudentId);
+            });
+            
+            var hasNotification = false;
+            
+            // 情况1：未提交作业
+            if (!mySubmission) {
+              hasNotification = true;
+            }
+            // 情况2：作业被退回
+            else if (mySubmission.returned) {
+              hasNotification = true;
+            }
+            // 情况3：已批阅但学生未查看
+            else if (mySubmission.graded && mySubmission.gradedAt) {
+              var gradedTimestamp = new Date(mySubmission.gradedAt).getTime();
+              if (gradedTimestamp > viewedGradedAt) {
+                hasNotification = true;
+              }
+            }
+            
+            // 更新感叹号显示
+            var quizBadge = document.getElementById('quizBadge');
+            var homeworkBadge = document.getElementById('homeworkBadge');
+            if (quizBadge) {
+              quizBadge.style.display = hasNotification ? 'block' : 'none';
+            }
+            if (homeworkBadge) {
+              homeworkBadge.style.display = hasNotification ? 'block' : 'none';
+            }
+            
+            console.log('[Auth] 作业感叹号已更新:', hasNotification ? '显示' : '隐藏');
+          }
+        }
+      } catch (e) {
+        console.warn('[Auth] 检查作业感叹号失败:', e);
+      }
+    }, 100);
+  }
 });
