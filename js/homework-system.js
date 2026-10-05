@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v333 ==========
+// ========== 作业岛系统 v334 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -183,12 +183,18 @@
       var reason = updatedSub.return_reason || '';
       showNotification('↩️ 作业被退回' + (reason ? '：' + reason : '，请重写'), 'warning');
       
-      // 刷新学生视图
-      var container = document.getElementById('homeworkContent');
-      if (container && _currentStudentId) {
-        var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
-        renderStudentView(container, parseInt(_currentStudentId), myClassId);
-        _updateHomeworkBadge();
+      // 刷新学生视图（如果用户正在书写，延迟到书写结束后再刷新）
+      if (_stuWriteModeActive || _stuFullscreenActive) {
+        console.log('[homework] Realtime退回通知：用户正在书写，延迟刷新');
+        // 保存待刷新标记，书写结束后会触发刷新
+        _pendingStudentRefresh = true;
+      } else {
+        var container = document.getElementById('homeworkContent');
+        if (container && _currentStudentId) {
+          var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+          renderStudentView(container, parseInt(_currentStudentId), myClassId);
+          _updateHomeworkBadge();
+        }
       }
       return;
     }
@@ -234,12 +240,17 @@
     var coins = updatedSub.coins_awarded || 0;
     showNotification('🎉 作业已批改: ' + grade + '，获得 ' + coins + ' 金币！', 'success');
     
-    // 刷新学生视图
-    var container = document.getElementById('homeworkContent');
-    if (container && _currentStudentId) {
-      var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
-      renderStudentView(container, parseInt(_currentStudentId), myClassId);
-      _updateHomeworkBadge();
+    // 刷新学生视图（如果用户正在书写，延迟到书写结束后再刷新）
+    if (_stuWriteModeActive || _stuFullscreenActive) {
+      console.log('[homework] Realtime批阅通知：用户正在书写，延迟刷新');
+      _pendingStudentRefresh = true;
+    } else {
+      var container = document.getElementById('homeworkContent');
+      if (container && _currentStudentId) {
+        var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+        renderStudentView(container, parseInt(_currentStudentId), myClassId);
+        _updateHomeworkBadge();
+      }
     }
   }
 
@@ -320,6 +331,11 @@
       
       // 从云端加载最新数据
       loadFromCloud(classId, true).then(function() {
+        // 如果用户正在书写或全屏模式中，跳过重渲染以保护书写状态
+        if (_stuWriteModeActive || _stuFullscreenActive) {
+          console.log('[homework] 轮询跳过重渲染：用户正在书写模式中');
+          return;
+        }
         var container = document.getElementById('homeworkContent');
         if (container && _isStudentView) {
           renderStudentView(container, studentId, classId);
@@ -1134,6 +1150,9 @@
 
   // ========== 学生视图渲染 ==========
   function renderStudentView(container, studentId, classId) {
+    // 在重建DOM前重置画布状态，防止旧canvas引用导致书写失效
+    _resetStudentCanvasState();
+    
     // 获取学生所在层级（内部使用，不显示给学生）
     var myTier = homeworkTiers[String(studentId)];
     
@@ -1410,6 +1429,33 @@
   var _studentUploadedImage = null;
   var _stuTouchActive = false;
   var _stuWriteModeActive = false; // 是否处于手写模式
+  var _pendingStudentRefresh = false; // 书写期间是否有待刷新的Realtime/轮询通知
+
+  // 重置学生画布状态（在DOM重建前调用，防止旧引用导致画布失效）
+  function _resetStudentCanvasState() {
+    _stuCanvas = null;
+    _stuCtx = null;
+    _stuOverlayCanvas = null;
+    _stuOverlayCtx = null;
+    _stuImg = null;
+    _stuIsDrawing = false;
+    _stuTouchActive = false;
+    _stuWriteModeActive = false;
+    _stuLastX = 0;
+    _stuLastY = 0;
+    // 同时清理全屏状态
+    if (_stuFsOverlay && _stuFsOverlay.parentNode) {
+      _stuFsOverlay.parentNode.removeChild(_stuFsOverlay);
+    }
+    _stuFullscreenActive = false;
+    _stuFsWriteMode = false;
+    _stuFsOverlay = null;
+    _stuFsCanvas = null;
+    _stuFsOverlayCanvas = null;
+    _stuFsCtx = null;
+    _stuFsOverlayCtx = null;
+    _stuFsImg = null;
+  }
 
   // 初始化学生查看模式（原生img）
   function initStudentView(imageDataUrl) {
@@ -1456,8 +1502,13 @@
     if (!_stuWriteModeActive) return;
     _stuWriteModeActive = false;
     
+    // 验证canvas引用是否仍然有效（在DOM中）
+    var canvasValid = _stuCanvas && _stuCtx && _stuOverlayCanvas && _stuOverlayCtx &&
+      (document.contains(_stuCanvas) || _stuCanvas.isConnected) &&
+      (document.contains(_stuOverlayCanvas) || _stuOverlayCanvas.isConnected);
+    
     // 将笔迹合并到底图中，让查看模式也能看到
-    if (_stuCanvas && _stuOverlayCanvas && _stuCtx && _stuOverlayCtx) {
+    if (canvasValid) {
       // 将叠加层（笔迹）绘制到底图画布上
       _stuCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuCanvas.width, _stuCanvas.height);
       // 清空叠加层
@@ -1490,12 +1541,37 @@
     if (writeBtn) writeBtn.style.display = 'flex';
     if (saveBtn) saveBtn.style.display = 'none';
     if (writeTools) writeTools.style.display = 'none';
+    
+    // 如果书写期间有Realtime/轮询通知到达，现在执行延迟刷新
+    if (_pendingStudentRefresh) {
+      _pendingStudentRefresh = false;
+      console.log('[homework] 书写结束，执行待刷新的Realtime/轮询通知');
+      setTimeout(function() {
+        var container = document.getElementById('homeworkContent');
+        if (container && _currentStudentId) {
+          var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+          renderStudentView(container, parseInt(_currentStudentId), myClassId);
+          _updateHomeworkBadge();
+        }
+      }, 500);
+    }
   };
 
   // 初始化手写画布（只初始化一次，保留已有笔迹）
   function initStudentCanvasForWrite() {
-    // 如果已经初始化过，不要重新初始化（保留已有笔迹）
-    if (_stuOverlayCanvas && _stuOverlayCtx) return;
+    // 如果已经初始化过，检查是否仍然在DOM中（防止DOM重建后引用失效）
+    if (_stuOverlayCanvas && _stuOverlayCtx) {
+      // 检查canvas是否仍在文档中
+      if (!_stuOverlayCanvas.isConnected && !document.contains(_stuOverlayCanvas)) {
+        console.log('[homework] 画布引用已失效（DOM已重建），重新初始化');
+        _stuOverlayCanvas = null;
+        _stuOverlayCtx = null;
+        _stuCanvas = null;
+        _stuCtx = null;
+      } else {
+        return; // 仍在DOM中，跳过重新初始化
+      }
+    }
     
     var canvas = document.getElementById('studentCanvas');
     var overlayCanvas = document.getElementById('studentOverlayCanvas');
@@ -2072,13 +2148,25 @@
     if (!_stuFsWriteMode) return;
     _stuFsWriteMode = false;
 
+    // 验证普通画布引用是否仍然有效
+    var normalCanvasValid = _stuOverlayCanvas && _stuOverlayCtx &&
+      (document.contains(_stuOverlayCanvas) || _stuOverlayCanvas.isConnected);
+    
     // 确保普通画布的叠加层已初始化
-    if (!_stuOverlayCanvas || !_stuOverlayCtx) {
+    if (!normalCanvasValid) {
+      _stuOverlayCanvas = null;
+      _stuOverlayCtx = null;
+      _stuCanvas = null;
+      _stuCtx = null;
       initStudentCanvasForWrite();
     }
 
+    // 验证全屏画布引用是否仍然有效
+    var fsCanvasValid = _stuFsOverlayCanvas &&
+      (document.contains(_stuFsOverlayCanvas) || _stuFsOverlayCanvas.isConnected);
+    
     // 将全屏手写内容同步回普通画布
-    if (_stuFsOverlayCanvas && _stuOverlayCanvas && _stuOverlayCtx) {
+    if (fsCanvasValid && normalCanvasValid && _stuOverlayCanvas && _stuOverlayCtx) {
       try {
         _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
         _stuOverlayCtx.drawImage(_stuFsOverlayCanvas, 0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
@@ -2089,7 +2177,11 @@
 
     // 将笔迹合并到底图中，生成带笔迹的图片
     var mergedImageUrl = null;
-    if (_stuCanvas && _stuCtx && _stuOverlayCanvas) {
+    // 重新验证合并所需的canvas引用
+    var mergeValid = _stuCanvas && _stuCtx && _stuOverlayCanvas && _stuOverlayCtx &&
+      (document.contains(_stuCanvas) || _stuCanvas.isConnected) &&
+      (document.contains(_stuOverlayCanvas) || _stuOverlayCanvas.isConnected);
+    if (mergeValid) {
       try {
         _stuCtx.drawImage(_stuOverlayCanvas, 0, 0, _stuCanvas.width, _stuCanvas.height);
         _stuOverlayCtx.clearRect(0, 0, _stuOverlayCanvas.width, _stuOverlayCanvas.height);
@@ -2144,6 +2236,20 @@
     _stuFsOverlayCanvas = null;
     _stuFsCtx = null;
     _stuFsOverlayCtx = null;
+    
+    // 如果书写期间有Realtime/轮询通知到达，现在执行延迟刷新
+    if (_pendingStudentRefresh) {
+      _pendingStudentRefresh = false;
+      console.log('[homework] 全屏书写结束，执行待刷新的Realtime/轮询通知');
+      setTimeout(function() {
+        var container = document.getElementById('homeworkContent');
+        if (container && _currentStudentId) {
+          var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+          renderStudentView(container, parseInt(_currentStudentId), myClassId);
+          _updateHomeworkBadge();
+        }
+      }, 500);
+    }
   };
 
   // 退出全屏查看
