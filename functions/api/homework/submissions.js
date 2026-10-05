@@ -126,7 +126,6 @@ export const onRequestPatch = async ({ request, env }) => {
       const updateData = {
         returned: true,
         return_reason: return_reason || '',
-        graded: false,
         grade: '',
         coins_awarded: 0,
         graded_image: '',
@@ -155,7 +154,6 @@ export const onRequestPatch = async ({ request, env }) => {
         image: image,
         returned: false,
         return_reason: '',
-        graded: false,
         grade: '',
         coins_awarded: 0,
         graded_image: '',

@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v332 ==========
+// ========== 作业岛系统 v333 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -2404,17 +2404,23 @@
   // 同步重新提交到云端
   async function syncResubmitToCloud(subId, imageData) {
     try {
-      await apiRequest('PATCH', '/submissions?id=' + subId, {
+      var result = await apiRequest('PATCH', '/submissions?id=' + subId, {
         image: imageData,
         returned: false,
         return_reason: '',
-        graded: false,
         grade: '',
         coins_awarded: 0,
         gradedImage: ''
       });
+      if (!result.ok) {
+        console.error('[homework] syncResubmitToCloud API error:', result);
+        showNotification('重新提交同步失败，请重试', 'error');
+      } else {
+        console.log('[homework] syncResubmitToCloud success for:', subId);
+      }
     } catch (err) {
-      console.warn('[homework] syncResubmitToCloud error:', err);
+      console.error('[homework] syncResubmitToCloud error:', err);
+      showNotification('重新提交同步失败，请重试', 'error');
     }
   }
   
@@ -3678,16 +3684,22 @@
   // 同步退回状态到云端
   async function syncReturnToCloud(subId, reason) {
     try {
-      await apiRequest('PATCH', '/submissions?id=' + subId, {
+      var result = await apiRequest('PATCH', '/submissions?id=' + subId, {
         returned: true,
         return_reason: reason,
-        graded: false,
         grade: '',
         coins_awarded: 0,
         gradedImage: ''
       });
+      if (!result.ok) {
+        console.error('[homework] syncReturnToCloud API error:', result);
+        showNotification('退回同步失败，请重试', 'error');
+      } else {
+        console.log('[homework] syncReturnToCloud success for:', subId);
+      }
     } catch (err) {
-      console.warn('[homework] syncReturnToCloud error:', err);
+      console.error('[homework] syncReturnToCloud error:', err);
+      showNotification('退回同步失败，请重试', 'error');
     }
   }
 
