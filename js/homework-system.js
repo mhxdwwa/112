@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v334 ==========
+// ========== 作业岛系统 v335 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -3814,5 +3814,14 @@
   style.textContent = '.hw-card{background:white;border-radius:16px;padding:20px;margin-bottom:15px;box-shadow:0 4px 20px rgba(0,0,0,0.1);}.hw-card-title{font-size:18px;font-weight:700;color:#333;margin-bottom:15px;display:flex;align-items:center;gap:8px;}.hw-form-group{margin-bottom:15px;}.hw-form-label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}.hw-student-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;border:2px solid transparent;margin:3px;}.hw-student-chip.selected{border-color:#667eea;background:#e0e7ff;color:#4338ca;}.hw-student-chip.assigned{opacity:0.4;cursor:not-allowed;}.hw-btn{padding:10px 20px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}.hw-btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}.hw-btn-success{background:linear-gradient(135deg,#11998e,#38ef7d);color:white;}.hw-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;}.hw-btn-secondary{background:#f1f3f5;color:#555;}';
   document.head.appendChild(style);
 
-  console.log('[homework-system] 作业岛系统已加载 v294 - 强制刷新缓存 + 版本检查 + 级联删除');
+  // ========== 立即检查感叹号（使用localStorage缓存数据）==========
+  // 在云端数据加载完成前，先用本地缓存数据显示感叹号，避免延迟
+  setTimeout(function() {
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.type === 'student') {
+      console.log('[homework] 立即检查感叹号（使用localStorage缓存）');
+      _updateHomeworkBadge();
+    }
+  }, 100);
+
+  console.log('[homework-system] 作业岛系统已加载 v334 - 立即显示感叹号 + 画布DOM重建修复');
 })();
