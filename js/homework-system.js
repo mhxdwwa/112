@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v329 ==========
+// ========== 作业岛系统 v330 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -187,6 +187,8 @@
     if (container && _currentStudentId) {
       var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
       renderStudentView(container, parseInt(_currentStudentId), myClassId);
+      // 更新作业提醒感叹号
+      _updateHomeworkBadge();
     }
   }
 
@@ -286,6 +288,101 @@
   var _gradeInitialPinchDistance = 0;
   var _gradeInitialZoom = 1;
   var _gradeTouchActive = false; // 标记触摸活跃（防止合成鼠标事件干扰）
+
+  // ========== 作业提醒感叹号逻辑 ==========
+  // 用于追踪学生是否已查看批阅结果
+  var _homeworkViewedGradedAt = parseInt(localStorage.getItem('hwViewedGradedAt') || '0');
+
+  // 检查是否有作业提醒（未提交/被退回/已批阅未查看）
+  function _checkHomeworkNotification() {
+    // 仅学生账户显示
+    if (typeof currentUser === 'undefined' || !currentUser || currentUser.type !== 'student') {
+      return false;
+    }
+
+    var myStudentId = parseInt(currentUser.studentId || localStorage.getItem('studentId') || 0);
+    var myClassId = parseInt(currentUser.classId || localStorage.getItem('classId') || 0);
+    
+    if (!myStudentId || !myClassId) return false;
+
+    // 获取学生所在层级
+    var myTier = homeworkTiers[String(myStudentId)];
+    if (!myTier) return false;
+
+    // 获取该层级的作业
+    var myHomework = homeworkList.find(function(h) { return h.tier === myTier; });
+    if (!myHomework) return false;
+
+    // 检查该作业的提交状态
+    var mySubmission = homeworkSubmissions.find(function(s) {
+      return s.homeworkId === myHomework.id && String(s.studentId) === String(myStudentId);
+    });
+
+    // 情况1：未提交作业
+    if (!mySubmission) {
+      return true;
+    }
+
+    // 情况2：作业被退回
+    if (mySubmission.returned) {
+      return true;
+    }
+
+    // 情况3：已批阅但学生未查看
+    if (mySubmission.graded && mySubmission.gradedAt) {
+      var gradedTimestamp = new Date(mySubmission.gradedAt).getTime();
+      if (gradedTimestamp > _homeworkViewedGradedAt) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // 更新取金阁和作业岛的感叹号显示
+  function _updateHomeworkBadge() {
+    var quizBadge = document.getElementById('quizBadge');
+    var homeworkBadge = document.getElementById('homeworkBadge');
+    
+    var hasNotification = _checkHomeworkNotification();
+    
+    if (quizBadge) {
+      quizBadge.style.display = hasNotification ? 'block' : 'none';
+    }
+    if (homeworkBadge) {
+      homeworkBadge.style.display = hasNotification ? 'block' : 'none';
+    }
+  }
+
+  // 标记学生已查看批阅结果
+  function _markHomeworkGradedAsViewed() {
+    var myStudentId = parseInt(currentUser.studentId || localStorage.getItem('studentId') || 0);
+    if (!myStudentId) return;
+
+    var myTier = homeworkTiers[String(myStudentId)];
+    if (!myTier) return;
+
+    var myHomework = homeworkList.find(function(h) { return h.tier === myTier; });
+    if (!myHomework) return;
+
+    var mySubmission = homeworkSubmissions.find(function(s) {
+      return s.homeworkId === myHomework.id && String(s.studentId) === String(myStudentId);
+    });
+
+    if (mySubmission && mySubmission.graded && mySubmission.gradedAt) {
+      var gradedTimestamp = new Date(mySubmission.gradedAt).getTime();
+      if (gradedTimestamp > _homeworkViewedGradedAt) {
+        _homeworkViewedGradedAt = gradedTimestamp;
+        localStorage.setItem('hwViewedGradedAt', String(gradedTimestamp));
+      }
+    }
+    
+    // 更新感叹号显示
+    _updateHomeworkBadge();
+  }
+
+  // 暴露全局函数，供其他模块调用
+  window.updateHomeworkBadge = _updateHomeworkBadge;
 
   // 评分等级 → 金币 (新标准)
   var GRADE_COINS = { 'A+': 70, 'A': 50, 'B+': 30, 'B': 20, 'C': 10 };
@@ -875,6 +972,10 @@
       // 学生端每次进入都强制重新加载，确保看到最新作业
       loadFromCloud(myClassId, true).then(function() {
         renderStudentView(container, myStudentId, myClassId);
+        // 学生进入作业岛时，标记已查看批阅结果（如果有）
+        _markHomeworkGradedAsViewed();
+        // 更新作业提醒感叹号
+        _updateHomeworkBadge();
       });
       
       return; // 学生视图结束，不执行后面的教师视图代码
@@ -2100,6 +2201,9 @@
       if (imageUrl) msg += ' (云端存储)';
       showNotification(msg, 'success');
       
+      // 更新作业提醒感叹号（提交后消失）
+      _updateHomeworkBadge();
+      
       // 刷新页面
       setTimeout(function() {
         window.renderHomeworkPage();
@@ -2183,6 +2287,9 @@
       var msg = '作业已重新提交，等待老师批改';
       if (imageUrl) msg += ' (云端存储)';
       showNotification(msg, 'success');
+      
+      // 更新作业提醒感叹号（重新提交后消失）
+      _updateHomeworkBadge();
       
       setTimeout(function() {
         window.renderHomeworkPage();

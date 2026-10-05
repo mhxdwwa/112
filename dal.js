@@ -5093,6 +5093,11 @@ function _initDALCore() {
       setTimeout(_initSnackStatusButton, 300);
     }
 
+    // v329: 初始化学生端作业提醒感叹号
+    if (typeof window.updateHomeworkBadge === 'function') {
+      setTimeout(window.updateHomeworkBadge, 400);
+    }
+
     wrapSaveFunctions();
     _setupRealtimeSubscriptions();
     _setupPageLifecycle();
