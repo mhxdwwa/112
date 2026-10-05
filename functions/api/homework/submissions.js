@@ -105,7 +105,7 @@ export const onRequestPost = async ({ request, env }) => {
   }
 };
 
-// PATCH — 批改作业
+// PATCH — 批改作业 / 退回作业
 export const onRequestPatch = async ({ request, env }) => {
   const envErr = checkEnv(env);
   if (envErr) return envErr;
@@ -118,13 +118,72 @@ export const onRequestPatch = async ({ request, env }) => {
   }
 
   const body = await request.json();
-  const { gradedImage, grade, coins_awarded, comment } = body;
-
-  if (!grade || !coins_awarded) {
-    return jsonResponse({ error: 'Missing grade or coins_awarded' }, 400);
-  }
+  const { gradedImage, grade, coins_awarded, comment, returned, return_reason, graded, image } = body;
 
   try {
+    // 退回作业请求
+    if (returned === true) {
+      const updateData = {
+        returned: true,
+        return_reason: return_reason || '',
+        graded: false,
+        grade: '',
+        coins_awarded: 0,
+        graded_image: '',
+        graded_at: null
+      };
+
+      const result = await sbRequest(env, 'PATCH', 'homework_submissions', {
+        query: `id=eq.${id}`,
+        body: updateData
+      });
+
+      if (result.error) {
+        console.error('[submissions PATCH] Return failed:', result.error);
+        return jsonResponse({ error: 'Return failed', details: result.error }, 500);
+      }
+
+      return jsonResponse({
+        ok: true,
+        message: '作业已退回'
+      });
+    }
+
+    // 重新提交作业（学生重新提交被退回的作业）
+    if (image && !grade) {
+      const updateData = {
+        image: image,
+        returned: false,
+        return_reason: '',
+        graded: false,
+        grade: '',
+        coins_awarded: 0,
+        graded_image: '',
+        graded_at: null,
+        submitted_at: new Date().toISOString()
+      };
+
+      const result = await sbRequest(env, 'PATCH', 'homework_submissions', {
+        query: `id=eq.${id}`,
+        body: updateData
+      });
+
+      if (result.error) {
+        console.error('[submissions PATCH] Resubmit failed:', result.error);
+        return jsonResponse({ error: 'Resubmit failed', details: result.error }, 500);
+      }
+
+      return jsonResponse({
+        ok: true,
+        message: '作业已重新提交'
+      });
+    }
+
+    // 正常批改作业
+    if (!grade || coins_awarded === undefined) {
+      return jsonResponse({ error: 'Missing grade or coins_awarded' }, 400);
+    }
+
     const updateData = {
       grade: grade,
       coins_awarded: parseInt(coins_awarded),

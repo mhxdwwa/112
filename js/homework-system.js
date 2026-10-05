@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v330 ==========
+// ========== 作业岛系统 v331 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -2873,7 +2873,7 @@
       html += '<div style="display:flex;flex-direction:column;gap:12px;">';
       tierStudents.forEach(function(s) {
         var sub = homeworkSubmissions.find(function(sub) { return sub.homeworkId === homeworkId && sub.studentId === s.id; });
-        var borderColor = sub ? (sub.graded ? '#22c55e' : '#f59e0b') : '#e9ecef';
+        var borderColor = sub ? (sub.returned ? '#ef4444' : (sub.graded ? '#22c55e' : '#f59e0b')) : '#e9ecef';
         html += '<div style="padding:15px;background:#f8f9fa;border-radius:14px;border-left:4px solid ' + borderColor + ';">';
         html += '<div style="display:flex;align-items:center;justify-content:space-between;">';
         html += '<div style="display:flex;align-items:center;gap:10px;">';
@@ -2882,6 +2882,8 @@
         html += '<div style="font-weight:700;font-size:14px;">' + esc(s.name) + '</div>';
         if (!sub) {
           html += '<div style="font-size:12px;color:#999;">未提交</div>';
+        } else if (sub.returned) {
+          html += '<div style="font-size:12px;color:#ef4444;font-weight:600;">已退回，待重新提交</div>';
         } else if (!sub.graded) {
           html += '<div style="font-size:12px;color:#f59e0b;font-weight:600;">待批改</div>';
         } else {
@@ -2889,7 +2891,7 @@
         }
         html += '</div></div>';
         html += '<div style="display:flex;gap:8px;">';
-        if (!sub) {
+        if (!sub || sub.returned) {
           html += '<button onclick="openSubmitModal(\'' + s.id + '\', \'' + homeworkId + '\')" class="hw-btn hw-btn-primary" style="font-size:12px;padding:8px 14px;">代提交</button>';
         } else {
           html += '<button onclick="openGradingCanvas(\'' + sub.id + '\')" class="hw-btn ' + (sub.graded ? 'hw-btn-success' : 'hw-btn-primary') + '" style="font-size:12px;padding:8px 14px;">' + (sub.graded ? '查看/已批' : '批改') + '</button>';
