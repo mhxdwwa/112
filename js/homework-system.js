@@ -3439,20 +3439,11 @@
   window.returnHomework = function(submissionId) {
     var sub = homeworkSubmissions.find(function(s) { return s.id === submissionId; });
     if (!sub) return;
-    var student = getStudentById(sub.studentId);
-    if (!student) return;
 
     var reason = prompt('请输入退回原因（可选）：', '');
     if (reason === null) return; // 用户取消
 
-    if (!confirm('确定退回该作业让学生重写？\n已发放的金币将被扣回。')) return;
-
-    // 扣回已发放的金币
-    if (sub.graded && sub.coins > 0 && typeof changeStudentCoins === 'function') {
-      changeStudentCoins(student, -sub.coins, '作业退回', '退回重写，扣回' + sub.coins + '金币', 0, null, {
-        type: 'homework_return', homeworkId: sub.homeworkId
-      });
-    }
+    if (!confirm('确定退回该作业让学生重写？')) return;
 
     // 标记为已退回
     sub.returned = true;
