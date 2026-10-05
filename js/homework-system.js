@@ -1,4 +1,4 @@
-// ========== 作业岛系统 v327 ==========
+// ========== 作业岛系统 v328 ==========
 // 按钮式功能栏 + 分层管理 + 布置作业 + 手写批阅 + 评分金币 + 云端同步 + 智能压缩(题目600KB/答案400KB) + 接收端图片增强(锐化+对比度) + 实时推送(师生双端) + 学生隐私保护 + 双层画布(橡皮擦只擦手写内容) + 自定义金币 + 分层数据即时加载
 (function() {
   'use strict';
@@ -757,7 +757,9 @@
                 coins: s.coins_awarded || 0,
                 comment: s.comment || '',
                 submittedAt: s.submitted_at,
-                gradedAt: s.graded_at
+                gradedAt: s.graded_at,
+                returned: !!s.returned,
+                returnReason: s.return_reason || ''
               };
             }));
           }
@@ -1060,6 +1062,73 @@
       html += '</div>';
       
       // 延迟初始化（等 DOM 渲染完成）
+      setTimeout(function() {
+        if (myHomework.image) {
+          initStudentView(myHomework.image);
+        }
+      }, 300);
+    } else if (mySubmission.returned) {
+      // 已退回，需要重写
+      html += '<div class="hw-card" style="background:linear-gradient(135deg,#fff0f0,#ffe0e0);border:2px solid #ef4444;">';
+      html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:15px;">';
+      html += '<div style="font-size:36px;">↩️</div>';
+      html += '<div>';
+      html += '<div style="font-weight:700;color:#991b1b;">作业已退回，请重写</div>';
+      if (mySubmission.returnReason) {
+        html += '<div style="font-size:13px;color:#991b1b;margin-top:4px;">退回原因：' + esc(mySubmission.returnReason) + '</div>';
+      }
+      html += '</div></div>';
+      // 显示重新提交的表单（和未提交一样的界面）
+      html += '<div style="font-size:13px;color:#666;margin-bottom:10px;">请重新书写答案后提交</div>';
+      
+      // 查看模式容器
+      html += '<div id="studentViewContainer" style="width:calc(100% + 24px);margin-left:-12px;margin-right:-12px;overflow:hidden;border-radius:0;border:none;background:#000;-webkit-overflow-scrolling:touch;position:relative;touch-action:manipulation;">';
+      if (myHomework.image) {
+        html += '<img id="studentViewImage" src="' + myHomework.image + '" style="display:block;width:100%;height:auto;touch-action:manipulation;-webkit-user-drag:none;user-select:none;" data-homework-image="' + myHomework.image + '">';
+      } else {
+        html += '<div style="padding:30px;text-align:center;color:#999;font-size:13px;">本题没有图片</div>';
+      }
+      html += '</div>';
+      
+      // 手写模式容器
+      html += '<div id="studentWriteContainer" style="width:calc(100% + 24px);margin-left:-12px;margin-right:-12px;overflow:hidden;border-radius:0;border:none;background:#000;-webkit-overflow-scrolling:touch;position:relative;touch-action:none;display:none;">';
+      if (myHomework.image) {
+        html += '<canvas id="studentCanvas" style="display:block;cursor:crosshair;touch-action:none;pointer-events:none;" data-homework-image="' + myHomework.image + '"></canvas>';
+        html += '<canvas id="studentOverlayCanvas" style="position:absolute;top:0;left:0;display:block;cursor:crosshair;touch-action:none;pointer-events:auto;z-index:2;background:transparent;"></canvas>';
+      }
+      html += '</div>';
+      
+      // 工具栏
+      html += '<div id="studentCanvasToolbar" style="display:flex;align-items:center;justify-content:center;gap:3px;margin-top:8px;padding:5px 6px;background:rgba(30,30,30,0.85);border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">';
+      html += '<button id="stuToolFullscreen" onclick="enterStudentFullscreen()" title="全屏查看" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">⛶</button>';
+      html += '<button id="stuToolWrite" onclick="enterStudentWriteMode()" title="手写答题" style="width:26px;height:26px;background:#667eea;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">✏️</button>';
+      html += '<button id="stuToolSave" onclick="exitStudentWriteMode()" title="保存笔迹" style="width:26px;height:26px;background:#22c55e;color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;display:none;">💾</button>';
+      html += '<span id="stuWriteTools" style="display:none;">';
+      html += '<button id="stuToolEraser" onclick="setStudentDrawTool(\'eraser\')" style="width:26px;height:26px;background:transparent;color:#ccc;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🧹</button>';
+      html += '</span>';
+      html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
+      var stuColors2 = ['#000000','#3b82f6','#22c55e'];
+      stuColors2.forEach(function(c) {
+        html += '<div onclick="setStudentDrawColor(\'' + c + '\')" class="stu-pen-color-btn" data-color="' + c + '" style="width:18px;height:18px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === '#000000' ? '#667eea' : 'rgba(255,255,255,0.3)') + ';flex-shrink:0;"></div>';
+      });
+      html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
+      html += '<input type="range" id="stuDrawLineWidth" min="1" max="10" value="3" oninput="setStudentDrawLineWidth(this.value)" style="width:60px;height:16px;cursor:pointer;accent-color:#667eea;">';
+      html += '<span style="width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px;"></span>';
+      html += '<button onclick="clearStudentCanvas()" title="清除笔迹" style="width:24px;height:24px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">🗑</button>';
+      html += '</div>';
+      
+      // 可选：额外上传照片
+      html += '<div style="margin-top:12px;">';
+      html += '<div onclick="document.getElementById(\'studentImageInput\').click()" style="border:1px dashed #d1d5db;border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:12px;color:#999;">';
+      html += '📷 可选：额外拍照上传答题纸（附加在答案后面）';
+      html += '</div>';
+      html += '<input type="file" id="studentImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleStudentExtraUpload(event)">';
+      html += '<div id="studentExtraUploadPreview" style="margin-top:8px;"></div>';
+      html += '</div>';
+      html += '<button onclick="studentResubmitHomework(\'' + myHomework.id + '\',' + studentId + ',\'' + mySubmission.id + '\')" class="hw-btn hw-btn-primary" style="width:100%;padding:14px;font-size:15px;margin-top:15px;">📤 重新提交作业</button>';
+      html += '</div>';
+      
+      // 延迟初始化
       setTimeout(function() {
         if (myHomework.image) {
           initStudentView(myHomework.image);
@@ -2046,6 +2115,105 @@
       });
     }
   };
+
+  // 学生重新提交被退回的作业
+  window.studentResubmitHomework = function(homeworkId, studentId, submissionId) {
+    var finalImage = exportStudentCanvasImage();
+    
+    if (!finalImage && !_studentExtraImage) {
+      showNotification('请在题目上书写答案或拍照上传', 'error');
+      return;
+    }
+    
+    var submitImages = [finalImage];
+    if (_studentExtraImage) {
+      submitImages.push(_studentExtraImage);
+    }
+    
+    var imageToSubmit = submitImages.length === 1 ? submitImages[0] : null;
+    
+    function doResubmit(imageData) {
+      var estimatedSize = Math.round((imageData.length * 3) / 4);
+      if (estimatedSize <= 800 * 1024) {
+        resubmitToServer(imageData);
+      } else {
+        compressImage(imageData, 400, function(compressedFinal) {
+          resubmitToServer(compressedFinal);
+        });
+      }
+    }
+    
+    async function resubmitToServer(imageData) {
+      showNotification('正在重新提交...', 'info');
+      var ext = getImageExtension();
+      var storagePath = 'sub/' + homeworkId + '/' + submissionId + ext;
+      var imageUrl = await uploadImageToStorage(imageData, storagePath);
+      var finalImageData = imageUrl || imageData;
+      
+      if (imageUrl) {
+        console.log('[homework] 学生重新提交的答案已上传到 Storage:', imageUrl);
+      } else {
+        console.log('[homework] Storage 上传失败，使用 base64 存储');
+      }
+      
+      // 更新已有的提交记录
+      var sub = homeworkSubmissions.find(function(s) { return s.id === submissionId; });
+      if (sub) {
+        sub.image = finalImageData;
+        sub.graded = false;
+        sub.grade = '';
+        sub.coins = 0;
+        sub.gradedImage = '';
+        sub.gradedAt = '';
+        sub.returned = false;
+        sub.returnReason = '';
+        sub.submittedAt = new Date().toISOString();
+      }
+      
+      saveData();
+      _studentUploadedImage = null;
+      _studentExtraImage = null;
+      _stuCanvas = null;
+      _stuCtx = null;
+      _stuImg = null;
+      
+      // 同步到云端
+      syncResubmitToCloud(submissionId, finalImageData);
+      
+      var msg = '作业已重新提交，等待老师批改';
+      if (imageUrl) msg += ' (云端存储)';
+      showNotification(msg, 'success');
+      
+      setTimeout(function() {
+        window.renderHomeworkPage();
+      }, 500);
+    }
+    
+    if (imageToSubmit) {
+      doResubmit(imageToSubmit);
+    } else {
+      mergeImagesVertical(submitImages, function(merged) {
+        doResubmit(merged);
+      });
+    }
+  };
+
+  // 同步重新提交到云端
+  async function syncResubmitToCloud(subId, imageData) {
+    try {
+      await apiRequest('PATCH', '/submissions?id=' + subId, {
+        image: imageData,
+        returned: false,
+        return_reason: '',
+        graded: false,
+        grade: '',
+        coins_awarded: 0,
+        gradedImage: ''
+      });
+    } catch (err) {
+      console.warn('[homework] syncResubmitToCloud error:', err);
+    }
+  }
   
   // 垂直合并多张图片
   function mergeImagesVertical(imageUrls, callback) {
@@ -2786,6 +2954,7 @@
     html += '</div>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="returnHomework(\'' + submissionId + '\')" style="padding:10px 18px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">↩ 退回重写</button>';
     html += '<button onclick="saveGradingImage()" style="padding:10px 24px;background:linear-gradient(135deg,#11998e,#38ef7d);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">💾 保存批阅</button>';
     html += '</div></div>';
 
@@ -3265,6 +3434,66 @@
       }
     });
   };
+
+  // ========== 退回重写功能 ==========
+  window.returnHomework = function(submissionId) {
+    var sub = homeworkSubmissions.find(function(s) { return s.id === submissionId; });
+    if (!sub) return;
+    var student = getStudentById(sub.studentId);
+    if (!student) return;
+
+    var reason = prompt('请输入退回原因（可选）：', '');
+    if (reason === null) return; // 用户取消
+
+    if (!confirm('确定退回该作业让学生重写？\n已发放的金币将被扣回。')) return;
+
+    // 扣回已发放的金币
+    if (sub.graded && sub.coins > 0 && typeof changeStudentCoins === 'function') {
+      changeStudentCoins(student, -sub.coins, '作业退回', '退回重写，扣回' + sub.coins + '金币', 0, null, {
+        type: 'homework_return', homeworkId: sub.homeworkId
+      });
+    }
+
+    // 标记为已退回
+    sub.returned = true;
+    sub.returnReason = reason || '';
+    sub.graded = false;
+    sub.grade = '';
+    sub.coins = 0;
+    sub.gradedImage = '';
+    sub.gradedAt = '';
+
+    saveData();
+
+    // 同步到云端
+    syncReturnToCloud(sub.id, reason || '');
+
+    // 关闭批阅画布
+    window.closeGradingCanvas();
+
+    showNotification('已退回作业' + (reason ? '：' + reason : ''), 'info');
+
+    // 刷新列表
+    if (typeof loadHomeworkSubmissions === 'function') {
+      setTimeout(loadHomeworkSubmissions, 300);
+    }
+  };
+
+  // 同步退回状态到云端
+  async function syncReturnToCloud(subId, reason) {
+    try {
+      await apiRequest('PATCH', '/submissions?id=' + subId, {
+        returned: true,
+        return_reason: reason,
+        graded: false,
+        grade: '',
+        coins_awarded: 0,
+        gradedImage: ''
+      });
+    } catch (err) {
+      console.warn('[homework] syncReturnToCloud error:', err);
+    }
+  }
 
   // ========== 样式注入 ==========
   var style = document.createElement('style');
