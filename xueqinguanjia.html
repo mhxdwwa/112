@@ -2553,6 +2553,27 @@ function updateSaveToCloudButton() {
       }
     }
   }
+  
+  // Update all cloud save bars (using class selectors)
+  document.querySelectorAll('.cloud-save-btn').forEach(btn => {
+    if (studentsDataChanged) {
+      btn.className = 'toolbar-btn primary cloud-save-btn';
+      btn.innerHTML = '💾 保存到云端';
+    } else {
+      btn.className = 'toolbar-btn ghost cloud-save-btn';
+      btn.innerHTML = '已保存';
+    }
+  });
+  
+  document.querySelectorAll('.cloud-save-status').forEach(status => {
+    if (studentsDataChanged) {
+      status.innerHTML = '● 有未保存的更改';
+      status.style.color = 'var(--accent)';
+    } else {
+      status.innerHTML = '✓ 数据已同步';
+      status.style.color = 'var(--gray-600)';
+    }
+  });
 }
 
 // 批量删除选中的班级
@@ -3925,6 +3946,7 @@ function renderFamilySituation() {
   </tr>`).join('');
   
   return `
+    ${renderCloudSaveBar()}
     <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
       <div class="stat-card green anim-in anim-d1">
         <div class="stat-label">脱贫户</div>
@@ -5149,6 +5171,26 @@ async function resetSelectedPasswords() {
   }
 }
 
+// Helper: Generate cloud save bar for editable pages
+function renderCloudSaveBar() {
+  return `
+    <div class="card anim-in" style="margin-bottom:12px;background:var(--gray-50);padding:10px 16px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="cloud-save-status" style="font-size:12px;color:var(--gray-600);font-weight:500">
+          ${studentsDataChanged ? '● 有未保存的更改' : '✓ 数据已同步'}
+        </span>
+        <button class="toolbar-btn ${studentsDataChanged ? 'primary' : 'ghost'} cloud-save-btn" 
+                style="font-size:12px;padding:4px 12px" onclick="saveStudentsToCloud()">
+          ${studentsDataChanged ? '💾 保存到云端' : '已保存'}
+        </button>
+        <span style="font-size:11px;color:var(--gray-500)">
+          ${studentsDataChanged ? '编辑后请及时保存，确保数据同步到云端' : '所有数据已同步到云端'}
+        </span>
+      </div>
+    </div>
+  `;
+}
+
 // Helper: Render cadre info for seating chart podium
 function renderCadreInfo(cls, side) {
   if (!CLASS_CADRES[cls] || Object.keys(CLASS_CADRES[cls]).length === 0) return '';
@@ -5379,6 +5421,7 @@ function renderClassSeatingPage() {
   flexRows += `</div>`;
 
   return `
+    ${canEdit ? renderCloudSaveBar() : ''}
     <div class="card" style="overflow:hidden;display:flex;flex-direction:column">
       <div style="display:flex;gap:16px;padding:16px 20px;flex:1;min-height:0;overflow:hidden">
         <!-- 左侧：统计信息 -->
@@ -5860,20 +5903,7 @@ function renderMyClass() {
   const r = ((p/t)*100).toFixed(1);
 
   return `
-    <div class="card anim-in" style="margin-bottom:12px;background:var(--gray-50);padding:10px 16px">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span id="htSaveStatusText" style="font-size:12px;color:var(--gray-600);font-weight:500">
-          ${studentsDataChanged ? '● 有未保存的更改' : '✓ 数据已同步'}
-        </span>
-        <button id="htSaveToCloudBtn" class="toolbar-btn ${studentsDataChanged ? 'primary' : 'ghost'}" 
-                style="font-size:12px;padding:4px 12px" onclick="saveStudentsToCloud()">
-          ${studentsDataChanged ? '💾 保存到云端' : '已保存'}
-        </button>
-        <span style="font-size:11px;color:var(--gray-500)">
-          ${studentsDataChanged ? '编辑后请及时保存，确保数据同步到云端' : '所有数据已同步到云端'}
-        </span>
-      </div>
-    </div>
+    ${renderCloudSaveBar()}
     <div class="stats-grid">
       <div class="stat-card blue anim-in anim-d1">
         <div class="stat-label">班级总人数</div>
@@ -5984,6 +6014,7 @@ function renderClassCadres() {
   }
   
   return `
+    ${renderCloudSaveBar()}
     <div class="toolbar">
       <div class="toolbar-left">
         <span style="font-size:14px;color:var(--gray-600)">为班级设置班干部，信息将显示在座位表讲台两侧</span>
@@ -6083,6 +6114,7 @@ function renderClassAttendance() {
   </tr>`).join('');
 
   return `
+    ${renderCloudSaveBar()}
     <div class="toolbar">
       <div class="toolbar-search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -6442,6 +6474,7 @@ function renderRoster() {
   </tr>`).join('');
 
   return `
+    ${renderCloudSaveBar()}
     <div class="toolbar">
       <div class="toolbar-search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -6851,6 +6884,7 @@ function renderLeaveRegister() {
   </tr>`).join('');
 
   return `
+    ${renderCloudSaveBar()}
     <div class="grid-2 mb-24">
       <div class="leave-form-card anim-in anim-d1">
         <h3 style="font-size:15px;font-weight:600;margin-bottom:16px">新建请假登记</h3>
