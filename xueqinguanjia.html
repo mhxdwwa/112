@@ -5373,7 +5373,49 @@ function renderClassSeatingPage() {
           <button class="toolbar-btn ghost" style="font-size:12px" onclick="navigate((xqCurrentUser && xqCurrentUser.isLeader) ? 'all-classes' : 'teach-classes')">← 返回</button>
         </div>
       </div>
-    </div>`;
+    </div>
+    ${renderCadreListBelow(cls)}
+  `;
+}
+
+/* ----- Helper: Render cadre list table below seating chart for ALL teachers ----- */
+function renderCadreListBelow(cls) {
+  if (!CLASS_CADRES[cls] || Object.keys(CLASS_CADRES[cls]).length === 0) return '';
+  
+  const cadres = Object.entries(CLASS_CADRES[cls]).filter(([pos, name]) => name && name.trim());
+  if (cadres.length === 0) return '';
+  
+  // Split into two columns
+  const halfLen = Math.ceil(cadres.length / 2);
+  const leftCadres = cadres.slice(0, halfLen);
+  const rightCadres = cadres.slice(halfLen);
+  
+  let leftRows = leftCadres.map(([pos, name]) => 
+    `<tr><td style="font-weight:600;color:var(--primary);padding:6px 12px">${pos}</td><td style="padding:6px 12px">${name}</td></tr>`
+  ).join('');
+  
+  let rightRows = rightCadres.map(([pos, name]) => 
+    `<tr><td style="font-weight:600;color:var(--primary);padding:6px 12px">${pos}</td><td style="padding:6px 12px">${name}</td></tr>`
+  ).join('');
+  
+  return `
+    <div class="card" style="margin-top:16px">
+      <div class="card-header" style="padding:12px 20px;border-bottom:1px solid var(--gray-100)">
+        <span class="card-title" style="font-size:15px">📋 班干名单</span>
+        <span style="font-size:12px;color:var(--gray-500);margin-left:8px">${cls}</span>
+      </div>
+      <div class="card-body" style="padding:16px 20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <table style="width:100%;border-collapse:collapse">
+            <tbody>${leftRows}</tbody>
+          </table>
+          ${rightCadres.length > 0 ? `<table style="width:100%;border-collapse:collapse">
+            <tbody>${rightRows}</tbody>
+          </table>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 /* ----- LEADER: Leave View (read-only) / HEADTEACHER: Leave Management (editable) ----- */
