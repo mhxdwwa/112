@@ -1,0 +1,1 @@
+import{a as e,c as t,i as n,n as r,o as i,r as a,s as o,t as s}from"./props-stone-Dyes0SGL.js";export{s as PLINTH,r as STELE,a as createCarvedMaterial,n as extrudeFace,e as headstoneGeometry,i as markerGeometry,o as plinthGeometry,t as steleGeometry};

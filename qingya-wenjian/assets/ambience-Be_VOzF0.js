@@ -1,0 +1,1 @@
+import{t as e}from"./ambience-CcVHNDeZ.js";export{e as createAmbience};

@@ -1,0 +1,1 @@
+import{t as e}from"./lamps-BoRlsdIe.js";export{e as lamps};

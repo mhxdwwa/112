@@ -1,0 +1,1 @@
+import{t as e}from"./crowd-BXxX72W4.js";export{e as createCrowd};

@@ -1,0 +1,1 @@
+var e=new Map,t={on(t,n){return e.has(t)||e.set(t,new Set),e.get(t).add(n),()=>e.get(t)?.delete(n)},off(t,n){e.get(t)?.delete(n)},emit(t,n={}){let r=e.get(t);if(r)for(let e of[...r])try{e(n,t)}catch(e){console.error(`bus handler for ${t} failed`,e)}let i=e.get(`*`);if(i)for(let e of[...i])try{e(n,t)}catch(e){console.error(e)}}};export{t};

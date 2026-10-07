@@ -1,0 +1,1 @@
+function e(e,t,n=``){return`#ifndef WXU_${t}\n#define WXU_${t}\nuniform ${e} ${t}${n};\n#endif\n`}export{e as t};
