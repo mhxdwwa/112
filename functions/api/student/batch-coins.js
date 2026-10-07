@@ -21,7 +21,7 @@
  *   }],
  * }
  */
-import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, sbRequest, genId } from '../../_utils.js';
+import { jsonResponse, handleOptions, checkEnv, sbSelectSingle, sbUpdate, sbRequest, genId, sbRpc } from '../../_utils.js';
 
 const STAGE_NAMES = {
   1: '神秘宠物蛋', 2: '可爱幼体', 3: '成长伙伴', 4: '成熟伙伴',
@@ -115,34 +115,39 @@ export const onRequestPost = async ({ request, env }) => {
       continue;
     }
 
-    const beforeCoins = student.coins || 0;
     const beforeXiandan = student.xiandan || 0;
 
-    // 检查余额
-    if (checkBalance && coinDelta < 0 && beforeCoins + coinDelta < 0) {
-      const errorMsg = 'Insufficient balance';
-      results.push({ studentId, ok: false, error: errorMsg, currentCoins: beforeCoins });
-      failedStudents.push({ studentId, studentName, error: errorMsg });
-      continue;
+    // v336: 使用原子操作更新金币，防止并发竞态条件
+    let actualBeforeCoins = beforeCoins;
+    let actualAfterCoins = beforeCoins;
+    
+    if (coinDelta !== 0) {
+      const rpcResult = await sbRpc(env, 'atomic_update_coins', {
+        p_student_id: studentId,
+        p_coin_delta: coinDelta,
+        p_check_balance: checkBalance
+      });
+      
+      if (rpcResult.error || !rpcResult.data || !rpcResult.data.ok) {
+        const errorMsg = rpcResult.data?.error || 'Failed to update coins atomically';
+        results.push({ studentId, ok: false, error: errorMsg });
+        failedStudents.push({ studentId, studentName, error: errorMsg });
+        continue;
+      }
+      
+      actualBeforeCoins = rpcResult.data.coinsBefore;
+      actualAfterCoins = rpcResult.data.coinsAfter;
     }
-
-    // 计算新金币
-    const newCoins = Math.max(0, beforeCoins + coinDelta);
 
     // v223: 计算新仙丹
     const newXiandan = Math.max(0, beforeXiandan + xiandanDelta);
 
-    // 写入金币和仙丹（合并为一次 UPDATE）
-    const studentUpdate = { coins: newCoins };
+    // 更新仙丹（如果有变更）
     if (xiandanDelta !== 0) {
-      studentUpdate.xiandan = newXiandan;
-    }
-    const coinUpdateR = await sbUpdate(env, 'students', studentUpdate, `id=eq.${studentId}`);
-    if (coinUpdateR.error) {
-      const errorMsg = 'Failed to update coins: ' + (coinUpdateR.error.message || 'Unknown error');
-      results.push({ studentId, ok: false, error: errorMsg });
-      failedStudents.push({ studentId, studentName, error: errorMsg });
-      continue;
+      const xiandanUpdateR = await sbUpdate(env, 'students', { xiandan: newXiandan }, `id=eq.${studentId}`);
+      if (xiandanUpdateR.error) {
+        console.warn('[batch-coins] Failed to update xiandan for student', studentId);
+      }
     }
 
     // 更新宠物
@@ -164,8 +169,8 @@ export const onRequestPost = async ({ request, env }) => {
       }
     }
 
-    // 构建日志
-    const snapshot = { coinsBefore: beforeCoins, coinsAfter: newCoins };
+    // 构建日志（使用原子操作返回的实际值）
+    const snapshot = { coinsBefore: actualBeforeCoins, coinsAfter: actualAfterCoins };
     if (petId && petSnapMap[petId]) {
       const bp = petSnapMap[petId];
       snapshot.petNick = bp.nickname || bp.name;
@@ -191,7 +196,7 @@ export const onRequestPost = async ({ request, env }) => {
     };
     newLogs.push(log);
 
-    results.push({ studentId, ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, xiandanBefore: beforeXiandan, xiandanAfter: newXiandan, petResults, logId: log.id });
+    results.push({ studentId, ok: true, coinsBefore: actualBeforeCoins, coinsAfter: actualAfterCoins, xiandanBefore: beforeXiandan, xiandanAfter: newXiandan, petResults, logId: log.id });
   }
 
   // 4. v221: 批量 INSERT 到 operation_logs 独立表（无竞态）

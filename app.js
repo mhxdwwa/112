@@ -3065,14 +3065,19 @@ function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&
     // v179: 异步发送批量API（后台写入服务器，不阻塞UI）
     // v223: 分批处理，每批最多 15 人，防止 Worker 超时
     // v336: 增强错误处理，失败时回滚本地数据
+    // v336: 改为串行执行批次，确保顺序处理，避免并发问题
     if (_batchItems.length > 0) {
       var _BATCH_SIZE = 15;
-      var _batchPromises = [];
       var _failedStudents = [];
-      for (var _i = 0; _i < _batchItems.length; _i += _BATCH_SIZE) {
-        var _chunk = _batchItems.slice(_i, _i + _BATCH_SIZE);
-        _batchPromises.push(
-          window.ApiMigration.batchCoins(_chunk).then(function(result) {
+      var _allSuccessCount = 0;
+      var _allFailCount = 0;
+      
+      // 串行执行批次（使用 async/await）
+      (async function() {
+        for (var _i = 0; _i < _batchItems.length; _i += _BATCH_SIZE) {
+          var _chunk = _batchItems.slice(_i, _i + _BATCH_SIZE);
+          try {
+            var result = await window.ApiMigration.batchCoins(_chunk);
             if (result.ok) {
               var _successCount = 0;
               var _failCount = 0;
@@ -3085,10 +3090,12 @@ function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&
                     if (r.xiandanAfter !== undefined) stu.xiandan = r.xiandanAfter;
                   }
                   _successCount++;
+                  _allSuccessCount++;
                 } else {
                   // v336: 记录失败的学生，用于回滚
                   _failedStudents.push({ studentId: r.studentId, error: r.error });
                   _failCount++;
+                  _allFailCount++;
                 }
               });
               console.log('[v336] Batch result:', _successCount, 'success,', _failCount, 'failed');
@@ -3097,21 +3104,20 @@ function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&
               // v336: 整个批次失败，标记所有学生为失败
               _chunk.forEach(function(item) {
                 _failedStudents.push({ studentId: item.studentId, error: result.error });
+                _allFailCount++;
               });
             }
-            return result;
-          }).catch(function(err) {
+          } catch (err) {
             console.error('[v179] Batch API request failed:', err);
             // v336: 请求失败，标记所有学生为失败
             _chunk.forEach(function(item) {
               _failedStudents.push({ studentId: item.studentId, error: err.message });
+              _allFailCount++;
             });
-            return { ok: false, error: err.message };
-          })
-        );
-      }
-      // 所有批次完成后统一保存并处理失败
-      Promise.all(_batchPromises).then(function() {
+          }
+        }
+        
+        // 所有批次完成后统一保存并处理失败
         // v336: 回滚失败学生的金币/仙丹
         if (_failedStudents.length > 0) {
           console.warn('[v336] Rolling back', _failedStudents.length, 'failed students');
@@ -3130,10 +3136,13 @@ function confirmBatchAction(){ if(typeof currentUser!=='undefined'&&currentUser&
             return stu ? stu.name : '未知';
           }).join('、');
           showNotification('部分学生金币发放失败', failedNames + ' 已回滚', 'error', 5000);
+        } else {
+          // 全部成功
+          showNotification('批量奖惩成功', '成功处理 ' + _allSuccessCount + ' 名学生', 'success', 3000);
         }
         saveClassData('coins');
         scheduleAllRenders();
-      });
+      })();
     }
     // v213: 仙丹历史记录（API mode）— 修复仙丹变更不写入历史操作的问题
     // v215: 同时调用 /api/logs/append 将日志持久化到服务器，否则刷新页面后丢失

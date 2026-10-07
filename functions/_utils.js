@@ -75,6 +75,22 @@ export async function sbDelete(env, table, filter) {
   return sbRequest(env, 'DELETE', table, { query: filter });
 }
 
+// --- Supabase RPC 调用（用于原子操作）---
+export async function sbRpc(env, functionName, params) {
+  const url = `${env.SUPABASE_URL}/rest/v1/rpc/${functionName}`;
+  const headers = sbHeaders(env);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(params)
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    return { error: { message: `RPC ${functionName} failed (${res.status})`, details: data }, data: null };
+  }
+  return { error: null, data };
+}
+
 // --- 操作日志辅助 ---
 export function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
