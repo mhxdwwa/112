@@ -1639,26 +1639,9 @@ async function xqSaveAllConfigToServer() {
     classGradeMap: classGradeMap || {}
   };
   
-  // 同时保存各班学生数据
-  Object.keys(STUDENTS).forEach(cls => {
-    if (STUDENTS[cls] && STUDENTS[cls].length > 0) {
-      configs['students_' + cls] = { students: STUDENTS[cls] };
-    }
-  });
-  
-  // 保存各班座位布局数据（使用每个班级独立的配置）
-  Object.keys(seatLayout).forEach(cls => {
-    if (seatLayout[cls] && seatLayout[cls].length > 0) {
-      const cfg = seatConfig[cls] || {};
-      configs['seating_' + cls] = {
-        layout: seatLayout[cls],
-        cols: cfg.cols || 8,
-        rows: cfg.rows || 7,
-        colGaps: cfg.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
-        colGroups: cfg.colGroups || []
-      };
-    }
-  });
+  // 注意：不在此处保存学生数据（students_XXX）和座位数据（seating_XXX）
+  // 这些数据由班主任/管理员通过 saveStudentsToStorage() 自动同步机制单独管理
+  // 避免管理员保存设置时覆盖班主任刚添加的学生数据
   
   console.log('[XQ] Saving config to server:', {
     classes: Object.keys(configs.classes).length,
@@ -1666,9 +1649,7 @@ async function xqSaveAllConfigToServer() {
     setupTeaching: configs.setupTeaching.length,
     setupClasses: configs.setupClasses.length,
     credentials: Object.keys(configs.credentials).length,
-    classGradeMap: Object.keys(configs.classGradeMap).length,
-    studentClasses: Object.keys(STUDENTS).filter(c => STUDENTS[c].length > 0).length,
-    seatingClasses: Object.keys(seatLayout).filter(c => seatLayout[c] && seatLayout[c].length > 0).length
+    classGradeMap: Object.keys(configs.classGradeMap).length
   });
   
   const result = await xqApi('config', {
