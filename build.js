@@ -139,6 +139,31 @@ async function main() {
     } catch (e) { /* skip */ }
   }
 
+  // v291: Copy qingya-wenjian game directory (recursive copy for nested structure)
+  try {
+    const qySrc = resolve(__dirname, 'qingya-wenjian');
+    const qyDist = join(DIST, 'qingya-wenjian');
+    
+    function copyDirRecursive(src, dest) {
+      mkdirSync(dest, { recursive: true });
+      const entries = readdirSync(src, { withFileTypes: true });
+      for (const entry of entries) {
+        const srcPath = join(src, entry.name);
+        const destPath = join(dest, entry.name);
+        if (entry.isDirectory()) {
+          copyDirRecursive(srcPath, destPath);
+        } else {
+          copyFileSync(srcPath, destPath);
+        }
+      }
+    }
+    
+    copyDirRecursive(qySrc, qyDist);
+    console.log('  ✓ qingya-wenjian/: game directory copied');
+  } catch (e) {
+    console.error(`  ✗ qingya-wenjian/: ${e.message}`);
+  }
+
   // Copy root images
   for (const img of ['小猪.png', '小猪.webp']) {
     try {
