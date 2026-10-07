@@ -3179,6 +3179,8 @@ function doLogout() {
   currentRole = null;
   xqCurrentUser = null;
   document.getElementById('app').classList.remove('visible');
+  // 关闭移动端侧边栏
+  closeMobileSidebar();
   setTimeout(() => {
     document.getElementById('loginPage').classList.remove('hidden');
   }, 300);
