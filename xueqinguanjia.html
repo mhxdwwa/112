@@ -1523,6 +1523,9 @@ async function xqLoadAllConfig() {
       // 如果有 setupTeaching，应用授课分配数据
       if (setupTeaching.length > 0) {
         applyTeachingDataFromSetup();
+        console.log('[XQ] Applied teaching data from setup, entries:', setupTeaching.length);
+      } else {
+        console.warn('[XQ] WARNING: setupTeaching is empty after loading config!');
       }
       // 加载各班学生数据（加载所有有数据的班级）
       for (const [key, value] of Object.entries(result.config)) {
@@ -1667,14 +1670,33 @@ async function xqSaveStudentsToServer(className) {
   if (!xqCurrentUser) return { ok: false, error: 'Not logged in' };
   
   const students = STUDENTS[className] || [];
+  
+  // 检查用户是否有权保存该班级
+  const userClasses = xqCurrentUser.classes || xqCurrentUser.allClasses || [];
+  const isAdmin = isXqAdmin();
+  if (!isAdmin && !userClasses.includes(className)) {
+    console.error('[XQ] Save failed: User', xqCurrentUser.teacherName, 'has no permission for class', className, 
+                  'User classes:', userClasses, 'isAdmin:', isAdmin);
+    return { ok: false, error: 'No permission for this class' };
+  }
+  
+  console.log('[XQ] Saving students to server for class:', className, 'Student count:', students.length, 
+              'User:', xqCurrentUser.teacherName, 'User classes:', userClasses);
+  
   const result = await xqApi('import', {
     action: 'students',
     teacherId: xqCurrentUser.teacherId,
     teacherName: xqCurrentUser.teacherName,
-    teacherClasses: xqCurrentUser.classes || [],
+    teacherClasses: userClasses,
     className: className,
     students: students
   });
+  
+  if (!result.ok) {
+    console.error('[XQ] Save to server failed for class', className, ':', result);
+  } else {
+    console.log('[XQ] ✓ Successfully saved class', className, 'to cloud');
+  }
   
   return result;
 }
@@ -1959,9 +1981,12 @@ function scheduleAutoSaveToCloud() {
     const isAdmin = isXqAdmin();
     const teacherClasses = getTeacherClasses();
     const isClassTeacher = teacherClasses.length > 0;
-    if (!isAdmin && !isClassTeacher) return;
+    if (!isAdmin && !isClassTeacher) {
+      console.warn('[XQ] Auto-save: User has no classes to save. User:', xqCurrentUser.teacherName, 'allClasses:', xqCurrentUser.allClasses);
+      return;
+    }
     
-    console.log('[XQ] Auto-saving to cloud...');
+    console.log('[XQ] Auto-saving to cloud... User:', xqCurrentUser.teacherName, 'Classes to save:', teacherClasses);
     
     try {
       let successCount = 0;
@@ -1978,12 +2003,16 @@ function scheduleAutoSaveToCloud() {
       // 保存班级学生数据
       for (const cls of classesToSave) {
         if (STUDENTS[cls]) {
+          console.log('[XQ] Auto-save: attempting to save class', cls, 'with', STUDENTS[cls].length, 'students');
           const result = await xqSaveStudentsToServer(cls);
           if (result && result.ok) {
             successCount++;
           } else {
             failCount++;
+            console.error('[XQ] Auto-save failed for class', cls, ':', result);
           }
+        } else {
+          console.warn('[XQ] Auto-save: No student data for class', cls);
         }
       }
       
@@ -2021,9 +2050,16 @@ function scheduleAutoSaveToCloud() {
       updateSaveToCloudButton();
       
       console.log(`[XQ] Auto-save completed: ${successCount} classes saved, ${failCount} failed`);
+      
+      // 如果有失败，显示警告
+      if (failCount > 0) {
+        showToast(`云端同步部分失败（${failCount}个班级），请手动点击"保存到云端"重试`, 'warning');
+      } else if (successCount > 0) {
+        console.log('[XQ] ✓ 数据已成功同步到云端');
+      }
     } catch (e) {
       console.error('[XQ] Auto-save to cloud failed:', e);
-      // 不显示 toast，避免频繁打扰用户
+      showToast('云端同步失败，请检查网络连接或手动保存', 'error');
     }
   }, AUTO_SAVE_CLOUD_DELAY);
 }
@@ -2323,9 +2359,13 @@ async function saveStudentsToCloud() {
   const isClassTeacher = teacherClasses.length > 0;
   
   if (!isAdmin && !isClassTeacher) {
-    showToast('无权保存到云端', 'error');
+    console.error('[XQ] Save to cloud failed: User has no classes. User:', xqCurrentUser.teacherName, 'allClasses:', xqCurrentUser.allClasses, 'headteacherClasses:', xqCurrentUser.headteacherClasses);
+    showToast('无法保存：未检测到您的班级信息。请联系管理员确认您的班主任/科任分配。', 'error');
     return;
   }
+  
+  console.log('[XQ] Manual save to cloud started. User:', xqCurrentUser.teacherName, 'Classes:', teacherClasses);
+  showToast('正在同步数据到云端...', 'info');
   
   const btn = document.getElementById('saveToCloudBtn');
   if (btn) {
@@ -2470,24 +2510,47 @@ async function saveStudentsToCloud() {
 function updateSaveToCloudButton() {
   const btn = document.getElementById('saveToCloudBtn');
   const statusText = document.getElementById('saveStatusText');
-  if (!btn) return;
-  if (studentsDataChanged) {
-    btn.style.background = 'var(--accent)';
-    btn.style.color = '#fff';
-    btn.style.animation = 'pulse 1.5s infinite';
-    btn.innerHTML = '保存到云端';
-    if (statusText) {
-      statusText.style.color = 'var(--accent)';
-      statusText.innerHTML = '● 有未保存更改';
+  const htBtn = document.getElementById('htSaveToCloudBtn');
+  const htStatusText = document.getElementById('htSaveStatusText');
+  
+  if (btn) {
+    if (studentsDataChanged) {
+      btn.style.background = 'var(--accent)';
+      btn.style.color = '#fff';
+      btn.style.animation = 'pulse 1.5s infinite';
+      btn.innerHTML = '保存到云端';
+      if (statusText) {
+        statusText.style.color = 'var(--accent)';
+        statusText.innerHTML = '● 有未保存更改';
+      }
+    } else {
+      btn.style.background = 'var(--gray-100)';
+      btn.style.color = 'var(--gray-600)';
+      btn.style.animation = '';
+      btn.innerHTML = '已保存';
+      if (statusText) {
+        statusText.style.color = 'var(--gray-500)';
+        statusText.innerHTML = '✓ 已同步';
+      }
     }
-  } else {
-    btn.style.background = 'var(--gray-100)';
-    btn.style.color = 'var(--gray-600)';
-    btn.style.animation = '';
-    btn.innerHTML = '已保存';
-    if (statusText) {
-      statusText.style.color = 'var(--gray-500)';
-      statusText.innerHTML = '✓ 已同步';
+  }
+  
+  // Update headteacher sync status bar
+  if (htBtn) {
+    if (studentsDataChanged) {
+      htBtn.className = 'toolbar-btn primary';
+      htBtn.innerHTML = '💾 保存到云端';
+      if (htStatusText) {
+        htStatusText.innerHTML = '● 有未保存的更改';
+        htStatusText.style.color = 'var(--accent)';
+      }
+    } else {
+      htBtn.className = 'toolbar-btn ghost';
+      htBtn.innerHTML = '已保存';
+      if (htStatusText) {
+        htStatusText.innerHTML = '✓ 数据已同步';
+        htStatusText.style.color = 'var(--gray-600)';
+      }
     }
   }
 }
@@ -3058,6 +3121,20 @@ function doLogin() {
     
     // 密码正确，获取完整的角色信息（支持三重角色）
     const roleInfo = getUserRoleInfo(name);
+    
+    console.log('[XQ] Login role info for', name, ':', {
+      isLeader: roleInfo.isLeader,
+      isHeadteacher: roleInfo.isHeadteacher,
+      isTeacher: roleInfo.isTeacher,
+      headteacherClasses: roleInfo.headteacherClasses,
+      teachingClasses: roleInfo.teachingClasses,
+      allClasses: roleInfo.allClasses,
+      setupTeachingLength: setupTeaching.length
+    });
+    
+    if (roleInfo.allClasses.length === 0) {
+      console.warn('[XQ] WARNING: User', name, 'has no classes detected! setupTeaching:', setupTeaching);
+    }
     
     // 确定主要角色（用于 UI 显示和导航）
     const foundRole = roleInfo.primaryRole || 'teacher';
@@ -5825,6 +5902,20 @@ function renderMyClass() {
   const r = ((p/t)*100).toFixed(1);
 
   return `
+    <div class="card anim-in" style="margin-bottom:12px;background:var(--gray-50);padding:10px 16px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span id="htSaveStatusText" style="font-size:12px;color:var(--gray-600);font-weight:500">
+          ${studentsDataChanged ? '● 有未保存的更改' : '✓ 数据已同步'}
+        </span>
+        <button id="htSaveToCloudBtn" class="toolbar-btn ${studentsDataChanged ? 'primary' : 'ghost'}" 
+                style="font-size:12px;padding:4px 12px" onclick="saveStudentsToCloud()">
+          ${studentsDataChanged ? '💾 保存到云端' : '已保存'}
+        </button>
+        <span style="font-size:11px;color:var(--gray-500)">
+          ${studentsDataChanged ? '编辑后请及时保存，确保数据同步到云端' : '所有数据已同步到云端'}
+        </span>
+      </div>
+    </div>
     <div class="stats-grid">
       <div class="stat-card blue anim-in anim-d1">
         <div class="stat-label">班级总人数</div>
