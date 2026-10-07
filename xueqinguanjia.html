@@ -5410,6 +5410,15 @@ function renderClassSeatingPage() {
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;overflow:hidden">
           ${editBar}
           <div id="seatingFlexWrapper" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">${flexRows}</div>
+          <div style="margin-top:12px;flex-shrink:0;display:flex;align-items:center;gap:16px">
+            <div style="flex:1;text-align:right;font-size:13px;color:var(--gray-600)">
+              ${renderCadreInfo(cls, 'left')}
+            </div>
+            <div class="seating-podium" style="flex-shrink:0">讲 台</div>
+            <div style="flex:1;text-align:left;font-size:13px;color:var(--gray-600)">
+              ${renderCadreInfo(cls, 'right')}
+            </div>
+          </div>
           <div class="seat-legend" style="margin-top:8px;flex-shrink:0">
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#8BC34A,#7CB342);border:1px solid rgba(139,195,74,0.4)"></div>在校</div>
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#FFB74D,#FFA726);border:1px solid rgba(255,152,0,0.3)"></div>请假</div>
@@ -5441,49 +5450,7 @@ function renderClassSeatingPage() {
           <button class="toolbar-btn ghost" style="font-size:12px" onclick="navigate((xqCurrentUser && xqCurrentUser.isLeader) ? 'all-classes' : 'teach-classes')">← 返回</button>
         </div>
       </div>
-    </div>
-    ${renderCadreListBelow(cls)}
-  `;
-}
-
-/* ----- Helper: Render cadre list table below seating chart for ALL teachers ----- */
-function renderCadreListBelow(cls) {
-  if (!CLASS_CADRES[cls] || Object.keys(CLASS_CADRES[cls]).length === 0) return '';
-  
-  const cadres = Object.entries(CLASS_CADRES[cls]).filter(([pos, name]) => name && name.trim());
-  if (cadres.length === 0) return '';
-  
-  // Split into two columns
-  const halfLen = Math.ceil(cadres.length / 2);
-  const leftCadres = cadres.slice(0, halfLen);
-  const rightCadres = cadres.slice(halfLen);
-  
-  let leftRows = leftCadres.map(([pos, name]) => 
-    `<tr><td style="font-weight:600;color:var(--primary);padding:6px 12px">${pos}</td><td style="padding:6px 12px">${name}</td></tr>`
-  ).join('');
-  
-  let rightRows = rightCadres.map(([pos, name]) => 
-    `<tr><td style="font-weight:600;color:var(--primary);padding:6px 12px">${pos}</td><td style="padding:6px 12px">${name}</td></tr>`
-  ).join('');
-  
-  return `
-    <div class="card" style="margin-top:16px">
-      <div class="card-header" style="padding:12px 20px;border-bottom:1px solid var(--gray-100)">
-        <span class="card-title" style="font-size:15px">📋 班干名单</span>
-        <span style="font-size:12px;color:var(--gray-500);margin-left:8px">${cls}</span>
-      </div>
-      <div class="card-body" style="padding:16px 20px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
-          <table style="width:100%;border-collapse:collapse">
-            <tbody>${leftRows}</tbody>
-          </table>
-          ${rightCadres.length > 0 ? `<table style="width:100%;border-collapse:collapse">
-            <tbody>${rightRows}</tbody>
-          </table>` : ''}
-        </div>
-      </div>
-    </div>
-  `;
+    </div>`;
 }
 
 /* ----- LEADER: Leave View (read-only) / HEADTEACHER: Leave Management (editable) ----- */
