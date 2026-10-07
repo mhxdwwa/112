@@ -1,4 +1,4 @@
-var e=[`零`,`一`,`二`,`三`,`四`,`五`,`六`,`七`,`八`,`九`,`十`],t=t=>t<=10?e[t]:t<20?`十`+e[t-10]:String(t),n=[{tt:`风起`,en:`The wind rises`},{tt:`草动`,en:`The grass stirs`},{tt:`剑鸣`,en:`The sword sings`},{tt:`云散`,en:`The clouds part`},{tt:`雁回`,en:`The geese return`}],r={no:`终回`,tt:`长风`,en:`The long wind`},i={风起:`The wind rises`,草动:`The grass stirs`,剑鸣:`The sword sings`,云散:`The clouds part`,长风:`The long wind`,雁回:`The geese return`,风定:`The field falls still`},a={swordmaster:{name:`寒山客`,sub:`Swordmaster of Cold Mountain`},boss:{name:`寒山客`,sub:`Swordmaster of Cold Mountain`},bandit_heavy:{name:`断岳`,sub:`The Mountain-Breaker`},assassin:{name:`夜枭`,sub:`The Night Owl`}},o=[[`W A S D`,`行`,`move`],[`Mouse`,`顾`,`look`],[`LMB`,`斩`,`strike`],[`Hold LMB`,`劈`,`heavy`],[`RMB`,`格`,`block · parry on impact`],[`Space`,`闪`,`dodge`],[`Shift`,`疾`,`sprint`],[`Q · Tab`,`锁`,`lock on`],[`E`,`气`,`sword qi`],[`F`,`剑`,`draw · sheathe`],[`Esc`,`歇`,`pause`]],s=[0,2,4,5,7,8],c={lines:[`十步杀一人`,`千里不留行`,`事了拂衣去`,`深藏身与名`],en:`Ten paces, and a man falls; a thousand li, and no trace remains.<br>The deed done, he shakes out his robe and goes, keeping his name and self unknown.`,src:`Li Bai · The Wandering Swordsman`,go:[`再战`,`ride on`]},l={lines:[`风萧萧兮易水寒`,`壮士一去兮不复还`],en:`The wind sighs, and the waters of the Yi run cold;<br>the warrior sets out, and does not return.`,src:`Song of the Yi River`,go:[`再起`,`rise again`]},u=e=>String(e).replace(/[&<>"]/g,e=>({"&":`&amp;`,"<":`&lt;`,">":`&gt;`,'"':`&quot;`})[e]),d=`
+var e=[`零`,`一`,`二`,`三`,`四`,`五`,`六`,`七`,`八`,`九`,`十`],t=t=>t<=10?e[t]:t<20?`十`+e[t-10]:String(t),n=[{tt:`出山`,en:`Leaving the Mountain`},{tt:`伏击`,en:`The Ambush`},{tt:`夜雨`,en:`Night Rain`},{tt:`问剑`,en:`Asking the Sword`},{tt:`侠名`,en:`Name of the Hero`}],r={no:`终回`,tt:`问剑`,en:`Asking the Sword`},i={出山:`Leaving the Mountain`,伏击:`The Ambush`,夜雨:`Night Rain`,问剑:`Asking the Sword`,侠名:`Name of the Hero`,风定:`The sword rests`},a={swordmaster:{name:`独孤剑`,sub:`The Lone Swordsman`},boss:{name:`独孤剑`,sub:`The Lone Swordsman`},bandit_heavy:{name:`铁横江`,sub:`Iron Tide`},assassin:{name:`天狼`,sub:`The Sky Wolf`}},o=[[`W A S D`,`行`,`move`],[`Mouse`,`顾`,`look`],[`LMB`,`斩`,`strike`],[`Hold LMB`,`劈`,`heavy`],[`RMB`,`格`,`block · parry on impact`],[`Space`,`闪`,`dodge`],[`Shift`,`疾`,`sprint`],[`Q · Tab`,`锁`,`lock on`],[`E`,`气`,`sword qi`],[`F`,`剑`,`draw · sheathe`],[`Esc`,`歇`,`pause`]],s=[0,2,4,5,7,8],c={lines:[`天地英雄气`,`千秋尚凛然`,`长剑倚天外`,`一笑泯恩仇`],en:`The spirit of heroes fills heaven and earth,<br>its power still awesome after a thousand autumns.<br>The long sword rests against the sky,<br>one smile, and all enmity is forgotten.`,src:`古风 · 侠客行`,go:[`再战`,`ride on`]},l={lines:[`剑道多险阻`,`侠路几沧桑`,`败亦何足惧`,`来日更自强`],en:`The way of the sword is fraught with peril;<br>the path of the hero, weathered by time.<br>What fear in defeat?<br>Tomorrow, I shall rise stronger.`,src:`青崖剑谱 · 悟道`,go:[`再起`,`rise again`]},u=e=>String(e).replace(/[&<>"]/g,e=>({"&":`&amp;`,"<":`&lt;`,">":`&gt;`,'"':`&quot;`})[e]),d=`
 <svg class="defs" aria-hidden="true" focusable="false"><defs>
   <filter id="wx-ink" x="-6%" y="-6%" width="112%" height="112%" color-interpolation-filters="sRGB">
     <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="3" seed="4" result="n"/>
@@ -31,9 +31,9 @@ ${d}
 
 <div class="scr title">
   <div class="shade"></div>
-  <div class="col"><div class="tt">长风</div><div class="tg">天苍苍 · 野茫茫</div><img class="seal" alt=""></div>
-  <div class="en"><b>LONG WIND</b><i>the wind arrives before the blade</i></div>
-  <div class="go"><div class="ln m"></div><div class="t"><b>点击 · 启程</b><i>click to begin</i></div><div class="ln r m"></div></div>
+  <div class="col"><div class="tt">青崖问剑</div><div class="tg">剑起青崖 · 侠行天下</div><img class="seal" alt=""></div>
+  <div class="en"><b>QINGYA SWORD</b><i>the blade asks the wind, the wind asks the sword</i></div>
+  <div class="go"><div class="ln m"></div><div class="t"><b>点击 · 入江湖</b><i>click to enter the jianghu</i></div><div class="ln r m"></div></div>
 </div>
 
 <div class="scr pause">
@@ -49,7 +49,7 @@ ${d}
       <div class="ctl">${o.map(([e,t,n])=>`<kbd>${e}</kbd><span>${t}<i>${n}</i></span>`).join(``)}</div>
     </div>
   </div>
-  <div class="ft">the grass waits · the wind does not</div>
+  <div class="ft">the sword hums · the hero walks on</div>
 </div>
 
 <div class="scr end victory">
