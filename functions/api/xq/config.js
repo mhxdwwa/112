@@ -34,6 +34,26 @@ function canTeacherSave(body, key) {
   return false;
 }
 
+// 检查教师是否可以更新自己的凭证（仅允许更新自己的条目）
+function canUpdateOwnCredential(body, configKey, configData) {
+  if (configKey !== 'credentials') return false;
+  if (!body.teacherName || !configData) return false;
+  
+  // 检查 configData 是否只包含教师自己的凭证
+  const teacherName = body.teacherName;
+  const credentialKeys = Object.keys(configData);
+  
+  // 只允许更新自己的凭证（configData 只能包含一个键，且必须是教师自己的名字）
+  if (credentialKeys.length === 1 && credentialKeys[0] === teacherName) {
+    // 确保不包含敏感的管理员字段
+    const cred = configData[teacherName];
+    if (cred && cred.role === 'admin') return false;
+    return true;
+  }
+  
+  return false;
+}
+
 export const onRequestPost = async ({ request, env }) => {
   const envErr = checkEnv(env);
   if (envErr) return envErr;
@@ -66,22 +86,40 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ ok: true, config });
   }
 
-  // ===== SET: 设置单个配置（管理员可设置任何配置，教师只能设置自己班级的 seating_XXX）=====
+  // ===== SET: 设置单个配置（管理员可设置任何配置，教师只能设置自己班级的 seating_XXX 或自己的凭证）=====
   if (action === 'set') {
     if (!configKey || !configData) {
       return jsonResponse({ error: 'Missing configKey or configData' }, 400);
     }
     
     // 权限检查
-    if (!isAdmin(body) && !canTeacherSave(body, configKey)) {
-      return jsonResponse({ error: 'Unauthorized: 班主任/科任老师只能保存自己班级的座位表数据' }, 403);
+    if (!isAdmin(body) && !canTeacherSave(body, configKey) && !canUpdateOwnCredential(body, configKey, configData)) {
+      return jsonResponse({ error: 'Unauthorized: 班主任/科任老师只能保存自己班级的座位表数据或自己的凭证' }, 403);
+    }
+
+    // 特殊处理：教师更新自己的凭证时，需要合并到现有的 credentials 中
+    let dataToSave = configData;
+    if (configKey === 'credentials' && !isAdmin(body) && canUpdateOwnCredential(body, configKey, configData)) {
+      // 获取现有的 credentials
+      const existingResult = await sbSelect(env, 'xq_school_config', 'config_data', 'config_key=eq.credentials');
+      if (existingResult.error) {
+        return jsonResponse({ error: 'Failed to fetch existing credentials', details: existingResult.error }, 500);
+      }
+      
+      let existingCredentials = {};
+      if (existingResult.data && existingResult.data.length > 0) {
+        existingCredentials = existingResult.data[0].config_data || {};
+      }
+      
+      // 合并教师的凭证更新
+      dataToSave = { ...existingCredentials, ...configData };
     }
 
     const updateResult = await sbUpdate(
       env, 
       'xq_school_config', 
       { 
-        config_data: configData, 
+        config_data: dataToSave, 
         updated_by_name: teacherName,
         updated_at: new Date().toISOString()
       }, 
@@ -91,7 +129,7 @@ export const onRequestPost = async ({ request, env }) => {
     if (updateResult.error || !updateResult.data || updateResult.data.length === 0) {
       const insertResult = await sbInsert(env, 'xq_school_config', [{
         config_key: configKey,
-        config_data: configData,
+        config_data: dataToSave,
         updated_by_name: teacherName
       }]);
       

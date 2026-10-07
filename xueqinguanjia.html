@@ -2028,6 +2028,84 @@ function scheduleAutoSaveToCloud() {
   }, AUTO_SAVE_CLOUD_DELAY);
 }
 
+// ===== 定期从云端同步学生数据（确保已登录教师能看到班主任的最新修改）=====
+const PERIODIC_SYNC_INTERVAL = 30000; // 30秒同步一次
+let periodicSyncTimer = null;
+let periodicSyncRunning = false;
+
+function startPeriodicSync() {
+  if (periodicSyncTimer) return; // 已启动
+  periodicSyncTimer = setInterval(periodicSyncFromCloud, PERIODIC_SYNC_INTERVAL);
+  console.log('[XQ] Periodic sync started (every', PERIODIC_SYNC_INTERVAL / 1000, 'seconds)');
+}
+
+function stopPeriodicSync() {
+  if (periodicSyncTimer) {
+    clearInterval(periodicSyncTimer);
+    periodicSyncTimer = null;
+    console.log('[XQ] Periodic sync stopped');
+  }
+}
+
+async function periodicSyncFromCloud() {
+  // 防止重入
+  if (periodicSyncRunning || xqSyncInProgress) return;
+  // 未登录不同步
+  if (!xqCurrentUser) return;
+  // 如果有未保存的本地更改，暂不同步（避免覆盖本地数据）
+  if (studentsDataChanged) return;
+  
+  periodicSyncRunning = true;
+  try {
+    const result = await xqApi('config', { action: 'get' });
+    if (!result.ok || !result.config) return;
+    
+    let updated = false;
+    
+    // 同步各班学生数据
+    for (const [key, value] of Object.entries(result.config)) {
+      if (key.startsWith('students_')) {
+        const className = key.replace('students_', '');
+        if (value.data && value.data.students && Array.isArray(value.data.students)) {
+          const serverStudents = value.data.students;
+          const localStudents = STUDENTS[className] || [];
+          
+          // 比较学生数量或最后一个学生的id，判断是否有更新
+          const serverCount = serverStudents.length;
+          const localCount = localStudents.length;
+          const serverMaxId = serverCount > 0 ? Math.max(...serverStudents.map(s => s.id)) : 0;
+          const localMaxId = localCount > 0 ? Math.max(...localStudents.map(s => s.id)) : 0;
+          
+          if (serverCount !== localCount || serverMaxId !== localMaxId) {
+            console.log('[XQ] Periodic sync: updating class', className, 'local:', localCount, 'server:', serverCount);
+            STUDENTS[className] = serverStudents;
+            if (!CLASS_LIST.includes(className)) CLASS_LIST.push(className);
+            updated = true;
+          }
+        }
+      }
+    }
+    
+    if (updated) {
+      // 保存到 localStorage 缓存（不触发云同步）
+      try {
+        localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+      } catch (e) {}
+      
+      // 如果当前正在查看学生名单或座位表，刷新页面
+      if (typeof currentPage !== 'undefined' && (currentPage === 'roster' || currentPage === 'seating' || currentPage === 'class-seating')) {
+        navigate(currentPage);
+      }
+      
+      console.log('[XQ] Periodic sync completed: student data updated');
+    }
+  } catch (e) {
+    console.warn('[XQ] Periodic sync failed:', e);
+  } finally {
+    periodicSyncRunning = false;
+  }
+}
+
 // 加载已删除班级列表
 function loadDeletedClasses() {
   try {
@@ -2685,7 +2763,26 @@ async function doForceChangePassword() {
       xqCredentials[name].mustChangePassword = false;
       delete xqCredentials[name].mustChangePassword;
     }
-    await xqSaveCredentials();
+    
+    // 保存到本地
+    localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
+    
+    // 同步到云端（教师可以更新自己的凭证）
+    try {
+      const result = await xqApi('config', {
+        action: 'set',
+        configKey: 'credentials',
+        configData: { [name]: xqCredentials[name] },
+        teacherName: name
+      });
+      if (result.ok) {
+        console.log('[XQ] Credential synced to cloud for:', name);
+      } else {
+        console.warn('[XQ] Failed to sync credential to cloud:', result.error);
+      }
+    } catch (e) {
+      console.warn('[XQ] Failed to sync credential to cloud:', e);
+    }
     
     // 关闭对话框
     document.getElementById('forceChangePwdDialog').style.display = 'none';
@@ -2799,6 +2896,9 @@ function doLogin() {
     // 保存登录状态到 localStorage
     saveSession();
     
+    // 启动定期云同步（确保已登录教师能看到班主任的最新修改）
+    startPeriodicSync();
+    
     // 配置已在启动时加载，无需再次加载
     // 直接刷新用户信息并导航
     refreshCurrentUserClass();
@@ -2853,6 +2953,9 @@ function restoreSession() {
     
     console.log('[XQ] Session restored for:', session.user.teacherName);
     
+    // 启动定期云同步（确保已登录教师能看到班主任的最新修改）
+    startPeriodicSync();
+    
     // 配置已在启动时加载，无需再次加载
     // 直接刷新用户信息并导航
     refreshCurrentUserClass();
@@ -2867,6 +2970,7 @@ function restoreSession() {
 }
 
 function doLogout() {
+  stopPeriodicSync();
   clearSession();
   currentRole = null;
   xqCurrentUser = null;
@@ -4789,7 +4893,9 @@ function renderClassSeatingPage() {
   
   const sts = STUDENTS[cls];
   const cols = seatingCols;
-  const totalRows = seatingRows > 0 ? seatingRows : Math.ceil(sts.length / cols);
+  // 确保行数足够容纳所有学生（即使手动设置了固定行数，学生超出时也要自动扩展）
+  const minRows = Math.ceil(sts.length / cols);
+  const totalRows = seatingRows > 0 ? Math.max(seatingRows, minRows) : minRows;
   const canEdit = canEditClass(cls);
 
   // 构建扁平座位数组：null=空位，对象=学生
@@ -4859,11 +4965,13 @@ function renderClassSeatingPage() {
     }
   }
   
-  // 根据布局构建座位数组
+  // 根据布局构建座位数组（使用布局实际长度，防止新增学生被截断）
+  const layoutLen = seatLayout[cls] ? seatLayout[cls].length : totalSlots;
+  const effectiveSlots = Math.max(totalSlots, layoutLen);
   let seatSlots = [];
-  for (let i = 0; i < totalSlots; i++) {
-    const studentId = seatLayout[cls][i];
-    if (studentId === null) {
+  for (let i = 0; i < effectiveSlots; i++) {
+    const studentId = seatLayout[cls] ? seatLayout[cls][i] : null;
+    if (studentId === null || studentId === undefined) {
       seatSlots.push(null);
     } else {
       const student = sts.find(s => s.id === studentId);
