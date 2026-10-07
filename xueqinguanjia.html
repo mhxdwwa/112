@@ -3957,6 +3957,7 @@ function renderFamilySituation() {
     <td>${s.familyNote || '-'}</td>
     <td>
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editFamilyType('${cls}',${s.id})">编辑</button>
+      <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteFamilyType('${cls}',${s.id})">删除</button>
     </td>
   </tr>`).join('');
   
@@ -3966,6 +3967,7 @@ function renderFamilySituation() {
     <td>${s.leftBehindNote || '-'}</td>
     <td>
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editLeftBehind('${cls}',${s.id})">编辑</button>
+      <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteLeftBehind('${cls}',${s.id})">删除</button>
     </td>
   </tr>`).join('');
   
@@ -4065,6 +4067,17 @@ function saveFamilyType(cls, id) {
   saveStudentsToStorage();
   hideModal();
   showToast('家庭情况已更新');
+  navigate('family-situation');
+}
+
+function deleteFamilyType(cls, id) {
+  const s = STUDENTS[cls].find(st => st.id === id);
+  if (!s) return;
+  if (!confirm(`确定要删除 ${s.name} 的家庭情况分类吗？`)) return;
+  s.familyType = '';
+  s.familyNote = '';
+  saveStudentsToStorage();
+  showToast('已删除家庭情况分类');
   navigate('family-situation');
 }
 
@@ -4200,6 +4213,17 @@ function saveLeftBehind(cls, id) {
   saveStudentsToStorage();
   hideModal();
   showToast('留守儿童信息已更新');
+  navigate('family-situation');
+}
+
+function deleteLeftBehind(cls, id) {
+  const s = STUDENTS[cls].find(st => st.id === id);
+  if (!s) return;
+  if (!confirm(`确定要将 ${s.name} 从留守儿童名单中移除吗？`)) return;
+  s.leftBehind = false;
+  s.leftBehindNote = '';
+  saveStudentsToStorage();
+  showToast('已从留守儿童名单中移除');
   navigate('family-situation');
 }
 
@@ -5196,7 +5220,10 @@ async function resetSelectedPasswords() {
 }
 
 // Helper: Generate cloud save bar for editable pages
-function renderCloudSaveBar() {
+ function renderCloudSaveBar(pageType) {
+  const saveAction = pageType === 'cadres' 
+    ? `saveClassCadres();saveClassCadresToCloud(getHeadteacherClass());showToast('班干部数据已保存到云端','success')`
+    : `saveStudentsToCloud()`;
   return `
     <div class="card anim-in" style="margin-bottom:12px;background:var(--gray-50);padding:10px 16px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -5204,7 +5231,7 @@ function renderCloudSaveBar() {
           ${studentsDataChanged ? '● 有未保存的更改' : '✓ 数据已同步'}
         </span>
         <button class="toolbar-btn ${studentsDataChanged ? 'primary' : 'ghost'} cloud-save-btn" 
-                style="font-size:12px;padding:4px 12px" onclick="saveStudentsToCloud()">
+                style="font-size:12px;padding:4px 12px" onclick="${saveAction}">
           ${studentsDataChanged ? '💾 保存到云端' : '已保存'}
         </button>
         <span style="font-size:11px;color:var(--gray-500)">
@@ -6040,7 +6067,7 @@ function renderClassCadres() {
   }
   
   return `
-    ${renderCloudSaveBar()}
+    ${renderCloudSaveBar('cadres')}
     <div class="toolbar">
       <div class="toolbar-left">
         <span style="font-size:14px;color:var(--gray-600)">为班级设置班干部，信息将显示在座位表讲台两侧</span>
