@@ -2028,15 +2028,155 @@ function scheduleAutoSaveToCloud() {
   }, AUTO_SAVE_CLOUD_DELAY);
 }
 
-// ===== 定期从云端同步学生数据（确保已登录教师能看到班主任的最新修改）=====
-const PERIODIC_SYNC_INTERVAL = 30000; // 30秒同步一次
-let periodicSyncTimer = null;
+// ===== 按需同步机制（只在有变化或切换页面时同步，减少流量消耗）=====
+let lastSyncTime = 0;
 let periodicSyncRunning = false;
 
+// 启动/停止函数保留接口，但不再使用定时器
 function startPeriodicSync() {
-  if (periodicSyncTimer) return; // 已启动
-  periodicSyncTimer = setInterval(periodicSyncFromCloud, PERIODIC_SYNC_INTERVAL);
-  console.log('[XQ] Periodic sync started (every', PERIODIC_SYNC_INTERVAL / 1000, 'seconds)');
+  console.log('[XQ] On-demand sync mode enabled (no periodic polling)');
+}
+
+function stopPeriodicSync() {
+  console.log('[XQ] Sync stopped');
+}
+
+// 按需同步：在切换页面时调用，确保数据是最新的
+async function syncOnPageChange(pageId) {
+  // 如果距离上次同步不到60秒，跳过（避免频繁切换页面时重复同步）
+  const now = Date.now();
+  if (now - lastSyncTime < 60000) return;
+  
+  // 如果正在同步或有未保存的更改，跳过
+  if (periodicSyncRunning || xqSyncInProgress || studentsDataChanged) return;
+  
+  // 只在关键页面触发同步（学生名单、座位表、班干部、请假等）
+  const syncPages = ['roster', 'seating', 'class-seating', 'class-cadres', 'leave-register', 'all-classes-view', 'overview', 'my-class'];
+  if (!syncPages.includes(pageId)) return;
+  
+  await syncFromCloud();
+}
+
+// 从云端同步数据（只在需要时调用）
+async function syncFromCloud() {
+  // 防止重入
+  if (periodicSyncRunning || xqSyncInProgress) return;
+  // 未登录不同步
+  if (!xqCurrentUser) return;
+  // 如果有未保存的本地更改，暂不同步（避免覆盖本地数据）
+  if (studentsDataChanged) return;
+  
+  periodicSyncRunning = true;
+  lastSyncTime = Date.now();
+  
+  try {
+    const result = await xqApi('config', { action: 'get' });
+    if (!result.ok || !result.config) {
+      periodicSyncRunning = false;
+      return;
+    }
+    
+    let updated = false;
+    
+    // 同步各班学生数据
+    for (const [key, value] of Object.entries(result.config)) {
+      if (key.startsWith('students_')) {
+        const className = key.replace('students_', '');
+        if (value.data && value.data.students && Array.isArray(value.data.students)) {
+          const serverStudents = value.data.students;
+          const localStudents = STUDENTS[className] || [];
+          
+          // 比较学生数量或最后一个学生的id，判断是否有更新
+          const serverCount = serverStudents.length;
+          const localCount = localStudents.length;
+          const serverMaxId = serverCount > 0 ? Math.max(...serverStudents.map(s => s.id)) : 0;
+          const localMaxId = localCount > 0 ? Math.max(...localStudents.map(s => s.id)) : 0;
+          
+          if (serverCount !== localCount || serverMaxId !== localMaxId) {
+            console.log('[XQ] Sync: updating students for class', className, 'local:', localCount, 'server:', serverCount);
+            STUDENTS[className] = serverStudents;
+            if (!CLASS_LIST.includes(className)) CLASS_LIST.push(className);
+            updated = true;
+          }
+        }
+      }
+      
+      // 同步班干部数据
+      if (key.startsWith('cadres_')) {
+        const className = key.replace('cadres_', '');
+        if (value.data) {
+          const serverCadres = value.data;
+          const localCadres = CLASS_CADRES[className] || {};
+          
+          // 比较班干部数量，判断是否有更新
+          const serverCount = Object.keys(serverCadres).length;
+          const localCount = Object.keys(localCadres).length;
+          
+          if (serverCount !== localCount) {
+            console.log('[XQ] Sync: updating cadres for class', className);
+            CLASS_CADRES[className] = serverCadres;
+            updated = true;
+          }
+        }
+      }
+      
+      // 同步座位布局数据
+      if (key.startsWith('seating_')) {
+        const className = key.replace('seating_', '');
+        if (value.data && value.data.layout) {
+          const serverLayout = value.data.layout;
+          const localLayout = seatLayout[className] || [];
+          
+          // 比较布局长度，判断是否有更新
+          if (serverLayout.length !== localLayout.length) {
+            console.log('[XQ] Sync: updating seating for class', className);
+            seatLayout[className] = serverLayout;
+            if (value.data.cols || value.data.rows) {
+              seatConfig[className] = {
+                cols: value.data.cols || 8,
+                rows: value.data.rows || 7,
+                colGaps: value.data.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+                colGroups: value.data.colGroups || []
+              };
+            }
+            updated = true;
+          }
+        }
+      }
+    }
+    
+    if (updated) {
+      // 保存到 localStorage 缓存（不触发云同步）
+      try {
+        localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+      } catch (e) {}
+      
+      console.log('[XQ] Sync completed: data updated from cloud');
+    }
+  } catch (e) {
+    console.warn('[XQ] Sync failed:', e);
+  } finally {
+    periodicSyncRunning = false;
+  }
+}
+
+// 手动刷新按钮：强制从云端同步
+async function manualSyncFromCloud() {
+  if (studentsDataChanged) {
+    if (!confirm('本地有未保存的更改，强制同步可能会覆盖本地数据。是否继续？')) {
+      return;
+    }
+  }
+  
+  showToast('正在从云端同步数据...', 'info');
+  lastSyncTime = 0; // 重置时间，强制同步
+  await syncFromCloud();
+  showToast('✓ 数据已同步', 'success');
+  
+  // 刷新当前页面
+  if (typeof currentPage !== 'undefined') {
+    navigate(currentPage);
+  }
 }
 
 function stopPeriodicSync() {
@@ -2045,6 +2185,22 @@ function stopPeriodicSync() {
     periodicSyncTimer = null;
     console.log('[XQ] Periodic sync stopped');
   }
+}
+
+// 按需同步：在切换页面时调用，确保数据是最新的
+async function syncOnPageChange(pageId) {
+  // 如果距离上次同步不到30秒，跳过
+  const now = Date.now();
+  if (now - lastSyncTime < 30000) return;
+  
+  // 如果正在同步或有未保存的更改，跳过
+  if (periodicSyncRunning || xqSyncInProgress || studentsDataChanged) return;
+  
+  // 只在关键页面触发同步
+  const syncPages = ['roster', 'seating', 'class-seating', 'class-cadres', 'leave-register', 'all-classes-view'];
+  if (!syncPages.includes(pageId)) return;
+  
+  await periodicSyncFromCloud();
 }
 
 async function periodicSyncFromCloud() {
@@ -3278,6 +3434,10 @@ function navigate(pageId) {
   const contentEl = document.getElementById('content');
   const isSeatingPage = (pageId === 'seating' || pageId === 'class-seating');
   contentEl.classList.toggle('no-scroll', isSeatingPage);
+  
+  // 切换页面时按需同步数据（减少流量消耗）
+  syncOnPageChange(pageId);
+  
   renderPage(pageId);
   // 移动端：切换页面后关闭侧边栏
   closeMobileSidebar();
