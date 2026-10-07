@@ -2493,8 +2493,9 @@ async function saveStudentsToCloud() {
       }
     }
     
-    // 5.5 保存班干部数据
-    for (const cls of classesToSave) {
+    // 5.5 保存班干部数据（遍历所有有班干部数据的班级，不仅限于 classesToSave）
+    const allCadreClasses = Object.keys(CLASS_CADRES);
+    for (const cls of allCadreClasses) {
       if (CLASS_CADRES[cls] && Object.keys(CLASS_CADRES[cls]).length > 0) {
         await xqSaveConfigToServer('cadres_' + cls, CLASS_CADRES[cls]);
       }
