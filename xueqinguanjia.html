@@ -1524,14 +1524,17 @@ async function xqLoadAllConfig() {
       if (setupTeaching.length > 0) {
         applyTeachingDataFromSetup();
       }
-      // 加载各班学生数据（只加载 setupClasses 中存在的班级）
-      const validClassNames = new Set(setupClasses.map(c => c.name));
+      // 加载各班学生数据（加载所有有数据的班级）
       for (const [key, value] of Object.entries(result.config)) {
         if (key.startsWith('students_')) {
           const className = key.replace('students_', '');
-          // 只加载在 setupClasses 中定义的班级数据
-          if (validClassNames.has(className) && value.data && value.data.students) {
+          // 只要有学生数据就加载，不再限制必须在 setupClasses 中
+          if (value.data && value.data.students && Array.isArray(value.data.students)) {
             STUDENTS[className] = value.data.students;
+            // 确保班级在 CLASS_LIST 中
+            if (!CLASS_LIST.includes(className)) {
+              CLASS_LIST.push(className);
+            }
           }
         }
       }
@@ -1540,7 +1543,8 @@ async function xqLoadAllConfig() {
       for (const [key, value] of Object.entries(result.config)) {
         if (key.startsWith('seating_')) {
           const className = key.replace('seating_', '');
-          if (validClassNames.has(className) && value.data && value.data.layout) {
+          // 只要有座位数据就加载
+          if (value.data && value.data.layout) {
             seatLayout[className] = value.data.layout;
             // 保存该班级的独立配置
             seatConfig[className] = {
@@ -1555,7 +1559,8 @@ async function xqLoadAllConfig() {
         // 加载班干部数据
         if (key.startsWith('cadres_')) {
           const className = key.replace('cadres_', '');
-          if (validClassNames.has(className) && value.data) {
+          // 只要有班干部数据就加载
+          if (value.data) {
             CLASS_CADRES[className] = value.data;
             console.log('[XQ] Loaded cadres for class:', className, Object.keys(value.data).length, 'positions');
           }
