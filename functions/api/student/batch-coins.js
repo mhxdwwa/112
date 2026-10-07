@@ -102,13 +102,16 @@ export const onRequestPost = async ({ request, env }) => {
   // 3. 顺序处理每个学生的金币和宠物变更，收集日志
   const results = [];
   const newLogs = [];
+  const failedStudents = [];
 
   for (const item of items) {
     const { studentId, studentName, coinDelta, actionType, details, expDelta = 0, petId = null, petUpdates = [], checkBalance = false, xiandanDelta = 0 } = item;
 
     const student = studentMap[studentId];
     if (!student) {
-      results.push({ studentId, ok: false, error: 'Student not found' });
+      const errorMsg = 'Student not found';
+      results.push({ studentId, ok: false, error: errorMsg });
+      failedStudents.push({ studentId, studentName, error: errorMsg });
       continue;
     }
 
@@ -117,7 +120,9 @@ export const onRequestPost = async ({ request, env }) => {
 
     // 检查余额
     if (checkBalance && coinDelta < 0 && beforeCoins + coinDelta < 0) {
-      results.push({ studentId, ok: false, error: 'Insufficient balance', currentCoins: beforeCoins });
+      const errorMsg = 'Insufficient balance';
+      results.push({ studentId, ok: false, error: errorMsg, currentCoins: beforeCoins });
+      failedStudents.push({ studentId, studentName, error: errorMsg });
       continue;
     }
 
@@ -134,7 +139,9 @@ export const onRequestPost = async ({ request, env }) => {
     }
     const coinUpdateR = await sbUpdate(env, 'students', studentUpdate, `id=eq.${studentId}`);
     if (coinUpdateR.error) {
-      results.push({ studentId, ok: false, error: 'Failed to update coins' });
+      const errorMsg = 'Failed to update coins: ' + (coinUpdateR.error.message || 'Unknown error');
+      results.push({ studentId, ok: false, error: errorMsg });
+      failedStudents.push({ studentId, studentName, error: errorMsg });
       continue;
     }
 
@@ -218,5 +225,21 @@ export const onRequestPost = async ({ request, env }) => {
     }
   }
 
-  return jsonResponse({ ok: true, results, logCount: newLogs.length });
+  // v336: 返回成功和失败统计
+  const successCount = results.filter(r => r.ok).length;
+  const failCount = results.filter(r => !r.ok).length;
+  
+  if (failCount > 0) {
+    console.warn('[batch-coins] Partial failure:', successCount, 'success,', failCount, 'failed');
+    console.warn('[batch-coins] Failed students:', failedStudents);
+  }
+
+  return jsonResponse({ 
+    ok: true, 
+    results, 
+    logCount: newLogs.length,
+    successCount,
+    failCount,
+    failedStudents: failCount > 0 ? failedStudents : undefined
+  });
 };
