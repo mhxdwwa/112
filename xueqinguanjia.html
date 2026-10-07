@@ -5174,13 +5174,20 @@ async function resetSelectedPasswords() {
   let successCount = 0;
   let failCount = 0;
   
+  // 先计算默认密码的哈希值（只需要计算一次）
+  const hash = await hashPassword(defaultPassword);
+  
+  // 批量更新本地凭证（不立即保存到云端）
   for (const name of selected) {
     try {
-      await setUserPassword(name, defaultPassword, null, [], null);
-      // 标记该教师下次登录时必须修改密码
-      if (xqCredentials[name]) {
-        xqCredentials[name].mustChangePassword = true;
-      }
+      // 保留现有的凭证字段，只更新密码
+      const existingCred = xqCredentials[name] || {};
+      xqCredentials[name] = {
+        ...existingCred,
+        passwordHash: hash,
+        mustChangePassword: true, // 标记下次登录时必须修改密码
+        updatedAt: new Date().toISOString()
+      };
       successCount++;
       console.log('[XQ] Password reset for:', name);
     } catch (e) {
@@ -5189,17 +5196,8 @@ async function resetSelectedPasswords() {
     }
   }
   
-  // 保存 mustChangePassword 标记到云端
+  // 统一保存到云端（只调用一次）
   if (successCount > 0) {
-    try {
-      await xqSaveCredentials();
-    } catch (e) {
-      console.warn('[XQ] Failed to sync mustChangePassword flag:', e);
-    }
-  }
-  
-  // 同步到云端
-  if (xqCurrentUser && isXqAdmin()) {
     try {
       await xqSaveCredentials();
       console.log('[XQ] Credentials synced to cloud');
