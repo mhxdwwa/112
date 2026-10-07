@@ -2692,13 +2692,18 @@ async function verifyPassword(name, password) {
 // 设置/更新用户密码
 async function setUserPassword(name, password, role, classes, subject) {
   const hash = await hashPassword(password);
+  
+  // 保留现有的凭证字段，只更新密码和基本信息
+  const existingCred = xqCredentials[name] || {};
   xqCredentials[name] = {
+    ...existingCred, // 保留所有现有字段（headteacherClasses, isHeadteacher 等）
     passwordHash: hash,
-    role: role || 'teacher',
-    classes: classes || [],
-    subject: subject || null,
+    role: role || existingCred.role || 'teacher',
+    classes: classes || existingCred.classes || [],
+    subject: subject !== undefined ? subject : existingCred.subject,
     updatedAt: new Date().toISOString()
   };
+  
   return await xqSaveCredentials();
 }
 
