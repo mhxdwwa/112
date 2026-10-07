@@ -2077,9 +2077,52 @@ async function periodicSyncFromCloud() {
           const localMaxId = localCount > 0 ? Math.max(...localStudents.map(s => s.id)) : 0;
           
           if (serverCount !== localCount || serverMaxId !== localMaxId) {
-            console.log('[XQ] Periodic sync: updating class', className, 'local:', localCount, 'server:', serverCount);
+            console.log('[XQ] Periodic sync: updating students for class', className, 'local:', localCount, 'server:', serverCount);
             STUDENTS[className] = serverStudents;
             if (!CLASS_LIST.includes(className)) CLASS_LIST.push(className);
+            updated = true;
+          }
+        }
+      }
+      
+      // 同步班干部数据
+      if (key.startsWith('cadres_')) {
+        const className = key.replace('cadres_', '');
+        if (value.data) {
+          const serverCadres = value.data;
+          const localCadres = CLASS_CADRES[className] || {};
+          
+          // 比较班干部数量，判断是否有更新
+          const serverCount = Object.keys(serverCadres).length;
+          const localCount = Object.keys(localCadres).length;
+          
+          if (serverCount !== localCount) {
+            console.log('[XQ] Periodic sync: updating cadres for class', className);
+            CLASS_CADRES[className] = serverCadres;
+            updated = true;
+          }
+        }
+      }
+      
+      // 同步座位布局数据
+      if (key.startsWith('seating_')) {
+        const className = key.replace('seating_', '');
+        if (value.data && value.data.layout) {
+          const serverLayout = value.data.layout;
+          const localLayout = seatLayout[className] || [];
+          
+          // 比较布局长度，判断是否有更新
+          if (serverLayout.length !== localLayout.length) {
+            console.log('[XQ] Periodic sync: updating seating for class', className);
+            seatLayout[className] = serverLayout;
+            if (value.data.cols || value.data.rows) {
+              seatConfig[className] = {
+                cols: value.data.cols || 8,
+                rows: value.data.rows || 7,
+                colGaps: value.data.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+                colGroups: value.data.colGroups || []
+              };
+            }
             updated = true;
           }
         }
@@ -2092,12 +2135,12 @@ async function periodicSyncFromCloud() {
         localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
       } catch (e) {}
       
-      // 如果当前正在查看学生名单或座位表，刷新页面
-      if (typeof currentPage !== 'undefined' && (currentPage === 'roster' || currentPage === 'seating' || currentPage === 'class-seating')) {
+      // 如果当前正在查看学生名单、座位表或班干部，刷新页面
+      if (typeof currentPage !== 'undefined' && (currentPage === 'roster' || currentPage === 'seating' || currentPage === 'class-seating' || currentPage === 'class-cadres')) {
         navigate(currentPage);
       }
       
-      console.log('[XQ] Periodic sync completed: student data updated');
+      console.log('[XQ] Periodic sync completed: data updated');
     }
   } catch (e) {
     console.warn('[XQ] Periodic sync failed:', e);
