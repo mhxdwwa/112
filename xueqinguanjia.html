@@ -4817,6 +4817,60 @@ function renderClassSeatingPage() {
     seatLayout[cls] = [];
     for (let i = 0; i < emptyCount; i++) seatLayout[cls].push(null);
     for (let i = 0; i < studentCount; i++) seatLayout[cls].push(sts[i].id);
+  } else {
+    // 布局已存在，检查是否有新学生未包含在布局中
+    const layoutStudentIds = new Set(seatLayout[cls].filter(id => id !== null));
+    const currentStudentIds = new Set(sts.map(s => s.id));
+    
+    // 找出新增的学生（在当前名单中但不在布局中）
+    const newStudents = sts.filter(s => !layoutStudentIds.has(s.id));
+    
+    // 找出已删除的学生（在布局中但不在当前名单中）
+    const removedStudentIds = [];
+    seatLayout[cls].forEach((id, idx) => {
+      if (id !== null && !currentStudentIds.has(id)) {
+        removedStudentIds.push(idx);
+      }
+    });
+    
+    // 如果有新增或删除的学生，更新布局
+    if (newStudents.length > 0 || removedStudentIds.length > 0) {
+      // 先将已删除学生的位置设为空
+      removedStudentIds.forEach(idx => {
+        seatLayout[cls][idx] = null;
+      });
+      
+      // 将新学生填入空位
+      if (newStudents.length > 0) {
+        let emptySlots = [];
+        for (let i = 0; i < seatLayout[cls].length; i++) {
+          if (seatLayout[cls][i] === null) {
+            emptySlots.push(i);
+          }
+        }
+        
+        // 如果有足够的空位，直接填入
+        if (emptySlots.length >= newStudents.length) {
+          for (let i = 0; i < newStudents.length; i++) {
+            seatLayout[cls][emptySlots[i]] = newStudents[i].id;
+          }
+        } else {
+          // 空位不够，扩展布局
+          for (let i = 0; i < emptySlots.length; i++) {
+            seatLayout[cls][emptySlots[i]] = newStudents[i].id;
+          }
+          // 剩余的新学生添加到末尾
+          for (let i = emptySlots.length; i < newStudents.length; i++) {
+            seatLayout[cls].push(newStudents[i].id);
+          }
+        }
+      }
+      
+      console.log('[XQ] Updated seatLayout for class:', cls, 'new students:', newStudents.length, 'removed:', removedStudentIds.length);
+      
+      // 触发保存，确保更新的布局被同步到云端
+      saveStudentsToStorage();
+    }
   }
   
   // 根据布局构建座位数组
@@ -6240,6 +6294,7 @@ function confirmImport() {
       STUDENTS[cls].push(s);
     }
   });
+  saveStudentsToStorage();
   hideModal();
   showToast(`成功导入 ${importData.length} 名学生`);
   importData = [];
@@ -6294,6 +6349,7 @@ function addStudent() {
     leftBehind: false,
     leftBehindNote: '',
   });
+  saveStudentsToStorage();
   hideModal();
   showToast(`已添加学生：${name}`);
   navigate('roster');
