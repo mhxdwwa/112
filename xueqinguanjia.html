@@ -1287,6 +1287,31 @@ tbody tr:last-child td { border-bottom: none; }
   </div>
 </div>
 
+<!-- ==================== FORCE CHANGE PASSWORD DIALOG (重置后强制修改密码) ==================== -->
+<div id="forceChangePwdDialog" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:36px;width:420px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--warning),#F59E0B);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 16px">🔑</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:4px">请修改您的密码</h2>
+      <p style="font-size:13px;color:var(--gray-500)">您的密码已被管理员重置，请设置新密码后继续使用</p>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">当前密码</label>
+      <input type="password" id="forcePwdCurrent" placeholder="请输入当前密码（123456）" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px" readonly>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">新密码</label>
+      <input type="password" id="forcePwdNew" placeholder="请输入新密码（至少4位）" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+    </div>
+    <div style="margin-bottom:24px">
+      <label style="display:block;font-size:13px;font-weight:500;color:var(--gray-700);margin-bottom:6px">确认新密码</label>
+      <input type="password" id="forcePwdConfirm" placeholder="请再次输入新密码" style="width:100%;padding:10px 14px;border:1px solid var(--gray-200);border-radius:10px;font-size:14px">
+    </div>
+    <div id="forcePwdError" style="display:none;margin-bottom:16px;padding:10px 14px;background:var(--danger-light);border-radius:8px;font-size:13px;color:var(--danger);text-align:center"></div>
+    <button onclick="doForceChangePassword()" style="width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--warning),#F59E0B);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(217,119,6,0.3)">确认修改并登录</button>
+  </div>
+</div>
+
 <!-- ==================== SETUP PAGE ==================== -->
 <div class="setup-page" id="setupPage">
   <div class="setup-header">
@@ -2632,6 +2657,64 @@ async function doAdminInit() {
   checkLoginState();
 }
 
+// ===== 强制修改密码（管理员重置后首次登录）=====
+let _forceChangePwdUser = null;
+let _forceChangePwdPass = null;
+
+async function doForceChangePassword() {
+  const newPwd = document.getElementById('forcePwdNew').value.trim();
+  const confirmPwd = document.getElementById('forcePwdConfirm').value.trim();
+  const errorDiv = document.getElementById('forcePwdError');
+  
+  if (!newPwd || newPwd.length < 4) {
+    errorDiv.textContent = '新密码至少4位';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  if (newPwd !== confirmPwd) {
+    errorDiv.textContent = '两次输入的新密码不一致';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  if (newPwd === '123456') {
+    errorDiv.textContent = '新密码不能与默认密码相同';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  const name = _forceChangePwdUser;
+  if (!name) return;
+  
+  try {
+    // 获取当前角色信息以保留
+    const cred = xqCredentials[name];
+    const role = cred ? cred.role : null;
+    const classes = cred ? cred.classes : [];
+    const subject = cred ? cred.subject : null;
+    
+    // 设置新密码并清除 mustChangePassword 标记
+    await setUserPassword(name, newPwd, role, classes, subject);
+    if (xqCredentials[name]) {
+      xqCredentials[name].mustChangePassword = false;
+      delete xqCredentials[name].mustChangePassword;
+    }
+    await xqSaveCredentials();
+    
+    // 关闭对话框
+    document.getElementById('forceChangePwdDialog').style.display = 'none';
+    
+    showToast('密码修改成功，正在登录...', 'success');
+    
+    // 继续登录流程（用新密码）
+    document.getElementById('loginPass').value = newPwd;
+    setTimeout(() => doLogin(), 500);
+  } catch (e) {
+    errorDiv.textContent = '密码修改失败，请重试';
+    errorDiv.style.display = 'block';
+    console.error('[XQ] Force change password failed:', e);
+  }
+}
+
 function doLogin() {
   const name = document.getElementById('loginUser').value.trim();
   const pass = document.getElementById('loginPass').value.trim();
@@ -2670,6 +2753,21 @@ function doLogin() {
   verifyPassword(name, pass).then(valid => {
     if (!valid) {
       alert('密码错误');
+      return;
+    }
+    
+    // 检查是否需要强制修改密码（管理员重置后首次登录）
+    if (xqCredentials[name] && xqCredentials[name].mustChangePassword) {
+      // 显示强制修改密码对话框
+      _forceChangePwdUser = name;
+      _forceChangePwdPass = pass;
+      document.getElementById('forcePwdCurrent').value = pass;
+      document.getElementById('forcePwdNew').value = '';
+      document.getElementById('forcePwdConfirm').value = '';
+      document.getElementById('forcePwdError').style.display = 'none';
+      const dlg = document.getElementById('forceChangePwdDialog');
+      dlg.style.display = 'flex';
+      setTimeout(() => document.getElementById('forcePwdNew').focus(), 100);
       return;
     }
     
@@ -4558,16 +4656,14 @@ function renderPasswordMgmt() {
   const roleOrder = { leader: 1, headteacher: 2, teacher: 3 };
   allTeachers.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
   
-  // 生成教师列表
-  let teacherListHtml = '<div style="display:flex;flex-direction:column;gap:8px">';
+  // 生成教师列表（紧凑标签布局）
+  let teacherListHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px">';
   allTeachers.forEach(t => {
-    const roleBadge = t.role === 'leader' ? '<span style="font-size:11px;background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:4px;margin-left:8px">领导</span>' :
-                      t.role === 'headteacher' ? '<span style="font-size:11px;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:4px;margin-left:8px">班主任</span>' :
-                      '<span style="font-size:11px;background:var(--gray-100);color:var(--gray-600);padding:2px 8px;border-radius:4px;margin-left:8px">教师</span>';
-    teacherListHtml += `<label style="display:flex;align-items:center;padding:12px 16px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1px solid var(--gray-200);transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--gray-200)'">
-      <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:18px;height:18px;margin-right:12px">
-      <span style="font-weight:500;font-size:14px">${t.name}</span>
-      ${roleBadge}
+    const roleIcon = t.role === 'leader' ? '🔵' :
+                     t.role === 'headteacher' ? '🟢' : '⚪';
+    teacherListHtml += `<label class="teacher-chip" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1.5px solid var(--gray-200);transition:all 0.15s;user-select:none" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--gray-200)'" onclick="setTimeout(()=>{const cb=this.querySelector('input');if(cb.checked){this.style.borderColor='var(--primary)';this.style.background='var(--primary-bg)'}else{this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50)'}},0)">
+      <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:15px;height:15px;margin:0;accent-color:var(--primary)" onclick="event.stopPropagation()">
+      <span style="font-size:13px;font-weight:500;color:var(--gray-700)">${roleIcon} ${t.name}</span>
     </label>`;
   });
   teacherListHtml += '</div>';
@@ -4584,7 +4680,7 @@ function renderPasswordMgmt() {
       <div class="card-body">
         <div style="background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px">
           <div style="font-size:13px;color:var(--warning-dark)">
-            <strong>提示：</strong>勾选需要重置密码的教师，点击"重置密码"按钮后，选中教师的密码将被重置为默认密码 <code style="background:#fff;padding:2px 6px;border-radius:4px">123456</code>
+            <strong>提示：</strong>勾选需要重置密码的教师，点击"重置密码"按钮后，选中教师的密码将被重置为默认密码 <code style="background:#fff;padding:2px 6px;border-radius:4px">123456</code>，下次登录时将要求修改新密码
           </div>
         </div>
         ${teacherListHtml}
@@ -4601,6 +4697,16 @@ function renderPasswordMgmt() {
 function selectAllTeachers(select) {
   document.querySelectorAll('.teacher-reset-checkbox').forEach(cb => {
     cb.checked = select;
+    const label = cb.closest('label');
+    if (label) {
+      if (select) {
+        label.style.borderColor = 'var(--primary)';
+        label.style.background = 'var(--primary-bg)';
+      } else {
+        label.style.borderColor = 'var(--gray-200)';
+        label.style.background = 'var(--gray-50)';
+      }
+    }
   });
 }
 
@@ -4615,7 +4721,7 @@ async function resetSelectedPasswords() {
     return;
   }
   
-  if (!confirm(`确定要重置以下 ${selected.length} 位教师的密码吗？\n\n${selected.join('、')}\n\n密码将被重置为：123456`)) {
+  if (!confirm(`确定要重置以下 ${selected.length} 位教师的密码吗？\n\n${selected.join('、')}\n\n密码将被重置为：123456\n重置后教师下次登录时需修改新密码`)) {
     return;
   }
   
@@ -4626,11 +4732,24 @@ async function resetSelectedPasswords() {
   for (const name of selected) {
     try {
       await setUserPassword(name, defaultPassword, null, [], null);
+      // 标记该教师下次登录时必须修改密码
+      if (xqCredentials[name]) {
+        xqCredentials[name].mustChangePassword = true;
+      }
       successCount++;
       console.log('[XQ] Password reset for:', name);
     } catch (e) {
       failCount++;
       console.warn('[XQ] Failed to reset password for:', name, e);
+    }
+  }
+  
+  // 保存 mustChangePassword 标记到云端
+  if (successCount > 0) {
+    try {
+      await xqSaveCredentials();
+    } catch (e) {
+      console.warn('[XQ] Failed to sync mustChangePassword flag:', e);
     }
   }
   
