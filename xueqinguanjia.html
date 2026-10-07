@@ -5410,15 +5410,6 @@ function renderClassSeatingPage() {
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;overflow:hidden">
           ${editBar}
           <div id="seatingFlexWrapper" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">${flexRows}</div>
-          <div style="margin-top:12px;flex-shrink:0;display:flex;align-items:center;gap:16px">
-            <div style="flex:1;text-align:right;font-size:13px;color:var(--gray-600)">
-              ${renderCadreInfo(cls, 'left')}
-            </div>
-            <div class="seating-podium" style="flex-shrink:0">讲 台</div>
-            <div style="flex:1;text-align:left;font-size:13px;color:var(--gray-600)">
-              ${renderCadreInfo(cls, 'right')}
-            </div>
-          </div>
           <div class="seat-legend" style="margin-top:8px;flex-shrink:0">
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#8BC34A,#7CB342);border:1px solid rgba(139,195,74,0.4)"></div>在校</div>
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#FFB74D,#FFA726);border:1px solid rgba(255,152,0,0.3)"></div>请假</div>
