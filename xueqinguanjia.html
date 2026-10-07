@@ -1671,8 +1671,12 @@ async function xqSaveStudentsToServer(className) {
   
   const students = STUDENTS[className] || [];
   
-  // 检查用户是否有权保存该班级
-  const userClasses = xqCurrentUser.classes || xqCurrentUser.allClasses || [];
+  // 检查用户是否有权保存该班级 - 增强逻辑：检查多个班级列表
+  let userClasses = xqCurrentUser.classes || xqCurrentUser.allClasses || [];
+  if (userClasses.length === 0 && xqCurrentUser.headteacherClasses && xqCurrentUser.headteacherClasses.length > 0) {
+    userClasses = xqCurrentUser.headteacherClasses;
+  }
+  
   const isAdmin = isXqAdmin();
   if (!isAdmin && !userClasses.includes(className)) {
     console.error('[XQ] Save failed: User', xqCurrentUser.teacherName, 'has no permission for class', className, 
@@ -1979,10 +1983,19 @@ function scheduleAutoSaveToCloud() {
     // 检查是否有权限保存
     if (!xqCurrentUser) return;
     const isAdmin = isXqAdmin();
-    const teacherClasses = getTeacherClasses();
+    
+    // 获取要保存的班级列表 - 增强逻辑：如果 allClasses 为空，尝试使用 headteacherClasses
+    let teacherClasses = getTeacherClasses();
+    if (teacherClasses.length === 0 && xqCurrentUser.headteacherClasses && xqCurrentUser.headteacherClasses.length > 0) {
+      teacherClasses = xqCurrentUser.headteacherClasses;
+      console.log('[XQ] Auto-save: allClasses is empty, using headteacherClasses:', teacherClasses);
+    }
+    
     const isClassTeacher = teacherClasses.length > 0;
     if (!isAdmin && !isClassTeacher) {
-      console.warn('[XQ] Auto-save: User has no classes to save. User:', xqCurrentUser.teacherName, 'allClasses:', xqCurrentUser.allClasses);
+      console.warn('[XQ] Auto-save: User has no classes to save. User:', xqCurrentUser.teacherName, 
+                   'allClasses:', xqCurrentUser.allClasses, 
+                   'headteacherClasses:', xqCurrentUser.headteacherClasses);
       return;
     }
     
@@ -2046,19 +2059,22 @@ function scheduleAutoSaveToCloud() {
         localStorage.removeItem('xq_deleted_classes');
       }
       
-      studentsDataChanged = false;
-      updateSaveToCloudButton();
-      
-      console.log(`[XQ] Auto-save completed: ${successCount} classes saved, ${failCount} failed`);
-      
-      // 如果有失败，显示警告
-      if (failCount > 0) {
-        showToast(`云端同步部分失败（${failCount}个班级），请手动点击"保存到云端"重试`, 'warning');
-      } else if (successCount > 0) {
+      // 只有在没有失败的情况下才清除更改标志
+      if (failCount === 0) {
+        studentsDataChanged = false;
+        updateSaveToCloudButton();
+        console.log(`[XQ] Auto-save completed: ${successCount} classes saved successfully`);
         console.log('[XQ] ✓ 数据已成功同步到云端');
+      } else {
+        // 有失败，保持更改标志，显示警告
+        updateSaveToCloudButton();
+        console.warn(`[XQ] Auto-save partially failed: ${successCount} saved, ${failCount} failed`);
+        showToast(`云端同步部分失败（${failCount}个班级），请手动点击"保存到云端"重试`, 'warning');
       }
     } catch (e) {
       console.error('[XQ] Auto-save to cloud failed:', e);
+      // 保存失败，保持更改标志
+      updateSaveToCloudButton();
       showToast('云端同步失败，请检查网络连接或手动保存', 'error');
     }
   }, AUTO_SAVE_CLOUD_DELAY);
@@ -2355,7 +2371,14 @@ async function saveStudentsToCloud() {
   
   // 管理员可以保存所有数据，班主任/科任老师只能保存自己班级的数据
   const isAdmin = isXqAdmin();
-  const teacherClasses = getTeacherClasses();
+  
+  // 获取要保存的班级列表 - 增强逻辑：如果 allClasses 为空，尝试使用 headteacherClasses
+  let teacherClasses = getTeacherClasses();
+  if (teacherClasses.length === 0 && xqCurrentUser.headteacherClasses && xqCurrentUser.headteacherClasses.length > 0) {
+    teacherClasses = xqCurrentUser.headteacherClasses;
+    console.log('[XQ] Manual save: allClasses is empty, using headteacherClasses:', teacherClasses);
+  }
+  
   const isClassTeacher = teacherClasses.length > 0;
   
   if (!isAdmin && !isClassTeacher) {
