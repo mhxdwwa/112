@@ -3331,12 +3331,55 @@ function saveClassGroups(groups) {
   if (cur) {
     cur.groupConfigs = groups;
     saveClassData();
+    saveCurrentClassGroupsToServer(); // v230: 同步到云端
   }
 }
 
 // 生成新的分组ID
 function genGroupId() {
   return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// v230: 保存分组数据到云端（API 模式）
+function saveGroupsToServer(classId, groupConfigs, studentGroups) {
+  if (!(window.USE_API && window.ApiMigration)) {
+    console.log('[v230] 非 API 模式，跳过云端保存');
+    return Promise.resolve();
+  }
+  
+  const apiUrl = '/api/class/groups';
+  const payload = { classId, groupConfigs, studentGroups };
+  
+  return fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.ok) {
+      console.log('[v230] 分组数据已保存到云端');
+    } else {
+      console.error('[v230] 保存分组数据失败:', data.error);
+    }
+    return data;
+  })
+  .catch(err => {
+    console.error('[v230] 保存分组数据异常:', err);
+  });
+}
+
+// v230: 保存当前班级的所有分组数据到云端
+function saveCurrentClassGroupsToServer() {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur) return Promise.resolve();
+  
+  const groupConfigs = cur.groupConfigs || [];
+  const studentGroups = cur.students
+    .filter(s => s.groupId)
+    .map(s => ({ studentId: s.id, groupId: s.groupId }));
+  
+  return saveGroupsToServer(currentClassId, groupConfigs, studentGroups);
 }
 
 // 显示分组管理弹窗
@@ -3441,6 +3484,7 @@ function removeMemberFromGroup(studentId, groupId) {
 
   student.groupId = null;
   saveClassData();
+  saveCurrentClassGroupsToServer(); // v230: 同步到云端
   
   showNotification('已移除', `已将"${student.name}"从本组移除`, 'success');
   closeModal();
@@ -3571,7 +3615,7 @@ function deleteGroup(groupId) {
 
   // 删除分组配置
   const newGroups = groups.filter(g => g.id !== groupId);
-  saveClassGroups(newGroups);
+  saveClassGroups(newGroups); // v230: 已包含云端同步
 
   showNotification('分组已删除', '', 'success');
   closeModal(); // 关闭弹窗
@@ -3643,6 +3687,7 @@ function saveGroupMembers(groupId) {
   });
 
   saveClassData();
+  saveCurrentClassGroupsToServer(); // v230: 同步到云端
   closeModal(); // 关闭调整成员弹窗
   showGroupManageModal();
   renderGroupFilterTabs();
