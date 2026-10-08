@@ -3371,20 +3371,36 @@ function showGroupManageModal() {
   } else {
     groups.forEach((g, idx) => {
       const count = groupCounts[g.id] || 0;
-      const members = students.filter(s => s.groupId === g.id).map(s => s.name).join('、');
+      const members = students.filter(s => s.groupId === g.id);
+      
       html += `
         <div style="background:#fff;border:2px solid ${g.color};border-radius:12px;padding:15px;margin:10px 0;">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
             <div style="width:20px;height:20px;border-radius:50%;background:${g.color};"></div>
             <div style="flex:1;font-size:16px;font-weight:700;color:#333;">${esc(g.name)}</div>
             <div style="font-size:13px;color:#666;">${count}人</div>
             <button onclick="editGroup('${g.id}')" style="background:#e0f7fa;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">编辑</button>
-            <button onclick="editGroupMembers('${g.id}')" style="background:#fff3e0;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">调整成员</button>
+            <button onclick="editGroupMembers('${g.id}')" style="background:#fff3e0;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">添加成员</button>
             <button onclick="deleteGroup('${g.id}')" style="background:#ffebee;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#d32f2f;">删除</button>
           </div>
-          ${members ? `<div style="font-size:13px;color:#666;line-height:1.6;">${esc(members)}</div>` : '<div style="font-size:13px;color:#999;font-style:italic;">暂无成员</div>'}
-        </div>
       `;
+      
+      if (members.length > 0) {
+        html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+        members.forEach(s => {
+          html += `
+            <div style="display:inline-flex;align-items:center;gap:6px;background:#f5f5f5;border-radius:16px;padding:4px 10px 4px 12px;font-size:13px;">
+              <span>${esc(s.name)}</span>
+              <button onclick="removeMemberFromGroup('${s.id}', '${g.id}')" style="background:none;border:none;cursor:pointer;color:#d32f2f;font-size:14px;padding:0 2px;line-height:1;" title="移除">×</button>
+            </div>
+          `;
+        });
+        html += '</div>';
+      } else {
+        html += '<div style="font-size:13px;color:#999;font-style:italic;">暂无成员</div>';
+      }
+      
+      html += '</div>';
     });
   }
 
@@ -3409,6 +3425,26 @@ function showGroupManageModal() {
     { text: '➕ 新建分组', class: 'btn-primary', onclick: 'createGroup()' },
     { text: '关闭', class: 'btn-secondary', onclick: 'closeModal()' }
   ]);
+}
+
+// 从分组中移除成员
+function removeMemberFromGroup(studentId, groupId) {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur || !cur.students) return;
+
+  const student = cur.students.find(s => s.id.toString() === studentId.toString());
+  if (!student) return;
+
+  if (!confirm(`确定将"${student.name}"从本组移除？\n该学生将变为"未分组"状态。`)) return;
+
+  student.groupId = null;
+  saveClassData();
+  
+  showNotification('已移除', `已将"${student.name}"从本组移除`, 'success');
+  closeModal();
+  showGroupManageModal();
+  renderGroupFilterTabs();
+  renderHomePetGrid();
 }
 
 // 创建新分组
@@ -3551,27 +3587,32 @@ function editGroupMembers(groupId) {
 
   const cur = classesData.find(c => c.id === currentClassId);
   const students = cur ? cur.students : [];
+  
+  // v226: 只显示未分组的学生（不在任何组中的学生）
+  const ungroupedStudents = students.filter(s => {
+    return !s.groupId || !groups.find(g => g.id === s.groupId);
+  });
 
   let html = '<div style="max-height:400px;overflow-y:auto;padding:10px 0;">';
-  html += '<div style="margin-bottom:15px;padding:10px;background:#f5f5f5;border-radius:8px;font-size:13px;color:#666;">勾选要加入本组的学生（已在本组的学生会自动保持勾选）</div>';
+  html += '<div style="margin-bottom:15px;padding:10px;background:#e0f7fa;border-radius:8px;font-size:13px;color:#00796b;line-height:1.6;">💡 <strong>操作说明</strong><br>• 勾选学生可将其加入本组<br>• 已在其他组的学生不会显示<br>• 若要换组，请先在原组移除该学生</div>';
 
-  students.forEach(s => {
-    const isChecked = s.groupId === groupId;
-    const currentGroup = groups.find(g => g.id === s.groupId);
-    const currentGroupText = currentGroup ? `当前: ${currentGroup.name}` : '当前: 未分组';
-
-    html += `
-      <label style="display:flex;align-items:center;gap:12px;padding:10px;margin:5px 0;background:#fff;border-radius:8px;cursor:pointer;transition:background 0.2s;border:1px solid #e8e8e8;">
-        <input type="checkbox" class="group-member-chk" data-student-id="${s.id}" ${isChecked ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;">
-        <span style="flex:1;font-size:15px;">${esc(s.name)}</span>
-        <span style="font-size:12px;color:#999;">${currentGroupText}</span>
-      </label>
-    `;
-  });
+  if (ungroupedStudents.length === 0) {
+    html += '<div style="text-align:center;padding:40px;color:#999;">暂无未分组的学生</div>';
+  } else {
+    ungroupedStudents.forEach(s => {
+      html += `
+        <label style="display:flex;align-items:center;gap:12px;padding:10px;margin:5px 0;background:#fff;border-radius:8px;cursor:pointer;transition:background 0.2s;border:1px solid #e8e8e8;">
+          <input type="checkbox" class="group-member-chk" data-student-id="${s.id}" style="width:20px;height:20px;cursor:pointer;">
+          <span style="flex:1;font-size:15px;">${esc(s.name)}</span>
+          <span style="font-size:12px;color:#999;">未分组</span>
+        </label>
+      `;
+    });
+  }
 
   html += '</div>';
 
-  showModal(`调整成员 - ${group.name}`, html, [
+  showModal(`添加成员 - ${group.name}`, html, [
     { text: '取消', class: 'btn-secondary', onclick: 'showGroupManageModal()' },
     { text: '保存', class: 'btn-primary', onclick: `saveGroupMembers('${groupId}')` }
   ]);
@@ -3590,22 +3631,26 @@ function saveGroupMembers(groupId) {
     }
   });
 
-  // 更新学生的 groupId
+  // v226: 只处理新添加的学生（将未分组的学生加入当前组）
+  let addedCount = 0;
   cur.students.forEach(s => {
-    if (selectedIds.has(s.id.toString())) {
+    if (selectedIds.has(s.id.toString()) && !s.groupId) {
       s.groupId = groupId;
-    } else if (s.groupId === groupId) {
-      // 取消勾选的，设为未分组
-      s.groupId = null;
+      addedCount++;
     }
   });
 
   saveClassData();
-  showNotification('成员已更新', '', 'success');
   closeModal(); // 关闭调整成员弹窗
   showGroupManageModal();
   renderGroupFilterTabs();
   renderHomePetGrid();
+  
+  if (addedCount > 0) {
+    showNotification('添加成功', `已将 ${addedCount} 名学生加入本组`, 'success');
+  } else {
+    showNotification('未添加成员', '请勾选要加入的学生', 'info');
+  }
 }
 
 // 渲染分组筛选标签
