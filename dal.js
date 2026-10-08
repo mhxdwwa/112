@@ -50,7 +50,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mob
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '229.0';
+var _DAL_VERSION = '230.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -187,7 +187,7 @@ function _applySnackConfigRealtimeUpdate(config) {
 // Classes table columns to select in load/refresh queries.
 // Excludes operation_logs_json (legacy JSON field) — logs now in operation_logs table (v221).
 // This single change saves ~2-5MB per refresh cycle.
-var _CLASS_COLS = 'id, name, teacher_id, created_at';
+var _CLASS_COLS = 'id, name, teacher_id, created_at, group_configs';
 
 /* ===== Snapshot System (v7.0) ===== */
 // _snapshotClassesData: what Supabase looked like when we last loaded/synced
@@ -498,7 +498,7 @@ function _smartRefreshFromSupabase() {
   } else if (isStudent) {
     queries = Promise.all([
       db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
-      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
+      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests, group_id').eq('class_id', classId),
       db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
     ]).then(function(results) {
       // Filter pets to class students client-side (already filtered by class)
@@ -520,7 +520,7 @@ function _smartRefreshFromSupabase() {
       // v54: Filter students by class_id at DB level
       return Promise.all([
         Promise.resolve({ data: classes, error: null }),
-        db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').in('class_id', classIds),
+      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests, group_id').in('class_id', classIds),
         db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
       ]).then(function(results) {
         // Filter pets to teacher's students client-side
@@ -1021,6 +1021,21 @@ function _loadTeacherFromSupabase() {
       classesData = newClassesData;
       _loadSnackConfigFromSupabase();
       
+      // v229: 一次性迁移 — 如果本地恢复了分组数据但云端没有，立即触发同步
+      var _needsGroupSync = false;
+      newClassesData.forEach(function(c) {
+        if (c.groupConfigs && c.groupConfigs.length > 0) {
+          var serverClass = classes.find(function(sc) { return sc.id === c.id; });
+          if (!serverClass || !serverClass.group_configs) {
+            _needsGroupSync = true;
+          }
+        }
+      });
+      if (_needsGroupSync) {
+        console.log('[DAL] v229: 检测到本地分组数据未同步到云端，触发迁移同步...');
+        setTimeout(function() { _syncToSupabase(); }, 2000);
+      }
+      
       console.log('[DAL] v143 API loaded: ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
       newClassesData.forEach(function(c) {
         console.log('[DAL]   Class ' + c.id + ' "' + c.name + '": ' + c.students.length + ' students');
@@ -1059,7 +1074,7 @@ function _loadTeacherFromSupabase() {
     // v54: Filter students by class_id at DB level (not client-side)
     return Promise.all([
       Promise.resolve(classes),
-      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').in('class_id', classIds),
+      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests, group_id').in('class_id', classIds),
       db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
     ]);
   }).then(function(results) {
@@ -1079,6 +1094,21 @@ function _loadTeacherFromSupabase() {
     classesData = newClassesData;
     _restoreCustomSnacksFromLS();
     _loadSnackConfigFromSupabase(); // v225: 教师旧模式也需要从 Supabase 加载零食配置
+
+    // v229: 一次性迁移 — 如果本地恢复了分组数据但云端没有，立即触发同步
+    var _needsGroupSync2 = false;
+    newClassesData.forEach(function(c) {
+      if (c.groupConfigs && c.groupConfigs.length > 0) {
+        var serverClass = classes.find(function(sc) { return sc.id === c.id; });
+        if (!serverClass || !serverClass.group_configs) {
+          _needsGroupSync2 = true;
+        }
+      }
+    });
+    if (_needsGroupSync2) {
+      console.log('[DAL] v229: 检测到本地分组数据未同步到云端，触发迁移同步...');
+      setTimeout(function() { _syncToSupabase(); }, 2000);
+    }
 
     console.log('[DAL] Loaded ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
     newClassesData.forEach(function(c) {
@@ -1122,7 +1152,7 @@ function _loadStudentFromSupabase() {
   } else {
     dataPromise = Promise.all([
       db.from('classes').select(_CLASS_COLS).eq('id', classId).single(),
-      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests').eq('class_id', classId),
+      db.from('students').select('id, name, class_id, coins, xiandan, last_checkin_date, last_jianghu_date, last_pk_date, active_pet_id, pk_count_today, shop_items, equipped_items, password, quiz_state, snack_requests, group_id').eq('class_id', classId),
       db.from('pets').select('id, student_id, name, nickname, level, growth, coins, is_active, is_dead, last_feed_date, last_play_date, today_feed_count, today_play_count, penalty_streak')
     ]);
   }
