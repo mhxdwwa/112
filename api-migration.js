@@ -400,18 +400,6 @@
       return { error: err.message || 'Network error' };
     });
   }
-    return apiRequest('/class/manage', payload).then(function(result) {
-      if (result.ok) {
-        console.log('[API] class manage ok:', action);
-      } else {
-        console.error('[API] class manage error:', result.error);
-      }
-      return result;
-    }).catch(function(err) {
-      console.error('[API] class manage request failed:', err);
-      return { error: err.message || 'Network error' };
-    });
-  }
 
   /**
    * 通过 API 检查班级名称是否重复

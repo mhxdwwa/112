@@ -50,7 +50,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mob
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '235.0';
+var _DAL_VERSION = '236.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -574,7 +574,9 @@ function _smartRefreshFromSupabase() {
         equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
         password: s.password || '',
         quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })(),
-        snackRequests: (function() { try { return typeof s.snack_requests === 'string' ? JSON.parse(s.snack_requests) : (s.snack_requests || []); } catch(e) { return []; } })()
+        snackRequests: (function() { try { return typeof s.snack_requests === 'string' ? JSON.parse(s.snack_requests) : (s.snack_requests || []); } catch(e) { return []; } })(),
+        // v236: 分组ID也需要在 smart refresh 中同步
+        groupId: s.group_id || null
       };
     });
 
@@ -763,6 +765,21 @@ function _smartRefreshFromSupabase() {
           }
         }
 
+        // v236: groupId — sync from server if changed on server and not changed locally
+        var snapGroupId = snapStu ? (snapStu.groupId || null) : null;
+        if (snapGroupId !== null) {
+          if ((freshStu.groupId || null) !== snapGroupId && (localStu.groupId || null) === snapGroupId) {
+            // Server changed, local didn't → apply
+            localStu.groupId = freshStu.groupId || null;
+            changesApplied++;
+          }
+          // If local changed too (teacher moved student), keep local until sync confirms
+        } else if ((freshStu.groupId || null) !== (localStu.groupId || null)) {
+          // No snapshot — trust server value
+          localStu.groupId = freshStu.groupId || null;
+          changesApplied++;
+        }
+
         // Merge pets for this student
         var freshPetsForStudent = freshPetByStudent[localStu.id] || [];
         if (!localStu.pets) localStu.pets = [];
@@ -851,6 +868,23 @@ function _smartRefreshFromSupabase() {
           }
         });
       });
+    });
+
+    // v236: Merge class-level groupConfigs from fresh data
+    classes.forEach(function(freshCls) {
+      for (var i = 0; i < classesData.length; i++) {
+        var localCls = classesData[i];
+        if (localCls.id === freshCls.id) {
+          var freshGroupConfigs = (function() { try { return typeof freshCls.group_configs === 'string' ? JSON.parse(freshCls.group_configs) : (freshCls.group_configs || []); } catch(e) { return []; } })();
+          var localGroupConfigsStr = JSON.stringify(localCls.groupConfigs || []);
+          var freshGroupConfigsStr = JSON.stringify(freshGroupConfigs);
+          if (localGroupConfigsStr !== freshGroupConfigsStr) {
+            localCls.groupConfigs = freshGroupConfigs;
+            changesApplied++;
+          }
+          break;
+        }
+      }
     });
 
     // For student: update _myBaseCoins after merge
