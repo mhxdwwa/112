@@ -14,8 +14,8 @@ export const onRequestGet = async ({ request, env, params }) => {
 
   // Step 1: Load class and students
   const [classR, studentsR] = await Promise.all([
-    sbSelectSingle(env, 'classes', `id=eq.${classId}&select=id,name,teacher_id`),
-    sbSelect(env, 'students', 'id,name,class_id,coins,xiandan,last_checkin_date,last_jianghu_date,last_pk_date,active_pet_id,pk_count_today,password,quiz_state,snack_requests,shop_items,equipped_items', `class_id=eq.${classId}`),
+    sbSelectSingle(env, 'classes', `id=eq.${classId}&select=id,name,teacher_id,group_configs`),
+    sbSelect(env, 'students', 'id,name,class_id,coins,xiandan,last_checkin_date,last_jianghu_date,last_pk_date,active_pet_id,pk_count_today,password,quiz_state,snack_requests,shop_items,equipped_items,group_id', `class_id=eq.${classId}`),
   ]);
 
   if (classR.error || !classR.data || classR.data.length === 0) {

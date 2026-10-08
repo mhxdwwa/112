@@ -1204,7 +1204,9 @@ function _loadStudentFromSupabase() {
         equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
         password: s.password || '',
         quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })(),
-        snackRequests: (function() { try { return typeof s.snack_requests === 'string' ? JSON.parse(s.snack_requests) : (s.snack_requests || []); } catch(e) { return []; } })()
+        snackRequests: (function() { try { return typeof s.snack_requests === 'string' ? JSON.parse(s.snack_requests) : (s.snack_requests || []); } catch(e) { return []; } })(),
+        // v234: 学生端也需要加载分组ID
+        groupId: s.group_id || null
       };
     });
 
@@ -1259,7 +1261,9 @@ function _loadStudentFromSupabase() {
       name: classInfo.name || '',
       teacher_id: classInfo.teacher_id,
       students: classmates,
-      createdAt: classInfo.created_at || null
+      createdAt: classInfo.created_at || null,
+      // v234: 学生端也需要加载分组配置
+      groupConfigs: (function() { try { return typeof classInfo.group_configs === 'string' ? JSON.parse(classInfo.group_configs) : (classInfo.group_configs || []); } catch(e) { return []; } })()
     }];
     _restoreCustomSnacksFromLS();
     _loadSnackConfigFromSupabase(); // v225: 学生端也需要从 Supabase 加载零食配置
