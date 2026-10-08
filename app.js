@@ -3413,12 +3413,14 @@ function showGroupManageModal() {
 
 // 创建新分组
 function createGroup() {
+  closeModal(); // 关闭分组管理弹窗，防止弹窗堆叠
   const groups = getClassGroups();
   showGroupEditModal(null, groups);
 }
 
 // 编辑分组
 function editGroup(groupId) {
+  closeModal(); // 关闭分组管理弹窗，防止弹窗堆叠
   const groups = getClassGroups();
   const group = groups.find(g => g.id === groupId);
   if (!group) return;
@@ -3507,6 +3509,7 @@ function saveGroup(groupId) {
 
   saveClassGroups(groups);
   showNotification('保存成功', '', 'success');
+  closeModal(); // 关闭编辑弹窗
   showGroupManageModal();
   renderGroupFilterTabs();
   renderHomePetGrid();
@@ -3533,6 +3536,7 @@ function deleteGroup(groupId) {
   saveClassGroups(newGroups);
 
   showNotification('分组已删除', '', 'success');
+  closeModal(); // 关闭弹窗
   showGroupManageModal();
   renderGroupFilterTabs();
   renderHomePetGrid();
@@ -3540,6 +3544,7 @@ function deleteGroup(groupId) {
 
 // 编辑分组成成员
 function editGroupMembers(groupId) {
+  closeModal(); // 关闭分组管理弹窗，防止弹窗堆叠
   const groups = getClassGroups();
   const group = groups.find(g => g.id === groupId);
   if (!group) return;
@@ -3597,6 +3602,7 @@ function saveGroupMembers(groupId) {
 
   saveClassData();
   showNotification('成员已更新', '', 'success');
+  closeModal(); // 关闭调整成员弹窗
   showGroupManageModal();
   renderGroupFilterTabs();
   renderHomePetGrid();

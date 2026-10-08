@@ -50,7 +50,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mob
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '225.0';
+var _DAL_VERSION = '226.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -955,6 +955,35 @@ function _buildTeacherClasses(classes, students, pets) {
       cls.students = applyStudentOrder(parseInt(cid), cls.students);
     }
   });
+
+  // v225: 恢复分组数据（groupConfigs 和 student.groupId 不在 Supabase 中，从旧 classesData 恢复）
+  if (typeof classesData !== 'undefined' && Array.isArray(classesData) && classesData.length > 0) {
+    var _oldClassMap = {};
+    classesData.forEach(function(c) { _oldClassMap[c.id] = c; });
+    classes.forEach(function(c) {
+      var newCls = classMap[c.id];
+      var oldCls = _oldClassMap[c.id];
+      if (!newCls || !oldCls) return;
+      // 恢复分组配置
+      if (oldCls.groupConfigs && oldCls.groupConfigs.length > 0) {
+        newCls.groupConfigs = oldCls.groupConfigs;
+      }
+      // 恢复学生分组
+      if (oldCls.students && oldCls.students.length > 0) {
+        var _oldGroupMap = {};
+        oldCls.students.forEach(function(s) {
+          if (s.groupId) _oldGroupMap[s.id] = s.groupId;
+        });
+        if (Object.keys(_oldGroupMap).length > 0) {
+          newCls.students.forEach(function(s) {
+            if (_oldGroupMap[s.id]) {
+              s.groupId = _oldGroupMap[s.id];
+            }
+          });
+        }
+      }
+    });
+  }
 
   return classes.map(function(c) { return classMap[c.id]; }).filter(Boolean);
 }
