@@ -355,46 +355,20 @@
 
     console.log('[API] saveGroups:', { classId, groupConfigsCount: groupConfigs ? groupConfigs.length : 0, studentGroupsCount: studentGroups ? studentGroups.length : 0 });
 
-    var promises = [];
-
-    // 1. 更新班级分组配置
-    if (groupConfigs !== undefined) {
-      var cls = typeof classesData !== 'undefined' ? classesData.find(function(c) { return c.id === classId; }) : null;
-      promises.push(
-        manageClassViaApi('update', {
-          classId: classId,
-          name: cls ? cls.name : '',
-          groupConfigs: groupConfigs
-        }).then(function(result) {
-          if (result.ok) {
-            console.log('[API] groupConfigs saved');
-          } else {
-            console.error('[API] groupConfigs save failed:', result.error);
-          }
-          return result;
-        })
-      );
-    }
-
-    // 2. 更新学生分组ID
-    if (studentGroups && Array.isArray(studentGroups) && studentGroups.length > 0) {
-      studentGroups.forEach(function(sg) {
-        promises.push(
-          updateStudentViaApi(sg.studentId, { group_id: sg.groupId || null }).then(function(result) {
-            if (result.ok) {
-              console.log('[API] student', sg.studentId, 'group_id updated:', sg.groupId);
-            } else {
-              console.error('[API] student', sg.studentId, 'group_id update failed:', result.error);
-            }
-            return result;
-          })
-        );
-      });
-    }
-
-    return Promise.all(promises).then(function(results) {
-      var errors = results.filter(function(r) { return !r.ok; });
-      return { ok: errors.length === 0, results: results };
+    // v236: 使用 /api/class/groups 端点一次性保存所有分组数据
+    // 替代之前的 N+1 个单独请求（1个班级配置 + N个学生更新）
+    return apiRequest('/class/groups', {
+      classId: classId,
+      groupConfigs: groupConfigs,
+      studentGroups: studentGroups
+    }).then(function(result) {
+      if (result.ok) {
+        console.log('[API] ✅ 分组数据已全部保存到云端');
+        if (typeof _lastOwnWriteTime !== 'undefined') _lastOwnWriteTime = Date.now();
+      } else {
+        console.error('[API] ❌ 分组数据保存失败:', result.error);
+      }
+      return result;
     }).catch(function(err) {
       console.error('[API] saveGroups failed:', err);
       return { error: err.message || 'Network error' };
