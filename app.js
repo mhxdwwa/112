@@ -3341,16 +3341,20 @@ function genGroupId() {
 }
 
 // v230: 保存分组数据到云端（API 模式）
+// v233: 添加详细调试日志
 function saveGroupsToServer(classId, groupConfigs, studentGroups) {
+  console.log('[v233] saveGroupsToServer 被调用:', { classId, groupConfigsCount: groupConfigs ? groupConfigs.length : 0, studentGroupsCount: studentGroups ? studentGroups.length : 0 });
+  console.log('[v233] window.USE_API:', window.USE_API, 'window.ApiMigration:', !!window.ApiMigration);
+  
   if (!(window.USE_API && window.ApiMigration)) {
-    console.log('[v230] 非 API 模式，跳过云端保存');
+    console.warn('[v233] ❌ 非 API 模式，跳过云端保存');
     return Promise.resolve();
   }
   
   const apiUrl = '/api/class/groups';
   const payload = { classId, groupConfigs, studentGroups };
   
-  console.log('[v230] 开始保存分组数据到云端:', payload);
+  console.log('[v233] 开始保存分组数据到云端:', JSON.stringify(payload, null, 2));
   
   return fetch(apiUrl, {
     method: 'POST',
@@ -3358,34 +3362,41 @@ function saveGroupsToServer(classId, groupConfigs, studentGroups) {
     body: JSON.stringify(payload)
   })
   .then(res => {
+    console.log('[v233] API 响应状态:', res.status, res.statusText);
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }
     return res.json();
   })
   .then(data => {
+    console.log('[v233] API 响应数据:', data);
     if (data.ok) {
-      console.log('[v230] ✅ 分组数据已成功保存到云端');
-      console.log('[v230] 更新统计:', {
+      console.log('[v233] ✅ 分组数据已成功保存到云端');
+      console.log('[v233] 更新统计:', {
         groupConfigsUpdated: data.groupConfigsUpdated,
         studentGroupsUpdated: data.studentGroupsUpdated
       });
     } else {
-      console.error('[v230] ❌ 保存分组数据失败:', data.error);
+      console.error('[v233] ❌ 保存分组数据失败:', data.error, data.details);
       showNotification('保存失败', data.error || '分组数据未能保存到云端', 'error');
     }
     return data;
   })
   .catch(err => {
-    console.error('[v230] ❌ 保存分组数据异常:', err);
+    console.error('[v233] ❌ 保存分组数据异常:', err);
     showNotification('网络错误', '分组数据保存失败：' + err.message, 'error');
-   });
+  });
 }
 
 // v230: 保存当前班级的所有分组数据到云端
+// v233: 添加调试日志
 function saveCurrentClassGroupsToServer() {
+  console.log('[v233] saveCurrentClassGroupsToServer 被调用, currentClassId:', currentClassId);
   const cur = classesData.find(c => c.id === currentClassId);
-  if (!cur) return Promise.resolve();
+  if (!cur) {
+    console.warn('[v233] ❌ 未找到当前班级, currentClassId:', currentClassId);
+    return Promise.resolve();
+  }
   
   const groupConfigs = cur.groupConfigs || [];
   // v232: 必须发送所有学生的分组状态（包括 groupId=null 的），
@@ -3394,6 +3405,13 @@ function saveCurrentClassGroupsToServer() {
     studentId: s.id,
     groupId: s.groupId || null
   }));
+  
+  console.log('[v233] 准备保存分组数据:', {
+    classId: currentClassId,
+    groupConfigsCount: groupConfigs.length,
+    studentGroupsCount: studentGroups.length,
+    studentsWithGroups: studentGroups.filter(sg => sg.groupId !== null).length
+  });
   
   return saveGroupsToServer(currentClassId, groupConfigs, studentGroups);
 }

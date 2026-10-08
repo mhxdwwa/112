@@ -885,6 +885,10 @@ function _smartRefreshFromSupabase() {
 function _buildTeacherClasses(classes, students, pets) {
   var studentMap = {};
   students.forEach(function(s) {
+    // v233: 添加调试日志
+    if (s.group_id) {
+      console.log('[v233] 从云端加载学生分组:', s.id, s.name, 'group_id:', s.group_id);
+    }
     studentMap[s.id] = {
       id: s.id,
       name: s.name || '',
@@ -932,6 +936,11 @@ function _buildTeacherClasses(classes, students, pets) {
 
   var classMap = {};
   classes.forEach(function(c) {
+    // v233: 添加调试日志
+    var parsedGroupConfigs = (function() { try { return typeof c.group_configs === 'string' ? JSON.parse(c.group_configs) : (c.group_configs || []); } catch(e) { return []; } })();
+    if (parsedGroupConfigs.length > 0) {
+      console.log('[v233] 从云端加载班级分组配置:', c.id, c.name, 'groupConfigs:', parsedGroupConfigs);
+    }
     classMap[c.id] = {
       id: c.id,
       name: c.name || '',
@@ -939,7 +948,7 @@ function _buildTeacherClasses(classes, students, pets) {
       students: [],
       createdAt: c.created_at || null,
       // v228: 从云端加载分组配置
-      groupConfigs: (function() { try { return typeof c.group_configs === 'string' ? JSON.parse(c.group_configs) : (c.group_configs || []); } catch(e) { return []; } })()
+      groupConfigs: parsedGroupConfigs
     };
   });
 
