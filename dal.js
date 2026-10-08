@@ -1022,6 +1022,7 @@ function _loadTeacherFromSupabase() {
       _loadSnackConfigFromSupabase();
       
       // v229: 一次性迁移 — 如果本地恢复了分组数据但云端没有，立即触发同步
+      // v233: API 模式下使用 saveCurrentClassGroupsToServer() 而非 _syncToSupabase()
       var _needsGroupSync = false;
       newClassesData.forEach(function(c) {
         if (c.groupConfigs && c.groupConfigs.length > 0) {
@@ -1032,8 +1033,15 @@ function _loadTeacherFromSupabase() {
         }
       });
       if (_needsGroupSync) {
-        console.log('[DAL] v229: 检测到本地分组数据未同步到云端，触发迁移同步...');
-        setTimeout(function() { _syncToSupabase(); }, 2000);
+        console.log('[DAL] v233: 检测到本地分组数据未同步到云端，触发迁移同步...');
+        setTimeout(function() {
+          // API 模式使用专用函数，非 API 模式使用全量同步
+          if (typeof window.USE_API !== 'undefined' && window.USE_API && typeof saveCurrentClassGroupsToServer === 'function') {
+            saveCurrentClassGroupsToServer();
+          } else {
+            _syncToSupabase();
+          }
+        }, 2000);
       }
       
       console.log('[DAL] v143 API loaded: ' + classes.length + ' classes, ' + students.length + ' students, ' + pets.length + ' pets');
