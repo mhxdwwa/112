@@ -116,6 +116,7 @@ export const onRequestPost = async ({ request, env }) => {
     }
 
     const beforeXiandan = student.xiandan || 0;
+    const beforeCoins = student.coins || 0;
 
     // v336: 使用原子操作更新金币，防止并发竞态条件
     let actualBeforeCoins = beforeCoins;
