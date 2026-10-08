@@ -3350,22 +3350,70 @@ function saveGroupsToServer(classId, groupConfigs, studentGroups) {
   const apiUrl = '/api/class/groups';
   const payload = { classId, groupConfigs, studentGroups };
   
+  console.log('[v230] 开始保存分组数据到云端:', payload);
+  
   return fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-  .then(res => res.json())
+  .then(res => {
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    return res.json();
+  })
   .then(data => {
     if (data.ok) {
-      console.log('[v230] 分组数据已保存到云端');
+      console.log('[v230] ✅ 分组数据已成功保存到云端');
+      console.log('[v230] 更新统计:', {
+        groupConfigsUpdated: data.groupConfigsUpdated,
+        studentGroupsUpdated: data.studentGroupsUpdated
+      });
     } else {
-      console.error('[v230] 保存分组数据失败:', data.error);
+      console.error('[v230] ❌ 保存分组数据失败:', data.error);
+      showNotification('保存失败', data.error || '分组数据未能保存到云端', 'error');
     }
     return data;
   })
   .catch(err => {
-    console.error('[v230] 保存分组数据异常:', err);
+    console.error('[v230] ❌ 保存分组数据异常:', err);
+    showNotification('网络错误', '分组数据保存失败：' + err.message, 'error');
+  });
+}
+  
+  const apiUrl = '/api/class/groups';
+  const payload = { classId, groupConfigs, studentGroups };
+  
+  console.log('[v230] 开始保存分组数据到云端:', payload);
+  
+  return fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => {
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    return res.json();
+  })
+  .then(data => {
+    if (data.ok) {
+      console.log('[v230] ✅ 分组数据已成功保存到云端');
+      console.log('[v230] 更新统计:', {
+        groupConfigsUpdated: data.groupConfigsUpdated,
+        studentGroupsUpdated: data.studentGroupsUpdated
+      });
+    } else {
+      console.error('[v230] ❌ 保存分组数据失败:', data.error);
+      showNotification('保存失败', data.error || '分组数据未能保存到云端', 'error');
+    }
+    return data;
+  })
+  .catch(err => {
+    console.error('[v230] ❌ 保存分组数据异常:', err);
+    showNotification('网络错误', '分组数据保存失败：' + err.message, 'error');
   });
 }
 
@@ -3375,9 +3423,12 @@ function saveCurrentClassGroupsToServer() {
   if (!cur) return Promise.resolve();
   
   const groupConfigs = cur.groupConfigs || [];
-  const studentGroups = cur.students
-    .filter(s => s.groupId)
-    .map(s => ({ studentId: s.id, groupId: s.groupId }));
+  // v232: 必须发送所有学生的分组状态（包括 groupId=null 的），
+  // 否则被移除分组的学生在服务器上的旧 groupId 不会被清除
+  const studentGroups = cur.students.map(s => ({
+    studentId: s.id,
+    groupId: s.groupId || null
+  }));
   
   return saveGroupsToServer(currentClassId, groupConfigs, studentGroups);
 }

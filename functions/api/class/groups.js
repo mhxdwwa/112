@@ -22,6 +22,12 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ error: 'Missing classId' }, 400);
   }
 
+  console.log('[API] /class/groups request:', {
+    classId,
+    groupConfigsCount: groupConfigs ? groupConfigs.length : 0,
+    studentGroupsCount: studentGroups ? studentGroups.length : 0
+  });
+
   const updates = [];
 
   // 1. 更新班级分组配置
@@ -31,11 +37,12 @@ export const onRequestPost = async ({ request, env }) => {
     );
   }
 
-  // 2. 更新学生分组ID
+  // 2. 更新学生分组ID（逐个更新，支持 null 值清除）
   if (studentGroups && Array.isArray(studentGroups) && studentGroups.length > 0) {
     studentGroups.forEach(sg => {
+      const groupIdValue = sg.groupId || null;
       updates.push(
-        sbUpdate(env, 'students', { group_id: sg.groupId || null }, `id=eq.${sg.studentId}`)
+        sbUpdate(env, 'students', { group_id: groupIdValue }, `id=eq.${sg.studentId}`)
       );
     });
   }
@@ -45,8 +52,10 @@ export const onRequestPost = async ({ request, env }) => {
 
   if (errors.length > 0) {
     console.error('[API] /class/groups errors:', errors);
-    return jsonResponse({ error: 'Some updates failed', details: errors }, 500);
+    return jsonResponse({ error: 'Some updates failed', details: errors.map(e => e.error?.message || e.error) }, 500);
   }
+
+  console.log('[API] /class/groups success: classId=' + classId + ', groups=' + (groupConfigs ? groupConfigs.length : 0) + ', students=' + (studentGroups ? studentGroups.length : 0));
 
   return jsonResponse({ 
     ok: true, 
