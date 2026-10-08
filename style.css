@@ -3585,3 +3585,43 @@ input:focus, select:focus{border-color:#ffb0a0;box-shadow:0 0 0 3px rgba(255,176
   color: #52c41a;
   font-weight: 700;
 }
+
+/* ========== v224: 分组筛选标签 ========== */
+.group-filter-tab {
+  padding: 6px 14px;
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f0f0f0;
+  color: #666;
+  border: 2px solid transparent;
+  user-select: none;
+}
+
+.group-filter-tab:hover {
+  background: #e0e0e0;
+  transform: translateY(-1px);
+}
+
+.group-filter-tab.active {
+  background: var(--group-color, #667eea);
+  color: #fff;
+  border-color: var(--group-color, #667eea);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* 学生卡片组别标记 */
+.student-group-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}

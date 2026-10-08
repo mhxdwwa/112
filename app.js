@@ -2254,6 +2254,9 @@ function _studentDataHash(s) {
 
 function _generateStudentCardHTML(s){
   const activePet = getActivePet(s);
+  // v224: 获取学生分组信息
+  const studentGroup = getStudentGroup(s);
+  const groupBadgeHtml = studentGroup ? `<div class="student-group-badge" style="background:${studentGroup.color};">${esc(studentGroup.name)}</div>` : '';
   if(activePet){const p=activePet; const need=getExpNeeded(p); const lastDate=p.lastFeedDate?new Date(p.lastFeedDate):null; let timeTip=''; if(p.level>=9){timeTip='👑 已满级';}else if(isPauseActive()){timeTip='🛡️ 假期保护中';}else if(!p.isDead&&lastDate){if(_hasFedToday(p)){timeTip='✅ 今日已喂食';}else{const hours=getEffectiveUnfedHours(p); timeTip=hours<24?`⏰ ${Math.floor(hours)}小时前喂`:hours>=1440?`🔴 ${Math.floor(hours/24)}天未喂`:`⚠️ ${Math.floor(hours/24)}天未喂`;}}else if(p.isDead)timeTip='💀 已饿死';
   const maxed=countMaxedPets(s); const totalPets=s.pets.length; const hasLegend=maxed>0; const isPetMax=p.level>=9; const fx=getStudentShopEffects(s); const cardClass='home-pet-card'; const innerClass='home-pet-inner'+(hasLegend?' has-legend':'')+(isPetMax?' pet-maxed':'')+(fx.borderClasses.length?' '+fx.borderClasses.join(' '):'');
   let multiBadge=''; if(totalPets>1) multiBadge=`<div class="multi-pet-badge multi">🐾×${totalPets}</div>`;
@@ -2271,8 +2274,8 @@ function _generateStudentCardHTML(s){
   const studentName = rawStudentName.length === 1 ? '\u3000\u3000' + rawStudentName : rawStudentName.length === 2 ? rawStudentName[0] + '\u3000' + rawStudentName[1] : rawStudentName.slice(0, 3);
   // 宠物名字最多5字
   const petName = (p.nickname||p.name).length > 5 ? (p.nickname||p.name).slice(0,5) : (p.nickname||p.name);
-  return `<div class="${cardClass}" data-sid="${s.id}" data-hash="${_studentDataHash(s)}">${fx.topHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}" onclick="openStudentModal('${s.id}')" style="cursor:pointer;"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1).replace('<img ', `<img style="${petImgStyle}" ${petImgAttr} `)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}${escapeHint}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}<div class="home-pet-middle" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" style="cursor:pointer;" title="点击修改宠物名字">${inlineTitleHtml}<span class="pet-name-line">${esc(studentName)}·${esc(petName)}</span></div><div class="home-pet-bottom" onclick="openStudentModal('${s.id}')" style="cursor:pointer;"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0} 🟠${s.xiandan||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;
-  }else{return `<div class="home-pet-card" data-sid="${s.id}" data-hash="${_studentDataHash(s)}" onclick="showAdoptModal('${s.id}')"><div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}
+  return `<div class="${cardClass}" data-sid="${s.id}" data-hash="${_studentDataHash(s)}">${fx.topHtml}${groupBadgeHtml}<div class="${innerClass}">${fx.particleHtml}${p.level<2?`<button class="change-pet-btn" onclick="event.stopPropagation();showChangePetModal('${s.id}')">🔄</button>`:''}${s.pets.length>1?`<button class="switch-pet-btn" onclick="event.stopPropagation();showSwitchPetModal('${s.id}')">🔀 切换</button>`:''}<div class="home-pet-top${fx.sceneClass?' '+fx.sceneClass:''}" onclick="openStudentModal('${s.id}')" style="cursor:pointer;"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${fx.baseHtml}${getPetImage(p.name, p.level||1).replace('<img ', `<img style="${petImgStyle}" ${petImgAttr} `)}${p.isDead?'<div class="dead-pet-overlay">💀</div>':''}${escapeHint}</div></div><div class="home-pet-level-badge">${isPetMax?'👑 MAX':'Lv.'+(p.level||1)}</div>${multiBadge}<div class="home-pet-middle" onclick="event.stopPropagation();renamePet('${s.id}','${p.id}')" style="cursor:pointer;" title="点击修改宠物名字">${inlineTitleHtml}<span class="pet-name-line">${esc(studentName)}·${esc(petName)}</span></div><div class="home-pet-bottom" onclick="openStudentModal('${s.id}')" style="cursor:pointer;"><div class="home-pet-bottom-row"><span class="pet-bottom-growth">成长:${p.level>=9?need:(p.growth||0)}/${need}</span><span class="pet-bottom-coins">💰${s.coins||0} 🟠${s.xiandan||0}</span></div><div class="feed-warning">${timeTip}</div>${growHint}</div></div></div>`;
+  }else{return `<div class="home-pet-card" data-sid="${s.id}" data-hash="${_studentDataHash(s)}" onclick="showAdoptModal('${s.id}')">${groupBadgeHtml}<div class="home-pet-inner"><div class="home-pet-top"><div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">${getEggImage()}</div></div><div class="home-pet-middle">${esc(s.name)}</div><div class="home-pet-bottom"><button class="btn btn-primary btn-small">领养宠物</button></div></div></div>`;}}
 
 function _renderGridBatch(grid){
   if(_gridBatchBusy) return;
@@ -2327,12 +2330,26 @@ function renderHomePetGrid(){ const grid=document.getElementById('homePetGrid');
   if (_resetPwdBtn) {
     _resetPwdBtn.style.display = _isTeacher() ? 'flex' : 'none';
   }
+  // v224: 渲染分组筛选标签
+  renderGroupFilterTabs();
   if(!currentClassId||!classesData.some(c=>c.id===currentClassId)){grid.innerHTML='<div class="empty-deco" style="width:100%;"><div class="empty-deco-img">🏫</div><div class="empty-deco-text">请先选择或创建一个班级</div><div class="empty-deco-sub">点击上方「新建班级」开始你的宠物之旅~</div></div>';return;}
   const cur=classesData.find(c=>c.id===currentClassId);
   if(cur.students.length===0){grid.innerHTML='<div class="empty-deco" style="width:100%;cursor:pointer;" onclick="addSingleStudent()"><div class="empty-deco-img">🐣</div><div class="empty-deco-text">还没有小伙伴呢</div><div class="empty-deco-sub">点击这里添加第一个学生吧~</div></div>';return;}
+  // v224: 分组筛选
+  var _filteredStudents = cur.students;
+  if (_currentGroupFilter !== null) {
+    if (_currentGroupFilter === 'ungrouped') {
+      // 未分组
+      const groups = getClassGroups();
+      _filteredStudents = cur.students.filter(s => !s.groupId || !groups.find(g => g.id === s.groupId));
+    } else {
+      // 特定分组
+      _filteredStudents = cur.students.filter(s => s.groupId === _currentGroupFilter);
+    }
+  }
   // 使用排序模式（仅教师账户下生效）
   var _sortMode = _isTeacher() ? (_petSortModes[currentClassId] || 0) : 0;
-  _gridStudents = _sortMode > 0 ? _getSortedStudents(cur.students, _sortMode) : cur.students;
+  _gridStudents = _sortMode > 0 ? _getSortedStudents(_filteredStudents, _sortMode) : _filteredStudents;
   // 更新排序按钮显示（切换班级时保持正确状态）
   if (_sortBtn && _isTeacher()) {
     var _curMode = _petSortModes[currentClassId] || 0;
@@ -3277,6 +3294,369 @@ function skipAuth(){
   const ov = document.getElementById('startOverlay');
   if(ov) ov.remove();
   showNotification('提示', '数据仅保存在本机浏览器，换电脑会丢失', 'warning');
+}
+
+// ============================================================
+// v224: 分组管理功能
+// ============================================================
+
+// 预设颜色
+const GROUP_COLORS = [
+  { name: '红色', value: '#ff6b6b' },
+  { name: '蓝色', value: '#4ecdc4' },
+  { name: '绿色', value: '#51cf66' },
+  { name: '黄色', value: '#ffd43b' },
+  { name: '紫色', value: '#cc5de8' },
+  { name: '橙色', value: '#ff922b' },
+  { name: '青色', value: '#22b8cf' },
+  { name: '粉色', value: '#f06595' }
+];
+
+// 当前选中的分组筛选（null 表示全部）
+var _currentGroupFilter = null;
+
+// 获取当前班级的分组配置
+function getClassGroups() {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur) return [];
+  if (!cur.groupConfigs) cur.groupConfigs = [];
+  return cur.groupConfigs;
+}
+
+// 保存分组配置
+function saveClassGroups(groups) {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (cur) {
+    cur.groupConfigs = groups;
+    saveClassData();
+  }
+}
+
+// 生成新的分组ID
+function genGroupId() {
+  return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// 显示分组管理弹窗
+function showGroupManageModal() {
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.type !== 'teacher') {
+    showNotification('权限不足', '仅教师可管理分组', 'error');
+    return;
+  }
+  if (!currentClassId) {
+    showNotification('请先选择班级', '请在左侧选择一个班级', 'warning');
+    return;
+  }
+
+  const groups = getClassGroups();
+  const cur = classesData.find(c => c.id === currentClassId);
+  const students = cur ? cur.students : [];
+
+  // 统计每个分组的学生数
+  const groupCounts = {};
+  groups.forEach(g => groupCounts[g.id] = 0);
+  let ungroupedCount = 0;
+  students.forEach(s => {
+    if (s.groupId && groupCounts[s.groupId] !== undefined) {
+      groupCounts[s.groupId]++;
+    } else {
+      ungroupedCount++;
+    }
+  });
+
+  let html = '<div style="max-height:500px;overflow-y:auto;padding:10px 0;">';
+
+  if (groups.length === 0) {
+    html += '<div style="text-align:center;padding:40px;color:#999;">暂无分组，点击下方按钮创建</div>';
+  } else {
+    groups.forEach((g, idx) => {
+      const count = groupCounts[g.id] || 0;
+      const members = students.filter(s => s.groupId === g.id).map(s => s.name).join('、');
+      html += `
+        <div style="background:#fff;border:2px solid ${g.color};border-radius:12px;padding:15px;margin:10px 0;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <div style="width:20px;height:20px;border-radius:50%;background:${g.color};"></div>
+            <div style="flex:1;font-size:16px;font-weight:700;color:#333;">${esc(g.name)}</div>
+            <div style="font-size:13px;color:#666;">${count}人</div>
+            <button onclick="editGroup('${g.id}')" style="background:#e0f7fa;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">编辑</button>
+            <button onclick="editGroupMembers('${g.id}')" style="background:#fff3e0;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">调整成员</button>
+            <button onclick="deleteGroup('${g.id}')" style="background:#ffebee;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:#d32f2f;">删除</button>
+          </div>
+          ${members ? `<div style="font-size:13px;color:#666;line-height:1.6;">${esc(members)}</div>` : '<div style="font-size:13px;color:#999;font-style:italic;">暂无成员</div>'}
+        </div>
+      `;
+    });
+  }
+
+  // 未分组学生
+  if (ungroupedCount > 0) {
+    const ungroupedMembers = students.filter(s => !s.groupId || !groups.find(g => g.id === s.groupId)).map(s => s.name).join('、');
+    html += `
+      <div style="background:#f5f5f5;border:2px dashed #ccc;border-radius:12px;padding:15px;margin:10px 0;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:20px;height:20px;border-radius:50%;background:#ccc;"></div>
+          <div style="flex:1;font-size:16px;font-weight:700;color:#666;">未分组</div>
+          <div style="font-size:13px;color:#999;">${ungroupedCount}人</div>
+        </div>
+        <div style="font-size:13px;color:#666;line-height:1.6;">${esc(ungroupedMembers)}</div>
+      </div>
+    `;
+  }
+
+  html += '</div>';
+
+  showModal('分组管理', html, [
+    { text: '➕ 新建分组', class: 'btn-primary', onclick: 'createGroup()' },
+    { text: '关闭', class: 'btn-secondary', onclick: 'closeModal()' }
+  ]);
+}
+
+// 创建新分组
+function createGroup() {
+  const groups = getClassGroups();
+  showGroupEditModal(null, groups);
+}
+
+// 编辑分组
+function editGroup(groupId) {
+  const groups = getClassGroups();
+  const group = groups.find(g => g.id === groupId);
+  if (!group) return;
+  showGroupEditModal(group, groups);
+}
+
+// 显示分组编辑弹窗（新建或编辑）
+function showGroupEditModal(group, groups) {
+  const isEdit = !!group;
+  const name = group ? group.name : '';
+  const color = group ? group.color : GROUP_COLORS[0].value;
+
+  let html = `
+    <div style="padding:20px 0;">
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-size:14px;font-weight:600;color:#333;margin-bottom:8px;">分组名称</label>
+        <input type="text" id="groupNameInput" value="${esc(name)}" placeholder="请输入分组名称" maxlength="20" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:15px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="display:block;font-size:14px;font-weight:600;color:#333;margin-bottom:8px;">分组颜色</label>
+        <div id="groupColorPicker" style="display:flex;gap:10px;flex-wrap:wrap;">
+  `;
+
+  GROUP_COLORS.forEach(c => {
+    const selected = c.value === color ? 'border:3px solid #333;' : 'border:3px solid transparent;';
+    html += `<div onclick="selectGroupColor('${c.value}')" data-color="${c.value}" style="width:40px;height:40px;border-radius:50%;background:${c.value};cursor:pointer;${selected}transition:all 0.2s;" title="${c.name}"></div>`;
+  });
+
+  html += `
+        </div>
+        <input type="hidden" id="groupColorInput" value="${color}">
+      </div>
+    </div>
+  `;
+
+  showModal(isEdit ? '编辑分组' : '新建分组', html, [
+    { text: '取消', class: 'btn-secondary', onclick: 'showGroupManageModal()' },
+    { text: '保存', class: 'btn-primary', onclick: `saveGroup('${isEdit ? group.id : ''}')` }
+  ]);
+}
+
+// 选择分组颜色
+function selectGroupColor(color) {
+  document.getElementById('groupColorInput').value = color;
+  const colorDivs = document.querySelectorAll('#groupColorPicker > div');
+  colorDivs.forEach(div => {
+    if (div.dataset.color === color) {
+      div.style.border = '3px solid #333';
+    } else {
+      div.style.border = '3px solid transparent';
+    }
+  });
+}
+
+// 保存分组
+function saveGroup(groupId) {
+  const nameInput = document.getElementById('groupNameInput');
+  const colorInput = document.getElementById('groupColorInput');
+  if (!nameInput || !colorInput) return;
+
+  const name = nameInput.value.trim();
+  const color = colorInput.value;
+
+  if (!name) {
+    showNotification('请输入分组名称', '', 'warning');
+    return;
+  }
+
+  const groups = getClassGroups();
+
+  if (groupId) {
+    // 编辑模式
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      group.name = name;
+      group.color = color;
+    }
+  } else {
+    // 新建模式
+    groups.push({
+      id: genGroupId(),
+      name: name,
+      color: color
+    });
+  }
+
+  saveClassGroups(groups);
+  showNotification('保存成功', '', 'success');
+  showGroupManageModal();
+  renderGroupFilterTabs();
+  renderHomePetGrid();
+}
+
+// 删除分组
+function deleteGroup(groupId) {
+  if (!confirm('确定删除该分组？\n组内学生将变为"未分组"状态。')) return;
+
+  const groups = getClassGroups();
+  const cur = classesData.find(c => c.id === currentClassId);
+
+  // 将该组的学生设为未分组
+  if (cur && cur.students) {
+    cur.students.forEach(s => {
+      if (s.groupId === groupId) {
+        s.groupId = null;
+      }
+    });
+  }
+
+  // 删除分组配置
+  const newGroups = groups.filter(g => g.id !== groupId);
+  saveClassGroups(newGroups);
+
+  showNotification('分组已删除', '', 'success');
+  showGroupManageModal();
+  renderGroupFilterTabs();
+  renderHomePetGrid();
+}
+
+// 编辑分组成成员
+function editGroupMembers(groupId) {
+  const groups = getClassGroups();
+  const group = groups.find(g => g.id === groupId);
+  if (!group) return;
+
+  const cur = classesData.find(c => c.id === currentClassId);
+  const students = cur ? cur.students : [];
+
+  let html = '<div style="max-height:400px;overflow-y:auto;padding:10px 0;">';
+  html += '<div style="margin-bottom:15px;padding:10px;background:#f5f5f5;border-radius:8px;font-size:13px;color:#666;">勾选要加入本组的学生（已在本组的学生会自动保持勾选）</div>';
+
+  students.forEach(s => {
+    const isChecked = s.groupId === groupId;
+    const currentGroup = groups.find(g => g.id === s.groupId);
+    const currentGroupText = currentGroup ? `当前: ${currentGroup.name}` : '当前: 未分组';
+
+    html += `
+      <label style="display:flex;align-items:center;gap:12px;padding:10px;margin:5px 0;background:#fff;border-radius:8px;cursor:pointer;transition:background 0.2s;border:1px solid #e8e8e8;">
+        <input type="checkbox" class="group-member-chk" data-student-id="${s.id}" ${isChecked ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;">
+        <span style="flex:1;font-size:15px;">${esc(s.name)}</span>
+        <span style="font-size:12px;color:#999;">${currentGroupText}</span>
+      </label>
+    `;
+  });
+
+  html += '</div>';
+
+  showModal(`调整成员 - ${group.name}`, html, [
+    { text: '取消', class: 'btn-secondary', onclick: 'showGroupManageModal()' },
+    { text: '保存', class: 'btn-primary', onclick: `saveGroupMembers('${groupId}')` }
+  ]);
+}
+
+// 保存分组成员
+function saveGroupMembers(groupId) {
+  const cur = classesData.find(c => c.id === currentClassId);
+  if (!cur || !cur.students) return;
+
+  const checkboxes = document.querySelectorAll('.group-member-chk');
+  const selectedIds = new Set();
+  checkboxes.forEach(chk => {
+    if (chk.checked) {
+      selectedIds.add(chk.dataset.studentId);
+    }
+  });
+
+  // 更新学生的 groupId
+  cur.students.forEach(s => {
+    if (selectedIds.has(s.id.toString())) {
+      s.groupId = groupId;
+    } else if (s.groupId === groupId) {
+      // 取消勾选的，设为未分组
+      s.groupId = null;
+    }
+  });
+
+  saveClassData();
+  showNotification('成员已更新', '', 'success');
+  showGroupManageModal();
+  renderGroupFilterTabs();
+  renderHomePetGrid();
+}
+
+// 渲染分组筛选标签
+function renderGroupFilterTabs() {
+  const container = document.getElementById('groupFilterTabs');
+  if (!container) return;
+
+  const groups = getClassGroups();
+  const cur = classesData.find(c => c.id === currentClassId);
+  const students = cur ? cur.students : [];
+
+  // 统计每个分组的学生数
+  const groupCounts = {};
+  groups.forEach(g => groupCounts[g.id] = 0);
+  let ungroupedCount = 0;
+  students.forEach(s => {
+    if (s.groupId && groupCounts[s.groupId] !== undefined) {
+      groupCounts[s.groupId]++;
+    } else {
+      ungroupedCount++;
+    }
+  });
+
+  let html = '';
+
+  // 全部标签
+  const allActive = _currentGroupFilter === null ? 'active' : '';
+  html += `<div class="group-filter-tab ${allActive}" onclick="filterByGroup(null)">全部 (${students.length})</div>`;
+
+  // 各分组标签
+  groups.forEach(g => {
+    const count = groupCounts[g.id] || 0;
+    const active = _currentGroupFilter === g.id ? 'active' : '';
+    html += `<div class="group-filter-tab ${active}" onclick="filterByGroup('${g.id}')" style="--group-color:${g.color};">${esc(g.name)} (${count})</div>`;
+  });
+
+  // 未分组标签
+  if (ungroupedCount > 0) {
+    const active = _currentGroupFilter === 'ungrouped' ? 'active' : '';
+    html += `<div class="group-filter-tab ${active}" onclick="filterByGroup('ungrouped')">未分组 (${ungroupedCount})</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// 按分组筛选
+function filterByGroup(groupId) {
+  _currentGroupFilter = groupId;
+  renderGroupFilterTabs();
+  renderHomePetGrid();
+}
+
+// 获取学生所属分组
+function getStudentGroup(student) {
+  if (!student || !student.groupId) return null;
+  const groups = getClassGroups();
+  return groups.find(g => g.id === student.groupId);
 }
 
 
