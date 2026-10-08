@@ -3653,6 +3653,9 @@ function renderOverview() {
         <div class="stat-sub">迟到 ${late} 人 · 点击查看详情 →</div>
       </div>
     </div>
+    <div style="margin-top:16px">
+      <button class="toolbar-btn primary" onclick="downloadSchoolAttendanceExcel()">下载全校到校情况Excel</button>
+    </div>
     <div id="overviewDrillDownArea"></div>
     <div class="grid-2-1">
       <div class="card anim-in anim-d2">
@@ -3954,6 +3957,7 @@ function renderFamilySituation() {
     <td>${s.seat}</td>
     <td style="font-weight:500">${s.name}</td>
     <td><span class="badge ${s.familyType === '脱贫户' ? 'green' : s.familyType === '低保' ? 'orange' : 'red'}">${s.familyType}</span></td>
+    <td>${s.familyAddress || '-'}</td>
     <td>${s.familyNote || '-'}</td>
     <td>
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editFamilyType('${cls}',${s.id})">编辑</button>
@@ -3965,6 +3969,7 @@ function renderFamilySituation() {
     <td>${s.seat}</td>
     <td style="font-weight:500">${s.name}</td>
     <td>${s.leftBehindNote || '-'}</td>
+    <td>${s.familyAddress || '-'}</td>
     <td>
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editLeftBehind('${cls}',${s.id})">编辑</button>
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteLeftBehind('${cls}',${s.id})">删除</button>
@@ -4004,24 +4009,30 @@ function renderFamilySituation() {
       <div class="card anim-in anim-d2">
         <div class="card-header">
           <span class="card-title">留守儿童 (${leftBehind}人)</span>
-          <button class="toolbar-btn primary" style="font-size:12px" onclick="showBatchLeftBehindModal()">批量设置</button>
+          <div style="display:flex;gap:8px">
+            <button class="toolbar-btn primary" style="font-size:12px" onclick="downloadClassLeftBehindExcel()">下载Excel</button>
+            <button class="toolbar-btn primary" style="font-size:12px" onclick="showBatchLeftBehindModal()">批量设置</button>
+          </div>
         </div>
         <div class="card-body no-pad"><div class="table-wrap">
           <table>
-            <thead><tr><th>座号</th><th>姓名</th><th>监护情况</th><th>操作</th></tr></thead>
-            <tbody>${leftBehindRows || '<tr><td colspan="4" style="text-align:center;color:var(--gray-400);padding:30px">暂无留守儿童</td></tr>'}</tbody>
+            <thead><tr><th>座号</th><th>姓名</th><th>监护情况</th><th>家庭地址</th><th>操作</th></tr></thead>
+            <tbody>${leftBehindRows || '<tr><td colspan="5" style="text-align:center;color:var(--gray-400);padding:30px">暂无留守儿童</td></tr>'}</tbody>
           </table>
         </div></div>
       </div>
       <div class="card anim-in anim-d3">
         <div class="card-header">
           <span class="card-title">特殊家庭情况学生 (${sts.filter(s => s.familyType).length}人)</span>
-          <button class="toolbar-btn primary" style="font-size:12px" onclick="showBatchFamilyModal()">批量设置</button>
+          <div style="display:flex;gap:8px">
+            <button class="toolbar-btn primary" style="font-size:12px" onclick="downloadClassFamilyExcel()">下载Excel</button>
+            <button class="toolbar-btn primary" style="font-size:12px" onclick="showBatchFamilyModal()">批量设置</button>
+          </div>
         </div>
         <div class="card-body no-pad"><div class="table-wrap">
           <table>
-            <thead><tr><th>座号</th><th>姓名</th><th>分类</th><th>备注</th><th>操作</th></tr></thead>
-            <tbody>${familyRows || '<tr><td colspan="5" style="text-align:center;color:var(--gray-400);padding:30px">暂无特殊家庭情况学生</td></tr>'}</tbody>
+            <thead><tr><th>座号</th><th>姓名</th><th>分类</th><th>家庭地址</th><th>备注</th><th>操作</th></tr></thead>
+            <tbody>${familyRows || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:30px">暂无特殊家庭情况学生</td></tr>'}</tbody>
           </table>
         </div></div>
       </div>
@@ -4050,6 +4061,10 @@ function editFamilyType(cls, id) {
       <input class="form-input" id="editFamilyCustomType" value="${s.familyType && s.familyType !== '脱贫户' && s.familyType !== '低保' ? s.familyType : ''}" placeholder="如：单亲家庭、孤儿等">
     </div>
     <div class="form-group">
+      <label class="form-label">家庭地址</label>
+      <input class="form-input" id="editFamilyAddress" value="${s.familyAddress || ''}" placeholder="请输入家庭地址">
+    </div>
+    <div class="form-group">
       <label class="form-label">备注</label>
       <textarea class="form-textarea" id="editFamilyNote" placeholder="补充说明...">${s.familyNote || ''}</textarea>
     </div>
@@ -4063,6 +4078,7 @@ function saveFamilyType(cls, id) {
   const type = document.getElementById('editFamilyTypeSelect').value;
   const customType = document.getElementById('editFamilyCustomType').value.trim();
   s.familyType = type === '其他特殊类' ? (customType || '其他特殊类') : type;
+  s.familyAddress = document.getElementById('editFamilyAddress').value.trim();
   s.familyNote = document.getElementById('editFamilyNote').value.trim();
   saveStudentsToStorage();
   hideModal();
@@ -4075,6 +4091,7 @@ function deleteFamilyType(cls, id) {
   if (!s) return;
   if (!confirm(`确定要删除 ${s.name} 的家庭情况分类吗？`)) return;
   s.familyType = '';
+  s.familyAddress = '';
   s.familyNote = '';
   saveStudentsToStorage();
   showToast('已删除家庭情况分类');
@@ -4113,6 +4130,10 @@ function showBatchFamilyModal() {
       <input class="form-input" id="batchFamilyCustomType" placeholder="如：单亲家庭、孤儿等">
     </div>
     <div class="form-group">
+      <label class="form-label">家庭地址</label>
+      <input class="form-input" id="batchFamilyAddress" placeholder="请输入家庭地址">
+    </div>
+    <div class="form-group">
       <label class="form-label">备注</label>
       <textarea class="form-textarea" id="batchFamilyNote" placeholder="补充说明..."></textarea>
     </div>
@@ -4143,6 +4164,7 @@ function saveBatchFamily() {
     return;
   }
   const customType = document.getElementById('batchFamilyCustomType').value.trim();
+  const address = document.getElementById('batchFamilyAddress').value.trim();
   const note = document.getElementById('batchFamilyNote').value.trim();
   const cls = getHeadteacherClass();
   const finalType = type === '其他特殊类' ? (customType || '其他特殊类') : type;
@@ -4151,6 +4173,7 @@ function saveBatchFamily() {
     const s = STUDENTS[cls].find(st => st.id === id);
     if (s) {
       s.familyType = finalType;
+      s.familyAddress = address;
       s.familyNote = note;
       count++;
     }
@@ -4192,6 +4215,10 @@ function editLeftBehind(cls, id) {
       <label class="form-label">补充说明（选填）</label>
       <input class="form-input" id="editLeftBehindCustom" value="${s.leftBehindNote && !['父母双方外出务工','父母一方外出务工','由祖父母监护','由亲戚监护'].includes(s.leftBehindNote) ? s.leftBehindNote : ''}" placeholder="如：由叔叔监护等">
     </div>
+    <div class="form-group">
+      <label class="form-label">家庭地址</label>
+      <input class="form-input" id="editLeftBehindAddress" value="${s.familyAddress || ''}" placeholder="请输入家庭地址">
+    </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="saveLeftBehind('${cls}',${id})">保存</button>`);
 }
@@ -4202,10 +4229,12 @@ function saveLeftBehind(cls, id) {
   const isLeftBehind = document.getElementById('editLeftBehindSelect').value === 'yes';
   const noteSelect = document.getElementById('editLeftBehindNote').value;
   const customNote = document.getElementById('editLeftBehindCustom').value.trim();
+  const address = document.getElementById('editLeftBehindAddress').value.trim();
   
   s.leftBehind = isLeftBehind;
   if (isLeftBehind) {
     s.leftBehindNote = noteSelect === '其他' ? (customNote || '其他') : noteSelect;
+    s.familyAddress = address;
   } else {
     s.leftBehindNote = '';
   }
@@ -4222,6 +4251,7 @@ function deleteLeftBehind(cls, id) {
   if (!confirm(`确定要将 ${s.name} 从留守儿童名单中移除吗？`)) return;
   s.leftBehind = false;
   s.leftBehindNote = '';
+  s.familyAddress = '';
   saveStudentsToStorage();
   showToast('已从留守儿童名单中移除');
   navigate('family-situation');
@@ -4259,6 +4289,10 @@ function showBatchLeftBehindModal() {
       <label class="form-label">补充说明（选其他时填写）</label>
       <input class="form-input" id="batchLeftBehindCustom" placeholder="如：由叔叔监护等">
     </div>
+    <div class="form-group">
+      <label class="form-label">家庭地址</label>
+      <input class="form-input" id="batchLeftBehindAddress" placeholder="请输入家庭地址">
+    </div>
     <div style="margin-top:12px">
       <button class="toolbar-btn ghost" style="font-size:12px;color:var(--danger)" onclick="clearSelectedLeftBehind()">清除已选学生的留守儿童标记</button>
     </div>
@@ -4285,6 +4319,7 @@ function saveBatchLeftBehind() {
   }
   const noteSelect = document.getElementById('batchLeftBehindNote').value;
   const customNote = document.getElementById('batchLeftBehindCustom').value.trim();
+  const address = document.getElementById('batchLeftBehindAddress').value.trim();
   const cls = getHeadteacherClass();
   const finalNote = noteSelect === '其他' ? (customNote || '其他') : noteSelect;
   
@@ -4294,6 +4329,7 @@ function saveBatchLeftBehind() {
     if (s) {
       s.leftBehind = true;
       s.leftBehindNote = finalNote;
+      s.familyAddress = address;
       count++;
     }
   });
@@ -4324,6 +4360,56 @@ function clearSelectedLeftBehind() {
   hideModal();
   showToast(`已清除 ${count} 名学生的留守儿童标记`);
   navigate('family-situation');
+}
+
+/* ----- DOWNLOAD FUNCTIONS FOR CLASS TEACHERS ----- */
+function downloadClassLeftBehindExcel() {
+  const cls = getHeadteacherClass();
+  if (!cls || !STUDENTS[cls]) { showToast('暂无班级数据', 'warning'); return; }
+  const sts = STUDENTS[cls].filter(s => s.leftBehind);
+  if (sts.length === 0) { showToast('暂无留守儿童数据', 'warning'); return; }
+  
+  const data = sts.map(s => ({
+    '班级': cls,
+    '座号': s.seat,
+    '姓名': s.name,
+    '监护情况': s.leftBehindNote || '-',
+    '家庭地址': s.familyAddress || '-',
+    '家长电话': s.parent || '-'
+  }));
+  
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '留守儿童');
+  
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `${cls}_留守儿童_${today}.xlsx`);
+  showToast('已下载留守儿童Excel');
+}
+
+function downloadClassFamilyExcel() {
+  const cls = getHeadteacherClass();
+  if (!cls || !STUDENTS[cls]) { showToast('暂无班级数据', 'warning'); return; }
+  const sts = STUDENTS[cls].filter(s => s.familyType);
+  if (sts.length === 0) { showToast('暂无特殊家庭情况数据', 'warning'); return; }
+  
+  const data = sts.map(s => ({
+    '班级': cls,
+    '座号': s.seat,
+    '姓名': s.name,
+    '分类': s.familyType,
+    '家庭地址': s.familyAddress || '-',
+    '家长电话': s.parent || '-',
+    '备注': s.familyNote || '-'
+  }));
+  
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '特殊家庭情况');
+  
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `${cls}_特殊家庭情况_${today}.xlsx`);
+  showToast('已下载特殊家庭情况Excel');
 }
 
 /* ----- LEADER: Family Overview (全校学生家庭情况) ----- */
@@ -4385,6 +4471,7 @@ function renderFamilyOverview() {
       <tr>
         <td style="font-weight:500">${s.name}</td>
         <td>${s.leftBehindNote || '-'}</td>
+        <td>${s.familyAddress || '-'}</td>
       </tr>
     `).join('');
     return `
@@ -4395,7 +4482,7 @@ function renderFamilyOverview() {
         </div>
         <div style="display:none;max-height:180px;overflow-y:auto">
           <table>
-            <thead><tr><th>姓名</th><th>监护情况</th></tr></thead>
+            <thead><tr><th>姓名</th><th>监护情况</th><th>家庭地址</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -4414,6 +4501,7 @@ function renderFamilyOverview() {
       <tr>
         <td style="font-weight:500">${s.name}</td>
         <td><span class="badge ${s.familyType === '脱贫户' ? 'green' : s.familyType === '低保' ? 'orange' : 'red'}">${s.familyType}</span></td>
+        <td>${s.familyAddress || '-'}</td>
         <td>${s.familyNote || '-'}</td>
       </tr>
     `).join('');
@@ -4425,7 +4513,7 @@ function renderFamilyOverview() {
         </div>
         <div style="display:none;max-height:180px;overflow-y:auto">
           <table>
-            <thead><tr><th>姓名</th><th>分类</th><th>备注</th></tr></thead>
+            <thead><tr><th>姓名</th><th>分类</th><th>家庭地址</th><th>备注</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -4480,6 +4568,11 @@ function renderFamilyOverview() {
       </div>
     </div>
     ${otherTypesHtml}
+    <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
+      <button class="toolbar-btn primary" onclick="downloadSchoolLeftBehindExcel()">下载全校留守儿童Excel</button>
+      <button class="toolbar-btn primary" onclick="downloadSchoolFamilyExcel()">下载全校特殊家庭情况Excel</button>
+      <button class="toolbar-btn primary" onclick="downloadSchoolAttendanceExcel()">下载全校到校情况Excel</button>
+    </div>
     <div class="grid-2" style="margin-top:20px">
       <div class="card anim-in anim-d2" style="display:flex;flex-direction:column">
         <div class="card-header" style="flex-shrink:0">
@@ -4506,17 +4599,111 @@ function showClassFamilyDetail(cls) {
     <td>${s.seat}</td>
     <td style="font-weight:500">${s.name}</td>
     <td><span class="badge ${s.familyType === '脱贫户' ? 'green' : s.familyType === '低保' ? 'orange' : 'red'}">${s.familyType}</span></td>
+    <td>${s.familyAddress || '-'}</td>
     <td>${s.familyNote || '-'}</td>
   </tr>`).join('');
   
   showModal(`${cls} 家庭情况详情`, `
     <div style="margin:-8px -4px">
       <table>
-        <thead><tr><th>座号</th><th>姓名</th><th>分类</th><th>备注</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--gray-400);padding:20px">暂无数据</td></tr>'}</tbody>
+        <thead><tr><th>座号</th><th>姓名</th><th>分类</th><th>家庭地址</th><th>备注</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--gray-400);padding:20px">暂无数据</td></tr>'}</tbody>
       </table>
     </div>
   `, '<button class="toolbar-btn ghost" onclick="hideModal()">关闭</button>', true);
+}
+
+/* ----- DOWNLOAD FUNCTIONS FOR LEADERS ----- */
+function downloadSchoolLeftBehindExcel() {
+  let allData = [];
+  CLASS_LIST.forEach(cls => {
+    STUDENTS[cls].filter(s => s.leftBehind).forEach(s => {
+      allData.push({
+        '班级': cls,
+        '座号': s.seat,
+        '姓名': s.name,
+        '监护情况': s.leftBehindNote || '-',
+        '家庭地址': s.familyAddress || '-',
+        '家长电话': s.parent || '-'
+      });
+    });
+  });
+  
+  if (allData.length === 0) { showToast('暂无留守儿童数据', 'warning'); return; }
+  
+  const ws = XLSX.utils.json_to_sheet(allData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '全校留守儿童');
+  
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `全校留守儿童_${today}.xlsx`);
+  showToast('已下载全校留守儿童Excel');
+}
+
+function downloadSchoolFamilyExcel() {
+  let allData = [];
+  CLASS_LIST.forEach(cls => {
+    STUDENTS[cls].filter(s => s.familyType).forEach(s => {
+      allData.push({
+        '班级': cls,
+        '座号': s.seat,
+        '姓名': s.name,
+        '分类': s.familyType,
+        '家庭地址': s.familyAddress || '-',
+        '家长电话': s.parent || '-',
+        '备注': s.familyNote || '-'
+      });
+    });
+  });
+  
+  if (allData.length === 0) { showToast('暂无特殊家庭情况数据', 'warning'); return; }
+  
+  const ws = XLSX.utils.json_to_sheet(allData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '全校特殊家庭情况');
+  
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `全校特殊家庭情况_${today}.xlsx`);
+  showToast('已下载全校特殊家庭情况Excel');
+}
+
+function downloadSchoolAttendanceExcel() {
+  let allData = [];
+  CLASS_LIST.forEach(cls => {
+    STUDENTS[cls].forEach(s => {
+      let statusText = '到校';
+      let detail = '-';
+      if (s.status === 'leave') {
+        statusText = '请假';
+        detail = s.leaveReason || '-';
+      } else if (s.status === 'absent') {
+        statusText = '缺勤';
+        detail = '未请假';
+      } else if (s.status === 'late') {
+        statusText = '迟到';
+        detail = '-';
+      }
+      
+      allData.push({
+        '班级': cls,
+        '座号': s.seat,
+        '姓名': s.name,
+        '状态': statusText,
+        '详情': detail,
+        '家长': s.parent || '-'
+      });
+    });
+  });
+  
+  if (allData.length === 0) { showToast('暂无学生数据', 'warning'); return; }
+  
+  const ws = XLSX.utils.json_to_sheet(allData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '全校到校情况');
+  
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `全校到校情况_${today}.xlsx`);
+  showToast('已下载全校到校情况Excel');
 }
 
 /* ----- ADMIN: Upload Student Lists ----- */
