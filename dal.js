@@ -50,7 +50,7 @@ var _REALTIME_LIVENESS_TIMEOUT = 30000; // v164: Reduced from 45s to 30s — mob
 var _syncRetryCount = 0;
 var _maxRetries = 3;
 var _lastSyncFailed = false;
-var _DAL_VERSION = '228.0';
+var _DAL_VERSION = '229.0';
 var _pendingLocalSave = false; // True when local data has unsaved changes — prevents Realtime overwrite
 var _REFRESH_PROTECTION_MS = 10000; // v14: 10s protection after sync (was 30s)
 var _syncDeletedClassIds = []; // v59: Track class IDs deleted during sync to ensure Phase 6 cleanup
@@ -900,7 +900,9 @@ function _buildTeacherClasses(classes, students, pets) {
       equippedItems: (function() { try { return typeof s.equipped_items === 'string' ? JSON.parse(s.equipped_items) : (s.equipped_items || {}); } catch(e) { return {}; } })(),
         password: s.password || '',
         quizState: (function() { try { return typeof s.quiz_state === 'string' ? JSON.parse(s.quiz_state) : (s.quiz_state || null); } catch(e) { return null; } })(),
-        snackRequests: (function() { try { return typeof s.snack_requests === 'string' ? JSON.parse(s.snack_requests) : (s.snack_requests || []); } catch(e) { return []; } })()
+        snackRequests: (function() { try { return typeof s.snack_requests === 'string' ? JSON.parse(s.snack_requests) : (s.snack_requests || []); } catch(e) { return []; } })(),
+        // v228: 从云端加载分组ID
+        groupId: s.group_id || null
       };
   });
 
@@ -935,7 +937,9 @@ function _buildTeacherClasses(classes, students, pets) {
       name: c.name || '',
       teacher_id: c.teacher_id,
       students: [],
-      createdAt: c.created_at || null
+      createdAt: c.created_at || null,
+      // v228: 从云端加载分组配置
+      groupConfigs: (function() { try { return typeof c.group_configs === 'string' ? JSON.parse(c.group_configs) : (c.group_configs || []); } catch(e) { return []; } })()
     };
   });
 
@@ -2388,7 +2392,11 @@ function _syncTeacherToSupabase() {
 
     if (isNewClass) {
       // v48: New class — INSERT without id, let DB auto-generate INT4 ID
+      // v228: 分组配置同步到云端
       var insertPayload = { name: cls.name, teacher_id: currentUser.id };
+      if (cls.groupConfigs && cls.groupConfigs.length > 0) {
+        insertPayload.group_configs = JSON.stringify(cls.groupConfigs);
+      }
       classPromises.push(
         db.from('classes').insert([insertPayload]).select().then(function(r) {
           if (r.error) {
@@ -2406,12 +2414,17 @@ function _syncTeacherToSupabase() {
       );
     } else {
       // Existing class with valid INT4 ID — upsert
+      // v228: 分组配置同步到云端
+      var upsertPayload = {
+        id: cls.id,
+        name: cls.name,
+        teacher_id: currentUser.id
+      };
+      if (cls.groupConfigs && cls.groupConfigs.length > 0) {
+        upsertPayload.group_configs = JSON.stringify(cls.groupConfigs);
+      }
       classPromises.push(
-        db.from('classes').upsert([{
-          id: cls.id,
-          name: cls.name,
-          teacher_id: currentUser.id
-        }]).then(function(r) {
+        db.from('classes').upsert([upsertPayload]).then(function(r) {
           if (r.error) console.error('[DAL] class upsert error:', r.error);
         })
       );
@@ -2587,7 +2600,9 @@ function _syncTeacherToSupabase() {
             // v207: REMOVED snack_requests — student-owned field, teacher must NOT overwrite.
             // Using .update() (not .upsert()) so only specified fields are modified.
             // This eliminates ALL race conditions with student shop purchases.
-            password: stu.password || ''
+            password: stu.password || '',
+            // v228: 分组数据同步到云端
+            group_id: stu.groupId || null
           };
           // v43: Use .update() instead of .upsert() to avoid overwriting student-owned
           // fields (shop_items, equipped_items). .update() only touches listed fields.

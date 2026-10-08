@@ -13,7 +13,7 @@ export const onRequestGet = async ({ request, env }) => {
   const teacherId = url.searchParams.get('teacherId');
   if (!teacherId) return jsonResponse({ error: 'Missing teacherId' }, 400);
 
-  const classesR = await sbSelect(env, 'classes', 'id,name,teacher_id,created_at', `teacher_id=eq.${teacherId}&order=id`);
+  const classesR = await sbSelect(env, 'classes', 'id,name,teacher_id,created_at,group_configs', `teacher_id=eq.${teacherId}&order=id`);
   if (classesR.error) return jsonResponse({ error: 'Failed to load classes' }, 500);
 
   const classes = classesR.data || [];
@@ -21,7 +21,7 @@ export const onRequestGet = async ({ request, env }) => {
 
   const classIds = classes.map(c => c.id);
   const [studentsR, actionsR] = await Promise.all([
-    sbSelect(env, 'students', 'id,name,class_id,coins,xiandan,last_checkin_date,last_jianghu_date,last_pk_date,active_pet_id,pk_count_today,password,quiz_state,snack_requests,shop_items,equipped_items', `class_id=in.(${classIds.join(',')})`),
+    sbSelect(env, 'students', 'id,name,class_id,coins,xiandan,last_checkin_date,last_jianghu_date,last_pk_date,active_pet_id,pk_count_today,password,quiz_state,snack_requests,shop_items,equipped_items,group_id', `class_id=in.(${classIds.join(',')})`),
     sbSelect(env, 'custom_actions', '*', `class_id=in.(${classIds.join(',')})`),
   ]);
 
