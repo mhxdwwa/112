@@ -3653,8 +3653,10 @@ function renderOverview() {
         <div class="stat-sub">迟到 ${late} 人 · 点击查看详情 →</div>
       </div>
     </div>
-    <div style="margin-top:16px">
+    <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap">
       <button class="toolbar-btn primary" onclick="downloadSchoolAttendanceExcel()">下载全校到校情况Excel</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolLeaveExcel()">只下载请假学生</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolAbsentExcel()">只下载缺勤学生</button>
     </div>
     <div id="overviewDrillDownArea"></div>
     <div class="grid-2-1">
@@ -3956,6 +3958,7 @@ function renderFamilySituation() {
   let familyRows = sts.filter(s => s.familyType).map(s => `<tr>
     <td>${s.seat}</td>
     <td style="font-weight:500">${s.name}</td>
+    <td>${s.gender || '-'}</td>
     <td><span class="badge ${s.familyType === '脱贫户' ? 'green' : s.familyType === '低保' ? 'orange' : 'red'}">${s.familyType}</span></td>
     <td>${s.familyAddress || '-'}</td>
     <td>${s.familyNote || '-'}</td>
@@ -3968,6 +3971,7 @@ function renderFamilySituation() {
   let leftBehindRows = sts.filter(s => s.leftBehind).map(s => `<tr>
     <td>${s.seat}</td>
     <td style="font-weight:500">${s.name}</td>
+    <td>${s.gender || '-'}</td>
     <td>${s.leftBehindNote || '-'}</td>
     <td>${s.familyAddress || '-'}</td>
     <td>
@@ -4010,14 +4014,19 @@ function renderFamilySituation() {
         <div class="card-header">
           <span class="card-title">留守儿童 (${leftBehind}人)</span>
           <div style="display:flex;gap:8px">
+            <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadLeftBehindTemplate()">导入模板</button>
+            <label class="toolbar-btn ghost" style="font-size:12px;cursor:pointer;margin:0">
+              导入
+              <input type="file" accept=".xlsx,.xls,.csv" onchange="importLeftBehindFromExcel(event)" style="display:none">
+            </label>
             <button class="toolbar-btn primary" style="font-size:12px" onclick="downloadClassLeftBehindExcel()">下载Excel</button>
             <button class="toolbar-btn primary" style="font-size:12px" onclick="showBatchLeftBehindModal()">批量设置</button>
           </div>
         </div>
         <div class="card-body no-pad"><div class="table-wrap">
           <table>
-            <thead><tr><th>座号</th><th>姓名</th><th>监护情况</th><th>家庭地址</th><th>操作</th></tr></thead>
-            <tbody>${leftBehindRows || '<tr><td colspan="5" style="text-align:center;color:var(--gray-400);padding:30px">暂无留守儿童</td></tr>'}</tbody>
+            <thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>监护情况</th><th>家庭地址</th><th>操作</th></tr></thead>
+            <tbody>${leftBehindRows || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:30px">暂无留守儿童</td></tr>'}</tbody>
           </table>
         </div></div>
       </div>
@@ -4025,14 +4034,19 @@ function renderFamilySituation() {
         <div class="card-header">
           <span class="card-title">特殊家庭情况学生 (${sts.filter(s => s.familyType).length}人)</span>
           <div style="display:flex;gap:8px">
+            <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadFamilyTemplate()">导入模板</button>
+            <label class="toolbar-btn ghost" style="font-size:12px;cursor:pointer;margin:0">
+              导入
+              <input type="file" accept=".xlsx,.xls,.csv" onchange="importFamilyFromExcel(event)" style="display:none">
+            </label>
             <button class="toolbar-btn primary" style="font-size:12px" onclick="downloadClassFamilyExcel()">下载Excel</button>
             <button class="toolbar-btn primary" style="font-size:12px" onclick="showBatchFamilyModal()">批量设置</button>
           </div>
         </div>
         <div class="card-body no-pad"><div class="table-wrap">
           <table>
-            <thead><tr><th>座号</th><th>姓名</th><th>分类</th><th>家庭地址</th><th>备注</th><th>操作</th></tr></thead>
-            <tbody>${familyRows || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:30px">暂无特殊家庭情况学生</td></tr>'}</tbody>
+            <thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>分类</th><th>家庭地址</th><th>备注</th><th>操作</th></tr></thead>
+            <tbody>${familyRows || '<tr><td colspan="7" style="text-align:center;color:var(--gray-400);padding:30px">暂无特殊家庭情况学生</td></tr>'}</tbody>
           </table>
         </div></div>
       </div>
@@ -4373,6 +4387,7 @@ function downloadClassLeftBehindExcel() {
     '班级': cls,
     '座号': s.seat,
     '姓名': s.name,
+    '性别': s.gender || '-',
     '监护情况': s.leftBehindNote || '-',
     '家庭地址': s.familyAddress || '-',
     '家长电话': s.parent || '-'
@@ -4397,6 +4412,7 @@ function downloadClassFamilyExcel() {
     '班级': cls,
     '座号': s.seat,
     '姓名': s.name,
+    '性别': s.gender || '-',
     '分类': s.familyType,
     '家庭地址': s.familyAddress || '-',
     '家长电话': s.parent || '-',
@@ -4410,6 +4426,177 @@ function downloadClassFamilyExcel() {
   const today = new Date().toISOString().split('T')[0];
   XLSX.writeFile(wb, `${cls}_特殊家庭情况_${today}.xlsx`);
   showToast('已下载特殊家庭情况Excel');
+}
+
+/* ----- IMPORT TEMPLATES AND FUNCTIONS ----- */
+function downloadLeftBehindTemplate() {
+  const template = [
+    ['班级', '座号', '学生姓名', '监护情况', '家庭地址', '家长电话'],
+    ['25-1', '1', '张三', '父母双方外出务工', 'XX镇XX村XX组', '13800138000'],
+    ['25-1', '2', '李四', '由祖父母监护', 'XX镇XX街XX号', '13900139000'],
+    ['25-2', '3', '王五', '父母一方外出务工', '', '']
+  ];
+  downloadExcel(template, '留守儿童导入模板.xlsx');
+}
+
+function downloadFamilyTemplate() {
+  const template = [
+    ['班级', '座号', '学生姓名', '家庭情况分类', '家庭地址', '家长电话', '备注'],
+    ['25-1', '1', '张三', '脱贫户', 'XX镇XX村XX组', '13800138000', ''],
+    ['25-1', '2', '李四', '低保', 'XX镇XX街XX号', '13900139000', '单亲家庭'],
+    ['25-2', '3', '王五', '其他特殊类', '', '', '孤儿']
+  ];
+  downloadExcel(template, '特殊家庭情况导入模板.xlsx');
+}
+
+function importLeftBehindFromExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const cls = getHeadteacherClass();
+  if (!cls || !STUDENTS[cls]) { showToast('暂无班级数据', 'warning'); return; }
+  
+  readExcelFile(file, function(data) {
+    if (!data || data.length < 2) { showToast('文件内容为空', 'error'); return; }
+    
+    // 查找表头行
+    let headerRowIdx = -1;
+    for (let i = 0; i < Math.min(data.length, 10); i++) {
+      const row = data[i].map(c => String(c).trim());
+      if (row.some(c => c.includes('姓名') || c.includes('班级'))) { headerRowIdx = i; break; }
+    }
+    if (headerRowIdx === -1) { showToast('未找到"姓名"列', 'error'); return; }
+    
+    const header = data[headerRowIdx].map(c => String(c).trim());
+    let classCol = -1, seatCol = -1, nameCol = -1, noteCol = -1, addressCol = -1, phoneCol = -1;
+    
+    header.forEach((c, i) => {
+      if (c.includes('班级')) classCol = i;
+      else if (c.includes('座号') || c.includes('学号')) seatCol = i;
+      else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
+      else if (c.includes('监护') || c.includes('情况')) noteCol = i;
+      else if (c.includes('地址') || c.includes('住址')) addressCol = i;
+      else if (c.includes('电话') || c.includes('手机')) phoneCol = i;
+    });
+    
+    if (nameCol === -1) {
+      showToast('未找到"学生姓名"列', 'error');
+      return;
+    }
+    
+    let importCount = 0;
+    let skipCount = 0;
+    
+    for (let i = headerRowIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      const name = String(row[nameCol] || '').trim();
+      const note = noteCol >= 0 ? String(row[noteCol] || '').trim() : '';
+      const address = addressCol >= 0 ? String(row[addressCol] || '').trim() : '';
+      const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
+      
+      if (!name) continue;
+      
+      // 查找学生
+      const student = STUDENTS[cls].find(s => s.name === name);
+      if (!student) {
+        skipCount++;
+        continue;
+      }
+      
+      student.leftBehind = true;
+      student.leftBehindNote = note;
+      if (address) student.familyAddress = address;
+      if (phone) student.phone = phone;
+      importCount++;
+    }
+    
+    if (importCount === 0) {
+      showToast(skipCount > 0 ? `未找到匹配的学生，跳过 ${skipCount} 人` : '未解析到有效数据', 'warning');
+      return;
+    }
+    
+    saveStudentsToStorage();
+    showToast(`成功导入 ${importCount} 名留守儿童信息${skipCount > 0 ? '，跳过 ' + skipCount + ' 人（未找到）' : ''}`, 'success');
+    navigate('family-situation');
+  });
+  
+  event.target.value = '';
+}
+
+function importFamilyFromExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const cls = getHeadteacherClass();
+  if (!cls || !STUDENTS[cls]) { showToast('暂无班级数据', 'warning'); return; }
+  
+  readExcelFile(file, function(data) {
+    if (!data || data.length < 2) { showToast('文件内容为空', 'error'); return; }
+    
+    // 查找表头行
+    let headerRowIdx = -1;
+    for (let i = 0; i < Math.min(data.length, 10); i++) {
+      const row = data[i].map(c => String(c).trim());
+      if (row.some(c => c.includes('姓名') || c.includes('班级'))) { headerRowIdx = i; break; }
+    }
+    if (headerRowIdx === -1) { showToast('未找到"姓名"列', 'error'); return; }
+    
+    const header = data[headerRowIdx].map(c => String(c).trim());
+    let classCol = -1, seatCol = -1, nameCol = -1, typeCol = -1, addressCol = -1, phoneCol = -1, noteCol = -1;
+    
+    header.forEach((c, i) => {
+      if (c.includes('班级')) classCol = i;
+      else if (c.includes('座号') || c.includes('学号')) seatCol = i;
+      else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
+      else if (c.includes('分类') || c.includes('类型') || c.includes('情况')) typeCol = i;
+      else if (c.includes('地址') || c.includes('住址')) addressCol = i;
+      else if (c.includes('电话') || c.includes('手机')) phoneCol = i;
+      else if (c.includes('备注') || c.includes('说明')) noteCol = i;
+    });
+    
+    if (nameCol === -1) {
+      showToast('未找到"学生姓名"列', 'error');
+      return;
+    }
+    
+    let importCount = 0;
+    let skipCount = 0;
+    
+    for (let i = headerRowIdx + 1; i < data.length; i++) {
+      const row = data[i];
+      const name = String(row[nameCol] || '').trim();
+      const type = typeCol >= 0 ? String(row[typeCol] || '').trim() : '';
+      const address = addressCol >= 0 ? String(row[addressCol] || '').trim() : '';
+      const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
+      const note = noteCol >= 0 ? String(row[noteCol] || '').trim() : '';
+      
+      if (!name) continue;
+      
+      // 查找学生
+      const student = STUDENTS[cls].find(s => s.name === name);
+      if (!student) {
+        skipCount++;
+        continue;
+      }
+      
+      student.familyType = type;
+      if (address) student.familyAddress = address;
+      if (phone) student.phone = phone;
+      student.familyNote = note;
+      importCount++;
+    }
+    
+    if (importCount === 0) {
+      showToast(skipCount > 0 ? `未找到匹配的学生，跳过 ${skipCount} 人` : '未解析到有效数据', 'warning');
+      return;
+    }
+    
+    saveStudentsToStorage();
+    showToast(`成功导入 ${importCount} 名特殊家庭情况信息${skipCount > 0 ? '，跳过 ' + skipCount + ' 人（未找到）' : ''}`, 'success');
+    navigate('family-situation');
+  });
+  
+  event.target.value = '';
 }
 
 /* ----- LEADER: Family Overview (全校学生家庭情况) ----- */
@@ -4470,6 +4657,7 @@ function renderFamilyOverview() {
     let rows = students.map(s => `
       <tr>
         <td style="font-weight:500">${s.name}</td>
+        <td>${s.gender || '-'}</td>
         <td>${s.leftBehindNote || '-'}</td>
         <td>${s.familyAddress || '-'}</td>
       </tr>
@@ -4482,7 +4670,7 @@ function renderFamilyOverview() {
         </div>
         <div style="display:none;max-height:180px;overflow-y:auto">
           <table>
-            <thead><tr><th>姓名</th><th>监护情况</th><th>家庭地址</th></tr></thead>
+            <thead><tr><th>姓名</th><th>性别</th><th>监护情况</th><th>家庭地址</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -4500,6 +4688,7 @@ function renderFamilyOverview() {
     let rows = students.map(s => `
       <tr>
         <td style="font-weight:500">${s.name}</td>
+        <td>${s.gender || '-'}</td>
         <td><span class="badge ${s.familyType === '脱贫户' ? 'green' : s.familyType === '低保' ? 'orange' : 'red'}">${s.familyType}</span></td>
         <td>${s.familyAddress || '-'}</td>
         <td>${s.familyNote || '-'}</td>
@@ -4513,7 +4702,7 @@ function renderFamilyOverview() {
         </div>
         <div style="display:none;max-height:180px;overflow-y:auto">
           <table>
-            <thead><tr><th>姓名</th><th>分类</th><th>家庭地址</th><th>备注</th></tr></thead>
+            <thead><tr><th>姓名</th><th>性别</th><th>分类</th><th>家庭地址</th><th>备注</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -4571,7 +4760,11 @@ function renderFamilyOverview() {
     <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap">
       <button class="toolbar-btn primary" onclick="downloadSchoolLeftBehindExcel()">下载全校留守儿童Excel</button>
       <button class="toolbar-btn primary" onclick="downloadSchoolFamilyExcel()">下载全校特殊家庭情况Excel</button>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
       <button class="toolbar-btn primary" onclick="downloadSchoolAttendanceExcel()">下载全校到校情况Excel</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolLeaveExcel()">只下载请假学生</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolAbsentExcel()">只下载缺勤学生</button>
     </div>
     <div class="grid-2" style="margin-top:20px">
       <div class="card anim-in anim-d2" style="display:flex;flex-direction:column">
@@ -4598,6 +4791,7 @@ function showClassFamilyDetail(cls) {
   let rows = sts.map(s => `<tr>
     <td>${s.seat}</td>
     <td style="font-weight:500">${s.name}</td>
+    <td>${s.gender || '-'}</td>
     <td><span class="badge ${s.familyType === '脱贫户' ? 'green' : s.familyType === '低保' ? 'orange' : 'red'}">${s.familyType}</span></td>
     <td>${s.familyAddress || '-'}</td>
     <td>${s.familyNote || '-'}</td>
@@ -4606,8 +4800,8 @@ function showClassFamilyDetail(cls) {
   showModal(`${cls} 家庭情况详情`, `
     <div style="margin:-8px -4px">
       <table>
-        <thead><tr><th>座号</th><th>姓名</th><th>分类</th><th>家庭地址</th><th>备注</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--gray-400);padding:20px">暂无数据</td></tr>'}</tbody>
+        <thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>分类</th><th>家庭地址</th><th>备注</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">暂无数据</td></tr>'}</tbody>
       </table>
     </div>
   `, '<button class="toolbar-btn ghost" onclick="hideModal()">关闭</button>', true);
@@ -4622,6 +4816,7 @@ function downloadSchoolLeftBehindExcel() {
         '班级': cls,
         '座号': s.seat,
         '姓名': s.name,
+        '性别': s.gender || '-',
         '监护情况': s.leftBehindNote || '-',
         '家庭地址': s.familyAddress || '-',
         '家长电话': s.parent || '-'
@@ -4648,6 +4843,7 @@ function downloadSchoolFamilyExcel() {
         '班级': cls,
         '座号': s.seat,
         '姓名': s.name,
+        '性别': s.gender || '-',
         '分类': s.familyType,
         '家庭地址': s.familyAddress || '-',
         '家长电话': s.parent || '-',
@@ -4688,8 +4884,10 @@ function downloadSchoolAttendanceExcel() {
         '班级': cls,
         '座号': s.seat,
         '姓名': s.name,
+        '性别': s.gender || '-',
         '状态': statusText,
         '详情': detail,
+        '家庭地址': s.familyAddress || '-',
         '家长': s.parent || '-'
       });
     });
@@ -4704,6 +4902,62 @@ function downloadSchoolAttendanceExcel() {
   const today = new Date().toISOString().split('T')[0];
   XLSX.writeFile(wb, `全校到校情况_${today}.xlsx`);
   showToast('已下载全校到校情况Excel');
+}
+
+function downloadSchoolLeaveExcel() {
+  let allData = [];
+  CLASS_LIST.forEach(cls => {
+    STUDENTS[cls].filter(s => s.status === 'leave').forEach(s => {
+      allData.push({
+        '班级': cls,
+        '座号': s.seat,
+        '姓名': s.name,
+        '性别': s.gender || '-',
+        '请假原因': s.leaveReason || '-',
+        '详细说明': s.leaveNote || '-',
+        '请假天数': s.leaveDays || '-',
+        '家庭地址': s.familyAddress || '-',
+        '家长': s.parent || '-'
+      });
+    });
+  });
+  
+  if (allData.length === 0) { showToast('暂无请假学生数据', 'warning'); return; }
+  
+  const ws = XLSX.utils.json_to_sheet(allData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '请假学生');
+  
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `全校请假学生_${today}.xlsx`);
+  showToast('已下载请假学生Excel');
+}
+
+function downloadSchoolAbsentExcel() {
+  let allData = [];
+  CLASS_LIST.forEach(cls => {
+    STUDENTS[cls].filter(s => s.status === 'absent').forEach(s => {
+      allData.push({
+        '班级': cls,
+        '座号': s.seat,
+        '姓名': s.name,
+        '性别': s.gender || '-',
+        '状态': '缺勤',
+        '家庭地址': s.familyAddress || '-',
+        '家长': s.parent || '-'
+      });
+    });
+  });
+  
+  if (allData.length === 0) { showToast('暂无缺勤学生数据', 'warning'); return; }
+  
+  const ws = XLSX.utils.json_to_sheet(allData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '缺勤学生');
+  
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `全校缺勤学生_${today}.xlsx`);
+  showToast('已下载缺勤学生Excel');
 }
 
 /* ----- ADMIN: Upload Student Lists ----- */
@@ -4827,7 +5081,7 @@ function renderAdminStudents() {
       </summary>
       <div style="padding:0 16px 16px">
         <div style="padding:10px;background:var(--gray-50);border-radius:6px;margin-bottom:12px;font-size:11px;color:var(--gray-600);line-height:1.6">
-          <strong>格式：</strong>班级、学生姓名、家长姓名(可选)、家长电话(可选) · 支持Excel/CSV · 同名自动跳过
+          <strong>格式：</strong>班级、学生姓名、性别(可选)、家长姓名(可选)、家长电话(可选)、家庭住址(可选) · 支持Excel/CSV · 同名自动跳过
           <button class="toolbar-btn ghost" style="font-size:10px;padding:2px 8px;margin-left:8px" onclick="downloadStudentTemplate()">下载模板</button>
         </div>
         <div class="setup-import-zone">
@@ -4879,11 +5133,11 @@ function assignSelectedClassesToGrade() {
 
 function downloadStudentTemplate() {
   const template = [
-    ['班级', '学生姓名', '家长姓名', '家长电话'],
-    ['25-1', '张三', '张大明', '13800138000'],
-    ['25-1', '李四', '李小红', '13900139000'],
-    ['25-2', '王五', '', ''],
-    ['25-2', '赵六', '赵建国', '13700137000']
+    ['班级', '学生姓名', '性别', '家长姓名', '家长电话', '家庭住址'],
+    ['25-1', '张三', '男', '张大明', '13800138000', 'XX镇XX村XX组'],
+    ['25-1', '李四', '女', '李小红', '13900139000', 'XX镇XX街XX号'],
+    ['25-2', '王五', '男', '', '', ''],
+    ['25-2', '赵六', '女', '赵建国', '13700137000', 'XX县XX路XX号']
   ];
   downloadExcel(template, '学生名单模板.xlsx');
 }
@@ -4904,17 +5158,19 @@ function importStudentsFromExcel(event) {
     if (headerRowIdx === -1) { showToast('未找到"班级"或"姓名"列', 'error'); return; }
     
     const header = data[headerRowIdx].map(c => String(c).trim());
-    let classCol = -1, nameCol = -1, parentCol = -1, phoneCol = -1;
+    let classCol = -1, nameCol = -1, parentCol = -1, phoneCol = -1, genderCol = -1, addressCol = -1;
     
     header.forEach((c, i) => {
       if (c.includes('班级') || c === '班') classCol = i;
       else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
       else if (c.includes('家长')) parentCol = i;
       else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
+      else if (c.includes('性别')) genderCol = i;
+      else if (c.includes('地址') || c.includes('住址') || c.includes('家庭')) addressCol = i;
     });
     
     console.log('[XQ Import] Header:', header);
-    console.log('[XQ Import] Column mapping: class=', classCol, 'name=', nameCol, 'parent=', parentCol, 'phone=', phoneCol);
+    console.log('[XQ Import] Column mapping: class=', classCol, 'name=', nameCol, 'parent=', parentCol, 'phone=', phoneCol, 'gender=', genderCol, 'address=', addressCol);
     
     if (classCol === -1 || nameCol === -1) {
       showToast('未找到"班级"或"学生姓名"列', 'error');
@@ -4932,6 +5188,8 @@ function importStudentsFromExcel(event) {
       const name = String(row[nameCol] || '').trim();
       const parent = parentCol >= 0 ? String(row[parentCol] || '').trim() : '';
       const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
+      const gender = genderCol >= 0 ? String(row[genderCol] || '').trim() : '';
+      const address = addressCol >= 0 ? String(row[addressCol] || '').trim() : '';
       
       if (!cls || !name) continue;
       
@@ -4956,8 +5214,10 @@ function importStudentsFromExcel(event) {
         id: maxId + 1,
         seat: seat,
         name: name,
+        gender: gender,
         phone: phone,
         parent: parent,
+        familyAddress: address,
         status: 'present',
         leaveReason: '',
         leaveNote: '',
