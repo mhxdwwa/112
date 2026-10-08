@@ -337,11 +337,69 @@
   function manageClassViaApi(action, data) {
     var payload = { action: action };
     if (data) {
-      // 将 data 中的字段展开到顶层
       Object.keys(data).forEach(function(key) {
         payload[key] = data[key];
       });
     }
+    return apiRequest('/class/manage', payload);
+  }
+
+  /**
+   * 通过 API 保存分组数据
+   * v235: 使用已有的 /api/class/manage 和 /api/student/update 端点
+   */
+  function saveGroupsViaApi(classId, groupConfigs, studentGroups) {
+    if (!classId) {
+      return Promise.resolve({ error: 'Missing classId' });
+    }
+
+    console.log('[API] saveGroups:', { classId, groupConfigsCount: groupConfigs ? groupConfigs.length : 0, studentGroupsCount: studentGroups ? studentGroups.length : 0 });
+
+    var promises = [];
+
+    // 1. 更新班级分组配置
+    if (groupConfigs !== undefined) {
+      var cls = typeof classesData !== 'undefined' ? classesData.find(function(c) { return c.id === classId; }) : null;
+      promises.push(
+        manageClassViaApi('update', {
+          classId: classId,
+          name: cls ? cls.name : '',
+          groupConfigs: groupConfigs
+        }).then(function(result) {
+          if (result.ok) {
+            console.log('[API] groupConfigs saved');
+          } else {
+            console.error('[API] groupConfigs save failed:', result.error);
+          }
+          return result;
+        })
+      );
+    }
+
+    // 2. 更新学生分组ID
+    if (studentGroups && Array.isArray(studentGroups) && studentGroups.length > 0) {
+      studentGroups.forEach(function(sg) {
+        promises.push(
+          updateStudentViaApi(sg.studentId, { group_id: sg.groupId || null }).then(function(result) {
+            if (result.ok) {
+              console.log('[API] student', sg.studentId, 'group_id updated:', sg.groupId);
+            } else {
+              console.error('[API] student', sg.studentId, 'group_id update failed:', result.error);
+            }
+            return result;
+          })
+        );
+      });
+    }
+
+    return Promise.all(promises).then(function(results) {
+      var errors = results.filter(function(r) { return !r.ok; });
+      return { ok: errors.length === 0, results: results };
+    }).catch(function(err) {
+      console.error('[API] saveGroups failed:', err);
+      return { error: err.message || 'Network error' };
+    });
+  }
     return apiRequest('/class/manage', payload).then(function(result) {
       if (result.ok) {
         console.log('[API] class manage ok:', action);
@@ -934,6 +992,7 @@
     manageClass: manageClassViaApi,
     checkClassDuplicate: checkClassDuplicateViaApi,
     resetClass: resetClassViaApi,
+    saveGroups: saveGroupsViaApi,
     
     // 学生
     updateStudent: updateStudentViaApi,

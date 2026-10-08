@@ -36,7 +36,14 @@ export const onRequestPost = async ({ request, env }) => {
 
   if (action === 'update') {
     if (!classId || !name) return jsonResponse({ error: 'Missing classId or name' }, 400);
-    const updateR = await sbUpdate(env, 'classes', { name }, `id=eq.${classId}`);
+    const updateData = { name };
+    // v235: 支持更新 group_configs
+    if (body.groupConfigs !== undefined || (body.data && body.data.groupConfigs !== undefined)) {
+      const groupConfigs = body.groupConfigs || (body.data && body.data.groupConfigs);
+      updateData.group_configs = JSON.stringify(groupConfigs);
+      console.log('[class/manage] update group_configs:', updateData.group_configs);
+    }
+    const updateR = await sbUpdate(env, 'classes', updateData, `id=eq.${classId}`);
     if (updateR.error) return jsonResponse({ error: 'Failed to update class', details: updateR.error }, 500);
     return jsonResponse({ ok: true });
   }

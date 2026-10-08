@@ -3341,56 +3341,27 @@ function genGroupId() {
 }
 
 // v230: 保存分组数据到云端（API 模式）
-// v233: 添加详细调试日志
+// v235: 使用 ApiMigration.saveGroups，和金币操作一样的方式
 function saveGroupsToServer(classId, groupConfigs, studentGroups) {
-  console.log('[v233] saveGroupsToServer 被调用:', { classId, groupConfigsCount: groupConfigs ? groupConfigs.length : 0, studentGroupsCount: studentGroups ? studentGroups.length : 0 });
-  console.log('[v233] window.USE_API:', window.USE_API, 'window.ApiMigration:', !!window.ApiMigration);
+  console.log('[v235] saveGroupsToServer 被调用:', { classId, groupConfigsCount: groupConfigs ? groupConfigs.length : 0, studentGroupsCount: studentGroups ? studentGroups.length : 0 });
   
-  if (!(window.USE_API && window.ApiMigration)) {
-    console.warn('[v233] ❌ 非 API 模式，跳过云端保存');
+  if (!(window.USE_API && window.ApiMigration && window.ApiMigration.saveGroups)) {
+    console.warn('[v235] ❌ 非 API 模式或 saveGroups 方法不存在，跳过云端保存');
     return Promise.resolve();
   }
   
-  const apiUrl = '/api/class/groups';
-  const payload = { classId, groupConfigs, studentGroups };
+  console.log('[v235] 开始保存分组数据到云端');
   
-  console.log('[v233] 开始保存分组数据到云端:', JSON.stringify(payload, null, 2));
-  
-  return fetch(apiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => {
-    console.log('[v233] API 响应状态:', res.status, res.statusText);
-    if (!res.ok) {
-      // v235: 尝试读取错误详情
-      return res.json().then(errData => {
-        console.error('[v235] API 错误详情:', errData);
-        throw new Error(`HTTP ${res.status}: ${errData.error || errData.message || res.statusText}${errData.details ? ' - ' + JSON.stringify(errData.details) : ''}`);
-      }).catch(parseErr => {
-        // 如果无法解析 JSON，抛出原始错误
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      });
-    }
-    return res.json();
-  })
-  .then(data => {
-    console.log('[v233] API 响应数据:', data);
-    if (data.ok) {
-      console.log('[v233] ✅ 分组数据已成功保存到云端');
-      console.log('[v233] 更新统计:', {
-        groupConfigsUpdated: data.groupConfigsUpdated,
-        studentGroupsUpdated: data.studentGroupsUpdated
-      });
+  return window.ApiMigration.saveGroups(classId, groupConfigs, studentGroups).then(function(result) {
+    if (result.ok) {
+      console.log('[v235] ✅ 分组数据已全部保存到云端');
     } else {
-      console.error('[v233] ❌ 保存分组数据失败:', data.error, data.details);
-      showNotification('保存失败', data.error || '分组数据未能保存到云端', 'error');
+      console.error('[v235] ❌ 分组数据保存失败:', result.error);
+      showNotification('保存失败', result.error || '分组数据未能保存到云端', 'error');
     }
-    return data;
-  })
-  .catch(err => {
-    console.error('[v233] ❌ 保存分组数据异常:', err);
+    return result;
+  }).catch(function(err) {
+    console.error('[v235] ❌ 保存分组数据异常:', err);
     showNotification('网络错误', '分组数据保存失败：' + err.message, 'error');
   });
 }
