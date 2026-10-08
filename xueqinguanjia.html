@@ -6790,6 +6790,20 @@ function showStudentDetail(cls, id) {
     </div>
   `;
 
+  // Gender and address info
+  let genderAddressHtml = `
+    <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="padding:12px 16px;background:var(--gray-50);border-radius:8px">
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">性别</div>
+        <div style="font-weight:600;font-size:14px;color:var(--gray-800)">${s.gender || '未填写'}</div>
+      </div>
+      <div style="padding:12px 16px;background:var(--gray-50);border-radius:8px">
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">家庭住址</div>
+        <div style="font-weight:600;font-size:14px;color:var(--gray-800)">${s.familyAddress || '未填写'}</div>
+      </div>
+    </div>
+  `;
+
   showModal(`${s.name} 详细信息`, `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="form-group"><div class="form-label">学生姓名</div><div style="font-weight:600;font-size:15px">${s.name}</div></div>
@@ -6797,6 +6811,7 @@ function showStudentDetail(cls, id) {
       <div class="form-group"><div class="form-label">班级</div><div style="font-weight:500">${cls}</div></div>
       <div class="form-group"><div class="form-label">当前状态</div><div><span class="badge ${s.status==='present'?'green':s.status==='leave'?'orange':s.status==='absent'?'red':'blue'}">${STATUS[s.status]}</span></div></div>
     </div>
+    ${genderAddressHtml}
     ${parentHtml}
     ${phoneHtml}
     ${leaveDetails}
@@ -7341,10 +7356,18 @@ function editStudent(cls, id) {
       <label class="form-label">姓名</label>
       <input class="form-input" id="editName" value="${s.name}">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       <div class="form-group">
         <label class="form-label">座号</label>
         <input class="form-input" id="editSeat" type="number" value="${s.seat}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">性别</label>
+        <select class="form-select" id="editGender">
+          <option value="" ${!s.gender ? 'selected' : ''}>未填写</option>
+          <option value="男" ${s.gender === '男' ? 'selected' : ''}>男</option>
+          <option value="女" ${s.gender === '女' ? 'selected' : ''}>女</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">联系电话</label>
@@ -7355,6 +7378,10 @@ function editStudent(cls, id) {
       <label class="form-label">家长信息</label>
       <input class="form-input" id="editParent" value="${s.parent}">
     </div>
+    <div class="form-group">
+      <label class="form-label">家庭住址</label>
+      <input class="form-input" id="editFamilyAddress" value="${s.familyAddress || ''}" placeholder="选填">
+    </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="saveStudentEdit('${cls}',${id})">保存</button>`);
 }
@@ -7364,8 +7391,10 @@ function saveStudentEdit(cls, id) {
   if (!s) return;
   s.name = document.getElementById('editName').value.trim() || s.name;
   s.seat = parseInt(document.getElementById('editSeat').value) || s.seat;
+  s.gender = document.getElementById('editGender').value;
   s.phone = document.getElementById('editPhone').value.trim();
   s.parent = document.getElementById('editParent').value.trim();
+  s.familyAddress = document.getElementById('editFamilyAddress').value.trim();
   saveStudentsToStorage();
   hideModal();
   showToast('学生信息已更新');
