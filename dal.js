@@ -3624,6 +3624,18 @@ function _applyRealtimeUpdate(table, payload) {
     if (newData.active_pet_id !== undefined) targetStudent.activePetId = newData.active_pet_id;
     if (newData.pk_count_today !== undefined) targetStudent.pkCountToday = newData.pk_count_today;
     
+    // v238: group_id — 实时更新分组ID
+    if (newData.group_id !== undefined) {
+      var oldGroupId = targetStudent.groupId;
+      targetStudent.groupId = newData.group_id || null;
+      if (oldGroupId !== targetStudent.groupId) {
+        console.log('[DAL] v238 group_id changed via Realtime:', targetStudent.name, oldGroupId, '→', targetStudent.groupId);
+        // 触发 UI 刷新
+        if (typeof renderHomePetGrid === 'function') setTimeout(renderHomePetGrid, 50);
+        if (typeof renderGroupFilterTabs === 'function') setTimeout(renderGroupFilterTabs, 50);
+      }
+    }
+    
     // v102: quiz_state 保护 — 如果本地正在玩游戏，跳过远程覆盖
     if (newData.quiz_state !== undefined && !window._quizStateLocallyModified) {
       try {
@@ -3933,7 +3945,18 @@ function _setupRealtimeSubscriptions() {
     var classChannel = db.channel('dal-classes-' + _clientId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
         _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v221: classes 表变化只处理班级元数据（名称等），日志变化由 operation_logs channel 处理
+        // v238: classes 表变化时，同步 group_configs 到内存
+        if (payload && payload.new && payload.new.group_configs !== undefined) {
+          var classId = payload.new.id;
+          var newGroupConfigs = (function() { try { return typeof payload.new.group_configs === 'string' ? JSON.parse(payload.new.group_configs) : (payload.new.group_configs || []); } catch(e) { return []; } })();
+          for (var i = 0; i < classesData.length; i++) {
+            if (classesData[i].id === classId) {
+              classesData[i].groupConfigs = newGroupConfigs;
+              console.log('[DAL] v238 groupConfigs updated via Realtime for class', classId, '→', newGroupConfigs.length, 'groups');
+              break;
+            }
+          }
+        }
         console.log('[DAL] v221 Classes channel: class metadata change, refreshing class list UI only');
         if (typeof renderClassList === 'function') {
           renderClassList();
