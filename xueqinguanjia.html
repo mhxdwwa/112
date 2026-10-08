@@ -5318,8 +5318,10 @@ function renderAdminClassStudents() {
   let rows = sts.map(s => `<tr>
     <td>${s.seat}</td>
     <td style="font-weight:500">${s.name}</td>
+    <td>${s.gender || '-'}</td>
     <td>${s.parent || '-'}</td>
     <td>${s.phone || '-'}</td>
+    <td>${s.familyAddress || '-'}</td>
     <td>
       <div class="roster-actions">
         <button class="toolbar-btn ghost" onclick="adminEditStudent('${cls}',${s.id})">编辑</button>
@@ -5346,7 +5348,7 @@ function renderAdminClassStudents() {
         <button class="toolbar-btn ghost" style="font-size:12px" onclick="exportAdminRoster('${cls}')">导出CSV</button>
       </div>
       <div class="card-body no-pad"><div class="table-wrap">
-        <table><thead><tr><th>座号</th><th>姓名</th><th>家长</th><th>电话</th><th>操作</th></tr></thead>
+        <table><thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>家长</th><th>电话</th><th>家庭住址</th><th>操作</th></tr></thead>
         <tbody id="adminRosterBody">${rows}</tbody></table>
       </div></div>
     </div>`;
@@ -5358,10 +5360,18 @@ function adminAddStudent(cls) {
       <label class="form-label">姓名 *</label>
       <input class="form-input" id="adminNewStudentName" placeholder="请输入学生姓名">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       <div class="form-group">
         <label class="form-label">座号</label>
         <input class="form-input" id="adminNewStudentSeat" type="number" placeholder="自动分配" value="${(STUDENTS[cls] || []).length + 1}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">性别</label>
+        <select class="form-select" id="adminNewStudentGender">
+          <option value="">未填写</option>
+          <option value="男">男</option>
+          <option value="女">女</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">家长姓名</label>
@@ -5371,6 +5381,10 @@ function adminAddStudent(cls) {
     <div class="form-group">
       <label class="form-label">家长电话</label>
       <input class="form-input" id="adminNewStudentPhone" placeholder="选填">
+    </div>
+    <div class="form-group">
+      <label class="form-label">家庭住址</label>
+      <input class="form-input" id="adminNewStudentAddress" placeholder="选填">
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="doAdminAddStudent('${cls}')">添加</button>`, true);
@@ -5387,15 +5401,19 @@ function doAdminAddStudent(cls) {
   
   const maxId = STUDENTS[cls].length > 0 ? Math.max(...STUDENTS[cls].map(s => s.id), 0) : 0;
   const seat = parseInt(document.getElementById('adminNewStudentSeat').value) || STUDENTS[cls].length + 1;
+  const gender = document.getElementById('adminNewStudentGender').value;
   const parent = document.getElementById('adminNewStudentParent').value.trim();
   const phone = document.getElementById('adminNewStudentPhone').value.trim();
+  const address = document.getElementById('adminNewStudentAddress').value.trim();
   
   STUDENTS[cls].push({
     id: maxId + 1,
     seat: seat,
     name: name,
+    gender: gender,
     phone: phone,
     parent: parent,
+    familyAddress: address,
     status: 'present',
     leaveReason: '',
     leaveNote: '',
@@ -5423,10 +5441,18 @@ function adminEditStudent(cls, id) {
       <label class="form-label">姓名 *</label>
       <input class="form-input" id="adminEditStudentName" value="${s.name}">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       <div class="form-group">
         <label class="form-label">座号</label>
         <input class="form-input" id="adminEditStudentSeat" type="number" value="${s.seat}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">性别</label>
+        <select class="form-select" id="adminEditStudentGender">
+          <option value="" ${!s.gender ? 'selected' : ''}>未填写</option>
+          <option value="男" ${s.gender === '男' ? 'selected' : ''}>男</option>
+          <option value="女" ${s.gender === '女' ? 'selected' : ''}>女</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">家长姓名</label>
@@ -5436,6 +5462,10 @@ function adminEditStudent(cls, id) {
     <div class="form-group">
       <label class="form-label">家长电话</label>
       <input class="form-input" id="adminEditStudentPhone" value="${s.phone || ''}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">家庭住址</label>
+      <input class="form-input" id="adminEditStudentAddress" value="${s.familyAddress || ''}" placeholder="选填">
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="doAdminEditStudent('${cls}',${id})">保存</button>`, true);
@@ -5450,8 +5480,10 @@ function doAdminEditStudent(cls, id) {
   
   s.name = name;
   s.seat = parseInt(document.getElementById('adminEditStudentSeat').value) || s.seat;
+  s.gender = document.getElementById('adminEditStudentGender').value;
   s.parent = document.getElementById('adminEditStudentParent').value.trim();
   s.phone = document.getElementById('adminEditStudentPhone').value.trim();
+  s.familyAddress = document.getElementById('adminEditStudentAddress').value.trim();
   
   saveStudentsToStorage();
   hideModal();
@@ -5481,18 +5513,20 @@ function exportAdminRoster(cls) {
   const sts = STUDENTS[cls] || [];
   if (sts.length === 0) { showToast('暂无学生数据', 'warning'); return; }
   
-  let csv = '座号,姓名,家长,电话\n';
-  sts.forEach(s => {
-    csv += `${s.seat},"${s.name}","${s.parent || ''}","${s.phone || ''}"\n`;
-  });
+  const data = sts.map(s => ({
+    '座号': s.seat,
+    '姓名': s.name,
+    '性别': s.gender || '',
+    '家长': s.parent || '',
+    '电话': s.phone || '',
+    '家庭住址': s.familyAddress || ''
+  }));
   
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${cls}_学生名单.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '学生名单');
+  XLSX.writeFile(wb, `${cls}_学生名单.xlsx`);
+  showToast('已导出学生名单Excel');
 }
 
 /* ----- ADMIN: Password Management ----- */
@@ -7024,7 +7058,7 @@ function showImportModal() {
       </div>
       <div style="margin-top:12px;padding:12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500)">
         <strong>格式说明：</strong><br>
-        列顺序：<strong>班级</strong>、<strong>学生姓名</strong>、家长姓名（可选）、家长电话（可选）<br>
+        列顺序：<strong>班级</strong>、<strong>学生姓名</strong>、性别（可选）、家长姓名（可选）、家长电话（可选）、家庭住址（可选）<br>
         班级列必须与当前班级一致（${cls}），否则会被忽略<br>
         <button class="toolbar-btn ghost" style="font-size:11px;padding:4px 10px;margin-top:8px" onclick="downloadStudentImportTemplate()">下载模板</button>
       </div>
@@ -7071,17 +7105,19 @@ function handleFileImport(event) {
       if (headerRowIdx === -1) { showToast('未找到"班级"或"姓名"列', 'error'); return; }
       
       const header = data[headerRowIdx].map(c => String(c).trim());
-      let classCol = -1, nameCol = -1, parentCol = -1, phoneCol = -1;
+      let classCol = -1, nameCol = -1, parentCol = -1, phoneCol = -1, genderCol = -1, addressCol = -1;
       
       header.forEach((c, i) => {
         if (c.includes('班级') || c === '班') classCol = i;
         else if (c.includes('电话') || c.includes('手机') || c.includes('联系')) phoneCol = i;
         else if (c.includes('家长')) parentCol = i;
         else if (c.includes('姓名') || c.includes('名字')) nameCol = i;
+        else if (c.includes('性别')) genderCol = i;
+        else if (c.includes('地址') || c.includes('住址') || c.includes('家庭')) addressCol = i;
       });
       
       console.log('[XQ Import] Header:', header);
-      console.log('[XQ Import] Column mapping: class=', classCol, 'name=', nameCol, 'parent=', parentCol, 'phone=', phoneCol);
+      console.log('[XQ Import] Column mapping: class=', classCol, 'name=', nameCol, 'parent=', parentCol, 'phone=', phoneCol, 'gender=', genderCol, 'address=', addressCol);
       
       if (nameCol === -1) {
         showToast('未找到"学生姓名"列', 'error');
@@ -7096,8 +7132,10 @@ function handleFileImport(event) {
         const row = data[i];
         const fileClass = classCol >= 0 ? String(row[classCol] || '').trim() : '';
         const name = String(row[nameCol] || '').trim();
+        const gender = genderCol >= 0 ? String(row[genderCol] || '').trim() : '';
         const parent = parentCol >= 0 ? String(row[parentCol] || '').trim() : '';
         const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
+        const address = addressCol >= 0 ? String(row[addressCol] || '').trim() : '';
         
         if (!name) continue;
         
@@ -7109,8 +7147,10 @@ function handleFileImport(event) {
         importData.push({
           seat: importData.length + 1,
           name: name,
+          gender: gender,
           phone: phone,
           parent: parent,
+          familyAddress: address,
           id: ++maxId,
           status: 'present',
           leaveReason: '',
@@ -7148,10 +7188,10 @@ function handleFileImport(event) {
 function downloadStudentImportTemplate() {
   const cls = getHeadteacherClass();
   const template = [
-    ['班级', '学生姓名', '家长姓名', '家长电话'],
-    [cls, '张三', '张大明', '13800138000'],
-    [cls, '李四', '李小红', '13900139000'],
-    [cls, '王五', '', '']
+    ['班级', '学生姓名', '性别', '家长姓名', '家长电话', '家庭住址'],
+    [cls, '张三', '男', '张大明', '13800138000', 'XX镇XX村XX组'],
+    [cls, '李四', '女', '李小红', '13900139000', 'XX镇XX街XX号'],
+    [cls, '王五', '男', '', '', '']
   ];
   downloadExcel(template, '学生名单模板.xlsx');
 }
@@ -7159,11 +7199,12 @@ function downloadStudentImportTemplate() {
 function showImportPreview() {
   let rows = importData.map(s => `<tr>
     <td>${s.seat}</td><td style="font-weight:500">${s.name}</td>
-    <td>${s.parent || '-'}</td><td>${s.phone || '-'}</td>
+    <td>${s.gender || '-'}</td><td>${s.parent || '-'}</td><td>${s.phone || '-'}</td>
+    <td>${s.familyAddress || '-'}</td>
   </tr>`).join('');
   document.getElementById('importPreviewArea').innerHTML = `
     <div class="import-preview">
-      <table><thead><tr><th>座号</th><th>姓名</th><th>家长</th><th>电话</th></tr></thead>
+      <table><thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>家长</th><th>电话</th><th>家庭住址</th></tr></thead>
       <tbody>${rows}</tbody></table>
     </div>
     <div style="margin-top:8px;font-size:12px;color:var(--gray-500)">共解析 <strong style="color:var(--primary)">${importData.length}</strong> 条记录</div>`;
@@ -7230,10 +7271,18 @@ function showAddStudentModal() {
       <label class="form-label">姓名 *</label>
       <input class="form-input" id="newStudentName" placeholder="请输入学生姓名">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       <div class="form-group">
         <label class="form-label">座号</label>
         <input class="form-input" id="newStudentSeat" type="number" placeholder="自动分配" value="${(STUDENTS[getHeadteacherClass()] || []).length + 1}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">性别</label>
+        <select class="form-select" id="newStudentGender">
+          <option value="">未填写</option>
+          <option value="男">男</option>
+          <option value="女">女</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">联系电话</label>
@@ -7243,6 +7292,10 @@ function showAddStudentModal() {
     <div class="form-group">
       <label class="form-label">家长信息</label>
       <input class="form-input" id="newStudentParent" placeholder="选填">
+    </div>
+    <div class="form-group">
+      <label class="form-label">家庭住址</label>
+      <input class="form-input" id="newStudentAddress" placeholder="选填">
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
       <button class="toolbar-btn primary" onclick="addStudent()">添加</button>`);
@@ -7259,8 +7312,10 @@ function addStudent() {
     id: maxId + 1,
     name: name,
     seat: parseInt(document.getElementById('newStudentSeat').value) || STUDENTS[cls].length + 1,
+    gender: document.getElementById('newStudentGender').value,
     phone: document.getElementById('newStudentPhone').value.trim(),
     parent: document.getElementById('newStudentParent').value.trim(),
+    familyAddress: document.getElementById('newStudentAddress').value.trim(),
     status: 'present',
     leaveReason: '',
     leaveNote: '',
