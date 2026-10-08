@@ -3364,7 +3364,14 @@ function saveGroupsToServer(classId, groupConfigs, studentGroups) {
   .then(res => {
     console.log('[v233] API 响应状态:', res.status, res.statusText);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      // v235: 尝试读取错误详情
+      return res.json().then(errData => {
+        console.error('[v235] API 错误详情:', errData);
+        throw new Error(`HTTP ${res.status}: ${errData.error || errData.message || res.statusText}${errData.details ? ' - ' + JSON.stringify(errData.details) : ''}`);
+      }).catch(parseErr => {
+        // 如果无法解析 JSON，抛出原始错误
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      });
     }
     return res.json();
   })
