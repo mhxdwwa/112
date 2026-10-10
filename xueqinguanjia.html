@@ -6520,8 +6520,6 @@ function s3dMakeDesk(stu, x, z, w, d, h, lh, showName, slotIdx) {
   g.userData = { slotIdx, student: stu };
 
   const padCol = stu.g === 'm' ? 0x4682B4 : 0xFF6B9D;
-  const stMap = { present: padCol, leave: 0xFF9800, absent: 0xf44336, late: 0x2196F3 };
-  const col = stMap[stu.status] || padCol;
 
   // Table top
   const topMat = new THREE.MeshStandardMaterial({
@@ -6534,7 +6532,7 @@ function s3dMakeDesk(stu, x, z, w, d, h, lh, showName, slotIdx) {
   // Color pad
   const pad = new THREE.Mesh(
     new THREE.BoxGeometry(w * 0.76, 0.008, d * 0.65),
-    new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.1, roughness: 0.35 })
+    new THREE.MeshStandardMaterial({ color: padCol, emissive: padCol, emissiveIntensity: 0.1, roughness: 0.35 })
   );
   pad.position.y = lh + h + 0.004;
   g.add(pad);
