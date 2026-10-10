@@ -1936,6 +1936,38 @@ const NAMES = [];
 
 const STATUS = { present: '在校', absent: '缺勤', leave: '请假', late: '迟到' };
 
+// 性别标准化：将各种性别表示统一为 '男'/'女'
+function normalizeGender(val) {
+  if (!val) return '';
+  const v = String(val).trim().toLowerCase();
+  if (v === '男' || v === 'm' || v === 'male' || v === 'man' || v === '1') return '男';
+  if (v === '女' || v === 'f' || v === 'female' || v === 'woman' || v === '2' || v === '0') return '女';
+  return '';
+}
+
+// 性别转 g 字段：'男' -> 'm', '女' -> 'f'
+function genderToG(gender) {
+  if (gender === '男') return 'm';
+  if (gender === '女') return 'f';
+  return '';
+}
+
+// 为学生对象同步 gender 和 g 字段
+function syncStudentGender(s) {
+  if (!s) return;
+  // 优先使用 gender 字段，如果没有则尝试从 g 推断
+  if (s.gender && !s.g) {
+    s.g = genderToG(normalizeGender(s.gender));
+  } else if (s.g && !s.gender) {
+    s.gender = s.g === 'm' ? '男' : s.g === 'f' ? '女' : '';
+  } else if (s.gender) {
+    // 两个都有，确保一致
+    const normalized = normalizeGender(s.gender);
+    s.gender = normalized;
+    s.g = genderToG(normalized);
+  }
+}
+
 // Generate mock data - returns empty object, data should be imported via setup page
 function generateStudents() {
   return {};
@@ -1948,6 +1980,22 @@ function loadStudentsFromStorage() {
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        // 迁移：为旧数据补充 g 字段
+        let migrated = false;
+        Object.values(parsed).forEach(students => {
+          if (Array.isArray(students)) {
+            students.forEach(s => {
+              if (!s.g || !s.gender) {
+                syncStudentGender(s);
+                migrated = true;
+              }
+            });
+          }
+        });
+        if (migrated) {
+          console.log('[XQ] Migrated student data: backfilled g field');
+          localStorage.setItem('xq_students', JSON.stringify(parsed));
+        }
         console.log('[XQ] Students loaded from localStorage, classes:', Object.keys(parsed).length);
         return parsed;
       }
@@ -2153,6 +2201,8 @@ async function syncFromCloud() {
           
           if (serverCount !== localCount || serverMaxId !== localMaxId) {
             console.log('[XQ] Sync: updating students for class', className, 'local:', localCount, 'server:', serverCount);
+            // 迁移：为云端数据补充 g 字段
+            serverStudents.forEach(s => syncStudentGender(s));
             STUDENTS[className] = serverStudents;
             if (!CLASS_LIST.includes(className)) CLASS_LIST.push(className);
             updated = true;
@@ -5195,7 +5245,7 @@ function importStudentsFromExcel(event) {
       const name = String(row[nameCol] || '').trim();
       const parent = parentCol >= 0 ? String(row[parentCol] || '').trim() : '';
       const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
-      const gender = genderCol >= 0 ? String(row[genderCol] || '').trim() : '';
+      const gender = genderCol >= 0 ? normalizeGender(String(row[genderCol] || '').trim()) : '';
       const address = addressCol >= 0 ? String(row[addressCol] || '').trim() : '';
       
       if (!cls || !name) continue;
@@ -5222,6 +5272,7 @@ function importStudentsFromExcel(event) {
         seat: seat,
         name: name,
         gender: gender,
+        g: genderToG(gender),
         phone: phone,
         parent: parent,
         familyAddress: address,
@@ -5418,6 +5469,7 @@ function doAdminAddStudent(cls) {
     seat: seat,
     name: name,
     gender: gender,
+    g: genderToG(gender),
     phone: phone,
     parent: parent,
     familyAddress: address,
@@ -5488,6 +5540,7 @@ function doAdminEditStudent(cls, id) {
   s.name = name;
   s.seat = parseInt(document.getElementById('adminEditStudentSeat').value) || s.seat;
   s.gender = document.getElementById('adminEditStudentGender').value;
+  s.g = genderToG(s.gender);
   s.parent = document.getElementById('adminEditStudentParent').value.trim();
   s.phone = document.getElementById('adminEditStudentPhone').value.trim();
   s.familyAddress = document.getElementById('adminEditStudentAddress').value.trim();
@@ -7662,7 +7715,7 @@ function handleFileImport(event) {
         const row = data[i];
         const fileClass = classCol >= 0 ? String(row[classCol] || '').trim() : '';
         const name = String(row[nameCol] || '').trim();
-        const gender = genderCol >= 0 ? String(row[genderCol] || '').trim() : '';
+        const gender = genderCol >= 0 ? normalizeGender(String(row[genderCol] || '').trim()) : '';
         const parent = parentCol >= 0 ? String(row[parentCol] || '').trim() : '';
         const phone = phoneCol >= 0 ? String(row[phoneCol] || '').trim() : '';
         const address = addressCol >= 0 ? String(row[addressCol] || '').trim() : '';
@@ -7678,6 +7731,7 @@ function handleFileImport(event) {
           seat: importData.length + 1,
           name: name,
           gender: gender,
+          g: genderToG(gender),
           phone: phone,
           parent: parent,
           familyAddress: address,
@@ -7754,11 +7808,25 @@ function parseImportText(text) {
   lines.forEach((line, i) => {
     const parts = line.split(/[,，\t]/).map(p => p.trim());
     if (parts.length >= 1 && parts[0]) {
+      // 支持格式: 姓名,性别,家长,电话 或 姓名,家长,电话
+      let gender = '', parent = '', phone = '';
+      if (parts.length >= 4) {
+        // 姓名,性别,家长,电话
+        gender = normalizeGender(parts[1]);
+        parent = parts[2] || '';
+        phone = parts[3] || '';
+      } else if (parts.length >= 2) {
+        // 姓名,家长,电话 (旧格式)
+        parent = parts[1] || '';
+        phone = parts[2] || '';
+      }
       importData.push({
         seat: importData.length + 1,
         name: parts[0],
-        parent: parts[1] || '',
-        phone: parts[2] || '',
+        gender: gender,
+        g: genderToG(gender),
+        parent: parent,
+        phone: phone,
         id: ++maxId,
         status: 'present',
         leaveReason: '',
@@ -7838,11 +7906,13 @@ function addStudent() {
   if (!cls) { showToast('请先设置班级数据', 'warning'); return; }
   if (!STUDENTS[cls]) STUDENTS[cls] = [];
   const maxId = STUDENTS[cls].length > 0 ? Math.max(...STUDENTS[cls].map(s => s.id), 0) : 0;
+  const gender = document.getElementById('newStudentGender').value;
   STUDENTS[cls].push({
     id: maxId + 1,
     name: name,
     seat: parseInt(document.getElementById('newStudentSeat').value) || STUDENTS[cls].length + 1,
-    gender: document.getElementById('newStudentGender').value,
+    gender: gender,
+    g: genderToG(gender),
     phone: document.getElementById('newStudentPhone').value.trim(),
     parent: document.getElementById('newStudentParent').value.trim(),
     familyAddress: document.getElementById('newStudentAddress').value.trim(),
@@ -7907,6 +7977,7 @@ function saveStudentEdit(cls, id) {
   s.name = document.getElementById('editName').value.trim() || s.name;
   s.seat = parseInt(document.getElementById('editSeat').value) || s.seat;
   s.gender = document.getElementById('editGender').value;
+  s.g = genderToG(s.gender);
   s.phone = document.getElementById('editPhone').value.trim();
   s.parent = document.getElementById('editParent').value.trim();
   s.familyAddress = document.getElementById('editFamilyAddress').value.trim();
