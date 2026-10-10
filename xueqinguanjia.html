@@ -6120,11 +6120,16 @@ function render3DOverlay(cls) {
   const absent = sts.filter(s => s.status === 'absent').length;
 
   overlay.innerHTML = `
-    <div id="s3dHeader" style="height:48px;background:rgba(10,14,23,0.95);display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(100,140,255,0.12);flex-shrink:0">
-      <div style="display:flex;align-items:center;gap:10px">
+    <div id="s3dHeader" style="background:rgba(10,14,23,0.95);display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid rgba(100,140,255,0.12);flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:12px">
         <span style="color:#e0e8ff;font-size:15px;font-weight:700">3D 座位表</span>
         <span style="color:rgba(180,200,255,0.5);font-size:12px">${cls}</span>
         ${seatingEditMode && canEdit ? '<span style="color:#fb923c;font-size:11px;background:rgba(251,146,60,0.15);padding:2px 8px;border-radius:4px">编辑模式</span>' : ''}
+        <div style="display:flex;gap:6px;margin-left:8px">
+          <div style="padding:3px 10px;background:rgba(74,222,128,0.1);border-radius:4px;text-align:center"><span style="color:#4ade80;font-size:14px;font-weight:700">${present}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">在校</span></div>
+          <div style="padding:3px 10px;background:rgba(251,146,60,0.1);border-radius:4px;text-align:center"><span style="color:#fb923c;font-size:14px;font-weight:700">${leave}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">请假</span></div>
+          <div style="padding:3px 10px;background:rgba(248,113,113,0.1);border-radius:4px;text-align:center"><span style="color:#f87171;font-size:14px;font-weight:700">${absent}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">缺勤</span></div>
+        </div>
       </div>
       <div style="display:flex;gap:6px">
         <button onclick="s3dView('podium')" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">从讲台看</button>
@@ -6139,15 +6144,7 @@ function render3DOverlay(cls) {
       <div id="s3dCanvas" style="flex:1;min-width:0;position:relative">
         <div id="s3dGapOverlay" style="position:absolute;inset:0;pointer-events:none;z-index:10"></div>
       </div>
-      <div style="width:200px;background:rgba(12,16,28,0.95);border-left:1px solid rgba(80,120,255,0.08);padding:12px;overflow-y:auto;flex-shrink:0">
-        <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(80,120,255,0.06)">
-          <div style="color:rgba(160,185,255,0.75);font-size:11px;font-weight:600;margin-bottom:7px">统计</div>
-          <div style="display:flex;gap:6px">
-            <div style="flex:1;text-align:center;padding:4px;background:rgba(74,222,128,0.1);border-radius:4px"><div style="color:#4ade80;font-size:16px;font-weight:700">${present}</div><div style="color:rgba(160,180,220,0.45);font-size:8px">在校</div></div>
-            <div style="flex:1;text-align:center;padding:4px;background:rgba(251,146,60,0.1);border-radius:4px"><div style="color:#fb923c;font-size:16px;font-weight:700">${leave}</div><div style="color:rgba(160,180,220,0.45);font-size:8px">请假</div></div>
-            <div style="flex:1;text-align:center;padding:4px;background:rgba(248,113,113,0.1);border-radius:4px"><div style="color:#f87171;font-size:16px;font-weight:700">${absent}</div><div style="color:rgba(160,180,220,0.45);font-size:8px">缺勤</div></div>
-          </div>
-        </div>
+      <div style="width:180px;background:rgba(12,16,28,0.95);border-left:1px solid rgba(80,120,255,0.08);padding:12px;overflow-y:auto;flex-shrink:0">
         <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(80,120,255,0.06)">
           <div style="color:rgba(160,185,255,0.75);font-size:11px;font-weight:600;margin-bottom:7px">通道间距</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -6283,9 +6280,15 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
     seating3DCtrl.update();
     seating3DRen.render(seating3DScene, seating3DCam);
     
-    // Update HTML gap handles in edit mode
-    if (seatingEditMode && seating3DGapWorldPositions.length > 0) {
-      s3dUpdateGapOverlay();
+    // Update HTML gap handles in edit mode only
+    const overlay = document.getElementById('s3dGapOverlay');
+    if (overlay) {
+      if (seatingEditMode && seating3DGapWorldPositions.length > 0) {
+        overlay.style.display = 'block';
+        s3dUpdateGapOverlay();
+      } else {
+        overlay.style.display = 'none';
+      }
     }
   }
   anim();
@@ -6603,26 +6606,26 @@ function s3dMakeEmpty(x, z, w, d, h, lh, slotIdx) {
 function s3dMakeLabel(stu) {
   const THREE = seating3DThree;
   const c = document.createElement('canvas');
-  c.width = 512; c.height = 128;
+  c.width = 1024; c.height = 256;
   const x = c.getContext('2d');
 
   const bg = stu.g === 'm' ? '#3F51B5' : '#E91E63';
   const sbg = { leave: '#E68A00', absent: '#D93636', late: '#2196F3' };
   x.fillStyle = sbg[stu.status] || bg;
-  s3dRoundRect(x, 0, 0, 512, 128, 20); x.fill();
-  x.strokeStyle = 'rgba(255,255,255,0.2)'; x.lineWidth = 3;
-  s3dRoundRect(x, 2, 2, 508, 124, 18); x.stroke();
+  s3dRoundRect(x, 0, 0, 1024, 256, 40); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 6;
+  s3dRoundRect(x, 4, 4, 1016, 248, 36); x.stroke();
 
   x.fillStyle = '#fff';
-  x.font = 'bold 52px sans-serif';
+  x.font = 'bold 100px sans-serif';
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(stu.name, 256, 66);
+  x.fillText(stu.name, 512, 132);
 
   const tex = new THREE.CanvasTexture(c);
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-  sp.scale.set(1.3, 0.33, 1);
+  sp.scale.set(1.5, 0.38, 1);
   return sp;
 }
 
