@@ -112,6 +112,34 @@ async function main() {
     }
   }
 
+  // Copy js/ subdirectories (e.g. three-modules/) without minification
+  function copyDirRecursive(src, dest) {
+    mkdirSync(dest, { recursive: true });
+    const entries = readdirSync(src, { withFileTypes: true });
+    for (const entry of entries) {
+      const srcPath = join(src, entry.name);
+      const destPath = join(dest, entry.name);
+      if (entry.isDirectory()) {
+        copyDirRecursive(srcPath, destPath);
+      } else {
+        copyFileSync(srcPath, destPath);
+      }
+    }
+  }
+  try {
+    const jsSubDirs = readdirSync(resolve(__dirname, JS_MODULE_DIR), { withFileTypes: true })
+      .filter(e => e.isDirectory())
+      .map(e => e.name);
+    for (const subDir of jsSubDirs) {
+      const srcDir = resolve(__dirname, JS_MODULE_DIR, subDir);
+      const distDir = join(DIST, 'js', subDir);
+      copyDirRecursive(srcDir, distDir);
+      console.log(`  ✓ js/${subDir}/: copied`);
+    }
+  } catch (e) {
+    console.error(`  ✗ js/ subdirectories: ${e.message}`);
+  }
+
   // Copy CSS (could add cssnano later)
   const cssFile = 'style.css';
   copyFileSync(resolve(__dirname, cssFile), join(DIST, cssFile));
