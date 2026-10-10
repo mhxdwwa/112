@@ -6049,11 +6049,12 @@ let seating3DSelectedSlot = null;
 let seating3DAnimId = null;
 let seating3DLoaded = false;
 let seating3DThree = null; // THREE module reference
-let seating3DGapHandles = null; // Group boundary handles
 let seating3DDraggingGap = -1; // Currently dragging gap index
 let seating3DDragStartX = 0;
 let seating3DDragStartGap = 0;
-let seating3DIsDragging = false; // Prevents handle destruction during drag
+let seating3DIsDragging = false;
+let seating3DGapOverlay = null; // HTML overlay for gap handles
+let seating3DGapWorldPositions = []; // 3D world positions of gaps for projection
 
 async function open3DSeating() {
   const cls = currentViewClass || getHeadteacherClass();
@@ -6135,7 +6136,9 @@ function render3DOverlay(cls) {
       </div>
     </div>
     <div style="flex:1;display:flex;min-height:0">
-      <div id="s3dCanvas" style="flex:1;min-width:0;position:relative"></div>
+      <div id="s3dCanvas" style="flex:1;min-width:0;position:relative">
+        <div id="s3dGapOverlay" style="position:absolute;inset:0;pointer-events:none;z-index:10"></div>
+      </div>
       <div style="width:200px;background:rgba(12,16,28,0.95);border-left:1px solid rgba(80,120,255,0.08);padding:12px;overflow-y:auto;flex-shrink:0">
         <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(80,120,255,0.06)">
           <div style="color:rgba(160,185,255,0.75);font-size:11px;font-weight:600;margin-bottom:7px">统计</div>
@@ -6259,10 +6262,8 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
   // Build classroom
   s3dBuildClassroom(cls, seatSlots, cols, totalRows);
 
-  // Click handler
+  // Click handler for desks
   seating3DRen.domElement.addEventListener('pointerdown', (e) => s3dOnPointerDown(e, cls, seatSlots, cols, totalRows));
-  seating3DRen.domElement.addEventListener('pointermove', (e) => s3dOnPointerMove(e));
-  seating3DRen.domElement.addEventListener('pointerup', (e) => s3dOnPointerUp(e, cls, seatSlots, cols, totalRows));
 
   // Resize handler
   const resizeObs = new ResizeObserver(() => {
@@ -6281,19 +6282,135 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
     seating3DAnimId = requestAnimationFrame(anim);
     seating3DCtrl.update();
     seating3DRen.render(seating3DScene, seating3DCam);
+    
+    // Update HTML gap handles in edit mode
+    if (seatingEditMode && seating3DGapWorldPositions.length > 0) {
+      s3dUpdateGapOverlay();
+    }
   }
   anim();
+}
+
+// Project 3D gap positions to 2D and update HTML overlay
+function s3dUpdateGapOverlay() {
+  const overlay = document.getElementById('s3dGapOverlay');
+  if (!overlay) return;
+  
+  const THREE = seating3DThree;
+  const container = document.getElementById('s3dCanvas');
+  if (!container || !seating3DCam) return;
+  
+  const rect = container.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  
+  // Clear existing handles
+  overlay.innerHTML = '';
+  
+  // Project each gap position to 2D
+  seating3DGapWorldPositions.forEach(gap => {
+    const vec = new THREE.Vector3(gap.x, 1, gap.z);
+    vec.project(seating3DCam);
+    
+    // Convert to screen coordinates
+    const screenX = (vec.x * 0.5 + 0.5) * w;
+    const screenY = (-vec.y * 0.5 + 0.5) * h;
+    
+    // Only show if in front of camera
+    if (vec.z < 1) {
+      const isGroup = gap.isGroupBoundary;
+      const color = isGroup ? '#fb923c' : '#5080ff';
+      const handle = document.createElement('div');
+      handle.style.cssText = `
+        position: absolute;
+        left: ${screenX - 8}px;
+        top: ${screenY - 40}px;
+        width: 16px;
+        height: 80px;
+        background: ${color};
+        opacity: ${isGroup ? 0.7 : 0.4};
+        border-radius: 4px;
+        cursor: ew-resize;
+        pointer-events: auto;
+        border: 2px solid ${color};
+        box-shadow: 0 0 8px ${color};
+      `;
+      handle.dataset.gapIdx = gap.gapIdx;
+      handle.addEventListener('mousedown', s3dStartGapDrag);
+      overlay.appendChild(handle);
+    }
+  });
+}
+
+// Start dragging a gap handle
+function s3dStartGapDrag(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const gapIdx = parseInt(e.target.dataset.gapIdx);
+  seating3DDraggingGap = gapIdx;
+  seating3DDragStartX = e.clientX;
+  seating3DDragStartGap = colGaps[gapIdx] || 10;
+  seating3DIsDragging = true;
+  
+  // Disable orbit controls
+  if (seating3DCtrl) seating3DCtrl.enabled = false;
+  
+  // Add document-level listeners
+  document.addEventListener('mousemove', s3dDoGapDrag);
+  document.addEventListener('mouseup', s3dStopGapDrag);
+}
+
+// During drag
+function s3dDoGapDrag(e) {
+  if (!seating3DIsDragging || seating3DDraggingGap < 0) return;
+  
+  const dx = e.clientX - seating3DDragStartX;
+  const newGap = Math.max(4, Math.min(60, seating3DDragStartGap + dx));
+  colGaps[seating3DDraggingGap] = newGap;
+  
+  // Rebuild scene
+  const cls = currentViewClass || getHeadteacherClass();
+  if (cls && STUDENTS[cls]) {
+    const sts = STUDENTS[cls];
+    loadSeatConfig(cls);
+    const cols = seatingCols;
+    const totalRows = seatingRows > 0 ? Math.max(seatingRows, Math.ceil(sts.length / cols)) : Math.ceil(sts.length / cols);
+    const totalSlots = totalRows * cols;
+    let seatSlots = [];
+    for (let i = 0; i < totalSlots; i++) {
+      const sid = seatLayout[cls] ? seatLayout[cls][i] : null;
+      seatSlots.push((sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null));
+    }
+    s3dBuildClassroom(cls, seatSlots, cols, totalRows);
+  }
+}
+
+// Stop dragging
+function s3dStopGapDrag(e) {
+  if (!seating3DIsDragging) return;
+  
+  seating3DIsDragging = false;
+  seating3DDraggingGap = -1;
+  
+  // Re-enable orbit controls
+  if (seating3DCtrl) seating3DCtrl.enabled = true;
+  
+  // Remove document listeners
+  document.removeEventListener('mousemove', s3dDoGapDrag);
+  document.removeEventListener('mouseup', s3dStopGapDrag);
+  
+  // Save config
+  const cls = currentViewClass || getHeadteacherClass();
+  if (cls) saveSeatConfig(cls);
+  
+  showToast('间距已调整（点击保存生效）', 'success');
 }
 
 function s3dBuildClassroom(cls, seatSlots, cols, totalRows) {
   const THREE = seating3DThree;
   if (seating3DDeskGroup) seating3DScene.remove(seating3DDeskGroup);
   if (seating3DPodiumGroup) seating3DScene.remove(seating3DPodiumGroup);
-  // Don't clear gap handles if we're actively dragging
-  if (!seating3DIsDragging) {
-    if (seating3DGapHandles) seating3DScene.remove(seating3DGapHandles);
-    seating3DGapHandles = null;
-  }
   seating3DDeskGroup = new THREE.Group();
   seating3DPodiumGroup = new THREE.Group();
 
@@ -6309,18 +6426,11 @@ function s3dBuildClassroom(cls, seatSlots, cols, totalRows) {
   }
 
   // Helper: get 3D gap width for gap index c
-  // colGaps[c] is in pixels (4-60), convert to 3D world units
   function getS3DGap(c) {
     const px = colGaps[c] || 10;
     if (groupBoundaries.has(c)) {
-      // Group boundary: use s3dAisle slider if not being dragged, else use colGaps
-      if (seating3DIsDragging || colGaps[c] <= 10) {
-        const slider = parseFloat(document.getElementById('s3dAisle')?.value || 2);
-        return slider * 1.2;
-      }
       return Math.max(0.3, px * 0.12);
     }
-    // Normal gap: map from pixels to 3D
     return Math.max(0.08, px * 0.03);
   }
 
@@ -6333,6 +6443,21 @@ function s3dBuildClassroom(cls, seatSlots, cols, totalRows) {
   const totalD = totalRows * DD + (totalRows - 1) * GZ;
   const ox = -totalW / 2 + DW / 2;
   const oz = -totalD / 2 + DD / 2;
+
+  // Calculate gap world positions for HTML overlay
+  seating3DGapWorldPositions = [];
+  let gapX = ox - DW / 2;
+  for (let c = 0; c < cols - 1; c++) {
+    const gapW = getS3DGap(c);
+    gapX += DW + gapW;
+    seating3DGapWorldPositions.push({
+      x: gapX,
+      z: oz + totalD / 2 - DD / 2,
+      gapIdx: c,
+      isGroupBoundary: groupBoundaries.has(c)
+    });
+    gapX += gapW; // Move to next gap position
+  }
 
   // Create desks with per-gap positioning
   seatSlots.forEach((stu, idx) => {
@@ -6392,60 +6517,6 @@ function s3dBuildClassroom(cls, seatSlots, cols, totalRows) {
 
   seating3DScene.add(seating3DDeskGroup);
   seating3DScene.add(seating3DPodiumGroup);
-
-  // Add gap handles in edit mode (but not during active drag)
-  if (seatingEditMode && !seating3DIsDragging) {
-    s3dAddGapHandles(cols, totalRows, ox, oz, DW, DD, groupBoundaries, getS3DGap);
-  }
-}
-
-function s3dAddGapHandles(cols, totalRows, ox, oz, DW, DD, groupBoundaries, getS3DGap) {
-  const THREE = seating3DThree;
-  if (seating3DGapHandles) seating3DScene.remove(seating3DGapHandles);
-  seating3DGapHandles = new THREE.Group();
-
-  const handleHeight = 2.0;
-  const handleDepth = totalRows * (DD + 0.5) - 0.3;
-
-  // Calculate gap positions using per-gap spacing
-  let x = ox - DW / 2;
-  for (let c = 0; c < cols - 1; c++) {
-    const gapW = getS3DGap(c);
-    x += DW + gapW;
-
-    // Create handle for this gap - make it wide enough to click
-    const isGroupBoundary = groupBoundaries.has(c);
-    const color = isGroupBoundary ? 0xfb923c : 0x5080ff;
-    const handleWidth = Math.max(0.2, gapW * 0.8);
-
-    // Translucent column for easy clicking
-    const handleGeo = new THREE.BoxGeometry(handleWidth, handleHeight, handleDepth);
-    const handleMat = new THREE.MeshBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: isGroupBoundary ? 0.5 : 0.25,
-      depthWrite: false
-    });
-    const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.set(x, handleHeight / 2, oz + handleDepth / 2 - DD / 2);
-    handle.userData = { gapIdx: c, isGroupBoundary: isGroupBoundary };
-    handle.renderOrder = 999;
-    seating3DGapHandles.add(handle);
-
-    // Bright center line indicator
-    const lineGeo = new THREE.BoxGeometry(0.03, handleHeight + 0.3, handleDepth * 0.95);
-    const lineMat = new THREE.MeshBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: isGroupBoundary ? 0.9 : 0.5
-    });
-    const line = new THREE.Mesh(lineGeo, lineMat);
-    line.position.set(x, handleHeight / 2, oz + handleDepth / 2 - DD / 2);
-    line.renderOrder = 1000;
-    seating3DGapHandles.add(line);
-  }
-
-  seating3DScene.add(seating3DGapHandles);
 }
 
 function s3dMakeDesk(stu, x, z, w, d, h, lh, showName, slotIdx) {
@@ -6572,23 +6643,6 @@ function s3dOnPointerDown(e, cls, seatSlots, cols, totalRows) {
 
   seating3DRaycaster.setFromCamera(seating3DPointer, seating3DCam);
 
-  // Check for gap handle clicks first (in edit mode)
-  if (seatingEditMode && seating3DGapHandles) {
-    const gapHits = seating3DRaycaster.intersectObjects(seating3DGapHandles.children, true);
-    if (gapHits.length > 0) {
-      let obj = gapHits[0].object;
-      if (obj.userData.gapIdx !== undefined) {
-        seating3DDraggingGap = obj.userData.gapIdx;
-        seating3DDragStartX = e.clientX;
-        seating3DDragStartGap = colGaps[obj.userData.gapIdx] || 10;
-        seating3DIsDragging = true;
-        seating3DCtrl.enabled = false; // Disable orbit controls during drag
-        e.preventDefault();
-        return;
-      }
-    }
-  }
-
   // Check for desk clicks
   const hits = seating3DRaycaster.intersectObjects(seating3DDeskGroup.children, true);
 
@@ -6630,60 +6684,6 @@ function s3dOnPointerDown(e, cls, seatSlots, cols, totalRows) {
         }
       }
     }
-  }
-}
-
-function s3dOnPointerMove(e) {
-  if (!seating3DIsDragging || seating3DDraggingGap < 0) return;
-
-  const dx = e.clientX - seating3DDragStartX;
-  // Map screen pixels to gap value (10px screen = 5 gap units)
-  const newGap = Math.max(4, Math.min(60, seating3DDragStartGap + dx * 0.5));
-  colGaps[seating3DDraggingGap] = newGap;
-
-  // Rebuild scene to show updated gap (handles preserved via seating3DIsDragging flag)
-  const cls = currentViewClass || getHeadteacherClass();
-  if (cls && STUDENTS[cls]) {
-    const sts = STUDENTS[cls];
-    loadSeatConfig(cls);
-    const cols = seatingCols;
-    const totalRows = seatingRows > 0 ? Math.max(seatingRows, Math.ceil(sts.length / cols)) : Math.ceil(sts.length / cols);
-    const totalSlots = totalRows * cols;
-    let seatSlots = [];
-    for (let i = 0; i < totalSlots; i++) {
-      const sid = seatLayout[cls] ? seatLayout[cls][i] : null;
-      seatSlots.push((sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null));
-    }
-    s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-  }
-}
-
-function s3dOnPointerUp(e, cls, seatSlots, cols, totalRows) {
-  if (seating3DIsDragging) {
-    seating3DIsDragging = false;
-    seating3DDraggingGap = -1;
-    seating3DCtrl.enabled = true; // Re-enable orbit controls
-
-    // Save config
-    const clsName = currentViewClass || getHeadteacherClass();
-    saveSeatConfig(clsName);
-
-    // Full rebuild to recreate handles at new positions
-    if (clsName && STUDENTS[clsName]) {
-      const sts = STUDENTS[clsName];
-      loadSeatConfig(clsName);
-      const c = seatingCols;
-      const r = seatingRows > 0 ? Math.max(seatingRows, Math.ceil(sts.length / c)) : Math.ceil(sts.length / c);
-      const totalSlots = r * c;
-      let slots = [];
-      for (let i = 0; i < totalSlots; i++) {
-        const sid = seatLayout[clsName] ? seatLayout[clsName][i] : null;
-        slots.push((sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null));
-      }
-      s3dBuildClassroom(clsName, slots, c, r);
-    }
-
-    showToast('间距已调整（点击保存生效）', 'success');
   }
 }
 
