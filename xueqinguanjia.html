@@ -1208,6 +1208,13 @@ tbody tr:last-child td { border-bottom: none; }
   }
 }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./js/three-modules/three.module.js"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -6060,13 +6067,17 @@ async function open3DSeating() {
   if (!seating3DLoaded) {
     overlay.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:rgba(180,200,255,0.6);font-size:14px">加载 3D 引擎...</div>';
     try {
-      seating3DThree = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
-      const { OrbitControls } = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js');
+      seating3DThree = await import('three');
+      const { OrbitControls } = await import('./js/three-modules/controls/OrbitControls.js');
       seating3DOrbitControls = OrbitControls;
       seating3DLoaded = true;
     } catch(e) {
-      overlay.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#f87171;font-size:14px">3D 引擎加载失败，请检查网络连接</div>';
-      setTimeout(() => { overlay.style.display = 'none'; }, 2000);
+      console.error('3D引擎加载失败:', e);
+      overlay.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">'
+        + '<div style="color:#f87171;font-size:14px">3D 引擎加载失败</div>'
+        + '<div style="color:rgba(180,200,255,0.5);font-size:12px">' + (e.message || e) + '</div>'
+        + '<button onclick="close3DSeating();setTimeout(function(){open3DSeating(\'' + cls + '\')},100)" style="padding:8px 24px;background:rgba(100,140,255,0.2);border:1px solid rgba(100,140,255,0.4);border-radius:8px;color:#8ab4ff;cursor:pointer;font-size:13px">重试</button>'
+        + '</div>';
       return;
     }
   }
