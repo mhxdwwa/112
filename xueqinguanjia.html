@@ -6432,33 +6432,25 @@ function s3dMakeEmpty(x, z, w, d, h, lh, slotIdx) {
 function s3dMakeLabel(stu) {
   const THREE = seating3DThree;
   const c = document.createElement('canvas');
-  c.width = 2048; c.height = 512;
+  c.width = 1024; c.height = 256;
   const x = c.getContext('2d');
 
-  const bg = stu.g === 'm' ? '#3F51B5' : '#E91E63';
-  const sbg = { leave: '#E68A00', absent: '#D93636', late: '#2196F3' };
-  x.fillStyle = sbg[stu.status] || bg;
-  s3dRoundRect(x, 0, 0, 2048, 512, 60); x.fill();
-  x.strokeStyle = 'rgba(255,255,255,0.35)'; x.lineWidth = 8;
-  s3dRoundRect(x, 6, 6, 2036, 500, 56); x.stroke();
+  // Color based on status: leave=yellow, absent=red, others=white
+  const statusColors = { leave: '#FFB800', absent: '#FF4444' };
+  const textColor = statusColors[stu.status] || '#ffffff';
 
-  // Name text with stroke for clarity
-  x.fillStyle = '#ffffff';
-  x.font = 'bold 180px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
+  // Solid filled text, no background box
+  x.fillStyle = textColor;
+  x.font = 'bold 120px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  // Draw text stroke/outline for better readability
-  x.strokeStyle = 'rgba(0,0,0,0.4)';
-  x.lineWidth = 8;
-  x.lineJoin = 'round';
-  x.strokeText(stu.name, 1024, 264);
-  x.fillText(stu.name, 1024, 264);
+  x.fillText(stu.name, 512, 128);
 
   const tex = new THREE.CanvasTexture(c);
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false }));
-  sp.scale.set(1.8, 0.45, 1);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true }));
+  sp.scale.set(1.2, 0.3, 1);
   sp.renderOrder = 999;
   return sp;
 }
