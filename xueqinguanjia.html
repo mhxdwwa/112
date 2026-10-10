@@ -6579,26 +6579,78 @@ function s3dMakeEmpty(x, z, w, d, h, lh, slotIdx) {
 
 function s3dMakeLabel(stu) {
   const THREE = seating3DThree;
+  
+  // 使用高分辨率 canvas，确保文字清晰
+  const W = 512, H = 128;
   const c = document.createElement('canvas');
-  c.width = 1024; c.height = 256;
-  const x = c.getContext('2d');
-
-  // Color based on status: leave=yellow, absent=red, others=white
-  const statusColors = { leave: '#FFB800', absent: '#FF4444' };
-  const textColor = statusColors[stu.status] || '#ffffff';
-
-  // Solid filled text, no background box
-  x.fillStyle = textColor;
-  x.font = 'bold 120px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(stu.name, 512, 128);
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  
+  // 状态颜色
+  const statusColors = { leave: '#FFD700', absent: '#FF6B6B' };
+  const textColor = statusColors[stu.status] || '#FFFFFF';
+  
+  // 字体设置 - 使用系统默认中文字体，确保实心渲染
+  const fontSize = 56;
+  const fontFamily = '"Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "WenQuanYi Micro Hei", "Noto Sans CJK SC", sans-serif';
+  ctx.font = `900 ${fontSize}px ${fontFamily}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // 先测量文字宽度，绘制半透明背景条
+  const metrics = ctx.measureText(stu.name);
+  const textW = metrics.width;
+  const padX = 20, padY = 12;
+  const bgX = (W - textW) / 2 - padX;
+  const bgY = (H - fontSize) / 2 - padY;
+  const bgW = textW + padX * 2;
+  const bgH = fontSize + padY * 2;
+  
+  // 绘制圆角半透明黑色背景
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.beginPath();
+  const r = 10;
+  ctx.moveTo(bgX + r, bgY);
+  ctx.lineTo(bgX + bgW - r, bgY);
+  ctx.quadraticCurveTo(bgX + bgW, bgY, bgX + bgW, bgY + r);
+  ctx.lineTo(bgX + bgW, bgY + bgH - r);
+  ctx.quadraticCurveTo(bgX + bgW, bgY + bgH, bgX + bgW - r, bgY + bgH);
+  ctx.lineTo(bgX + r, bgY + bgH);
+  ctx.quadraticCurveTo(bgX, bgY + bgH, bgX, bgY + bgH - r);
+  ctx.lineTo(bgX, bgY + r);
+  ctx.quadraticCurveTo(bgX, bgY, bgX + r, bgY);
+  ctx.closePath();
+  ctx.fill();
+  
+  // 绘制文字阴影（增强可读性）
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 2;
+  
+  // 实心填充文字（不使用 strokeText）
+  ctx.fillStyle = textColor;
+  ctx.font = `900 ${fontSize}px ${fontFamily}`;
+  ctx.fillText(stu.name, W / 2, H / 2);
+  
+  // 清除阴影再画一次确保实心
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.fillText(stu.name, W / 2, H / 2);
 
   const tex = new THREE.CanvasTexture(c);
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true }));
-  sp.scale.set(1.2, 0.3, 1);
+  
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ 
+    map: tex, 
+    depthTest: false, 
+    depthWrite: false, 
+    transparent: true,
+    sizeAttenuation: true
+  }));
+  sp.scale.set(1.4, 0.35, 1);
   sp.renderOrder = 999;
   return sp;
 }
