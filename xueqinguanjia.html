@@ -6212,9 +6212,9 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
   bgX.fillStyle = gr; bgX.fillRect(0, 0, 2, 512);
   seating3DScene.background = new THREE.CanvasTexture(bgC);
 
-  // Camera
+  // Camera - closer view, from behind students looking toward podium
   seating3DCam = new THREE.PerspectiveCamera(50, w / h, 0.1, 500);
-  seating3DCam.position.set(0, 16, 22);
+  seating3DCam.position.set(0, 10, -14);
 
   // Renderer
   seating3DRen = new THREE.WebGLRenderer({ antialias: true });
@@ -6672,9 +6672,11 @@ function s3dOnPointerUp(e, cls, seatSlots, cols, totalRows) {
 function s3dView(type) {
   if (!seating3DCam || !seating3DCtrl) return;
   if (type === 'podium') {
-    seating3DCam.position.set(0, 12, -16);
+    // 从讲台看：camera at podium side (positive Z), looking toward students
+    seating3DCam.position.set(0, 10, 16);
   } else {
-    seating3DCam.position.set(0, 16, 22);
+    // 从后看：camera behind students (negative Z), looking toward podium
+    seating3DCam.position.set(0, 10, -14);
   }
   seating3DCtrl.target.set(0, 0, 0);
   seating3DCtrl.update();
@@ -6682,7 +6684,7 @@ function s3dView(type) {
 
 function s3dResetView() {
   if (!seating3DCam || !seating3DCtrl) return;
-  seating3DCam.position.set(0, 16, 22);
+  seating3DCam.position.set(0, 10, -14);
   seating3DCtrl.target.set(0, 0, 0);
   seating3DCtrl.update();
 }
