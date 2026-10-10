@@ -1535,15 +1535,26 @@ async function xqLoadAllConfig() {
         console.warn('[XQ] WARNING: setupTeaching is empty after loading config!');
       }
       // 加载各班学生数据（加载所有有数据的班级）
-      for (const [key, value] of Object.entries(result.config)) {
-        if (key.startsWith('students_')) {
-          const className = key.replace('students_', '');
-          // 只要有学生数据就加载，不再限制必须在 setupClasses 中
-          if (value.data && value.data.students && Array.isArray(value.data.students)) {
-            STUDENTS[className] = value.data.students;
-            // 确保班级在 CLASS_LIST 中
-            if (!CLASS_LIST.includes(className)) {
-              CLASS_LIST.push(className);
+      // 检查本地是否有更新的数据（持久化脏标记）
+      const localIsNewer = localStorage.getItem('xq_local_newer') === 'true';
+      if (localIsNewer) {
+        console.log('[XQ] Local data is newer (xq_local_newer flag set), skipping server student data overwrite');
+        console.log('[XQ] Local classes:', Object.keys(STUDENTS).join(', '));
+        // 仍然标记为有未保存的更改，提醒用户需要保存
+        studentsDataChanged = true;
+      } else {
+        for (const [key, value] of Object.entries(result.config)) {
+          if (key.startsWith('students_')) {
+            const className = key.replace('students_', '');
+            // 只要有学生数据就加载，不再限制必须在 setupClasses 中
+            if (value.data && value.data.students && Array.isArray(value.data.students)) {
+              // 迁移：为云端数据补充 g 字段
+              value.data.students.forEach(s => syncStudentGender(s));
+              STUDENTS[className] = value.data.students;
+              // 确保班级在 CLASS_LIST 中
+              if (!CLASS_LIST.includes(className)) {
+                CLASS_LIST.push(className);
+              }
             }
           }
         }
@@ -1596,9 +1607,14 @@ async function xqLoadAllConfig() {
       });
       
       // 保存到 localStorage 作为缓存（不触发服务器同步）
-      saveStudentsToStorage();
-      if (deletedClasses.length === 0) {
-        studentsDataChanged = false; // 从服务器加载后重置脏标记（如果没有待删除的）
+      // 直接写 localStorage，不通过 saveStudentsToStorage()，避免设置脏标记
+      try {
+        localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+        localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses));
+      } catch (e) {}
+      if (deletedClasses.length === 0 && !localIsNewer) {
+        studentsDataChanged = false; // 从服务器加载后重置脏标记（如果没有待删除的且本地不是更新的）
+        localStorage.removeItem('xq_local_newer'); // 清除持久化脏标记
       }
       try {
         const config = {
@@ -2014,6 +2030,8 @@ function saveStudentsToStorage() {
     localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
     localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses));
     studentsDataChanged = true; // 标记有未同步的更改
+    // 持久化脏标记：即使刷新页面也能知道本地有更新的数据
+    localStorage.setItem('xq_local_newer', 'true');
     updateSaveToCloudButton(); // 更新保存按钮状态
     
     // 自动触发云保存（带防抖）
@@ -2117,6 +2135,8 @@ function scheduleAutoSaveToCloud() {
       // 只有在没有失败的情况下才清除更改标志
       if (failCount === 0) {
         studentsDataChanged = false;
+        // 清除持久化脏标记（本地数据已成功同步到云端）
+        localStorage.removeItem('xq_local_newer');
         updateSaveToCloudButton();
         console.log(`[XQ] Auto-save completed: ${successCount} classes saved successfully`);
         console.log('[XQ] ✓ 数据已成功同步到云端');
@@ -2172,6 +2192,11 @@ async function syncFromCloud() {
   if (!xqCurrentUser) return;
   // 如果有未保存的本地更改，暂不同步（避免覆盖本地数据）
   if (studentsDataChanged) return;
+  // 也检查持久化脏标记
+  if (localStorage.getItem('xq_local_newer') === 'true') {
+    console.log('[XQ] Sync skipped: local data is newer (persistent flag)');
+    return;
+  }
   
   periodicSyncRunning = true;
   lastSyncTime = Date.now();
@@ -2193,14 +2218,27 @@ async function syncFromCloud() {
           const serverStudents = value.data.students;
           const localStudents = STUDENTS[className] || [];
           
-          // 比较学生数量或最后一个学生的id，判断是否有更新
-          const serverCount = serverStudents.length;
-          const localCount = localStudents.length;
-          const serverMaxId = serverCount > 0 ? Math.max(...serverStudents.map(s => s.id)) : 0;
-          const localMaxId = localCount > 0 ? Math.max(...localStudents.map(s => s.id)) : 0;
+          // 深度比较：先比较数量，再比较内容（JSON序列化比较）
+          // 仅比较数量和maxId不够——编辑性别等字段不会改变这两个值
+          let hasDiff = false;
+          if (serverStudents.length !== localStudents.length) {
+            hasDiff = true;
+          } else {
+            // 数量相同，比较每个学生的关键字段
+            for (let i = 0; i < serverStudents.length; i++) {
+              const sv = serverStudents[i];
+              const lv = localStudents[i];
+              if (!lv || sv.name !== lv.name || sv.gender !== lv.gender || 
+                  sv.seat !== lv.seat || sv.phone !== lv.phone || 
+                  sv.parent !== lv.parent || (sv.g || '') !== (lv.g || '')) {
+                hasDiff = true;
+                break;
+              }
+            }
+          }
           
-          if (serverCount !== localCount || serverMaxId !== localMaxId) {
-            console.log('[XQ] Sync: updating students for class', className, 'local:', localCount, 'server:', serverCount);
+          if (hasDiff) {
+            console.log('[XQ] Sync: updating students for class', className, '(content differs)');
             // 迁移：为云端数据补充 g 字段
             serverStudents.forEach(s => syncStudentGender(s));
             STUDENTS[className] = serverStudents;
@@ -2271,10 +2309,14 @@ async function syncFromCloud() {
 
 // 手动刷新按钮：强制从云端同步
 async function manualSyncFromCloud() {
-  if (studentsDataChanged) {
+  const localNewer = localStorage.getItem('xq_local_newer') === 'true';
+  if (studentsDataChanged || localNewer) {
     if (!confirm('本地有未保存的更改，强制同步可能会覆盖本地数据。是否继续？')) {
       return;
     }
+    // 用户确认覆盖，清除脏标记
+    localStorage.removeItem('xq_local_newer');
+    studentsDataChanged = false;
   }
   
   showToast('正在从云端同步数据...', 'info');
@@ -2569,6 +2611,10 @@ async function saveStudentsToCloud() {
     }
     
     studentsDataChanged = false;
+    // 清除持久化脏标记
+    if (failCount === 0) {
+      localStorage.removeItem('xq_local_newer');
+    }
     updateSaveToCloudButton();
     
     let msg = `已保存 ${successCount} 个班级到云端`;
@@ -5448,7 +5494,7 @@ function adminAddStudent(cls) {
       <button class="toolbar-btn primary" onclick="doAdminAddStudent('${cls}')">添加</button>`, true);
 }
 
-function doAdminAddStudent(cls) {
+async function doAdminAddStudent(cls) {
   const name = document.getElementById('adminNewStudentName').value.trim();
   if (!name) { showToast('请输入学生姓名', 'warning'); return; }
   
@@ -5487,7 +5533,27 @@ function doAdminAddStudent(cls) {
   
   saveStudentsToStorage();
   hideModal();
-  showToast(`已添加学生 ${name}`, 'success');
+  showToast(`已添加学生 ${name}，正在同步到云端...`, 'info');
+  
+  // 直接等待云保存完成
+  try {
+    const result = await xqSaveStudentsToServer(cls);
+    if (result && result.ok) {
+      studentsDataChanged = false;
+      localStorage.removeItem('xq_local_newer');
+      updateSaveToCloudButton();
+      showToast(`已添加学生 ${name} 并同步到云端`, 'success');
+    } else {
+      studentsDataChanged = true;
+      updateSaveToCloudButton();
+      showToast(`已添加学生 ${name}，但云端同步失败，请手动保存到云端`, 'warning');
+    }
+  } catch (e) {
+    studentsDataChanged = true;
+    updateSaveToCloudButton();
+    showToast(`已添加学生 ${name}，但云端同步异常，请手动保存到云端`, 'warning');
+  }
+  
   navigate('admin-class-students');
 }
 
@@ -5530,7 +5596,7 @@ function adminEditStudent(cls, id) {
       <button class="toolbar-btn primary" onclick="doAdminEditStudent('${cls}',${id})">保存</button>`, true);
 }
 
-function doAdminEditStudent(cls, id) {
+async function doAdminEditStudent(cls, id) {
   const s = STUDENTS[cls].find(st => st.id === id);
   if (!s) return;
   
@@ -5545,9 +5611,38 @@ function doAdminEditStudent(cls, id) {
   s.phone = document.getElementById('adminEditStudentPhone').value.trim();
   s.familyAddress = document.getElementById('adminEditStudentAddress').value.trim();
   
-  saveStudentsToStorage();
+  // 先保存到 localStorage
+  try {
+    localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+    localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses));
+    localStorage.setItem('xq_local_newer', 'true'); // 标记本地有更新数据
+  } catch (e) { console.warn('[XQ] localStorage save failed:', e); }
+  
   hideModal();
-  showToast(`已更新学生 ${name} 的信息`, 'success');
+  showToast(`已更新学生 ${name} 的信息，正在同步到云端...`, 'info');
+  
+  // 直接等待云保存完成，不依赖防抖
+  try {
+    const result = await xqSaveStudentsToServer(cls);
+    if (result && result.ok) {
+      studentsDataChanged = false;
+      localStorage.removeItem('xq_local_newer'); // 云保存成功，清除标记
+      updateSaveToCloudButton();
+      showToast(`已更新学生 ${name} 的信息并同步到云端`, 'success');
+    } else {
+      studentsDataChanged = true;
+      // xq_local_newer 保持为 true，下次加载时保护本地数据
+      updateSaveToCloudButton();
+      showToast(`已更新本地，但云端同步失败，请点击"保存到云端"重试`, 'warning');
+    }
+  } catch (e) {
+    console.error('[XQ] Cloud save failed after edit:', e);
+    studentsDataChanged = true;
+    // xq_local_newer 保持为 true
+    updateSaveToCloudButton();
+    showToast(`已更新本地，但云端同步异常，请点击"保存到云端"重试`, 'warning');
+  }
+  
   navigate('admin-class-students');
 }
 
@@ -7899,7 +7994,7 @@ function showAddStudentModal() {
       <button class="toolbar-btn primary" onclick="addStudent()">添加</button>`);
 }
 
-function addStudent() {
+async function addStudent() {
   const name = document.getElementById('newStudentName').value.trim();
   if (!name) { showToast('请输入学生姓名', 'warning'); return; }
   const cls = getHeadteacherClass();
@@ -7929,7 +8024,26 @@ function addStudent() {
   });
   saveStudentsToStorage();
   hideModal();
-  showToast(`已添加学生：${name}`);
+  showToast(`已添加学生：${name}，正在同步到云端...`, 'info');
+  
+  try {
+    const result = await xqSaveStudentsToServer(cls);
+    if (result && result.ok) {
+      studentsDataChanged = false;
+      localStorage.removeItem('xq_local_newer');
+      updateSaveToCloudButton();
+      showToast(`已添加学生：${name}，并同步到云端`, 'success');
+    } else {
+      studentsDataChanged = true;
+      updateSaveToCloudButton();
+      showToast(`已添加学生：${name}，但云端同步失败，请手动保存`, 'warning');
+    }
+  } catch (e) {
+    studentsDataChanged = true;
+    updateSaveToCloudButton();
+    showToast(`已添加学生：${name}，但云端同步异常，请手动保存`, 'warning');
+  }
+  
   navigate('roster');
 }
 
@@ -7971,7 +8085,7 @@ function editStudent(cls, id) {
       <button class="toolbar-btn primary" onclick="saveStudentEdit('${cls}',${id})">保存</button>`);
 }
 
-function saveStudentEdit(cls, id) {
+async function saveStudentEdit(cls, id) {
   const s = STUDENTS[cls].find(st => st.id === id);
   if (!s) return;
   s.name = document.getElementById('editName').value.trim() || s.name;
@@ -7981,9 +8095,37 @@ function saveStudentEdit(cls, id) {
   s.phone = document.getElementById('editPhone').value.trim();
   s.parent = document.getElementById('editParent').value.trim();
   s.familyAddress = document.getElementById('editFamilyAddress').value.trim();
-  saveStudentsToStorage();
+  
+  // 先保存到 localStorage
+  try {
+    localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
+    localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses));
+    localStorage.setItem('xq_local_newer', 'true');
+  } catch (e) { console.warn('[XQ] localStorage save failed:', e); }
+  
   hideModal();
-  showToast('学生信息已更新');
+  showToast('正在保存并同步到云端...', 'info');
+  
+  // 直接等待云保存完成
+  try {
+    const result = await xqSaveStudentsToServer(cls);
+    if (result && result.ok) {
+      studentsDataChanged = false;
+      localStorage.removeItem('xq_local_newer');
+      updateSaveToCloudButton();
+      showToast('学生信息已更新并同步到云端', 'success');
+    } else {
+      studentsDataChanged = true;
+      updateSaveToCloudButton();
+      showToast('学生信息已更新本地，云端同步失败，请手动保存到云端', 'warning');
+    }
+  } catch (e) {
+    console.error('[XQ] Cloud save failed after edit:', e);
+    studentsDataChanged = true;
+    updateSaveToCloudButton();
+    showToast('学生信息已更新本地，云端同步异常，请手动保存到云端', 'warning');
+  }
+  
   navigate('roster');
 }
 
