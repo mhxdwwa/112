@@ -6211,6 +6211,14 @@ async function open3DSeating() {
   }
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0a0e17;display:flex;flex-direction:column';
 
+  // 手机端自动横屏
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {
+      // 部分浏览器不支持或需要全屏，静默失败
+      console.log('[XQ] 横屏锁定失败，请手动旋转手机');
+    });
+  }
+
   // Load Three.js if not loaded
   if (!seating3DLoaded) {
     overlay.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:rgba(180,200,255,0.6);font-size:14px">加载 3D 引擎...</div>';
@@ -6739,6 +6747,12 @@ function close3DSeating() {
   if (seating3DAnimId) { cancelAnimationFrame(seating3DAnimId); seating3DAnimId = null; }
   const overlay = document.getElementById('seating3DOverlay');
   if (overlay) overlay.style.display = 'none';
+  
+  // 解除横屏锁定
+  if (screen.orientation && screen.orientation.unlock) {
+    try { screen.orientation.unlock(); } catch(e) {}
+  }
+  
   // Re-render 2D seating page
   navigate('class-seating');
 }
