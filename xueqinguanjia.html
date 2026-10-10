@@ -6045,16 +6045,10 @@ let seating3DActive = false;
 let seating3DScene, seating3DCam, seating3DRen, seating3DCtrl;
 let seating3DDeskGroup, seating3DPodiumGroup, seating3DGrid;
 let seating3DRaycaster, seating3DPointer;
-let seating3DSelectedSlot = null;
 let seating3DAnimId = null;
 let seating3DLoaded = false;
 let seating3DThree = null; // THREE module reference
-let seating3DDraggingGap = -1; // Currently dragging gap index
-let seating3DDragStartX = 0;
-let seating3DDragStartGap = 0;
-let seating3DIsDragging = false;
-let seating3DGapOverlay = null; // HTML overlay for gap handles
-let seating3DGapWorldPositions = []; // 3D world positions of gaps for projection
+let seating3DPointerDownPos = null; // Track pointer down position for click detection
 
 async function open3DSeating() {
   const cls = currentViewClass || getHeadteacherClass();
@@ -6089,7 +6083,6 @@ async function open3DSeating() {
   }
 
   seating3DActive = true;
-  seating3DSelectedSlot = null;
   render3DOverlay(cls);
 }
 
@@ -6098,7 +6091,6 @@ let seating3DOrbitControls = null;
 function render3DOverlay(cls) {
   const overlay = document.getElementById('seating3DOverlay');
   const sts = STUDENTS[cls];
-  const canEdit = canEditClass(cls);
 
   // Build seat slots from layout
   loadSeatConfig(cls);
@@ -6120,63 +6112,35 @@ function render3DOverlay(cls) {
   const absent = sts.filter(s => s.status === 'absent').length;
 
   overlay.innerHTML = `
-    <div id="s3dHeader" style="background:rgba(10,14,23,0.95);display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid rgba(100,140,255,0.12);flex-shrink:0">
-      <div style="display:flex;align-items:center;gap:12px">
-        <span style="color:#e0e8ff;font-size:15px;font-weight:700">3D 座位表</span>
-        <span style="color:rgba(180,200,255,0.5);font-size:12px">${cls}</span>
-        ${seatingEditMode && canEdit ? '<span style="color:#fb923c;font-size:11px;background:rgba(251,146,60,0.15);padding:2px 8px;border-radius:4px">编辑模式</span>' : ''}
-        <div style="display:flex;gap:6px;margin-left:8px">
-          <div style="padding:3px 10px;background:rgba(74,222,128,0.1);border-radius:4px;text-align:center"><span style="color:#4ade80;font-size:14px;font-weight:700">${present}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">在校</span></div>
-          <div style="padding:3px 10px;background:rgba(251,146,60,0.1);border-radius:4px;text-align:center"><span style="color:#fb923c;font-size:14px;font-weight:700">${leave}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">请假</span></div>
-          <div style="padding:3px 10px;background:rgba(248,113,113,0.1);border-radius:4px;text-align:center"><span style="color:#f87171;font-size:14px;font-weight:700">${absent}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">缺勤</span></div>
+    <div id="s3dHeader" style="background:rgba(10,14,23,0.95);flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid rgba(100,140,255,0.08)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="color:#e0e8ff;font-size:15px;font-weight:700">3D 座位表</span>
+          <span style="color:rgba(180,200,255,0.5);font-size:12px">${cls}</span>
+          <div style="display:flex;gap:6px;margin-left:8px">
+            <div style="padding:3px 10px;background:rgba(74,222,128,0.1);border-radius:4px;text-align:center"><span style="color:#4ade80;font-size:14px;font-weight:700">${present}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">在校</span></div>
+            <div style="padding:3px 10px;background:rgba(251,146,60,0.1);border-radius:4px;text-align:center"><span style="color:#fb923c;font-size:14px;font-weight:700">${leave}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">请假</span></div>
+            <div style="padding:3px 10px;background:rgba(248,113,113,0.1);border-radius:4px;text-align:center"><span style="color:#f87171;font-size:14px;font-weight:700">${absent}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">缺勤</span></div>
+          </div>
         </div>
-      </div>
-      <div style="display:flex;gap:6px">
-        <button onclick="s3dView('podium')" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">从讲台看</button>
-        <button onclick="s3dView('back')" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">从后看</button>
-        <button onclick="s3dResetView()" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">重置视角</button>
-        ${canEdit && !seatingEditMode ? '<button onclick="s3dEnterEdit()" style="background:rgba(80,120,255,0.2);border:1px solid rgba(100,140,255,0.3);color:#fff;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">编辑座位</button>' : ''}
-        ${canEdit && seatingEditMode ? '<button onclick="s3dSaveEdit()" style="background:#4CAF50;border:none;color:#fff;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">保存</button><button onclick="s3dCancelEdit()" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">取消</button>' : ''}
-        <button onclick="close3DSeating()" style="background:rgba(220,60,60,0.2);border:1px solid rgba(220,60,60,0.3);color:#f87171;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">返回 2D</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+            <input type="checkbox" id="s3dShowNames" checked onchange="s3dRebuild()" style="accent-color:#5080ff">
+            <span style="color:rgba(180,200,240,0.6);font-size:10px">显示姓名</span>
+          </label>
+          <button onclick="s3dView('podium')" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">从讲台看</button>
+          <button onclick="s3dView('back')" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">从后看</button>
+          <button onclick="s3dResetView()" style="background:rgba(80,120,255,0.12);border:1px solid rgba(100,140,255,0.2);color:rgba(200,220,255,0.85);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">重置视角</button>
+          <button onclick="close3DSeating()" style="background:rgba(220,60,60,0.2);border:1px solid rgba(220,60,60,0.3);color:#f87171;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px">返回 2D</button>
+        </div>
       </div>
     </div>
     <div style="flex:1;display:flex;min-height:0">
       <div id="s3dCanvas" style="flex:1;min-width:0;position:relative">
-        <div id="s3dGapOverlay" style="position:absolute;inset:0;pointer-events:none;z-index:10"></div>
-      </div>
-      <div style="width:180px;background:rgba(12,16,28,0.95);border-left:1px solid rgba(80,120,255,0.08);padding:12px;overflow-y:auto;flex-shrink:0">
-        <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(80,120,255,0.06)">
-          <div style="color:rgba(160,185,255,0.75);font-size:11px;font-weight:600;margin-bottom:7px">通道间距</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <span style="color:rgba(160,180,220,0.55);font-size:10px;white-space:nowrap">组间距</span>
-            <input type="range" id="s3dAisle" min="0.5" max="4" step="0.1" value="2" style="flex:1;accent-color:#5080ff" oninput="s3dUpdateGap()">
-          </div>
-        </div>
-        ${seatingEditMode && canEdit ? `
-        <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(80,120,255,0.06)">
-          <div style="color:rgba(160,185,255,0.75);font-size:11px;font-weight:600;margin-bottom:7px">分组管理</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="color:rgba(160,180,220,0.55);font-size:10px">每</span>
-              <input type="number" id="s3dGroupSize" value="${colGroups.length > 0 ? colGroups[0] : 1}" min="1" max="${cols}" style="width:40px;padding:2px 4px;border-radius:4px;border:1px solid rgba(80,120,255,0.2);background:rgba(20,30,50,0.6);color:rgba(200,220,255,0.85);font-size:10px;text-align:center" onchange="s3dChangeGrouping(this.value)">
-              <span style="color:rgba(160,180,220,0.55);font-size:10px">列一组</span>
-            </div>
-            <div style="color:rgba(160,180,220,0.4);font-size:9px">拖动橙色竖条调整组间距，拖动蓝色竖条调整列间距</div>
-          </div>
-        </div>
-        ` : ''}
-        <div>
-          <div style="color:rgba(160,185,255,0.75);font-size:11px;font-weight:600;margin-bottom:7px">显示</div>
-          <label style="display:flex;align-items:center;gap:5px;margin-bottom:4px;cursor:pointer">
-            <input type="checkbox" id="s3dShowNames" checked onchange="s3dRebuild()" style="accent-color:#5080ff">
-            <span style="color:rgba(180,200,240,0.65);font-size:10px">显示姓名</span>
-          </label>
-        </div>
-        ${seatingEditMode && canEdit ? '<div style="margin-top:12px;padding:8px;background:rgba(251,146,60,0.1);border-radius:6px;border:1px solid rgba(251,146,60,0.2)"><div style="color:#fb923c;font-size:10px;font-weight:600;margin-bottom:4px">编辑模式</div><div style="color:rgba(180,200,240,0.6);font-size:9px">点击学生选中，再点击另一个交换位置。<br>拖动竖条调整间距：<span style="color:#fb923c">橙色</span>=组间距，<span style="color:#5080ff">蓝色</span>=列间距</div></div>' : ''}
       </div>
     </div>
-    <div style="height:28px;background:rgba(10,14,23,0.9);display:flex;align-items:center;justify-content:center;border-top:1px solid rgba(100,140,255,0.08);flex-shrink:0">
-      <span style="color:rgba(160,180,220,0.3);font-size:9px">拖动旋转 · 滚轮缩放 · ${seatingEditMode && canEdit ? '点击座位交换 · 拖动竖条调整间距' : '点击座位查看详情'}</span>
+    <div style="height:24px;background:rgba(10,14,23,0.9);display:flex;align-items:center;justify-content:center;border-top:1px solid rgba(100,140,255,0.08);flex-shrink:0">
+      <span style="color:rgba(160,180,220,0.3);font-size:9px">拖动旋转 · 滚轮缩放 · 点击学生查看详情</span>
     </div>
   `;
 
@@ -6259,8 +6223,21 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
   // Build classroom
   s3dBuildClassroom(cls, seatSlots, cols, totalRows);
 
-  // Click handler for desks
-  seating3DRen.domElement.addEventListener('pointerdown', (e) => s3dOnPointerDown(e, cls, seatSlots, cols, totalRows));
+  // Click handler for desks - track pointer down/up to distinguish click from drag
+  seating3DRen.domElement.addEventListener('pointerdown', (e) => {
+    seating3DPointerDownPos = { x: e.clientX, y: e.clientY };
+  });
+  seating3DRen.domElement.addEventListener('pointerup', (e) => {
+    if (!seating3DPointerDownPos) return;
+    const dx = e.clientX - seating3DPointerDownPos.x;
+    const dy = e.clientY - seating3DPointerDownPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    seating3DPointerDownPos = null;
+    // Only treat as click if pointer moved less than 5px (not a drag/orbit)
+    if (dist < 5) {
+      s3dOnPointerDown(e, cls, seatSlots, cols, totalRows);
+    }
+  });
 
   // Resize handler
   const resizeObs = new ResizeObserver(() => {
@@ -6279,135 +6256,8 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
     seating3DAnimId = requestAnimationFrame(anim);
     seating3DCtrl.update();
     seating3DRen.render(seating3DScene, seating3DCam);
-    
-    // Update HTML gap handles in edit mode only
-    const overlay = document.getElementById('s3dGapOverlay');
-    if (overlay) {
-      if (seatingEditMode && seating3DGapWorldPositions.length > 0) {
-        overlay.style.display = 'block';
-        s3dUpdateGapOverlay();
-      } else {
-        overlay.style.display = 'none';
-      }
-    }
   }
   anim();
-}
-
-// Project 3D gap positions to 2D and update HTML overlay
-function s3dUpdateGapOverlay() {
-  const overlay = document.getElementById('s3dGapOverlay');
-  if (!overlay) return;
-  
-  const THREE = seating3DThree;
-  const container = document.getElementById('s3dCanvas');
-  if (!container || !seating3DCam) return;
-  
-  const rect = container.getBoundingClientRect();
-  const w = rect.width;
-  const h = rect.height;
-  
-  // Clear existing handles
-  overlay.innerHTML = '';
-  
-  // Project each gap position to 2D
-  seating3DGapWorldPositions.forEach(gap => {
-    const vec = new THREE.Vector3(gap.x, 1, gap.z);
-    vec.project(seating3DCam);
-    
-    // Convert to screen coordinates
-    const screenX = (vec.x * 0.5 + 0.5) * w;
-    const screenY = (-vec.y * 0.5 + 0.5) * h;
-    
-    // Only show if in front of camera
-    if (vec.z < 1) {
-      const isGroup = gap.isGroupBoundary;
-      const color = isGroup ? '#fb923c' : '#5080ff';
-      const handle = document.createElement('div');
-      handle.style.cssText = `
-        position: absolute;
-        left: ${screenX - 8}px;
-        top: ${screenY - 40}px;
-        width: 16px;
-        height: 80px;
-        background: ${color};
-        opacity: ${isGroup ? 0.7 : 0.4};
-        border-radius: 4px;
-        cursor: ew-resize;
-        pointer-events: auto;
-        border: 2px solid ${color};
-        box-shadow: 0 0 8px ${color};
-      `;
-      handle.dataset.gapIdx = gap.gapIdx;
-      handle.addEventListener('mousedown', s3dStartGapDrag);
-      overlay.appendChild(handle);
-    }
-  });
-}
-
-// Start dragging a gap handle
-function s3dStartGapDrag(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  
-  const gapIdx = parseInt(e.target.dataset.gapIdx);
-  seating3DDraggingGap = gapIdx;
-  seating3DDragStartX = e.clientX;
-  seating3DDragStartGap = colGaps[gapIdx] || 10;
-  seating3DIsDragging = true;
-  
-  // Disable orbit controls
-  if (seating3DCtrl) seating3DCtrl.enabled = false;
-  
-  // Add document-level listeners
-  document.addEventListener('mousemove', s3dDoGapDrag);
-  document.addEventListener('mouseup', s3dStopGapDrag);
-}
-
-// During drag
-function s3dDoGapDrag(e) {
-  if (!seating3DIsDragging || seating3DDraggingGap < 0) return;
-  
-  const dx = e.clientX - seating3DDragStartX;
-  const newGap = Math.max(4, Math.min(60, seating3DDragStartGap + dx));
-  colGaps[seating3DDraggingGap] = newGap;
-  
-  // Rebuild scene
-  const cls = currentViewClass || getHeadteacherClass();
-  if (cls && STUDENTS[cls]) {
-    const sts = STUDENTS[cls];
-    loadSeatConfig(cls);
-    const cols = seatingCols;
-    const totalRows = seatingRows > 0 ? Math.max(seatingRows, Math.ceil(sts.length / cols)) : Math.ceil(sts.length / cols);
-    const totalSlots = totalRows * cols;
-    let seatSlots = [];
-    for (let i = 0; i < totalSlots; i++) {
-      const sid = seatLayout[cls] ? seatLayout[cls][i] : null;
-      seatSlots.push((sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null));
-    }
-    s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-  }
-}
-
-// Stop dragging
-function s3dStopGapDrag(e) {
-  if (!seating3DIsDragging) return;
-  
-  seating3DIsDragging = false;
-  seating3DDraggingGap = -1;
-  
-  // Re-enable orbit controls
-  if (seating3DCtrl) seating3DCtrl.enabled = true;
-  
-  // Remove document listeners
-  document.removeEventListener('mousemove', s3dDoGapDrag);
-  document.removeEventListener('mouseup', s3dStopGapDrag);
-  
-  // Save config
-  const cls = currentViewClass || getHeadteacherClass();
-  if (cls) saveSeatConfig(cls);
-  
-  showToast('间距已调整（点击保存生效）', 'success');
 }
 
 function s3dBuildClassroom(cls, seatSlots, cols, totalRows) {
@@ -6446,21 +6296,6 @@ function s3dBuildClassroom(cls, seatSlots, cols, totalRows) {
   const totalD = totalRows * DD + (totalRows - 1) * GZ;
   const ox = -totalW / 2 + DW / 2;
   const oz = -totalD / 2 + DD / 2;
-
-  // Calculate gap world positions for HTML overlay
-  seating3DGapWorldPositions = [];
-  let gapX = ox - DW / 2;
-  for (let c = 0; c < cols - 1; c++) {
-    const gapW = getS3DGap(c);
-    gapX += DW + gapW;
-    seating3DGapWorldPositions.push({
-      x: gapX,
-      z: oz + totalD / 2 - DD / 2,
-      gapIdx: c,
-      isGroupBoundary: groupBoundaries.has(c)
-    });
-    gapX += gapW; // Move to next gap position
-  }
 
   // Create desks with per-gap positioning
   seatSlots.forEach((stu, idx) => {
@@ -6532,14 +6367,9 @@ function s3dMakeDesk(stu, x, z, w, d, h, lh, showName, slotIdx) {
   const stMap = { present: padCol, leave: 0xFF9800, absent: 0xf44336, late: 0x2196F3 };
   const col = stMap[stu.status] || padCol;
 
-  // Highlight if selected
-  const isSelected = seating3DSelectedSlot === slotIdx;
-
   // Table top
   const topMat = new THREE.MeshStandardMaterial({
-    color: 0xB8956A, roughness: 0.5, metalness: 0.05,
-    emissive: isSelected ? 0x5080ff : 0x000000,
-    emissiveIntensity: isSelected ? 0.3 : 0
+    color: 0xB8956A, roughness: 0.5, metalness: 0.05
   });
   const top = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), topMat);
   top.position.y = lh + h / 2; top.castShadow = true; top.receiveShadow = true;
@@ -6548,7 +6378,7 @@ function s3dMakeDesk(stu, x, z, w, d, h, lh, showName, slotIdx) {
   // Color pad
   const pad = new THREE.Mesh(
     new THREE.BoxGeometry(w * 0.76, 0.008, d * 0.65),
-    new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: isSelected ? 0.4 : 0.1, roughness: 0.35 })
+    new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.1, roughness: 0.35 })
   );
   pad.position.y = lh + h + 0.004;
   g.add(pad);
@@ -6579,14 +6409,10 @@ function s3dMakeEmpty(x, z, w, d, h, lh, slotIdx) {
   g.position.set(x, 0, z);
   g.userData = { slotIdx, student: null };
 
-  const isSelected = seating3DSelectedSlot === slotIdx;
-
   const top = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
     new THREE.MeshStandardMaterial({
-      color: 0x5a5a6a, roughness: 0.6, transparent: true, opacity: 0.4,
-      emissive: isSelected ? 0x5080ff : 0x000000,
-      emissiveIntensity: isSelected ? 0.3 : 0
+      color: 0x5a5a6a, roughness: 0.6, transparent: true, opacity: 0.4
     })
   );
   top.position.y = lh + h / 2; top.castShadow = true;
@@ -6606,26 +6432,34 @@ function s3dMakeEmpty(x, z, w, d, h, lh, slotIdx) {
 function s3dMakeLabel(stu) {
   const THREE = seating3DThree;
   const c = document.createElement('canvas');
-  c.width = 1024; c.height = 256;
+  c.width = 2048; c.height = 512;
   const x = c.getContext('2d');
 
   const bg = stu.g === 'm' ? '#3F51B5' : '#E91E63';
   const sbg = { leave: '#E68A00', absent: '#D93636', late: '#2196F3' };
   x.fillStyle = sbg[stu.status] || bg;
-  s3dRoundRect(x, 0, 0, 1024, 256, 40); x.fill();
-  x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 6;
-  s3dRoundRect(x, 4, 4, 1016, 248, 36); x.stroke();
+  s3dRoundRect(x, 0, 0, 2048, 512, 60); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.35)'; x.lineWidth = 8;
+  s3dRoundRect(x, 6, 6, 2036, 500, 56); x.stroke();
 
-  x.fillStyle = '#fff';
-  x.font = 'bold 100px sans-serif';
+  // Name text with stroke for clarity
+  x.fillStyle = '#ffffff';
+  x.font = 'bold 180px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(stu.name, 512, 132);
+  // Draw text stroke/outline for better readability
+  x.strokeStyle = 'rgba(0,0,0,0.4)';
+  x.lineWidth = 8;
+  x.lineJoin = 'round';
+  x.strokeText(stu.name, 1024, 264);
+  x.fillText(stu.name, 1024, 264);
 
   const tex = new THREE.CanvasTexture(c);
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-  sp.scale.set(1.5, 0.38, 1);
+  tex.generateMipmaps = false;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false }));
+  sp.scale.set(1.8, 0.45, 1);
+  sp.renderOrder = 999;
   return sp;
 }
 
@@ -6653,38 +6487,20 @@ function s3dOnPointerDown(e, cls, seatSlots, cols, totalRows) {
     let obj = hits[0].object;
     while (obj.parent && obj.userData.slotIdx === undefined) obj = obj.parent;
     if (obj.userData.slotIdx !== undefined) {
-      const clickedSlot = obj.userData.slotIdx;
-      const canEdit = canEditClass(cls);
-
-      if (seatingEditMode && canEdit) {
-        // Edit mode: swap seats
-        if (seating3DSelectedSlot === null) {
-          seating3DSelectedSlot = clickedSlot;
-          s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-        } else if (seating3DSelectedSlot === clickedSlot) {
-          seating3DSelectedSlot = null;
-          s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-        } else {
-          // Swap
-          const tmp = seatLayout[cls][seating3DSelectedSlot];
-          seatLayout[cls][seating3DSelectedSlot] = seatLayout[cls][clickedSlot];
-          seatLayout[cls][clickedSlot] = tmp;
-          seating3DSelectedSlot = null;
-          // Rebuild seatSlots
-          const sts = STUDENTS[cls];
-          for (let i = 0; i < seatSlots.length; i++) {
-            const sid = seatLayout[cls][i];
-            seatSlots[i] = (sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null);
-          }
-          s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-          showToast('座位已交换（点击保存生效）', 'success');
-        }
-      } else {
-        // View mode: show student detail
-        const stu = obj.userData.student;
-        if (stu) {
-          showStudentDetail(cls, stu.id);
-        }
+      // View mode: show student detail
+      const stu = obj.userData.student;
+      if (stu) {
+        // Lower 3D overlay z-index so modal (z-index:2000) appears on top
+        const ov3d = document.getElementById('seating3DOverlay');
+        if (ov3d) ov3d.style.zIndex = '1000';
+        showStudentDetail(cls, stu.id);
+        // Restore z-index when modal is closed
+        const origHide = window.hideModal;
+        window.hideModal = function() {
+          origHide();
+          if (ov3d) ov3d.style.zIndex = '9999';
+          window.hideModal = origHide;
+        };
       }
     }
   }
@@ -6710,43 +6526,6 @@ function s3dResetView() {
   seating3DCtrl.update();
 }
 
-function s3dUpdateGap() {
-  const cls = currentViewClass || getHeadteacherClass();
-  if (!cls || !STUDENTS[cls]) return;
-  const sts = STUDENTS[cls];
-  loadSeatConfig(cls);
-  const cols = seatingCols;
-  const totalRows = seatingRows > 0 ? Math.max(seatingRows, Math.ceil(sts.length / cols)) : Math.ceil(sts.length / cols);
-  const totalSlots = totalRows * cols;
-  let seatSlots = [];
-  for (let i = 0; i < totalSlots; i++) {
-    const sid = seatLayout[cls] ? seatLayout[cls][i] : null;
-    seatSlots.push((sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null));
-  }
-  s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-}
-
-function s3dChangeGrouping(val) {
-  const cls = currentViewClass || getHeadteacherClass();
-  if (!cls) return;
-  const groupSize = Math.max(1, Math.min(seatingCols, parseInt(val) || 1));
-  if (groupSize === 1) {
-    colGroups = []; // 不分组，每列独立
-  } else {
-    // 均匀分组
-    colGroups = [];
-    let remaining = seatingCols;
-    while (remaining > 0) {
-      const size = Math.min(groupSize, remaining);
-      colGroups.push(size);
-      remaining -= size;
-    }
-  }
-  saveSeatConfig(cls);
-  s3dRebuild();
-  showToast('分组已更新（点击保存生效）', 'success');
-}
-
 function s3dRebuild() {
   const cls = currentViewClass || getHeadteacherClass();
   if (!cls || !STUDENTS[cls]) return;
@@ -6761,27 +6540,6 @@ function s3dRebuild() {
     seatSlots.push((sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null));
   }
   s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-}
-
-function s3dEnterEdit() {
-  seatingEditMode = true;
-  seating3DSelectedSlot = null;
-  const cls = currentViewClass || getHeadteacherClass();
-  render3DOverlay(cls);
-}
-
-function s3dCancelEdit() {
-  seatingEditMode = false;
-  seating3DSelectedSlot = null;
-  const cls = currentViewClass || getHeadteacherClass();
-  render3DOverlay(cls);
-}
-
-function s3dSaveEdit() {
-  seatingEditMode = false;
-  seating3DSelectedSlot = null;
-  close3DSeating();
-  saveSeating();
 }
 
 function close3DSeating() {
