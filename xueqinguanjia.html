@@ -6171,10 +6171,6 @@ function render3DOverlay(cls) {
             <input type="checkbox" id="s3dShowNames" checked onchange="s3dRebuild()" style="accent-color:#5080ff">
             <span style="color:rgba(180,200,240,0.65);font-size:10px">显示姓名</span>
           </label>
-          <label style="display:flex;align-items:center;gap:5px;margin-bottom:4px;cursor:pointer">
-            <input type="checkbox" id="s3dShowGrid" checked onchange="s3dToggleGrid()" style="accent-color:#5080ff">
-            <span style="color:rgba(180,200,240,0.65);font-size:10px">显示网格</span>
-          </label>
         </div>
         ${seatingEditMode && canEdit ? '<div style="margin-top:12px;padding:8px;background:rgba(251,146,60,0.1);border-radius:6px;border:1px solid rgba(251,146,60,0.2)"><div style="color:#fb923c;font-size:10px;font-weight:600;margin-bottom:4px">编辑模式</div><div style="color:rgba(180,200,240,0.6);font-size:9px">点击学生选中，再点击另一个交换位置。<br>拖动竖条调整间距：<span style="color:#fb923c">橙色</span>=组间距，<span style="color:#5080ff">蓝色</span>=列间距</div></div>' : ''}
       </div>
@@ -6213,9 +6209,9 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
   bgX.fillStyle = gr; bgX.fillRect(0, 0, 2, 512);
   seating3DScene.background = new THREE.CanvasTexture(bgC);
 
-  // Camera - closer view, from behind students looking toward podium
+  // Camera - from podium side, looking down at students
   seating3DCam = new THREE.PerspectiveCamera(50, w / h, 0.1, 500);
-  seating3DCam.position.set(0, 10, -14);
+  seating3DCam.position.set(0, 8, 8);
 
   // Renderer
   seating3DRen = new THREE.WebGLRenderer({ antialias: true });
@@ -6247,11 +6243,6 @@ function init3DScene(cls, seatSlots, cols, totalRows) {
   seating3DScene.add(dir);
   seating3DScene.add(new THREE.DirectionalLight(0x8090ff, 0.2).translateX(-8).translateY(12).translateZ(-6));
   seating3DScene.add(new THREE.HemisphereLight(0x6080c0, 0x203040, 0.3));
-
-  // Grid
-  seating3DGrid = new THREE.GridHelper(50, 50, 0x2C3E50, 0x1A2535);
-  seating3DGrid.position.y = 0.005;
-  seating3DScene.add(seating3DGrid);
 
   // Floor
   const fl = new THREE.Mesh(
@@ -6700,7 +6691,7 @@ function s3dView(type) {
   if (!seating3DCam || !seating3DCtrl) return;
   if (type === 'podium') {
     // 从讲台看：camera at podium side (positive Z), looking toward students
-    seating3DCam.position.set(0, 10, 16);
+    seating3DCam.position.set(0, 8, 8);
   } else {
     // 从后看：camera behind students (negative Z), looking toward podium
     seating3DCam.position.set(0, 10, -14);
@@ -6711,7 +6702,7 @@ function s3dView(type) {
 
 function s3dResetView() {
   if (!seating3DCam || !seating3DCtrl) return;
-  seating3DCam.position.set(0, 10, -14);
+  seating3DCam.position.set(0, 8, 8);
   seating3DCtrl.target.set(0, 0, 0);
   seating3DCtrl.update();
 }
@@ -6767,10 +6758,6 @@ function s3dRebuild() {
     seatSlots.push((sid === null || sid === undefined) ? null : (sts.find(s => s.id === sid) || null));
   }
   s3dBuildClassroom(cls, seatSlots, cols, totalRows);
-}
-
-function s3dToggleGrid() {
-  if (seating3DGrid) seating3DGrid.visible = document.getElementById('s3dShowGrid')?.checked !== false;
 }
 
 function s3dEnterEdit() {
