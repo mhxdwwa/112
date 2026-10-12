@@ -922,6 +922,29 @@
     for(let i = 0; i < times; i++) tone(freq, 0.5, i * 0.62, 0.30);
   }
 
+  /* 语音播报 */
+  function speak(text){
+    if(!('speechSynthesis' in window)) return;
+    // 取消之前的语音队列
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'zh-CN';
+    utter.rate = 0.9;
+    utter.pitch = 1.0;
+    utter.volume = 1.0; // 最大音量
+    // 尝试使用中文语音
+    const voices = speechSynthesis.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh')) || voices[0];
+    if(zhVoice) utter.voice = zhVoice;
+    speechSynthesis.speak(utter);
+  }
+
+  // 预加载语音列表
+  if('speechSynthesis' in window){
+    speechSynthesis.getVoices();
+    speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+  }
+
   function alarmEnd(){
     chime(3, 880);
     tone(1318, 1.5, 1.85, 0.28);
@@ -1089,6 +1112,10 @@
     if(els.btnToggle.textContent !== btnText) els.btnToggle.textContent = btnText;
 
     if(lastRem !== null){
+      if(lastRem > 900000 && rem <= 900000 && rem > 0){
+        chime(2, 784);
+        speak('距离考试结束时间还有15分钟');
+      }
       if(lastRem > 300000 && rem <= 300000 && rem > 60000) chime(2, 784);
       if(lastRem > 60000  && rem <= 60000  && rem > 0)     chime(3, 880);
       if(lastRem > 0      && rem <= 0)                      startEndAlarm();
