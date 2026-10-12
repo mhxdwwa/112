@@ -3,6 +3,12 @@
 
 # HTML 文件 - 不缓存，确保每次加载最新 JS
 # v294: 改为 no-cache，解决学生端看到旧作业的问题
+
+# 考试计时器 - 需要访问外部时间API和手写识别API
+/kaoshijishiqi.html
+  Cache-Control: no-cache, no-store, must-revalidate
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' blob: https://worldtimeapi.org https://timeapi.io https://showcase.api.linx.twenty57.net https://corsproxy.io https://inputtools.google.com; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
+
 /*.html
   Cache-Control: no-cache, no-store, must-revalidate
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com https://xbygooadskfqllnhwmet.supabase.co data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
