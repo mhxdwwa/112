@@ -104,15 +104,76 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .pen-color-row .pcp-custom label{font-size:11px;font-weight:600;color:#111827}
 .pen-color-row .pcp-custom input[type="color"]{width:28px;height:26px;border:1.5px solid var(--bd);border-radius:6px;cursor:pointer;padding:1px}
 .pen-color-row .pcp-close{padding:4px 12px;border-radius:5px;font-size:10px;font-weight:600;background:#6b7280;color:#fff;flex-shrink:0}
+/* Image canvas layer */
+#imgC{z-index:1.5;pointer-events:none}
+/* Pairing code display (PC) */
+.pair-code-display{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border:2px solid var(--blue);border-radius:16px;padding:24px 32px;text-align:center;box-shadow:0 8px 32px rgba(37,99,235,.2);min-width:280px}
+.pair-code-title{font-size:16px;font-weight:700;color:var(--blue);margin-bottom:12px}
+.pair-code-text{font-size:13px;color:#6b7280;margin-bottom:8px}
+.pair-code-value{font-size:42px;font-weight:700;color:var(--blue);font-family:var(--m);letter-spacing:8px;margin:12px 0;padding:12px 20px;background:rgba(37,99,235,.08);border-radius:12px;border:2px dashed var(--blue)}
+.pair-code-hint{font-size:12px;color:#6b7280;line-height:1.6;margin-top:12px}
+.pair-code-close{position:absolute;top:8px;right:12px;font-size:24px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:4px 8px;line-height:1}
+.pair-code-close:hover{color:var(--red)}
+/* Mobile upload panel */
+.mobile-upload-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(255,255,255,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px}
+.mobile-upload-title{font-size:18px;font-weight:700;color:var(--t)}
+.mobile-code-input{width:200px;text-align:center;font-size:24px;font-weight:700;letter-spacing:6px;font-family:var(--m);padding:12px;border:2px solid var(--blue);border-radius:12px;color:var(--blue);text-transform:uppercase}
+.mobile-code-input::placeholder{color:#d1d5db;font-size:16px;letter-spacing:4px}
+.mobile-upload-buttons{display:flex;gap:16px;margin-top:8px}
+.mobile-upload-btn{display:flex;align-items:center;gap:8px;padding:14px 24px;background:var(--blue);color:#fff;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.mobile-upload-btn:active{transform:scale(.95);background:#1d4ed8}
+.mobile-upload-status{font-size:13px;color:#6b7280;margin-top:8px;min-height:20px}
+.mobile-upload-status.success{color:#059669}
+.mobile-upload-status.error{color:var(--red)}
+/* Image control buttons */
+.image-controls{position:absolute;top:10px;right:10px;z-index:90;display:none;gap:6px;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);padding:6px 10px;border-radius:8px;border:1px solid var(--bd);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.image-controls.on{display:flex}
+.image-ctrl-btn{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;border:1.5px solid var(--bd);background:#fff;cursor:pointer;transition:all .1s;color:#111827}
+.image-ctrl-btn:active{transform:scale(.95)}
+.image-ctrl-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.image-ctrl-btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
 </style>
 </head>
 <body>
 <div class="app">
   <div class="canvas-wrap" id="cw">
     <canvas id="bgC"></canvas>
+    <canvas id="imgC"></canvas>
     <canvas id="mainC"></canvas>
     <canvas id="ovC"></canvas>
+    <!-- Photo upload pairing code display (PC) -->
+    <div class="pair-code-display" id="pairCodeDisplay" style="display:none">
+      <div class="pair-code-title">手机拍照上传</div>
+      <div class="pair-code-text">配对码</div>
+      <div class="pair-code-value" id="pairCodeValue">------</div>
+      <div class="pair-code-hint">手机打开此网页，点击"拍照"按钮<br>输入上方配对码即可传输图片</div>
+      <button class="pair-code-close" id="pairCodeClose">×</button>
+    </div>
+    <!-- Photo upload UI (Mobile) -->
+    <div class="mobile-upload-panel" id="mobileUploadPanel" style="display:none">
+      <div class="mobile-upload-title">上传题目图片</div>
+      <input type="text" class="mobile-code-input" id="mobileCodeInput" placeholder="输入配对码" maxlength="6">
+      <div class="mobile-upload-buttons">
+        <label class="mobile-upload-btn">
+          <input type="file" accept="image/*" capture="environment" id="mobileCameraInput" style="display:none">
+          📷 拍照
+        </label>
+        <label class="mobile-upload-btn">
+          <input type="file" accept="image/*" id="mobileFileInput" style="display:none">
+          🖼️ 选图
+        </label>
+      </div>
+      <div class="mobile-upload-status" id="mobileUploadStatus"></div>
+    </div>
     <div class="status"><span id="sHint">选择工具开始作图</span><span id="sCoord">(0, 0)</span><span id="sZoom">100%</span><span id="s3D" style="display:none;color:var(--blue)">3D视角 ← → ↑ ↓</span></div>
+    <!-- Image controls for uploaded image -->
+    <div class="image-controls" id="imageControls">
+      <button class="image-ctrl-btn" id="imgMoveMode" title="拖动图片">✋ 拖动</button>
+      <button class="image-ctrl-btn" id="imgScaleUp" title="放大图片">+</button>
+      <button class="image-ctrl-btn" id="imgScaleDown" title="缩小图片">-</button>
+      <button class="image-ctrl-btn" id="imgOpacity" title="调整透明度">透明</button>
+      <button class="image-ctrl-btn danger" id="imgRemove" title="移除图片">✕ 移除</button>
+    </div>
     <div class="unfold-panel" id="unfoldPanel">
       <div class="up-title">选择几何体展开图</div>
       <div class="up-row" id="upShapes"></div>
@@ -174,10 +235,27 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 // ============================================================
 // MathLab v8.0 - Complete rewrite with fixes
 // ============================================================
-const bgC=document.getElementById('bgC'),mainC=document.getElementById('mainC'),ovC=document.getElementById('ovC');
-const bgX=bgC.getContext('2d'),mx=mainC.getContext('2d'),ox=ovC.getContext('2d');
+const bgC=document.getElementById('bgC'),imgC=document.getElementById('imgC'),mainC=document.getElementById('mainC'),ovC=document.getElementById('ovC');
+const bgX=bgC.getContext('2d'),imgX=imgC.getContext('2d'),mx=mainC.getContext('2d'),ox=ovC.getContext('2d');
 const cw=document.getElementById('cw');
 let dpr=window.devicePixelRatio||1;
+
+// Image upload state
+const IMG_STATE = {
+  enabled: false,
+  image: null,           // HTMLImageElement
+  x: 0, y: 0,           // position in canvas pixels
+  scale: 1,              // image scale factor
+  opacity: 0.6,          // transparency
+  dragging: false,
+  dragStartX: 0, dragStartY: 0,
+  imgStartX: 0, imgStartY: 0,
+  moveMode: false,       // whether in image move mode
+  isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
+  workerUrl: 'https://mathlab-image-relay.mhxdwwa.workers.dev',  // Cloudflare Worker URL
+  pairCode: null,
+  pollTimer: null,
+};
 
 const G={
   ox:0,oy:0,scale:40,tool:'move',color:'#2563eb',
@@ -212,15 +290,16 @@ function snapPt(m){
 function resize(){
   dpr=window.devicePixelRatio||1;
   const w=cw.clientWidth,h=cw.clientHeight;
-  [bgC,mainC,ovC].forEach(c=>{
+  [bgC,imgC,mainC,ovC].forEach(c=>{
     c.width=w*dpr;c.height=h*dpr;
     c.style.width=w+'px';c.style.height=h+'px';
   });
   bgX.setTransform(dpr,0,0,dpr,0,0);
+  imgX.setTransform(dpr,0,0,dpr,0,0);
   mx.setTransform(dpr,0,0,dpr,0,0);
   ox.setTransform(dpr,0,0,dpr,0,0);
   if(G.ox===0){G.ox=w/2;G.oy=h/2}
-  drawBg();draw();
+  drawBg();drawImage();draw();
 }
 
 function drawBg(){
@@ -291,6 +370,19 @@ function drawBg(){
       bgX.fillText(i,px,axisY+10);
     }
   }
+}
+
+// Draw uploaded image on imgC canvas
+function drawImage(){
+  const W=cw.clientWidth,H=cw.clientHeight;
+  imgX.clearRect(0,0,W,H);
+  if(!IMG_STATE.enabled||!IMG_STATE.image)return;
+  imgX.globalAlpha=IMG_STATE.opacity;
+  const img=IMG_STATE.image;
+  const w=img.naturalWidth*IMG_STATE.scale;
+  const h=img.naturalHeight*IMG_STATE.scale;
+  imgX.drawImage(img,IMG_STATE.x,IMG_STATE.y,w,h);
+  imgX.globalAlpha=1;
 }
 
 function draw(){
@@ -3171,6 +3263,321 @@ function placeUnfoldNet(shapeType,netIdx){
 document.getElementById('upClose').addEventListener('click',()=>{
   document.getElementById('unfoldPanel').classList.remove('on');
 });
+
+// ============================================================
+// PHOTO UPLOAD FEATURE - Cloudflare Worker Image Relay
+// ============================================================
+
+// Add photo button to toolbar
+(function addPhotoButton(){
+  const toolRow=document.getElementById('toolRow');
+  const btn=document.createElement('button');
+  btn.className='tg';
+  btn.id='tgPhoto';
+  btn.textContent='📷 拍照';
+  btn.title='手机拍照上传题目';
+  // Insert before the first separator or at the beginning
+  const firstSep=toolRow.querySelector('.tsep');
+  if(firstSep){
+    toolRow.insertBefore(btn,firstSep);
+  }else{
+    toolRow.insertBefore(btn,toolRow.firstChild);
+  }
+  btn.addEventListener('click',togglePhotoUpload);
+})();
+
+function togglePhotoUpload(){
+  const btn=document.getElementById('tgPhoto');
+  const isActive=btn.classList.contains('on');
+  
+  if(isActive){
+    // Turn off
+    btn.classList.remove('on');
+    stopPhotoUpload();
+  }else{
+    // Turn on
+    btn.classList.add('on');
+    startPhotoUpload();
+  }
+}
+
+function startPhotoUpload(){
+  if(IMG_STATE.isMobile){
+    // Mobile: show upload panel
+    document.getElementById('mobileUploadPanel').style.display='flex';
+    document.getElementById('mobileCodeInput').value='';
+    document.getElementById('mobileCodeInput').focus();
+    document.getElementById('mobileUploadStatus').textContent='';
+    document.getElementById('mobileUploadStatus').className='mobile-upload-status';
+  }else{
+    // PC: generate pairing code and show display
+    generatePairCode();
+    document.getElementById('pairCodeDisplay').style.display='block';
+  }
+}
+
+function stopPhotoUpload(){
+  document.getElementById('mobileUploadPanel').style.display='none';
+  document.getElementById('pairCodeDisplay').style.display='none';
+  if(IMG_STATE.pollTimer){
+    clearInterval(IMG_STATE.pollTimer);
+    IMG_STATE.pollTimer=null;
+  }
+  IMG_STATE.pairCode=null;
+}
+
+// Generate pairing code from Cloudflare Worker
+async function generatePairCode(){
+  try{
+    const res=await fetch(IMG_STATE.workerUrl+'/api/pair',{method:'POST'});
+    const data=await res.json();
+    if(data.code){
+      IMG_STATE.pairCode=data.code;
+      document.getElementById('pairCodeValue').textContent=data.code;
+      // Start polling for image
+      startPolling();
+    }
+  }catch(e){
+    console.error('[Photo] Failed to generate pair code:',e);
+    document.getElementById('pairCodeValue').textContent='ERROR';
+  }
+}
+
+// Poll for uploaded image (PC side)
+function startPolling(){
+  if(IMG_STATE.pollTimer)clearInterval(IMG_STATE.pollTimer);
+  IMG_STATE.pollTimer=setInterval(async()=>{
+    if(!IMG_STATE.pairCode)return;
+    try{
+      const res=await fetch(IMG_STATE.workerUrl+'/api/check/'+IMG_STATE.pairCode);
+      const data=await res.json();
+      if(data.hasImage&&data.image){
+        // Image received!
+        clearInterval(IMG_STATE.pollTimer);
+        IMG_STATE.pollTimer=null;
+        await loadImage(data.image);
+        // Clear the image from worker
+        fetch(IMG_STATE.workerUrl+'/api/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
+        // Show success feedback
+        showToast('图片已接收，可以开始标注');
+      }
+    }catch(e){
+      console.error('[Photo] Poll error:',e);
+    }
+  },2000);
+}
+
+// Load image from base64 data
+function loadImage(base64Data){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=()=>{
+      IMG_STATE.image=img;
+      IMG_STATE.enabled=true;
+      // Center image in canvas
+      const W=cw.clientWidth,H=cw.clientHeight;
+      const maxW=W*0.8,maxH=H*0.8;
+      const scale=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight,1);
+      IMG_STATE.scale=scale;
+      IMG_STATE.x=(W-img.naturalWidth*scale)/2;
+      IMG_STATE.y=(H-img.naturalHeight*scale)/2;
+      IMG_STATE.opacity=0.6;
+      // Enable image layer
+      imgC.style.pointerEvents='auto';
+      // Show image controls
+      document.getElementById('imageControls').classList.add('on');
+      // Redraw
+      drawImage();
+      resolve();
+    };
+    img.src=base64Data;
+  });
+}
+
+// Mobile: handle file selection
+document.getElementById('mobileCameraInput').addEventListener('change',handleMobileFile);
+document.getElementById('mobileFileInput').addEventListener('change',handleMobileFile);
+
+async function handleMobileFile(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  
+  const code=document.getElementById('mobileCodeInput').value.trim().toUpperCase();
+  if(!code||code.length!==6){
+    const status=document.getElementById('mobileUploadStatus');
+    status.textContent='请先输入6位配对码';
+    status.className='mobile-upload-status error';
+    return;
+  }
+  
+  const status=document.getElementById('mobileUploadStatus');
+  status.textContent='正在上传图片...';
+  status.className='mobile-upload-status';
+  
+  try{
+    // Compress image
+    const base64=await compressImage(file,1920,0.7);
+    // Upload to worker
+    const res=await fetch(IMG_STATE.workerUrl+'/api/upload',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code:code,image:base64})
+    });
+    const data=await res.json();
+    if(data.success){
+      status.textContent='上传成功！';
+      status.className='mobile-upload-status success';
+      // Reset file input
+      e.target.value='';
+      // Close panel after 1.5s
+      setTimeout(()=>{
+        document.getElementById('mobileUploadPanel').style.display='none';
+        document.getElementById('tgPhoto').classList.remove('on');
+      },1500);
+    }else{
+      status.textContent='上传失败: '+(data.error||'未知错误');
+      status.className='mobile-upload-status error';
+    }
+  }catch(err){
+    status.textContent='上传失败: '+err.message;
+    status.className='mobile-upload-status error';
+  }
+}
+
+// Compress image using canvas
+function compressImage(file,maxWidth,quality){
+  return new Promise((resolve)=>{
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        let w=img.naturalWidth,h=img.naturalHeight;
+        if(w>maxWidth){
+          h=h*(maxWidth/w);
+          w=maxWidth;
+        }
+        canvas.width=w;
+        canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Image control buttons
+document.getElementById('imgMoveMode').addEventListener('click',function(){
+  IMG_STATE.moveMode=!IMG_STATE.moveMode;
+  this.classList.toggle('active',IMG_STATE.moveMode);
+  imgC.style.cursor=IMG_STATE.moveMode?'grab':'default';
+});
+
+document.getElementById('imgScaleUp').addEventListener('click',()=>{
+  IMG_STATE.scale*=1.2;
+  drawImage();
+});
+
+document.getElementById('imgScaleDown').addEventListener('click',()=>{
+  IMG_STATE.scale*=0.83;
+  drawImage();
+});
+
+document.getElementById('imgOpacity').addEventListener('click',function(){
+  // Cycle through opacity levels
+  const levels=[0.3,0.5,0.7,0.9];
+  const idx=levels.indexOf(IMG_STATE.opacity);
+  IMG_STATE.opacity=levels[(idx+1)%levels.length];
+  this.textContent='透明 '+Math.round(IMG_STATE.opacity*100)+'%';
+  drawImage();
+});
+
+document.getElementById('imgRemove').addEventListener('click',()=>{
+  IMG_STATE.enabled=false;
+  IMG_STATE.image=null;
+  imgC.style.pointerEvents='none';
+  document.getElementById('imageControls').classList.remove('on');
+  drawImage();
+});
+
+document.getElementById('pairCodeClose').addEventListener('click',()=>{
+  document.getElementById('pairCodeDisplay').style.display='none';
+  document.getElementById('tgPhoto').classList.remove('on');
+  stopPhotoUpload();
+});
+
+// Image drag handling on imgC
+imgC.addEventListener('pointerdown',(e)=>{
+  if(!IMG_STATE.enabled||!IMG_STATE.moveMode)return;
+  IMG_STATE.dragging=true;
+  IMG_STATE.dragStartX=e.clientX;
+  IMG_STATE.dragStartY=e.clientY;
+  IMG_STATE.imgStartX=IMG_STATE.x;
+  IMG_STATE.imgStartY=IMG_STATE.y;
+  imgC.style.cursor='grabbing';
+  imgC.setPointerCapture(e.pointerId);
+});
+
+imgC.addEventListener('pointermove',(e)=>{
+  if(!IMG_STATE.dragging)return;
+  const dx=e.clientX-IMG_STATE.dragStartX;
+  const dy=e.clientY-IMG_STATE.dragStartY;
+  IMG_STATE.x=IMG_STATE.imgStartX+dx;
+  IMG_STATE.y=IMG_STATE.imgStartY+dy;
+  drawImage();
+});
+
+imgC.addEventListener('pointerup',(e)=>{
+  if(!IMG_STATE.dragging)return;
+  IMG_STATE.dragging=false;
+  imgC.style.cursor=IMG_STATE.moveMode?'grab':'default';
+  imgC.releasePointerCapture(e.pointerId);
+});
+
+// Image pinch-to-zoom on touch devices
+let lastTouchDist=0;
+imgC.addEventListener('touchstart',(e)=>{
+  if(e.touches.length===2){
+    lastTouchDist=Math.hypot(
+      e.touches[0].clientX-e.touches[1].clientX,
+      e.touches[0].clientY-e.touches[1].clientY
+    );
+  }
+},{passive:true});
+
+imgC.addEventListener('touchmove',(e)=>{
+  if(e.touches.length===2&&IMG_STATE.enabled){
+    const dist=Math.hypot(
+      e.touches[0].clientX-e.touches[1].clientX,
+      e.touches[0].clientY-e.touches[1].clientY
+    );
+    if(lastTouchDist>0){
+      const ratio=dist/lastTouchDist;
+      IMG_STATE.scale*=ratio;
+      drawImage();
+    }
+    lastTouchDist=dist;
+  }
+},{passive:true});
+
+imgC.addEventListener('touchend',()=>{lastTouchDist=0},{passive:true});
+
+// Simple toast notification
+function showToast(msg){
+  const toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999;background:rgba(0,0,0,.85);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;pointer-events:none;animation:fadeInOut 2s';
+  toast.textContent=msg;
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(),2000);
+}
+
+// Add animation keyframes
+const style=document.createElement('style');
+style.textContent='@keyframes fadeInOut{0%{opacity:0;transform:translateX(-50%) translateY(10px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1}100%{opacity:0}}';
+document.head.appendChild(style);
 
 // === INIT ===
 window.addEventListener('resize',resize);

@@ -1,0 +1,14 @@
+name = "mathlab-image-relay"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV Namespace binding
+[[kv_namespaces]]
+binding = "IMAGE_KV"
+id = "YOUR_KV_NAMESPACE_ID"  # Replace after creating KV namespace
+
+# Route configuration
+# Uncomment and update after deploying
+# routes = [
+#   { pattern = "wscls.cn/api/image-relay/*", zone_name = "wscls.cn" }
+# ]
