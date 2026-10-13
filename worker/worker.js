@@ -116,12 +116,11 @@ async function handleRequest(request) {
   }
 }
 
-// Generate random 6-character pairing code (alphanumeric uppercase)
+// Generate random 6-digit numeric pairing code
 function generateCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude ambiguous chars
   let code = '';
   for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+    code += Math.floor(Math.random() * 10);
   }
   return code;
 }

@@ -132,6 +132,12 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .image-ctrl-btn:active{transform:scale(.95)}
 .image-ctrl-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .image-ctrl-btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
+/* Photo role selection panel */
+.photo-role-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border:2px solid var(--blue);border-radius:16px;padding:24px 32px;text-align:center;box-shadow:0 8px 32px rgba(37,99,235,.2);min-width:280px}
+.photo-role-title{font-size:16px;font-weight:700;color:var(--blue);margin-bottom:16px}
+.photo-role-buttons{display:flex;flex-direction:column;gap:12px}
+.photo-role-btn{padding:14px 24px;border-radius:12px;font-size:15px;font-weight:600;border:2px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;transition:all .15s}
+.photo-role-btn:active{transform:scale(.95);background:var(--blue);color:#fff}
 </style>
 </head>
 <body>
@@ -141,6 +147,14 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
     <canvas id="imgC"></canvas>
     <canvas id="mainC"></canvas>
     <canvas id="ovC"></canvas>
+    <!-- Photo upload role selection -->
+    <div class="photo-role-panel" id="photoRolePanel" style="display:none">
+      <div class="photo-role-title">选择设备类型</div>
+      <div class="photo-role-buttons">
+        <button class="photo-role-btn" id="rolePC">💻 电脑（显示配对码）</button>
+        <button class="photo-role-btn" id="roleMobile">📱 手机（输入配对码）</button>
+      </div>
+    </div>
     <!-- Photo upload pairing code display (PC) -->
     <div class="pair-code-display" id="pairCodeDisplay" style="display:none">
       <div class="pair-code-title">手机拍照上传</div>
@@ -152,7 +166,7 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
     <!-- Photo upload UI (Mobile) -->
     <div class="mobile-upload-panel" id="mobileUploadPanel" style="display:none">
       <div class="mobile-upload-title">上传题目图片</div>
-      <input type="text" class="mobile-code-input" id="mobileCodeInput" placeholder="输入配对码" maxlength="6">
+      <input type="tel" class="mobile-code-input" id="mobileCodeInput" placeholder="输入6位数字" maxlength="6" inputmode="numeric" pattern="[0-9]*">
       <div class="mobile-upload-buttons">
         <label class="mobile-upload-btn">
           <input type="file" accept="image/*" capture="environment" id="mobileCameraInput" style="display:none">
@@ -3295,28 +3309,35 @@ function togglePhotoUpload(){
     btn.classList.remove('on');
     stopPhotoUpload();
   }else{
-    // Turn on
+    // Turn on - show role selection
     btn.classList.add('on');
-    startPhotoUpload();
+    document.getElementById('photoRolePanel').style.display='block';
   }
 }
 
+// Role selection handlers
+document.getElementById('rolePC').addEventListener('click',()=>{
+  document.getElementById('photoRolePanel').style.display='none';
+  document.getElementById('pairCodeDisplay').style.display='block';
+  generatePairCode();
+});
+
+document.getElementById('roleMobile').addEventListener('click',()=>{
+  document.getElementById('photoRolePanel').style.display='none';
+  document.getElementById('mobileUploadPanel').style.display='flex';
+  document.getElementById('mobileCodeInput').value='';
+  document.getElementById('mobileCodeInput').focus();
+  document.getElementById('mobileUploadStatus').textContent='';
+  document.getElementById('mobileUploadStatus').className='mobile-upload-status';
+});
+
 function startPhotoUpload(){
-  if(IMG_STATE.isMobile){
-    // Mobile: show upload panel
-    document.getElementById('mobileUploadPanel').style.display='flex';
-    document.getElementById('mobileCodeInput').value='';
-    document.getElementById('mobileCodeInput').focus();
-    document.getElementById('mobileUploadStatus').textContent='';
-    document.getElementById('mobileUploadStatus').className='mobile-upload-status';
-  }else{
-    // PC: generate pairing code and show display
-    generatePairCode();
-    document.getElementById('pairCodeDisplay').style.display='block';
-  }
+  // This function is no longer used directly
+  // Role selection is now handled by togglePhotoUpload
 }
 
 function stopPhotoUpload(){
+  document.getElementById('photoRolePanel').style.display='none';
   document.getElementById('mobileUploadPanel').style.display='none';
   document.getElementById('pairCodeDisplay').style.display='none';
   if(IMG_STATE.pollTimer){
@@ -3402,10 +3423,10 @@ async function handleMobileFile(e){
   const file=e.target.files[0];
   if(!file)return;
   
-  const code=document.getElementById('mobileCodeInput').value.trim().toUpperCase();
-  if(!code||code.length!==6){
+  const code=document.getElementById('mobileCodeInput').value.trim();
+  if(!code||code.length!==6||!/^\d{6}$/.test(code)){
     const status=document.getElementById('mobileUploadStatus');
-    status.textContent='请先输入6位配对码';
+    status.textContent='请输入6位数字配对码';
     status.className='mobile-upload-status error';
     return;
   }
