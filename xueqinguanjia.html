@@ -1950,7 +1950,7 @@ function refreshCurrentUserClass() {
 
 const NAMES = [];
 
-const STATUS = { present: '在校', absent: '缺勤', leave: '请假', late: '迟到' };
+const STATUS = { present: '在校', absent: '控辍对象', leave: '请假' };
 
 // 性别标准化：将各种性别表示统一为 '男'/'女'
 function normalizeGender(val) {
@@ -3713,13 +3713,12 @@ function renderPage(pageId) {
 
 /* ----- LEADER: Overview ----- */
 function renderOverview() {
-  let total = 0, present = 0, leave = 0, absent = 0, late = 0;
+  let total = 0, present = 0, leave = 0, absent = 0;
   CLASS_LIST.forEach(cls => STUDENTS[cls].forEach(s => {
     total++;
     if (s.status === 'present') present++;
     else if (s.status === 'leave') leave++;
     else if (s.status === 'absent') absent++;
-    else if (s.status === 'late') late++;
   }));
   const rate = ((present / total) * 100).toFixed(1);
 
@@ -3760,15 +3759,15 @@ function renderOverview() {
       </div>
       <div class="stat-card red anim-in anim-d4" style="cursor:pointer" onclick="toggleOverviewDrillDown('absent')">
         <div class="stat-icon red">⚠</div>
-        <div class="stat-label">缺勤人数</div>
+        <div class="stat-label">控辍对象人数</div>
         <div class="stat-value">${absent}</div>
-        <div class="stat-sub">迟到 ${late} 人 · 点击查看详情 →</div>
+        <div class="stat-sub">点击查看详情 →</div>
       </div>
     </div>
     <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap">
       <button class="toolbar-btn primary" onclick="downloadSchoolAttendanceExcel()">下载全校到校情况Excel</button>
       <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolLeaveExcel()">只下载请假学生</button>
-      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolAbsentExcel()">只下载缺勤学生</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolAbsentExcel()">只下载控辍对象学生</button>
     </div>
     <div id="overviewDrillDownArea"></div>
     <div class="grid-2-1">
@@ -3817,7 +3816,7 @@ function toggleOverviewDrillDown(type) {
 function renderDrillDownInline(type) {
   const area = document.getElementById('overviewDrillDownArea');
   if (!area) return;
-  const typeLabels = { leave: '请假', absent: '缺勤', late: '迟到' };
+  const typeLabels = { leave: '请假', absent: '控辍对象' };
   const typeLabel = typeLabels[type] || type;
   const colorVar = type === 'leave' ? 'var(--warning)' : type === 'absent' ? 'var(--danger)' : 'var(--primary)';
   const bgLight = type === 'leave' ? 'var(--warning-light)' : type === 'absent' ? 'var(--danger-light)' : 'var(--primary-bg)';
@@ -3925,7 +3924,7 @@ function showGradeDrillDown(type, grade) {
 }
 
 function showClassStudentList(type, cls) {
-  const typeLabels = { leave: '请假', absent: '缺勤', late: '迟到' };
+  const typeLabels = { leave: '请假', absent: '控辍对象' };
   const typeLabel = typeLabels[type] || type;
   
   let students = STUDENTS[cls].filter(s => s.status === type);
@@ -3966,7 +3965,7 @@ function renderAllClasses() {
       <div class="class-card-stats">
         <div class="class-card-stat"><strong style="color:var(--accent)">${p}</strong>在校</div>
         <div class="class-card-stat"><strong style="color:var(--warning)">${l}</strong>请假</div>
-        <div class="class-card-stat"><strong style="color:var(--danger)">${a}</strong>缺勤</div>
+        <div class="class-card-stat"><strong style="color:var(--danger)">${a}</strong>控辍对象</div>
         <div class="class-card-stat"><strong>${t}</strong>总人数</div>
       </div>
     </div>`;
@@ -4015,7 +4014,7 @@ function renderAllClassesView() {
       <div class="class-card-stats">
         <div class="class-card-stat"><strong style="color:var(--accent)">${p}</strong>在校</div>
         <div class="class-card-stat"><strong style="color:var(--warning)">${l}</strong>请假</div>
-        <div class="class-card-stat"><strong style="color:var(--danger)">${a}</strong>缺勤</div>
+        <div class="class-card-stat"><strong style="color:var(--danger)">${a}</strong>控辍对象</div>
         <div class="class-card-stat"><strong>${t}</strong>总人数</div>
       </div>
     </div>`;
@@ -4876,7 +4875,7 @@ function renderFamilyOverview() {
     <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
       <button class="toolbar-btn primary" onclick="downloadSchoolAttendanceExcel()">下载全校到校情况Excel</button>
       <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolLeaveExcel()">只下载请假学生</button>
-      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolAbsentExcel()">只下载缺勤学生</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadSchoolAbsentExcel()">只下载控辍对象学生</button>
     </div>
     <div class="grid-2" style="margin-top:20px">
       <div class="card anim-in anim-d2" style="display:flex;flex-direction:column">
@@ -4985,11 +4984,8 @@ function downloadSchoolAttendanceExcel() {
         statusText = '请假';
         detail = s.leaveReason || '-';
       } else if (s.status === 'absent') {
-        statusText = '缺勤';
+        statusText = '控辍对象';
         detail = '未请假';
-      } else if (s.status === 'late') {
-        statusText = '迟到';
-        detail = '-';
       }
       
       allData.push({
@@ -5054,22 +5050,25 @@ function downloadSchoolAbsentExcel() {
         '座号': s.seat,
         '姓名': s.name,
         '性别': s.gender || '-',
-        '状态': '缺勤',
+        '状态': '控辍对象',
         '家庭地址': s.familyAddress || '-',
-        '家长': s.parent || '-'
+        '家长': s.parent || '-',
+        '联系电话': s.phone || '-',
+        '家庭类型': s.familyType || '-',
+        '备注': s.familyNote || '-'
       });
     });
   });
   
-  if (allData.length === 0) { showToast('暂无缺勤学生数据', 'warning'); return; }
+  if (allData.length === 0) { showToast('暂无控辍对象学生数据', 'warning'); return; }
   
   const ws = XLSX.utils.json_to_sheet(allData);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '缺勤学生');
+  XLSX.utils.book_append_sheet(wb, ws, '控辍对象学生');
   
   const today = new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb, `全校缺勤学生_${today}.xlsx`);
-  showToast('已下载缺勤学生Excel');
+  XLSX.writeFile(wb, `全校控辍对象学生_${today}.xlsx`);
+  showToast('已下载控辍对象学生Excel');
 }
 
 /* ----- ADMIN: Upload Student Lists ----- */
@@ -6029,7 +6028,6 @@ function renderClassSeatingPage() {
   const present = sts.filter(s => s.status === 'present').length;
   const leave = sts.filter(s => s.status === 'leave').length;
   const absent = sts.filter(s => s.status === 'absent').length;
-  const late = sts.filter(s => s.status === 'late').length;
   const rate = ((present / total) * 100).toFixed(1);
 
   // 编辑按钮
@@ -6134,12 +6132,8 @@ function renderClassSeatingPage() {
             <div style="font-size:18px;font-weight:700;color:#E65100">${leave}</div>
           </div>
           <div style="text-align:center;padding:6px 10px;background:#FFEBEE;border-radius:6px">
-            <div style="font-size:10px;color:#C62828">缺勤</div>
+            <div style="font-size:10px;color:#C62828">控辍对象</div>
             <div style="font-size:18px;font-weight:700;color:#C62828">${absent}</div>
-          </div>
-          <div style="text-align:center;padding:6px 10px;background:var(--primary-bg);border-radius:6px">
-            <div style="font-size:10px;color:#1E40AF">迟到</div>
-            <div style="font-size:18px;font-weight:700;color:#1E40AF">${late}</div>
           </div>
         </div>
         <!-- 中间：座位表 -->
@@ -6158,7 +6152,7 @@ function renderClassSeatingPage() {
           <div class="seat-legend" style="margin-top:8px;flex-shrink:0">
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#8BC34A,#7CB342);border:1px solid rgba(139,195,74,0.4)"></div>在校</div>
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#FFB74D,#FFA726);border:1px solid rgba(255,152,0,0.3)"></div>请假</div>
-            <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#EF5350,#E53935);border:1px solid rgba(220,38,38,0.3)"></div>缺勤</div>
+            <div class="seat-legend-item"><div class="seat-legend-dot" style="background:linear-gradient(135deg,#EF5350,#E53935);border:1px solid rgba(220,38,38,0.3)"></div>控辍对象</div>
             <div class="seat-legend-item"><div class="seat-legend-dot" style="background:var(--gray-100);border:1px solid var(--gray-200)"></div>空位</div>
             <div class="seat-legend-item"><div style="width:14px;height:14px;border-radius:50%;background:var(--danger);color:#fff;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center">!</div>特殊</div>
             <div class="seat-legend-item"><span style="font-size:11px">🏠</span>外宿</div>
@@ -6285,7 +6279,7 @@ function render3DOverlay(cls) {
           <div style="display:flex;gap:6px;margin-left:8px">
             <div style="padding:3px 10px;background:rgba(74,222,128,0.1);border-radius:4px;text-align:center"><span style="color:#4ade80;font-size:14px;font-weight:700">${present}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">在校</span></div>
             <div style="padding:3px 10px;background:rgba(251,146,60,0.1);border-radius:4px;text-align:center"><span style="color:#fb923c;font-size:14px;font-weight:700">${leave}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">请假</span></div>
-            <div style="padding:3px 10px;background:rgba(248,113,113,0.1);border-radius:4px;text-align:center"><span style="color:#f87171;font-size:14px;font-weight:700">${absent}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">缺勤</span></div>
+            <div style="padding:3px 10px;background:rgba(248,113,113,0.1);border-radius:4px;text-align:center"><span style="color:#f87171;font-size:14px;font-weight:700">${absent}</span><span style="color:rgba(160,180,220,0.45);font-size:9px;margin-left:3px">控辍对象</span></div>
           </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
@@ -6934,7 +6928,7 @@ function renderAnomaly() {
   let rows = absentStudents.map(s => `<tr>
     <td>${s.class}</td>
     <td style="font-weight:500">${s.name}</td>
-    <td><span class="badge red"><span class="badge-dot red"></span>缺勤</span></td>
+    <td><span class="badge red"><span class="badge-dot red"></span>控辍对象</span></td>
     <td style="color:var(--danger)">未请假</td>
   </tr>`).join('');
 
@@ -6942,19 +6936,14 @@ function renderAnomaly() {
     <div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">
       <div class="stat-card red anim-in anim-d1">
         <div class="stat-icon red">⚠</div>
-        <div class="stat-label">未请假缺勤</div>
+        <div class="stat-label">未请假控辍对象</div>
         <div class="stat-value">${absentStudents.length}</div>
         <div class="stat-sub">需要立即关注</div>
-      </div>
-      <div class="stat-card orange anim-in anim-d2">
-        <div class="stat-icon orange">🔔</div>
-        <div class="stat-label">今日迟到</div>
-        <div class="stat-value">${CLASS_LIST.reduce((a,c)=>a+STUDENTS[c].filter(s=>s.status==='late').length,0)}</div>
       </div>
     </div>
     <div class="card anim-in anim-d2">
       <div class="card-header">
-        <span class="card-title">异常缺勤预警</span>
+        <span class="card-title">异常控辍对象预警</span>
         <span style="font-size:12px;color:var(--gray-400)">全校查看（只读）</span>
       </div>
       <div class="card-body no-pad"><div class="table-wrap">
@@ -6971,7 +6960,7 @@ function showNotifyModal(name) {
 /* ----- LEADER: Attendance Statistics (Comprehensive) ----- */
 function renderAttendanceStats() {
   // Calculate overall stats
-  let total = 0, present = 0, leave = 0, absent = 0, late = 0;
+  let total = 0, present = 0, leave = 0, absent = 0;
   let leaveByReason = { '病假': 0, '事假': 0, '就医': 0, '其他': 0 };
   
   CLASS_LIST.forEach(cls => STUDENTS[cls].forEach(s => {
@@ -6984,7 +6973,6 @@ function renderAttendanceStats() {
       }
     }
     else if (s.status === 'absent') absent++;
-    else if (s.status === 'late') late++;
   }));
   
   const attendanceRate = ((present / total) * 100).toFixed(1);
@@ -7049,7 +7037,7 @@ function renderAttendanceStats() {
   let abnormalRows = abnormalStudents.map(s => `<tr>
     <td>${s.class}</td>
     <td style="font-weight:500">${s.name}</td>
-    <td><span class="badge red"><span class="badge-dot red"></span>缺勤</span></td>
+    <td><span class="badge red"><span class="badge-dot red"></span>控辍对象</span></td>
     <td style="color:var(--danger)">未请假</td>
   </tr>`).join('');
 
@@ -7072,14 +7060,9 @@ function renderAttendanceStats() {
         <div class="stat-sub">病假 ${leaveByReason['病假']} · 事假 ${leaveByReason['事假']}</div>
       </div>
       <div class="stat-card red anim-in anim-d4">
-        <div class="stat-label">缺勤人数</div>
+        <div class="stat-label">控辍对象人数</div>
         <div class="stat-value">${absent}</div>
-        <div class="stat-sub">未请假缺勤</div>
-      </div>
-      <div class="stat-card blue anim-in anim-d4">
-        <div class="stat-label">迟到人数</div>
-        <div class="stat-value">${late}</div>
-        <div class="stat-sub">今日累计</div>
+        <div class="stat-sub">未请假控辍对象</div>
       </div>
     </div>
 
@@ -7091,7 +7074,7 @@ function renderAttendanceStats() {
         </div>
         <div class="card-body no-pad">
           <table>
-            <thead><tr><th>年级</th><th>总人数</th><th>在校</th><th>请假</th><th>缺勤</th><th>到校率</th></tr></thead>
+            <thead><tr><th>年级</th><th>总人数</th><th>在校</th><th>请假</th><th>控辍对象</th><th>到校率</th></tr></thead>
             <tbody>${gradeRows}</tbody>
           </table>
         </div>
@@ -7135,14 +7118,14 @@ function renderAttendanceStats() {
         </div>
         <div class="card-body no-pad">
           <table>
-            <thead><tr><th>排名</th><th>班级</th><th>总人数</th><th>在校</th><th>请假</th><th>缺勤</th><th>到校率</th></tr></thead>
+            <thead><tr><th>排名</th><th>班级</th><th>总人数</th><th>在校</th><th>请假</th><th>控辍对象</th><th>到校率</th></tr></thead>
             <tbody>${rankingRows}</tbody>
           </table>
         </div>
       </div>
       <div class="card anim-in anim-d4">
         <div class="card-header">
-          <span class="card-title">异常缺勤预警</span>
+          <span class="card-title">异常控辍对象预警</span>
           <span style="font-size:12px;color:var(--danger);font-weight:500">${abnormalStudents.length} 人</span>
         </div>
         <div class="card-body no-pad">
@@ -7188,7 +7171,7 @@ function renderMyClass() {
         <div class="stat-value">${l}</div>
       </div>
       <div class="stat-card red anim-in anim-d4">
-        <div class="stat-label">缺勤</div>
+        <div class="stat-label">控辍对象</div>
         <div class="stat-value">${a}</div>
       </div>
     </div>
@@ -7214,7 +7197,7 @@ function renderMyClass() {
               </div>
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="width:10px;height:10px;border-radius:3px;background:var(--danger)"></span>
-                <span style="font-size:13px;color:var(--gray-600)">缺勤 ${a}人</span>
+                <span style="font-size:13px;color:var(--gray-600)">控辍对象 ${a}人</span>
   </div>
 </div>
 
@@ -7372,8 +7355,7 @@ function renderClassAttendance() {
       <select class="toolbar-select" style="padding:4px 8px;font-size:12px" onchange="changeStatus('${cls}',${s.id},this.value)">
         <option value="present" ${s.status==='present'?'selected':''}>在校</option>
         <option value="leave" ${s.status==='leave'?'selected':''}>请假</option>
-        <option value="absent" ${s.status==='absent'?'selected':''}>缺勤</option>
-        <option value="late" ${s.status==='late'?'selected':''}>迟到</option>
+        <option value="absent" ${s.status==='absent'?'selected':''}>控辍对象</option>
       </select>
     </td>
     <td style="white-space:normal;max-width:180px;font-size:12.5px;color:var(--gray-600)">${s.leaveNote || s.leaveReason || '-'}</td>
@@ -7392,8 +7374,7 @@ function renderClassAttendance() {
         <option value="">全部状态</option>
         <option value="present">在校</option>
         <option value="leave">请假</option>
-        <option value="absent">缺勤</option>
-        <option value="late">迟到</option>
+        <option value="absent">控辍对象</option>
       </select>
       <div class="toolbar-spacer"></div>
       <button class="toolbar-btn primary" onclick="saveAttendance()">保存考勤</button>
@@ -7450,7 +7431,7 @@ function showStudentDetail(cls, id) {
   } else if (s.status === 'absent') {
     leaveDetails = `
       <div style="margin-top:16px;padding:16px;background:var(--danger-light);border-radius:8px;border-left:4px solid var(--danger)">
-        <div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠ 缺勤警告</div>
+        <div style="font-weight:600;color:var(--danger);margin-bottom:8px">⚠ 控辍对象警告</div>
         <div style="font-size:13px;color:var(--gray-700)">该学生今日未到校且未请假，需立即关注。</div>
       </div>
     `;
@@ -7654,7 +7635,7 @@ function renderTeachClasses() {
       <div class="class-card-stats">
         <div class="class-card-stat"><strong style="color:var(--accent)">${p}</strong>在校</div>
         <div class="class-card-stat"><strong style="color:var(--warning)">${l}</strong>请假</div>
-        <div class="class-card-stat"><strong style="color:var(--danger)">${a}</strong>缺勤</div>
+        <div class="class-card-stat"><strong style="color:var(--danger)">${a}</strong>控辍对象</div>
         <div class="class-card-stat"><strong>${t}</strong>总人数</div>
       </div>
     </div>`;
