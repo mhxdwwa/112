@@ -266,7 +266,7 @@ const IMG_STATE = {
   imgStartX: 0, imgStartY: 0,
   moveMode: false,       // whether in image move mode
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
-  workerUrl: 'https://mathlab-image-relay.444522621.workers.dev',  // Cloudflare Worker URL
+  workerUrl: '',  // Using Pages Functions, no separate worker needed
   pairCode: null,
   pollTimer: null,
 };
@@ -3350,7 +3350,7 @@ function stopPhotoUpload(){
 // Generate pairing code from Cloudflare Worker
 async function generatePairCode(){
   try{
-    const res=await fetch(IMG_STATE.workerUrl+'/api/pair',{method:'POST'});
+    const res=await fetch('/api/image-relay/pair',{method:'POST'});
     const data=await res.json();
     if(data.code){
       IMG_STATE.pairCode=data.code;
@@ -3370,7 +3370,7 @@ function startPolling(){
   IMG_STATE.pollTimer=setInterval(async()=>{
     if(!IMG_STATE.pairCode)return;
     try{
-      const res=await fetch(IMG_STATE.workerUrl+'/api/check/'+IMG_STATE.pairCode);
+      const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
       const data=await res.json();
       if(data.hasImage&&data.image){
         // Image received!
@@ -3378,7 +3378,7 @@ function startPolling(){
         IMG_STATE.pollTimer=null;
         await loadImage(data.image);
         // Clear the image from worker
-        fetch(IMG_STATE.workerUrl+'/api/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
+        fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
         // Show success feedback
         showToast('图片已接收，可以开始标注');
       }
@@ -3439,7 +3439,7 @@ async function handleMobileFile(e){
     // Compress image
     const base64=await compressImage(file,1920,0.7);
     // Upload to worker
-    const res=await fetch(IMG_STATE.workerUrl+'/api/upload',{
+    const res=await fetch('/api/image-relay/upload',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({code:code,image:base64})

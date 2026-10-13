@@ -9,10 +9,10 @@
   Cache-Control: no-cache, no-store, must-revalidate
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' blob: https://worldtimeapi.org https://timeapi.io https://showcase.api.linx.twenty57.net https://corsproxy.io https://inputtools.google.com; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
 
-# 数学作图工具 - 需要访问 Cloudflare Worker 图片中转服务
+# 数学作图工具 - 拍照上传功能使用 Pages Functions
 /shuxuezuotu.html
   Cache-Control: no-cache, no-store, must-revalidate
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev https://mathlab-image-relay.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com https://xbygooadskfqllnhwmet.supabase.co data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com https://xbygooadskfqllnhwmet.supabase.co data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
 
 /*.html
   Cache-Control: no-cache, no-store, must-revalidate
