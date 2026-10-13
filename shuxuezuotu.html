@@ -1998,6 +1998,7 @@ mainC.addEventListener('contextmenu',e=>e.preventDefault());
 // === PINCH ZOOM (Touch) ===
 const activePointers=new Map();
 let pinchStartDist=0,pinchStartScale=0,pinchCenterPx={x:0,y:0},pinchCenterMath={x:0,y:0},isPinching=false;
+let pinchOnImage=false,pinchStartImgScale=0;
 mainC.addEventListener('pointerdown',function(e){
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(activePointers.size===2){
@@ -2008,9 +2009,17 @@ mainC.addEventListener('pointerdown',function(e){
     const p0={x:pts[0].x-r.left,y:pts[0].y-r.top};
     const p1={x:pts[1].x-r.left,y:pts[1].y-r.top};
     pinchStartDist=Math.hypot(p1.x-p0.x,p1.y-p0.y);
-    pinchStartScale=G.scale;
     pinchCenterPx={x:(p0.x+p1.x)/2,y:(p0.y+p1.y)/2};
-    pinchCenterMath=p2m(pinchCenterPx.x,pinchCenterPx.y);
+    
+    // Check if pinch is on image
+    if(IMG_STATE.enabled&&isPointOnImage(pinchCenterPx.x,pinchCenterPx.y)){
+      pinchOnImage=true;
+      pinchStartImgScale=IMG_STATE.scale;
+    }else{
+      pinchOnImage=false;
+      pinchStartScale=G.scale;
+      pinchCenterMath=p2m(pinchCenterPx.x,pinchCenterPx.y);
+    }
   }
 },{capture:true});
 mainC.addEventListener('pointermove',function(e){
@@ -2025,19 +2034,27 @@ mainC.addEventListener('pointermove',function(e){
     const dist=Math.hypot(p1.x-p0.x,p1.y-p0.y);
     if(pinchStartDist>0){
       const ratio=dist/pinchStartDist;
-      G.scale=pinchStartScale*ratio;
-      G.scale=Math.max(8,Math.min(200,G.scale));
-      const newCenterPx={x:(p0.x+p1.x)/2,y:(p0.y+p1.y)/2};
-      G.ox=newCenterPx.x-pinchCenterMath.x*G.scale;
-      G.oy=newCenterPx.y+pinchCenterMath.y*G.scale;
-      drawBg();draw();
-      document.getElementById('sZoom').textContent=Math.round(G.scale/40*100)+'%';
+      if(pinchOnImage){
+        // Zoom image
+        IMG_STATE.scale=pinchStartImgScale*ratio;
+        IMG_STATE.scale=Math.max(0.1,Math.min(5,IMG_STATE.scale));
+        drawImage();
+      }else{
+        // Zoom canvas
+        G.scale=pinchStartScale*ratio;
+        G.scale=Math.max(8,Math.min(200,G.scale));
+        const newCenterPx={x:(p0.x+p1.x)/2,y:(p0.y+p1.y)/2};
+        G.ox=newCenterPx.x-pinchCenterMath.x*G.scale;
+        G.oy=newCenterPx.y+pinchCenterMath.y*G.scale;
+        drawBg();draw();
+        document.getElementById('sZoom').textContent=Math.round(G.scale/40*100)+'%';
+      }
     }
   }
 },{capture:true,passive:false});
 function removePointer(e){
   activePointers.delete(e.pointerId);
-  if(activePointers.size<2){isPinching=false}
+  if(activePointers.size<2){isPinching=false;pinchOnImage=false}
 }
 mainC.addEventListener('pointerup',removePointer,{capture:true});
 mainC.addEventListener('pointercancel',removePointer,{capture:true});
@@ -2045,6 +2062,15 @@ mainC.addEventListener('pointercancel',removePointer,{capture:true});
 function getPos(e){
   const r=mainC.getBoundingClientRect();
   return{px:e.clientX-r.left,py:e.clientY-r.top};
+}
+
+// Check if a point is on the uploaded image
+function isPointOnImage(px,py){
+  if(!IMG_STATE.enabled||!IMG_STATE.image)return false;
+  const img=IMG_STATE.image;
+  const w=img.naturalWidth*IMG_STATE.scale;
+  const h=img.naturalHeight*IMG_STATE.scale;
+  return px>=IMG_STATE.x&&px<=IMG_STATE.x+w&&py>=IMG_STATE.y&&py<=IMG_STATE.y+h;
 }
 
 function onDown(e){
@@ -2076,6 +2102,17 @@ function onDown(e){
   }
 
   if(t==='move'){
+    // Check if clicking on image first
+    if(IMG_STATE.enabled&&isPointOnImage(px,py)){
+      IMG_STATE.dragging=true;
+      IMG_STATE.dragStartX=e.clientX;
+      IMG_STATE.dragStartY=e.clientY;
+      IMG_STATE.imgStartX=IMG_STATE.x;
+      IMG_STATE.imgStartY=IMG_STATE.y;
+      mainC.style.cursor='grabbing';
+      draw();return;
+    }
+    
     const hit=hitTest(px,py);
     if(hit){
       G.selected=hit.id;G.dragging=true;G.dragObj=hit;
@@ -2212,6 +2249,16 @@ function onMove(e){
   document.getElementById('sCoord').textContent=`(${m.x.toFixed(2)}, ${m.y.toFixed(2)})`;
 
   if(G.panning){G.ox=G.panOX+(e.clientX-G.panSX);G.oy=G.panOY+(e.clientY-G.panSY);drawBg();draw();return}
+
+  // Handle image dragging with move tool
+  if(IMG_STATE.dragging){
+    const dx=e.clientX-IMG_STATE.dragStartX;
+    const dy=e.clientY-IMG_STATE.dragStartY;
+    IMG_STATE.x=IMG_STATE.imgStartX+dx;
+    IMG_STATE.y=IMG_STATE.imgStartY+dy;
+    drawImage();
+    return;
+  }
 
   if(G.dragging&&G.dragObj){
     const o=G.dragObj;
@@ -2452,6 +2499,10 @@ function onUp(e){
     draw();
   }
   if(G.panning){G.panning=false;mainC.style.cursor=G.tool==='move'?'default':'crosshair'}
+  if(IMG_STATE.dragging){
+    IMG_STATE.dragging=false;
+    mainC.style.cursor=G.tool==='move'?'default':'crosshair';
+  }
   if(G.dragging){G.dragging=false;G.dragObj=null;G.rotating=false;G.rotPivot=null;G.rotOrig=null;G.rotCenter=null}
   
   // Finalize compass arc
@@ -2655,9 +2706,75 @@ function handleToolClick(t,sp){
 }
 
 // === UNDO/REDO ===
-function saveUndo(){G.undoStack.push(JSON.stringify(G.objs));if(G.undoStack.length>50)G.undoStack.shift();G.redoStack=[]}
-function undo(){if(!G.undoStack.length)return;G.redoStack.push(JSON.stringify(G.objs));G.objs=JSON.parse(G.undoStack.pop());G.selected=null;draw()}
-function redo(){if(!G.redoStack.length)return;G.undoStack.push(JSON.stringify(G.objs));G.objs=JSON.parse(G.redoStack.pop());draw()}
+function getImageState(){
+  if(!IMG_STATE.enabled||!IMG_STATE.image)return null;
+  // Get the image's base64 data
+  const canvas=document.createElement('canvas');
+  canvas.width=IMG_STATE.image.naturalWidth;
+  canvas.height=IMG_STATE.image.naturalHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.drawImage(IMG_STATE.image,0,0);
+  return{
+    enabled:IMG_STATE.enabled,
+    imageSrc:canvas.toDataURL('image/jpeg',0.7),
+    x:IMG_STATE.x,
+    y:IMG_STATE.y,
+    scale:IMG_STATE.scale,
+    opacity:IMG_STATE.opacity
+  };
+}
+
+function restoreImageState(state){
+  if(!state){
+    IMG_STATE.enabled=false;
+    IMG_STATE.image=null;
+    imgC.style.pointerEvents='none';
+    document.getElementById('imageControls').classList.remove('on');
+    drawImage();
+    return;
+  }
+  const img=new Image();
+  img.onload=()=>{
+    IMG_STATE.enabled=state.enabled;
+    IMG_STATE.image=img;
+    IMG_STATE.x=state.x;
+    IMG_STATE.y=state.y;
+    IMG_STATE.scale=state.scale;
+    IMG_STATE.opacity=state.opacity;
+    imgC.style.pointerEvents='auto';
+    document.getElementById('imageControls').classList.add('on');
+    drawImage();
+  };
+  img.src=state.imageSrc;
+}
+
+function saveUndo(){
+  const state={objs:G.objs,image:getImageState()};
+  G.undoStack.push(JSON.stringify(state));
+  if(G.undoStack.length>50)G.undoStack.shift();
+  G.redoStack=[];
+}
+
+function undo(){
+  if(!G.undoStack.length)return;
+  const currentState={objs:G.objs,image:getImageState()};
+  G.redoStack.push(JSON.stringify(currentState));
+  const state=JSON.parse(G.undoStack.pop());
+  G.objs=state.objs;
+  G.selected=null;
+  restoreImageState(state.image);
+  draw();
+}
+
+function redo(){
+  if(!G.redoStack.length)return;
+  const currentState={objs:G.objs,image:getImageState()};
+  G.undoStack.push(JSON.stringify(currentState));
+  const state=JSON.parse(G.redoStack.pop());
+  G.objs=state.objs;
+  restoreImageState(state.image);
+  draw();
+}
 
 // === BUILD TOOLBAR ===
 const allTools=[
@@ -3103,7 +3220,27 @@ document.addEventListener('keydown',e=>{
   if(e.key==='v'||e.key==='V')setTool('move');
   else if(e.key==='p'||e.key==='P')setTool('point');
   else if(e.key==='c'||e.key==='C')setTool('circle');
-  else if(e.key==='Delete'||e.key==='Backspace'){if(G.selected){saveUndo();G.objs=G.objs.filter(o=>o.id!==G.selected);G.selected=null;draw()}}
+  else if(e.key==='Delete'||e.key==='Backspace'){
+    if(G.selected){
+      saveUndo();
+      G.objs=G.objs.filter(o=>o.id!==G.selected);
+      G.selected=null;
+      draw();
+    }else if(IMG_STATE.enabled){
+      // Delete image if no object is selected
+      saveUndo();
+      IMG_STATE.enabled=false;
+      IMG_STATE.image=null;
+      IMG_STATE.pairCode=null;
+      if(IMG_STATE.pollTimer){
+        clearInterval(IMG_STATE.pollTimer);
+        IMG_STATE.pollTimer=null;
+      }
+      imgC.style.pointerEvents='none';
+      document.getElementById('imageControls').classList.remove('on');
+      drawImage();
+    }
+  }
   else if(e.key==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();undo()}
   else if(e.key==='y'&&(e.ctrlKey||e.metaKey)){e.preventDefault();redo()}
   else if(e.key==='Escape'){G.tempPts=[];G.drawState=null;G.selected=null;setTool('move')}
@@ -3546,8 +3683,15 @@ document.getElementById('imgOpacity').addEventListener('click',function(){
 });
 
 document.getElementById('imgRemove').addEventListener('click',()=>{
+  // Save undo state before removing
+  saveUndo();
   IMG_STATE.enabled=false;
   IMG_STATE.image=null;
+  IMG_STATE.pairCode=null; // Clear pair code to prevent re-loading
+  if(IMG_STATE.pollTimer){
+    clearInterval(IMG_STATE.pollTimer);
+    IMG_STATE.pollTimer=null;
+  }
   imgC.style.pointerEvents='none';
   document.getElementById('imageControls').classList.remove('on');
   drawImage();
@@ -3586,34 +3730,6 @@ imgC.addEventListener('pointerup',(e)=>{
   imgC.style.cursor=IMG_STATE.moveMode?'grab':'default';
   imgC.releasePointerCapture(e.pointerId);
 });
-
-// Image pinch-to-zoom on touch devices
-let lastTouchDist=0;
-imgC.addEventListener('touchstart',(e)=>{
-  if(e.touches.length===2){
-    lastTouchDist=Math.hypot(
-      e.touches[0].clientX-e.touches[1].clientX,
-      e.touches[0].clientY-e.touches[1].clientY
-    );
-  }
-},{passive:true});
-
-imgC.addEventListener('touchmove',(e)=>{
-  if(e.touches.length===2&&IMG_STATE.enabled){
-    const dist=Math.hypot(
-      e.touches[0].clientX-e.touches[1].clientX,
-      e.touches[0].clientY-e.touches[1].clientY
-    );
-    if(lastTouchDist>0){
-      const ratio=dist/lastTouchDist;
-      IMG_STATE.scale*=ratio;
-      drawImage();
-    }
-    lastTouchDist=dist;
-  }
-},{passive:true});
-
-imgC.addEventListener('touchend',()=>{lastTouchDist=0},{passive:true});
 
 // Simple toast notification
 function showToast(msg){
