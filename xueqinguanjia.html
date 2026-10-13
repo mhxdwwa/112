@@ -3456,11 +3456,6 @@ const NAV_CONFIG = {
   headteacher: [
     { section: '本班管理', items: [
       { id: 'my-class', label: '本班概览', icon: iconGrid },
-      { id: 'class-cadres', label: '班干部编辑', icon: iconUsers },
-      { id: 'class-attendance', label: '考勤管理', icon: iconCheck },
-      { id: 'roster', label: '名单管理', icon: iconUsers },
-      { id: 'leave-register', label: '请假登记', icon: iconFile },
-      { id: 'family-situation', label: '家庭情况', icon: iconUsers },
     ]},
     { section: '教学', items: [
       { id: 'teach-classes', label: '授课班级', icon: iconUsers },
@@ -7213,6 +7208,8 @@ function renderMyClass() {
           <button class="toolbar-btn ghost" style="justify-content:center;padding:16px" onclick="currentViewClass=getHeadteacherClass();navigate('class-seating')">💺 座位表</button>
           <button class="toolbar-btn ghost" style="justify-content:center;padding:16px" onclick="navigate('leave-register')">📝 请假登记</button>
           <button class="toolbar-btn ghost" style="justify-content:center;padding:16px" onclick="navigate('roster')">👥 名单管理</button>
+          <button class="toolbar-btn ghost" style="justify-content:center;padding:16px" onclick="navigate('class-cadres')">👔 班干部编辑</button>
+          <button class="toolbar-btn ghost" style="justify-content:center;padding:16px" onclick="navigate('family-situation')">🏠 家庭情况</button>
           <button class="toolbar-btn ghost" style="justify-content:center;padding:16px;border:1.5px solid var(--warning);color:var(--warning)" onclick="showBatchMarkModal()">🏷️ 特殊情况标记</button>
           <button class="toolbar-btn ghost" style="justify-content:center;padding:16px;border:1.5px solid var(--primary);color:var(--primary)" onclick="showBatchBoardingModal()">🏠 外宿标记</button>
         </div>
