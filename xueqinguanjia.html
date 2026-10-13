@@ -7409,8 +7409,19 @@ function filterStatusRows(sel) {
     tr.style.display = select && select.value === v ? '' : 'none';
   });
 }
-function saveAttendance() {
-  showModal('保存成功', '<p style="color:var(--accent);font-size:14px">考勤数据已保存。</p>', '<button class="toolbar-btn primary" onclick="hideModal()">确定</button>');
+async function saveAttendance() {
+  // 先标记数据已更改，触发保存状态
+  studentsDataChanged = true;
+  updateSaveToCloudButton();
+  
+  // 调用保存到云端的函数
+  try {
+    await saveStudentsToCloud();
+    showToast('考勤数据已保存到云端', 'success');
+  } catch (e) {
+    console.error('[XQ] Save attendance failed:', e);
+    showToast('保存考勤失败：' + e.message, 'error');
+  }
 }
 function showStudentDetail(cls, id) {
   const s = STUDENTS[cls].find(st => st.id === id);
