@@ -272,6 +272,7 @@ const IMG_STATE = {
   workerUrl: '',  // Using Pages Functions, no separate worker needed
   pairCode: null,
   pollTimer: null,
+  generation: 0,         // race condition guard: stale poll responses are ignored
 };
 
 const G={
@@ -2725,6 +2726,7 @@ function getImageState(){
 }
 
 function restoreImageState(state){
+  IMG_STATE.generation++; // invalidate any stale poll responses
   if(!state){
     IMG_STATE.enabled=false;
     IMG_STATE.image=null;
@@ -2740,10 +2742,10 @@ function restoreImageState(state){
     IMG_STATE.x=state.x;
     IMG_STATE.y=state.y;
     IMG_STATE.scale=state.scale;
-    IMG_STATE.opacity=state.opacity;
-    imgC.style.pointerEvents='auto';
-    document.getElementById('imageControls').classList.add('on');
-    drawImage();
+      IMG_STATE.opacity=state.opacity;
+      imgC.style.pointerEvents='none';
+      document.getElementById('imageControls').classList.add('on');
+      drawImage();
   };
   img.src=state.imageSrc;
 }
@@ -3232,6 +3234,7 @@ document.addEventListener('keydown',e=>{
       IMG_STATE.enabled=false;
       IMG_STATE.image=null;
       IMG_STATE.pairCode=null;
+      IMG_STATE.generation++; // Invalidate any in-flight poll responses
       if(IMG_STATE.pollTimer){
         clearInterval(IMG_STATE.pollTimer);
         IMG_STATE.pollTimer=null;
@@ -3524,9 +3527,12 @@ function startPolling(){
 
 async function checkForImage(){
   if(!IMG_STATE.pairCode)return;
+  const gen=IMG_STATE.generation; // capture current generation
   try{
     const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
     const data=await res.json();
+    // Guard: if image was removed/changed while fetch was in-flight, ignore this response
+    if(gen!==IMG_STATE.generation)return;
     if(data.hasImage&&data.image){
       // Image received!
       if(IMG_STATE.pollTimer){
@@ -3554,6 +3560,7 @@ async function checkForImage(){
 
 // Load image from base64 data
 function loadImage(base64Data){
+  IMG_STATE.generation++; // new image invalidates old poll responses
   return new Promise((resolve)=>{
     const img=new Image();
     img.onload=()=>{
@@ -3688,6 +3695,7 @@ document.getElementById('imgRemove').addEventListener('click',()=>{
   IMG_STATE.enabled=false;
   IMG_STATE.image=null;
   IMG_STATE.pairCode=null; // Clear pair code to prevent re-loading
+  IMG_STATE.generation++;  // Invalidate any in-flight poll responses
   if(IMG_STATE.pollTimer){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
@@ -3701,34 +3709,6 @@ document.getElementById('pairCodeClose').addEventListener('click',()=>{
   document.getElementById('pairCodeDisplay').style.display='none';
   document.getElementById('tgPhoto').classList.remove('on');
   stopPhotoUpload();
-});
-
-// Image drag handling on imgC
-imgC.addEventListener('pointerdown',(e)=>{
-  if(!IMG_STATE.enabled||!IMG_STATE.moveMode)return;
-  IMG_STATE.dragging=true;
-  IMG_STATE.dragStartX=e.clientX;
-  IMG_STATE.dragStartY=e.clientY;
-  IMG_STATE.imgStartX=IMG_STATE.x;
-  IMG_STATE.imgStartY=IMG_STATE.y;
-  imgC.style.cursor='grabbing';
-  imgC.setPointerCapture(e.pointerId);
-});
-
-imgC.addEventListener('pointermove',(e)=>{
-  if(!IMG_STATE.dragging)return;
-  const dx=e.clientX-IMG_STATE.dragStartX;
-  const dy=e.clientY-IMG_STATE.dragStartY;
-  IMG_STATE.x=IMG_STATE.imgStartX+dx;
-  IMG_STATE.y=IMG_STATE.imgStartY+dy;
-  drawImage();
-});
-
-imgC.addEventListener('pointerup',(e)=>{
-  if(!IMG_STATE.dragging)return;
-  IMG_STATE.dragging=false;
-  imgC.style.cursor=IMG_STATE.moveMode?'grab':'default';
-  imgC.releasePointerCapture(e.pointerId);
 });
 
 // Simple toast notification
