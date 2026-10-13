@@ -114,6 +114,8 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .pair-code-hint{font-size:12px;color:#6b7280;line-height:1.6;margin-top:12px}
 .pair-code-close{position:absolute;top:8px;right:12px;font-size:24px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:4px 8px;line-height:1}
 .pair-code-close:hover{color:var(--red)}
+.pair-code-status{font-size:13px;color:var(--blue);margin-top:12px;padding:8px 16px;background:rgba(37,99,235,.08);border-radius:8px;display:inline-block}
+.pair-code-status.received{color:#059669;background:rgba(5,150,105,.08)}
 /* Mobile upload panel */
 .mobile-upload-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(255,255,255,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px}
 .mobile-upload-title{font-size:18px;font-weight:700;color:var(--t)}
@@ -161,6 +163,7 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
       <div class="pair-code-text">配对码</div>
       <div class="pair-code-value" id="pairCodeValue">------</div>
       <div class="pair-code-hint">手机打开此网页，点击"拍照"按钮<br>输入上方配对码即可传输图片</div>
+      <div class="pair-code-status" id="pairCodeStatus">等待手机上传...</div>
       <button class="pair-code-close" id="pairCodeClose">×</button>
     </div>
     <!-- Photo upload UI (Mobile) -->
@@ -3349,6 +3352,12 @@ function stopPhotoUpload(){
 
 // Generate pairing code from Cloudflare Worker
 async function generatePairCode(){
+  // Reset status
+  const statusEl=document.getElementById('pairCodeStatus');
+  if(statusEl){
+    statusEl.textContent='等待手机上传...';
+    statusEl.className='pair-code-status';
+  }
   try{
     const res=await fetch('/api/image-relay/pair',{method:'POST'});
     const data=await res.json();
@@ -3361,31 +3370,49 @@ async function generatePairCode(){
   }catch(e){
     console.error('[Photo] Failed to generate pair code:',e);
     document.getElementById('pairCodeValue').textContent='ERROR';
+    if(statusEl)statusEl.textContent='生成配对码失败';
   }
 }
 
 // Poll for uploaded image (PC side)
 function startPolling(){
   if(IMG_STATE.pollTimer)clearInterval(IMG_STATE.pollTimer);
-  IMG_STATE.pollTimer=setInterval(async()=>{
-    if(!IMG_STATE.pairCode)return;
-    try{
-      const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
-      const data=await res.json();
-      if(data.hasImage&&data.image){
-        // Image received!
+  
+  // Immediate first check
+  checkForImage();
+  
+  // Then poll every 500ms for faster response
+  IMG_STATE.pollTimer=setInterval(checkForImage,500);
+}
+
+async function checkForImage(){
+  if(!IMG_STATE.pairCode)return;
+  try{
+    const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
+    const data=await res.json();
+    if(data.hasImage&&data.image){
+      // Image received!
+      if(IMG_STATE.pollTimer){
         clearInterval(IMG_STATE.pollTimer);
         IMG_STATE.pollTimer=null;
-        await loadImage(data.image);
-        // Clear the image from worker
-        fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
-        // Show success feedback
-        showToast('图片已接收，可以开始标注');
       }
-    }catch(e){
-      console.error('[Photo] Poll error:',e);
+      // Update status
+      const statusEl=document.getElementById('pairCodeStatus');
+      if(statusEl){
+        statusEl.textContent='正在加载图片...';
+        statusEl.className='pair-code-status received';
+      }
+      await loadImage(data.image);
+      // Clear the image from worker
+      fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
+      // Hide pair code display
+      document.getElementById('pairCodeDisplay').style.display='none';
+      // Show success feedback
+      showToast('图片已接收，可以开始标注');
     }
-  },2000);
+  }catch(e){
+    console.error('[Photo] Poll error:',e);
+  }
 }
 
 // Load image from base64 data
@@ -3436,9 +3463,11 @@ async function handleMobileFile(e){
   status.className='mobile-upload-status';
   
   try{
-    // Compress image
-    const base64=await compressImage(file,1920,0.7);
+    // Compress image (aggressive compression for faster upload)
+    status.textContent='正在压缩图片...';
+    const base64=await compressImage(file,1280,0.5);
     // Upload to worker
+    status.textContent='正在上传...';
     const res=await fetch('/api/image-relay/upload',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
