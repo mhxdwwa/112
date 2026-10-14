@@ -6808,9 +6808,9 @@ function renderClassAnalysis() {
   }
   
   // === 步骤3：分析结果 ===
-  // 按 selectedIds 的顺序过滤并排序
+  // 按 selectedIds 的顺序过滤并排序（兼容字符串和数字类型的id）
   const analysis = data.selectedIds
-    .map(id => allAnalysis.find(a => a.id === id))
+    .map(id => allAnalysis.find(a => String(a.id) === String(id)))
     .filter(Boolean);
   
   if (analysis.length === 0) {
