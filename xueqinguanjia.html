@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 /* === CSS VARIABLES === */
 :root {
@@ -13071,10 +13072,130 @@ async function doXqAutoLogin(email) {
 }
 
 // 打开扫码器（用于手机端）
+let xqHtml5Qrcode = null;
+
 function openXqQrScanner() {
-  // 这里需要实现扫码功能，可以使用 html5-qrcode 库
-  // 暂时先提示用户
-  alert('扫码功能开发中...\n\n请在手机上打开相机或扫码应用，扫描电脑端显示的二维码。');
+  // 检查是否在移动端
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (!isMobile) {
+    alert('请使用手机浏览器打开此网站进行扫码');
+    return;
+  }
+
+  // 创建扫码弹窗
+  let scannerModal = document.getElementById('xqScannerModal');
+  if (!scannerModal) {
+    scannerModal = document.createElement('div');
+    scannerModal.id = 'xqScannerModal';
+    scannerModal.innerHTML = `
+      <div style="position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px">
+        <div style="color:#fff;font-size:18px;font-weight:600;margin-bottom:20px">扫描二维码</div>
+        <div id="xqQrScannerBox" style="width:300px;height:300px;background:#fff;border-radius:12px;overflow:hidden"></div>
+        <div id="xqScannerStatus" style="color:#fff;margin-top:16px;font-size:14px">正在启动摄像头...</div>
+        <button onclick="closeXqQrScanner()" style="margin-top:20px;padding:12px 32px;background:var(--danger);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">关闭</button>
+      </div>
+    `;
+    document.body.appendChild(scannerModal);
+  }
+
+  scannerModal.style.display = 'block';
+  startXqQrScanner();
+}
+
+async function startXqQrScanner() {
+  const scannerStatus = document.getElementById('xqScannerStatus');
+  
+  try {
+    // 检查浏览器支持
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('浏览器不支持摄像头访问');
+    }
+
+    // 检查 html5-qrcode 库
+    if (typeof Html5Qrcode === 'undefined') {
+      throw new Error('扫码库未加载，请刷新页面');
+    }
+
+    // 创建扫码器实例
+    if (xqHtml5Qrcode) {
+      try {
+        await xqHtml5Qrcode.stop();
+      } catch (e) {}
+    }
+
+    xqHtml5Qrcode = new Html5Qrcode('xqQrScannerBox');
+
+    // 配置扫码器
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    };
+
+    // 启动摄像头
+    await xqHtml5Qrcode.start(
+      { facingMode: 'environment' }, // 使用后置摄像头
+      config,
+      onScanSuccess,
+      onScanFailure
+    );
+
+    if (scannerStatus) {
+      scannerStatus.textContent = '将二维码放入框内，即可自动扫描';
+    }
+
+  } catch (e) {
+    console.error('[XQ QR Scanner] 启动失败:', e);
+    if (scannerStatus) {
+      scannerStatus.textContent = '❌ ' + e.message;
+      scannerStatus.style.color = '#ef4444';
+    }
+  }
+}
+
+function onScanSuccess(decodedText) {
+  console.log('[XQ QR Scanner] 扫描成功:', decodedText);
+  
+  // 停止扫码器
+  if (xqHtml5Qrcode) {
+    xqHtml5Qrcode.stop().catch(e => console.error(e));
+  }
+
+  // 关闭扫码弹窗
+  closeXqQrScanner();
+
+  // 解析 URL 并跳转
+  try {
+    const url = new URL(decodedText);
+    // 检查是否是 qr-scan.html
+    if (url.pathname.includes('qr-scan.html')) {
+      window.location.href = decodedText;
+    } else {
+      alert('二维码内容无效');
+    }
+  } catch (e) {
+    alert('二维码解析失败');
+  }
+}
+
+function onScanFailure(error) {
+  // 忽略正常的扫描失败（没有检测到二维码）
+  if (error && error.toString().includes('NotFoundException')) {
+    return;
+  }
+  // 其他错误可以记录但不显示
+}
+
+function closeXqQrScanner() {
+  const scannerModal = document.getElementById('xqScannerModal');
+  if (scannerModal) {
+    scannerModal.style.display = 'none';
+  }
+
+  if (xqHtml5Qrcode) {
+    xqHtml5Qrcode.stop().catch(e => console.error(e));
+    xqHtml5Qrcode = null;
+  }
 }
 
 // HTML 转义
