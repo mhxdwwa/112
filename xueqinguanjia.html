@@ -7032,9 +7032,14 @@ function renderClassAnalysis() {
   
   // === 步骤3：分析结果 ===
   // 按 selectedIds 的顺序过滤并排序（兼容字符串和数字类型的id）
-  const analysis = data.selectedIds
+  let analysis = data.selectedIds
     .map(id => allAnalysis.find(a => String(a.id) === String(id)))
     .filter(Boolean);
+  
+  // 防御性检查：如果过滤后为空但有数据，使用全部考试
+  if (analysis.length === 0 && allAnalysis.length > 0) {
+    analysis = allAnalysis;
+  }
   
   if (analysis.length === 0) {
     return `
