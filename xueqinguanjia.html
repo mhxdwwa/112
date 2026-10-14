@@ -7299,7 +7299,7 @@ function renderClassAnalysis() {
       </div>
     </div>
     
-    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
       <div class="stat-card blue anim-in anim-d1">
         <div class="stat-label">已选考试</div>
         <div class="stat-value">${analysis.length}次</div>
@@ -7326,133 +7326,131 @@ function renderClassAnalysis() {
       </div>
     </div>
     
-    <div class="card" style="margin-top:16px">
-      <div class="card-header">
-        <span class="card-title">平均分与中位数变化趋势</span>
-        <div style="display:flex;gap:16px;font-size:12px">
-          <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--primary);display:inline-block"></span>平均分</span>
-          <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent);display:inline-block"></span>中位数</span>
-        </div>
-      </div>
-      <div class="card-body" style="overflow-x:auto">
-        <svg width="${chartWidth}" height="${chartHeight}" style="display:block">
-          ${gridLines}
-          <path d="${chartPath}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.3"/>
-          <path d="${medianPath}" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.3" stroke-dasharray="5,5"/>
-          ${chartPoints}
-          ${chartLabels}
-        </svg>
-      </div>
-    </div>
-    
-    <div class="card" style="margin-top:16px">
-      <div class="card-header">
-        <span class="card-title">分数段分布变化</span>
-        <span style="font-size:12px;color:var(--gray-400)">各分数段人数占比随考试的变化</span>
-      </div>
-      <div class="card-body" style="overflow-x:auto">
-        ${(() => {
-          const distChartHeight = 250;
-          const distChartWidth = Math.max(analysis.length * 80, 400);
-          const barWidth = 50;
-          const maxCount = Math.max(...analysis.map(a => a.scores.length), 1);
-          
-          let distBars = '';
-          let distLabels = '';
-          let distGridLines = '';
-          
-          // 绘制网格线
-          for (let i = 0; i <= 4; i++) {
-            const y = 20 + (distChartHeight - 60) * i / 4;
-            const val = Math.round(maxCount - (maxCount * i / 4));
-            distGridLines += `<line x1="35" y1="${y}" x2="${distChartWidth - 10}" y2="${y}" stroke="var(--gray-200)" stroke-width="1"/>`;
-            distGridLines += `<text x="30" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--gray-400)">${val}</text>`;
-          }
-          
-          analysis.forEach((a, i) => {
-            const x = (i / (analysis.length - 1 || 1)) * (distChartWidth - 100) + 50;
-            const dist = calcScoreDistribution(a.scores, defaultScoreRanges);
-            let currentY = distChartHeight - 30;
-            
-            dist.forEach((d, j) => {
-              const height = (d.count / maxCount) * (distChartHeight - 60);
-              const y = currentY - height;
-              distBars += `<rect x="${x - barWidth/2}" y="${y}" width="${barWidth}" height="${height}" fill="${d.color}" opacity="0.8"/>`;
-              if (d.count > 0) {
-                distBars += `<text x="${x}" y="${y + height/2 + 4}" text-anchor="middle" font-size="10" fill="#fff" font-weight="600">${d.count}</text>`;
-              }
-              currentY = y;
-            });
-            
-            const label = (a.name || a.exam_name).length > 6 ? (a.name || a.exam_name).substring(0, 6) + '..' : (a.name || a.exam_name);
-            distLabels += `<text x="${x}" y="${distChartHeight - 5}" text-anchor="middle" font-size="10" fill="var(--gray-500)">${label}</text>`;
-          });
-          
-          // 图例
-          const legend = defaultScoreRanges.map((r, i) => 
-            `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:11px">
-              <span style="width:12px;height:12px;background:${r.color};display:inline-block;border-radius:2px"></span>${r.label}
-            </span>`
-          ).join('');
-          
-          return `
-            <div style="margin-bottom:8px">${legend}</div>
-            <svg width="${distChartWidth}" height="${distChartHeight}" style="display:block">
-              ${distGridLines}
-              ${distBars}
-              ${distLabels}
-            </svg>
-          `;
-        })()}
-      </div>
-    </div>
-    
-    ${analysis.length >= 2 ? `
-    <div class="grid-2" style="margin-top:16px">
-      <div class="card anim-in anim-d2">
-        <div class="card-header">
-          <span class="card-title" style="color:var(--accent)">↑ 进步最大的学生</span>
-          <span style="font-size:12px;color:var(--gray-400)">${compareLabel}</span>
-        </div>
-        <div class="card-body">
-          ${progressHtml}
-        </div>
-      </div>
-      <div class="card anim-in anim-d3">
-        <div class="card-header">
-          <span class="card-title" style="color:var(--danger)">↓ 退步最大的学生</span>
-          <span style="font-size:12px;color:var(--gray-400)">${compareLabel}</span>
-        </div>
-        <div class="card-body">
-          ${declineHtml}
-        </div>
-      </div>
-    </div>
-    ` : ''}
-    
-    ${continuousDeclineStudents.length > 0 ? `
-    <div class="card" style="margin-top:16px;border-left:4px solid var(--danger)">
-      <div class="card-header">
-        <span class="card-title" style="color:var(--danger)">⚠ 连续下滑学生</span>
-        <span style="font-size:12px;color:var(--gray-400)">连续3次及以上成绩下降，需要重点关注</span>
-      </div>
-      <div class="card-body">
-        ${continuousDeclineStudents.map((s, i) => `
-          <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
-            <span style="width:24px;height:24px;border-radius:50%;background:var(--danger);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${i + 1}</span>
-            <span style="flex:1;font-weight:500;cursor:pointer;color:var(--primary)" onclick="showStudentDetailInAnalysis('${s.student}')">${s.student}</span>
-            <span style="font-size:12px;color:var(--gray-500)">连续${s.declineCount}次下滑</span>
-            <span style="font-size:14px;font-weight:600;color:var(--danger)">${s.totalChange > 0 ? '+' : ''}${s.totalChange.toFixed(1)}</span>
+    <div class="grid-2" style="gap:16px">
+      <div>
+        <div class="card anim-in anim-d1">
+          <div class="card-header">
+            <span class="card-title">成绩趋势</span>
+            <div style="display:flex;gap:12px;font-size:11px">
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:var(--primary);display:inline-block"></span>平均分</span>
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:var(--accent);display:inline-block;border-style:dashed"></span>中位数</span>
+            </div>
           </div>
-        `).join('')}
+          <div class="card-body" style="overflow-x:auto;padding:12px">
+            <svg width="${chartWidth}" height="${chartHeight}" style="display:block">
+              ${gridLines}
+              <path d="${chartPath}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.3"/>
+              <path d="${medianPath}" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.3" stroke-dasharray="5,5"/>
+              ${chartPoints}
+              ${chartLabels}
+            </svg>
+          </div>
+        </div>
+        
+        <div class="card anim-in anim-d2" style="margin-top:16px">
+          <div class="card-header">
+            <span class="card-title">分数段分布</span>
+            <div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap">
+              ${defaultScoreRanges.map(r => `<span style="display:inline-flex;align-items:center;gap:3px"><span style="width:10px;height:10px;background:${r.color};display:inline-block;border-radius:2px"></span>${r.label.split('(')[0]}</span>`).join('')}
+            </div>
+          </div>
+          <div class="card-body" style="overflow-x:auto;padding:12px">
+            ${(() => {
+              const distChartHeight = 220;
+              const distChartWidth = Math.max(analysis.length * 70, 350);
+              const barWidth = 45;
+              const maxCount = Math.max(...analysis.map(a => a.scores.length), 1);
+              
+              let distBars = '';
+              let distLabels = '';
+              let distGridLines = '';
+              
+              for (let i = 0; i <= 4; i++) {
+                const y = 20 + (distChartHeight - 50) * i / 4;
+                const val = Math.round(maxCount - (maxCount * i / 4));
+                distGridLines += `<line x1="30" y1="${y}" x2="${distChartWidth - 10}" y2="${y}" stroke="var(--gray-200)" stroke-width="1"/>`;
+                distGridLines += `<text x="25" y="${y + 4}" text-anchor="end" font-size="9" fill="var(--gray-400)">${val}</text>`;
+              }
+              
+              analysis.forEach((a, i) => {
+                const x = (i / (analysis.length - 1 || 1)) * (distChartWidth - 80) + 40;
+                const dist = calcScoreDistribution(a.scores, defaultScoreRanges);
+                let currentY = distChartHeight - 25;
+                
+                dist.forEach((d, j) => {
+                  const height = (d.count / maxCount) * (distChartHeight - 50);
+                  const y = currentY - height;
+                  distBars += `<rect x="${x - barWidth/2}" y="${y}" width="${barWidth}" height="${height}" fill="${d.color}" opacity="0.85"/>`;
+                  if (d.count > 0 && height > 15) {
+                    distBars += `<text x="${x}" y="${y + height/2 + 3}" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">${d.count}</text>`;
+                  }
+                  currentY = y;
+                });
+                
+                const label = (a.name || a.exam_name).length > 5 ? (a.name || a.exam_name).substring(0, 5) + '..' : (a.name || a.exam_name);
+                distLabels += `<text x="${x}" y="${distChartHeight - 5}" text-anchor="middle" font-size="9" fill="var(--gray-500)">${label}</text>`;
+              });
+              
+              return `
+                <svg width="${distChartWidth}" height="${distChartHeight}" style="display:block">
+                  ${distGridLines}
+                  ${distBars}
+                  ${distLabels}
+                </svg>
+              `;
+            })()}
+          </div>
+        </div>
+      </div>
+      
+      <div>
+        ${analysis.length >= 2 ? `
+        <div class="card anim-in anim-d3">
+          <div class="card-header">
+            <span class="card-title" style="color:var(--accent);font-size:13px">↑ 进步最大</span>
+            <span style="font-size:11px;color:var(--gray-400)">${compareLabel}</span>
+          </div>
+          <div class="card-body" style="padding:12px">
+            ${progressHtml}
+          </div>
+        </div>
+        
+        <div class="card anim-in anim-d4" style="margin-top:16px">
+          <div class="card-header">
+            <span class="card-title" style="color:var(--danger);font-size:13px">↓ 退步最大</span>
+            <span style="font-size:11px;color:var(--gray-400)">${compareLabel}</span>
+          </div>
+          <div class="card-body" style="padding:12px">
+            ${declineHtml}
+          </div>
+        </div>
+        ` : ''}
+        
+        ${continuousDeclineStudents.length > 0 ? `
+        <div class="card anim-in anim-d5" style="margin-top:16px;border-left:3px solid var(--danger)">
+          <div class="card-header">
+            <span class="card-title" style="color:var(--danger);font-size:13px">⚠ 连续下滑</span>
+            <span style="font-size:11px;color:var(--gray-400)">需重点关注</span>
+          </div>
+          <div class="card-body" style="padding:12px">
+            ${continuousDeclineStudents.map((s, i) => `
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--gray-100)">
+                <span style="width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${i + 1}</span>
+                <span style="flex:1;font-weight:500;font-size:13px;cursor:pointer;color:var(--primary)" onclick="showStudentDetailInAnalysis('${s.student}')">${s.student}</span>
+                <span style="font-size:11px;color:var(--gray-500)">${s.declineCount}次</span>
+                <span style="font-size:13px;font-weight:600;color:var(--danger)">${s.totalChange > 0 ? '+' : ''}${s.totalChange.toFixed(1)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
       </div>
     </div>
-    ` : ''}
     
-    <div class="card" style="margin-top:16px">
+    <div class="card anim-in anim-d6" style="margin-top:16px">
       <div class="card-header">
-        <span class="card-title">班级整体成绩对比</span>
-        <span style="font-size:12px;color:var(--gray-400)">各次考试关键指标对比（含变化趋势）</span>
+        <span class="card-title">各次考试数据明细</span>
+        <span style="font-size:11px;color:var(--gray-400)">点击学生姓名查看详细成绩</span>
       </div>
       <div class="card-body no-pad">
         <div class="table-wrap">
