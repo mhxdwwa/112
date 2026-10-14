@@ -36,33 +36,43 @@ export async function onRequest(context) {
       });
     }
 
-    // Upload image
+    // Upload image (binary)
     if (path === '/upload' && request.method === 'POST') {
-      const { code, image } = await request.json();
+      const code = url.searchParams.get('code');
       
-      if (!code || !image) {
-        return new Response(JSON.stringify({ error: 'Missing code or image' }), {
+      if (!code) {
+        return new Response(JSON.stringify({ error: 'Missing code parameter' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
-      const existing = await env.IMAGE_KV.get(`pair:${code}`);
+      const existing = await env.IMAGE_KV.get(`pair:${code}`, { type: 'text' });
       if (existing === null) {
-        return new Response(JSON.stringify({ error: 'Invalid or expired code' }), {
+        return new Response(JSON.stringify({ error: 'Invalid or expired pairing code' }), {
           status: 404,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
-      await env.IMAGE_KV.put(`pair:${code}`, image, { expirationTtl: 1800 });
+      // Get content type from request
+      const contentType = request.headers.get('Content-Type') || 'image/webp';
       
-      return new Response(JSON.stringify({ success: true }), {
+      // Store binary image directly (much faster than base64)
+      const imageBuffer = await request.arrayBuffer();
+      
+      // Store image binary with metadata
+      await env.IMAGE_KV.put(`pair:${code}`, imageBuffer, { 
+        expirationTtl: 1800,
+        metadata: { contentType: contentType }
+      });
+      
+      return new Response(JSON.stringify({ success: true, size: imageBuffer.byteLength }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Check for image
+    // Check for image (returns binary or 204)
     if (path.startsWith('/check/') && request.method === 'GET') {
       const code = path.split('/check/')[1];
       
@@ -73,16 +83,37 @@ export async function onRequest(context) {
         });
       }
 
-      const image = await env.IMAGE_KV.get(`pair:${code}`);
+      // Get image as ArrayBuffer
+      const imageBuffer = await env.IMAGE_KV.get(`pair:${code}`, { type: 'arrayBuffer' });
       
-      if (image === null || image === '') {
-        return new Response(JSON.stringify({ hasImage: false }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      if (imageBuffer === null) {
+        // No image - return 204 No Content
+        return new Response(null, { 
+          status: 204,
+          headers: corsHeaders 
         });
       }
 
-      return new Response(JSON.stringify({ hasImage: true, image }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      // Check if it's empty placeholder
+      if (imageBuffer.byteLength === 0) {
+        return new Response(null, { 
+          status: 204,
+          headers: corsHeaders 
+        });
+      }
+
+      // Get metadata for content type
+      const { value, metadata } = await env.IMAGE_KV.getWithMetadata(`pair:${code}`, { type: 'arrayBuffer' });
+      const contentType = metadata?.contentType || 'image/webp';
+
+      // Return binary image directly (much faster than JSON with base64)
+      return new Response(value, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': contentType,
+          'Content-Length': value.byteLength.toString(),
+          'Cache-Control': 'no-cache'
+        }
       });
     }
 
