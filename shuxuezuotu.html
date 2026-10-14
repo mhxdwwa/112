@@ -3561,16 +3561,15 @@ async function checkForImage(){
   }
 }
 
-// Fallback polling (every 2s, only used if WebSocket fails)
+// Fallback polling (every 1s, runs alongside WebSocket as backup)
 function startFallbackPolling(){
   if(IMG_STATE.pollTimer) clearInterval(IMG_STATE.pollTimer);
-  IMG_STATE.pollTimer=setInterval(fallbackCheck,2000);
+  IMG_STATE.pollTimer=setInterval(fallbackCheck,1000);
 }
 
 async function fallbackCheck(){
-  // Only poll if WebSocket is not connected
-  if(IMG_STATE.wsConnected||!IMG_STATE.pairCode||IMG_STATE.loading) return;
-  console.log('[Fallback] Polling...');
+  // Always poll as backup - WebSocket may not get notification if upload goes through different route
+  if(!IMG_STATE.pairCode||IMG_STATE.loading) return;
   // Check flag only
   try{
     const res=await fetch(IMG_STATE.apiBase+'/check/'+IMG_STATE.pairCode);
