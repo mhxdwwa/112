@@ -189,7 +189,6 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
       <button class="image-ctrl-btn" id="imgMoveMode" title="拖动图片">✋ 拖动</button>
       <button class="image-ctrl-btn" id="imgScaleUp" title="放大图片">+</button>
       <button class="image-ctrl-btn" id="imgScaleDown" title="缩小图片">-</button>
-      <button class="image-ctrl-btn" id="imgOpacity" title="调整透明度">透明</button>
       <button class="image-ctrl-btn danger" id="imgRemove" title="移除图片">✕ 移除</button>
     </div>
     <div class="unfold-panel" id="unfoldPanel">
@@ -264,7 +263,7 @@ const IMG_STATE = {
   image: null,           // HTMLImageElement
   x: 0, y: 0,           // position in canvas pixels
   scale: 1,              // image scale factor
-  opacity: 0.6,          // transparency
+  opacity: 1.0,          // transparency (always 100%)
   dragging: false,
   dragStartX: 0, dragStartY: 0,
   imgStartX: 0, imgStartY: 0,
@@ -3470,7 +3469,7 @@ function loadImage(imageUrl){
       IMG_STATE.scale=scale;
       IMG_STATE.x=(W-img.naturalWidth*scale)/2;
       IMG_STATE.y=(H-img.naturalHeight*scale)/2;
-      IMG_STATE.opacity=0.6;
+      IMG_STATE.opacity=1.0;
       // Enable image layer
       imgC.style.pointerEvents='auto';
       // Show image controls
@@ -3587,15 +3586,6 @@ document.getElementById('imgScaleUp').addEventListener('click',()=>{
 
 document.getElementById('imgScaleDown').addEventListener('click',()=>{
   IMG_STATE.scale*=0.83;
-  drawImage();
-});
-
-document.getElementById('imgOpacity').addEventListener('click',function(){
-  // Cycle through opacity levels
-  const levels=[0.3,0.5,0.7,0.9];
-  const idx=levels.indexOf(IMG_STATE.opacity);
-  IMG_STATE.opacity=levels[(idx+1)%levels.length];
-  this.textContent='透明 '+Math.round(IMG_STATE.opacity*100)+'%';
   drawImage();
 });
 
