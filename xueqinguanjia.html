@@ -7055,6 +7055,11 @@ function renderClassAnalysis() {
   const firstExam = analysis[0];
   const lastExam = analysis[analysis.length - 1];
   
+  // 对比标签（显示对比的是哪两次考试）
+  const firstName = firstExam.name || firstExam.exam_name || '第一次考试';
+  const lastName = lastExam.name || lastExam.exam_name || '最后一次考试';
+  const compareLabel = analysis.length >= 2 ? `${firstName} → ${lastName}` : '';
+  
   // 平均分变化
   let avgChange = '';
   let avgChangeColor = 'var(--gray-400)';
