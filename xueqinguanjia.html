@@ -6932,10 +6932,6 @@ function renderClassAnalysis() {
   // === 步骤1：选择班级和科目 ===
   if (!data) {
     const classOptions = teacherClasses.map(c => `<option value="${c}">${c}</option>`).join('');
-    const subjects = [...new Set(scoreExamsCache.map(e => e.subject))];
-    const subjectOptions = subjects.length > 0 
-      ? subjects.map(s => `<option value="${s}">${s}</option>`).join('')
-      : '<option value="">暂无科目数据</option>';
     
     return `
       <div class="toolbar">
@@ -6947,22 +6943,21 @@ function renderClassAnalysis() {
       <div class="card">
         <div class="card-header">
           <span class="card-title">选择班级和科目</span>
-          <span style="font-size:12px;color:var(--gray-400)">选择后可进一步选择要对比的考试</span>
+          <span style="font-size:12px;color:var(--gray-400)">选择班级后自动加载该班级的科目</span>
         </div>
         <div class="card-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:500px">
             <div class="form-group">
               <label class="form-label">班级</label>
-              <select class="form-input" id="analysisClass">
+              <select class="form-input" id="analysisClass" onchange="onAnalysisClassChange()">
                 <option value="">请选择班级</option>
                 ${classOptions}
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">科目</label>
-              <select class="form-input" id="analysisSubject">
-                <option value="">请选择科目</option>
-                ${subjectOptions}
+              <select class="form-input" id="analysisSubject" disabled>
+                <option value="">请先选择班级</option>
               </select>
             </div>
           </div>
@@ -7036,18 +7031,10 @@ function renderClassAnalysis() {
   }
   
   // === 步骤3：分析结果 ===
-  console.log('[ScoreDebug] Step 3 - selectedIds:', data.selectedIds);
-  console.log('[ScoreDebug] Step 3 - allAnalysis length:', allAnalysis.length);
   // 按 selectedIds 的顺序过滤并排序（兼容字符串和数字类型的id）
   const analysis = data.selectedIds
-    .map(id => {
-      const found = allAnalysis.find(a => String(a.id) === String(id));
-      if (!found) console.log('[ScoreDebug] No match for id:', id, 'type:', typeof id);
-      return found;
-    })
+    .map(id => allAnalysis.find(a => String(a.id) === String(id)))
     .filter(Boolean);
-  
-  console.log('[ScoreDebug] Step 3 - filtered analysis length:', analysis.length);
   
   if (analysis.length === 0) {
     return `
@@ -7280,30 +7267,49 @@ function submitClassAnalysis() {
   loadClassAnalysis(cls, subject);
 }
 
+// 班级选择变化时，动态加载该班级的科目列表
+async function onAnalysisClassChange() {
+  const cls = document.getElementById('analysisClass').value;
+  const subjectSelect = document.getElementById('analysisSubject');
+  
+  if (!cls) {
+    subjectSelect.innerHTML = '<option value="">请先选择班级</option>';
+    subjectSelect.disabled = true;
+    return;
+  }
+  
+  subjectSelect.innerHTML = '<option value="">加载中...</option>';
+  subjectSelect.disabled = true;
+  
+  // 从API获取该班级的所有考试（不限teacher），提取科目
+  const result = await xqApi('exams', { action: 'list', class: cls });
+  if (result.ok && result.exams && result.exams.length > 0) {
+    const subjects = [...new Set(result.exams.map(e => e.subject))];
+    subjectSelect.innerHTML = '<option value="">请选择科目</option>' + 
+      subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+    subjectSelect.disabled = false;
+  } else {
+    subjectSelect.innerHTML = '<option value="">该班级暂无成绩记录</option>';
+  }
+}
+
 function submitExamSelection() {
   const checked = [];
   document.querySelectorAll('.exam-check:checked').forEach(c => {
-    checked.push(c.value); // 保持字符串类型，与API返回的id一致
+    checked.push(c.value);
   });
-  
-  console.log('[ScoreDebug] checked values:', checked);
-  console.log('[ScoreDebug] analysis ids:', classAnalysisData.analysis.map(a => a.id));
   
   if (checked.length < 2) {
     showToast('请至少选择2次考试', 'warning');
     return;
   }
   
-  // 按原始顺序（日期升序）保留，用字符串比较
+  // 按原始顺序（日期升序）保留
   const ordered = classAnalysisData.analysis
     .filter(a => checked.includes(String(a.id)))
     .map(a => a.id);
   
-  console.log('[ScoreDebug] ordered selected ids:', ordered);
-  
   classAnalysisData.selectedIds = ordered;
-  console.log('[ScoreDebug] classAnalysisData.selectedIds set:', classAnalysisData.selectedIds);
-  
   navigate('score-manage');
 }
 
