@@ -170,7 +170,7 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
       <div class="mobile-upload-status" id="mobileUploadStatus"></div>
       <button class="mobile-upload-btn" id="mobileCloseBtn" style="background:#6b7280;margin-top:8px;padding:10px 20px;font-size:14px;display:none;">关闭</button>
     </div>
-    <div class="status"><span id="sHint">选择工具开始作图</span><span id="sCoord">(0, 0)</span><span id="sZoom">100%</span><span id="s3D" style="display:none;color:var(--blue)">3D视角 ← → ↑ ↓</span></div>
+    <div class="status"><span id="sHint">选择工具开始作图</span><span id="sCoord">(0, 0)</span><span id="s3D" style="display:none;color:var(--blue)">3D视角 ← → ↑ ↓</span></div>
     <!-- Image controls for uploaded image -->
     <div class="image-controls" id="imageControls">
       <button class="image-ctrl-btn" id="imgMoveMode" title="拖动图片">✋ 拖动</button>
@@ -1975,7 +1975,7 @@ mainC.addEventListener('pointermove',function(e){
         G.ox=newCenterPx.x-pinchCenterMath.x*G.scale;
         G.oy=newCenterPx.y+pinchCenterMath.y*G.scale;
         drawBg();draw();
-        document.getElementById('sZoom').textContent=Math.round(G.scale/40*100)+'%';
+        // sZoom removed
       }
     }
   }
