@@ -256,9 +256,7 @@ const IMG_STATE = {
   imgStartX: 0, imgStartY: 0,
   moveMode: false,       // whether in image move mode
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
-  workerUrl: 'https://mathlab-image-relay.444522621.workers.dev',  // Worker URL for WebSocket
-  apiBase: '/api/image-relay',  // Pages Function base URL (fallback)
-  useWorker: false,      // Whether to use Worker or Pages Function
+  apiBase: '/api/image-relay',  // Pages Function base URL (via wscls.cn)
   pairCode: null,
   pollTimer: null,
   generation: 0,         // race condition guard: stale poll responses are ignored
@@ -3369,12 +3367,6 @@ function stopPhotoUpload(){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
   }
-  // Close WebSocket
-  if(IMG_STATE.ws){
-    try{ IMG_STATE.ws.close(); }catch(e){}
-    IMG_STATE.ws=null;
-    IMG_STATE.wsConnected=false;
-  }
   IMG_STATE.pairCode=null;
   IMG_STATE.loading=false;
   // Clean up blob URL
@@ -3384,7 +3376,7 @@ function stopPhotoUpload(){
   }
 }
 
-// Generate pairing code - try Worker first, fallback to Pages Function
+// Generate pairing code via Pages Function (wscls.cn)
 async function generatePairCode(){
   const statusEl=document.getElementById('pairCodeStatus');
   if(statusEl){
@@ -3392,60 +3384,22 @@ async function generatePairCode(){
     statusEl.className='pair-code-status';
   }
   
-  // Try Worker first (supports WebSocket for instant notifications)
   try{
-    console.log('[Photo] Trying Worker...');
-    const controller=new AbortController();
-    const timeoutId=setTimeout(()=>controller.abort(),3000); // 3s timeout
-    
-    const res=await fetch(IMG_STATE.workerUrl+'/api/pair',{
-      method:'POST',
-      signal:controller.signal
-    });
-    clearTimeout(timeoutId);
-    
-    const data=await res.json();
-    if(!data.code) throw new Error('No code returned');
-    
-    IMG_STATE.pairCode=data.code;
-    IMG_STATE.useWorker=true;
-    document.getElementById('pairCodeValue').textContent=data.code;
-    
-    // Connect WebSocket for instant notifications
-    connectWebSocket(data.code);
-    
-    // Start fallback polling (in case WebSocket fails)
-    startFallbackPolling();
-    
-    if(statusEl){
-      statusEl.textContent='等待手机上传...';
-      statusEl.className='pair-code-status';
-    }
-    console.log('[Photo] Using Worker mode');
-    return;
-  }catch(e){
-    console.warn('[Photo] Worker failed, falling back to Pages Function:',e.message);
-  }
-  
-  // Fallback to Pages Function (polling mode)
-  try{
-    console.log('[Photo] Using Pages Function...');
     const res=await fetch(IMG_STATE.apiBase+'/pair',{method:'POST'});
     const data=await res.json();
     if(!data.code) throw new Error('No code returned');
     
     IMG_STATE.pairCode=data.code;
-    IMG_STATE.useWorker=false;
     document.getElementById('pairCodeValue').textContent=data.code;
     
-    // Start polling
+    // Start polling for new images
     startPolling();
     
     if(statusEl){
       statusEl.textContent='等待手机上传...';
       statusEl.className='pair-code-status';
     }
-    console.log('[Photo] Using Pages Function mode');
+    console.log('[Photo] Pair code generated, polling started');
   }catch(e){
     console.error('[Photo] Failed to generate pair code:',e);
     document.getElementById('pairCodeValue').textContent='ERROR';
@@ -3453,64 +3407,7 @@ async function generatePairCode(){
   }
 }
 
-// Connect WebSocket for real-time image notifications
-function connectWebSocket(code){
-  if(IMG_STATE.ws){
-    try{ IMG_STATE.ws.close(); }catch(e){}
-  }
-  
-  const wsUrl=IMG_STATE.workerUrl.replace('https://','wss://').replace('http://','ws://');
-  const ws=new WebSocket(wsUrl+'/ws');
-  IMG_STATE.ws=ws;
-  
-  ws.onopen=()=>{
-    console.log('[WebSocket] Connected, registering code:',code);
-    ws.send(JSON.stringify({type:'register',code:code}));
-  };
-  
-  ws.onmessage=(event)=>{
-    try{
-      const msg=JSON.parse(event.data);
-      console.log('[WebSocket] Message:',msg);
-      
-      if(msg.type==='registered'){
-        IMG_STATE.wsConnected=true;
-        console.log('[WebSocket] Registered successfully');
-        const statusEl=document.getElementById('pairCodeStatus');
-        if(statusEl) statusEl.textContent='已连接 (实时模式)';
-      }
-      
-      if(msg.type==='image_ready' && msg.code===IMG_STATE.pairCode){
-        // Instant notification! Download and display image
-        console.log('[WebSocket] Image ready!',msg.size,'bytes');
-        handleImageReady(msg.size);
-      }
-    }catch(e){
-      console.error('[WebSocket] Message parse error:',e);
-    }
-  };
-  
-  ws.onclose=()=>{
-    console.log('[WebSocket] Closed');
-    IMG_STATE.wsConnected=false;
-    // Reconnect after 2s if still active
-    if(IMG_STATE.pairCode && IMG_STATE.ws===ws){
-      setTimeout(()=>{
-        if(IMG_STATE.pairCode && !IMG_STATE.wsConnected){
-          console.log('[WebSocket] Reconnecting...');
-          connectWebSocket(IMG_STATE.pairCode);
-        }
-      },2000);
-    }
-  };
-  
-  ws.onerror=(e)=>{
-    console.error('[WebSocket] Error:',e);
-    IMG_STATE.wsConnected=false;
-  };
-}
-
-// Handle image ready notification (from WebSocket or fallback poll)
+// Handle image ready notification (from polling)
 async function handleImageReady(sizeHint){
   if(!IMG_STATE.pairCode||IMG_STATE.loading) return;
   const gen=IMG_STATE.generation;
@@ -3523,9 +3420,8 @@ async function handleImageReady(sizeHint){
   }
   
   try{
-    // Download image - use Worker or Pages Function based on mode
-    const baseUrl=IMG_STATE.useWorker?IMG_STATE.workerUrl+'/api':IMG_STATE.apiBase;
-    const imgRes=await fetch(baseUrl+'/download/'+IMG_STATE.pairCode);
+    // Download image from Pages Function
+    const imgRes=await fetch(IMG_STATE.apiBase+'/download/'+IMG_STATE.pairCode);
     if(gen!==IMG_STATE.generation){IMG_STATE.loading=false;return;}
     
     if(imgRes.status===200){
@@ -3543,7 +3439,7 @@ async function handleImageReady(sizeHint){
       
       // Clear image from server
       try{
-        await fetch(baseUrl+'/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
+        await fetch(IMG_STATE.apiBase+'/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
       }catch(e){}
       
       IMG_STATE.generation++;
@@ -3577,7 +3473,7 @@ function startPolling(){
 }
 
 async function checkForImage(){
-  if(!IMG_STATE.pairCode||IMG_STATE.loading||IMG_STATE.useWorker)return;
+  if(!IMG_STATE.pairCode||IMG_STATE.loading)return;
   const gen=IMG_STATE.generation;
   try{
     // Check flag only (reads ~50 bytes, very fast)
@@ -3596,26 +3492,6 @@ async function checkForImage(){
   }catch(e){
     console.error('[Photo] Poll error:',e);
   }
-}
-
-// Fallback polling (every 2s, only used if WebSocket fails)
-function startFallbackPolling(){
-  if(IMG_STATE.pollTimer) clearInterval(IMG_STATE.pollTimer);
-  IMG_STATE.pollTimer=setInterval(fallbackCheck,2000);
-}
-
-async function fallbackCheck(){
-  // Only poll if WebSocket is not connected
-  if(IMG_STATE.wsConnected||!IMG_STATE.pairCode||IMG_STATE.loading||!IMG_STATE.useWorker) return;
-  console.log('[Fallback] Polling...');
-  // Try downloading directly - if image exists, handle it
-  try{
-    const res=await fetch(IMG_STATE.workerUrl+'/api/download/'+IMG_STATE.pairCode);
-    if(res.status===200){
-      const size=parseInt(res.headers.get('Content-Length'))||0;
-      await handleImageReady(size);
-    }
-  }catch(e){}
 }
 
 // Load image from URL (blob URL or data URL)
@@ -3686,26 +3562,13 @@ async function handleMobileFile(e){
     const compSizeKB=Math.round(blob.size/1024);
     status.textContent='正在上传 ('+origSizeKB+'KB→'+compSizeKB+'KB)...';
     
-    // Try Worker first, fallback to Pages Function
+    // Upload to Pages Function (wscls.cn)
     let res;
-    try{
-      const controller=new AbortController();
-      const timeoutId=setTimeout(()=>controller.abort(),5000); // 5s timeout
-      res=await fetch(IMG_STATE.workerUrl+'/api/upload?code='+encodeURIComponent(code),{
-        method:'POST',
-        headers:{'Content-Type': blob.type || 'image/jpeg'},
-        body: blob,
-        signal:controller.signal
-      });
-      clearTimeout(timeoutId);
-    }catch(workerErr){
-      console.warn('[Mobile] Worker upload failed, trying Pages Function:',workerErr.message);
-      res=await fetch(IMG_STATE.apiBase+'/upload?code='+encodeURIComponent(code),{
-        method:'POST',
-        headers:{'Content-Type': blob.type || 'image/jpeg'},
-        body: blob
-      });
-    }
+    res=await fetch(IMG_STATE.apiBase+'/upload?code='+encodeURIComponent(code),{
+      method:'POST',
+      headers:{'Content-Type': blob.type || 'image/jpeg'},
+      body: blob
+    });
     
     const data=await res.json();
     if(data.success){
@@ -3726,87 +3589,118 @@ async function handleMobileFile(e){
   }
 }
 
-// Compress image using canvas → JPEG, targeting ~1MB file size
-// Dynamically adjusts quality and resolution to balance clarity and speed
-function compressImage(file,targetSizeMB){
-  const TARGET_SIZE=targetSizeMB*1024*1024; // Convert MB to bytes
+// Compress image to target ~500KB for fast transfer
+// Uses fast single-pass approach: cap resolution + single JPEG compression
+async function compressImage(file,targetSizeMB){
+  const TARGET_SIZE=targetSizeMB*1024*1024;
+  const MAX_WIDTH=1600; // Cap resolution for fast processing
+  console.log('[Compress] Original:',file.name,Math.round(file.size/1024)+'KB',file.type);
+  
+  // Use createImageBitmap for fast decoding (much faster than Image + DataURL)
+  let bitmap;
+  try{
+    bitmap=await createImageBitmap(file);
+  }catch(e){
+    // Fallback for older browsers
+    console.warn('[Compress] createImageBitmap failed, using Image fallback');
+    return compressImageFallback(file,targetSizeMB);
+  }
+  
+  let origW=bitmap.width,origH=bitmap.height;
+  console.log('[Compress] Dimensions:',origW,'x',origH);
+  
+  // Calculate target dimensions (cap at MAX_WIDTH, maintain aspect ratio)
+  let scale=1;
+  if(origW>MAX_WIDTH) scale=MAX_WIDTH/origW;
+  let targetW=Math.round(origW*scale);
+  let targetH=Math.round(origH*scale);
+  
+  // Try compression with decreasing quality until under target
+  const qualities=[0.7,0.6,0.5,0.4];
+  
+  for(let i=0;i<qualities.length;i++){
+    const quality=qualities[i];
+    const canvas=document.createElement('canvas');
+    canvas.width=targetW;
+    canvas.height=targetH;
+    const ctx=canvas.getContext('2d');
+    ctx.imageSmoothingEnabled=true;
+    ctx.imageSmoothingQuality='high';
+    ctx.drawImage(bitmap,0,0,targetW,targetH);
+    
+    const blob=await new Promise(resolve=>{
+      canvas.toBlob(resolve,'image/jpeg',quality);
+    });
+    
+    if(blob && blob.size>0){
+      console.log('[Compress] q='+quality+':',Math.round(blob.size/1024)+'KB');
+      // If under target or at lowest quality, return result
+      if(blob.size<=TARGET_SIZE || i===qualities.length-1){
+        bitmap.close();
+        return blob;
+      }
+    }
+  }
+  
+  // If still too large at max width, try reducing resolution further
+  targetW=Math.round(targetW*0.7);
+  targetH=Math.round(targetH*0.7);
+  const canvas=document.createElement('canvas');
+  canvas.width=targetW;
+  canvas.height=targetH;
+  const ctx=canvas.getContext('2d');
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality='high';
+  ctx.drawImage(bitmap,0,0,targetW,targetH);
+  bitmap.close();
+  
+  const blob=await new Promise(resolve=>{
+    canvas.toBlob(resolve,'image/jpeg',0.5);
+  });
+  console.log('[Compress] Reduced resolution:',targetW,'x',targetH,'=',Math.round(blob.size/1024)+'KB');
+  return blob||new Blob([file],{type:'image/jpeg'});
+}
+
+// Fallback for browsers without createImageBitmap
+function compressImageFallback(file,targetSizeMB){
+  const TARGET_SIZE=targetSizeMB*1024*1024;
   return new Promise((resolve,reject)=>{
-    console.log('[Compress] Original file:',file.name,'size:',Math.round(file.size/1024)+'KB','type:',file.type);
     const reader=new FileReader();
     reader.onload=(e)=>{
       const img=new Image();
       img.onload=()=>{
-        let origW=img.naturalWidth,origH=img.naturalHeight;
-        console.log('[Compress] Image dimensions:',origW,'x',origH);
+        const MAX_WIDTH=1600;
+        let scale=Math.min(1,MAX_WIDTH/img.naturalWidth);
+        let w=Math.round(img.naturalWidth*scale);
+        let h=Math.round(img.naturalHeight*scale);
         
-        const qualities=[0.9,0.8,0.7,0.6,0.5];
-        const scales=[1,0.8,0.6,0.5]; // Resolution scale factors
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality='high';
+        ctx.drawImage(img,0,0,w,h);
         
-        let qualityIndex=0;
-        let scaleIndex=0;
-        
-        function tryCompress(){
-          const scale=scales[scaleIndex];
-          const currentW=Math.round(origW*scale);
-          const currentH=Math.round(origH*scale);
-          const quality=qualities[qualityIndex];
-          
-          const canvas=document.createElement('canvas');
-          canvas.width=currentW;
-          canvas.height=currentH;
-          const ctx=canvas.getContext('2d');
-          ctx.imageSmoothingEnabled=true;
-          ctx.imageSmoothingQuality='high';
-          ctx.drawImage(img,0,0,currentW,currentH);
-          
-          console.log('[Compress] Trying:',currentW,'x',currentH,'(scale:'+scale+')','quality:',quality);
-          
-          if(typeof canvas.toBlob==='function'){
-            canvas.toBlob((blob)=>{
-              if(blob && blob.size>0){
-                console.log('[Compress] Result:',Math.round(blob.size/1024)+'KB','type:',blob.type);
-                // If under target size, we're done
-                if(blob.size<=TARGET_SIZE){
-                  resolve(blob);
-                }else if(qualityIndex<qualities.length-1){
-                  // Try lower quality at same resolution
-                  qualityIndex++;
-                  tryCompress();
-                }else if(scaleIndex<scales.length-1){
-                  // Tried all qualities, reduce resolution
-                  qualityIndex=0;
-                  scaleIndex++;
-                  tryCompress();
-                }else{
-                  // Tried everything, use this result
-                  console.warn('[Compress] Could not reach target size, using best result');
-                  resolve(blob);
-                }
-              }else{
-                // toBlob failed, use fallback
-                console.warn('[Compress] toBlob returned null, using toDataURL fallback');
-                const dataUrl=canvas.toDataURL('image/jpeg',quality);
-                const byteString=atob(dataUrl.split(',')[1]);
-                const ab=new ArrayBuffer(byteString.length);
-                const ia=new Uint8Array(ab);
-                for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
-                resolve(new Blob([ab],{type:'image/jpeg'}));
-              }
-            },'image/jpeg',quality);
-          }else{
-            // Very old browser without toBlob support
-            console.warn('[Compress] toBlob not supported, using toDataURL fallback');
-            const dataUrl=canvas.toDataURL('image/jpeg',quality);
-            const byteString=atob(dataUrl.split(',')[1]);
-            const ab=new ArrayBuffer(byteString.length);
-            const ia=new Uint8Array(ab);
-            for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
-            resolve(new Blob([ab],{type:'image/jpeg'}));
-          }
+        if(typeof canvas.toBlob==='function'){
+          canvas.toBlob((blob)=>{
+            if(blob&&blob.size>0) resolve(blob);
+            else{
+              const dataUrl=canvas.toDataURL('image/jpeg',0.6);
+              const byteString=atob(dataUrl.split(',')[1]);
+              const ab=new ArrayBuffer(byteString.length);
+              const ia=new Uint8Array(ab);
+              for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
+              resolve(new Blob([ab],{type:'image/jpeg'}));
+            }
+          },'image/jpeg',0.6);
+        }else{
+          const dataUrl=canvas.toDataURL('image/jpeg',0.6);
+          const byteString=atob(dataUrl.split(',')[1]);
+          const ab=new ArrayBuffer(byteString.length);
+          const ia=new Uint8Array(ab);
+          for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
+          resolve(new Blob([ab],{type:'image/jpeg'}));
         }
-        
-        // Start with original resolution and highest quality
-        tryCompress();
       };
       img.onerror=()=>reject(new Error('Failed to load image'));
       img.src=e.target.result;
@@ -3849,12 +3743,6 @@ document.getElementById('imgRemove').addEventListener('click',()=>{
   if(IMG_STATE.pollTimer){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
-  }
-  // Close WebSocket
-  if(IMG_STATE.ws){
-    try{ IMG_STATE.ws.close(); }catch(e){}
-    IMG_STATE.ws=null;
-    IMG_STATE.wsConnected=false;
   }
   imgC.style.pointerEvents='none';
   document.getElementById('imageControls').classList.remove('on');
