@@ -3536,7 +3536,7 @@ async function handleMobileFile(e){
     // Compress image to ~1MB for fast transfer while keeping clarity
     const origSizeKB=Math.round(file.size/1024);
     status.textContent='正在压缩图片 ('+origSizeKB+'KB)...';
-    const blob=await compressImage(file,1); // Target 1MB
+    const blob=await compressImage(file,0.5); // Target 500KB
     const compSizeKB=Math.round(blob.size/1024);
     // Upload binary directly (much faster than base64+JSON)
     status.textContent='正在上传 ('+origSizeKB+'KB→'+compSizeKB+'KB)...';
