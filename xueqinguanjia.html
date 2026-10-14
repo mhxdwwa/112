@@ -5701,8 +5701,12 @@ function exportAdminRoster(cls) {
 
 /* ===== SCORE MANAGEMENT ===== */
 let scoreExamsCache = [];
-let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail'
+let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail' | 'headteacher-overview' | 'student-history'
 let scoreCurrentExam = null;
+let scoreClassSummaryCache = {};
+let scoreStudentHistoryCache = [];
+let scoreCurrentStudent = null;
+let scoreCurrentSubject = null;
 
 async function loadScoreExams() {
   const teacher = xqCurrentUser?.teacherName;
@@ -5712,11 +5716,26 @@ async function loadScoreExams() {
   }
 }
 
+async function loadClassScoreSummary(className) {
+  const result = await xqApi('exams', { action: 'class_summary', class: className });
+  if (result.ok) {
+    scoreClassSummaryCache = result.summary || {};
+  }
+}
+
+async function loadStudentScoreHistory(student, subject, className) {
+  const result = await xqApi('exams', { action: 'student_history', student, subject, class: className });
+  if (result.ok) {
+    scoreStudentHistoryCache = result.history || [];
+  }
+}
+
 function renderScoreManage() {
   if (scoreCurrentView === 'create') return renderScoreCreate();
   if (scoreCurrentView === 'detail' && scoreCurrentExam) return renderScoreDetail();
+  if (scoreCurrentView === 'headteacher-overview') return renderHeadteacherOverview();
+  if (scoreCurrentView === 'student-history') return renderStudentHistory();
   
-  // 考试列表视图
   const isHeadteacher = xqCurrentUser?.isHeadteacher;
   const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
   
@@ -5733,11 +5752,14 @@ function renderScoreManage() {
         <td>${exam.teacher}</td>
         <td>
           <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="viewScoreDetail('${exam.id}')">查看</button>
-          <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteExam('${exam.id}','${exam.exam_name}')">删除</button>
+          ${isHeadteacher ? '' : `<button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteExam('${exam.id}','${exam.exam_name}')">删除</button>`}
         </td>
       </tr>
     `).join('');
   }
+  
+  // 班主任可以看到全班成绩总览按钮
+  const headteacherBtn = isHeadteacher ? `<button class="toolbar-btn ghost" style="font-size:12px" onclick="showHeadteacherOverview()">📊 全班成绩总览</button>` : '';
   
   return `
     <div class="toolbar">
@@ -5745,6 +5767,7 @@ function renderScoreManage() {
         <span style="font-size:14px;color:var(--gray-600)">管理学生平时测验成绩，支持手动录入和Excel导入</span>
       </div>
       <div class="toolbar-spacer"></div>
+      ${headteacherBtn}
       <button class="toolbar-btn primary" onclick="showScoreCreate()">+ 新建考试</button>
     </div>
     
@@ -5763,7 +5786,7 @@ function renderScoreManage() {
                 <th>科目</th>
                 <th>考试日期</th>
                 <th>录入教师</th>
-                <th style="width:140px">操作</th>
+                <th style="width:${isHeadteacher ? '80px' : '140px'}">操作</th>
               </tr>
             </thead>
             <tbody>${examListHtml}</tbody>
@@ -5964,12 +5987,23 @@ async function viewScoreDetail(examId) {
 function renderScoreDetail() {
   const exam = scoreCurrentExam;
   const scores = exam.scores || [];
+  const isHeadteacher = xqCurrentUser?.isHeadteacher;
   
   // 计算统计
   const scoreValues = scores.map(s => s.score);
   const avg = scoreValues.length > 0 ? (scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length).toFixed(1) : 0;
   const max = scoreValues.length > 0 ? Math.max(...scoreValues) : 0;
   const min = scoreValues.length > 0 ? Math.min(...scoreValues) : 0;
+  
+  // 计算标准差
+  const variance = scoreValues.length > 0 ? scoreValues.reduce((sum, s) => sum + Math.pow(s - avg, 2), 0) / scoreValues.length : 0;
+  const stdDev = Math.sqrt(variance).toFixed(1);
+  
+  // 及格率和优秀率
+  const passCount = scoreValues.filter(s => s >= 60).length;
+  const excellentCount = scoreValues.filter(s => s >= 90).length;
+  const passRate = scoreValues.length > 0 ? ((passCount / scoreValues.length) * 100).toFixed(1) : 0;
+  const excellentRate = scoreValues.length > 0 ? ((excellentCount / scoreValues.length) * 100).toFixed(1) : 0;
   
   // 分数段统计
   const ranges = [
@@ -5984,13 +6018,17 @@ function renderScoreDetail() {
     if (range) range.count++;
   });
   
-  const scoreRows = scores.map((s, i) => `
-    <tr>
-      <td>${i + 1}</td>
-      <td style="font-weight:500">${s.student}</td>
-      <td><span style="font-size:16px;font-weight:600;color:${s.score >= 90 ? 'var(--accent)' : s.score >= 60 ? 'var(--gray-800)' : 'var(--danger)'}">${s.score}</span></td>
-    </tr>
-  `).join('');
+  const scoreRows = scores.map((s, i) => {
+    const historyBtn = isHeadteacher ? `<button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="showStudentHistory('${s.student}','${exam.subject}')">历史</button>` : '';
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td style="font-weight:500">${s.student}</td>
+        <td><span style="font-size:16px;font-weight:600;color:${s.score >= 90 ? 'var(--accent)' : s.score >= 60 ? 'var(--gray-800)' : 'var(--danger)'}">${s.score}</span></td>
+        <td>${historyBtn}</td>
+      </tr>
+    `;
+  }).join('');
   
   return `
     <div class="toolbar">
@@ -6008,14 +6046,17 @@ function renderScoreDetail() {
       <div class="stat-card green anim-in anim-d2">
         <div class="stat-label">平均分</div>
         <div class="stat-value">${avg}</div>
+        <div class="stat-sub">标准差 ${stdDev}</div>
       </div>
       <div class="stat-card green anim-in anim-d3">
-        <div class="stat-label">最高分</div>
-        <div class="stat-value">${max}</div>
+        <div class="stat-label">及格率</div>
+        <div class="stat-value">${passRate}%</div>
+        <div class="stat-sub">${passCount}/${scores.length}人及格</div>
       </div>
       <div class="stat-card orange anim-in anim-d4">
-        <div class="stat-label">最低分</div>
-        <div class="stat-value">${min}</div>
+        <div class="stat-label">优秀率</div>
+        <div class="stat-value">${excellentRate}%</div>
+        <div class="stat-sub">${excellentCount}/${scores.length}人优秀</div>
       </div>
     </div>
     
@@ -6029,7 +6070,7 @@ function renderScoreDetail() {
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
               <span style="width:60px;font-size:13px;color:var(--gray-600)">${r.label}</span>
               <div style="flex:1;height:20px;background:var(--gray-100);border-radius:4px;overflow:hidden">
-                <div style="height:100%;width:${scores.length > 0 ? (r.count / scores.length * 100) : 0}%;background:var(--primary);transition:width 0.3s"></div>
+                <div style="height:100%;width:${scores.length > 0 ? (r.count / scores.length * 100) : 0}%;background:${r.min >= 90 ? 'var(--accent)' : r.min >= 60 ? 'var(--primary)' : 'var(--danger)'};transition:width 0.3s"></div>
               </div>
               <span style="width:40px;text-align:right;font-size:13px;font-weight:500">${r.count}人</span>
             </div>
@@ -6080,6 +6121,7 @@ function renderScoreDetail() {
                 <th style="width:60px">排名</th>
                 <th>学生姓名</th>
                 <th style="width:100px">分数</th>
+                ${isHeadteacher ? '<th style="width:80px">操作</th>' : ''}
               </tr>
             </thead>
             <tbody>${scoreRows}</tbody>
@@ -6168,6 +6210,341 @@ async function handleScoreExcelImport(event) {
   
   // 清空input以便下次可以再次导入同一文件
   event.target.value = '';
+}
+
+// ===== HEADTEACHER: 全班成绩总览 =====
+function showHeadteacherOverview() {
+  scoreCurrentView = 'headteacher-overview';
+  const cls = getHeadteacherClass();
+  if (!cls) {
+    showToast('未找到您的班级信息', 'error');
+    return;
+  }
+  loadClassScoreSummary(cls).then(() => {
+    navigate('score-manage');
+  });
+}
+
+function renderHeadteacherOverview() {
+  const cls = getHeadteacherClass();
+  if (!cls) {
+    return `<div class="card"><div class="card-body" style="text-align:center;padding:40px;color:var(--gray-400)">未找到班级信息</div></div>`;
+  }
+  
+  const summary = scoreClassSummaryCache;
+  const subjects = Object.keys(summary);
+  
+  if (subjects.length === 0) {
+    return `
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+          <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${cls} 全班成绩总览</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" style="text-align:center;padding:60px;color:var(--gray-400)">
+          <div style="font-size:48px;margin-bottom:16px">📊</div>
+          <div style="font-size:16px;margin-bottom:8px">暂无成绩数据</div>
+          <div style="font-size:13px">各科任老师录入成绩后，这里将显示全班各科成绩概览</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  // 按科目分组显示
+  let subjectCards = '';
+  subjects.forEach(key => {
+    const data = summary[key];
+    const exams = data.exams || [];
+    
+    // 计算该科目总体统计
+    let totalAvg = 0, totalMax = 0, totalMin = 0;
+    if (exams.length > 0) {
+      totalAvg = (exams.reduce((s, e) => s + e.avg, 0) / exams.length).toFixed(1);
+      totalMax = Math.max(...exams.map(e => e.max));
+      totalMin = Math.min(...exams.map(e => e.min));
+    }
+    
+    const examRows = exams.map(e => `
+      <tr>
+        <td style="font-weight:500">${e.name}</td>
+        <td>${e.date}</td>
+        <td>${e.count}人</td>
+        <td style="color:var(--accent);font-weight:600">${e.avg}</td>
+        <td style="color:var(--accent)">${e.max}</td>
+        <td style="color:var(--danger)">${e.min}</td>
+        <td><button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="viewScoreDetail('${e.id}')">详情</button></td>
+      </tr>
+    `).join('');
+    
+    subjectCards += `
+      <div class="card anim-in">
+        <div class="card-header">
+          <span class="card-title">${data.subject} <span style="font-size:12px;color:var(--gray-400);font-weight:400">（${data.teacher}老师）</span></span>
+          <span style="font-size:12px;color:var(--gray-400)">共 ${exams.length} 次测验</span>
+        </div>
+        <div class="card-body" style="padding:12px 16px">
+          <div style="display:flex;gap:24px;margin-bottom:12px;padding:8px 12px;background:var(--gray-50);border-radius:6px">
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;color:var(--gray-500)">平均</div>
+              <div style="font-size:18px;font-weight:700;color:var(--primary)">${totalAvg}</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;color:var(--gray-500)">最高</div>
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">${totalMax}</div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;color:var(--gray-500)">最低</div>
+              <div style="font-size:18px;font-weight:700;color:var(--danger)">${totalMin}</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>考试名称</th>
+                  <th>日期</th>
+                  <th>人数</th>
+                  <th>平均分</th>
+                  <th>最高分</th>
+                  <th>最低分</th>
+                  <th style="width:80px">操作</th>
+                </tr>
+              </thead>
+              <tbody>${examRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  // 学生列表（选择学生和科目查看历史）
+  const students = STUDENTS[cls] || [];
+  const subjectOptions = subjects.map(key => {
+    const data = summary[key];
+    return `<option value="${data.subject}">${data.subject}（${data.teacher}老师）</option>`;
+  }).join('');
+  
+  const studentOptions = students.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+        <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${cls} 全班成绩总览</span>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">查看学生个人成绩历史</span>
+        <span style="font-size:12px;color:var(--gray-400)">选择学生和科目查看详细分析</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:12px;align-items:flex-end">
+          <div style="flex:1">
+            <label class="form-label">学生</label>
+            <select class="form-input" id="historyStudentSelect">
+              <option value="">请选择学生</option>
+              ${studentOptions}
+            </select>
+          </div>
+          <div style="flex:1">
+            <label class="form-label">科目</label>
+            <select class="form-input" id="historySubjectSelect">
+              <option value="">请选择科目</option>
+              ${subjectOptions}
+            </select>
+          </div>
+          <button class="toolbar-btn primary" onclick="viewStudentHistoryFromSelect()">查看分析</button>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;flex-direction:column;gap:16px;margin-top:16px">
+      ${subjectCards}
+    </div>
+  `;
+}
+
+function viewStudentHistoryFromSelect() {
+  const student = document.getElementById('historyStudentSelect').value;
+  const subject = document.getElementById('historySubjectSelect').value;
+  if (!student || !subject) {
+    showToast('请选择学生和科目', 'warning');
+    return;
+  }
+  showStudentHistory(student, subject);
+}
+
+// ===== STUDENT HISTORY: 学生成绩历史 =====
+function showStudentHistory(student, subject) {
+  scoreCurrentStudent = student;
+  scoreCurrentSubject = subject;
+  scoreCurrentView = 'student-history';
+  const cls = getHeadteacherClass();
+  loadStudentScoreHistory(student, subject, cls).then(() => {
+    navigate('score-manage');
+  });
+}
+
+function renderStudentHistory() {
+  const student = scoreCurrentStudent;
+  const subject = scoreCurrentSubject;
+  const history = scoreStudentHistoryCache;
+  
+  if (history.length === 0) {
+    return `
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+          <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${student} - ${subject}成绩历史</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" style="text-align:center;padding:60px;color:var(--gray-400)">
+          <div style="font-size:48px;margin-bottom:16px">📈</div>
+          <div style="font-size:16px;margin-bottom:8px">暂无成绩记录</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  // 计算统计
+  const scores = history.map(h => h.score);
+  const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  const max = Math.max(...scores);
+  const min = Math.min(...scores);
+  
+  // 计算进步/退步趋势
+  let trend = '稳定';
+  let trendColor = 'var(--gray-600)';
+  let trendIcon = '→';
+  if (scores.length >= 2) {
+    const recent = scores.slice(0, Math.ceil(scores.length / 2));
+    const earlier = scores.slice(Math.ceil(scores.length / 2));
+    const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+    const earlierAvg = earlier.reduce((a, b) => a + b, 0) / earlier.length;
+    const diff = recentAvg - earlierAvg;
+    if (diff > 3) {
+      trend = '进步';
+      trendColor = 'var(--accent)';
+      trendIcon = '↑';
+    } else if (diff < -3) {
+      trend = '退步';
+      trendColor = 'var(--danger)';
+      trendIcon = '↓';
+    }
+  }
+  
+  // 成绩历史表格
+  const historyRows = history.map((h, i) => {
+    // 计算与上次的变化
+    let change = '';
+    if (i < history.length - 1) {
+      const prevScore = history[i + 1].score;
+      const diff = h.score - prevScore;
+      if (diff > 0) {
+        change = `<span style="color:var(--accent);font-size:12px">↑${diff}</span>`;
+      } else if (diff < 0) {
+        change = `<span style="color:var(--danger);font-size:12px">↓${Math.abs(diff)}</span>`;
+      } else {
+        change = `<span style="color:var(--gray-400);font-size:12px">→0</span>`;
+      }
+    }
+    
+    return `
+      <tr>
+        <td>${h.exam_name}</td>
+        <td>${h.exam_date}</td>
+        <td>${h.teacher}</td>
+        <td style="font-size:16px;font-weight:600;color:${h.score >= 90 ? 'var(--accent)' : h.score >= 60 ? 'var(--gray-800)' : 'var(--danger)'}">${h.score}</td>
+        <td>${change}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  // 简单的折线图（用CSS实现）
+  const maxScore = Math.max(...scores, 100);
+  const minScore = Math.min(...scores, 0);
+  const range = maxScore - minScore || 1;
+  const chartHeight = 200;
+  const chartWidth = Math.max(history.length * 80, 400);
+  
+  let chartPoints = '';
+  let chartPath = '';
+  history.forEach((h, i) => {
+    const x = (i / (history.length - 1 || 1)) * (chartWidth - 40) + 20;
+    const y = chartHeight - ((h.score - minScore) / range) * (chartHeight - 40) - 20;
+    chartPoints += `<circle cx="${x}" cy="${y}" r="5" fill="var(--primary)" stroke="#fff" stroke-width="2"/>`;
+    chartPoints += `<text x="${x}" y="${y - 10}" text-anchor="middle" font-size="11" fill="var(--gray-700)" font-weight="600">${h.score}</text>`;
+    chartPath += (i === 0 ? 'M' : 'L') + `${x},${y} `;
+  });
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+        <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${student} - ${subject}成绩分析</span>
+      </div>
+    </div>
+    
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="stat-card blue anim-in anim-d1">
+        <div class="stat-label">测验次数</div>
+        <div class="stat-value">${history.length}</div>
+      </div>
+      <div class="stat-card green anim-in anim-d2">
+        <div class="stat-label">平均分</div>
+        <div class="stat-value">${avg}</div>
+      </div>
+      <div class="stat-card green anim-in anim-d3">
+        <div class="stat-label">最高分</div>
+        <div class="stat-value">${max}</div>
+      </div>
+      <div class="stat-card anim-in anim-d4" style="border-left:4px solid ${trendColor}">
+        <div class="stat-label">趋势</div>
+        <div class="stat-value" style="color:${trendColor}">${trendIcon} ${trend}</div>
+      </div>
+    </div>
+    
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <span class="card-title">成绩变化趋势</span>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+        <svg width="${chartWidth}" height="${chartHeight}" style="display:block">
+          <path d="${chartPath}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.3"/>
+          ${chartPoints}
+        </svg>
+      </div>
+    </div>
+    
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <span class="card-title">成绩明细</span>
+        <span style="font-size:12px;color:var(--gray-400)">按时间倒序排列</span>
+      </div>
+      <div class="card-body no-pad">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>考试名称</th>
+                <th>日期</th>
+                <th>教师</th>
+                <th style="width:80px">分数</th>
+                <th style="width:80px">变化</th>
+              </tr>
+            </thead>
+            <tbody>${historyRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 /* ----- ADMIN: Password Management ----- */
