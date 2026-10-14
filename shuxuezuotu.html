@@ -3413,54 +3413,62 @@ async function checkForImage(){
   if(!IMG_STATE.pairCode||IMG_STATE.loading)return;
   const gen=IMG_STATE.generation; // capture current generation
   try{
+    // Step 1: Check flag only (reads ~50 bytes, very fast)
     const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
-    // Guard: if image was removed/changed while fetch was in-flight, ignore this response
     if(gen!==IMG_STATE.generation)return;
     
-    // 204 = no image, 200 = binary image data
+    // 200 = flag exists (new image ready), 204 = no image
     if(res.status===200){
+      const flag=await res.json();
+      if(gen!==IMG_STATE.generation)return;
+      if(!flag.ready)return;
+      
       // Prevent concurrent loads
       IMG_STATE.loading=true;
       
-      // Image received as binary!
       const statusEl=document.getElementById('pairCodeStatus');
       if(statusEl){
         statusEl.textContent='正在加载图片...';
         statusEl.className='pair-code-status received';
       }
-      // Convert binary response to blob URL
-      const blob=await res.blob();
-      const blobUrl=URL.createObjectURL(blob);
       
-      // Clean up old blob URL before creating new one
-      if(IMG_STATE.currentBlobUrl){
-        URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
+      // Step 2: Download the actual image binary (only once)
+      const imgRes=await fetch('/api/image-relay/download/'+IMG_STATE.pairCode);
+      if(gen!==IMG_STATE.generation){IMG_STATE.loading=false;return;}
+      
+      if(imgRes.status===200){
+        const blob=await imgRes.blob();
+        const blobUrl=URL.createObjectURL(blob);
+        
+        // Clean up old blob URL before creating new one
+        if(IMG_STATE.currentBlobUrl){
+          URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
+        }
+        IMG_STATE.currentBlobUrl=blobUrl;
+        
+        await loadImage(blobUrl);
       }
-      IMG_STATE.currentBlobUrl=blobUrl;
       
-      await loadImage(blobUrl);
-      
-      // Clear the image from worker (but keep the pair code valid)
-      // MUST await this to prevent race condition where next poll reads old image
+      // Step 3: Clear image + flag from server
       try{
         await fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
       }catch(clearErr){
-        console.warn('[Photo] Clear failed, will retry:',clearErr);
+        console.warn('[Photo] Clear failed:',clearErr);
       }
       
-      // Bump generation to invalidate any in-flight polls that may have read the old image
+      // Bump generation to invalidate any in-flight polls
       IMG_STATE.generation++;
       IMG_STATE.loading=false;
       
       // Show success feedback
-      showToast('图片已接收，可以开始标注');
-      // Reset status to waiting for next upload
+      const sizeKB=Math.round((flag.size||0)/1024);
+      showToast('图片已接收 ('+sizeKB+'KB)');
       if(statusEl){
-        statusEl.textContent='等待下一张图片...';
+        statusEl.textContent='等待下一张...';
         statusEl.className='pair-code-status';
       }
     }
-    // 204 = no image yet, just continue polling
+    // 204 = no image yet, continue polling
   }catch(e){
     console.error('[Photo] Poll error:',e);
     IMG_STATE.loading=false;

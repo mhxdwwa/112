@@ -1,6 +1,10 @@
 /**
  * Cloudflare Worker - Image Relay for MathLab Photo Upload
- * Binary upload mode - no base64/JSON overhead
+ * Two-key design for fast polling:
+ * - img:{code} = image binary data
+ * - flag:{code} = tiny notification flag (JSON)
+ * 
+ * Polling reads only the tiny flag (~50 bytes), not the image.
  */
 
 addEventListener('fetch', event => {
@@ -11,7 +15,6 @@ async function handleRequest(request) {
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // CORS headers
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -19,7 +22,6 @@ async function handleRequest(request) {
     'Access-Control-Max-Age': '86400',
   };
 
-  // Handle preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -28,14 +30,13 @@ async function handleRequest(request) {
     // POST /api/pair - Generate pairing code
     if (path === '/api/pair' && request.method === 'POST') {
       const code = generateCode();
-      // Store empty placeholder with 30 min TTL
       await IMAGE_KV.put(`pair:${code}`, '', { expirationTtl: 1800 });
       return new Response(JSON.stringify({ code }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // POST /api/upload?code=XXXXX - Upload image (binary body)
+    // POST /api/upload?code=XXXXX - Upload image (binary body) + set flag
     if (path === '/api/upload' && request.method === 'POST') {
       const code = url.searchParams.get('code');
       
@@ -46,7 +47,6 @@ async function handleRequest(request) {
         });
       }
 
-      // Verify pairing code exists
       const existing = await IMAGE_KV.get(`pair:${code}`, { type: 'text' });
       if (existing === null) {
         return new Response(JSON.stringify({ error: 'Invalid or expired pairing code' }), {
@@ -55,24 +55,30 @@ async function handleRequest(request) {
         });
       }
 
-      // Get content type from request
       const contentType = request.headers.get('Content-Type') || 'image/webp';
-      
-      // Store binary image directly (much faster than base64)
       const imageBuffer = await request.arrayBuffer();
       
-      // Store image binary with metadata
-      await IMAGE_KV.put(`pair:${code}`, imageBuffer, { 
+      // Store image binary
+      await IMAGE_KV.put(`img:${code}`, imageBuffer, { 
         expirationTtl: 1800,
-        metadata: { contentType: contentType }
+        metadata: { contentType }
       });
+      
+      // Set tiny flag for fast polling
+      const flag = JSON.stringify({ 
+        ready: true, 
+        size: imageBuffer.byteLength, 
+        type: contentType,
+        ts: Date.now()
+      });
+      await IMAGE_KV.put(`flag:${code}`, flag, { expirationTtl: 1800 });
       
       return new Response(JSON.stringify({ success: true, size: imageBuffer.byteLength }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // GET /api/check/:code - Check for image (returns binary or 204)
+    // GET /api/check/:code - Check flag only (FAST!)
     if (path.startsWith('/api/check/') && request.method === 'GET') {
       const code = path.split('/api/check/')[1];
       
@@ -83,30 +89,40 @@ async function handleRequest(request) {
         });
       }
 
-      // Get image as ArrayBuffer
-      const imageBuffer = await IMAGE_KV.get(`pair:${code}`, { type: 'arrayBuffer' });
+      const flag = await IMAGE_KV.get(`flag:${code}`, { type: 'text' });
       
-      if (imageBuffer === null) {
-        // No image - return 204 No Content (smaller than JSON response)
-        return new Response(null, { 
-          status: 204,
-          headers: corsHeaders 
+      if (!flag) {
+        return new Response(null, { status: 204, headers: corsHeaders });
+      }
+
+      return new Response(flag, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+    }
+
+    // GET /api/download/:code - Download image binary
+    if (path.startsWith('/api/download/') && request.method === 'GET') {
+      const code = path.split('/api/download/')[1];
+      
+      if (!code) {
+        return new Response(JSON.stringify({ error: 'Missing code' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
-      // Check if it's empty placeholder
-      if (imageBuffer.byteLength === 0) {
-        return new Response(null, { 
-          status: 204,
-          headers: corsHeaders 
-        });
+      const { value, metadata } = await IMAGE_KV.getWithMetadata(`img:${code}`, { type: 'arrayBuffer' });
+      
+      if (!value || value.byteLength === 0) {
+        return new Response(null, { status: 204, headers: corsHeaders });
       }
 
-      // Get metadata for content type
-      const { value, metadata } = await IMAGE_KV.getWithMetadata(`pair:${code}`, { type: 'arrayBuffer' });
       const contentType = metadata?.contentType || 'image/webp';
 
-      // Return binary image directly (much faster than JSON with base64)
       return new Response(value, {
         headers: {
           ...corsHeaders,
@@ -117,7 +133,7 @@ async function handleRequest(request) {
       });
     }
 
-    // DELETE /api/clear/:code - Clear image
+    // DELETE /api/clear/:code - Clear image + flag
     if (path.startsWith('/api/clear/') && request.method === 'DELETE') {
       const code = path.split('/api/clear/')[1];
       
@@ -128,14 +144,16 @@ async function handleRequest(request) {
         });
       }
 
-      await IMAGE_KV.delete(`pair:${code}`);
+      await Promise.all([
+        IMAGE_KV.delete(`img:${code}`),
+        IMAGE_KV.delete(`flag:${code}`)
+      ]);
       
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // 404 for unknown routes
     return new Response('Not Found', { status: 404, headers: corsHeaders });
 
   } catch (err) {
@@ -146,7 +164,6 @@ async function handleRequest(request) {
   }
 }
 
-// Generate random 6-digit numeric pairing code
 function generateCode() {
   let code = '';
   for (let i = 0; i < 6; i++) {
