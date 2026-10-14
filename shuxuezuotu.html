@@ -3535,12 +3535,12 @@ async function handleMobileFile(e){
   try{
     // Compress image very aggressively for faster transfer (3MB → ~50-100KB)
     status.textContent='正在压缩图片...';
-    const blob=await compressImage(file,800,0.5);
+    const blob=await compressImage(file,800,0.6);
     // Upload binary directly (much faster than base64+JSON)
-    status.textContent='正在上传...';
+    status.textContent='正在上传 ('+Math.round(blob.size/1024)+'KB)...';
     const res=await fetch('/api/image-relay/upload?code='+encodeURIComponent(code),{
       method:'POST',
-      headers:{'Content-Type': blob.type || 'image/webp'},
+      headers:{'Content-Type': blob.type || 'image/jpeg'},
       body: blob
     });
     const data=await res.json();
@@ -3563,6 +3563,7 @@ async function handleMobileFile(e){
 }
 
 // Compress image using canvas (returns Blob for binary upload)
+// Uses JPEG format for maximum browser compatibility (WebP not supported on some iOS)
 function compressImage(file,maxWidth,quality){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -3578,14 +3579,25 @@ function compressImage(file,maxWidth,quality){
         canvas.width=w;
         canvas.height=h;
         const ctx=canvas.getContext('2d');
-        // Use high quality rendering
         ctx.imageSmoothingEnabled=true;
         ctx.imageSmoothingQuality='high';
         ctx.drawImage(img,0,0,w,h);
-        // Convert to Blob (binary) instead of base64
+        // Try WebP first (better compression), fall back to JPEG (universal support)
         canvas.toBlob((blob)=>{
-          if(blob) resolve(blob);
-          else reject(new Error('Failed to compress image'));
+          if(blob && blob.size>0){
+            // Check if browser actually produced WebP (not fallback PNG)
+            if(blob.type==='image/webp'){
+              resolve(blob);
+            }else{
+              // Browser didn't support WebP, use JPEG instead
+              canvas.toBlob((jpegBlob)=>{
+                if(jpegBlob) resolve(jpegBlob);
+                else reject(new Error('Failed to compress image'));
+              }, 'image/jpeg', quality);
+            }
+          }else{
+            reject(new Error('Failed to compress image'));
+          }
         }, 'image/webp', quality);
       };
       img.onerror=()=>reject(new Error('Failed to load image'));

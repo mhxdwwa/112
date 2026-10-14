@@ -55,7 +55,7 @@ async function handleRequest(request) {
         });
       }
 
-      const contentType = request.headers.get('Content-Type') || 'image/webp';
+      const contentType = request.headers.get('Content-Type') || 'image/jpeg';
       const imageBuffer = await request.arrayBuffer();
       
       // Store image binary
@@ -121,7 +121,7 @@ async function handleRequest(request) {
         return new Response(null, { status: 204, headers: corsHeaders });
       }
 
-      const contentType = metadata?.contentType || 'image/webp';
+      const contentType = metadata?.contentType || 'image/jpeg';
 
       return new Response(value, {
         headers: {
