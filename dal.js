@@ -3993,74 +3993,78 @@ function _setupRealtimeSubscriptions() {
       channelsCreated++;
     }
 
-    // Subscribe to students table — v100: 直接用 payload.new 更新内存数据
-    var studentChannel = db.channel('dal-students-' + _clientId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
-        _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v221: API 模式下日志已直接写入 operation_logs 表，无需合并 pending_logs_json
-        // operation_logs 表的 Realtime 订阅会自动推送新日志
-        if (currentUser && currentUser.type === 'teacher' && payload && payload.new) {
-          if (!(typeof window.USE_API !== 'undefined' && window.USE_API)) {
-            // 旧模式：合并学生 pending_logs_json
-            var _plj = payload.new.pending_logs_json;
-            if (_plj && _plj !== '[]' && _plj !== 'null' && _plj !== '') {
-              console.log('[DAL] v115 ⚡ Student pending_logs_json changed via Realtime — immediate merge');
-              var _mergeClassId = payload.new.class_id;
-              if (_mergeClassId) {
-                _mergeStudentPendingLogs([_mergeClassId]).then(function(mergedCount) {
-                  if (mergedCount > 0) {
-                    console.log('[DAL] v115 ⚡ Immediate merge: ' + mergedCount + ' logs merged');
-                    return _loadOperationLogsAfterMerge([_mergeClassId]).then(function() {
-                      if (typeof refreshHistoryModalIfOpen === 'function') {
-                        clearTimeout(window._historyRefreshDebounce);
-                        window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 500);
-                      }
-                      if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
-                    });
-                  }
-                });
+    // 学生端不创建 Realtime 通道，仅教师端订阅（减少并发连接数）
+    // 学生端依靠 120 秒轮询兜底，数据不会丢失
+    if (!_isStudentForChannels) {
+      // Subscribe to students table — v100: 直接用 payload.new 更新内存数据
+      var studentChannel = db.channel('dal-students-' + _clientId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
+          _realtimeLastEventTime = Date.now(); // v95: Track liveness
+          // v221: API 模式下日志已直接写入 operation_logs 表，无需合并 pending_logs_json
+          // operation_logs 表的 Realtime 订阅会自动推送新日志
+          if (currentUser && currentUser.type === 'teacher' && payload && payload.new) {
+            if (!(typeof window.USE_API !== 'undefined' && window.USE_API)) {
+              // 旧模式：合并学生 pending_logs_json
+              var _plj = payload.new.pending_logs_json;
+              if (_plj && _plj !== '[]' && _plj !== 'null' && _plj !== '') {
+                console.log('[DAL] v115 ⚡ Student pending_logs_json changed via Realtime — immediate merge');
+                var _mergeClassId = payload.new.class_id;
+                if (_mergeClassId) {
+                  _mergeStudentPendingLogs([_mergeClassId]).then(function(mergedCount) {
+                    if (mergedCount > 0) {
+                      console.log('[DAL] v115 ⚡ Immediate merge: ' + mergedCount + ' logs merged');
+                      return _loadOperationLogsAfterMerge([_mergeClassId]).then(function() {
+                        if (typeof refreshHistoryModalIfOpen === 'function') {
+                          clearTimeout(window._historyRefreshDebounce);
+                          window._historyRefreshDebounce = setTimeout(refreshHistoryModalIfOpen, 500);
+                        }
+                        if (typeof _syncOpLogsAlias === 'function') { try { _syncOpLogsAlias(); } catch(e) {} }
+                      });
+                    }
+                  });
+                }
               }
             }
           }
-        }
-        // v100: 直接用 payload.new 更新内存数据，零数据库查询，立即生效
-        console.log('[DAL] v100 Students: realtime update, applying directly to memory');
-        _applyRealtimeUpdate('students', payload);
-      })
-      .subscribe(function(status) {
-        if (status === 'SUBSCRIBED') _onChannelConfirmed();
-      });
-    _realtimeChannels.push(studentChannel);
-    channelsCreated++;
+          // v100: 直接用 payload.new 更新内存数据，零数据库查询，立即生效
+          console.log('[DAL] v100 Students: realtime update, applying directly to memory');
+          _applyRealtimeUpdate('students', payload);
+        })
+        .subscribe(function(status) {
+          if (status === 'SUBSCRIBED') _onChannelConfirmed();
+        });
+      _realtimeChannels.push(studentChannel);
+      channelsCreated++;
 
-    // Subscribe to pets table — v100: 直接用 payload.new 更新内存数据
-    var petChannel = db.channel('dal-pets-' + _clientId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
-        _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v100: 直接用 payload.new 更新内存数据，零数据库查询，立即生效
-        console.log('[DAL] v100 Pets: realtime update (' + payload.eventType + '), applying directly to memory');
-        _applyRealtimeUpdate('pets', payload);
-      })
-      .subscribe(function(status) {
-        if (status === 'SUBSCRIBED') _onChannelConfirmed();
-      });
-    _realtimeChannels.push(petChannel);
-    channelsCreated++;
+      // Subscribe to pets table — v100: 直接用 payload.new 更新内存数据
+      var petChannel = db.channel('dal-pets-' + _clientId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pets' }, function(payload) {
+          _realtimeLastEventTime = Date.now(); // v95: Track liveness
+          // v100: 直接用 payload.new 更新内存数据，零数据库查询，立即生效
+          console.log('[DAL] v100 Pets: realtime update (' + payload.eventType + '), applying directly to memory');
+          _applyRealtimeUpdate('pets', payload);
+        })
+        .subscribe(function(status) {
+          if (status === 'SUBSCRIBED') _onChannelConfirmed();
+        });
+      _realtimeChannels.push(petChannel);
+      channelsCreated++;
 
-    // v201: Subscribe to snack_configs table — 教师编辑后学生立即看到更新
-    var snackChannel = db.channel('dal-snack-configs-' + _clientId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'snack_configs' }, function(payload) {
-        _realtimeLastEventTime = Date.now();
-        console.log('[v201] ⚡ Snack configs: realtime update (' + payload.eventType + ')');
-        if (payload.new && payload.new.config_data) {
-          _applySnackConfigRealtimeUpdate(payload.new.config_data);
-        }
-      })
-      .subscribe(function(status) {
-        if (status === 'SUBSCRIBED') _onChannelConfirmed();
-      });
-    _realtimeChannels.push(snackChannel);
-    channelsCreated++;
+      // v201: Subscribe to snack_configs table — 教师编辑后学生立即看到更新
+      var snackChannel = db.channel('dal-snack-configs-' + _clientId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'snack_configs' }, function(payload) {
+          _realtimeLastEventTime = Date.now();
+          console.log('[v201] ⚡ Snack configs: realtime update (' + payload.eventType + ')');
+          if (payload.new && payload.new.config_data) {
+            _applySnackConfigRealtimeUpdate(payload.new.config_data);
+          }
+        })
+        .subscribe(function(status) {
+          if (status === 'SUBSCRIBED') _onChannelConfirmed();
+        });
+      _realtimeChannels.push(snackChannel);
+      channelsCreated++;
+    }
 
     console.log('[DAL] ⚡ Realtime subscriptions created (' + channelsCreated + ' channels, client=' + _clientId + ') — waiting for confirmation...');
 

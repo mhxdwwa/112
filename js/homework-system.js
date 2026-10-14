@@ -1066,10 +1066,7 @@
         return;
       }
       
-      // 初始化学生端 Realtime 订阅
-      if (!_realtimeInitialized) {
-        initRealtime(true, myStudentId);
-      }
+      // Realtime 已禁用，依靠轮询同步数据
       
       // 显示加载中状态
       if (!_cloudDataLoaded) {
@@ -1104,12 +1101,7 @@
       return;
     }
     
-    // 初始化教师端 Realtime 订阅
-    if (!_realtimeInitialized) {
-      initRealtime(false, null);
-      // 检查 Realtime 是否已启用
-      ensureRealtimeEnabled();
-    }
+    // Realtime 已禁用，依靠手动刷新同步数据
     
     // 检查 currentClassId 是否已设置
     if (!currentClassId) {
