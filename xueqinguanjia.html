@@ -3503,17 +3503,7 @@ function buildSidebar() {
   if (xqCurrentUser?.teacherName === XQ_ADMIN_NAME) {
     html += `<div class="sidebar-section">`;
     html += `<div class="sidebar-section-title">系统管理</div>`;
-    // 1. 授课班级
-    html += `<div class="sidebar-item" data-page="teach-classes" onclick="navigate('teach-classes')">
-      <span class="sidebar-icon">${iconUsers()}</span>
-      <span>授课班级</span>
-    </div>`;
-    // 1.5 成绩管理
-    html += `<div class="sidebar-item" data-page="score-manage" onclick="navigate('score-manage')">
-      <span class="sidebar-icon">${iconFile()}</span>
-      <span>成绩管理</span>
-    </div>`;
-    // 2. 学校数据设置
+    // 1. 学校数据设置
     html += `<div class="sidebar-item" data-page="school-setup" onclick="openSetupPage()">
       <span class="sidebar-icon">${iconSettings()}</span>
       <span>学校数据设置</span>
