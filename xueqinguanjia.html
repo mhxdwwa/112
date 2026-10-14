@@ -3538,7 +3538,8 @@ function buildSidebar() {
       section.items.forEach(item => {
         const badgeCount = item.id === 'leave-mgmt' ? getPendingLeaveCount() :
                            item.id === 'anomaly' ? getAnomalyCount() : 0;
-        html += `<div class="sidebar-item" data-page="${item.id}" onclick="navigate('${item.id}')">
+        const onclickHandler = item.id === 'score-manage' ? 'navigateToScoreManage()' : `navigate('${item.id}')`;
+        html += `<div class="sidebar-item" data-page="${item.id}" onclick="${onclickHandler}">
           <span class="sidebar-icon">${item.icon()}</span>
           <span>${item.label}</span>
           ${badgeCount > 0 ? `<span class="sidebar-badge">${badgeCount}</span>` : ''}
@@ -3559,7 +3560,8 @@ function buildSidebar() {
       section.items.forEach(item => {
         const badgeCount = item.id === 'leave-mgmt' ? getPendingLeaveCount() :
                            item.id === 'anomaly' ? getAnomalyCount() : 0;
-        html += `<div class="sidebar-item" data-page="${item.id}" onclick="navigate('${item.id}')">
+        const onclickHandler = item.id === 'score-manage' ? 'navigateToScoreManage()' : `navigate('${item.id}')`;
+        html += `<div class="sidebar-item" data-page="${item.id}" onclick="${onclickHandler}">
           <span class="sidebar-icon">${item.icon()}</span>
           <span>${item.label}</span>
           ${badgeCount > 0 ? `<span class="sidebar-badge">${badgeCount}</span>` : ''}
@@ -3579,7 +3581,8 @@ function buildSidebar() {
       section.items.forEach(item => {
         const badgeCount = item.id === 'leave-mgmt' ? getPendingLeaveCount() :
                            item.id === 'anomaly' ? getAnomalyCount() : 0;
-        html += `<div class="sidebar-item" data-page="${item.id}" onclick="navigate('${item.id}')">
+        const onclickHandler = item.id === 'score-manage' ? 'navigateToScoreManage()' : `navigate('${item.id}')`;
+        html += `<div class="sidebar-item" data-page="${item.id}" onclick="${onclickHandler}">
           <span class="sidebar-icon">${item.icon()}</span>
           <span>${item.label}</span>
           ${badgeCount > 0 ? `<span class="sidebar-badge">${badgeCount}</span>` : ''}
@@ -3667,19 +3670,20 @@ function navigate(pageId) {
   const isSeatingPage = (pageId === 'seating' || pageId === 'class-seating');
   contentEl.classList.toggle('no-scroll', isSeatingPage);
   
-  // 点击侧边栏的成绩管理时，重置到列表视图
-  if (pageId === 'score-manage') {
-    scoreCurrentView = 'list';
-    scoreCurrentExam = null;
-    classAnalysisData = null;
-  }
-  
   // 切换页面时按需同步数据（减少流量消耗）
   syncOnPageChange(pageId);
   
   renderPage(pageId);
   // 移动端：切换页面后关闭侧边栏
   closeMobileSidebar();
+}
+
+// 点击侧边栏"成绩管理"时调用，重置状态后跳转到列表
+function navigateToScoreManage() {
+  scoreCurrentView = 'list';
+  scoreCurrentExam = null;
+  classAnalysisData = null;
+  navigate('score-manage');
 }
 
 /* ============================================================
