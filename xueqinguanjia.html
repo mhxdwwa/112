@@ -13126,7 +13126,18 @@ function openXqQrScanner() {
     scannerModal.innerHTML = `
       <div style="position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px">
         <div style="color:#fff;font-size:18px;font-weight:600;margin-bottom:20px">扫描二维码</div>
-        <div id="xqQrScannerBox" style="width:300px;height:300px;background:#fff;border-radius:12px;overflow:hidden"></div>
+        <div id="xqQrScannerBox" style="width:300px;height:300px;background:#000;border-radius:12px;overflow:hidden;position:relative">
+          <style>
+            #xqQrScannerBox video {
+              width: 100% !important;
+              height: 100% !important;
+              object-fit: cover !important;
+            }
+            #xqQrScannerBox #qr-shaded-region {
+              border-width: 2px !important;
+            }
+          </style>
+        </div>
         <div id="xqScannerStatus" style="color:#fff;margin-top:16px;font-size:14px">正在启动摄像头...</div>
         <button onclick="closeXqQrScanner()" style="margin-top:20px;padding:12px 32px;background:var(--danger);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">关闭</button>
       </div>
@@ -13164,7 +13175,7 @@ async function startXqQrScanner() {
     // 配置扫码器
     const config = {
       fps: 10,
-      qrbox: { width: 250, height: 250 },
+      qrBox: { width: 280, height: 280 },
       aspectRatio: 1.0
     };
 
