@@ -3527,6 +3527,11 @@ function buildSidebar() {
       <span class="sidebar-icon">${iconLock()}</span>
       <span>密码管理</span>
     </div>`;
+    // 6. 成绩管理
+    html += `<div class="sidebar-item" data-page="score-manage" onclick="navigate('score-manage')">
+      <span class="sidebar-icon">${iconFile()}</span>
+      <span>成绩管理</span>
+    </div>`;
     html += `</div>`;
   }
   
@@ -5735,6 +5740,7 @@ function renderScoreManage() {
   if (scoreCurrentView === 'detail' && scoreCurrentExam) return renderScoreDetail();
   if (scoreCurrentView === 'headteacher-overview') return renderHeadteacherOverview();
   if (scoreCurrentView === 'student-history') return renderStudentHistory();
+  if (scoreCurrentView === 'student-history-select') return renderStudentHistorySelect();
   
   const isHeadteacher = xqCurrentUser?.isHeadteacher;
   const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
@@ -5760,6 +5766,8 @@ function renderScoreManage() {
   
   // 班主任可以看到全班成绩总览按钮
   const headteacherBtn = isHeadteacher ? `<button class="toolbar-btn ghost" style="font-size:12px" onclick="showHeadteacherOverview()">📊 全班成绩总览</button>` : '';
+  // 所有老师都可以查看学生历史
+  const historyBtn = teacherClasses.length > 0 ? `<button class="toolbar-btn ghost" style="font-size:12px" onclick="showStudentHistorySelect()">📈 学生成绩历史</button>` : '';
   
   return `
     <div class="toolbar">
@@ -5767,6 +5775,7 @@ function renderScoreManage() {
         <span style="font-size:14px;color:var(--gray-600)">管理学生平时测验成绩，支持手动录入和Excel导入</span>
       </div>
       <div class="toolbar-spacer"></div>
+      ${historyBtn}
       ${headteacherBtn}
       <button class="toolbar-btn primary" onclick="showScoreCreate()">+ 新建考试</button>
     </div>
@@ -6379,13 +6388,139 @@ function viewStudentHistoryFromSelect() {
   showStudentHistory(student, subject);
 }
 
+// ===== 学生成绩历史选择页面（所有老师可用）=====
+function showStudentHistorySelect() {
+  scoreCurrentView = 'student-history-select';
+  navigate('score-manage');
+}
+
+function renderStudentHistorySelect() {
+  const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
+  
+  if (teacherClasses.length === 0) {
+    return `
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+          <span style="font-size:14px;color:var(--gray-600);margin-left:12px">学生成绩历史</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" style="text-align:center;padding:60px;color:var(--gray-400)">
+          <div style="font-size:48px;margin-bottom:16px">📈</div>
+          <div style="font-size:16px;margin-bottom:8px">未找到授课班级</div>
+          <div style="font-size:13px">请联系管理员确认您的授课班级分配</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  const classOptions = teacherClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+        <span style="font-size:14px;color:var(--gray-600);margin-left:12px">学生成绩历史</span>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">选择查看条件</span>
+        <span style="font-size:12px;color:var(--gray-400)">选择班级、学生和科目查看成绩变化趋势</span>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:end">
+          <div>
+            <label class="form-label">班级</label>
+            <select class="form-input" id="histClassSelect" onchange="updateHistStudentOptions()">
+              <option value="">请选择班级</option>
+              ${classOptions}
+            </select>
+          </div>
+          <div>
+            <label class="form-label">学生</label>
+            <select class="form-input" id="histStudentSelect">
+              <option value="">请先选择班级</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">科目</label>
+            <select class="form-input" id="histSubjectSelect">
+              <option value="">请选择科目</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:16px">
+          <button class="toolbar-btn primary" onclick="viewStudentHistoryFromSelectPage()">查看成绩分析</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 班级选择后更新学生列表和科目列表
+async function updateHistStudentOptions() {
+  const cls = document.getElementById('histClassSelect').value;
+  const studentSelect = document.getElementById('histStudentSelect');
+  const subjectSelect = document.getElementById('histSubjectSelect');
+  
+  if (!cls) {
+    studentSelect.innerHTML = '<option value="">请先选择班级</option>';
+    subjectSelect.innerHTML = '<option value="">请选择科目</option>';
+    return;
+  }
+  
+  // 更新学生列表
+  const students = STUDENTS[cls] || [];
+  if (students.length === 0) {
+    studentSelect.innerHTML = '<option value="">该班级暂无学生</option>';
+  } else {
+    studentSelect.innerHTML = '<option value="">请选择学生</option>' + 
+      students.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  }
+  
+  // 从已有考试中获取该班级的科目列表
+  const result = await xqApi('exams', { action: 'list', class: cls });
+  if (result.ok && result.exams) {
+    const subjects = [...new Set(result.exams.map(e => e.subject))];
+    if (subjects.length === 0) {
+      subjectSelect.innerHTML = '<option value="">该班级暂无成绩记录</option>';
+    } else {
+      subjectSelect.innerHTML = '<option value="">请选择科目</option>' + 
+        subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+    }
+  }
+}
+
+function viewStudentHistoryFromSelectPage() {
+  const cls = document.getElementById('histClassSelect').value;
+  const student = document.getElementById('histStudentSelect').value;
+  const subject = document.getElementById('histSubjectSelect').value;
+  
+  if (!cls || !student || !subject) {
+    showToast('请选择班级、学生和科目', 'warning');
+    return;
+  }
+  
+  showStudentHistory(student, subject, cls);
+}
+
 // ===== STUDENT HISTORY: 学生成绩历史 =====
-function showStudentHistory(student, subject) {
+function showStudentHistory(student, subject, className) {
   scoreCurrentStudent = student;
   scoreCurrentSubject = subject;
   scoreCurrentView = 'student-history';
-  const cls = getHeadteacherClass();
-  loadStudentScoreHistory(student, subject, cls).then(() => {
+  // 如果没有传入班级，尝试获取
+  if (!className) {
+    className = getHeadteacherClass();
+  }
+  if (!className) {
+    showToast('未找到班级信息', 'error');
+    return;
+  }
+  loadStudentScoreHistory(student, subject, className).then(() => {
     navigate('score-manage');
   });
 }
