@@ -3407,12 +3407,14 @@ function restoreSession() {
       USERS[session.role] = session.userInfo;
     }
     
-    // 更新 UI
+    // 更新 UI — 优先使用 xqCurrentUser.teacherName 作为权威来源
+    // 避免 session.userInfo 中残留旧数据导致显示错误
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('app').classList.add('visible');
-    document.getElementById('sidebarAvatar').textContent = session.userInfo?.avatar || session.user.teacherName.charAt(0);
-    document.getElementById('sidebarName').textContent = session.userInfo?.name || session.user.teacherName;
-    document.getElementById('sidebarRole').textContent = session.userInfo?.role || '';
+    document.getElementById('sidebarAvatar').textContent = session.user.teacherName.charAt(0);
+    document.getElementById('sidebarName').textContent = session.user.teacherName;
+    document.getElementById('sidebarRole').textContent = session.user.role === 'leader' ? '校领导' : 
+                                                          session.user.role === 'headteacher' ? '班主任' : '科任老师';
     buildSidebar();
     updateDate();
     
@@ -13063,6 +13065,16 @@ async function doXqAutoLogin(email) {
       isHeadteacher: user.role === 'headteacher',
       isLeader: user.role === 'leader',
       isTeacher: user.role === 'teacher'
+    };
+
+    // 同步更新 USERS 对象（saveSession 依赖此对象保存 userInfo）
+    // 如果不更新，USERS 中可能残留上次密码登录的用户信息
+    currentRole = xqCurrentUser.role;
+    USERS[currentRole] = {
+      name: email,
+      role: xqCurrentUser.role === 'leader' ? '校领导' : 
+            xqCurrentUser.role === 'headteacher' ? '班主任' : '科任老师',
+      avatar: email.charAt(0)
     };
 
     // 保存登录状态
