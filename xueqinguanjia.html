@@ -7036,10 +7036,18 @@ function renderClassAnalysis() {
   }
   
   // === 步骤3：分析结果 ===
+  console.log('[ScoreDebug] Step 3 - selectedIds:', data.selectedIds);
+  console.log('[ScoreDebug] Step 3 - allAnalysis length:', allAnalysis.length);
   // 按 selectedIds 的顺序过滤并排序（兼容字符串和数字类型的id）
   const analysis = data.selectedIds
-    .map(id => allAnalysis.find(a => String(a.id) === String(id)))
+    .map(id => {
+      const found = allAnalysis.find(a => String(a.id) === String(id));
+      if (!found) console.log('[ScoreDebug] No match for id:', id, 'type:', typeof id);
+      return found;
+    })
     .filter(Boolean);
+  
+  console.log('[ScoreDebug] Step 3 - filtered analysis length:', analysis.length);
   
   if (analysis.length === 0) {
     return `
@@ -7275,20 +7283,27 @@ function submitClassAnalysis() {
 function submitExamSelection() {
   const checked = [];
   document.querySelectorAll('.exam-check:checked').forEach(c => {
-    checked.push(parseInt(c.value));
+    checked.push(c.value); // 保持字符串类型，与API返回的id一致
   });
+  
+  console.log('[ScoreDebug] checked values:', checked);
+  console.log('[ScoreDebug] analysis ids:', classAnalysisData.analysis.map(a => a.id));
   
   if (checked.length < 2) {
     showToast('请至少选择2次考试', 'warning');
     return;
   }
   
-  // 按原始顺序（日期升序）保留
+  // 按原始顺序（日期升序）保留，用字符串比较
   const ordered = classAnalysisData.analysis
-    .filter(a => checked.includes(a.id))
+    .filter(a => checked.includes(String(a.id)))
     .map(a => a.id);
   
+  console.log('[ScoreDebug] ordered selected ids:', ordered);
+  
   classAnalysisData.selectedIds = ordered;
+  console.log('[ScoreDebug] classAnalysisData.selectedIds set:', classAnalysisData.selectedIds);
+  
   navigate('score-manage');
 }
 
