@@ -51,36 +51,6 @@ body.xueqinguanjia .title { color: #2563eb; }
 }
 body.petworld .msg strong { color: #c04058; }
 body.xueqinguanjia .msg strong { color: #2563eb; }
-.btn-row { display: flex; gap: 12px; }
-.btn {
-  flex: 1;
-  padding: 14px;
-  border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-.btn-cancel {
-  background: #f0f0f0;
-  color: #666;
-}
-.btn-cancel:hover { background: #e0e0e0; }
-.btn-confirm {
-  background: linear-gradient(135deg, #52c41a, #389e0d);
-  color: white;
-  box-shadow: 0 4px 12px rgba(82, 196, 26, 0.3);
-}
-.btn-confirm:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(82, 196, 26, 0.4);
-}
-.btn-confirm:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
 .status {
   margin-top: 20px;
   padding: 14px;
@@ -127,13 +97,7 @@ body.xueqinguanjia .msg strong { color: #2563eb; }
   <div class="msg" id="statusMsg">
     <span class="spinner"></span> 正在检查登录状态...
   </div>
-  <div class="btn-row" id="btnRow" style="display:none;">
-    <button class="btn btn-cancel" onclick="handleCancel()">取消</button>
-    <button class="btn btn-confirm" id="confirmBtn" onclick="handleConfirm()">确认登录</button>
-  </div>
-  <div id="switchAccountRow" style="display:none;margin-top:12px;">
-    <button class="btn" style="width:100%;background:#f0f0f0;color:#666;font-size:13px;padding:10px;" onclick="handleSwitchAccount()">切换账号登录</button>
-  </div>
+
   <div class="status" id="resultStatus"></div>
 </div>
 
@@ -279,15 +243,9 @@ var appTitle = '宠物世界';
       return;
     }
 
-    // 5. 显示确认界面
-    document.getElementById('statusMsg').innerHTML =
-      '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:12px;">' +
-      '<div style="font-size:12px;color:#856404;margin-bottom:4px;">⚠️ 请确认以下账号是本人操作：</div>' +
-      '<div style="font-size:20px;font-weight:700;color:#d4a017;">' + escapeHtml(userEmail) + '</div>' +
-      '</div>' +
-      '如果不是您的账号，请点击下方"切换账号"按钮重新登录。';
-    document.getElementById('btnRow').style.display = 'flex';
-    document.getElementById('switchAccountRow').style.display = 'block';
+    // 5. 已登录用户直接确认登录（名字+密码已验证过，无需再次确认）
+    document.getElementById('statusMsg').innerHTML = '正在登录 <b>' + escapeHtml(userEmail) + '</b> ...';
+    handleConfirm();
 
   } catch (e) {
     console.error('[扫码] Token check error:', e);
@@ -295,13 +253,8 @@ var appTitle = '宠物世界';
   }
 })();
 
-// 确认登录
+// 确认登录（已登录用户自动调用，无需手动确认）
 async function handleConfirm() {
-  var confirmBtn = document.getElementById('confirmBtn');
-  confirmBtn.disabled = true;
-  confirmBtn.textContent = '处理中...';
-  document.getElementById('btnRow').style.display = 'none';
-
   var resultStatus = document.getElementById('resultStatus');
   resultStatus.className = 'status loading';
   resultStatus.innerHTML = '<span class="spinner"></span> 正在确认登录...';
@@ -407,37 +360,6 @@ async function handleConfirm() {
     resultStatus.innerHTML = '❌ 确认失败: ' + (e.message || '未知错误');
     document.getElementById('statusMsg').innerHTML = '请关闭页面后重试';
   }
-}
-
-// 取消
-function handleCancel() {
-  document.getElementById('resultStatus').className = 'status loading';
-  document.getElementById('resultStatus').innerHTML = '已取消登录';
-  document.getElementById('btnRow').style.display = 'none';
-  document.getElementById('switchAccountRow').style.display = 'none';
-  document.getElementById('statusMsg').innerHTML = '您已取消本次登录确认';
-}
-
-// 切换账号：清除当前会话，跳转到主应用重新登录
-function handleSwitchAccount() {
-  if (appName === 'xq') {
-    localStorage.removeItem('xq_session');
-    localStorage.removeItem('xq_current_user');
-  } else {
-    localStorage.removeItem('userType');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userEmail');
-  }
-  // 保存扫码 token，登录后自动完成确认
-  sessionStorage.setItem('xq_pending_qr_token', qrToken);
-  sessionStorage.setItem('xq_pending_qr_app', appName);
-  var mainAppUrl = appName === 'xq' ? 'xueqinguanjia.html' : 'index.html';
-  document.getElementById('statusMsg').innerHTML = '正在跳转到登录页面...<br><br><span style="font-size:12px;color:#999;">请用正确的账号登录后，将自动完成扫码确认</span>';
-  document.getElementById('btnRow').style.display = 'none';
-  document.getElementById('switchAccountRow').style.display = 'none';
-  setTimeout(function() {
-    window.location.href = mainAppUrl;
-  }, 1000);
 }
 
 // 显示错误
