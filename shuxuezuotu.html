@@ -106,16 +106,12 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .pen-color-row .pcp-close{padding:4px 12px;border-radius:5px;font-size:10px;font-weight:600;background:#6b7280;color:#fff;flex-shrink:0}
 /* Image canvas layer */
 #imgC{z-index:1.5;pointer-events:none}
-/* Pairing code display (PC) */
-.pair-code-display{position:absolute;bottom:10px;left:12px;transform:none;z-index:100;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border:1.5px solid var(--blue);border-radius:10px;padding:10px 14px;text-align:center;box-shadow:0 4px 16px rgba(37,99,235,.15);min-width:auto}
-.pair-code-title{font-size:11px;font-weight:700;color:var(--blue);margin-bottom:5px}
-.pair-code-text{font-size:9px;color:#6b7280;margin-bottom:4px}
-.pair-code-value{font-size:21px;font-weight:700;color:var(--blue);font-family:var(--m);letter-spacing:4px;margin:5px 0;padding:5px 10px;background:rgba(37,99,235,.08);border-radius:8px;border:1.5px dashed var(--blue)}
-.pair-code-hint{font-size:9px;color:#6b7280;line-height:1.4;margin-top:5px}
-.pair-code-close{position:absolute;top:3px;right:6px;font-size:16px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:2px 4px;line-height:1}
-.pair-code-close:hover{color:var(--red)}
-.pair-code-status{font-size:9px;color:var(--blue);margin-top:5px;padding:3px 8px;background:rgba(37,99,235,.08);border-radius:5px;display:inline-block}
-.pair-code-status.received{color:#059669;background:rgba(5,150,105,.08)}
+/* Inline pairing code display in toolbar */
+.pair-code-inline{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(37,99,235,.06);border:1.5px solid var(--blue);border-radius:6px;margin-left:4px;white-space:nowrap;flex-shrink:0}
+.pair-code-label{font-size:11px;font-weight:600;color:var(--blue)}
+.pair-code-inline .pair-code-value{font-size:16px;font-weight:700;color:var(--blue);font-family:var(--m);letter-spacing:3px;padding:2px 8px;background:rgba(37,99,235,.08);border-radius:4px;border:1px dashed var(--blue)}
+.pair-code-inline .pair-code-status{font-size:10px;color:var(--blue);padding:2px 6px;background:rgba(37,99,235,.06);border-radius:4px}
+.pair-code-inline .pair-code-status.received{color:#059669;background:rgba(5,150,105,.08)}
 /* Mobile upload panel */
 .mobile-upload-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(255,255,255,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px}
 .mobile-upload-title{font-size:18px;font-weight:700;color:var(--t)}
@@ -156,15 +152,6 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
         <button class="photo-role-btn" id="rolePC">💻 电脑（显示配对码）</button>
         <button class="photo-role-btn" id="roleMobile">📱 手机（输入配对码）</button>
       </div>
-    </div>
-    <!-- Photo upload pairing code display (PC) -->
-    <div class="pair-code-display" id="pairCodeDisplay" style="display:none">
-      <div class="pair-code-title">手机拍照上传</div>
-      <div class="pair-code-text">配对码</div>
-      <div class="pair-code-value" id="pairCodeValue">------</div>
-      <div class="pair-code-hint">手机打开此网页，点击"拍照"按钮<br>输入上方配对码即可传输图片</div>
-      <div class="pair-code-status" id="pairCodeStatus">等待手机上传...</div>
-      <button class="pair-code-close" id="pairCodeClose">×</button>
     </div>
     <!-- Photo upload UI (Mobile) -->
     <div class="mobile-upload-panel" id="mobileUploadPanel" style="display:none">
@@ -2701,6 +2688,8 @@ tbHTML+='<button class="tg" id="tgNumLine">数轴</button>';
 tbHTML+='<button class="tg" id="tgSnap">吸附</button>';
 tbHTML+='<button class="tg" id="tgSmartDraw">智能作图</button>';
 tbHTML+='<button class="tg" id="tgFuncGraph">函数图像</button>';
+tbHTML+='<button class="tg" id="tgPhoto">📷 拍照</button>';
+tbHTML+='<span class="pair-code-inline" id="pairCodeDisplay" style="display:none"><span class="pair-code-label">配对码:</span><span class="pair-code-value" id="pairCodeValue">------</span><span class="pair-code-status" id="pairCodeStatus">等待上传...</span></span>';
 tbHTML+='<div id="eraserSizeWrap" style="display:none;align-items:center;gap:4px;flex-shrink:0"><span style="font-size:11px;color:#111827;font-weight:600;white-space:nowrap">擦除范围</span><input type="range" id="eraserSize" min="10" max="80" value="40" style="width:60px;height:4px;-webkit-appearance:none;background:var(--bd);border-radius:2px;outline:none"><span id="eraserSizeVal" style="font-size:11px;color:#111827;font-weight:600;min-width:20px;font-family:var(--m)">40</span></div>';
 // Center spacer
 tbHTML+='<div style="flex:1"></div>';
@@ -3319,23 +3308,8 @@ document.getElementById('upClose').addEventListener('click',()=>{
 // PHOTO UPLOAD FEATURE - Cloudflare Worker Image Relay
 // ============================================================
 
-// Add photo button to toolbar
-(function addPhotoButton(){
-  const toolRow=document.getElementById('toolRow');
-  const btn=document.createElement('button');
-  btn.className='tg';
-  btn.id='tgPhoto';
-  btn.textContent='📷 拍照';
-  btn.title='手机拍照上传题目';
-  // Insert before the first separator or at the beginning
-  const firstSep=toolRow.querySelector('.tsep');
-  if(firstSep){
-    toolRow.insertBefore(btn,firstSep);
-  }else{
-    toolRow.insertBefore(btn,toolRow.firstChild);
-  }
-  btn.addEventListener('click',togglePhotoUpload);
-})();
+// Photo button event listener (button is now in toolbar HTML)
+document.getElementById('tgPhoto').addEventListener('click',togglePhotoUpload);
 
 function togglePhotoUpload(){
   const btn=document.getElementById('tgPhoto');
@@ -3355,7 +3329,7 @@ function togglePhotoUpload(){
 // Role selection handlers
 document.getElementById('rolePC').addEventListener('click',()=>{
   document.getElementById('photoRolePanel').style.display='none';
-  document.getElementById('pairCodeDisplay').style.display='block';
+  document.getElementById('pairCodeDisplay').style.display='inline-flex';
   generatePairCode();
 });
 
@@ -3651,12 +3625,6 @@ document.getElementById('imgRemove').addEventListener('click',()=>{
   imgC.style.pointerEvents='none';
   document.getElementById('imageControls').classList.remove('on');
   drawImage();
-});
-
-document.getElementById('pairCodeClose').addEventListener('click',()=>{
-  document.getElementById('pairCodeDisplay').style.display='none';
-  document.getElementById('tgPhoto').classList.remove('on');
-  stopPhotoUpload();
 });
 
 // Mobile close button
