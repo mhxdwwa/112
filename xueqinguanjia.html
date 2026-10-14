@@ -1238,7 +1238,7 @@ tbody tr:last-child td { border-bottom: none; }
       <input type="password" id="loginPass" placeholder="请输入密码">
     </div>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">登 录</button>
-    <button class="login-import-btn" onclick="showXqQRLogin()" style="background:linear-gradient(135deg,#059669,#10b981);margin-top:12px">
+    <button class="login-import-btn" id="qrLoginBtn" onclick="showXqQRLogin()" style="background:linear-gradient(135deg,#059669,#10b981);margin-top:12px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><rect x="7" y="7" width="3" height="3"/><rect x="14" y="7" width="3" height="3"/><rect x="7" y="14" width="3" height="3"/><rect x="14" y="14" width="3" height="3"/></svg>
       手机扫码登录
     </button>
@@ -12694,6 +12694,28 @@ loadSchoolConfigFromStorage();
 // 清空输入框，防止浏览器自动填充干扰
 document.getElementById('loginUser').value = '';
 document.getElementById('loginPass').value = '';
+
+// 根据设备类型显示/隐藏相应功能按钮
+// 电脑端：显示"手机扫码登录"（生成二维码），隐藏扫码按钮（摄像头扫码）
+// 手机端：隐藏"手机扫码登录"，显示扫码按钮（摄像头扫码）
+(function initDeviceButtons() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|HarmonyOS/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 0 && window.screen.width < 900)
+    || (window.innerWidth <= 768 && 'ontouchstart' in window);
+  
+  // 登录页的"手机扫码登录"按钮：仅电脑端显示
+  const qrLoginBtn = document.getElementById('qrLoginBtn');
+  if (qrLoginBtn) {
+    qrLoginBtn.style.display = isMobile ? 'none' : 'block';
+  }
+  
+  // 顶栏的扫码按钮：仅移动端显示（登录后才会实际显示，这里先设置初始状态）
+  const scanQrBtn = document.getElementById('scanQrBtn');
+  if (scanQrBtn) {
+    scanQrBtn.dataset.mobileOnly = 'true';
+    scanQrBtn.style.display = isMobile ? 'block' : 'none';
+  }
+})();
 
 // 立即检查本地凭证状态（快速响应）
 try {
