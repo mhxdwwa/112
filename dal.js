@@ -3942,51 +3942,56 @@ function _setupRealtimeSubscriptions() {
   try {
     // v221: Subscribe to classes table — class metadata changes only
     // operation_logs 已迁移到独立表，不再监听 classes 表的 operation_logs_json 变化
-    var classChannel = db.channel('dal-classes-' + _clientId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
-        _realtimeLastEventTime = Date.now(); // v95: Track liveness
-        // v238: classes 表变化时，同步 group_configs 到内存
-        if (payload && payload.new && payload.new.group_configs !== undefined) {
-          var classId = payload.new.id;
-          var newGroupConfigs = (function() { try { return typeof payload.new.group_configs === 'string' ? JSON.parse(payload.new.group_configs) : (payload.new.group_configs || []); } catch(e) { return []; } })();
-          for (var i = 0; i < classesData.length; i++) {
-            if (classesData[i].id === classId) {
-              classesData[i].groupConfigs = newGroupConfigs;
-              console.log('[DAL] v238 groupConfigs updated via Realtime for class', classId, '→', newGroupConfigs.length, 'groups');
-              break;
+    // 学生不需要 classes 和 operation_logs 的实时推送，减少 40% 并发连接
+    var _isStudentForChannels = currentUser && currentUser.type === 'student';
+
+    if (!_isStudentForChannels) {
+      var classChannel = db.channel('dal-classes-' + _clientId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
+          _realtimeLastEventTime = Date.now(); // v95: Track liveness
+          // v238: classes 表变化时，同步 group_configs 到内存
+          if (payload && payload.new && payload.new.group_configs !== undefined) {
+            var classId = payload.new.id;
+            var newGroupConfigs = (function() { try { return typeof payload.new.group_configs === 'string' ? JSON.parse(payload.new.group_configs) : (payload.new.group_configs || []); } catch(e) { return []; } })();
+            for (var i = 0; i < classesData.length; i++) {
+              if (classesData[i].id === classId) {
+                classesData[i].groupConfigs = newGroupConfigs;
+                console.log('[DAL] v238 groupConfigs updated via Realtime for class', classId, '→', newGroupConfigs.length, 'groups');
+                break;
+              }
             }
           }
-        }
-        console.log('[DAL] v221 Classes channel: class metadata change, refreshing class list UI only');
-        if (typeof renderClassList === 'function') {
-          renderClassList();
-        }
-      })
-      .subscribe(function(status) {
-        if (status === 'SUBSCRIBED') _onChannelConfirmed();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[DAL] Classes channel status:', status);
-          _checkRealtimeHealth();
-        }
-      });
-    _realtimeChannels.push(classChannel);
-    channelsCreated++;
+          console.log('[DAL] v221 Classes channel: class metadata change, refreshing class list UI only');
+          if (typeof renderClassList === 'function') {
+            renderClassList();
+          }
+        })
+        .subscribe(function(status) {
+          if (status === 'SUBSCRIBED') _onChannelConfirmed();
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('[DAL] Classes channel status:', status);
+            _checkRealtimeHealth();
+          }
+        });
+      _realtimeChannels.push(classChannel);
+      channelsCreated++;
 
-    // v221: Subscribe to operation_logs table — 日志变更实时推送
-    var logsChannel = db.channel('dal-oplogs-' + _clientId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function(payload) {
-        _realtimeLastEventTime = Date.now();
-        console.log('[DAL] v221 Operation logs channel: ' + payload.eventType + ' — lightweight log refresh');
-        _refreshLogsOnly();
-      })
-      .subscribe(function(status) {
-        if (status === 'SUBSCRIBED') _onChannelConfirmed();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[DAL] OpLogs channel status:', status);
-        }
-      });
-    _realtimeChannels.push(logsChannel);
-    channelsCreated++;
+      // v221: Subscribe to operation_logs table — 日志变更实时推送
+      var logsChannel = db.channel('dal-oplogs-' + _clientId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function(payload) {
+          _realtimeLastEventTime = Date.now();
+          console.log('[DAL] v221 Operation logs channel: ' + payload.eventType + ' — lightweight log refresh');
+          _refreshLogsOnly();
+        })
+        .subscribe(function(status) {
+          if (status === 'SUBSCRIBED') _onChannelConfirmed();
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('[DAL] OpLogs channel status:', status);
+          }
+        });
+      _realtimeChannels.push(logsChannel);
+      channelsCreated++;
+    }
 
     // Subscribe to students table — v100: 直接用 payload.new 更新内存数据
     var studentChannel = db.channel('dal-students-' + _clientId)
