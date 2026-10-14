@@ -12777,7 +12777,6 @@ let xqDb = null;
 let xqQrToken = null;
 let xqQrPollTimer = null;
 let xqQrPollCount = 0;
-let xqQrRealtimeChannel = null;
 let xqQrVerified = false;
 
 // 初始化 Supabase 客户端
@@ -12827,10 +12826,6 @@ function stopXqQRDetection() {
   if (xqQrPollTimer) {
     clearInterval(xqQrPollTimer);
     xqQrPollTimer = null;
-  }
-  if (xqQrRealtimeChannel && xqDb) {
-    try { xqDb.removeChannel(xqQrRealtimeChannel); } catch(e) {}
-    xqQrRealtimeChannel = null;
   }
   xqQrPollCount = 0;
 }
@@ -12944,44 +12939,11 @@ function startXqQRDetection() {
   
   updateXqQRWaitingStatus();
   
-  // Realtime 实时推送
-  try {
-    xqQrRealtimeChannel = xqDb
-      .channel('xq_qr_' + xqQrToken)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'qr_login_tokens',
-        filter: 'token=eq.' + xqQrToken
-      }, function(payload) {
-        console.log('[XQ QR] Realtime收到UPDATE:', payload.new);
-        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
-          onXqQRVerified(payload.new.email);
-        }
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'qr_login_tokens',
-        filter: 'token=eq.' + xqQrToken
-      }, function(payload) {
-        console.log('[XQ QR] Realtime收到INSERT:', payload.new);
-        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
-          onXqQRVerified(payload.new.email);
-        }
-      })
-      .subscribe(function(status) {
-        console.log('[XQ QR] Realtime订阅状态:', status);
-      });
-  } catch(e) {
-    console.warn('[XQ QR] Realtime初始化失败:', e.message);
-  }
-  
-  // 轮询备份
+  // 仅使用轮询检测（避免占用 Realtime 并发连接数）
   xqQrPollTimer = setInterval(pollXqQRStatus, 1500);
   pollXqQRStatus();
   
-  console.log('[XQ QR] 开始检测（Realtime + 轮询），token:', xqQrToken.substring(0, 20) + '...');
+  console.log('[XQ QR] 开始检测（轮询模式），token:', xqQrToken.substring(0, 20) + '...');
 }
 
 function updateXqQRWaitingStatus() {
