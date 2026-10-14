@@ -3403,9 +3403,14 @@ function restoreSession() {
     buildSidebar();
     updateDate();
     
-    // 显示扫码按钮（移动端）
+    // 显示扫码按钮（仅移动端）
     const scanBtn = document.getElementById('scanQrBtn');
-    if (scanBtn) scanBtn.style.display = 'block';
+    if (scanBtn) {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|HarmonyOS/i.test(navigator.userAgent)
+        || (navigator.maxTouchPoints > 0 && window.screen.width < 900)
+        || (window.innerWidth <= 768 && 'ontouchstart' in window);
+      scanBtn.style.display = isMobile ? 'block' : 'none';
+    }
     
     console.log('[XQ] Session restored for:', session.user.teacherName);
     
@@ -3435,9 +3440,14 @@ function initAppAfterLogin() {
   buildSidebar();
   updateDate();
   
-  // 显示扫码按钮（移动端）
+  // 显示扫码按钮（仅移动端）
   const scanBtn = document.getElementById('scanQrBtn');
-  if (scanBtn) scanBtn.style.display = 'block';
+  if (scanBtn) {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|HarmonyOS/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 0 && window.screen.width < 900)
+      || (window.innerWidth <= 768 && 'ontouchstart' in window);
+    scanBtn.style.display = isMobile ? 'block' : 'none';
+  }
   
   // 保存会话
   localStorage.setItem('xq_session', JSON.stringify({
@@ -13074,10 +13084,27 @@ async function doXqAutoLogin(email) {
 // 打开扫码器（用于手机端）
 let xqHtml5Qrcode = null;
 
+// 综合检测设备是否为移动端（UA + 触摸屏 + 屏幕尺寸）
+function isMobileDevice() {
+  // 1. UserAgent 检测（覆盖大部分手机）
+  const ua = navigator.userAgent || '';
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|HarmonyOS/i.test(ua)) {
+    return true;
+  }
+  // 2. 触摸屏检测（大部分手机都有触摸屏，且屏幕较小）
+  if ('maxTouchPoints' in navigator && navigator.maxTouchPoints > 0 && window.screen.width < 900) {
+    return true;
+  }
+  // 3. 窗口宽度很小（手机竖屏一般 < 768px）
+  if (window.innerWidth <= 768 && 'ontouchstart' in window) {
+    return true;
+  }
+  return false;
+}
+
 function openXqQrScanner() {
   // 检查是否在移动端
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  if (!isMobile) {
+  if (!isMobileDevice()) {
     alert('请使用手机浏览器打开此网站进行扫码');
     return;
   }
