@@ -3673,8 +3673,8 @@ function compressImage(file,maxWidth,quality){
         ctx.imageSmoothingEnabled=true;
         ctx.imageSmoothingQuality='high';
         ctx.drawImage(img,0,0,w,h);
-        // Use higher quality JPEG for better clarity
-        resolve(canvas.toDataURL('image/jpeg',quality));
+        // Use WebP for better quality at smaller file size
+        resolve(canvas.toDataURL('image/webp',quality));
       };
       img.src=e.target.result;
     };
