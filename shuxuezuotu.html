@@ -3421,18 +3421,23 @@ async function checkForImage(){
   const gen=IMG_STATE.generation; // capture current generation
   try{
     const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
-    const data=await res.json();
     // Guard: if image was removed/changed while fetch was in-flight, ignore this response
     if(gen!==IMG_STATE.generation)return;
-    if(data.hasImage&&data.image){
-      // Image received!
-      // Update status
+    
+    // 204 = no image, 200 = binary image data
+    if(res.status===200){
+      // Image received as binary!
       const statusEl=document.getElementById('pairCodeStatus');
       if(statusEl){
         statusEl.textContent='正在加载图片...';
         statusEl.className='pair-code-status received';
       }
-      await loadImage(data.image);
+      // Convert binary response to blob URL
+      const blob=await res.blob();
+      const blobUrl=URL.createObjectURL(blob);
+      await loadImage(blobUrl);
+      URL.revokeObjectURL(blobUrl); // clean up after image is loaded
+      
       // Clear the image from worker (but keep the pair code valid)
       fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
       // Show success feedback
@@ -3444,13 +3449,14 @@ async function checkForImage(){
         statusEl.className='pair-code-status';
       }
     }
+    // 204 = no image yet, just continue polling
   }catch(e){
     console.error('[Photo] Poll error:',e);
   }
 }
 
-// Load image from base64 data
-function loadImage(base64Data){
+// Load image from URL (blob URL or data URL)
+function loadImage(imageUrl){
   IMG_STATE.generation++; // new image invalidates old poll responses
   return new Promise((resolve)=>{
     const img=new Image();
@@ -3473,7 +3479,7 @@ function loadImage(base64Data){
       drawImage();
       resolve();
     };
-    img.src=base64Data;
+    img.src=imageUrl;
   });
 }
 
@@ -3506,17 +3512,18 @@ async function handleMobileFile(e){
   try{
     // Compress image (better quality for math drawings)
     status.textContent='正在压缩图片...';
-    const base64=await compressImage(file,1920,0.8);
-    // Upload to worker
+    const blob=await compressImage(file,1600,0.85);
+    // Upload binary directly (much faster than base64+JSON)
     status.textContent='正在上传...';
-    const res=await fetch('/api/image-relay/upload',{
+    const res=await fetch('/api/image-relay/upload?code='+encodeURIComponent(code),{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code:code,image:base64})
+      headers:{'Content-Type': blob.type || 'image/webp'},
+      body: blob
     });
     const data=await res.json();
     if(data.success){
-      status.textContent='✅ 上传成功！可以继续拍照';
+      const sizeKB = Math.round((data.size || blob.size) / 1024);
+      status.textContent='✅ 上传成功！('+sizeKB+'KB) 可以继续拍照';
       status.className='mobile-upload-status success';
       // Reset file input immediately so user can take another photo
       e.target.value='';
@@ -3532,9 +3539,9 @@ async function handleMobileFile(e){
   }
 }
 
-// Compress image using canvas (optimized for math drawings)
+// Compress image using canvas (returns Blob for binary upload)
 function compressImage(file,maxWidth,quality){
-  return new Promise((resolve)=>{
+  return new Promise((resolve,reject)=>{
     const reader=new FileReader();
     reader.onload=(e)=>{
       const img=new Image();
@@ -3552,11 +3559,16 @@ function compressImage(file,maxWidth,quality){
         ctx.imageSmoothingEnabled=true;
         ctx.imageSmoothingQuality='high';
         ctx.drawImage(img,0,0,w,h);
-        // Use WebP for better quality at smaller file size
-        resolve(canvas.toDataURL('image/webp',quality));
+        // Convert to Blob (binary) instead of base64
+        canvas.toBlob((blob)=>{
+          if(blob) resolve(blob);
+          else reject(new Error('Failed to compress image'));
+        }, 'image/webp', quality);
       };
+      img.onerror=()=>reject(new Error('Failed to load image'));
       img.src=e.target.result;
     };
+    reader.onerror=()=>reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
 }
