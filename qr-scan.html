@@ -208,7 +208,15 @@ var appTitle = '宠物世界';
   }
 
   if (userType !== 'teacher' || !userId || !userEmail) {
-    showError('请先在手机上以教师身份登录' + appTitle + '，然后再扫码');
+    // 未登录，保存扫码信息后跳转到主应用登录
+    sessionStorage.setItem('xq_pending_qr_token', qrToken);
+    sessionStorage.setItem('xq_pending_qr_app', appName);
+    var mainAppUrl = appName === 'xq' ? 'xueqinguanjia.html' : 'index.html';
+    document.getElementById('statusMsg').innerHTML =
+      '正在跳转到登录页面...<br><br><span style="font-size:12px;color:#999;">请先登录，登录后将自动完成扫码确认</span>';
+    setTimeout(function() {
+      window.location.href = mainAppUrl;
+    }, 1500);
     return;
   }
 

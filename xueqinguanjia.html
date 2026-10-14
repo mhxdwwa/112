@@ -3345,6 +3345,19 @@ function doLogin() {
     buildSidebar();
     updateDate();
     
+    // 检查是否有待完成的扫码确认（从 qr-scan.html 跳转过来登录后）
+    var pendingQrToken = sessionStorage.getItem('xq_pending_qr_token');
+    var pendingQrApp = sessionStorage.getItem('xq_pending_qr_app');
+    if (pendingQrToken) {
+      sessionStorage.removeItem('xq_pending_qr_token');
+      sessionStorage.removeItem('xq_pending_qr_app');
+      // 先保存会话，然后跳回 qr-scan.html 完成扫码确认
+      saveSession();
+      var qrUrl = 'qr-scan.html?token=' + encodeURIComponent(pendingQrToken) + '&app=' + (pendingQrApp || 'xq');
+      window.location.href = qrUrl;
+      return;
+    }
+    
     // 保存登录状态到 localStorage
     saveSession();
     
@@ -3432,6 +3445,18 @@ function restoreSession() {
 
 // 初始化应用（QR登录后调用）
 function initAppAfterLogin() {
+  // 检查是否有待完成的扫码确认（从 qr-scan.html 跳转过来登录后）
+  var pendingQrToken = sessionStorage.getItem('xq_pending_qr_token');
+  var pendingQrApp = sessionStorage.getItem('xq_pending_qr_app');
+  if (pendingQrToken) {
+    sessionStorage.removeItem('xq_pending_qr_token');
+    sessionStorage.removeItem('xq_pending_qr_app');
+    // 跳回 qr-scan.html 完成扫码确认
+    var qrUrl = 'qr-scan.html?token=' + encodeURIComponent(pendingQrToken) + '&app=' + (pendingQrApp || 'xq');
+    window.location.href = qrUrl;
+    return;
+  }
+  
   document.getElementById('app').classList.add('visible');
   document.getElementById('sidebarAvatar').textContent = xqCurrentUser.teacherName.charAt(0);
   document.getElementById('sidebarName').textContent = xqCurrentUser.teacherName;
@@ -13210,20 +13235,29 @@ function onScanSuccess(decodedText) {
     xqHtml5Qrcode.stop().catch(e => console.error(e));
   }
 
-  // 关闭扫码弹窗
-  closeXqQrScanner();
+  // 显示扫描成功提示
+  const scannerStatus = document.getElementById('xqScannerStatus');
+  if (scannerStatus) {
+    scannerStatus.textContent = '✅ 扫描成功，正在跳转...';
+    scannerStatus.style.color = '#10b981';
+  }
 
   // 解析 URL 并跳转
   try {
     const url = new URL(decodedText);
     // 检查是否是 qr-scan.html
     if (url.pathname.includes('qr-scan.html')) {
-      window.location.href = decodedText;
+      // 延迟跳转，让用户看到成功提示
+      setTimeout(function() {
+        window.location.href = decodedText;
+      }, 800);
     } else {
       alert('二维码内容无效');
+      closeXqQrScanner();
     }
   } catch (e) {
     alert('二维码解析失败');
+    closeXqQrScanner();
   }
 }
 
