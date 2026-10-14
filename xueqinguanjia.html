@@ -3459,6 +3459,7 @@ const NAV_CONFIG = {
     ]},
     { section: '教学', items: [
       { id: 'teach-classes', label: '授课班级', icon: iconUsers },
+      { id: 'score-manage', label: '成绩管理', icon: iconFile },
     ]},
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
@@ -3467,6 +3468,7 @@ const NAV_CONFIG = {
   teacher: [
     { section: '教学', items: [
       { id: 'my-classes', label: '授课班级', icon: iconGrid },
+      { id: 'score-manage', label: '成绩管理', icon: iconFile },
     ]},
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
@@ -3660,6 +3662,7 @@ function navigate(pageId) {
     'admin-students': '上传学生名单',
     'admin-class-students': '班级学生管理',
     'password-mgmt': '密码管理',
+    'score-manage': '成绩管理',
   };
   document.getElementById('headerTitle').textContent = titles[pageId] || '';
   document.getElementById('headerBreadcrumb').textContent = `首页 / ${titles[pageId] || ''}`;
@@ -3702,8 +3705,17 @@ function renderPage(pageId) {
     'admin-students': renderAdminStudents,
     'admin-class-students': renderAdminClassStudents,
     'password-mgmt': renderPasswordMgmt,
+    'score-manage': renderScoreManage,
   };
-  if (renderers[pageId]) content.innerHTML = renderers[pageId]();
+  if (renderers[pageId]) {
+    content.innerHTML = renderers[pageId]();
+    // 进入成绩管理页面时加载考试列表
+    if (pageId === 'score-manage' && scoreCurrentView === 'list') {
+      loadScoreExams().then(() => {
+        content.innerHTML = renderScoreManage();
+      });
+    }
+  }
 }
 
 /* ----- LEADER: Overview ----- */
@@ -5685,6 +5697,477 @@ function exportAdminRoster(cls) {
   XLSX.utils.book_append_sheet(wb, ws, '学生名单');
   XLSX.writeFile(wb, `${cls}_学生名单.xlsx`);
   showToast('已导出学生名单Excel');
+}
+
+/* ===== SCORE MANAGEMENT ===== */
+let scoreExamsCache = [];
+let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail'
+let scoreCurrentExam = null;
+
+async function loadScoreExams() {
+  const teacher = xqCurrentUser?.teacherName;
+  const result = await xqApi('exams', { action: 'list', teacher });
+  if (result.ok) {
+    scoreExamsCache = result.exams || [];
+  }
+}
+
+function renderScoreManage() {
+  if (scoreCurrentView === 'create') return renderScoreCreate();
+  if (scoreCurrentView === 'detail' && scoreCurrentExam) return renderScoreDetail();
+  
+  // 考试列表视图
+  const isHeadteacher = xqCurrentUser?.isHeadteacher;
+  const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
+  
+  let examListHtml = '';
+  if (scoreExamsCache.length === 0) {
+    examListHtml = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-400)">暂无考试记录，点击上方"新建考试"开始录入成绩</td></tr>';
+  } else {
+    examListHtml = scoreExamsCache.map(exam => `
+      <tr>
+        <td style="font-weight:500">${exam.exam_name}</td>
+        <td>${exam.class}</td>
+        <td><span class="badge blue">${exam.subject}</span></td>
+        <td>${exam.exam_date}</td>
+        <td>${exam.teacher}</td>
+        <td>
+          <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="viewScoreDetail('${exam.id}')">查看</button>
+          <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteExam('${exam.id}','${exam.exam_name}')">删除</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span style="font-size:14px;color:var(--gray-600)">管理学生平时测验成绩，支持手动录入和Excel导入</span>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn primary" onclick="showScoreCreate()">+ 新建考试</button>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">考试记录</span>
+        <span style="font-size:12px;color:var(--gray-400)">共 ${scoreExamsCache.length} 条记录</span>
+      </div>
+      <div class="card-body no-pad">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>考试名称</th>
+                <th>班级</th>
+                <th>科目</th>
+                <th>考试日期</th>
+                <th>录入教师</th>
+                <th style="width:140px">操作</th>
+              </tr>
+            </thead>
+            <tbody>${examListHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function showScoreCreate() {
+  scoreCurrentView = 'create';
+  navigate('score-manage');
+}
+
+function renderScoreCreate() {
+  const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
+  const classOptions = teacherClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+        <span style="font-size:14px;color:var(--gray-600);margin-left:12px">新建考试</span>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">考试信息</span>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group">
+            <label class="form-label">考试名称 *</label>
+            <input class="form-input" id="scoreExamName" placeholder="如：第一单元测试、期中模拟">
+          </div>
+          <div class="form-group">
+            <label class="form-label">科目 *</label>
+            <input class="form-input" id="scoreSubject" placeholder="如：数学、英语">
+          </div>
+          <div class="form-group">
+            <label class="form-label">班级 *</label>
+            <select class="form-input" id="scoreClass">
+              <option value="">请选择班级</option>
+              ${classOptions}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">考试日期 *</label>
+            <input class="form-input" type="date" id="scoreDate" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">录入成绩</span>
+        <div style="display:flex;gap:8px">
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="importScoreExcel()">📥 导入Excel</button>
+          <input type="file" id="scoreExcelInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleScoreExcelImport(event)">
+        </div>
+      </div>
+      <div class="card-body no-pad">
+        <div class="table-wrap">
+          <table id="scoreEntryTable">
+            <thead>
+              <tr>
+                <th style="width:60px">序号</th>
+                <th>学生姓名</th>
+                <th style="width:120px">分数</th>
+                <th style="width:80px">操作</th>
+              </tr>
+            </thead>
+            <tbody id="scoreEntryBody">
+              <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--gray-400)">请先选择班级，系统将自动加载学生名单</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <div class="toolbar" style="margin-top:16px">
+      <div class="toolbar-left"></div>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn ghost" onclick="backToScoreList()">取消</button>
+      <button class="toolbar-btn primary" onclick="saveScoreExam()">保存考试</button>
+    </div>
+  `;
+}
+
+function backToScoreList() {
+  scoreCurrentView = 'list';
+  scoreCurrentExam = null;
+  navigate('score-manage');
+}
+
+// 班级选择后加载学生名单
+document.addEventListener('change', async function(e) {
+  if (e.target.id === 'scoreClass') {
+    const cls = e.target.value;
+    const tbody = document.getElementById('scoreEntryBody');
+    if (!cls) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--gray-400)">请先选择班级</td></tr>';
+      return;
+    }
+    
+    const students = STUDENTS[cls] || [];
+    if (students.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--gray-400)">该班级暂无学生数据</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = students.map((s, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${s.name}</td>
+        <td><input type="number" class="form-input score-input" data-student="${s.name}" placeholder="分数" style="width:100px" min="0"></td>
+        <td><button class="toolbar-btn ghost" style="padding:4px 8px;font-size:11px;color:var(--gray-400)" onclick="this.closest('tr').querySelector('.score-input').value=''">清空</button></td>
+      </tr>
+    `).join('');
+  }
+});
+
+async function saveScoreExam() {
+  const examName = document.getElementById('scoreExamName').value.trim();
+  const subject = document.getElementById('scoreSubject').value.trim();
+  const cls = document.getElementById('scoreClass').value;
+  const examDate = document.getElementById('scoreDate').value;
+  
+  if (!examName || !subject || !cls || !examDate) {
+    showToast('请填写完整的考试信息', 'warning');
+    return;
+  }
+  
+  // 收集成绩
+  const scores = [];
+  document.querySelectorAll('.score-input').forEach(input => {
+    const student = input.dataset.student;
+    const score = input.value.trim();
+    if (score !== '') {
+      scores.push({ student, score: parseFloat(score) });
+    }
+  });
+  
+  if (scores.length === 0) {
+    showToast('请至少录入一个学生的成绩', 'warning');
+    return;
+  }
+  
+  const teacher = xqCurrentUser?.teacherName;
+  const result = await xqApi('exams', {
+    action: 'create',
+    teacher,
+    class: cls,
+    subject,
+    exam_name: examName,
+    exam_date: examDate,
+    scores
+  });
+  
+  if (result.ok) {
+    showToast(`考试已保存，共录入 ${scores.length} 条成绩`, 'success');
+    await loadScoreExams();
+    backToScoreList();
+  } else {
+    showToast('保存失败：' + (result.error || '未知错误'), 'error');
+  }
+}
+
+async function deleteExam(examId, examName) {
+  if (!confirm(`确定要删除考试"${examName}"吗？删除后无法恢复。`)) return;
+  
+  const teacher = xqCurrentUser?.teacherName;
+  const result = await xqApi('exams', { action: 'delete', examId, teacher });
+  
+  if (result.ok) {
+    showToast('考试已删除', 'success');
+    await loadScoreExams();
+    navigate('score-manage');
+  } else {
+    showToast('删除失败：' + (result.error || '未知错误'), 'error');
+  }
+}
+
+async function viewScoreDetail(examId) {
+  const result = await xqApi('exams', { action: 'get', examId });
+  if (result.ok) {
+    scoreCurrentExam = { ...result.exam, scores: result.scores };
+    scoreCurrentView = 'detail';
+    navigate('score-manage');
+  } else {
+    showToast('获取成绩详情失败', 'error');
+  }
+}
+
+function renderScoreDetail() {
+  const exam = scoreCurrentExam;
+  const scores = exam.scores || [];
+  
+  // 计算统计
+  const scoreValues = scores.map(s => s.score);
+  const avg = scoreValues.length > 0 ? (scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length).toFixed(1) : 0;
+  const max = scoreValues.length > 0 ? Math.max(...scoreValues) : 0;
+  const min = scoreValues.length > 0 ? Math.min(...scoreValues) : 0;
+  
+  // 分数段统计
+  const ranges = [
+    { label: '90-100', min: 90, max: 100, count: 0 },
+    { label: '80-89', min: 80, max: 89, count: 0 },
+    { label: '70-79', min: 70, max: 79, count: 0 },
+    { label: '60-69', min: 60, max: 69, count: 0 },
+    { label: '60以下', min: 0, max: 59, count: 0 }
+  ];
+  scoreValues.forEach(s => {
+    const range = ranges.find(r => s >= r.min && s <= r.max);
+    if (range) range.count++;
+  });
+  
+  const scoreRows = scores.map((s, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td style="font-weight:500">${s.student}</td>
+      <td><span style="font-size:16px;font-weight:600;color:${s.score >= 90 ? 'var(--accent)' : s.score >= 60 ? 'var(--gray-800)' : 'var(--danger)'}">${s.score}</span></td>
+    </tr>
+  `).join('');
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+        <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${exam.exam_name}</span>
+      </div>
+    </div>
+    
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="stat-card blue anim-in anim-d1">
+        <div class="stat-label">参考人数</div>
+        <div class="stat-value">${scores.length}</div>
+      </div>
+      <div class="stat-card green anim-in anim-d2">
+        <div class="stat-label">平均分</div>
+        <div class="stat-value">${avg}</div>
+      </div>
+      <div class="stat-card green anim-in anim-d3">
+        <div class="stat-label">最高分</div>
+        <div class="stat-value">${max}</div>
+      </div>
+      <div class="stat-card orange anim-in anim-d4">
+        <div class="stat-label">最低分</div>
+        <div class="stat-value">${min}</div>
+      </div>
+    </div>
+    
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card anim-in anim-d2">
+        <div class="card-header">
+          <span class="card-title">分数段分布</span>
+        </div>
+        <div class="card-body">
+          ${ranges.map(r => `
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+              <span style="width:60px;font-size:13px;color:var(--gray-600)">${r.label}</span>
+              <div style="flex:1;height:20px;background:var(--gray-100);border-radius:4px;overflow:hidden">
+                <div style="height:100%;width:${scores.length > 0 ? (r.count / scores.length * 100) : 0}%;background:var(--primary);transition:width 0.3s"></div>
+              </div>
+              <span style="width:40px;text-align:right;font-size:13px;font-weight:500">${r.count}人</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="card anim-in anim-d3">
+        <div class="card-header">
+          <span class="card-title">考试信息</span>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;gap:12px">
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+              <span style="color:var(--gray-500)">考试名称</span>
+              <span style="font-weight:500">${exam.exam_name}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+              <span style="color:var(--gray-500)">班级</span>
+              <span style="font-weight:500">${exam.class}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+              <span style="color:var(--gray-500)">科目</span>
+              <span style="font-weight:500">${exam.subject}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+              <span style="color:var(--gray-500)">考试日期</span>
+              <span style="font-weight:500">${exam.exam_date}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0">
+              <span style="color:var(--gray-500)">录入教师</span>
+              <span style="font-weight:500">${exam.teacher}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <span class="card-title">成绩明细</span>
+        <span style="font-size:12px;color:var(--gray-400)">按分数降序排列</span>
+      </div>
+      <div class="card-body no-pad">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px">排名</th>
+                <th>学生姓名</th>
+                <th style="width:100px">分数</th>
+              </tr>
+            </thead>
+            <tbody>${scoreRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function importScoreExcel() {
+  document.getElementById('scoreExcelInput').click();
+}
+
+async function handleScoreExcelImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const cls = document.getElementById('scoreClass').value;
+  if (!cls) {
+    showToast('请先选择班级', 'warning');
+    return;
+  }
+  
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    
+    if (rows.length < 2) {
+      showToast('Excel文件为空或格式不正确', 'warning');
+      return;
+    }
+    
+    // 查找姓名和分数列
+    const header = rows[0].map(h => String(h || '').trim());
+    let nameCol = -1, scoreCol = -1;
+    
+    // 尝试匹配常见列名
+    const nameKeywords = ['姓名', '学生', '名字', 'name', '学生姓名'];
+    const scoreKeywords = ['分数', '成绩', '得分', 'score', '考试', '测验'];
+    
+    header.forEach((h, i) => {
+      if (nameKeywords.some(k => h.includes(k))) nameCol = i;
+      if (scoreKeywords.some(k => h.includes(k))) scoreCol = i;
+    });
+    
+    // 如果没找到，尝试第一列和第二列
+    if (nameCol === -1) nameCol = 0;
+    if (scoreCol === -1) scoreCol = 1;
+    
+    // 获取班级学生名单
+    const classStudents = (STUDENTS[cls] || []).map(s => s.name);
+    
+    // 解析成绩
+    let importedCount = 0;
+    const scoreMap = {};
+    
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length === 0) continue;
+      
+      const name = String(row[nameCol] || '').trim();
+      const score = parseFloat(row[scoreCol]);
+      
+      if (name && !isNaN(score) && classStudents.includes(name)) {
+        scoreMap[name] = score;
+        importedCount++;
+      }
+    }
+    
+    // 填充到表格
+    document.querySelectorAll('.score-input').forEach(input => {
+      const student = input.dataset.student;
+      if (scoreMap[student] !== undefined) {
+        input.value = scoreMap[student];
+      }
+    });
+    
+    showToast(`成功导入 ${importedCount} 条成绩`, 'success');
+  } catch (e) {
+    console.error('Excel导入失败:', e);
+    showToast('导入失败：' + e.message, 'error');
+  }
+  
+  // 清空input以便下次可以再次导入同一文件
+  event.target.value = '';
 }
 
 /* ----- ADMIN: Password Management ----- */
