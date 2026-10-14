@@ -256,13 +256,15 @@ const IMG_STATE = {
   imgStartX: 0, imgStartY: 0,
   moveMode: false,       // whether in image move mode
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
-  workerUrl: '',  // Using Pages Functions, no separate worker needed
+  workerUrl: 'https://mathlab-image-relay.444522621.workers.dev',  // Worker URL for WebSocket + upload
   pairCode: null,
   pollTimer: null,
   generation: 0,         // race condition guard: stale poll responses are ignored
   loading: false,        // prevent concurrent image loads
   currentBlobUrl: null,  // track blob URL for proper cleanup
   mobilePairCode: null,  // remember pairing code on mobile for continuous uploads
+  ws: null,              // WebSocket connection for real-time notifications
+  wsConnected: false,    // WebSocket connection status
 };
 
 const G={
@@ -3365,6 +3367,12 @@ function stopPhotoUpload(){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
   }
+  // Close WebSocket
+  if(IMG_STATE.ws){
+    try{ IMG_STATE.ws.close(); }catch(e){}
+    IMG_STATE.ws=null;
+    IMG_STATE.wsConnected=false;
+  }
   IMG_STATE.pairCode=null;
   IMG_STATE.loading=false;
   // Clean up blob URL
@@ -3374,22 +3382,31 @@ function stopPhotoUpload(){
   }
 }
 
-// Generate pairing code from Cloudflare Worker
+// Generate pairing code and connect WebSocket for real-time notifications
 async function generatePairCode(){
-  // Reset status
   const statusEl=document.getElementById('pairCodeStatus');
   if(statusEl){
-    statusEl.textContent='等待手机上传...';
+    statusEl.textContent='正在连接...';
     statusEl.className='pair-code-status';
   }
   try{
-    const res=await fetch('/api/image-relay/pair',{method:'POST'});
+    // Step 1: Get pairing code from Worker
+    const res=await fetch(IMG_STATE.workerUrl+'/api/pair',{method:'POST'});
     const data=await res.json();
-    if(data.code){
-      IMG_STATE.pairCode=data.code;
-      document.getElementById('pairCodeValue').textContent=data.code;
-      // Start polling for image
-      startPolling();
+    if(!data.code) throw new Error('No code returned');
+    
+    IMG_STATE.pairCode=data.code;
+    document.getElementById('pairCodeValue').textContent=data.code;
+    
+    // Step 2: Connect WebSocket for instant notifications
+    connectWebSocket(data.code);
+    
+    // Step 3: Start fallback polling (every 2s, in case WebSocket fails)
+    startFallbackPolling();
+    
+    if(statusEl){
+      statusEl.textContent='等待手机上传...';
+      statusEl.className='pair-code-status';
     }
   }catch(e){
     console.error('[Photo] Failed to generate pair code:',e);
@@ -3398,81 +3415,133 @@ async function generatePairCode(){
   }
 }
 
-// Poll for uploaded image (PC side)
-function startPolling(){
-  if(IMG_STATE.pollTimer)clearInterval(IMG_STATE.pollTimer);
+// Connect WebSocket for real-time image notifications
+function connectWebSocket(code){
+  if(IMG_STATE.ws){
+    try{ IMG_STATE.ws.close(); }catch(e){}
+  }
   
-  // Immediate first check
-  checkForImage();
+  const wsUrl=IMG_STATE.workerUrl.replace('https://','wss://').replace('http://','ws://');
+  const ws=new WebSocket(wsUrl+'/ws');
+  IMG_STATE.ws=ws;
   
-  // Then poll every 500ms for faster response
-  IMG_STATE.pollTimer=setInterval(checkForImage,500);
+  ws.onopen=()=>{
+    console.log('[WebSocket] Connected, registering code:',code);
+    ws.send(JSON.stringify({type:'register',code:code}));
+  };
+  
+  ws.onmessage=(event)=>{
+    try{
+      const msg=JSON.parse(event.data);
+      console.log('[WebSocket] Message:',msg);
+      
+      if(msg.type==='registered'){
+        IMG_STATE.wsConnected=true;
+        console.log('[WebSocket] Registered successfully');
+        const statusEl=document.getElementById('pairCodeStatus');
+        if(statusEl) statusEl.textContent='已连接 (实时模式)';
+      }
+      
+      if(msg.type==='image_ready' && msg.code===IMG_STATE.pairCode){
+        // Instant notification! Download and display image
+        console.log('[WebSocket] Image ready!',msg.size,'bytes');
+        handleImageReady(msg.size);
+      }
+    }catch(e){
+      console.error('[WebSocket] Message parse error:',e);
+    }
+  };
+  
+  ws.onclose=()=>{
+    console.log('[WebSocket] Closed');
+    IMG_STATE.wsConnected=false;
+    // Reconnect after 2s if still active
+    if(IMG_STATE.pairCode && IMG_STATE.ws===ws){
+      setTimeout(()=>{
+        if(IMG_STATE.pairCode && !IMG_STATE.wsConnected){
+          console.log('[WebSocket] Reconnecting...');
+          connectWebSocket(IMG_STATE.pairCode);
+        }
+      },2000);
+    }
+  };
+  
+  ws.onerror=(e)=>{
+    console.error('[WebSocket] Error:',e);
+    IMG_STATE.wsConnected=false;
+  };
 }
 
-async function checkForImage(){
-  if(!IMG_STATE.pairCode||IMG_STATE.loading)return;
-  const gen=IMG_STATE.generation; // capture current generation
+// Handle image ready notification (from WebSocket or fallback poll)
+async function handleImageReady(sizeHint){
+  if(!IMG_STATE.pairCode||IMG_STATE.loading) return;
+  const gen=IMG_STATE.generation;
+  IMG_STATE.loading=true;
+  
+  const statusEl=document.getElementById('pairCodeStatus');
+  if(statusEl){
+    statusEl.textContent='正在加载图片...';
+    statusEl.className='pair-code-status received';
+  }
+  
   try{
-    // Step 1: Check flag only (reads ~50 bytes, very fast)
-    const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
-    if(gen!==IMG_STATE.generation)return;
+    // Download image from Worker
+    const imgRes=await fetch(IMG_STATE.workerUrl+'/api/download/'+IMG_STATE.pairCode);
+    if(gen!==IMG_STATE.generation){IMG_STATE.loading=false;return;}
     
-    // 200 = flag exists (new image ready), 204 = no image
-    if(res.status===200){
-      const flag=await res.json();
-      if(gen!==IMG_STATE.generation)return;
-      if(!flag.ready)return;
+    if(imgRes.status===200){
+      const blob=await imgRes.blob();
+      const blobUrl=URL.createObjectURL(blob);
       
-      // Prevent concurrent loads
-      IMG_STATE.loading=true;
-      
-      const statusEl=document.getElementById('pairCodeStatus');
-      if(statusEl){
-        statusEl.textContent='正在加载图片...';
-        statusEl.className='pair-code-status received';
+      if(IMG_STATE.currentBlobUrl){
+        URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
       }
+      IMG_STATE.currentBlobUrl=blobUrl;
       
-      // Step 2: Download the actual image binary (only once)
-      const imgRes=await fetch('/api/image-relay/download/'+IMG_STATE.pairCode);
-      if(gen!==IMG_STATE.generation){IMG_STATE.loading=false;return;}
+      await loadImage(blobUrl);
       
-      if(imgRes.status===200){
-        const blob=await imgRes.blob();
-        const blobUrl=URL.createObjectURL(blob);
-        
-        // Clean up old blob URL before creating new one
-        if(IMG_STATE.currentBlobUrl){
-          URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
-        }
-        IMG_STATE.currentBlobUrl=blobUrl;
-        
-        await loadImage(blobUrl);
-      }
-      
-      // Step 3: Clear image + flag from server
+      // Clear image from server
       try{
-        await fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
-      }catch(clearErr){
-        console.warn('[Photo] Clear failed:',clearErr);
-      }
+        await fetch(IMG_STATE.workerUrl+'/api/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
+      }catch(e){}
       
-      // Bump generation to invalidate any in-flight polls
       IMG_STATE.generation++;
       IMG_STATE.loading=false;
       
-      // Show success feedback
-      const sizeKB=Math.round((flag.size||0)/1024);
+      const sizeKB=sizeHint?Math.round(sizeHint/1024):Math.round(blob.size/1024);
       showToast('图片已接收 ('+sizeKB+'KB)');
       if(statusEl){
         statusEl.textContent='等待下一张...';
         statusEl.className='pair-code-status';
       }
+    }else{
+      IMG_STATE.loading=false;
     }
-    // 204 = no image yet, continue polling
   }catch(e){
-    console.error('[Photo] Poll error:',e);
+    console.error('[Photo] Download error:',e);
     IMG_STATE.loading=false;
+    if(statusEl) statusEl.textContent='下载失败，重试中...';
   }
+}
+
+// Fallback polling (every 2s, only used if WebSocket fails)
+function startFallbackPolling(){
+  if(IMG_STATE.pollTimer) clearInterval(IMG_STATE.pollTimer);
+  IMG_STATE.pollTimer=setInterval(fallbackCheck,2000);
+}
+
+async function fallbackCheck(){
+  // Only poll if WebSocket is not connected
+  if(IMG_STATE.wsConnected||!IMG_STATE.pairCode||IMG_STATE.loading) return;
+  console.log('[Fallback] Polling...');
+  // Try downloading directly - if image exists, handle it
+  try{
+    const res=await fetch(IMG_STATE.workerUrl+'/api/download/'+IMG_STATE.pairCode);
+    if(res.status===200){
+      const size=parseInt(res.headers.get('Content-Length'))||0;
+      await handleImageReady(size);
+    }
+  }catch(e){}
 }
 
 // Load image from URL (blob URL or data URL)
@@ -3540,7 +3609,7 @@ async function handleMobileFile(e){
     const compSizeKB=Math.round(blob.size/1024);
     // Upload binary directly (much faster than base64+JSON)
     status.textContent='正在上传 ('+origSizeKB+'KB→'+compSizeKB+'KB)...';
-    const res=await fetch('/api/image-relay/upload?code='+encodeURIComponent(code),{
+    const res=await fetch(IMG_STATE.workerUrl+'/api/upload?code='+encodeURIComponent(code),{
       method:'POST',
       headers:{'Content-Type': blob.type || 'image/jpeg'},
       body: blob
@@ -3687,6 +3756,12 @@ document.getElementById('imgRemove').addEventListener('click',()=>{
   if(IMG_STATE.pollTimer){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
+  }
+  // Close WebSocket
+  if(IMG_STATE.ws){
+    try{ IMG_STATE.ws.close(); }catch(e){}
+    IMG_STATE.ws=null;
+    IMG_STATE.wsConnected=false;
   }
   imgC.style.pointerEvents='none';
   document.getElementById('imageControls').classList.remove('on');

@@ -1,11 +1,15 @@
 /**
- * Cloudflare Worker - Image Relay for MathLab Photo Upload
- * Two-key design for fast polling:
- * - img:{code} = image binary data
- * - flag:{code} = tiny notification flag (JSON)
+ * Cloudflare Worker - Image Relay with WebSocket Real-time Notifications
  * 
- * Polling reads only the tiny flag (~50 bytes), not the image.
+ * Architecture:
+ * - PC connects via WebSocket for instant notifications
+ * - Phone uploads via HTTP POST
+ * - Worker notifies PC immediately via WebSocket (no polling delay!)
+ * - Images stored in KV
  */
+
+// In-memory map of pairing codes to WebSocket connections
+const wsConnections = new Map();
 
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request));
@@ -19,7 +23,6 @@ async function handleRequest(request) {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
   };
 
   if (request.method === 'OPTIONS') {
@@ -27,6 +30,11 @@ async function handleRequest(request) {
   }
 
   try {
+    // WebSocket upgrade for PC real-time notifications
+    if (path === '/ws' && request.headers.get('Upgrade') === 'websocket') {
+      return handleWebSocket(request);
+    }
+
     // POST /api/pair - Generate pairing code
     if (path === '/api/pair' && request.method === 'POST') {
       const code = generateCode();
@@ -36,7 +44,7 @@ async function handleRequest(request) {
       });
     }
 
-    // POST /api/upload?code=XXXXX - Upload image (binary body) + set flag
+    // POST /api/upload?code=XXXXX - Upload image
     if (path === '/api/upload' && request.method === 'POST') {
       const code = url.searchParams.get('code');
       
@@ -64,43 +72,26 @@ async function handleRequest(request) {
         metadata: { contentType }
       });
       
-      // Set tiny flag for fast polling
-      const flag = JSON.stringify({ 
-        ready: true, 
-        size: imageBuffer.byteLength, 
-        type: contentType,
-        ts: Date.now()
-      });
-      await IMAGE_KV.put(`flag:${code}`, flag, { expirationTtl: 1800 });
+      // Notify PC via WebSocket immediately!
+      const wsPair = wsConnections.get(code);
+      if (wsPair && wsPair.ws.readyState === 1) { // 1 = OPEN
+        try {
+          wsPair.ws.send(JSON.stringify({
+            type: 'image_ready',
+            code: code,
+            size: imageBuffer.byteLength,
+            contentType: contentType
+          }));
+          console.log(`[Upload] Notified PC via WebSocket for code ${code}`);
+        } catch (err) {
+          console.error('[Upload] WebSocket send failed:', err);
+        }
+      } else {
+        console.log(`[Upload] No WebSocket connection for code ${code}, PC will fallback poll`);
+      }
       
       return new Response(JSON.stringify({ success: true, size: imageBuffer.byteLength }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // GET /api/check/:code - Check flag only (FAST!)
-    if (path.startsWith('/api/check/') && request.method === 'GET') {
-      const code = path.split('/api/check/')[1];
-      
-      if (!code) {
-        return new Response(JSON.stringify({ error: 'Missing code' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      const flag = await IMAGE_KV.get(`flag:${code}`, { type: 'text' });
-      
-      if (!flag) {
-        return new Response(null, { status: 204, headers: corsHeaders });
-      }
-
-      return new Response(flag, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
       });
     }
 
@@ -133,7 +124,7 @@ async function handleRequest(request) {
       });
     }
 
-    // DELETE /api/clear/:code - Clear image + flag
+    // DELETE /api/clear/:code - Clear image
     if (path.startsWith('/api/clear/') && request.method === 'DELETE') {
       const code = path.split('/api/clear/')[1];
       
@@ -144,10 +135,7 @@ async function handleRequest(request) {
         });
       }
 
-      await Promise.all([
-        IMAGE_KV.delete(`img:${code}`),
-        IMAGE_KV.delete(`flag:${code}`)
-      ]);
+      await IMAGE_KV.delete(`img:${code}`);
       
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -162,6 +150,52 @@ async function handleRequest(request) {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
+}
+
+function handleWebSocket(request) {
+  const pair = new WebSocketPair();
+  const [client, server] = [pair[0], pair[1]];
+
+  // Accept the WebSocket
+  server.accept();
+
+  let pairCode = null;
+
+  server.addEventListener('message', async (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      
+      if (msg.type === 'register' && msg.code) {
+        pairCode = msg.code;
+        wsConnections.set(pairCode, { ws: server });
+        console.log(`[WebSocket] PC registered for code ${pairCode}`);
+        
+        // Send confirmation
+        server.send(JSON.stringify({ type: 'registered', code: pairCode }));
+      }
+    } catch (err) {
+      console.error('[WebSocket] Message error:', err);
+    }
+  });
+
+  server.addEventListener('close', () => {
+    if (pairCode) {
+      wsConnections.delete(pairCode);
+      console.log(`[WebSocket] PC disconnected for code ${pairCode}`);
+    }
+  });
+
+  server.addEventListener('error', (err) => {
+    console.error('[WebSocket] Error:', err);
+    if (pairCode) {
+      wsConnections.delete(pairCode);
+    }
+  });
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
+  });
 }
 
 function generateCode() {
