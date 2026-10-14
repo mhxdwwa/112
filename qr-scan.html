@@ -188,16 +188,33 @@ var appTitle = '宠物世界';
   // 3. 检查用户是否已登录（根据应用类型使用不同的 localStorage key）
   var userType, userId;
   if (appName === 'xq') {
-    // 学勤管家
-    var xqUser = localStorage.getItem('xq_current_user');
-    if (xqUser) {
+    // 学勤管家 - 检查 xq_session（正常登录保存的位置）
+    var xqSession = localStorage.getItem('xq_session');
+    if (xqSession) {
       try {
-        var userData = JSON.parse(xqUser);
-        userType = 'teacher';
-        userId = userData.teacherId;
-        userEmail = userData.email || '';
+        var sessionData = JSON.parse(xqSession);
+        if (sessionData.user && sessionData.user.teacherId) {
+          userType = 'teacher';
+          userId = sessionData.user.teacherId;
+          // teacherId 实际上是教师姓名，用作 email 字段
+          userEmail = sessionData.user.teacherId;
+        }
       } catch (e) {
-        console.error('[扫码] 解析 xq_current_user 失败:', e);
+        console.error('[扫码] 解析 xq_session 失败:', e);
+      }
+    }
+    // 兼容旧的 xq_current_user（QR 登录保存的位置）
+    if (!userType) {
+      var xqUser = localStorage.getItem('xq_current_user');
+      if (xqUser) {
+        try {
+          var userData = JSON.parse(xqUser);
+          userType = 'teacher';
+          userId = userData.teacherId;
+          userEmail = userData.teacherId || userData.email || '';
+        } catch (e) {
+          console.error('[扫码] 解析 xq_current_user 失败:', e);
+        }
       }
     }
   } else {
