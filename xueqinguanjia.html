@@ -3667,6 +3667,13 @@ function navigate(pageId) {
   const isSeatingPage = (pageId === 'seating' || pageId === 'class-seating');
   contentEl.classList.toggle('no-scroll', isSeatingPage);
   
+  // 点击侧边栏的成绩管理时，重置到列表视图
+  if (pageId === 'score-manage') {
+    scoreCurrentView = 'list';
+    scoreCurrentExam = null;
+    classAnalysisData = null;
+  }
+  
   // 切换页面时按需同步数据（减少流量消耗）
   syncOnPageChange(pageId);
   
@@ -5859,9 +5866,12 @@ function renderScoreCreate() {
     <div class="card">
       <div class="card-header">
         <span class="card-title">录入成绩</span>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
           <button class="toolbar-btn ghost" style="font-size:12px" onclick="importScoreExcel()">📥 导入Excel</button>
           <input type="file" id="scoreExcelInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleScoreExcelImport(event)">
+          <div style="width:1px;height:20px;background:var(--gray-200);margin:0 4px"></div>
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="backToScoreList()">取消</button>
+          <button class="toolbar-btn primary" style="font-size:12px" onclick="saveScoreExam()">保存考试</button>
         </div>
       </div>
       <div class="card-body no-pad">
@@ -5881,13 +5891,6 @@ function renderScoreCreate() {
           </table>
         </div>
       </div>
-    </div>
-    
-    <div class="toolbar" style="margin-top:16px">
-      <div class="toolbar-left"></div>
-      <div class="toolbar-spacer"></div>
-      <button class="toolbar-btn ghost" onclick="backToScoreList()">取消</button>
-      <button class="toolbar-btn primary" onclick="saveScoreExam()">保存考试</button>
     </div>
   `;
 }
