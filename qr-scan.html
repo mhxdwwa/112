@@ -384,7 +384,13 @@ async function handleConfirm() {
         resultStatus.innerHTML = '✅ 登录确认已发送！<br><span style="font-size:12px;color:#888;">如电脑端无反应，请重试</span>';
       }
 
-      document.getElementById('statusMsg').innerHTML = '操作完成';
+      document.getElementById('statusMsg').innerHTML = '操作完成，正在返回...';
+      
+      // 1.5秒后跳转回主应用
+      setTimeout(function() {
+        var mainAppUrl = appName === 'xq' ? 'xueqinguanjia.html' : 'index.html';
+        window.location.href = mainAppUrl;
+      }, 1500);
     }
 
   } catch (e) {
