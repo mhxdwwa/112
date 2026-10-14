@@ -288,7 +288,6 @@ const G={
   undoStack:[],redoStack:[],
   funcs:[],pointN:0,
   drawState:null,demo:null,
-  measureResult:null,
   eraserSize:40,eraserActive:false,_eraserRaf:null,_eraserDirty:false,_eraserPx:0,_eraserPy:0,_eraserSaved:false,
   // Rotation state
   rotating:false,rotPivot:null,rotOrig:null,rotCenter:null,
@@ -776,7 +775,6 @@ function drawPreview(){
   }else if(G.tempPts.length===2){
     const p1=m2p(G.tempPts[0].x,G.tempPts[0].y),p2=m2p(G.tempPts[1].x,G.tempPts[1].y);
     if(tool==='triangle'){mx.beginPath();mx.moveTo(p1.x,p1.y);mx.lineTo(p2.x,p2.y);mx.lineTo(lastP.x,lastP.y);mx.closePath();mx.stroke()}
-    else if(tool==='bisect'){mx.beginPath();mx.moveTo(p1.x,p1.y);mx.lineTo(p2.x,p2.y);mx.stroke();mx.beginPath();mx.moveTo(p1.x,p1.y);mx.lineTo(lastP.x,lastP.y);mx.stroke()}
   }else if(G.tempPts.length===3){
     const pts=G.tempPts.map(p=>m2p(p.x,p.y));
     if(tool==='quad'){mx.beginPath();pts.forEach((p,i)=>{if(i===0)mx.moveTo(p.x,p.y);else mx.lineTo(p.x,p.y)});mx.lineTo(lastP.x,lastP.y);mx.stroke()}
@@ -954,72 +952,6 @@ function drawOverlay(){
     const r=Math.hypot(cur.x-ds.pts[0].x,cur.y-ds.pts[0].y)*G.scale;
     ox.strokeStyle=G.color;ox.lineWidth=1.5;ox.setLineDash([6,4]);
     ox.beginPath();ox.arc(p1.x,p1.y,r,0,Math.PI*2);ox.stroke();ox.setLineDash([]);
-  }
-
-  // Measure preview
-  if(ds.type==='measure'&&ds.pts){
-    const pts=ds.pts.map(p=>m2p(p.x,p.y));
-    ox.strokeStyle='#dc2626';ox.lineWidth=1.5;ox.setLineDash([4,3]);
-    pts.forEach(p=>{ox.fillStyle='#dc2626';ox.beginPath();ox.arc(p.x,p.y,5,0,Math.PI*2);ox.fill()});
-    if(pts.length===1){ox.beginPath();ox.moveTo(pts[0].x,pts[0].y);ox.lineTo(curP.x,curP.y);ox.stroke()}
-    else if(pts.length===2){
-      ox.beginPath();ox.moveTo(pts[0].x,pts[0].y);ox.lineTo(pts[1].x,pts[1].y);ox.lineTo(curP.x,curP.y);ox.stroke();
-      // Show angle preview
-      const v=ds.pts[0],a1=ds.pts[1];
-      const d1x=a1.x-v.x,d1y=a1.y-v.y,d2x=cur.x-v.x,d2y=cur.y-v.y;
-      const l1=Math.hypot(d1x,d1y),l2=Math.hypot(d2x,d2y);
-      if(l1>0.01&&l2>0.01){
-        const angle=Math.acos(Math.max(-1,Math.min(1,(d1x*d2x+d1y*d2y)/(l1*l2))))*180/Math.PI;
-        ox.fillStyle='#dc2626';ox.font='bold 13px JetBrains Mono';ox.textAlign='center';
-        const mid=m2p(v.x+(d1x/l1+d2x/l2)*0.8,v.y+(d1y/l1+d2y/l2)*0.8);
-        ox.fillText(angle.toFixed(1)+'°',mid.x,mid.y-10);
-      }
-    }
-    ox.setLineDash([]);
-  }
-
-  // Measure result display
-  if(G.measureResult){
-    const mr=G.measureResult;
-    if(mr.type==='distance'){
-      const a=m2p(mr.pts[0].x,mr.pts[0].y),b=m2p(mr.pts[1].x,mr.pts[1].y);
-      ox.strokeStyle='#dc2626';ox.lineWidth=2;ox.setLineDash([]);
-      ox.beginPath();ox.moveTo(a.x,a.y);ox.lineTo(b.x,b.y);ox.stroke();
-      ox.fillStyle='#dc2626';ox.beginPath();ox.arc(a.x,a.y,5,0,Math.PI*2);ox.fill();
-      ox.beginPath();ox.arc(b.x,b.y,5,0,Math.PI*2);ox.fill();
-      // Distance label
-      const dist=mr.dist;
-      const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2;
-      ox.fillStyle='rgba(220,38,38,0.9)';
-      const label='d = '+dist.toFixed(2);
-      ox.font='bold 13px JetBrains Mono';
-      const tw=ox.measureText(label).width;
-      ox.fillStyle='rgba(255,255,255,0.9)';ox.fillRect(midX-tw/2-6,midY-22,tw+12,22);
-      ox.strokeStyle='#dc2626';ox.lineWidth=1;ox.strokeRect(midX-tw/2-6,midY-22,tw+12,22);
-      ox.fillStyle='#dc2626';ox.textAlign='center';ox.textBaseline='middle';
-      ox.fillText(label,midX,midY-11);
-    }else if(mr.type==='angle'){
-      const v=m2p(mr.pts[0].x,mr.pts[0].y),a1=m2p(mr.pts[1].x,mr.pts[1].y),a2=m2p(mr.pts[2].x,mr.pts[2].y);
-      ox.strokeStyle='#dc2626';ox.lineWidth=2;ox.setLineDash([]);
-      ox.beginPath();ox.moveTo(a1.x,a1.y);ox.lineTo(v.x,v.y);ox.lineTo(a2.x,a2.y);ox.stroke();
-      // Draw angle arc
-      const ang1=Math.atan2(a1.y-v.y,a1.x-v.x),ang2=Math.atan2(a2.y-v.y,a2.x-v.x);
-      const arcR=30;
-      ox.beginPath();ox.arc(v.x,v.y,arcR,ang1,ang2,false);ox.stroke();
-      // Angle label
-      const label=mr.angle.toFixed(1)+'°';
-      const midAng=(ang1+ang2)/2;
-      const lx=v.x+Math.cos(midAng)*(arcR+20),ly=v.y+Math.sin(midAng)*(arcR+20);
-      ox.fillStyle='rgba(255,255,255,0.9)';ox.font='bold 13px JetBrains Mono';
-      const tw=ox.measureText(label).width;
-      ox.fillRect(lx-tw/2-6,ly-11,tw+12,22);
-      ox.strokeStyle='#dc2626';ox.lineWidth=1;ox.strokeRect(lx-tw/2-6,ly-11,tw+12,22);
-      ox.fillStyle='#dc2626';ox.textAlign='center';ox.textBaseline='middle';
-      ox.fillText(label,lx,ly);
-      // Points
-      ox.fillStyle='#dc2626';
-      [v,a1,a2].forEach(p=>{ox.beginPath();ox.arc(p.x,p.y,4,0,Math.PI*2);ox.fill()});
-    }
   }
 }
 
@@ -1361,20 +1293,6 @@ function eraseAt(px,py){
   const r2=r*r;
   let erased=false;
   const newObjs=[];
-
-  // Clear measurement display if eraser passes over it
-  if(G.measureResult){
-    const mr=G.measureResult;
-    let clearMeasure=false;
-    if(mr.type==='distance'&&mr.pts.length===2){
-      const a=m2p(mr.pts[0].x,mr.pts[0].y),b=m2p(mr.pts[1].x,mr.pts[1].y);
-      if(distToSeg(px,py,a.x,a.y,b.x,b.y)<r)clearMeasure=true;
-    }else if(mr.type==='angle'&&mr.pts.length===3){
-      const v=m2p(mr.pts[0].x,mr.pts[0].y),a1=m2p(mr.pts[1].x,mr.pts[1].y),a2=m2p(mr.pts[2].x,mr.pts[2].y);
-      if(distToSeg(px,py,v.x,v.y,a1.x,a1.y)<r||distToSeg(px,py,v.x,v.y,a2.x,a2.y)<r)clearMeasure=true;
-    }
-    if(clearMeasure){G.measureResult=null;erased=true}
-  }
 
   // Erase function curves that pass through eraser area
   const W=cw.clientWidth;
@@ -1922,7 +1840,7 @@ function rotateShape(o,center,da){
 
 // === TOOL SELECTION ===
 function setTool(t){
-  G.tool=t;G.tempPts=[];G.drawState=null;G.measureResult=null;
+  G.tool=t;G.tempPts=[];G.drawState=null;
   document.querySelectorAll('.tb[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   const hints={
     move:'点击选择对象，拖拽移动；拖拽端点可旋转图形',
@@ -1935,11 +1853,7 @@ function setTool(t){
     polygon:'点击两个点定义第一条边，然后输入边数画正多边形',
     circle:'点击圆心，再点击圆上一点',
     sector:'点击圆心，再点击圆上一点画扇形（90度）',
-    perp:'点击线的两点，再点击线外一点作垂线',
     parallel:'点击线的两点，再点击线外一点作平行线',
-    tangent:'点击圆心和半径点，再点击圆外一点作切线',
-    midperp:'点击线段两端点作中垂线',
-    bisect:'点击角的顶点，再点击两边上的点',
     box:'点击左上角，再点击右下角确定大小（正方体或长方体）',
     cylinder:'点击顶部中心，再点击底部边缘确定大小',
     cone:'点击顶部中心，再点击底部边缘确定大小',
@@ -1949,7 +1863,6 @@ function setTool(t){
     compass:'点击圆心，再按住鼠标拖动画弧',
     pen:'按住鼠标自由绘画',
     eraser:'按住鼠标拖动擦除，可调节擦除范围大小',
-    measure:'点击两个点测量距离，或点击三个点测量角度',
   };
   document.getElementById('sHint').textContent=hints[t]||'';
   mainC.style.cursor=t==='move'?'default':t==='pen'?'crosshair':t==='eraser'?'none':'crosshair';
@@ -2176,30 +2089,6 @@ function onDown(e){
       saveUndo();
       G.objs.push({id:G.nextId++,type:'ruler',x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,color:'#eab308'});
       G.drawState=null;
-    }
-    draw();return;
-  }
-
-  // Measure tool: click 2 points for distance, 3 points for angle
-  if(t==='measure'){
-    if(!G.drawState||G.drawState.type!=='measure'){
-      G.drawState={type:'measure',pts:[{x:sp.x,y:sp.y}]};
-    }else{
-      G.drawState.pts.push({x:sp.x,y:sp.y});
-      if(G.drawState.pts.length===2){
-        // Show distance measurement temporarily
-        const a=G.drawState.pts[0],b=G.drawState.pts[1];
-        const dist=Math.hypot(b.x-a.x,b.y-a.y);
-        G.measureResult={type:'distance',pts:G.drawState.pts.slice(),dist};
-        G.drawState=null;
-      }else if(G.drawState.pts.length===3){
-        // Show angle measurement
-        const v=G.drawState.pts[0],a1=G.drawState.pts[1],a2=G.drawState.pts[2];
-        const d1x=a1.x-v.x,d1y=a1.y-v.y,d2x=a2.x-v.x,d2y=a2.y-v.y;
-        const angle=Math.acos((d1x*d2x+d1y*d2y)/(Math.hypot(d1x,d1y)*Math.hypot(d2x,d2y)))*180/Math.PI;
-        G.measureResult={type:'angle',pts:G.drawState.pts.slice(),angle};
-        G.drawState=null;
-      }
     }
     draw();return;
   }
@@ -2613,58 +2502,13 @@ function handleToolClick(t,sp){
       saveUndo();
       G.objs.push({id:G.nextId++,type:'point',x:sp.x,y:sp.y,color:G.color,label:getNextLabel()});
       draw();break;
-    case'perp':case'parallel':
+    case'parallel':
       G.tempPts.push(sp);
       if(G.tempPts.length===2){G.objs.push({id:G.nextId++,type:'line',x1:G.tempPts[0].x,y1:G.tempPts[0].y,x2:G.tempPts[1].x,y2:G.tempPts[1].y,color:'#9ca3af'})}
       if(G.tempPts.length===3){
         const dx=G.tempPts[1].x-G.tempPts[0].x,dy=G.tempPts[1].y-G.tempPts[0].y;
-        if(t==='perp')G.objs.push({id:G.nextId++,type:'line',x1:sp.x-dy,y1:sp.y+dx,x2:sp.x+dy,y2:sp.y-dx,color:G.color});
-        else G.objs.push({id:G.nextId++,type:'line',x1:sp.x-dx,y1:sp.y-dy,x2:sp.x+dx,y2:sp.y+dy,color:G.color});
+        G.objs.push({id:G.nextId++,type:'line',x1:sp.x-dx,y1:sp.y-dy,x2:sp.x+dx,y2:sp.y+dy,color:G.color});
         G.objs.push({id:G.nextId++,type:'point',x:sp.x,y:sp.y,color:G.color,label:getNextLabel()});
-        G.tempPts=[];
-      }
-      draw();break;
-    case'midperp':
-      G.tempPts.push(sp);
-      if(G.tempPts.length===2){
-        saveUndo();const a=G.tempPts[0],b=G.tempPts[1];
-        const midx=(a.x+b.x)/2,midy=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
-        G.objs.push({id:G.nextId++,type:'segment',x1:a.x,y1:a.y,x2:b.x,y2:b.y,color:'#9ca3af'});
-        G.objs.push({id:G.nextId++,type:'line',x1:midx-dy/len*10,y1:midy+dx/len*10,x2:midx+dy/len*10,y2:midy-dx/len*10,color:G.color});
-        G.objs.push({id:G.nextId++,type:'point',x:midx,y:midy,color:G.color,label:'M'});
-        G.tempPts=[];
-      }
-      draw();break;
-    case'tangent':
-      G.tempPts.push(sp);
-      if(G.tempPts.length===2){const r=Math.hypot(sp.x-G.tempPts[0].x,sp.y-G.tempPts[0].y);G.objs.push({id:G.nextId++,type:'circle',cx:G.tempPts[0].x,cy:G.tempPts[0].y,r,color:'#9ca3af'});G.tempPts[0].r=r}
-      if(G.tempPts.length===3){
-        saveUndo();const c=G.tempPts[0],r=c.r,d=Math.hypot(sp.x-c.x,sp.y-c.y);
-        if(d>r){const dx=sp.x-c.x,dy=sp.y-c.y,d2=dx*dx+dy*dy;const f1=r*r/d2,f2=r*Math.sqrt(d2-r*r)/d2;
-          const t1={x:c.x+f1*dx+f2*dy,y:c.y+f1*dy-f2*dx},t2={x:c.x+f1*dx-f2*dy,y:c.y+f1*dy+f2*dx};
-          // Draw tangent lines from external point to tangent points only
-          G.objs.push({id:G.nextId++,type:'segment',x1:sp.x,y1:sp.y,x2:t1.x,y2:t1.y,color:G.color});
-          G.objs.push({id:G.nextId++,type:'segment',x1:sp.x,y1:sp.y,x2:t2.x,y2:t2.y,color:G.color});
-          G.objs.push({id:G.nextId++,type:'point',x:sp.x,y:sp.y,color:G.color,label:getNextLabel()});
-        }
-        G.tempPts=[];
-      }
-      draw();break;
-    case'bisect':
-      G.tempPts.push(sp);
-      if(G.tempPts.length===3){
-        saveUndo();const v=G.tempPts[0],a1=G.tempPts[1],a2=G.tempPts[2];
-        const d1x=a1.x-v.x,d1y=a1.y-v.y,l1=Math.hypot(d1x,d1y);
-        const d2x=a2.x-v.x,d2y=a2.y-v.y,l2=Math.hypot(d2x,d2y);
-        if(l1>0&&l2>0){const u1x=d1x/l1,u1y=d1y/l1,u2x=d2x/l2,u2y=d2y/l2;
-          const bx=u1x+u2x,by=u1y+u2y,bl=Math.hypot(bx,by);
-          if(bl>0){
-            G.objs.push({id:G.nextId++,type:'ray',x1:v.x,y1:v.y,x2:a1.x,y2:a1.y,color:'#9ca3af'});
-            G.objs.push({id:G.nextId++,type:'ray',x1:v.x,y1:v.y,x2:a2.x,y2:a2.y,color:'#9ca3af'});
-            G.objs.push({id:G.nextId++,type:'ray',x1:v.x,y1:v.y,x2:v.x+bx/bl*10,y2:v.y+by/bl*10,color:G.color});
-            G.objs.push({id:G.nextId++,type:'point',x:v.x,y:v.y,color:G.color,label:getNextLabel()});
-          }
-        }
         G.tempPts=[];
       }
       draw();break;
@@ -2791,18 +2635,13 @@ const allTools=[
   {t:'polygon',icon:'⬡',label:'多边形'},
   {t:'circle',icon:'○',label:'圆'},
   {t:'sector',icon:'◔',label:'扇形'},
-  {t:'perp',icon:'⊥',label:'垂线'},
   {t:'parallel',icon:'∥',label:'平行'},
-  {t:'tangent',icon:'⊃',label:'切线'},
-  {t:'midperp',icon:'⊤',label:'中垂'},
-  {t:'bisect',icon:'∠',label:'平分'},
   {t:'box',icon:'⬜',label:'方块'},
   {t:'cylinder',icon:'⬭',label:'圆柱'},
   {t:'cone',icon:'△',label:'圆锥'},
   {t:'sphere',icon:'●',label:'球'},
   {t:'ruler',icon:'📏',label:'直尺'},
   {t:'compass',icon:'⊙',label:'圆规'},
-  {t:'measure',icon:'📐',label:'测量'},
   {t:'unfold',icon:'⊞',label:'展开图'},
 ];
 const toolRow=document.getElementById('toolRow');
