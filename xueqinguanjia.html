@@ -3447,6 +3447,7 @@ const NAV_CONFIG = {
   leader: [
     { section: '教学', items: [
       { id: 'teach-classes', label: '授课班级', icon: iconUsers },
+      { id: 'score-manage', label: '成绩管理', icon: iconFile },
     ]},
     { section: '总览', items: [
       { id: 'overview', label: '全校到校情况', icon: iconGrid },
@@ -3459,6 +3460,7 @@ const NAV_CONFIG = {
     ]},
     { section: '教学', items: [
       { id: 'teach-classes', label: '授课班级', icon: iconUsers },
+      { id: 'score-manage', label: '成绩管理', icon: iconFile },
     ]},
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
@@ -3467,6 +3469,7 @@ const NAV_CONFIG = {
   teacher: [
     { section: '教学', items: [
       { id: 'my-classes', label: '授课班级', icon: iconGrid },
+      { id: 'score-manage', label: '成绩管理', icon: iconFile },
     ]},
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
@@ -3504,6 +3507,11 @@ function buildSidebar() {
     html += `<div class="sidebar-item" data-page="teach-classes" onclick="navigate('teach-classes')">
       <span class="sidebar-icon">${iconUsers()}</span>
       <span>授课班级</span>
+    </div>`;
+    // 1.5 成绩管理
+    html += `<div class="sidebar-item" data-page="score-manage" onclick="navigate('score-manage')">
+      <span class="sidebar-icon">${iconFile()}</span>
+      <span>成绩管理</span>
     </div>`;
     // 2. 学校数据设置
     html += `<div class="sidebar-item" data-page="school-setup" onclick="openSetupPage()">
@@ -3594,10 +3602,6 @@ function buildSidebar() {
   // 工具栏 - 所有角色可见
   html += `<div class="sidebar-section">`;
   html += `<div class="sidebar-section-title">工具</div>`;
-  html += `<div class="sidebar-item" data-page="score-manage" onclick="navigate('score-manage')">
-    <span class="sidebar-icon">${iconFile()}</span>
-    <span>成绩管理</span>
-  </div>`;
   html += `<div class="sidebar-item" onclick="window.open('https://wscls.cn/kaoshijishiqi.html', '_blank')">
     <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
     <span>考试计时器</span>
