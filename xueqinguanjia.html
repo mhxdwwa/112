@@ -5697,7 +5697,8 @@ function exportAdminRoster(cls) {
 
 /* ===== SCORE MANAGEMENT ===== */
 let scoreExamsCache = [];
-let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail' | 'headteacher-overview' | 'student-history'
+let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail' | 'headteacher-overview' | 'student-history' | 'class-analysis'
+let classAnalysisData = null; // 班级分析数据缓存
 let scoreCurrentExam = null;
 let scoreClassSummaryCache = {};
 let scoreStudentHistoryCache = [];
@@ -5732,6 +5733,7 @@ function renderScoreManage() {
   if (scoreCurrentView === 'headteacher-overview') return renderHeadteacherOverview();
   if (scoreCurrentView === 'student-history') return renderStudentHistory();
   if (scoreCurrentView === 'student-history-select') return renderStudentHistorySelect();
+  if (scoreCurrentView === 'class-analysis') return renderClassAnalysis();
   
   const isHeadteacher = xqCurrentUser?.isHeadteacher;
   const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
@@ -5759,6 +5761,8 @@ function renderScoreManage() {
   const headteacherBtn = isHeadteacher ? `<button class="toolbar-btn ghost" style="font-size:12px" onclick="showHeadteacherOverview()">📊 全班成绩总览</button>` : '';
   // 所有老师都可以查看学生历史
   const historyBtn = teacherClasses.length > 0 ? `<button class="toolbar-btn ghost" style="font-size:12px" onclick="showStudentHistorySelect()">📈 学生成绩历史</button>` : '';
+  // 班级成绩分析按钮（选择班级和科目查看趋势和进退步）
+  const analysisBtn = teacherClasses.length > 0 ? `<button class="toolbar-btn ghost" style="font-size:12px" onclick="showClassAnalysisSelect()">📉 班级成绩分析</button>` : '';
   
   return `
     <div class="toolbar">
@@ -5766,6 +5770,7 @@ function renderScoreManage() {
         <span style="font-size:14px;color:var(--gray-600)">管理学生平时测验成绩，支持手动录入和Excel导入</span>
       </div>
       <div class="toolbar-spacer"></div>
+      ${analysisBtn}
       ${historyBtn}
       ${headteacherBtn}
       <button class="toolbar-btn primary" onclick="showScoreCreate()">+ 新建考试</button>
@@ -6671,6 +6676,315 @@ function renderStudentHistory() {
       </div>
     </div>
   `;
+}
+
+// ===== CLASS ANALYSIS: 班级成绩分析（趋势+进退步）=====
+function showClassAnalysisSelect() {
+  scoreCurrentView = 'class-analysis';
+  classAnalysisData = null;
+  navigate('score-manage');
+}
+
+async function loadClassAnalysis(cls, subject) {
+  const result = await xqApi('exams', { action: 'class_subject_analysis', class: cls, subject });
+  if (result.ok && result.analysis) {
+    classAnalysisData = { class: cls, subject, analysis: result.analysis };
+  } else {
+    showToast('加载分析数据失败', 'error');
+    classAnalysisData = { class: cls, subject, analysis: [] };
+  }
+  navigate('score-manage');
+}
+
+function renderClassAnalysis() {
+  const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
+  const data = classAnalysisData;
+  
+  // 如果没有选择班级/科目，显示选择界面
+  if (!data) {
+    const classOptions = teacherClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+    
+    // 从缓存中提取该老师教的所有科目
+    const subjects = [...new Set(scoreExamsCache.map(e => e.subject))];
+    const subjectOptions = subjects.length > 0 
+      ? subjects.map(s => `<option value="${s}">${s}</option>`).join('')
+      : '<option value="">暂无科目数据</option>';
+    
+    return `
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+          <span style="font-size:14px;color:var(--gray-600);margin-left:12px">班级成绩分析</span>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">选择班级和科目</span>
+          <span style="font-size:12px;color:var(--gray-400)">查看成绩变化趋势和学生进退步</span>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:500px">
+            <div class="form-group">
+              <label class="form-label">班级</label>
+              <select class="form-input" id="analysisClass">
+                <option value="">请选择班级</option>
+                ${classOptions}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">科目</label>
+              <select class="form-input" id="analysisSubject">
+                <option value="">请选择科目</option>
+                ${subjectOptions}
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:16px">
+            <button class="toolbar-btn primary" onclick="submitClassAnalysis()">开始分析</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  const analysis = data.analysis;
+  
+  // 如果没有数据
+  if (analysis.length === 0) {
+    return `
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="toolbar-btn ghost" onclick="showClassAnalysisSelect()">← 重新选择</button>
+          <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${data.class} - ${data.subject} 成绩分析</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" style="text-align:center;padding:60px;color:var(--gray-400)">
+          <div style="font-size:48px;margin-bottom:16px">📊</div>
+          <div style="font-size:16px;margin-bottom:8px">暂无考试数据</div>
+          <div style="font-size:13px">请先录入该班级该科目的考试成绩</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  // 计算最新考试的统计
+  const latest = analysis[analysis.length - 1];
+  const prev = analysis.length >= 2 ? analysis[analysis.length - 2] : null;
+  
+  // 计算平均分变化
+  let avgChange = '';
+  let avgChangeColor = 'var(--gray-400)';
+  if (prev) {
+    const diff = latest.avg - prev.avg;
+    if (diff > 0) {
+      avgChange = `↑${diff.toFixed(1)}`;
+      avgChangeColor = 'var(--accent)';
+    } else if (diff < 0) {
+      avgChange = `↓${Math.abs(diff).toFixed(1)}`;
+      avgChangeColor = 'var(--danger)';
+    } else {
+      avgChange = '→0';
+    }
+  }
+  
+  // 计算进退步学生（对比最近两次考试）
+  let progressStudents = [];
+  let declineStudents = [];
+  
+  if (prev && latest.scores.length > 0 && prev.scores.length > 0) {
+    // 建立上次考试的成绩映射
+    const prevScoreMap = {};
+    prev.scores.forEach(s => { prevScoreMap[s.student] = s.score; });
+    
+    // 计算每个学生的变化
+    const changes = [];
+    latest.scores.forEach(s => {
+      if (prevScoreMap[s.student] !== undefined) {
+        const diff = s.score - prevScoreMap[s.student];
+        changes.push({ student: s.student, currentScore: s.score, prevScore: prevScoreMap[s.student], change: diff });
+      }
+    });
+    
+    // 按变化值排序
+    changes.sort((a, b) => b.change - a.change);
+    
+    // 取进步最大的前5名
+    progressStudents = changes.filter(c => c.change > 0).slice(0, 5);
+    // 取退步最大的前5名（倒序）
+    declineStudents = changes.filter(c => c.change < 0).reverse().slice(0, 5);
+  }
+  
+  // 绘制趋势图（SVG）
+  const chartHeight = 200;
+  const chartWidth = Math.max(analysis.length * 100, 400);
+  const allAvgs = analysis.map(a => a.avg);
+  const maxAvg = Math.max(...allAvgs, 100);
+  const minAvg = Math.min(...allAvgs, 0);
+  const range = maxAvg - minAvg || 1;
+  
+  let chartPoints = '';
+  let chartPath = '';
+  let chartLabels = '';
+  analysis.forEach((a, i) => {
+    const x = (i / (analysis.length - 1 || 1)) * (chartWidth - 80) + 40;
+    const y = chartHeight - ((a.avg - minAvg) / range) * (chartHeight - 60) - 30;
+    chartPoints += `<circle cx="${x}" cy="${y}" r="5" fill="var(--primary)" stroke="#fff" stroke-width="2"/>`;
+    chartPoints += `<text x="${x}" y="${y - 10}" text-anchor="middle" font-size="11" fill="var(--gray-700)" font-weight="600">${a.avg}</text>`;
+    chartLabels += `<text x="${x}" y="${chartHeight - 5}" text-anchor="middle" font-size="10" fill="var(--gray-500)">${a.name.length > 6 ? a.name.substring(0, 6) + '..' : a.name}</text>`;
+    chartPath += (i === 0 ? 'M' : 'L') + `${x},${y} `;
+  });
+  
+  // 进退步学生列表HTML
+  const progressHtml = progressStudents.length > 0 ? progressStudents.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <span style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${i + 1}</span>
+      <span style="flex:1;font-weight:500">${s.student}</span>
+      <span style="font-size:12px;color:var(--gray-500)">${s.prevScore}→${s.currentScore}</span>
+      <span style="font-size:14px;font-weight:600;color:var(--accent)">+${s.change}</span>
+    </div>
+  `).join('') : '<div style="text-align:center;padding:20px;color:var(--gray-400)">暂无数据</div>';
+  
+  const declineHtml = declineStudents.length > 0 ? declineStudents.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <span style="width:24px;height:24px;border-radius:50%;background:var(--danger);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${i + 1}</span>
+      <span style="flex:1;font-weight:500">${s.student}</span>
+      <span style="font-size:12px;color:var(--gray-500)">${s.prevScore}→${s.currentScore}</span>
+      <span style="font-size:14px;font-weight:600;color:var(--danger)">${s.change}</span>
+    </div>
+  `).join('') : '<div style="text-align:center;padding:20px;color:var(--gray-400)">暂无数据</div>';
+  
+  // 历次考试数据表格
+  const examTableRows = analysis.map((a, i) => {
+    let change = '';
+    if (i > 0) {
+      const diff = a.avg - analysis[i - 1].avg;
+      if (diff > 0) change = `<span style="color:var(--accent)">↑${diff.toFixed(1)}</span>`;
+      else if (diff < 0) change = `<span style="color:var(--danger)">↓${Math.abs(diff).toFixed(1)}</span>`;
+      else change = `<span style="color:var(--gray-400)">→0</span>`;
+    }
+    return `
+      <tr>
+        <td>${a.name}</td>
+        <td>${a.date}</td>
+        <td>${a.count}</td>
+        <td style="font-weight:600">${a.avg}</td>
+        <td>${a.max}</td>
+        <td>${a.min}</td>
+        <td>${a.passRate}%</td>
+        <td>${a.excellentRate}%</td>
+        <td>${change}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn ghost" onclick="showClassAnalysisSelect()">← 重新选择</button>
+        <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${data.class} - ${data.subject} 成绩分析</span>
+      </div>
+    </div>
+    
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="stat-card blue anim-in anim-d1">
+        <div class="stat-label">考试次数</div>
+        <div class="stat-value">${analysis.length}</div>
+      </div>
+      <div class="stat-card green anim-in anim-d2">
+        <div class="stat-label">最新平均分</div>
+        <div class="stat-value">${latest.avg}</div>
+        <div class="stat-sub" style="color:${avgChangeColor}">${avgChange || '首次考试'}</div>
+      </div>
+      <div class="stat-card green anim-in anim-d3">
+        <div class="stat-label">最新及格率</div>
+        <div class="stat-value">${latest.passRate}%</div>
+        <div class="stat-sub">${latest.count}人参考</div>
+      </div>
+      <div class="stat-card orange anim-in anim-d4">
+        <div class="stat-label">最新优秀率</div>
+        <div class="stat-value">${latest.excellentRate}%</div>
+        <div class="stat-sub">最高分 ${latest.max}</div>
+      </div>
+    </div>
+    
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <span class="card-title">平均分变化趋势</span>
+        <span style="font-size:12px;color:var(--gray-400)">对比最近${analysis.length}次考试</span>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+        <svg width="${chartWidth}" height="${chartHeight}" style="display:block">
+          <path d="${chartPath}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.3"/>
+          ${chartPoints}
+          ${chartLabels}
+        </svg>
+      </div>
+    </div>
+    
+    ${analysis.length >= 2 ? `
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card anim-in anim-d2">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--accent)">↑ 进步最大的学生</span>
+          <span style="font-size:12px;color:var(--gray-400)">对比最近两次考试</span>
+        </div>
+        <div class="card-body">
+          ${progressHtml}
+        </div>
+      </div>
+      <div class="card anim-in anim-d3">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--danger)">↓ 退步最大的学生</span>
+          <span style="font-size:12px;color:var(--gray-400)">对比最近两次考试</span>
+        </div>
+        <div class="card-body">
+          ${declineHtml}
+        </div>
+      </div>
+    </div>
+    ` : ''}
+    
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <span class="card-title">历次考试数据</span>
+        <span style="font-size:12px;color:var(--gray-400)">按时间顺序排列</span>
+      </div>
+      <div class="card-body no-pad">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>考试名称</th>
+                <th>日期</th>
+                <th>参考人数</th>
+                <th>平均分</th>
+                <th>最高分</th>
+                <th>最低分</th>
+                <th>及格率</th>
+                <th>优秀率</th>
+                <th>平均分变化</th>
+              </tr>
+            </thead>
+            <tbody>${examTableRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function submitClassAnalysis() {
+  const cls = document.getElementById('analysisClass').value;
+  const subject = document.getElementById('analysisSubject').value;
+  
+  if (!cls || !subject) {
+    showToast('请选择班级和科目', 'warning');
+    return;
+  }
+  
+  loadClassAnalysis(cls, subject);
 }
 
 /* ----- ADMIN: Password Management ----- */

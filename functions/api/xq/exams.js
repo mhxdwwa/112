@@ -223,5 +223,59 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ ok: true, history });
   }
 
+  // ===== CLASS_SUBJECT_ANALYSIS: 获取某班级某科目的所有考试及成绩（用于趋势和进退步分析）=====
+  if (action === 'class_subject_analysis') {
+    const { class: className, subject } = body;
+    if (!className || !subject) {
+      return jsonResponse({ error: 'Missing class or subject' }, 400);
+    }
+
+    // 获取该班级该科目的所有考试
+    const examsResult = await sbSelect(env, 'xq_exams', 'id,teacher,class,subject,exam_name,exam_date',
+      `class=eq.${encodeURIComponent(className)}&subject=eq.${encodeURIComponent(subject)}&order=exam_date.asc`);
+    if (examsResult.error) {
+      return jsonResponse({ error: 'Failed to fetch exams', details: examsResult.error }, 500);
+    }
+
+    const exams = examsResult.data || [];
+    if (exams.length === 0) {
+      return jsonResponse({ ok: true, analysis: [] });
+    }
+
+    // 获取每个考试的成绩
+    const analysis = [];
+    for (const exam of exams) {
+      const scoresResult = await sbSelect(env, 'xq_exam_scores', 'id,student,score',
+        `exam_id=eq.${exam.id}&order=score.desc`);
+      const scores = (scoresResult.data || []).map(s => ({
+        student: s.student,
+        score: parseFloat(s.score)
+      }));
+
+      const scoreValues = scores.map(s => s.score);
+      const avg = scoreValues.length > 0 ? Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length * 10) / 10 : 0;
+      const max = scoreValues.length > 0 ? Math.max(...scoreValues) : 0;
+      const min = scoreValues.length > 0 ? Math.min(...scoreValues) : 0;
+      const passCount = scoreValues.filter(s => s >= 60).length;
+      const excellentCount = scoreValues.filter(s => s >= 90).length;
+
+      analysis.push({
+        id: exam.id,
+        name: exam.exam_name,
+        date: exam.exam_date,
+        teacher: exam.teacher,
+        count: scores.length,
+        avg,
+        max,
+        min,
+        passRate: scoreValues.length > 0 ? Math.round(passCount / scoreValues.length * 1000) / 10 : 0,
+        excellentRate: scoreValues.length > 0 ? Math.round(excellentCount / scoreValues.length * 1000) / 10 : 0,
+        scores
+      });
+    }
+
+    return jsonResponse({ ok: true, analysis });
+  }
+
   return jsonResponse({ error: 'Invalid action' }, 400);
 };
