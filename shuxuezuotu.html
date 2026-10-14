@@ -181,6 +181,7 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
         </label>
       </div>
       <div class="mobile-upload-status" id="mobileUploadStatus"></div>
+      <button class="mobile-upload-btn" id="mobileCloseBtn" style="background:#6b7280;margin-top:8px;padding:10px 20px;font-size:14px;display:none;">关闭</button>
     </div>
     <div class="status"><span id="sHint">选择工具开始作图</span><span id="sCoord">(0, 0)</span><span id="sZoom">100%</span><span id="s3D" style="display:none;color:var(--blue)">3D视角 ← → ↑ ↓</span></div>
     <!-- Image controls for uploaded image -->
@@ -273,6 +274,7 @@ const IMG_STATE = {
   pairCode: null,
   pollTimer: null,
   generation: 0,         // race condition guard: stale poll responses are ignored
+  mobilePairCode: null,  // remember pairing code on mobile for continuous uploads
 };
 
 const G={
@@ -3468,8 +3470,18 @@ document.getElementById('rolePC').addEventListener('click',()=>{
 document.getElementById('roleMobile').addEventListener('click',()=>{
   document.getElementById('photoRolePanel').style.display='none';
   document.getElementById('mobileUploadPanel').style.display='flex';
-  document.getElementById('mobileCodeInput').value='';
-  document.getElementById('mobileCodeInput').focus();
+  document.getElementById('mobileCloseBtn').style.display='block';
+  // Restore pairing code if we have one from before
+  if(IMG_STATE.mobilePairCode){
+    document.getElementById('mobileCodeInput').value=IMG_STATE.mobilePairCode;
+    document.getElementById('mobileCodeInput').readOnly=true;
+    document.getElementById('mobileCodeInput').style.background='#f3f4f6';
+  }else{
+    document.getElementById('mobileCodeInput').value='';
+    document.getElementById('mobileCodeInput').readOnly=false;
+    document.getElementById('mobileCodeInput').style.background='#fff';
+    document.getElementById('mobileCodeInput').focus();
+  }
   document.getElementById('mobileUploadStatus').textContent='';
   document.getElementById('mobileUploadStatus').className='mobile-upload-status';
 });
@@ -3535,10 +3547,6 @@ async function checkForImage(){
     if(gen!==IMG_STATE.generation)return;
     if(data.hasImage&&data.image){
       // Image received!
-      if(IMG_STATE.pollTimer){
-        clearInterval(IMG_STATE.pollTimer);
-        IMG_STATE.pollTimer=null;
-      }
       // Update status
       const statusEl=document.getElementById('pairCodeStatus');
       if(statusEl){
@@ -3546,12 +3554,16 @@ async function checkForImage(){
         statusEl.className='pair-code-status received';
       }
       await loadImage(data.image);
-      // Clear the image from worker
+      // Clear the image from worker (but keep the pair code valid)
       fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
-      // Hide pair code display
-      document.getElementById('pairCodeDisplay').style.display='none';
       // Show success feedback
       showToast('图片已接收，可以开始标注');
+      // Keep polling for next image - don't stop or hide the pair code display
+      // Reset status to waiting for next upload
+      if(statusEl){
+        statusEl.textContent='等待下一张图片...';
+        statusEl.className='pair-code-status';
+      }
     }
   }catch(e){
     console.error('[Photo] Poll error:',e);
@@ -3594,7 +3606,7 @@ async function handleMobileFile(e){
   const file=e.target.files[0];
   if(!file)return;
   
-  const code=document.getElementById('mobileCodeInput').value.trim();
+  let code=document.getElementById('mobileCodeInput').value.trim();
   if(!code||code.length!==6||!/^\d{6}$/.test(code)){
     const status=document.getElementById('mobileUploadStatus');
     status.textContent='请输入6位数字配对码';
@@ -3602,14 +3614,20 @@ async function handleMobileFile(e){
     return;
   }
   
+  // Remember the pairing code for continuous uploads
+  IMG_STATE.mobilePairCode=code;
+  // Lock the code input
+  document.getElementById('mobileCodeInput').readOnly=true;
+  document.getElementById('mobileCodeInput').style.background='#f3f4f6';
+  
   const status=document.getElementById('mobileUploadStatus');
   status.textContent='正在上传图片...';
   status.className='mobile-upload-status';
   
   try{
-    // Compress image (aggressive compression for faster upload)
+    // Compress image (better quality for math drawings)
     status.textContent='正在压缩图片...';
-    const base64=await compressImage(file,1280,0.5);
+    const base64=await compressImage(file,1920,0.8);
     // Upload to worker
     status.textContent='正在上传...';
     const res=await fetch('/api/image-relay/upload',{
@@ -3619,15 +3637,12 @@ async function handleMobileFile(e){
     });
     const data=await res.json();
     if(data.success){
-      status.textContent='上传成功！';
+      status.textContent='✅ 上传成功！可以继续拍照';
       status.className='mobile-upload-status success';
-      // Reset file input
+      // Reset file input immediately so user can take another photo
       e.target.value='';
-      // Close panel after 1.5s
-      setTimeout(()=>{
-        document.getElementById('mobileUploadPanel').style.display='none';
-        document.getElementById('tgPhoto').classList.remove('on');
-      },1500);
+      // Keep panel open - user can immediately take another photo
+      // Don't close the panel or reset the code
     }else{
       status.textContent='上传失败: '+(data.error||'未知错误');
       status.className='mobile-upload-status error';
@@ -3638,7 +3653,7 @@ async function handleMobileFile(e){
   }
 }
 
-// Compress image using canvas
+// Compress image using canvas (optimized for math drawings)
 function compressImage(file,maxWidth,quality){
   return new Promise((resolve)=>{
     const reader=new FileReader();
@@ -3654,7 +3669,11 @@ function compressImage(file,maxWidth,quality){
         canvas.width=w;
         canvas.height=h;
         const ctx=canvas.getContext('2d');
+        // Use high quality rendering
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality='high';
         ctx.drawImage(img,0,0,w,h);
+        // Use higher quality JPEG for better clarity
         resolve(canvas.toDataURL('image/jpeg',quality));
       };
       img.src=e.target.result;
@@ -3708,6 +3727,18 @@ document.getElementById('imgRemove').addEventListener('click',()=>{
 document.getElementById('pairCodeClose').addEventListener('click',()=>{
   document.getElementById('pairCodeDisplay').style.display='none';
   document.getElementById('tgPhoto').classList.remove('on');
+  stopPhotoUpload();
+});
+
+// Mobile close button
+document.getElementById('mobileCloseBtn').addEventListener('click',()=>{
+  document.getElementById('mobileUploadPanel').style.display='none';
+  document.getElementById('tgPhoto').classList.remove('on');
+  // Clear the remembered pairing code
+  IMG_STATE.mobilePairCode=null;
+  // Unlock the code input for next time
+  document.getElementById('mobileCodeInput').readOnly=false;
+  document.getElementById('mobileCodeInput').style.background='#fff';
   stopPhotoUpload();
 });
 
