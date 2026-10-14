@@ -131,6 +131,9 @@ body.xueqinguanjia .msg strong { color: #2563eb; }
     <button class="btn btn-cancel" onclick="handleCancel()">取消</button>
     <button class="btn btn-confirm" id="confirmBtn" onclick="handleConfirm()">确认登录</button>
   </div>
+  <div id="switchAccountRow" style="display:none;margin-top:12px;">
+    <button class="btn" style="width:100%;background:#f0f0f0;color:#666;font-size:13px;padding:10px;" onclick="handleSwitchAccount()">切换账号登录</button>
+  </div>
   <div class="status" id="resultStatus"></div>
 </div>
 
@@ -278,8 +281,13 @@ var appTitle = '宠物世界';
 
     // 5. 显示确认界面
     document.getElementById('statusMsg').innerHTML =
-      '电脑端请求登录' + appTitle + '教师账号<br><strong>' + escapeHtml(userEmail) + '</strong><br><br>确认是本人操作？';
+      '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:12px;">' +
+      '<div style="font-size:12px;color:#856404;margin-bottom:4px;">⚠️ 请确认以下账号是本人操作：</div>' +
+      '<div style="font-size:20px;font-weight:700;color:#d4a017;">' + escapeHtml(userEmail) + '</div>' +
+      '</div>' +
+      '如果不是您的账号，请点击下方"切换账号"按钮重新登录。';
     document.getElementById('btnRow').style.display = 'flex';
+    document.getElementById('switchAccountRow').style.display = 'block';
 
   } catch (e) {
     console.error('[扫码] Token check error:', e);
@@ -406,7 +414,30 @@ function handleCancel() {
   document.getElementById('resultStatus').className = 'status loading';
   document.getElementById('resultStatus').innerHTML = '已取消登录';
   document.getElementById('btnRow').style.display = 'none';
+  document.getElementById('switchAccountRow').style.display = 'none';
   document.getElementById('statusMsg').innerHTML = '您已取消本次登录确认';
+}
+
+// 切换账号：清除当前会话，跳转到主应用重新登录
+function handleSwitchAccount() {
+  if (appName === 'xq') {
+    localStorage.removeItem('xq_session');
+    localStorage.removeItem('xq_current_user');
+  } else {
+    localStorage.removeItem('userType');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userEmail');
+  }
+  // 保存扫码 token，登录后自动完成确认
+  sessionStorage.setItem('xq_pending_qr_token', qrToken);
+  sessionStorage.setItem('xq_pending_qr_app', appName);
+  var mainAppUrl = appName === 'xq' ? 'xueqinguanjia.html' : 'index.html';
+  document.getElementById('statusMsg').innerHTML = '正在跳转到登录页面...<br><br><span style="font-size:12px;color:#999;">请用正确的账号登录后，将自动完成扫码确认</span>';
+  document.getElementById('btnRow').style.display = 'none';
+  document.getElementById('switchAccountRow').style.display = 'none';
+  setTimeout(function() {
+    window.location.href = mainAppUrl;
+  }, 1000);
 }
 
 // 显示错误

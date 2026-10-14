@@ -13044,17 +13044,19 @@ async function doXqAutoLogin(email) {
     console.log('[XQ QR] 开始查询教师账号:', email);
     
     // 从凭证中查找用户
+    // email 参数实际上是教师姓名（凭证的 key）
     const user = xqCredentials[email];
     if (!user) {
       throw new Error('未找到教师账号: ' + email);
     }
 
-    console.log('[XQ QR] 找到教师账号:', user.name || email);
+    console.log('[XQ QR] 找到教师账号:', email);
 
     // 设置当前用户
+    // 注意：email 参数就是教师姓名（凭证的 key），不是真正的 email
     xqCurrentUser = {
-      teacherId: user.id || email,
-      teacherName: user.name || email,
+      teacherId: email,  // 教师姓名作为 ID
+      teacherName: email,  // 教师姓名
       email: email,
       role: user.role || 'teacher',
       classes: user.classes || [],
