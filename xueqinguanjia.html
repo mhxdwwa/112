@@ -3375,10 +3375,17 @@ function doLogin() {
 // ===== 会话持久化 =====
 function saveSession() {
   try {
+    // 直接从 xqCurrentUser 构建 userInfo，不使用 USERS 对象
+    // USERS 会被 applyImportedUsers() 用教师名单第一个领导覆盖，导致名字错误
     const session = {
       user: xqCurrentUser,
       role: currentRole,
-      userInfo: USERS[currentRole],
+      userInfo: xqCurrentUser ? {
+        name: xqCurrentUser.teacherName,
+        role: xqCurrentUser.role === 'leader' ? '校领导' : 
+              xqCurrentUser.role === 'headteacher' ? '班主任' : '科任老师',
+        avatar: xqCurrentUser.teacherName.charAt(0)
+      } : null,
       timestamp: Date.now()
     };
     localStorage.setItem('xq_session', JSON.stringify(session));
@@ -3403,9 +3410,13 @@ function restoreSession() {
     // 恢复登录状态
     currentRole = session.role;
     xqCurrentUser = session.user;
-    if (session.userInfo) {
-      USERS[session.role] = session.userInfo;
-    }
+    // 用实际登录用户的信息更新 USERS，不用 session.userInfo（可能被教师名单污染）
+    USERS[session.role] = {
+      name: session.user.teacherName,
+      role: session.user.role === 'leader' ? '校领导' : 
+            session.user.role === 'headteacher' ? '班主任' : '科任老师',
+      avatar: session.user.teacherName.charAt(0)
+    };
     
     // 更新 UI — 优先使用 xqCurrentUser.teacherName 作为权威来源
     // 避免 session.userInfo 中残留旧数据导致显示错误
