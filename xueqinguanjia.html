@@ -6925,6 +6925,44 @@ async function loadClassAnalysis(cls, subject) {
   navigate('score-manage');
 }
 
+// 计算中位数
+function calcMedian(scores) {
+  if (!scores || scores.length === 0) return 0;
+  const sorted = scores.map(s => s.score).sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// 计算标准差
+function calcStdDev(scores, avg) {
+  if (!scores || scores.length === 0) return 0;
+  const sum = scores.reduce((acc, s) => acc + Math.pow(s.score - avg, 2), 0);
+  return Math.sqrt(sum / scores.length);
+}
+
+// 计算分数段分布
+function calcScoreDistribution(scores, ranges) {
+  const dist = ranges.map(r => ({ ...r, count: 0 }));
+  scores.forEach(s => {
+    for (let i = 0; i < dist.length; i++) {
+      if (s.score >= dist[i].min && s.score <= dist[i].max) {
+        dist[i].count++;
+        break;
+      }
+    }
+  });
+  return dist;
+}
+
+// 默认分数段
+const defaultScoreRanges = [
+  { label: '优秀(90-100)', min: 90, max: 100, color: '#10b981' },
+  { label: '良好(80-89)', min: 80, max: 89, color: '#3b82f6' },
+  { label: '中等(70-79)', min: 70, max: 79, color: '#f59e0b' },
+  { label: '及格(60-69)', min: 60, max: 69, color: '#f97316' },
+  { label: '不及格(<60)', min: 0, max: 59, color: '#ef4444' }
+];
+
 function renderClassAnalysis() {
   const teacherClasses = xqCurrentUser?.allClasses || xqCurrentUser?.headteacherClasses || [];
   const data = classAnalysisData;
@@ -7060,6 +7098,24 @@ function renderClassAnalysis() {
   const lastName = lastExam.name || lastExam.exam_name || '最后一次考试';
   const compareLabel = analysis.length >= 2 ? `${firstName} → ${lastName}` : '';
   
+  // 计算中位数和标准差
+  const lastMedian = calcMedian(lastExam.scores);
+  const lastStdDev = calcStdDev(lastExam.scores, lastExam.avg);
+  let medianChange = '';
+  let stdDevChange = '';
+  if (analysis.length >= 2) {
+    const firstMedian = calcMedian(firstExam.scores);
+    const firstStdDev = calcStdDev(firstExam.scores, firstExam.avg);
+    const medianDiff = lastMedian - firstMedian;
+    const stdDiff = lastStdDev - firstStdDev;
+    if (medianDiff > 0) medianChange = `↑${medianDiff.toFixed(1)}`;
+    else if (medianDiff < 0) medianChange = `↓${Math.abs(medianDiff).toFixed(1)}`;
+    else medianChange = '→0';
+    if (stdDiff > 0) stdDevChange = `↑${stdDiff.toFixed(1)} 分化加剧`;
+    else if (stdDiff < 0) stdDevChange = `↓${Math.abs(stdDiff).toFixed(1)} 趋于集中`;
+    else stdDevChange = '→0';
+  }
+  
   // 平均分变化
   let avgChange = '';
   let avgChangeColor = 'var(--gray-400)';
@@ -7089,6 +7145,56 @@ function renderClassAnalysis() {
     changes.sort((a, b) => b.change - a.change);
     progressStudents = changes.filter(c => c.change > 0).slice(0, 5);
     declineStudents = changes.filter(c => c.change < 0).reverse().slice(0, 5);
+  }
+  
+  // 检测连续下滑的学生（连续3次及以上排名下降）
+  let continuousDeclineStudents = [];
+  if (analysis.length >= 3) {
+    // 收集所有学生
+    const allStudents = new Set();
+    analysis.forEach(a => a.scores.forEach(s => allStudents.add(s.student)));
+    
+    allStudents.forEach(student => {
+      // 获取该学生在每次考试中的分数
+      const studentScores = analysis.map(a => {
+        const scoreObj = a.scores.find(s => s.student === student);
+        return scoreObj ? scoreObj.score : null;
+      });
+      
+      // 计算排名变化（与班级均分的差距）
+      const gaps = analysis.map((a, i) => {
+        if (studentScores[i] === null) return null;
+        return studentScores[i] - a.avg;
+      });
+      
+      // 检测连续下滑（与均分差距连续变小）
+      let maxConsecutiveDecline = 0;
+      let currentDecline = 0;
+      for (let i = 1; i < gaps.length; i++) {
+        if (gaps[i] !== null && gaps[i-1] !== null && gaps[i] < gaps[i-1]) {
+          currentDecline++;
+          maxConsecutiveDecline = Math.max(maxConsecutiveDecline, currentDecline);
+        } else {
+          currentDecline = 0;
+        }
+      }
+      
+      if (maxConsecutiveDecline >= 2) { // 至少连续3次下降（2个间隔）
+        const totalDecline = studentScores.filter(s => s !== null);
+        if (totalDecline.length >= 3) {
+          const firstValid = totalDecline[0];
+          const lastValid = totalDecline[totalDecline.length - 1];
+          continuousDeclineStudents.push({
+            student,
+            declineCount: maxConsecutiveDecline + 1,
+            totalChange: lastValid - firstValid
+          });
+        }
+      }
+    });
+    
+    continuousDeclineStudents.sort((a, b) => a.totalChange - b.totalChange);
+    continuousDeclineStudents = continuousDeclineStudents.slice(0, 5);
   }
   
   // 班级整体成绩对比表格
@@ -7127,16 +7233,19 @@ function renderClassAnalysis() {
     `;
   }).join('');
   
-  // 趋势图（SVG）
+  // 趋势图（SVG）- 平均分和中位数双折线
   const chartHeight = 220;
   const chartWidth = Math.max(analysis.length * 100, 400);
   const allAvgs = analysis.map(a => a.avg);
-  const maxAvg = Math.max(...allAvgs, 100);
-  const minAvg = Math.min(...allAvgs, 0);
+  const allMedians = analysis.map(a => calcMedian(a.scores));
+  const allValues = [...allAvgs, ...allMedians];
+  const maxAvg = Math.max(...allValues, 100);
+  const minAvg = Math.min(...allValues, 0);
   const range = maxAvg - minAvg || 1;
   
   let chartPoints = '';
   let chartPath = '';
+  let medianPath = '';
   let chartLabels = '';
   // 绘制网格线
   let gridLines = '';
@@ -7149,12 +7258,18 @@ function renderClassAnalysis() {
   
   analysis.forEach((a, i) => {
     const x = (i / (analysis.length - 1 || 1)) * (chartWidth - 100) + 50;
-    const y = chartHeight - ((a.avg - minAvg) / range) * (chartHeight - 60) - 30;
-    chartPoints += `<circle cx="${x}" cy="${y}" r="5" fill="var(--primary)" stroke="#fff" stroke-width="2"/>`;
-    chartPoints += `<text x="${x}" y="${y - 12}" text-anchor="middle" font-size="11" fill="var(--gray-700)" font-weight="600">${a.avg}</text>`;
+    const avgY = chartHeight - ((a.avg - minAvg) / range) * (chartHeight - 60) - 30;
+    const median = calcMedian(a.scores);
+    const medianY = chartHeight - ((median - minAvg) / range) * (chartHeight - 60) - 30;
+    
+    chartPoints += `<circle cx="${x}" cy="${avgY}" r="5" fill="var(--primary)" stroke="#fff" stroke-width="2"/>`;
+    chartPoints += `<text x="${x}" y="${avgY - 12}" text-anchor="middle" font-size="11" fill="var(--gray-700)" font-weight="600">${a.avg}</text>`;
+    chartPoints += `<circle cx="${x}" cy="${medianY}" r="4" fill="var(--accent)" stroke="#fff" stroke-width="2"/>`;
+    
     const label = (a.name || a.exam_name).length > 6 ? (a.name || a.exam_name).substring(0, 6) + '..' : (a.name || a.exam_name);
     chartLabels += `<text x="${x}" y="${chartHeight - 5}" text-anchor="middle" font-size="10" fill="var(--gray-500)">${label}</text>`;
-    chartPath += (i === 0 ? 'M' : 'L') + `${x},${y} `;
+    chartPath += (i === 0 ? 'M' : 'L') + `${x},${avgY} `;
+    medianPath += (i === 0 ? 'M' : 'L') + `${x},${medianY} `;
   });
   
   // 进退步HTML（学生名字可点击查看详情）
@@ -7184,7 +7299,7 @@ function renderClassAnalysis() {
       </div>
     </div>
     
-    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
       <div class="stat-card blue anim-in anim-d1">
         <div class="stat-label">已选考试</div>
         <div class="stat-value">${analysis.length}次</div>
@@ -7195,29 +7310,100 @@ function renderClassAnalysis() {
         <div class="stat-sub" style="color:${avgChangeColor}">${avgChange || '仅1次考试'}</div>
       </div>
       <div class="stat-card green anim-in anim-d3">
+        <div class="stat-label">末次中位数</div>
+        <div class="stat-value">${lastMedian.toFixed(1)}</div>
+        <div class="stat-sub">${medianChange || ''}</div>
+      </div>
+      <div class="stat-card orange anim-in anim-d4">
+        <div class="stat-label">末次标准差</div>
+        <div class="stat-value">${lastStdDev.toFixed(1)}</div>
+        <div class="stat-sub">${stdDevChange || ''}</div>
+      </div>
+      <div class="stat-card green anim-in anim-d5">
         <div class="stat-label">末次及格率</div>
         <div class="stat-value">${lastExam.passRate}%</div>
         <div class="stat-sub">${lastExam.count}人参考</div>
-      </div>
-      <div class="stat-card orange anim-in anim-d4">
-        <div class="stat-label">末次优秀率</div>
-        <div class="stat-value">${lastExam.excellentRate}%</div>
-        <div class="stat-sub">最高分 ${lastExam.max}</div>
       </div>
     </div>
     
     <div class="card" style="margin-top:16px">
       <div class="card-header">
-        <span class="card-title">平均分变化趋势</span>
-        <span style="font-size:12px;color:var(--gray-400)">已选${analysis.length}次考试</span>
+        <span class="card-title">平均分与中位数变化趋势</span>
+        <div style="display:flex;gap:16px;font-size:12px">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--primary);display:inline-block"></span>平均分</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent);display:inline-block"></span>中位数</span>
+        </div>
       </div>
       <div class="card-body" style="overflow-x:auto">
         <svg width="${chartWidth}" height="${chartHeight}" style="display:block">
           ${gridLines}
           <path d="${chartPath}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.3"/>
+          <path d="${medianPath}" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.3" stroke-dasharray="5,5"/>
           ${chartPoints}
           ${chartLabels}
         </svg>
+      </div>
+    </div>
+    
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <span class="card-title">分数段分布变化</span>
+        <span style="font-size:12px;color:var(--gray-400)">各分数段人数占比随考试的变化</span>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+        ${(() => {
+          const distChartHeight = 250;
+          const distChartWidth = Math.max(analysis.length * 80, 400);
+          const barWidth = 50;
+          const maxCount = Math.max(...analysis.map(a => a.scores.length), 1);
+          
+          let distBars = '';
+          let distLabels = '';
+          let distGridLines = '';
+          
+          // 绘制网格线
+          for (let i = 0; i <= 4; i++) {
+            const y = 20 + (distChartHeight - 60) * i / 4;
+            const val = Math.round(maxCount - (maxCount * i / 4));
+            distGridLines += `<line x1="35" y1="${y}" x2="${distChartWidth - 10}" y2="${y}" stroke="var(--gray-200)" stroke-width="1"/>`;
+            distGridLines += `<text x="30" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--gray-400)">${val}</text>`;
+          }
+          
+          analysis.forEach((a, i) => {
+            const x = (i / (analysis.length - 1 || 1)) * (distChartWidth - 100) + 50;
+            const dist = calcScoreDistribution(a.scores, defaultScoreRanges);
+            let currentY = distChartHeight - 30;
+            
+            dist.forEach((d, j) => {
+              const height = (d.count / maxCount) * (distChartHeight - 60);
+              const y = currentY - height;
+              distBars += `<rect x="${x - barWidth/2}" y="${y}" width="${barWidth}" height="${height}" fill="${d.color}" opacity="0.8"/>`;
+              if (d.count > 0) {
+                distBars += `<text x="${x}" y="${y + height/2 + 4}" text-anchor="middle" font-size="10" fill="#fff" font-weight="600">${d.count}</text>`;
+              }
+              currentY = y;
+            });
+            
+            const label = (a.name || a.exam_name).length > 6 ? (a.name || a.exam_name).substring(0, 6) + '..' : (a.name || a.exam_name);
+            distLabels += `<text x="${x}" y="${distChartHeight - 5}" text-anchor="middle" font-size="10" fill="var(--gray-500)">${label}</text>`;
+          });
+          
+          // 图例
+          const legend = defaultScoreRanges.map((r, i) => 
+            `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:11px">
+              <span style="width:12px;height:12px;background:${r.color};display:inline-block;border-radius:2px"></span>${r.label}
+            </span>`
+          ).join('');
+          
+          return `
+            <div style="margin-bottom:8px">${legend}</div>
+            <svg width="${distChartWidth}" height="${distChartHeight}" style="display:block">
+              ${distGridLines}
+              ${distBars}
+              ${distLabels}
+            </svg>
+          `;
+        })()}
       </div>
     </div>
     
@@ -7240,6 +7426,25 @@ function renderClassAnalysis() {
         <div class="card-body">
           ${declineHtml}
         </div>
+      </div>
+    </div>
+    ` : ''}
+    
+    ${continuousDeclineStudents.length > 0 ? `
+    <div class="card" style="margin-top:16px;border-left:4px solid var(--danger)">
+      <div class="card-header">
+        <span class="card-title" style="color:var(--danger)">⚠ 连续下滑学生</span>
+        <span style="font-size:12px;color:var(--gray-400)">连续3次及以上成绩下降，需要重点关注</span>
+      </div>
+      <div class="card-body">
+        ${continuousDeclineStudents.map((s, i) => `
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+            <span style="width:24px;height:24px;border-radius:50%;background:var(--danger);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${i + 1}</span>
+            <span style="flex:1;font-weight:500;cursor:pointer;color:var(--primary)" onclick="showStudentDetailInAnalysis('${s.student}')">${s.student}</span>
+            <span style="font-size:12px;color:var(--gray-500)">连续${s.declineCount}次下滑</span>
+            <span style="font-size:14px;font-weight:600;color:var(--danger)">${s.totalChange > 0 ? '+' : ''}${s.totalChange.toFixed(1)}</span>
+          </div>
+        `).join('')}
       </div>
     </div>
     ` : ''}
@@ -7373,6 +7578,7 @@ function showStudentDetailInAnalysis(studentName) {
   
   let chartPoints = '';
   let chartPath = '';
+  let avgPath = '';
   let chartLabels = '';
   let gridLines = '';
   
@@ -7385,12 +7591,17 @@ function showStudentDetailInAnalysis(studentName) {
   
   studentScores.forEach((s, i) => {
     const x = (i / (studentScores.length - 1 || 1)) * (chartWidth - 100) + 50;
-    const y = chartHeight - ((s.score - minScore) / range) * (chartHeight - 60) - 30;
-    chartPoints += `<circle cx="${x}" cy="${y}" r="5" fill="var(--primary)" stroke="#fff" stroke-width="2"/>`;
-    chartPoints += `<text x="${x}" y="${y - 12}" text-anchor="middle" font-size="11" fill="var(--gray-700)" font-weight="600">${s.score}</text>`;
+    const studentY = chartHeight - ((s.score - minScore) / range) * (chartHeight - 60) - 30;
+    const avgY = chartHeight - ((s.classAvg - minScore) / range) * (chartHeight - 60) - 30;
+    
+    chartPoints += `<circle cx="${x}" cy="${studentY}" r="5" fill="var(--primary)" stroke="#fff" stroke-width="2"/>`;
+    chartPoints += `<text x="${x}" y="${studentY - 12}" text-anchor="middle" font-size="11" fill="var(--gray-700)" font-weight="600">${s.score}</text>`;
+    chartPoints += `<circle cx="${x}" cy="${avgY}" r="4" fill="var(--accent)" stroke="#fff" stroke-width="2"/>`;
+    
     const label = s.examName.length > 6 ? s.examName.substring(0, 6) + '..' : s.examName;
     chartLabels += `<text x="${x}" y="${chartHeight - 5}" text-anchor="middle" font-size="10" fill="var(--gray-500)">${label}</text>`;
-    chartPath += (i === 0 ? 'M' : 'L') + `${x},${y} `;
+    chartPath += (i === 0 ? 'M' : 'L') + `${x},${studentY} `;
+    avgPath += (i === 0 ? 'M' : 'L') + `${x},${avgY} `;
   });
   
   // 生成成绩明细表
@@ -7450,12 +7661,17 @@ function showStudentDetailInAnalysis(studentName) {
         
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
-            <span class="card-title">成绩变化趋势</span>
+            <span class="card-title">成绩变化趋势（与班级均分对比）</span>
+            <div style="display:flex;gap:16px;font-size:12px">
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--primary);display:inline-block"></span>我的成绩</span>
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent);display:inline-block"></span>班级均分</span>
+            </div>
           </div>
           <div class="card-body" style="overflow-x:auto">
             <svg width="${chartWidth}" height="${chartHeight}" style="display:block">
               ${gridLines}
               <path d="${chartPath}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.3"/>
+              <path d="${avgPath}" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.3" stroke-dasharray="5,5"/>
               ${chartPoints}
               ${chartLabels}
             </svg>
