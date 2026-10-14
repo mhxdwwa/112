@@ -5699,6 +5699,14 @@ function exportAdminRoster(cls) {
 let scoreExamsCache = [];
 let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail' | 'headteacher-overview' | 'student-history' | 'class-analysis'
 let classAnalysisData = null; // 班级分析数据缓存
+let scoreDetailChartType = 'pie'; // 'pie' | 'bar'
+let scoreDetailRanges = [
+  { label: '90-100', min: 90, max: 100, color: '#10b981' },
+  { label: '80-89', min: 80, max: 89, color: '#3b82f6' },
+  { label: '70-79', min: 70, max: 79, color: '#f59e0b' },
+  { label: '60-69', min: 60, max: 69, color: '#f97316' },
+  { label: '60以下', min: 0, max: 59, color: '#ef4444' }
+];
 let scoreCurrentExam = null;
 let scoreClassSummaryCache = {};
 let scoreStudentHistoryCache = [];
@@ -6010,14 +6018,8 @@ function renderScoreDetail() {
   const passRate = scoreValues.length > 0 ? ((passCount / scoreValues.length) * 100).toFixed(1) : 0;
   const excellentRate = scoreValues.length > 0 ? ((excellentCount / scoreValues.length) * 100).toFixed(1) : 0;
   
-  // 分数段统计
-  const ranges = [
-    { label: '90-100', min: 90, max: 100, count: 0 },
-    { label: '80-89', min: 80, max: 89, count: 0 },
-    { label: '70-79', min: 70, max: 79, count: 0 },
-    { label: '60-69', min: 60, max: 69, count: 0 },
-    { label: '60以下', min: 0, max: 59, count: 0 }
-  ];
+  // 分数段统计（使用自定义分数段）
+  const ranges = scoreDetailRanges.map(r => ({ ...r, count: 0 }));
   scoreValues.forEach(s => {
     const range = ranges.find(r => s >= r.min && s <= r.max);
     if (range) range.count++;
@@ -6034,6 +6036,22 @@ function renderScoreDetail() {
       </tr>
     `;
   }).join('');
+  
+  // 生成分数段分布HTML
+  const distributionHtml = ranges.map(r => `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <span style="width:60px;font-size:13px;color:var(--gray-600)">${r.label}</span>
+      <div style="flex:1;height:20px;background:var(--gray-100);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${scores.length > 0 ? (r.count / scores.length * 100) : 0}%;background:${r.color};transition:width 0.3s"></div>
+      </div>
+      <span style="width:40px;text-align:right;font-size:13px;font-weight:500">${r.count}人</span>
+    </div>
+  `).join('');
+  
+  // 生成SVG图表
+  const chartHtml = scoreDetailChartType === 'pie' 
+    ? generatePieChart(ranges, scores.length)
+    : generateBarChart(ranges, scores.length);
   
   return `
     <div class="toolbar">
@@ -6069,46 +6087,19 @@ function renderScoreDetail() {
       <div class="card anim-in anim-d2">
         <div class="card-header">
           <span class="card-title">分数段分布</span>
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="showCustomRanges()">自定义分数段</button>
         </div>
         <div class="card-body">
-          ${ranges.map(r => `
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-              <span style="width:60px;font-size:13px;color:var(--gray-600)">${r.label}</span>
-              <div style="flex:1;height:20px;background:var(--gray-100);border-radius:4px;overflow:hidden">
-                <div style="height:100%;width:${scores.length > 0 ? (r.count / scores.length * 100) : 0}%;background:${r.min >= 90 ? 'var(--accent)' : r.min >= 60 ? 'var(--primary)' : 'var(--danger)'};transition:width 0.3s"></div>
-              </div>
-              <span style="width:40px;text-align:right;font-size:13px;font-weight:500">${r.count}人</span>
-            </div>
-          `).join('')}
+          ${distributionHtml}
         </div>
       </div>
       <div class="card anim-in anim-d3">
         <div class="card-header">
-          <span class="card-title">考试信息</span>
+          <span class="card-title">成绩分布图</span>
+          <span style="font-size:12px;color:var(--gray-400)">点击图表切换显示方式</span>
         </div>
-        <div class="card-body">
-          <div style="display:grid;gap:12px">
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
-              <span style="color:var(--gray-500)">考试名称</span>
-              <span style="font-weight:500">${exam.exam_name}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
-              <span style="color:var(--gray-500)">班级</span>
-              <span style="font-weight:500">${exam.class}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
-              <span style="color:var(--gray-500)">科目</span>
-              <span style="font-weight:500">${exam.subject}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
-              <span style="color:var(--gray-500)">考试日期</span>
-              <span style="font-weight:500">${exam.exam_date}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:8px 0">
-              <span style="color:var(--gray-500)">录入教师</span>
-              <span style="font-weight:500">${exam.teacher}</span>
-            </div>
-          </div>
+        <div class="card-body" style="cursor:pointer" onclick="toggleScoreDetailChart()">
+          ${chartHtml}
         </div>
       </div>
     </div>
@@ -6135,6 +6126,243 @@ function renderScoreDetail() {
       </div>
     </div>
   `;
+}
+
+// 生成饼图SVG
+function generatePieChart(ranges, total) {
+  if (total === 0) return '<div style="text-align:center;padding:40px;color:var(--gray-400)">暂无数据</div>';
+  
+  const size = 240;
+  const centerX = size / 2;
+  const centerY = size / 2;
+  const radius = 90;
+  
+  let svg = `<svg width="${size}" height="${size}" style="display:block;margin:0 auto">`;
+  
+  let startAngle = -Math.PI / 2; // 从顶部开始
+  
+  ranges.forEach(r => {
+    if (r.count === 0) return;
+    
+    const percentage = r.count / total;
+    const angle = percentage * 2 * Math.PI;
+    const endAngle = startAngle + angle;
+    
+    const x1 = centerX + radius * Math.cos(startAngle);
+    const y1 = centerY + radius * Math.sin(startAngle);
+    const x2 = centerX + radius * Math.cos(endAngle);
+    const y2 = centerY + radius * Math.sin(endAngle);
+    
+    const largeArcFlag = angle > Math.PI ? 1 : 0;
+    
+    const path = `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+    svg += `<path d="${path}" fill="${r.color}" stroke="#fff" stroke-width="2"/>`;
+    
+    // 添加标签
+    const midAngle = startAngle + angle / 2;
+    const labelRadius = radius * 0.65;
+    const labelX = centerX + labelRadius * Math.cos(midAngle);
+    const labelY = centerY + labelRadius * Math.sin(midAngle);
+    
+    if (percentage > 0.05) { // 只在占比大于5%时显示标签
+      svg += `<text x="${labelX}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="12" font-weight="600">${Math.round(percentage * 100)}%</text>`;
+    }
+    
+    startAngle = endAngle;
+  });
+  
+  svg += '</svg>';
+  
+  // 添加图例
+  const legendHtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:16px;justify-content:center">
+    ${ranges.map(r => `
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600)">
+        <div style="width:12px;height:12px;border-radius:2px;background:${r.color}"></div>
+        <span>${r.label} (${r.count}人)</span>
+      </div>
+    `).join('')}
+  </div>`;
+  
+  return svg + legendHtml;
+}
+
+// 生成柱状图SVG
+function generateBarChart(ranges, total) {
+  if (total === 0) return '<div style="text-align:center;padding:40px;color:var(--gray-400)">暂无数据</div>';
+  
+  const width = 400;
+  const height = 220;
+  const padding = { top: 20, right: 20, bottom: 40, left: 40 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  
+  const maxCount = Math.max(...ranges.map(r => r.count), 1);
+  const barWidth = chartWidth / ranges.length * 0.6;
+  const barGap = chartWidth / ranges.length * 0.4;
+  
+  let svg = `<svg width="${width}" height="${height}" style="display:block;margin:0 auto">`;
+  
+  // 绘制Y轴网格线
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + chartHeight * i / 4;
+    const value = Math.round(maxCount * (4 - i) / 4);
+    svg += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="var(--gray-200)" stroke-width="1"/>`;
+    svg += `<text x="${padding.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--gray-400)">${value}</text>`;
+  }
+  
+  // 绘制柱状图
+  ranges.forEach((r, i) => {
+    const x = padding.left + i * (barWidth + barGap) + barGap / 2;
+    const barHeight = (r.count / maxCount) * chartHeight;
+    const y = padding.top + chartHeight - barHeight;
+    
+    svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${r.color}" rx="4"/>`;
+    
+    // 添加数值标签
+    if (r.count > 0) {
+      svg += `<text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="var(--gray-700)" font-weight="600">${r.count}</text>`;
+    }
+    
+    // 添加X轴标签
+    svg += `<text x="${x + barWidth / 2}" y="${height - 10}" text-anchor="middle" font-size="11" fill="var(--gray-600)">${r.label}</text>`;
+  });
+  
+  svg += '</svg>';
+  
+  return svg;
+}
+
+// 切换图表类型
+function toggleScoreDetailChart() {
+  scoreDetailChartType = scoreDetailChartType === 'pie' ? 'bar' : 'pie';
+  navigate('score-manage');
+}
+
+// 显示自定义分数段
+function showCustomRanges() {
+  const rangesHtml = scoreDetailRanges.map((r, i) => `
+    <div style="display:grid;grid-template-columns:1fr 80px 80px 80px 40px;gap:8px;align-items:center;margin-bottom:8px">
+      <input type="text" class="form-input" id="range-label-${i}" value="${r.label}" placeholder="标签" style="font-size:13px">
+      <input type="number" class="form-input" id="range-min-${i}" value="${r.min}" placeholder="最小值" style="font-size:13px">
+      <input type="number" class="form-input" id="range-max-${i}" value="${r.max}" placeholder="最大值" style="font-size:13px">
+      <input type="color" class="form-input" id="range-color-${i}" value="${r.color}" style="padding:2px;height:36px">
+      <button class="toolbar-btn ghost" style="padding:4px 8px;font-size:12px;color:var(--danger)" onclick="removeRange(${i})">删除</button>
+    </div>
+  `).join('');
+  
+  const modalHtml = `
+    <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000">
+      <div style="background:#fff;border-radius:12px;padding:24px;max-width:700px;width:90%;max-height:80vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h3 style="margin:0;font-size:18px">自定义分数段</h3>
+          <button class="toolbar-btn ghost" style="padding:4px 8px" onclick="closeCustomRanges()">关闭</button>
+        </div>
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">设置分数段的标签、最小值、最大值和颜色</div>
+        <div style="display:grid;grid-template-columns:1fr 80px 80px 80px 40px;gap:8px;margin-bottom:8px;font-size:12px;color:var(--gray-500);font-weight:500">
+          <div>标签</div>
+          <div>最小值</div>
+          <div>最大值</div>
+          <div>颜色</div>
+          <div></div>
+        </div>
+        <div id="ranges-container">
+          ${rangesHtml}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="toolbar-btn ghost" onclick="addRange()">+ 添加分数段</button>
+          <button class="toolbar-btn ghost" onclick="resetRanges()">恢复默认</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+          <button class="toolbar-btn ghost" onclick="closeCustomRanges()">取消</button>
+          <button class="toolbar-btn primary" onclick="saveCustomRanges()">保存</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// 关闭自定义分数段弹窗
+function closeCustomRanges() {
+  const modal = document.querySelector('body > div:last-child');
+  if (modal && modal.style.position === 'fixed') {
+    modal.remove();
+  }
+}
+
+// 添加分数段
+function addRange() {
+  const container = document.getElementById('ranges-container');
+  const newIndex = container.children.length;
+  const newRangeHtml = `
+    <div style="display:grid;grid-template-columns:1fr 80px 80px 80px 40px;gap:8px;align-items:center;margin-bottom:8px">
+      <input type="text" class="form-input" id="range-label-${newIndex}" value="" placeholder="标签" style="font-size:13px">
+      <input type="number" class="form-input" id="range-min-${newIndex}" value="0" placeholder="最小值" style="font-size:13px">
+      <input type="number" class="form-input" id="range-max-${newIndex}" value="100" placeholder="最大值" style="font-size:13px">
+      <input type="color" class="form-input" id="range-color-${newIndex}" value="#6366f1" style="padding:2px;height:36px">
+      <button class="toolbar-btn ghost" style="padding:4px 8px;font-size:12px;color:var(--danger)" onclick="removeRange(${newIndex})">删除</button>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', newRangeHtml);
+}
+
+// 删除分数段
+function removeRange(index) {
+  const container = document.getElementById('ranges-container');
+  if (container.children.length > 1) {
+    container.children[index].remove();
+  } else {
+    showToast('至少保留一个分数段', 'warning');
+  }
+}
+
+// 恢复默认分数段
+function resetRanges() {
+  scoreDetailRanges = [
+    { label: '90-100', min: 90, max: 100, color: '#10b981' },
+    { label: '80-89', min: 80, max: 89, color: '#3b82f6' },
+    { label: '70-79', min: 70, max: 79, color: '#f59e0b' },
+    { label: '60-69', min: 60, max: 69, color: '#f97316' },
+    { label: '60以下', min: 0, max: 59, color: '#ef4444' }
+  ];
+  closeCustomRanges();
+  navigate('score-manage');
+}
+
+// 保存自定义分数段
+function saveCustomRanges() {
+  const container = document.getElementById('ranges-container');
+  const newRanges = [];
+  
+  for (let i = 0; i < container.children.length; i++) {
+    const label = document.getElementById(`range-label-${i}`).value.trim();
+    const min = parseFloat(document.getElementById(`range-min-${i}`).value);
+    const max = parseFloat(document.getElementById(`range-max-${i}`).value);
+    const color = document.getElementById(`range-color-${i}`).value;
+    
+    if (!label || isNaN(min) || isNaN(max)) {
+      showToast(`第${i + 1}行数据不完整`, 'warning');
+      return;
+    }
+    
+    if (min > max) {
+      showToast(`第${i + 1}行最小值不能大于最大值`, 'warning');
+      return;
+    }
+    
+    newRanges.push({ label, min, max, color });
+  }
+  
+  if (newRanges.length === 0) {
+    showToast('至少需要一个分数段', 'warning');
+    return;
+  }
+  
+  scoreDetailRanges = newRanges;
+  closeCustomRanges();
+  navigate('score-manage');
+  showToast('分数段已更新', 'success');
 }
 
 function importScoreExcel() {
