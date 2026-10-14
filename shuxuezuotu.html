@@ -256,7 +256,9 @@ const IMG_STATE = {
   imgStartX: 0, imgStartY: 0,
   moveMode: false,       // whether in image move mode
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
-  workerUrl: 'https://mathlab-image-relay.444522621.workers.dev',  // Worker URL for WebSocket + upload
+  workerUrl: 'https://mathlab-image-relay.444522621.workers.dev',  // Worker URL for WebSocket
+  apiBase: '/api/image-relay',  // Pages Function base URL (fallback)
+  useWorker: false,      // Whether to use Worker or Pages Function
   pairCode: null,
   pollTimer: null,
   generation: 0,         // race condition guard: stale poll responses are ignored
@@ -3382,32 +3384,68 @@ function stopPhotoUpload(){
   }
 }
 
-// Generate pairing code and connect WebSocket for real-time notifications
+// Generate pairing code - try Worker first, fallback to Pages Function
 async function generatePairCode(){
   const statusEl=document.getElementById('pairCodeStatus');
   if(statusEl){
     statusEl.textContent='正在连接...';
     statusEl.className='pair-code-status';
   }
+  
+  // Try Worker first (supports WebSocket for instant notifications)
   try{
-    // Step 1: Get pairing code from Worker
-    const res=await fetch(IMG_STATE.workerUrl+'/api/pair',{method:'POST'});
+    console.log('[Photo] Trying Worker...');
+    const controller=new AbortController();
+    const timeoutId=setTimeout(()=>controller.abort(),3000); // 3s timeout
+    
+    const res=await fetch(IMG_STATE.workerUrl+'/api/pair',{
+      method:'POST',
+      signal:controller.signal
+    });
+    clearTimeout(timeoutId);
+    
     const data=await res.json();
     if(!data.code) throw new Error('No code returned');
     
     IMG_STATE.pairCode=data.code;
+    IMG_STATE.useWorker=true;
     document.getElementById('pairCodeValue').textContent=data.code;
     
-    // Step 2: Connect WebSocket for instant notifications
+    // Connect WebSocket for instant notifications
     connectWebSocket(data.code);
     
-    // Step 3: Start fallback polling (every 2s, in case WebSocket fails)
+    // Start fallback polling (in case WebSocket fails)
     startFallbackPolling();
     
     if(statusEl){
       statusEl.textContent='等待手机上传...';
       statusEl.className='pair-code-status';
     }
+    console.log('[Photo] Using Worker mode');
+    return;
+  }catch(e){
+    console.warn('[Photo] Worker failed, falling back to Pages Function:',e.message);
+  }
+  
+  // Fallback to Pages Function (polling mode)
+  try{
+    console.log('[Photo] Using Pages Function...');
+    const res=await fetch(IMG_STATE.apiBase+'/pair',{method:'POST'});
+    const data=await res.json();
+    if(!data.code) throw new Error('No code returned');
+    
+    IMG_STATE.pairCode=data.code;
+    IMG_STATE.useWorker=false;
+    document.getElementById('pairCodeValue').textContent=data.code;
+    
+    // Start polling
+    startPolling();
+    
+    if(statusEl){
+      statusEl.textContent='等待手机上传...';
+      statusEl.className='pair-code-status';
+    }
+    console.log('[Photo] Using Pages Function mode');
   }catch(e){
     console.error('[Photo] Failed to generate pair code:',e);
     document.getElementById('pairCodeValue').textContent='ERROR';
@@ -3485,8 +3523,9 @@ async function handleImageReady(sizeHint){
   }
   
   try{
-    // Download image from Worker
-    const imgRes=await fetch(IMG_STATE.workerUrl+'/api/download/'+IMG_STATE.pairCode);
+    // Download image - use Worker or Pages Function based on mode
+    const baseUrl=IMG_STATE.useWorker?IMG_STATE.workerUrl+'/api':IMG_STATE.apiBase;
+    const imgRes=await fetch(baseUrl+'/download/'+IMG_STATE.pairCode);
     if(gen!==IMG_STATE.generation){IMG_STATE.loading=false;return;}
     
     if(imgRes.status===200){
@@ -3498,14 +3537,13 @@ async function handleImageReady(sizeHint){
       }
       IMG_STATE.currentBlobUrl=blobUrl;
       
-      // Only center if this is the first image (no image exists yet)
-      // Otherwise keep current position and scale
+      // Only center if this is the first image
       const shouldCenter=!IMG_STATE.image;
       await loadImage(blobUrl,shouldCenter);
       
       // Clear image from server
       try{
-        await fetch(IMG_STATE.workerUrl+'/api/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
+        await fetch(baseUrl+'/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
       }catch(e){}
       
       IMG_STATE.generation++;
@@ -3527,6 +3565,39 @@ async function handleImageReady(sizeHint){
   }
 }
 
+// Polling for Pages Function mode (no WebSocket support)
+function startPolling(){
+  if(IMG_STATE.pollTimer)clearInterval(IMG_STATE.pollTimer);
+  
+  // Immediate first check
+  checkForImage();
+  
+  // Then poll every 500ms
+  IMG_STATE.pollTimer=setInterval(checkForImage,500);
+}
+
+async function checkForImage(){
+  if(!IMG_STATE.pairCode||IMG_STATE.loading||IMG_STATE.useWorker)return;
+  const gen=IMG_STATE.generation;
+  try{
+    // Check flag only (reads ~50 bytes, very fast)
+    const res=await fetch(IMG_STATE.apiBase+'/check/'+IMG_STATE.pairCode);
+    if(gen!==IMG_STATE.generation)return;
+    
+    // 200 = flag exists (new image ready), 204 = no image
+    if(res.status===200){
+      const flag=await res.json();
+      if(gen!==IMG_STATE.generation)return;
+      if(!flag.ready)return;
+      
+      // Image ready! Download and display
+      await handleImageReady(flag.size);
+    }
+  }catch(e){
+    console.error('[Photo] Poll error:',e);
+  }
+}
+
 // Fallback polling (every 2s, only used if WebSocket fails)
 function startFallbackPolling(){
   if(IMG_STATE.pollTimer) clearInterval(IMG_STATE.pollTimer);
@@ -3535,7 +3606,7 @@ function startFallbackPolling(){
 
 async function fallbackCheck(){
   // Only poll if WebSocket is not connected
-  if(IMG_STATE.wsConnected||!IMG_STATE.pairCode||IMG_STATE.loading) return;
+  if(IMG_STATE.wsConnected||!IMG_STATE.pairCode||IMG_STATE.loading||!IMG_STATE.useWorker) return;
   console.log('[Fallback] Polling...');
   // Try downloading directly - if image exists, handle it
   try{
@@ -3608,18 +3679,34 @@ async function handleMobileFile(e){
   status.className='mobile-upload-status';
   
   try{
-    // Compress image to ~1MB for fast transfer while keeping clarity
+    // Compress image to ~500KB for fast transfer while keeping clarity
     const origSizeKB=Math.round(file.size/1024);
     status.textContent='正在压缩图片 ('+origSizeKB+'KB)...';
     const blob=await compressImage(file,0.5); // Target 500KB
     const compSizeKB=Math.round(blob.size/1024);
-    // Upload binary directly (much faster than base64+JSON)
     status.textContent='正在上传 ('+origSizeKB+'KB→'+compSizeKB+'KB)...';
-    const res=await fetch(IMG_STATE.workerUrl+'/api/upload?code='+encodeURIComponent(code),{
-      method:'POST',
-      headers:{'Content-Type': blob.type || 'image/jpeg'},
-      body: blob
-    });
+    
+    // Try Worker first, fallback to Pages Function
+    let res;
+    try{
+      const controller=new AbortController();
+      const timeoutId=setTimeout(()=>controller.abort(),5000); // 5s timeout
+      res=await fetch(IMG_STATE.workerUrl+'/api/upload?code='+encodeURIComponent(code),{
+        method:'POST',
+        headers:{'Content-Type': blob.type || 'image/jpeg'},
+        body: blob,
+        signal:controller.signal
+      });
+      clearTimeout(timeoutId);
+    }catch(workerErr){
+      console.warn('[Mobile] Worker upload failed, trying Pages Function:',workerErr.message);
+      res=await fetch(IMG_STATE.apiBase+'/upload?code='+encodeURIComponent(code),{
+        method:'POST',
+        headers:{'Content-Type': blob.type || 'image/jpeg'},
+        body: blob
+      });
+    }
+    
     const data=await res.json();
     if(data.success){
       const sizeKB = Math.round((data.size || blob.size) / 1024);
