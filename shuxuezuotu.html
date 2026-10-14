@@ -3533,9 +3533,9 @@ async function handleMobileFile(e){
   status.className='mobile-upload-status';
   
   try{
-    // Compress image aggressively for faster transfer (5MB → ~100-200KB)
+    // Compress image very aggressively for faster transfer (3MB → ~50-100KB)
     status.textContent='正在压缩图片...';
-    const blob=await compressImage(file,1200,0.7);
+    const blob=await compressImage(file,800,0.5);
     // Upload binary directly (much faster than base64+JSON)
     status.textContent='正在上传...';
     const res=await fetch('/api/image-relay/upload?code='+encodeURIComponent(code),{
