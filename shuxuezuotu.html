@@ -273,6 +273,8 @@ const IMG_STATE = {
   pairCode: null,
   pollTimer: null,
   generation: 0,         // race condition guard: stale poll responses are ignored
+  loading: false,        // prevent concurrent image loads
+  currentBlobUrl: null,  // track blob URL for proper cleanup
   mobilePairCode: null,  // remember pairing code on mobile for continuous uploads
 };
 
@@ -2615,6 +2617,12 @@ function restoreImageState(state){
   if(!state){
     IMG_STATE.enabled=false;
     IMG_STATE.image=null;
+    IMG_STATE.loading=false;
+    // Clean up blob URL
+    if(IMG_STATE.currentBlobUrl){
+      URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
+      IMG_STATE.currentBlobUrl=null;
+    }
     imgC.style.pointerEvents='none';
     document.getElementById('imageControls').classList.remove('on');
     drawImage();
@@ -3115,6 +3123,12 @@ document.addEventListener('keydown',e=>{
       IMG_STATE.image=null;
       IMG_STATE.pairCode=null;
       IMG_STATE.generation++; // Invalidate any in-flight poll responses
+      IMG_STATE.loading=false;
+      // Clean up blob URL
+      if(IMG_STATE.currentBlobUrl){
+        URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
+        IMG_STATE.currentBlobUrl=null;
+      }
       if(IMG_STATE.pollTimer){
         clearInterval(IMG_STATE.pollTimer);
         IMG_STATE.pollTimer=null;
@@ -3378,6 +3392,12 @@ function stopPhotoUpload(){
     IMG_STATE.pollTimer=null;
   }
   IMG_STATE.pairCode=null;
+  IMG_STATE.loading=false;
+  // Clean up blob URL
+  if(IMG_STATE.currentBlobUrl){
+    URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
+    IMG_STATE.currentBlobUrl=null;
+  }
 }
 
 // Generate pairing code from Cloudflare Worker
@@ -3416,7 +3436,7 @@ function startPolling(){
 }
 
 async function checkForImage(){
-  if(!IMG_STATE.pairCode)return;
+  if(!IMG_STATE.pairCode||IMG_STATE.loading)return;
   const gen=IMG_STATE.generation; // capture current generation
   try{
     const res=await fetch('/api/image-relay/check/'+IMG_STATE.pairCode);
@@ -3425,6 +3445,9 @@ async function checkForImage(){
     
     // 204 = no image, 200 = binary image data
     if(res.status===200){
+      // Prevent concurrent loads
+      IMG_STATE.loading=true;
+      
       // Image received as binary!
       const statusEl=document.getElementById('pairCodeStatus');
       if(statusEl){
@@ -3434,14 +3457,29 @@ async function checkForImage(){
       // Convert binary response to blob URL
       const blob=await res.blob();
       const blobUrl=URL.createObjectURL(blob);
+      
+      // Clean up old blob URL before creating new one
+      if(IMG_STATE.currentBlobUrl){
+        URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
+      }
+      IMG_STATE.currentBlobUrl=blobUrl;
+      
       await loadImage(blobUrl);
-      URL.revokeObjectURL(blobUrl); // clean up after image is loaded
       
       // Clear the image from worker (but keep the pair code valid)
-      fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'}).catch(()=>{});
+      // MUST await this to prevent race condition where next poll reads old image
+      try{
+        await fetch('/api/image-relay/clear/'+IMG_STATE.pairCode,{method:'DELETE'});
+      }catch(clearErr){
+        console.warn('[Photo] Clear failed, will retry:',clearErr);
+      }
+      
+      // Bump generation to invalidate any in-flight polls that may have read the old image
+      IMG_STATE.generation++;
+      IMG_STATE.loading=false;
+      
       // Show success feedback
       showToast('图片已接收，可以开始标注');
-      // Keep polling for next image - don't stop or hide the pair code display
       // Reset status to waiting for next upload
       if(statusEl){
         statusEl.textContent='等待下一张图片...';
@@ -3451,12 +3489,12 @@ async function checkForImage(){
     // 204 = no image yet, just continue polling
   }catch(e){
     console.error('[Photo] Poll error:',e);
+    IMG_STATE.loading=false;
   }
 }
 
 // Load image from URL (blob URL or data URL)
 function loadImage(imageUrl){
-  IMG_STATE.generation++; // new image invalidates old poll responses
   return new Promise((resolve)=>{
     const img=new Image();
     img.onload=()=>{
@@ -3477,6 +3515,10 @@ function loadImage(imageUrl){
       // Redraw
       drawImage();
       resolve();
+    };
+    img.onerror=()=>{
+      console.error('[Photo] Failed to load image from URL');
+      resolve(); // resolve anyway to unblock loading flag
     };
     img.src=imageUrl;
   });
@@ -3509,9 +3551,9 @@ async function handleMobileFile(e){
   status.className='mobile-upload-status';
   
   try{
-    // Compress image (better quality for math drawings)
+    // Compress image aggressively for faster transfer (5MB → ~100-200KB)
     status.textContent='正在压缩图片...';
-    const blob=await compressImage(file,1600,0.85);
+    const blob=await compressImage(file,1200,0.7);
     // Upload binary directly (much faster than base64+JSON)
     status.textContent='正在上传...';
     const res=await fetch('/api/image-relay/upload?code='+encodeURIComponent(code),{
@@ -3596,6 +3638,12 @@ document.getElementById('imgRemove').addEventListener('click',()=>{
   IMG_STATE.image=null;
   IMG_STATE.pairCode=null; // Clear pair code to prevent re-loading
   IMG_STATE.generation++;  // Invalidate any in-flight poll responses
+  IMG_STATE.loading=false; // Reset loading flag
+  // Clean up blob URL
+  if(IMG_STATE.currentBlobUrl){
+    URL.revokeObjectURL(IMG_STATE.currentBlobUrl);
+    IMG_STATE.currentBlobUrl=null;
+  }
   if(IMG_STATE.pollTimer){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
