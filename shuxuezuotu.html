@@ -256,7 +256,8 @@ const IMG_STATE = {
   imgStartX: 0, imgStartY: 0,
   moveMode: false,       // whether in image move mode
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
-  apiBase: '/api/image-relay',  // Pages Function base URL (via wscls.cn)
+  apiBase: '/api/image-relay',  // API base URL (via wscls.cn Worker route)
+  wsBase: 'wss://wscls.cn/api/image-relay',  // WebSocket URL for real-time notifications
   pairCode: null,
   pollTimer: null,
   generation: 0,         // race condition guard: stale poll responses are ignored
@@ -3367,6 +3368,12 @@ function stopPhotoUpload(){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
   }
+  // Close WebSocket
+  if(IMG_STATE.ws){
+    try{ IMG_STATE.ws.close(); }catch(e){}
+    IMG_STATE.ws=null;
+    IMG_STATE.wsConnected=false;
+  }
   IMG_STATE.pairCode=null;
   IMG_STATE.loading=false;
   // Clean up blob URL
@@ -3376,7 +3383,7 @@ function stopPhotoUpload(){
   }
 }
 
-// Generate pairing code via Pages Function (wscls.cn)
+// Generate pairing code and connect WebSocket for real-time notifications
 async function generatePairCode(){
   const statusEl=document.getElementById('pairCodeStatus');
   if(statusEl){
@@ -3385,6 +3392,7 @@ async function generatePairCode(){
   }
   
   try{
+    // Generate pair code via API
     const res=await fetch(IMG_STATE.apiBase+'/pair',{method:'POST'});
     const data=await res.json();
     if(!data.code) throw new Error('No code returned');
@@ -3392,14 +3400,17 @@ async function generatePairCode(){
     IMG_STATE.pairCode=data.code;
     document.getElementById('pairCodeValue').textContent=data.code;
     
-    // Start polling for new images
-    startPolling();
+    // Connect WebSocket for instant notifications
+    connectWebSocket(data.code);
+    
+    // Start fallback polling (in case WebSocket fails)
+    startFallbackPolling();
     
     if(statusEl){
       statusEl.textContent='等待手机上传...';
       statusEl.className='pair-code-status';
     }
-    console.log('[Photo] Pair code generated, polling started');
+    console.log('[Photo] Pair code generated, WebSocket connecting');
   }catch(e){
     console.error('[Photo] Failed to generate pair code:',e);
     document.getElementById('pairCodeValue').textContent='ERROR';
@@ -3407,7 +3418,63 @@ async function generatePairCode(){
   }
 }
 
-// Handle image ready notification (from polling)
+// Connect WebSocket for real-time image notifications
+function connectWebSocket(code){
+  if(IMG_STATE.ws){
+    try{ IMG_STATE.ws.close(); }catch(e){}
+  }
+  
+  const ws=new WebSocket(IMG_STATE.wsBase+'/ws');
+  IMG_STATE.ws=ws;
+  
+  ws.onopen=()=>{
+    console.log('[WebSocket] Connected, registering code:',code);
+    ws.send(JSON.stringify({type:'register',code:code}));
+  };
+  
+  ws.onmessage=(event)=>{
+    try{
+      const msg=JSON.parse(event.data);
+      console.log('[WebSocket] Message:',msg);
+      
+      if(msg.type==='registered'){
+        IMG_STATE.wsConnected=true;
+        console.log('[WebSocket] Registered successfully');
+        const statusEl=document.getElementById('pairCodeStatus');
+        if(statusEl) statusEl.textContent='已连接 (实时模式)';
+      }
+      
+      if(msg.type==='image_ready' && msg.code===IMG_STATE.pairCode){
+        // Instant notification! Download and display image
+        console.log('[WebSocket] Image ready!',msg.size,'bytes');
+        handleImageReady(msg.size);
+      }
+    }catch(e){
+      console.error('[WebSocket] Message parse error:',e);
+    }
+  };
+  
+  ws.onclose=()=>{
+    console.log('[WebSocket] Closed');
+    IMG_STATE.wsConnected=false;
+    // Reconnect after 2s if still active
+    if(IMG_STATE.pairCode && IMG_STATE.ws===ws){
+      setTimeout(()=>{
+        if(IMG_STATE.pairCode && !IMG_STATE.wsConnected){
+          console.log('[WebSocket] Reconnecting...');
+          connectWebSocket(IMG_STATE.pairCode);
+        }
+      },2000);
+    }
+  };
+  
+  ws.onerror=(e)=>{
+    console.error('[WebSocket] Error:',e);
+    IMG_STATE.wsConnected=false;
+  };
+}
+
+// Handle image ready notification (from WebSocket or fallback poll)
 async function handleImageReady(sizeHint){
   if(!IMG_STATE.pairCode||IMG_STATE.loading) return;
   const gen=IMG_STATE.generation;
@@ -3420,7 +3487,7 @@ async function handleImageReady(sizeHint){
   }
   
   try{
-    // Download image from Pages Function
+    // Download image from API
     const imgRes=await fetch(IMG_STATE.apiBase+'/download/'+IMG_STATE.pairCode);
     if(gen!==IMG_STATE.generation){IMG_STATE.loading=false;return;}
     
@@ -3492,6 +3559,28 @@ async function checkForImage(){
   }catch(e){
     console.error('[Photo] Poll error:',e);
   }
+}
+
+// Fallback polling (every 2s, only used if WebSocket fails)
+function startFallbackPolling(){
+  if(IMG_STATE.pollTimer) clearInterval(IMG_STATE.pollTimer);
+  IMG_STATE.pollTimer=setInterval(fallbackCheck,2000);
+}
+
+async function fallbackCheck(){
+  // Only poll if WebSocket is not connected
+  if(IMG_STATE.wsConnected||!IMG_STATE.pairCode||IMG_STATE.loading) return;
+  console.log('[Fallback] Polling...');
+  // Check flag only
+  try{
+    const res=await fetch(IMG_STATE.apiBase+'/check/'+IMG_STATE.pairCode);
+    if(res.status===200){
+      const flag=await res.json();
+      if(flag.ready){
+        await handleImageReady(flag.size);
+      }
+    }
+  }catch(e){}
 }
 
 // Load image from URL (blob URL or data URL)
@@ -3743,6 +3832,12 @@ document.getElementById('imgRemove').addEventListener('click',()=>{
   if(IMG_STATE.pollTimer){
     clearInterval(IMG_STATE.pollTimer);
     IMG_STATE.pollTimer=null;
+  }
+  // Close WebSocket
+  if(IMG_STATE.ws){
+    try{ IMG_STATE.ws.close(); }catch(e){}
+    IMG_STATE.ws=null;
+    IMG_STATE.wsConnected=false;
   }
   imgC.style.pointerEvents='none';
   document.getElementById('imageControls').classList.remove('on');
