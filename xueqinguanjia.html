@@ -6688,12 +6688,11 @@ function showClassAnalysisSelect() {
 async function loadClassAnalysis(cls, subject) {
   const result = await xqApi('exams', { action: 'class_subject_analysis', class: cls, subject });
   if (result.ok && result.analysis) {
-    // analysis 按日期升序排列，默认全选
-    const allIds = (result.analysis || []).map(a => a.id);
-    classAnalysisData = { class: cls, subject, analysis: result.analysis, selectedIds: allIds };
+    // 不设置 selectedIds，让用户在第2步手动选择
+    classAnalysisData = { class: cls, subject, analysis: result.analysis };
   } else {
     showToast('加载分析数据失败', 'error');
-    classAnalysisData = { class: cls, subject, analysis: [], selectedIds: [] };
+    classAnalysisData = { class: cls, subject, analysis: [] };
   }
   navigate('score-manage');
 }
