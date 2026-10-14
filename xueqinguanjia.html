@@ -11,6 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 /* === CSS VARIABLES === */
 :root {
@@ -1235,6 +1237,10 @@ tbody tr:last-child td { border-bottom: none; }
       <input type="password" id="loginPass" placeholder="请输入密码">
     </div>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">登 录</button>
+    <button class="login-import-btn" onclick="showXqQRLogin()" style="background:linear-gradient(135deg,#059669,#10b981);margin-top:12px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><rect x="7" y="7" width="3" height="3"/><rect x="14" y="7" width="3" height="3"/><rect x="7" y="14" width="3" height="3"/><rect x="14" y="14" width="3" height="3"/></svg>
+      手机扫码登录
+    </button>
     <div style="margin-top:10px;text-align:center;font-size:12px;color:rgba(255,255,255,0.45)">默认密码：<span style="font-family:'DM Sans',monospace;letter-spacing:0.05em;color:rgba(255,255,255,0.65);font-weight:500">123456</span></div>
     <button class="login-import-btn" id="setPasswordBtn" onclick="showSetPasswordDialog()" style="display:none;background:linear-gradient(135deg,var(--accent),#059669)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -1246,6 +1252,22 @@ tbody tr:last-child td { border-bottom: none; }
     </button>
 
     <div id="loginHint" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.06);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.5);text-align:center"></div>
+  </div>
+</div>
+
+<!-- ==================== QR LOGIN MODAL ==================== -->
+<div id="xqQrModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:32px;width:420px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,0.3);text-align:center">
+    <div style="font-size:20px;font-weight:700;color:var(--gray-800);margin-bottom:8px">📱 扫码登录</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:20px;line-height:1.6">
+      打开手机上的学勤管家<br>点击右上角扫码图标扫描此二维码
+    </div>
+    <div id="xqQrCodeWrap" style="display:inline-block;padding:16px;background:#fff;border:2px solid var(--gray-200);border-radius:16px;margin-bottom:16px"></div>
+    <div id="xqQrStatus" style="font-size:14px;color:var(--warning);margin-bottom:16px">等待扫码...</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="refreshXqQR()" style="flex:1;padding:10px;border:none;border-radius:10px;background:var(--gray-100);color:var(--gray-600);font-size:13px;font-weight:600;cursor:pointer">🔄 刷新</button>
+      <button onclick="closeXqQRModal()" style="flex:1;padding:10px;border:none;border-radius:10px;background:var(--danger-light);color:var(--danger);font-size:13px;font-weight:600;cursor:pointer">关闭</button>
+    </div>
   </div>
 </div>
 
@@ -1396,6 +1418,9 @@ tbody tr:last-child td { border-bottom: none; }
       </div>
       <div class="header-right">
         <span class="header-date" id="headerDate"></span>
+        <button class="header-btn" id="scanQrBtn" onclick="openXqQrScanner()" style="display:none" title="扫码登录">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><rect x="7" y="7" width="3" height="3"/><rect x="14" y="7" width="3" height="3"/><rect x="7" y="14" width="3" height="3"/><rect x="14" y="14" width="3" height="3"/></svg>
+        </button>
         <button class="header-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           <span class="dot"></span>
@@ -3377,6 +3402,10 @@ function restoreSession() {
     buildSidebar();
     updateDate();
     
+    // 显示扫码按钮（移动端）
+    const scanBtn = document.getElementById('scanQrBtn');
+    if (scanBtn) scanBtn.style.display = 'block';
+    
     console.log('[XQ] Session restored for:', session.user.teacherName);
     
     // 启动定期云同步（确保已登录教师能看到班主任的最新修改）
@@ -3393,6 +3422,41 @@ function restoreSession() {
     console.warn('[XQ] Failed to restore session:', e);
     return false;
   }
+}
+
+// 初始化应用（QR登录后调用）
+function initAppAfterLogin() {
+  document.getElementById('app').classList.add('visible');
+  document.getElementById('sidebarAvatar').textContent = xqCurrentUser.teacherName.charAt(0);
+  document.getElementById('sidebarName').textContent = xqCurrentUser.teacherName;
+  document.getElementById('sidebarRole').textContent = xqCurrentUser.role === 'leader' ? '校领导' : 
+                                                         xqCurrentUser.role === 'headteacher' ? '班主任' : '科任老师';
+  buildSidebar();
+  updateDate();
+  
+  // 显示扫码按钮（移动端）
+  const scanBtn = document.getElementById('scanQrBtn');
+  if (scanBtn) scanBtn.style.display = 'block';
+  
+  // 保存会话
+  localStorage.setItem('xq_session', JSON.stringify({
+    user: xqCurrentUser,
+    role: xqCurrentUser.role,
+    userInfo: {
+      name: xqCurrentUser.teacherName,
+      role: xqCurrentUser.role === 'leader' ? '校领导' : 
+            xqCurrentUser.role === 'headteacher' ? '班主任' : '科任老师',
+      avatar: xqCurrentUser.teacherName.charAt(0)
+    }
+  }));
+  
+  // 启动定期云同步
+  startPeriodicSync();
+  
+  // 刷新用户信息并导航
+  refreshCurrentUserClass();
+  buildSidebar();
+  navigate(getDefaultPage());
 }
 
 function doLogout() {
@@ -12643,6 +12707,381 @@ try {
     checkLoginState();
   }
 })();
+
+/* ============================================================
+   QR LOGIN FOR XUEQINGUANJIA
+   ============================================================ */
+// Supabase 配置（与 login.js 相同）
+const XQ_SUPABASE_URL = 'https://xbygooadskfqllnhwmet.supabase.co';
+const XQ_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA';
+
+let xqDb = null;
+let xqQrToken = null;
+let xqQrPollTimer = null;
+let xqQrPollCount = 0;
+let xqQrRealtimeChannel = null;
+let xqQrVerified = false;
+
+// 初始化 Supabase 客户端
+(function initXqSupabase() {
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      xqDb = window.supabase.createClient(XQ_SUPABASE_URL, XQ_SUPABASE_ANON_KEY, {
+        auth: {
+          storageKey: 'xq-qr-login-auth'
+        }
+      });
+      console.log('[XQ QR] Supabase connected');
+    } else {
+      console.warn('[XQ QR] Supabase SDK not loaded yet');
+    }
+  } catch (e) {
+    console.error('[XQ QR] Supabase init error:', e);
+  }
+})();
+
+// 显示 QR 登录弹窗
+function showXqQRLogin() {
+  const modal = document.getElementById('xqQrModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    generateXqQRCode();
+  }
+}
+
+// 关闭 QR 弹窗
+function closeXqQRModal() {
+  const modal = document.getElementById('xqQrModal');
+  if (modal) modal.style.display = 'none';
+  stopXqQRDetection();
+  xqQrToken = null;
+  xqQrVerified = false;
+}
+
+// 刷新二维码
+function refreshXqQR() {
+  stopXqQRDetection();
+  generateXqQRCode();
+}
+
+// 停止检测
+function stopXqQRDetection() {
+  if (xqQrPollTimer) {
+    clearInterval(xqQrPollTimer);
+    xqQrPollTimer = null;
+  }
+  if (xqQrRealtimeChannel && xqDb) {
+    try { xqDb.removeChannel(xqQrRealtimeChannel); } catch(e) {}
+    xqQrRealtimeChannel = null;
+  }
+  xqQrPollCount = 0;
+}
+
+// 生成二维码
+async function generateXqQRCode() {
+  const qrWrap = document.getElementById('xqQrCodeWrap');
+  const qrStatus = document.getElementById('xqQrStatus');
+  if (!qrWrap || !qrStatus) return;
+
+  qrWrap.innerHTML = '';
+  qrStatus.textContent = '正在检查扫码功能...';
+  qrStatus.style.color = 'var(--warning)';
+  xqQrVerified = false;
+
+  if (!xqDb) {
+    qrStatus.textContent = '❌ 数据库未连接，请刷新页面';
+    qrStatus.style.color = 'var(--danger)';
+    return;
+  }
+
+  // 检查表是否存在
+  const tableCheck = await xqDb
+    .from('qr_login_tokens')
+    .select('id')
+    .limit(1);
+  
+  if (tableCheck.error) {
+    console.error('[XQ QR] 表检查失败:', tableCheck.error.message);
+    if (tableCheck.error.message && tableCheck.error.message.indexOf('does not exist') !== -1) {
+      qrStatus.innerHTML = '❌ 扫码功能未启用<br><span style="font-size:11px;color:var(--gray-500);line-height:1.6;">需要在Supabase中创建qr_login_tokens表<br>请联系管理员执行建表SQL</span>';
+      qrStatus.style.color = 'var(--danger)';
+      return;
+    }
+    qrStatus.textContent = '❌ 数据库错误: ' + tableCheck.error.message;
+    qrStatus.style.color = 'var(--danger)';
+    return;
+  }
+
+  try {
+    // 生成随机 token
+    xqQrToken = 'xq_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+    // 存储 token 到 Supabase
+    const insertResult = await xqDb
+      .from('qr_login_tokens')
+      .insert([{
+        token: xqQrToken,
+        email: '',
+        status: 'pending',
+        expires_at: expiresAt
+      }]);
+
+    if (insertResult.error) {
+      console.error('[XQ QR] 插入token失败:', insertResult.error.message);
+      qrStatus.innerHTML = '❌ 生成二维码失败<br><span style="font-size:11px;color:var(--gray-500);">' + insertResult.error.message + '</span>';
+      qrStatus.style.color = 'var(--danger)';
+      return;
+    }
+
+    // 验证插入成功
+    const verifyInsert = await xqDb
+      .from('qr_login_tokens')
+      .select('token, status')
+      .eq('token', xqQrToken)
+      .limit(1);
+    
+    if (verifyInsert.error || !verifyInsert.data || verifyInsert.data.length === 0) {
+      console.error('[XQ QR] 插入验证失败:', verifyInsert.error ? verifyInsert.error.message : 'no data');
+      qrStatus.innerHTML = '❌ 二维码写入失败，请刷新重试';
+      qrStatus.style.color = 'var(--danger)';
+      return;
+    }
+
+    console.log('[XQ QR] Token已创建并验证:', xqQrToken.substring(0, 20) + '...');
+
+    // 生成二维码 URL
+    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+    const scanUrl = baseUrl + 'qr-scan.html?token=' + encodeURIComponent(xqQrToken) + '&app=xq';
+
+    // 渲染二维码
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(qrWrap, {
+        text: scanUrl,
+        width: 250,
+        height: 250,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    } else {
+      qrWrap.innerHTML = '<div style="font-size:12px;color:var(--gray-500);word-break:break-all;padding:10px;">' + scanUrl + '</div>';
+    }
+
+    // 启动检测
+    startXqQRDetection();
+
+  } catch(e) {
+    console.error('[XQ QR] 生成二维码失败:', e);
+    qrStatus.textContent = '❌ 生成失败: ' + e.message;
+    qrStatus.style.color = 'var(--danger)';
+  }
+}
+
+// 启动检测（Realtime + 轮询）
+function startXqQRDetection() {
+  if (!xqQrToken) return;
+  stopXqQRDetection();
+  xqQrPollCount = 0;
+  
+  updateXqQRWaitingStatus();
+  
+  // Realtime 实时推送
+  try {
+    xqQrRealtimeChannel = xqDb
+      .channel('xq_qr_' + xqQrToken)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'qr_login_tokens',
+        filter: 'token=eq.' + xqQrToken
+      }, function(payload) {
+        console.log('[XQ QR] Realtime收到UPDATE:', payload.new);
+        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
+          onXqQRVerified(payload.new.email);
+        }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'qr_login_tokens',
+        filter: 'token=eq.' + xqQrToken
+      }, function(payload) {
+        console.log('[XQ QR] Realtime收到INSERT:', payload.new);
+        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
+          onXqQRVerified(payload.new.email);
+        }
+      })
+      .subscribe(function(status) {
+        console.log('[XQ QR] Realtime订阅状态:', status);
+      });
+  } catch(e) {
+    console.warn('[XQ QR] Realtime初始化失败:', e.message);
+  }
+  
+  // 轮询备份
+  xqQrPollTimer = setInterval(pollXqQRStatus, 1500);
+  pollXqQRStatus();
+  
+  console.log('[XQ QR] 开始检测（Realtime + 轮询），token:', xqQrToken.substring(0, 20) + '...');
+}
+
+function updateXqQRWaitingStatus() {
+  const qrStatus = document.getElementById('xqQrStatus');
+  if (qrStatus) {
+    qrStatus.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+      '<span style="width:8px;height:8px;background:var(--accent);border-radius:50%;animation:xqQrPulse 1.5s infinite;"></span>' +
+      '等待手机扫码确认...' +
+      '</span>' +
+      '<div id="xqQrPollInfo" style="font-size:11px;color:var(--gray-400);margin-top:4px;">检测中...</div>' +
+      '<style>@keyframes xqQrPulse{0%,100%{opacity:0.3}50%{opacity:1}}</style>';
+    qrStatus.style.color = 'var(--warning)';
+  }
+}
+
+function updateXqPollInfo(statusText) {
+  const info = document.getElementById('xqQrPollInfo');
+  if (info) {
+    info.textContent = '轮询#' + xqQrPollCount + ' | ' + statusText;
+  }
+}
+
+// 轮询检测
+async function pollXqQRStatus() {
+  if (xqQrVerified || !xqQrToken || !xqDb) return;
+  
+  xqQrPollCount++;
+  
+  try {
+    const result = await xqDb
+      .from('qr_login_tokens')
+      .select('status, email, expires_at')
+      .eq('token', xqQrToken)
+      .limit(1);
+
+    if (result.error) {
+      console.warn('[XQ QR] 轮询#' + xqQrPollCount + ' 查询失败:', result.error.message);
+      updateXqPollInfo('查询失败: ' + result.error.message.substring(0, 30));
+      return;
+    }
+
+    if (!result.data || result.data.length === 0) {
+      updateXqPollInfo('等待数据写入...');
+      return;
+    }
+
+    const data = result.data[0];
+    
+    if (xqQrPollCount % 5 === 1) {
+      console.log('[XQ QR] 轮询#' + xqQrPollCount + ' status=' + data.status + ' email=' + (data.email || '无'));
+    }
+    
+    updateXqPollInfo('轮询#' + xqQrPollCount + ' | status=' + data.status + (data.email ? ' | ' + data.email.substring(0, 10) + '...' : ''));
+
+    // 检查过期
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      stopXqQRDetection();
+      const qrStatus = document.getElementById('xqQrStatus');
+      if (qrStatus) {
+        qrStatus.textContent = '❌ 二维码已过期，请点击刷新';
+        qrStatus.style.color = 'var(--danger)';
+      }
+      return;
+    }
+
+    // 检查是否已验证
+    if (data.status === 'verified' && data.email) {
+      console.log('[XQ QR] 轮询检测到verified! email=' + data.email);
+      onXqQRVerified(data.email);
+    }
+
+  } catch(e) {
+    console.warn('[XQ QR] 轮询#' + xqQrPollCount + ' 异常:', e.message);
+    updateXqPollInfo('异常: ' + e.message.substring(0, 20));
+  }
+}
+
+// 处理验证成功
+async function onXqQRVerified(email) {
+  if (xqQrVerified) return;
+  xqQrVerified = true;
+  
+  stopXqQRDetection();
+  console.log('[XQ QR] 验证成功，开始自动登录:', email);
+  
+  const qrStatus = document.getElementById('xqQrStatus');
+  if (qrStatus) {
+    qrStatus.innerHTML = '✅ 验证成功！正在登录 ' + escapeHtml(email) + ' ...';
+    qrStatus.style.color = 'var(--accent)';
+  }
+  
+  await doXqAutoLogin(email);
+}
+
+// 自动登录
+async function doXqAutoLogin(email) {
+  try {
+    console.log('[XQ QR] 开始查询教师账号:', email);
+    
+    // 从凭证中查找用户
+    const user = xqCredentials[email];
+    if (!user) {
+      throw new Error('未找到教师账号: ' + email);
+    }
+
+    console.log('[XQ QR] 找到教师账号:', user.name || email);
+
+    // 设置当前用户
+    xqCurrentUser = {
+      teacherId: user.id || email,
+      teacherName: user.name || email,
+      email: email,
+      role: user.role || 'teacher',
+      classes: user.classes || [],
+      isHeadteacher: user.role === 'headteacher',
+      isLeader: user.role === 'leader',
+      isTeacher: user.role === 'teacher'
+    };
+
+    // 保存登录状态
+    localStorage.setItem('xq_current_user', JSON.stringify(xqCurrentUser));
+
+    const qrStatus = document.getElementById('xqQrStatus');
+    if (qrStatus) {
+      qrStatus.innerHTML = '✅ 登录成功！正在跳转到 ' + escapeHtml(user.name || email) + ' ...';
+      qrStatus.style.color = 'var(--accent)';
+    }
+
+    // 延迟关闭弹窗并刷新界面
+    setTimeout(() => {
+      closeXqQRModal();
+      document.getElementById('loginPage').classList.add('hidden');
+      initAppAfterLogin();
+    }, 800);
+
+  } catch(e) {
+    console.error('[XQ QR] 自动登录失败:', e);
+    xqQrVerified = false;
+    const qrStatus = document.getElementById('xqQrStatus');
+    if (qrStatus) {
+      qrStatus.innerHTML = '❌ 登录失败: ' + escapeHtml(e.message) + '<br><span style="font-size:12px;color:var(--gray-500);">请刷新页面重试</span>';
+      qrStatus.style.color = 'var(--danger)';
+    }
+  }
+}
+
+// 打开扫码器（用于手机端）
+function openXqQrScanner() {
+  // 这里需要实现扫码功能，可以使用 html5-qrcode 库
+  // 暂时先提示用户
+  alert('扫码功能开发中...\n\n请在手机上打开相机或扫码应用，扫描电脑端显示的二维码。');
+}
+
+// HTML 转义
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>

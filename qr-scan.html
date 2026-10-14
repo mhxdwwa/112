@@ -3,18 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>扫码登录 - 宠物世界</title>
+<title>扫码登录</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #ffe6dd, #ffd4e8, #ffe0f0);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+body.petworld {
+  background: linear-gradient(135deg, #ffe6dd, #ffd4e8, #ffe0f0);
+}
+body.xueqinguanjia {
+  background: linear-gradient(135deg, #e0f2fe, #dbeafe, #eff6ff);
 }
 .container {
   background: rgba(255, 255, 255, 0.95);
@@ -22,23 +27,30 @@ body {
   padding: 36px 28px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 20px 60px rgba(255, 180, 160, 0.3);
   text-align: center;
+}
+body.petworld .container {
+  box-shadow: 0 20px 60px rgba(255, 180, 160, 0.3);
+}
+body.xueqinguanjia .container {
+  box-shadow: 0 20px 60px rgba(59, 130, 246, 0.15);
 }
 .icon { font-size: 56px; margin-bottom: 16px; }
 .title {
   font-size: 22px;
-  color: #c04058;
   font-weight: 700;
   margin-bottom: 16px;
 }
+body.petworld .title { color: #c04058; }
+body.xueqinguanjia .title { color: #2563eb; }
 .msg {
   font-size: 14px;
   color: #666;
   line-height: 1.8;
   margin-bottom: 24px;
 }
-.msg strong { color: #c04058; }
+body.petworld .msg strong { color: #c04058; }
+body.xueqinguanjia .msg strong { color: #2563eb; }
 .btn-row { display: flex; gap: 12px; }
 .btn {
   flex: 1;
@@ -111,7 +123,7 @@ body {
 <body>
 <div class="container" id="mainContainer">
   <div class="icon">🔐</div>
-  <div class="title">扫码登录确认</div>
+  <div class="title" id="pageTitle">扫码登录确认</div>
   <div class="msg" id="statusMsg">
     <span class="spinner"></span> 正在检查登录状态...
   </div>
@@ -130,9 +142,21 @@ var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 var db;
 var qrToken = '';
 var userEmail = '';
+var appName = 'petworld'; // 默认宠物世界
+var appTitle = '宠物世界';
 
 // 初始化
 (async function init() {
+  // 0. 检测应用类型
+  var params = new URLSearchParams(window.location.search);
+  appName = params.get('app') || 'petworld';
+  appTitle = appName === 'xq' ? '学勤管家' : '宠物世界';
+  
+  // 设置页面样式和标题
+  document.body.className = appName === 'xq' ? 'xueqinguanjia' : 'petworld';
+  document.title = '扫码登录 - ' + appTitle;
+  document.getElementById('pageTitle').textContent = appTitle + ' 扫码登录确认';
+  
   // 1. 初始化 Supabase（使用独立 storageKey，避免拾取已有的登录 session）
   try {
     if (window.supabase && window.supabase.createClient) {
@@ -153,25 +177,42 @@ var userEmail = '';
   }
 
   // 2. 从URL提取token
-  var params = new URLSearchParams(window.location.search);
   qrToken = params.get('token');
   if (!qrToken) {
     showError('二维码链接无效：缺少token参数');
     return;
   }
   console.log('[扫码] Token:', qrToken.substring(0, 20) + '...');
+  console.log('[扫码] App:', appName, appTitle);
 
-  // 3. 检查用户是否已登录（教师）
-  var userType = localStorage.getItem('userType');
-  var userId = localStorage.getItem('userId');
-  userEmail = localStorage.getItem('userEmail') || '';
+  // 3. 检查用户是否已登录（根据应用类型使用不同的 localStorage key）
+  var userType, userId;
+  if (appName === 'xq') {
+    // 学勤管家
+    var xqUser = localStorage.getItem('xq_current_user');
+    if (xqUser) {
+      try {
+        var userData = JSON.parse(xqUser);
+        userType = 'teacher';
+        userId = userData.teacherId;
+        userEmail = userData.email || '';
+      } catch (e) {
+        console.error('[扫码] 解析 xq_current_user 失败:', e);
+      }
+    }
+  } else {
+    // 宠物世界
+    userType = localStorage.getItem('userType');
+    userId = localStorage.getItem('userId');
+    userEmail = localStorage.getItem('userEmail') || '';
+  }
 
   if (userType !== 'teacher' || !userId || !userEmail) {
-    showError('请先在手机上以教师身份登录宠物世界，然后再扫码');
+    showError('请先在手机上以教师身份登录' + appTitle + '，然后再扫码');
     return;
   }
 
-  // 4. 检查token是否有效（跳过session检查——匿名客户端没有session，但anon key有RLS读取权限）
+  // 4. 检查token是否有效
   try {
     console.log('[扫码] 查询token, 值="' + qrToken + '", 长度=' + qrToken.length);
     var tokenResult = await db
@@ -195,7 +236,6 @@ var userEmail = '';
     }
 
     if (!tokenResult.data || tokenResult.data.length === 0) {
-      // 调试：列出表中所有记录
       var allRows = await db
         .from('qr_login_tokens')
         .select('token, status, created_at')
@@ -213,7 +253,7 @@ var userEmail = '';
 
     // 5. 显示确认界面
     document.getElementById('statusMsg').innerHTML =
-      '电脑端请求登录教师账号<br><strong>' + escapeHtml(userEmail) + '</strong><br><br>确认是本人操作？';
+      '电脑端请求登录' + appTitle + '教师账号<br><strong>' + escapeHtml(userEmail) + '</strong><br><br>确认是本人操作？';
     document.getElementById('btnRow').style.display = 'flex';
 
   } catch (e) {
@@ -313,7 +353,7 @@ async function handleConfirm() {
 
       if (verifyRow && verifyRow.status === 'verified') {
         resultStatus.className = 'status success';
-        resultStatus.innerHTML = '✅ 登录成功！<br><span style="font-size:12px;color:#888;">电脑端将自动进入教师账户</span>';
+        resultStatus.innerHTML = '✅ 登录成功！<br><span style="font-size:12px;color:#888;">电脑端将自动进入' + appTitle + '教师账户</span>';
       } else {
         resultStatus.className = 'status success';
         resultStatus.innerHTML = '✅ 登录确认已发送！<br><span style="font-size:12px;color:#888;">如电脑端无反应，请重试</span>';
