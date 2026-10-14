@@ -3533,10 +3533,10 @@ async function handleMobileFile(e){
   status.className='mobile-upload-status';
   
   try{
-    // Compress image aggressively for faster transfer (3MB → ~50-100KB)
+    // Compress image to ~1MB for fast transfer while keeping clarity
     const origSizeKB=Math.round(file.size/1024);
     status.textContent='正在压缩图片 ('+origSizeKB+'KB)...';
-    const blob=await compressImage(file,1600,0.75);
+    const blob=await compressImage(file,1); // Target 1MB
     const compSizeKB=Math.round(blob.size/1024);
     // Upload binary directly (much faster than base64+JSON)
     status.textContent='正在上传 ('+origSizeKB+'KB→'+compSizeKB+'KB)...';
@@ -3564,56 +3564,87 @@ async function handleMobileFile(e){
   }
 }
 
-// Compress image using canvas → JPEG (returns Blob for binary upload)
-// JPEG chosen for maximum browser compatibility (works on ALL phones including iOS)
-function compressImage(file,maxWidth,quality){
+// Compress image using canvas → JPEG, targeting ~1MB file size
+// Dynamically adjusts quality and resolution to balance clarity and speed
+function compressImage(file,targetSizeMB){
+  const TARGET_SIZE=targetSizeMB*1024*1024; // Convert MB to bytes
   return new Promise((resolve,reject)=>{
     console.log('[Compress] Original file:',file.name,'size:',Math.round(file.size/1024)+'KB','type:',file.type);
     const reader=new FileReader();
     reader.onload=(e)=>{
       const img=new Image();
       img.onload=()=>{
-        const canvas=document.createElement('canvas');
-        let w=img.naturalWidth,h=img.naturalHeight;
-        console.log('[Compress] Image dimensions:',w,'x',h);
-        if(w>maxWidth){
-          h=Math.round(h*(maxWidth/w));
-          w=maxWidth;
+        let origW=img.naturalWidth,origH=img.naturalHeight;
+        console.log('[Compress] Image dimensions:',origW,'x',origH);
+        
+        const qualities=[0.9,0.8,0.7,0.6,0.5];
+        const scales=[1,0.8,0.6,0.5]; // Resolution scale factors
+        
+        let qualityIndex=0;
+        let scaleIndex=0;
+        
+        function tryCompress(){
+          const scale=scales[scaleIndex];
+          const currentW=Math.round(origW*scale);
+          const currentH=Math.round(origH*scale);
+          const quality=qualities[qualityIndex];
+          
+          const canvas=document.createElement('canvas');
+          canvas.width=currentW;
+          canvas.height=currentH;
+          const ctx=canvas.getContext('2d');
+          ctx.imageSmoothingEnabled=true;
+          ctx.imageSmoothingQuality='high';
+          ctx.drawImage(img,0,0,currentW,currentH);
+          
+          console.log('[Compress] Trying:',currentW,'x',currentH,'(scale:'+scale+')','quality:',quality);
+          
+          if(typeof canvas.toBlob==='function'){
+            canvas.toBlob((blob)=>{
+              if(blob && blob.size>0){
+                console.log('[Compress] Result:',Math.round(blob.size/1024)+'KB','type:',blob.type);
+                // If under target size, we're done
+                if(blob.size<=TARGET_SIZE){
+                  resolve(blob);
+                }else if(qualityIndex<qualities.length-1){
+                  // Try lower quality at same resolution
+                  qualityIndex++;
+                  tryCompress();
+                }else if(scaleIndex<scales.length-1){
+                  // Tried all qualities, reduce resolution
+                  qualityIndex=0;
+                  scaleIndex++;
+                  tryCompress();
+                }else{
+                  // Tried everything, use this result
+                  console.warn('[Compress] Could not reach target size, using best result');
+                  resolve(blob);
+                }
+              }else{
+                // toBlob failed, use fallback
+                console.warn('[Compress] toBlob returned null, using toDataURL fallback');
+                const dataUrl=canvas.toDataURL('image/jpeg',quality);
+                const byteString=atob(dataUrl.split(',')[1]);
+                const ab=new ArrayBuffer(byteString.length);
+                const ia=new Uint8Array(ab);
+                for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
+                resolve(new Blob([ab],{type:'image/jpeg'}));
+              }
+            },'image/jpeg',quality);
+          }else{
+            // Very old browser without toBlob support
+            console.warn('[Compress] toBlob not supported, using toDataURL fallback');
+            const dataUrl=canvas.toDataURL('image/jpeg',quality);
+            const byteString=atob(dataUrl.split(',')[1]);
+            const ab=new ArrayBuffer(byteString.length);
+            const ia=new Uint8Array(ab);
+            for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
+            resolve(new Blob([ab],{type:'image/jpeg'}));
+          }
         }
-        canvas.width=w;
-        canvas.height=h;
-        console.log('[Compress] Canvas size:',w,'x',h);
-        const ctx=canvas.getContext('2d');
-        ctx.imageSmoothingEnabled=true;
-        ctx.imageSmoothingQuality='high';
-        ctx.drawImage(img,0,0,w,h);
-        // Use JPEG directly - works on ALL browsers including iOS Safari
-        if(typeof canvas.toBlob==='function'){
-          canvas.toBlob((blob)=>{
-            if(blob && blob.size>0){
-              console.log('[Compress] Compressed to:',Math.round(blob.size/1024)+'KB','type:',blob.type);
-              resolve(blob);
-            }else{
-              // toBlob returned null, fallback to toDataURL
-              console.warn('[Compress] toBlob returned null, using toDataURL fallback');
-              const dataUrl=canvas.toDataURL('image/jpeg',quality);
-              const byteString=atob(dataUrl.split(',')[1]);
-              const ab=new ArrayBuffer(byteString.length);
-              const ia=new Uint8Array(ab);
-              for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
-              resolve(new Blob([ab],{type:'image/jpeg'}));
-            }
-          },'image/jpeg',quality);
-        }else{
-          // Very old browser without toBlob support
-          console.warn('[Compress] toBlob not supported, using toDataURL fallback');
-          const dataUrl=canvas.toDataURL('image/jpeg',quality);
-          const byteString=atob(dataUrl.split(',')[1]);
-          const ab=new ArrayBuffer(byteString.length);
-          const ia=new Uint8Array(ab);
-          for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
-          resolve(new Blob([ab],{type:'image/jpeg'}));
-        }
+        
+        // Start with original resolution and highest quality
+        tryCompress();
       };
       img.onerror=()=>reject(new Error('Failed to load image'));
       img.src=e.target.result;
