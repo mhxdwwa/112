@@ -288,6 +288,7 @@ const G={
   undoStack:[],redoStack:[],
   funcs:[],pointN:0,
   drawState:null,demo:null,
+  compassRadius:null,  // 记住圆规半径，像真实圆规一样
   eraserSize:40,eraserActive:false,_eraserRaf:null,_eraserDirty:false,_eraserPx:0,_eraserPy:0,_eraserSaved:false,
   // Rotation state
   rotating:false,rotPivot:null,rotOrig:null,rotCenter:null,
@@ -831,17 +832,34 @@ function drawOverlay(){
   if(ds.type==='compass'){
     const p1=m2p(ds.center.x,ds.center.y);
     if(ds.step===1){
-      const r=Math.hypot(cur.x-ds.center.x,cur.y-ds.center.y)*G.scale;
+      // 如果有记住的半径，显示固定半径的预览圆；否则显示跟随鼠标的预览
+      const previewRadius = (G.compassRadius !== null && G.compassRadius > 0) ? G.compassRadius : Math.hypot(cur.x-ds.center.x,cur.y-ds.center.y);
+      const r=previewRadius*G.scale;
       ox.strokeStyle='#9ca3af';ox.lineWidth=1.5;ox.setLineDash([4,4]);
       ox.beginPath();ox.arc(p1.x,p1.y,r,0,Math.PI*2);ox.stroke();ox.setLineDash([]);
       const hingeX=p1.x,hingeY=p1.y-Math.max(r*0.4,25);
+      // 如果有记住的半径，铅笔端显示在圆周上；否则跟随鼠标
+      let pencilX, pencilY;
+      if(G.compassRadius !== null && G.compassRadius > 0){
+        const angle = Math.atan2(cur.y-ds.center.y, cur.x-ds.center.x);
+        pencilX = p1.x + Math.cos(angle) * r;
+        pencilY = p1.y + Math.sin(angle) * r;
+      } else {
+        pencilX = curP.x;
+        pencilY = curP.y;
+      }
       ox.strokeStyle='#4b5563';ox.lineWidth=3;ox.lineCap='round';
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(p1.x,p1.y);ox.stroke();
-      ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(curP.x,curP.y);ox.stroke();
+      ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(pencilX,pencilY);ox.stroke();
       ox.fillStyle='#6b7280';ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.fill();
       ox.strokeStyle='#374151';ox.lineWidth=1;ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.stroke();
       ox.fillStyle='#374151';ox.beginPath();ox.arc(p1.x,p1.y,3,0,Math.PI*2);ox.fill();
-      ox.fillStyle='#dc2626';ox.beginPath();ox.arc(curP.x,curP.y,4,0,Math.PI*2);ox.fill();
+      ox.fillStyle='#dc2626';ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
+      // 显示半径数值
+      if(G.compassRadius !== null && G.compassRadius > 0){
+        ox.fillStyle='rgba(37,99,235,0.9)';ox.font='bold 12px JetBrains Mono';ox.textAlign='center';
+        ox.fillText('r='+G.compassRadius.toFixed(2), p1.x, p1.y - r - 10);
+      }
     }else if(ds.step===2&&ds.drawing){
       const r=ds.radius*G.scale;
       const currentAngleCanvas=ds.startAngleCanvas+ds.totalAngle;
@@ -1840,6 +1858,10 @@ function rotateShape(o,center,da){
 
 // === TOOL SELECTION ===
 function setTool(t){
+  // 如果切换到其他工具，清除圆规记住的半径
+  if(t !== 'compass'){
+    G.compassRadius = null;
+  }
   G.tool=t;G.tempPts=[];G.drawState=null;
   document.querySelectorAll('.tb[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   const hints={
@@ -1860,7 +1882,7 @@ function setTool(t){
     sphere:'点击球心，再点击球面一点确定半径',
     unfold:'选择立体图形，点击放置展开图',
     ruler:'点击起点，再点击终点放置直尺',
-    compass:'点击圆心，再按住鼠标拖动画弧',
+    compass:'点击圆心，再按住鼠标拖动画弧（半径会自动记住，可连续使用）',
     pen:'按住鼠标自由绘画',
     eraser:'按住鼠标拖动擦除，可调节擦除范围大小',
   };
@@ -2096,7 +2118,19 @@ function onDown(e){
   // Compass: click center, then press+drag to draw arc
   if(t==='compass'){
     if(!G.drawState||G.drawState.type!=='compass'){
-      G.drawState={type:'compass',step:1,center:{x:sp.x,y:sp.y},radius:0,startAngle:0,endAngle:0,startAngleCanvas:0,endAngleCanvas:0,drawing:false};
+      // 如果已经有记住的半径，直接进入画弧模式（点击圆心即可）
+      const hasRadius = G.compassRadius !== null && G.compassRadius > 0;
+      G.drawState={
+        type:'compass',
+        step: hasRadius ? 1 : 1,  // 始终从step 1开始，但如果有半径则不需要拖动设定
+        center:{x:sp.x,y:sp.y},
+        radius: G.compassRadius || 0,
+        startAngle:0,endAngle:0,startAngleCanvas:0,endAngleCanvas:0,drawing:false
+      };
+      // 如果有记住的半径，显示提示
+      if(hasRadius){
+        showToast('圆规半径: ' + G.compassRadius.toFixed(2) + '，按住鼠标拖动画弧');
+      }
     }
     draw();return;
   }
@@ -2188,9 +2222,11 @@ function onMove(e){
   if(G.tool==='compass'&&G.drawState&&G.drawState.step===1&&G.pointerDown&&!G.drawState.drawing){
     const r=Math.hypot(m.x-G.drawState.center.x,m.y-G.drawState.center.y);
     if(r>0.05){
+      // 如果有记住的半径，直接使用；否则用当前拖动距离作为半径
+      const useRadius = (G.compassRadius !== null && G.compassRadius > 0) ? G.compassRadius : r;
+      G.drawState.radius=useRadius;
       const p1=m2p(G.drawState.center.x,G.drawState.center.y);
       const curP=m2p(m.x,m.y);
-      G.drawState.radius=r;
       const startAngleCanvas=Math.atan2(curP.y-p1.y,curP.x-p1.x);
       G.drawState.startAngleCanvas=startAngleCanvas;
       G.drawState.prevAngleCanvas=startAngleCanvas;
@@ -2410,8 +2446,12 @@ function onUp(e){
         anticlockwise:ds.totalAngle<0,
         color:G.color
       });
+      // 记住圆规半径，下次可以直接使用
+      G.compassRadius = ds.radius;
     }
-    G.drawState=null;draw();
+    // 清除画弧状态，但保持圆规工具激活，可以继续画弧
+    G.drawState=null;
+    draw();
   }
   
   if(G.tool==='pen'&&G.fhPts.length>1){
