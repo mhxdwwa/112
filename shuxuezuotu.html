@@ -3498,7 +3498,10 @@ async function handleImageReady(sizeHint){
       }
       IMG_STATE.currentBlobUrl=blobUrl;
       
-      await loadImage(blobUrl);
+      // Only center if this is the first image (no image exists yet)
+      // Otherwise keep current position and scale
+      const shouldCenter=!IMG_STATE.image;
+      await loadImage(blobUrl,shouldCenter);
       
       // Clear image from server
       try{
@@ -3545,19 +3548,22 @@ async function fallbackCheck(){
 }
 
 // Load image from URL (blob URL or data URL)
-function loadImage(imageUrl){
+// centerImage: if true, center and fit to screen; if false, keep current position/scale
+function loadImage(imageUrl,centerImage=true){
   return new Promise((resolve)=>{
     const img=new Image();
     img.onload=()=>{
       IMG_STATE.image=img;
       IMG_STATE.enabled=true;
-      // Center image in canvas
-      const W=cw.clientWidth,H=cw.clientHeight;
-      const maxW=W*0.8,maxH=H*0.8;
-      const scale=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight,1);
-      IMG_STATE.scale=scale;
-      IMG_STATE.x=(W-img.naturalWidth*scale)/2;
-      IMG_STATE.y=(H-img.naturalHeight*scale)/2;
+      // Only center if requested or if this is the first load
+      if(centerImage || !IMG_STATE.scale){
+        const W=cw.clientWidth,H=cw.clientHeight;
+        const maxW=W*0.8,maxH=H*0.8;
+        const scale=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight,1);
+        IMG_STATE.scale=scale;
+        IMG_STATE.x=(W-img.naturalWidth*scale)/2;
+        IMG_STATE.y=(H-img.naturalHeight*scale)/2;
+      }
       IMG_STATE.opacity=1.0;
       // Enable image layer
       imgC.style.pointerEvents='auto';
