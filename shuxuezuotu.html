@@ -383,113 +383,6 @@ function drawBg(){
   }
 }
 
-// === HANDWRITING SMOOTHING ALGORITHM ===
-// Simplify points using Ramer-Douglas-Peucker algorithm
-function simplifyPoints(points, tolerance) {
-  if (points.length <= 2) return points;
-  
-  // Find the point with the maximum distance from the line between first and last
-  let maxDist = 0;
-  let maxIndex = 0;
-  
-  const start = points[0];
-  const end = points[points.length - 1];
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const lineLenSq = dx * dx + dy * dy;
-  
-  for (let i = 1; i < points.length - 1; i++) {
-    let dist;
-    if (lineLenSq === 0) {
-      // Start and end are the same point
-      dist = Math.hypot(points[i].x - start.x, points[i].y - start.y);
-    } else {
-      // Perpendicular distance to line
-      const t = ((points[i].x - start.x) * dx + (points[i].y - start.y) * dy) / lineLenSq;
-      const projX = start.x + t * dx;
-      const projY = start.y + t * dy;
-      dist = Math.hypot(points[i].x - projX, points[i].y - projY);
-    }
-    
-    if (dist > maxDist) {
-      maxDist = dist;
-      maxIndex = i;
-    }
-  }
-  
-  // If max distance is greater than tolerance, recursively simplify
-  if (maxDist > tolerance) {
-    const left = simplifyPoints(points.slice(0, maxIndex + 1), tolerance);
-    const right = simplifyPoints(points.slice(maxIndex), tolerance);
-    return left.slice(0, -1).concat(right);
-  } else {
-    return [start, end];
-  }
-}
-
-// Smooth points using moving average
-function smoothPoints(points, windowSize) {
-  if (points.length <= 2) return points;
-  
-  const smoothed = [];
-  const halfWindow = Math.floor(windowSize / 2);
-  
-  for (let i = 0; i < points.length; i++) {
-    let sumX = 0, sumY = 0, count = 0;
-    
-    for (let j = Math.max(0, i - halfWindow); j <= Math.min(points.length - 1, i + halfWindow); j++) {
-      sumX += points[j].x;
-      sumY += points[j].y;
-      count++;
-    }
-    
-    smoothed.push({ x: sumX / count, y: sumY / count });
-  }
-  
-  return smoothed;
-}
-
-// Draw smoothed stroke using quadratic Bezier curves
-function drawSmoothedStroke(points, ctx) {
-  if (points.length === 0) return;
-  if (points.length === 1) {
-    const p = m2p(points[0].x, points[0].y);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
-    ctx.fill();
-    return;
-  }
-  
-  // Simplify and smooth the points
-  const simplified = simplifyPoints(points, 0.05); // tolerance in math units
-  const smoothed = smoothPoints(simplified, 3);
-  
-  if (smoothed.length < 2) return;
-  
-  ctx.beginPath();
-  const first = m2p(smoothed[0].x, smoothed[0].y);
-  ctx.moveTo(first.x, first.y);
-  
-  if (smoothed.length === 2) {
-    const second = m2p(smoothed[1].x, smoothed[1].y);
-    ctx.lineTo(second.x, second.y);
-  } else {
-    // Use quadratic Bezier curves for smooth strokes
-    for (let i = 1; i < smoothed.length - 1; i++) {
-      const curr = m2p(smoothed[i].x, smoothed[i].y);
-      const next = m2p(smoothed[i + 1].x, smoothed[i + 1].y);
-      const midX = (curr.x + next.x) / 2;
-      const midY = (curr.y + next.y) / 2;
-      ctx.quadraticCurveTo(curr.x, curr.y, midX, midY);
-    }
-    // Draw to the last point
-    const last = m2p(smoothed[smoothed.length - 1].x, smoothed[smoothed.length - 1].y);
-    ctx.lineTo(last.x, last.y);
-  }
-  
-  ctx.stroke();
-}
-
 // Draw uploaded image on imgC canvas
 function drawImage(){
   const W=cw.clientWidth,H=cw.clientHeight;
@@ -582,11 +475,9 @@ function drawObj(o,sel,hov){
       break;
     }
     case'freehand':{
-      if(o.pts.length<2)break;
-      mx.lineWidth=o.lw||2.5;
-      // Use smoothed stroke for better handwriting appearance
-      drawSmoothedStroke(o.pts, mx);
-      break;
+      if(o.pts.length<2)break;mx.lineWidth=o.lw||2.5;mx.beginPath();
+      o.pts.forEach((p,i)=>{const pp=m2p(p.x,p.y);if(i===0)mx.moveTo(pp.x,pp.y);else mx.lineTo(pp.x,pp.y)});
+      mx.stroke();break;
     }
     case'box':{
       const{x,y,w,h,d}=o;
@@ -937,13 +828,7 @@ function drawOverlay(){
       const r=previewRadius*G.scale;
       ox.strokeStyle='#9ca3af';ox.lineWidth=1.5;ox.setLineDash([4,4]);
       ox.beginPath();ox.arc(p1.x,p1.y,r,0,Math.PI*2);ox.stroke();ox.setLineDash([]);
-      
-      // 计算圆规的铰链点（在两个腿之间，顶部）
-      // 铰链点在圆心正上方，距离根据半径调整
-      const hingeHeight = Math.max(r * 0.6, 40); // 铰链高度
-      const hingeX = p1.x;
-      const hingeY = p1.y - hingeHeight;
-      
+      const hingeX=p1.x,hingeY=p1.y-Math.max(r*0.4,25);
       // 如果有记住的半径，铅笔端显示在圆周上；否则跟随鼠标
       let pencilX, pencilY;
       if(G.compassRadius !== null && G.compassRadius > 0){
@@ -954,32 +839,13 @@ function drawOverlay(){
         pencilX = curP.x;
         pencilY = curP.y;
       }
-      
-      // 绘制圆规（更真实的视觉效果）
-      // 铰链/手柄（顶部圆形）
-      ox.fillStyle='#374151';
-      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.fill();
-      ox.strokeStyle='#1f2937';ox.lineWidth=1.5;
-      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.stroke();
-      
-      // 针腿（从铰链到圆心）
-      ox.strokeStyle='#6b7280';ox.lineWidth=3;ox.lineCap='round';
+      ox.strokeStyle='#4b5563';ox.lineWidth=3;ox.lineCap='round';
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(p1.x,p1.y);ox.stroke();
-      
-      // 针尖（圆心处的小点）
-      ox.fillStyle='#1f2937';
-      ox.beginPath();ox.arc(p1.x,p1.y,2.5,0,Math.PI*2);ox.fill();
-      
-      // 铅笔腿（从铰链到铅笔端）
-      ox.strokeStyle='#6b7280';ox.lineWidth=3;
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(pencilX,pencilY);ox.stroke();
-      
-      // 铅笔端（红色圆点）
-      ox.fillStyle='#dc2626';
-      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
-      ox.strokeStyle='#991b1b';ox.lineWidth=1;
-      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.stroke();
-      
+      ox.fillStyle='#6b7280';ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.fill();
+      ox.strokeStyle='#374151';ox.lineWidth=1;ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.stroke();
+      ox.fillStyle='#374151';ox.beginPath();ox.arc(p1.x,p1.y,3,0,Math.PI*2);ox.fill();
+      ox.fillStyle='#dc2626';ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
       // 显示半径数值
       if(G.compassRadius !== null && G.compassRadius > 0){
         ox.fillStyle='rgba(37,99,235,0.9)';ox.font='bold 12px JetBrains Mono';ox.textAlign='center';
@@ -994,37 +860,13 @@ function drawOverlay(){
       ox.beginPath();
       ox.arc(p1.x,p1.y,r,ds.startAngleCanvas,currentAngleCanvas,anticlockwise);
       ox.stroke();
-      
-      // 绘制圆规（画弧时的动态效果）
-      const hingeHeight = Math.max(r * 0.6, 40);
-      const hingeX = p1.x;
-      const hingeY = p1.y - hingeHeight;
+      // Compass visual
+      const hingeX=p1.x,hingeY=p1.y-Math.max(r*0.4,25);
       const pencilX=p1.x+Math.cos(currentAngleCanvas)*r;
       const pencilY=p1.y+Math.sin(currentAngleCanvas)*r;
-      
-      // 铰链/手柄
-      ox.fillStyle='#374151';
-      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.fill();
-      ox.strokeStyle='#1f2937';ox.lineWidth=1.5;
-      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.stroke();
-      
-      // 针腿
-      ox.strokeStyle='#6b7280';ox.lineWidth=3;ox.lineCap='round';
+      ox.strokeStyle='#4b5563';ox.lineWidth=3;ox.lineCap='round';
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(p1.x,p1.y);ox.stroke();
-      
-      // 针尖
-      ox.fillStyle='#1f2937';
-      ox.beginPath();ox.arc(p1.x,p1.y,2.5,0,Math.PI*2);ox.fill();
-      
-      // 铅笔腿
-      ox.strokeStyle='#6b7280';ox.lineWidth=3;
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(pencilX,pencilY);ox.stroke();
-      
-      // 铅笔端
-      ox.fillStyle='#dc2626';
-      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
-      ox.strokeStyle='#991b1b';ox.lineWidth=1;
-      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.stroke();
       ox.fillStyle='#6b7280';ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.fill();
       ox.fillStyle='#374151';ox.beginPath();ox.arc(p1.x,p1.y,3,0,Math.PI*2);ox.fill();
       ox.fillStyle='#dc2626';ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
@@ -2031,7 +1873,7 @@ function setTool(t){
     sphere:'点击球心，再点击球面一点确定半径',
     unfold:'选择立体图形，点击放置展开图',
     ruler:'点击起点，再点击终点放置直尺',
-    compass:'点击圆心，再按住鼠标拖动画弧（像真实圆规一样，半径会自动记住）',
+    compass:'点击圆心，再按住鼠标拖动画弧（半径会自动记住，可连续使用）',
     pen:'按住鼠标自由绘画',
     eraser:'按住鼠标拖动擦除，可调节擦除范围大小',
   };
@@ -2435,10 +2277,9 @@ function onMove(e){
       G.fhPts.push({x:drawX,y:drawY});
     }
     draw();
-    // Draw smoothed stroke using quadratic Bezier curves
-    mx.strokeStyle=G.color;mx.lineWidth=2.5;mx.lineCap='round';mx.lineJoin='round';
-    drawSmoothedStroke(G.fhPts,mx);
-    return;
+    mx.strokeStyle=G.color;mx.lineWidth=2.5;mx.lineCap='round';mx.beginPath();
+    G.fhPts.forEach((p,i)=>{const pp=m2p(p.x,p.y);if(i===0)mx.moveTo(pp.x,pp.y);else mx.lineTo(pp.x,pp.y)});
+    mx.stroke();return;
   }
 
   if(G.tool==='move'){
