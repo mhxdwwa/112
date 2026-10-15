@@ -828,7 +828,7 @@ function drawOverlay(){
       const r=previewRadius*G.scale;
       ox.strokeStyle='#9ca3af';ox.lineWidth=1.5;ox.setLineDash([4,4]);
       ox.beginPath();ox.arc(p1.x,p1.y,r,0,Math.PI*2);ox.stroke();ox.setLineDash([]);
-      const hingeX=p1.x,hingeY=p1.y-Math.max(r*0.4,25);
+      
       // 如果有记住的半径，铅笔端显示在圆周上；否则跟随鼠标
       let pencilX, pencilY;
       if(G.compassRadius !== null && G.compassRadius > 0){
@@ -839,13 +839,39 @@ function drawOverlay(){
         pencilX = curP.x;
         pencilY = curP.y;
       }
-      ox.strokeStyle='#4b5563';ox.lineWidth=3;ox.lineCap='round';
+      
+      // 计算铰链位置：在圆心和铅笔端的中点上方
+      // 铰链应该在两个腿的交点，让圆规看起来更真实
+      const midX = (p1.x + pencilX) / 2;
+      const midY = (p1.y + pencilY) / 2;
+      const hingeHeight = Math.max(r * 0.5, 30); // 铰链高度
+      const hingeX = midX;
+      const hingeY = midY - hingeHeight;
+      
+      // 绘制圆规
+      // 针腿（从铰链到圆心）
+      ox.strokeStyle='#6b7280';ox.lineWidth=3;ox.lineCap='round';
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(p1.x,p1.y);ox.stroke();
+      
+      // 铅笔腿（从铰链到铅笔端）
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(pencilX,pencilY);ox.stroke();
-      ox.fillStyle='#6b7280';ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.fill();
-      ox.strokeStyle='#374151';ox.lineWidth=1;ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.stroke();
-      ox.fillStyle='#374151';ox.beginPath();ox.arc(p1.x,p1.y,3,0,Math.PI*2);ox.fill();
-      ox.fillStyle='#dc2626';ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
+      
+      // 铰链（顶部圆形手柄）
+      ox.fillStyle='#374151';
+      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.fill();
+      ox.strokeStyle='#1f2937';ox.lineWidth=1.5;
+      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.stroke();
+      
+      // 针尖（圆心处）
+      ox.fillStyle='#1f2937';
+      ox.beginPath();ox.arc(p1.x,p1.y,2.5,0,Math.PI*2);ox.fill();
+      
+      // 铅笔端（红色）
+      ox.fillStyle='#dc2626';
+      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
+      ox.strokeStyle='#991b1b';ox.lineWidth=1;
+      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.stroke();
+      
       // 显示半径数值
       if(G.compassRadius !== null && G.compassRadius > 0){
         ox.fillStyle='rgba(37,99,235,0.9)';ox.font='bold 12px JetBrains Mono';ox.textAlign='center';
@@ -860,16 +886,41 @@ function drawOverlay(){
       ox.beginPath();
       ox.arc(p1.x,p1.y,r,ds.startAngleCanvas,currentAngleCanvas,anticlockwise);
       ox.stroke();
-      // Compass visual
-      const hingeX=p1.x,hingeY=p1.y-Math.max(r*0.4,25);
+      
+      // 计算铅笔端位置
       const pencilX=p1.x+Math.cos(currentAngleCanvas)*r;
       const pencilY=p1.y+Math.sin(currentAngleCanvas)*r;
-      ox.strokeStyle='#4b5563';ox.lineWidth=3;ox.lineCap='round';
+      
+      // 计算铰链位置
+      const midX = (p1.x + pencilX) / 2;
+      const midY = (p1.y + pencilY) / 2;
+      const hingeHeight = Math.max(r * 0.5, 30);
+      const hingeX = midX;
+      const hingeY = midY - hingeHeight;
+      
+      // 绘制圆规
+      // 针腿
+      ox.strokeStyle='#6b7280';ox.lineWidth=3;ox.lineCap='round';
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(p1.x,p1.y);ox.stroke();
+      
+      // 铅笔腿
       ox.beginPath();ox.moveTo(hingeX,hingeY);ox.lineTo(pencilX,pencilY);ox.stroke();
-      ox.fillStyle='#6b7280';ox.beginPath();ox.arc(hingeX,hingeY,5,0,Math.PI*2);ox.fill();
-      ox.fillStyle='#374151';ox.beginPath();ox.arc(p1.x,p1.y,3,0,Math.PI*2);ox.fill();
-      ox.fillStyle='#dc2626';ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
+      
+      // 铰链
+      ox.fillStyle='#374151';
+      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.fill();
+      ox.strokeStyle='#1f2937';ox.lineWidth=1.5;
+      ox.beginPath();ox.arc(hingeX,hingeY,6,0,Math.PI*2);ox.stroke();
+      
+      // 针尖
+      ox.fillStyle='#1f2937';
+      ox.beginPath();ox.arc(p1.x,p1.y,2.5,0,Math.PI*2);ox.fill();
+      
+      // 铅笔端
+      ox.fillStyle='#dc2626';
+      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.fill();
+      ox.strokeStyle='#991b1b';ox.lineWidth=1;
+      ox.beginPath();ox.arc(pencilX,pencilY,4,0,Math.PI*2);ox.stroke();
     }
   }
 
