@@ -1049,6 +1049,11 @@ async function apiSearch(keyword, sourceIdx, onPartial) {
 
   const srcDone = new Map();
 
+  // 判断是否为无广告优选源
+  function isAdFreeSource(srcName) {
+    return srcName && srcName.startsWith('🟢');
+  }
+
   function addItems(data, srcName, isPrimary) {
     if (!data || !data.list) return;
     const items = data.list.map(item => ({
@@ -1058,17 +1063,34 @@ async function apiSearch(keyword, sourceIdx, onPartial) {
       desc: (item.vod_blurb||item.vod_content||'').replace(/<[^>]+>/g,'').slice(0,200),
       playFrom: item.vod_play_from||'', playUrl: item.vod_play_url||'',
       score: item.vod_score||'', source: srcName,
-    })).filter(it => {
+    }));
+    const adFree = isAdFreeSource(srcName);
+    items.forEach(it => {
       const normName = it.name.replace(/\s+/g,'').toLowerCase();
-      const key = normName + '|' + it.source;
-      if (seen.has(key)) return false;
       const nameKey = normName + '|' + (it.type||'未知');
-      if (seen.has(nameKey)) return false;
-      seen.add(key);
-      seen.add(nameKey);
-      return true;
+      const key = normName + '|' + it.source;
+      // 无广告源：直接覆盖已有结果（替换掉有广告源的结果）
+      if (adFree) {
+        if (seen.has(nameKey)) {
+          // 替换掉之前有广告源的同名结果
+          const idx = allResults.findIndex(r => r.name.replace(/\s+/g,'').toLowerCase() === normName && (r.type||'未知') === (it.type||'未知'));
+          if (idx !== -1) {
+            allResults[idx] = it;
+          }
+        } else {
+          seen.add(key);
+          seen.add(nameKey);
+          allResults.push(it);
+        }
+      } else {
+        // 有广告源：只在无广告源还没返回时才添加
+        if (seen.has(key)) return;
+        if (seen.has(nameKey)) return;
+        seen.add(key);
+        seen.add(nameKey);
+        allResults.push(it);
+      }
     });
-    allResults.push(...items);
     if (isPrimary && !srcDone.has(srcName)) {
       srcDone.set(srcName, true);
       _reportedCompleted++;
