@@ -834,6 +834,7 @@ function jpFetch(url, timeout) {
 }
 
 const CORS_PROXIES = [
+  u => 'https://wscls.cn/api/vod-proxy?url=' + encodeURIComponent(u),
   u => 'https://wscls.cn/api/image-relay/vod-proxy?url=' + encodeURIComponent(u),
   u => 'https://corsproxy.io/?' + encodeURIComponent(u),
   u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
@@ -842,7 +843,7 @@ const CORS_PROXIES = [
 async function proxyFetch(url) {
   const results = await Promise.any(CORS_PROXIES.map(async (px) => {
     try {
-      const r = await fetch(px(url), {signal: AbortSignal.timeout(5000)});
+      const r = await fetch(px(url), {signal: AbortSignal.timeout(8000)});
       if (r.ok) { const d = await r.json(); return d; }
     } catch(e) {}
     throw new Error('fail');
