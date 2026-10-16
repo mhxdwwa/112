@@ -753,6 +753,8 @@ const SHORT_DRAMA_SOURCES = [
   { name:'金鹰短剧', api:'https://jyzyapi.com/api.php/provide/vod/' },
   { name:'急速短剧', api:'https://jszyapi.com/api.php/provide/vod/' },
 ];
+// 短剧源的API端点集合（用于搜索时去重判断）
+const _shortDramaEndpoints = new Set(SHORT_DRAMA_SOURCES.map(s => s.api));
 const PLAYERS = [
   // === 🌟 首选：速度快、广告少、稳定性好的优质线路 ===
   { name:'🌟Parw3解析', url:'https://jx.parw3.com/?url=' },
@@ -1028,88 +1030,121 @@ async function apiSearch(keyword, sourceIdx, onPartial) {
     return cached;
   }
 
-  const sources = sourceIdx === -1 ? [...API_SOURCES, ...SHORT_DRAMA_SOURCES] : [API_SOURCES[sourceIdx]];
+  // 搜索所有源（包括短剧源），但共享端点的源只请求一次API，结果共享给所有同名源
+  const allSearchSources = sourceIdx === -1 ? [...API_SOURCES, ...SHORT_DRAMA_SOURCES] : [API_SOURCES[sourceIdx]];
   const allResults = [];
   const seen = new Set();
-  const failedSources = [];
 
   // Generate expanded keywords for better coverage
   const keywords = sourceIdx === -1 ? expandKeywords(keyword) : [keyword];
   const primaryKw = keyword.trim();
 
-  let _reportedCompleted = 0;
-  const _totalSources = sources.length;
+  const _totalSources = allSearchSources.length;
 
-  // Build all search tasks: each source × each keyword, all run in parallel
-  const tasks = [];
-  for (const src of sources) {
-    tasks.push({ src, kw: primaryKw, isPrimary: true });
-    // Expanded keywords on top API sources AND all SHORT_DRAMA_SOURCES
-    const isTopSource = API_SOURCES.indexOf(src) < 10 || SHORT_DRAMA_SOURCES.indexOf(src) >= 0;
-    for (const ekw of keywords) {
-      if (ekw === primaryKw) continue;
-      if (isTopSource) {
-        tasks.push({ src, kw: ekw, isPrimary: false });
+  // === 端点去重：共享同一API端点的源只请求一次 ===
+  const endpointToSources = new Map(); // api -> [使用该端点的所有源]
+  allSearchSources.forEach(src => {
+    if (!endpointToSources.has(src.api)) endpointToSources.set(src.api, []);
+    endpointToSources.get(src.api).push(src);
+  });
+
+  // 构建搜索任务：每个唯一端点 × 关键词
+  const fetchTasks = [];
+  const processedEndpoints = new Set();
+  for (const src of allSearchSources) {
+    if (processedEndpoints.has(src.api)) continue;
+    processedEndpoints.add(src.api);
+    fetchTasks.push({ src, kw: primaryKw });
+    // 扩展关键词只在 API_SOURCES 的端点上搜索
+    if (API_SOURCES.some(s => s.api === src.api)) {
+      for (const ekw of keywords) {
+        if (ekw === primaryKw) continue;
+        fetchTasks.push({ src, kw: ekw });
       }
     }
   }
 
-  const srcDone = new Map();
+  // 端点 -> 主关键词的API响应缓存
+  const endpointDataCache = new Map();
 
-  function addItems(data, srcName, isPrimary) {
-    if (!data || !data.list) return;
-    const items = data.list.map(item => ({
-      id: item.vod_id, name: item.vod_name||'', type: item.type_name||'',
-      pic: item.vod_pic||'', year: item.vod_year||'', remarks: item.vod_remarks||'',
-      actor: item.vod_actor||'', director: item.vod_director||'',
-      desc: (item.vod_blurb||item.vod_content||'').replace(/<[^>]+>/g,'').slice(0,200),
-      playFrom: item.vod_play_from||'', playUrl: item.vod_play_url||'',
-      score: item.vod_score||'', source: srcName,
-    }));
-    items.forEach(it => {
-      const normName = it.name.replace(/\s+/g,'').toLowerCase();
-      const key = normName + '|' + it.source;
-      
-      // 每个源独立保留结果，不去重（因为现在按源分组显示）
-      if (!seen.has(key)) {
-        seen.add(key);
-        allResults.push(it);
-      }
-    });
-    if (isPrimary && !srcDone.has(srcName)) {
-      srcDone.set(srcName, true);
-      _reportedCompleted++;
-      if (onPartial) onPartial([...allResults], srcName, _reportedCompleted, _totalSources);
-    }
-  }
-
-  const promises = tasks.map(async (task) => {
+  // 执行所有搜索任务
+  const promises = fetchTasks.map(async (task) => {
     try {
       const url = task.src.api + '?ac=detail&wd=' + encodeURIComponent(task.kw);
       const data = await apiFetch(url);
-      addItems(data, task.src.name, task.isPrimary);
-    } catch(e) {
-      if (task.isPrimary) {
-        if (!srcDone.has(task.src.name)) {
-          srcDone.set(task.src.name, true);
-          _reportedCompleted++;
-        }
-        failedSources.push(task.src);
+      if (data && data.list) {
+        endpointDataCache.set(task.src.api, data);
       }
-    }
+    } catch(e) {}
   });
   await Promise.all(promises);
 
-  // Retry failed sources once (primary keyword only)
-  if (failedSources.length > 0) {
-    const retryPromises = failedSources.map(async (src) => {
+  // === 将端点结果映射到所有使用该端点的源 ===
+  let _reportedCompleted = 0;
+  for (const [endpoint, srcList] of endpointToSources.entries()) {
+    const data = endpointDataCache.get(endpoint);
+    if (!data || !data.list) {
+      _reportedCompleted += srcList.length;
+      continue;
+    }
+    for (const src of srcList) {
+      const items = data.list.map(item => ({
+        id: item.vod_id, name: item.vod_name||'', type: item.type_name||'',
+        pic: item.vod_pic||'', year: item.vod_year||'', remarks: item.vod_remarks||'',
+        actor: item.vod_actor||'', director: item.vod_director||'',
+        desc: (item.vod_blurb||item.vod_content||'').replace(/<[^>]+>/g,'').slice(0,200),
+        playFrom: item.vod_play_from||'', playUrl: item.vod_play_url||'',
+        score: item.vod_score||'', source: src.name,
+      }));
+      items.forEach(it => {
+        const normName = it.name.replace(/\s+/g,'').toLowerCase();
+        const key = normName + '|' + it.source;
+        if (!seen.has(key)) {
+          seen.add(key);
+          allResults.push(it);
+        }
+      });
+      _reportedCompleted++;
+      if (onPartial) onPartial([...allResults], src.name, _reportedCompleted, _totalSources);
+    }
+  }
+
+  // Retry failed endpoints once (primary keyword only)
+  const failedEndpoints = [...endpointToSources.keys()].filter(ep => !endpointDataCache.has(ep));
+  if (failedEndpoints.length > 0) {
+    const retryPromises = failedEndpoints.map(async (ep) => {
       try {
-        const url = src.api + '?ac=detail&wd=' + encodeURIComponent(primaryKw);
+        const url = ep + '?ac=detail&wd=' + encodeURIComponent(primaryKw);
         const data = await apiFetch(url);
-        addItems(data, src.name, true);
+        if (data && data.list) endpointDataCache.set(ep, data);
       } catch(e) {}
     });
     await Promise.all(retryPromises);
+    // 重试成功的端点，映射结果到对应的源
+    for (const ep of failedEndpoints) {
+      const data = endpointDataCache.get(ep);
+      if (!data || !data.list) continue;
+      const srcList = endpointToSources.get(ep) || [];
+      for (const src of srcList) {
+        if (allResults.some(r => r.source === src.name)) continue; // 已有结果则跳过
+        const items = data.list.map(item => ({
+          id: item.vod_id, name: item.vod_name||'', type: item.type_name||'',
+          pic: item.vod_pic||'', year: item.vod_year||'', remarks: item.vod_remarks||'',
+          actor: item.vod_actor||'', director: item.vod_director||'',
+          desc: (item.vod_blurb||item.vod_content||'').replace(/<[^>]+>/g,'').slice(0,200),
+          playFrom: item.vod_play_from||'', playUrl: item.vod_play_url||'',
+          score: item.vod_score||'', source: src.name,
+        }));
+        items.forEach(it => {
+          const normName = it.name.replace(/\s+/g,'').toLowerCase();
+          const key = normName + '|' + it.source;
+          if (!seen.has(key)) {
+            seen.add(key);
+            allResults.push(it);
+          }
+        });
+      }
+    }
   }
 
   // Sort results: exact/partial name matches first
