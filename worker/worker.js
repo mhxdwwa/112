@@ -244,6 +244,108 @@ export default {
         }
       }
 
+      // GET /m3u8-proxy?url=xxx - Proxy and filter M3U8 streams (remove ad segments)
+      if (path === '/m3u8-proxy' && request.method === 'GET') {
+        const targetUrl = url.searchParams.get('url');
+        const origin = url.searchParams.get('origin') || '';
+        
+        if (!targetUrl) {
+          return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        try {
+          // Fetch the original m3u8
+          const m3u8Response = await fetch(targetUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Referer': origin || new URL(targetUrl).origin,
+            },
+          });
+          
+          let m3u8Content = await m3u8Response.text();
+          
+          // Check if it's a master playlist (contains multiple quality levels)
+          if (m3u8Content.includes('#EXT-X-STREAM-INF')) {
+            // Rewrite master playlist URLs to go through our proxy
+            const baseUrl = new URL(targetUrl);
+            m3u8Content = m3u8Content.replace(/^(https?:\/\/[^\r\n]+|[^#\r\n][^\r\n]*\.m3u8[^\r\n]*)/gm, (match) => {
+              let absoluteUrl;
+              if (match.startsWith('http')) {
+                absoluteUrl = match;
+              } else {
+                // Relative URL - resolve against base
+                absoluteUrl = new URL(match, baseUrl).href;
+              }
+              return `/api/image-relay/m3u8-proxy?url=${encodeURIComponent(absoluteUrl)}&origin=${encodeURIComponent(origin || baseUrl.origin)}`;
+            });
+            
+            return new Response(m3u8Content, {
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/vnd.apple.mpegurl',
+                'Cache-Control': 'public, max-age=3600',
+              },
+            });
+          }
+          
+          // Filter ad segments from media playlist
+          m3u8Content = filterM3u8Ads(m3u8Content, targetUrl, origin);
+          
+          return new Response(m3u8Content, {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/vnd.apple.mpegurl',
+              'Cache-Control': 'public, max-age=60',
+            },
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: 'Fetch failed: ' + err.message }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // GET /ts-proxy?url=xxx&origin=xxx - Proxy TS segment requests
+      if (path === '/ts-proxy' && request.method === 'GET') {
+        const targetUrl = url.searchParams.get('url');
+        const origin = url.searchParams.get('origin') || '';
+        
+        if (!targetUrl) {
+          return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        try {
+          const tsResponse = await fetch(targetUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Referer': origin || new URL(targetUrl).origin,
+              'Range': request.headers.get('Range') || '',
+            },
+          });
+          
+          return new Response(tsResponse.body, {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'video/mp2t',
+              'Cache-Control': 'public, max-age=86400',
+              'Accept-Ranges': 'bytes',
+            },
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: 'Fetch failed: ' + err.message }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
       return new Response('Not Found', { status: 404, headers: corsHeaders });
 
     } catch (err) {
@@ -293,4 +395,115 @@ function generateCode() {
     code += Math.floor(Math.random() * 10);
   }
   return code;
+}
+
+/**
+ * Filter ad segments from M3U8 content
+ * Removes segments between DISCONTINUITY markers and segments with suspicious durations
+ */
+function filterM3u8Ads(m3u8Content, baseUrl, origin) {
+  const lines = m3u8Content.split('\n');
+  const output = [];
+  const base = new URL(baseUrl);
+  
+  // Suspicious ad durations (in seconds) - common ad lengths
+  const AD_DURATIONS = [5, 10, 15, 20, 30];
+  
+  let inAdBlock = false;
+  let skipUntilNextSegment = false;
+  let lastDuration = 0;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Handle DISCONTINUITY markers (often used to insert ads)
+    if (line === '#EXT-X-DISCONTINUITY') {
+      // Check if next segment looks like an ad
+      let nextDuration = 0;
+      let nextUrl = '';
+      for (let j = i + 1; j < lines.length && j < i + 5; j++) {
+        if (lines[j].startsWith('#EXTINF:')) {
+          nextDuration = parseFloat(lines[j].split(':')[1]);
+        } else if (!lines[j].startsWith('#') && lines[j].length > 0) {
+          nextUrl = lines[j];
+          break;
+        }
+      }
+      
+      // If next segment has suspicious duration, skip until next DISCONTINUITY or end
+      if (AD_DURATIONS.includes(Math.round(nextDuration)) || nextDuration < 3) {
+        inAdBlock = true;
+        continue; // Skip the DISCONTINUITY marker itself
+      }
+    }
+    
+    // Handle end of ad block
+    if (inAdBlock && line === '#EXT-X-DISCONTINUITY') {
+      inAdBlock = false;
+      continue;
+    }
+    
+    // Skip lines in ad block
+    if (inAdBlock) {
+      continue;
+    }
+    
+    // Check for suspicious segment duration
+    if (line.startsWith('#EXTINF:')) {
+      const duration = parseFloat(line.split(':')[1]);
+      lastDuration = duration;
+      
+      // Skip segments with very short or ad-like durations
+      if (duration < 3 || AD_DURATIONS.includes(Math.round(duration))) {
+        skipUntilNextSegment = true;
+        continue;
+      }
+    }
+    
+    // Skip TS segment URL if we're in skip mode
+    if (skipUntilNextSegment) {
+      if (!line.startsWith('#') && line.length > 0) {
+        skipUntilNextSegment = false;
+        continue;
+      }
+    }
+    
+    // Rewrite TS segment URLs to go through our proxy
+    if (!line.startsWith('#') && line.length > 0 && (line.includes('.ts') || line.includes('.m3u8'))) {
+      let absoluteUrl;
+      if (line.startsWith('http')) {
+        absoluteUrl = line;
+      } else {
+        // Relative URL - resolve against base
+        absoluteUrl = new URL(line, base).href;
+      }
+      
+      // Rewrite to use our TS proxy
+      const proxyUrl = `/api/image-relay/ts-proxy?url=${encodeURIComponent(absoluteUrl)}&origin=${encodeURIComponent(origin || base.origin)}`;
+      output.push(proxyUrl);
+      continue;
+    }
+    
+    // Rewrite EXT-X-MAP (initialization segment) URLs
+    if (line.startsWith('#EXT-X-MAP:')) {
+      const uriMatch = line.match(/URI="([^"]+)"/);
+      if (uriMatch) {
+        const uri = uriMatch[1];
+        let absoluteUrl;
+        if (uri.startsWith('http')) {
+          absoluteUrl = uri;
+        } else {
+          absoluteUrl = new URL(uri, base).href;
+        }
+        const proxyUrl = `/api/image-relay/ts-proxy?url=${encodeURIComponent(absoluteUrl)}&origin=${encodeURIComponent(origin || base.origin)}`;
+        output.push(line.replace(uri, proxyUrl));
+        continue;
+      }
+    }
+    
+    // Keep all other lines as-is
+    output.push(line);
+  }
+  
+  return output.join('\n');
 }

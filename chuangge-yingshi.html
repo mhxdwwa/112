@@ -4371,6 +4371,17 @@ function initDirectPlayer(url) {
   function _createHls(sourceUrl) {
     if (_hlsInstance) { try { _hlsInstance.destroy(); } catch(e){} _hlsInstance = null; }
 
+    // 通过 m3u8 代理过滤广告分片
+    var proxiedUrl = sourceUrl;
+    try {
+      var m3u8ProxyBase = 'https://wscls.cn/api/image-relay/m3u8-proxy';
+      var origin = window.location.origin;
+      proxiedUrl = m3u8ProxyBase + '?url=' + encodeURIComponent(sourceUrl) + '&origin=' + encodeURIComponent(origin);
+    } catch(e) {
+      // 如果代理失败，使用原始URL
+      proxiedUrl = sourceUrl;
+    }
+
     var hls = new Hls({
       // === 秒开极速策略（优化版） ===
       maxBufferLength: 15,             // 15秒起播缓冲，平衡速度和流畅度
@@ -4408,7 +4419,7 @@ function initDirectPlayer(url) {
       }
     });
     _hlsInstance = hls;
-    hls.loadSource(sourceUrl);
+    hls.loadSource(proxiedUrl);
     hls.attachMedia(video);
 
     // 设置6秒超时：如果6秒内没有解析到manifest就回退iframe
