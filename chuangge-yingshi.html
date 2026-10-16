@@ -104,11 +104,11 @@ img{max-width:100%}
 .section-more:hover{background:rgba(255,107,107,.1);border-color:var(--accent);transform:translateX(2px)}
 
 /* CARD GRID */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px}
-.card{background:var(--card);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:all .35s cubic-bezier(.25,.46,.45,.94);border:1px solid var(--border);position:relative;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;contain:layout style}
+.card{background:var(--card);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:transform .35s cubic-bezier(.25,.46,.45,.94),box-shadow .35s,border-color .35s;border:1px solid var(--border);position:relative;box-shadow:0 2px 8px rgba(0,0,0,.04);contain:layout style paint;will-change:transform}
 .card:hover{transform:translateY(-8px) scale(1.03);box-shadow:0 12px 32px rgba(0,0,0,.1),0 0 0 1px rgba(255,107,107,.2);border-color:rgba(255,107,107,.3)}
 .card-poster{position:relative;aspect-ratio:2/3;overflow:hidden;background:linear-gradient(135deg,#e2e8f0,#cbd5e0)}
-.card-poster img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s cubic-bezier(.25,.46,.45,.94),filter .3s}
+.card-poster img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s cubic-bezier(.25,.46,.45,.94),filter .3s;will-change:transform}
 .card:hover .card-poster img{transform:scale(1.08);filter:brightness(1.05)}
 .card-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#4a5568;font-size:15px;font-weight:700;padding:12px;text-align:center;line-height:1.4;letter-spacing:1px}
 .card:nth-child(6n+1) .card-ph{background:linear-gradient(135deg,#fed7d7,#feb2b2)}
@@ -139,9 +139,9 @@ img{max-width:100%}
 
 /* SEARCH RESULTS */
 .sr-tip{padding:14px 0;font-size:14px;color:var(--sub);margin-bottom:12px}
-.sr-back{display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-size:15px;cursor:pointer;font-weight:600;margin-bottom:18px;padding:8px 16px;border-radius:10px;background:rgba(255,140,107,.08);border:1px solid rgba(255,140,107,.15);transition:all .25s}
+.sr-back{display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-size:15px;cursor:pointer;font-weight:600;margin-bottom:18px;padding:8px 16px;border-radius:10px;background:rgba(255,140,107,.08);border:1px solid rgba(255,140,107,.15);transition:transform .25s,background .25s,border-color .25s}
 .sr-back:hover{background:rgba(255,140,107,.15);border-color:var(--accent);transform:translateX(-4px)}
-.sr-item{display:flex;gap:16px;padding:18px;background:var(--card);border-radius:var(--radius);margin-bottom:12px;cursor:pointer;transition:all .3s;border:1px solid var(--border);position:relative;overflow:hidden}
+.sr-item{display:flex;gap:16px;padding:18px;background:var(--card);border-radius:var(--radius);margin-bottom:12px;cursor:pointer;transition:transform .3s,box-shadow .3s,border-color .3s;border:1px solid var(--border);position:relative;overflow:hidden;contain:layout style paint}
 .sr-item::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--accent-g);opacity:0;transition:.3s}
 .sr-item:hover{border-color:rgba(255,107,107,.3);box-shadow:0 4px 20px rgba(255,107,107,.08);transform:translateX(4px)}
 .sr-item:hover::before{opacity:1}
@@ -169,9 +169,17 @@ img{max-width:100%}
 .modal-box{width:100%;height:100%;position:relative}
 .player-area{position:absolute;inset:0;background:#000;overflow:hidden}
 .player-area iframe{width:100%;height:100%;border:none}
-/* Mobile ad blocking: hide common ad containers injected outside our UI */
-.player-area > div:not(#adBlockOverlay):not(#uiDetectOverlay):not(.player-loading):not(.p-top):not(.p-side):not(.p-bottom):not(.p-bottom-btns):not(.p-next-btn):not(.p-open-btn):not(.p-fs-btn):not(.dp-controls):not(.dp-buffer-status):not(.dp-error){pointer-events:none!important}
+/* Enhanced ad blocking: CSS-based prevention */
+.player-area > div:not(#adBlockOverlay):not(#uiDetectOverlay):not(.player-loading):not(.p-top):not(.p-side):not(.p-bottom):not(.p-bottom-btns):not(.p-next-btn):not(.p-open-btn):not(.p-fs-btn):not(.dp-controls):not(.dp-buffer-status):not(.dp-error){pointer-events:none!important;opacity:0!important;visibility:hidden!important}
 .player-area > a{display:none!important}
+/* Block common ad patterns globally */
+body > div[style*="position:fixed"][style*="z-index:9999"],
+body > div[style*="position:absolute"][style*="z-index:9999"],
+body > iframe:not(.player-area iframe),
+body > div[id*="ad"]:not(#adBlockOverlay):not(#uiDetectOverlay),
+body > div[class*="ad-"],
+body > div[id*="popup"],body > div[class*="popup"],
+body > div[id*="banner"],body > div[class*="banner"]{display:none!important;visibility:hidden!important;pointer-events:none!important}
 @media(max-width:768px){.player-area > div:not(#adBlockOverlay):not(#uiDetectOverlay):not(.player-loading):not(.dp-controls):not(.dp-buffer-status):not(.dp-error){z-index:auto!important}}
 .player-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-direction:column;gap:8px}
 
@@ -784,14 +792,21 @@ var _searchFromPage = null;
 const DEFAULT_API_SOURCES = [...API_SOURCES];
 const DEFAULT_PLAYERS = [...PLAYERS];
 
-// === IMAGE CACHE (localStorage) ===
+// === IMAGE CACHE (optimized localStorage) ===
+var _imgCacheMem = null; // In-memory cache for faster access
 function getImgCache() {
-  try { return JSON.parse(localStorage.getItem('wyh_img_cache')||'{}'); } catch(e) { return {}; }
+  if (_imgCacheMem) return _imgCacheMem;
+  try { 
+    _imgCacheMem = JSON.parse(localStorage.getItem('wyh_img_cache')||'{}'); 
+  } catch(e) { _imgCacheMem = {}; }
+  return _imgCacheMem;
 }
 function setImgCache(cache) {
+  _imgCacheMem = cache;
   var keys = Object.keys(cache);
-  if (keys.length > 500) {
-    var toDelete = keys.slice(0, keys.length - 500);
+  // Keep cache size manageable (1000 entries)
+  if (keys.length > 1000) {
+    var toDelete = keys.slice(0, keys.length - 1000);
     toDelete.forEach(function(k) { delete cache[k]; });
   }
   try { localStorage.setItem('wyh_img_cache', JSON.stringify(cache)); } catch(e) {}
@@ -870,20 +885,35 @@ async function apiFetch(url) {
   return null;
 }
 
-// === SEARCH CACHE ===
+// === SEARCH CACHE (optimized) ===
 const _searchCache = {};
-const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (increased from 5 for better hit rate)
 const TRENDING_CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时刷新一次
 
 function cacheGet(key) {
   const c = _searchCache[key];
-  if (c && Date.now() - c.ts < CACHE_TTL) return c.data;
+  if (c && Date.now() - c.ts < CACHE_TTL) {
+    // Move to end (LRU-like behavior)
+    const data = c.data;
+    delete _searchCache[key];
+    _searchCache[key] = c;
+    return data;
+  }
   return null;
 }
 function cacheSet(key, data) {
+  // Remove if exists (to update position)
+  if (_searchCache[key]) delete _searchCache[key];
   _searchCache[key] = { data, ts: Date.now() };
+  // Keep cache size manageable (100 entries)
   const keys = Object.keys(_searchCache);
-  if (keys.length > 50) delete _searchCache[keys[0]];
+  if (keys.length > 100) {
+    // Remove oldest 20% of cache
+    const toRemove = keys.slice(0, 20);
+    for (let i = 0; i < toRemove.length; i++) {
+      delete _searchCache[toRemove[i]];
+    }
+  }
 }
 
 // === KEYWORD EXPANSION (智能搜索扩展) ===
@@ -3799,7 +3829,7 @@ function resetSources() {
     return false;
   }
 
-  // --- Check if an element looks like the ~600x400 center ad ---
+  // --- Check if an element looks like an ad ---
   function isLikelyAd(el) {
     if (!el || el.nodeType !== 1) return false;
     if (isSafeElement(el)) return false;
@@ -3825,47 +3855,62 @@ function resetSources() {
     var id = (el.id || '').toLowerCase();
     var text = (el.innerText || el.textContent || '').toLowerCase();
     
-    // 增强：精准检测您截图中的赌博广告关键词
-    var gamblingKeywords = ['澳门', '新葡京', '019019', 'pg游戏', '麻将胡了', '赏金女王', '寻宝黄金城', '招财猫', '赏金船长', 'banket', 'playb', '线上最刺激'];
+    // Enhanced gambling keywords detection
+    var gamblingKeywords = ['澳门', '新葡京', '019019', 'pg游戏', '麻将胡了', '赏金女王', '寻宝黄金城', '招财猫', '赏金船长', 'banket', 'playb', '线上最刺激', '威尼斯人', '永利皇宫', '金沙娱乐', '太阳城', '凤凰彩票', '大发彩票', '华娱娱乐'];
     for (var i = 0; i < gamblingKeywords.length; i++) {
       if (text.indexOf(gamblingKeywords[i]) >= 0 || cls.indexOf(gamblingKeywords[i]) >= 0 || id.indexOf(gamblingKeywords[i]) >= 0) {
         return true;
       }
     }
     
-    var adHints = ['ad','ads','advert','banner','popup','overlay','float','promo','sponsor','gg','guanggao','modal','dialog'];
+    var adHints = ['ad','ads','advert','banner','popup','overlay','float','promo','sponsor','gg','guanggao','modal','dialog','gambling','casino','betting','lottery'];
     for (var i = 0; i < adHints.length; i++) {
       if (cls.indexOf(adHints[i]) >= 0 || id.indexOf(adHints[i]) >= 0) return true;
     }
     return false;
   }
 
-  // --- Scan entire document body for ad-like elements ---
+  // --- Scan entire document body for ad-like elements (optimized) ---
+  var _lastScanTime = 0;
   function scanAndKillAds() {
+    var now = Date.now();
+    // Throttle: don't scan more than once per 800ms to avoid performance issues
+    if (now - _lastScanTime < 800) return false;
+    _lastScanTime = now;
+    
     var found = false;
     var gamblingFound = false;
-    // Scan all fixed/absolute positioned elements on the page
-    var allEls = document.querySelectorAll('body > div, body > a, body > section, body > aside, body > article, body > iframe, body > img');
-    allEls.forEach(function(el) {
-      if (isSafeElement(el)) return;
+    
+    // Fast path: scan direct children of body first (most ads are injected here)
+    var bodyChildren = document.body.children;
+    for (var i = bodyChildren.length - 1; i >= 0; i--) {
+      var el = bodyChildren[i];
+      if (isSafeElement(el)) continue;
+      
+      // Remove rogue iframes immediately
       if (el.tagName === 'IFRAME' && !(el.closest && el.closest('.player-area'))) {
         var rect = el.getBoundingClientRect();
-        if (rect.width > 100 && rect.height > 100) { el.remove(); found = true; }
-        return;
+        if (rect.width > 50 && rect.height > 50) { el.remove(); found = true; }
+        continue;
       }
+      
       if (isLikelyAd(el)) { 
         var text = (el.innerText || el.textContent || '').toLowerCase();
-        if (text.indexOf('澳门') >= 0 || text.indexOf('新葡京') >= 0 || text.indexOf('019019') >= 0 || text.indexOf('pg游戏') >= 0) {
-          el.remove(); // 赌博广告直接彻底删除DOM
+        var isGambling = text.indexOf('澳门') >= 0 || text.indexOf('新葡京') >= 0 || text.indexOf('019019') >= 0 || text.indexOf('pg游戏') >= 0 || text.indexOf('威尼斯人') >= 0 || text.indexOf('永利') >= 0;
+        if (isGambling) {
+          el.remove(); // Gambling ads: completely remove from DOM
           gamblingFound = true;
         } else {
-          el.style.display = 'none'; el.style.visibility = 'hidden'; el.style.opacity = '0'; el.style.pointerEvents = 'none'; 
+          el.style.cssText = 'display:none!important;visibility:hidden!important;pointer-events:none!important;opacity:0!important';
         }
         found = true; 
       }
-    });
-    // Also scan deeper: any fixed/absolute element anywhere with high z-index
-    document.querySelectorAll('div,a,section,aside,article,iframe,img').forEach(function(el) {
+    }
+    
+    // Deep scan: check high z-index elements anywhere in the document
+    // Use querySelectorAll with specific selectors for better performance
+    var highZSelectors = 'div[style*="z-index:9"],div[style*="z-index:8"],div[style*="z-index:7"],a[style*="z-index:9"],iframe[style*="z-index"]';
+    document.querySelectorAll(highZSelectors).forEach(function(el) {
       if (isSafeElement(el)) return;
       var st = null;
       try { st = getComputedStyle(el); } catch(e) { return; }
@@ -3874,22 +3919,21 @@ function resetSources() {
       var z = parseInt(st.zIndex) || 0;
       if ((pos === 'fixed' || pos === 'absolute') && z > 500) {
         var rect = el.getBoundingClientRect();
-        if (rect.width > 150 && rect.height > 100) {
-          if (!isSafeElement(el)) { 
-            var text = (el.innerText || el.textContent || '').toLowerCase();
-            if (text.indexOf('澳门') >= 0 || text.indexOf('新葡京') >= 0 || text.indexOf('019019') >= 0 || text.indexOf('pg游戏') >= 0) {
-              el.remove();
-              gamblingFound = true;
-            } else {
-              el.style.display = 'none'; el.style.visibility = 'hidden'; 
-            }
-            found = true; 
+        if (rect.width > 100 && rect.height > 80) {
+          var text = (el.innerText || el.textContent || '').toLowerCase();
+          var isGambling = text.indexOf('澳门') >= 0 || text.indexOf('新葡京') >= 0 || text.indexOf('019019') >= 0 || text.indexOf('pg游戏') >= 0;
+          if (isGambling) {
+            el.remove();
+            gamblingFound = true;
+          } else {
+            el.style.cssText = 'display:none!important;visibility:hidden!important';
           }
+          found = true; 
         }
       }
     });
     
-    // 如果检测到赌博广告，立即强制快进跳过
+    // If gambling ads detected, force skip forward
     if (gamblingFound) {
       trySkip10s();
     }
@@ -4146,7 +4190,7 @@ function resetSources() {
     });
     _adGuardObserver.observe(document.documentElement, { childList: true, subtree: true });
 
-    // Periodic scan every 1.5s
+    // Periodic scan every 2s (reduced frequency for better performance)
     _adScanTimer = setInterval(function() {
       var mask = document.getElementById('modalMask');
       if (!mask || !mask.classList.contains('show')) return;
@@ -4172,7 +4216,7 @@ function resetSources() {
           });
         }
       } catch(e) {} // cross-origin, ignore
-    }, 1500);
+    }, 2000);
   }
 
   function stopAdGuard() {
@@ -4372,51 +4416,51 @@ function initDirectPlayer(url) {
     if (_hlsInstance) { try { _hlsInstance.destroy(); } catch(e){} _hlsInstance = null; }
 
     var hls = new Hls({
-      // === 激进预载策略：尽快缓冲整集视频 ===
-      maxBufferLength: 30,             // 30秒起播缓冲
+      // === 极致预载策略：尽快缓冲整集视频 ===
+      maxBufferLength: 45,             // 45秒起播缓冲（增加以确保流畅）
       maxMaxBufferLength: 1800,        // 最大缓冲到30分钟（整集预载）
-      maxBufferSize: 600 * 1024 * 1024, // 600MB内存缓冲上限
-      maxBufferHole: 0.8,             // 容忍更大的buffer空洞，避免卡住
-      highBufferWatchdogPeriod: 2,
-      nudgeOffset: 0.3,
-      nudgeMaxRetry: 10,
+      maxBufferSize: 800 * 1024 * 1024, // 800MB内存缓冲上限（增加以支持更高清视频）
+      maxBufferHole: 0.5,             // 更小的buffer空洞容忍，减少卡顿
+      highBufferWatchdogPeriod: 1.5,   // 更快的缓冲检测
+      nudgeOffset: 0.2,
+      nudgeMaxRetry: 12,               // 增加重试次数
       enableWorker: true,
       lowLatencyMode: false,           // 关闭低延迟模式，优先预载
       startLevel: -1,                  // 自动选择清晰度，快速连接时直接高清
-      abrEwmaDefaultEstimate: 5000000, // 5Mbps带宽估计，鼓励高速下载
-      abrBandWidthFactor: 0.7,
-      abrBandWidthUpFactor: 0.7,
-      fragLoadingTimeOut: 8000,
-      fragLoadingMaxRetry: 4,
-      fragLoadingRetryDelay: 200,      // 更快重试
-      manifestLoadingTimeOut: 6000,    // manifest超时缩短
-      manifestLoadingMaxRetry: 3,
-      manifestLoadingRetryDelay: 200,
-      levelLoadingTimeOut: 6000,
-      levelLoadingMaxRetry: 3,
-      levelLoadingRetryDelay: 200,
+      abrEwmaDefaultEstimate: 8000000, // 8Mbps带宽估计，鼓励更高质量
+      abrBandWidthFactor: 0.6,         // 更激进的ABR策略
+      abrBandWidthUpFactor: 0.6,
+      fragLoadingTimeOut: 10000,       // 增加超时时间以适应慢速网络
+      fragLoadingMaxRetry: 6,          // 增加重试次数
+      fragLoadingRetryDelay: 150,      // 更快重试
+      manifestLoadingTimeOut: 8000,    // manifest超时
+      manifestLoadingMaxRetry: 4,
+      manifestLoadingRetryDelay: 150,
+      levelLoadingTimeOut: 8000,
+      levelLoadingMaxRetry: 4,
+      levelLoadingRetryDelay: 150,
       startFragPrefetch: true,         // 预取首个分片
       testBandwidth: true,
       progressive: true,
-      backBufferLength: 90,
-      maxFragLookUpTolerance: 0.25,
-      appendErrorMaxRetry: 5,
+      backBufferLength: 120,           // 增加后退缓冲
+      maxFragLookUpTolerance: 0.2,
+      appendErrorMaxRetry: 6,
       stretchShortVideoTrack: true,    // 处理短分片
-      // 关键：自定义XHR设置
+      // 自定义XHR设置
       xhrSetup: function(xhr, xhrUrl) {
-        xhr.timeout = 10000;
+        xhr.timeout = 12000;           // 增加XHR超时
       }
     });
     _hlsInstance = hls;
     hls.loadSource(sourceUrl);
     hls.attachMedia(video);
 
-    // 设置6秒超时：如果6秒内没有解析到manifest就回退iframe
+    // 设置8秒超时：如果8秒内没有解析到manifest就回退iframe
     _autoFallbackTimeout = setTimeout(function() {
       if (_hlsInstance === hls && video.readyState < 2) {
         _autoFallbackToIframe();
       }
-    }, 6000);
+    }, 8000);
 
     hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
       if (_autoFallbackTimeout) { clearTimeout(_autoFallbackTimeout); _autoFallbackTimeout = null; }
@@ -4426,8 +4470,9 @@ function initDirectPlayer(url) {
         if (hls && hls.config) {
           hls.config.maxBufferLength = 1800;  // 30分钟，等于预载整集
           hls.config.maxMaxBufferLength = 1800;
+          hls.config.maxBufferSize = 800 * 1024 * 1024;
         }
-      }, 1000);
+      }, 500); // 更快放开限制
     });
 
     var _hlsNetRetry = 0;
