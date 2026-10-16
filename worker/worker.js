@@ -200,6 +200,11 @@ export default {
           'www.hongniuzy2.com',
           'bfzyapi.com',
           'okzyapi.com',
+          'subocaiji.com',
+          'hhzyapi.com',
+          'jszyapi.com',
+          'jyzyapi.com',
+          'duanjutiantang.com',
         ];
         
         let targetHost;
