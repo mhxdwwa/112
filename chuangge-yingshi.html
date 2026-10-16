@@ -841,10 +841,10 @@ function jpFetch(url, timeout) {
 }
 
 const CORS_PROXIES = [
+  u => 'https://wscls.cn/api/image-relay/vod-proxy?url=' + encodeURIComponent(u),
   u => 'https://corsproxy.io/?' + encodeURIComponent(u),
   u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
   u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u),
-  u => 'https://wscls.cn/api/image-relay/vod-proxy?url=' + encodeURIComponent(u),
 ];
 async function proxyFetch(url) {
   const results = await Promise.any(CORS_PROXIES.map(async (px) => {
