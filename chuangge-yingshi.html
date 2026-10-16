@@ -1112,13 +1112,20 @@ async function apiSearch(keyword, sourceIdx, onPartial) {
     await Promise.all(retryPromises);
   }
 
-  // Sort results: exact/partial name matches first
+  // Sort results: 量子高清优先，然后按名称匹配度
   allResults.sort(function(a, b) {
     const kwLower = primaryKw.toLowerCase();
     const aName = a.name.toLowerCase();
     const bName = b.name.toLowerCase();
     const aExact = aName === kwLower ? 0 : aName.includes(kwLower) ? 1 : 2;
     const bExact = bName === kwLower ? 0 : bName.includes(kwLower) ? 1 : 2;
+    
+    // 量子高清优先
+    const aIsLZ = a.source && a.source.indexOf('量子') >= 0 ? 0 : 1;
+    const bIsLZ = b.source && b.source.indexOf('量子') >= 0 ? 0 : 1;
+    if (aIsLZ !== bIsLZ) return aIsLZ - bIsLZ;
+    
+    // 同级别按名称匹配度排序
     if (aExact !== bExact) return aExact - bExact;
     return 0;
   });
