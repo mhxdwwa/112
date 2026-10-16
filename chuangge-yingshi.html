@@ -706,12 +706,6 @@ img{max-width:100%}
 
 // === CONFIG ===
 const API_SOURCES = [
-  // === 🟢 无广告优选：暂未发现广告的优质线路，优先使用 ===
-  { name:'🟢巨量资源', api:'https://api.juliang.live/api/provide/vod/' },
-  { name:'🟢最大资源', api:'https://api.zuidapi.com/api.php/provide/vod/from/zuidam3u8/' },
-  { name:'🟢西瓜资源', api:'https://caiji.xgzyapi.com/api.php/provide/vod/' },
-  { name:'🟢母鸡资源', api:'https://mujiziyuan00.com/api.php/provide/vod/' },
-  { name:'🟢非凡资源', api:'https://ffzy5.tv/api.php/provide/vod/' },
   // === 🌟 首选：高清、更新快、广告相对最少的优质线路 ===
   { name:'🌟量子高清', api:'https://cj.lziapi.com/api.php/provide/vod/' },
   { name:'🌟非凡高清', api:'https://cj.ffzyapi.com/api.php/provide/vod/' },
@@ -1049,11 +1043,6 @@ async function apiSearch(keyword, sourceIdx, onPartial) {
   }
 
   const srcDone = new Map();
-
-  // 判断是否为无广告优选源
-  function isAdFreeSource(srcName) {
-    return srcName && srcName.startsWith('🟢');
-  }
 
   function addItems(data, srcName, isPrimary) {
     if (!data || !data.list) return;
@@ -4329,15 +4318,12 @@ function injectDPControls() {
   mb.appendChild(ct);
 }
 
-function initDirectPlayer(url, sourceName) {
+function initDirectPlayer(url) {
   destroyHls();
   _currentM3u8Url = url;
   const video = document.getElementById('dpVideo');
   if(!video) return;
   _hlsVideo = video;
-  
-  // 检测是否为无广告优选源（用于调整缓冲策略）
-  const isAdFreeSource = sourceName && sourceName.startsWith('🟢');
 
   // Inject controls into modalBox (outside player-area overflow:hidden)
   injectDPControls();
@@ -4385,95 +4371,60 @@ function initDirectPlayer(url, sourceName) {
   function _createHls(sourceUrl) {
     if (_hlsInstance) { try { _hlsInstance.destroy(); } catch(e){} _hlsInstance = null; }
 
-    // 无广告源使用增强缓冲策略（国外CDN较慢，需要更多缓冲）
-    const bufferConfig = isAdFreeSource ? {
-      maxBufferLength: 45,             // 45秒起播缓冲，确保流畅播放
-      maxMaxBufferLength: 600,         // 播放后缓冲到600秒（10分钟）
-      maxBufferSize: 240 * 1024 * 1024, // 更大的buffer
-    } : {
+    var hls = new Hls({
+      // === 秒开极速策略（优化版） ===
       maxBufferLength: 15,             // 15秒起播缓冲，平衡速度和流畅度
       maxMaxBufferLength: 300,         // 播放后逐步缓冲到300秒
       maxBufferSize: 120 * 1024 * 1024,
-    };
-
-    var hls = new Hls({
-      // === 秒开极速策略（优化版） ===
-      ...bufferConfig,
       maxBufferHole: 0.8,             // 容忍更大的buffer空洞，避免卡住
       highBufferWatchdogPeriod: 2,
       nudgeOffset: 0.3,
       nudgeMaxRetry: 10,
       enableWorker: true,
-      lowLatencyMode: !isAdFreeSource, // 无广告源不使用低延迟模式，优先稳定性
+      lowLatencyMode: true,            // 低延迟模式，更快拉取分片
       startLevel: -1,                  // 自动选择清晰度，快速连接时直接高清
-      abrEwmaDefaultEstimate: isAdFreeSource ? 1500000 : 3000000, // 无广告源使用更保守的带宽估计
+      abrEwmaDefaultEstimate: 3000000, // 3Mbps带宽估计，适合大多数网络
       abrBandWidthFactor: 0.7,
       abrBandWidthUpFactor: 0.7,
-      fragLoadingTimeOut: isAdFreeSource ? 15000 : 8000, // 无广告源更长的超时时间
-      fragLoadingMaxRetry: 6,          // 无广告源更多重试次数
-      fragLoadingRetryDelay: 500,      // 无广告源更长的重试间隔
-      manifestLoadingTimeOut: isAdFreeSource ? 12000 : 6000,
-      manifestLoadingMaxRetry: 5,
-      manifestLoadingRetryDelay: 500,
-      levelLoadingTimeOut: isAdFreeSource ? 12000 : 6000,
-      levelLoadingMaxRetry: 5,
-      levelLoadingRetryDelay: 500,
+      fragLoadingTimeOut: 8000,
+      fragLoadingMaxRetry: 4,
+      fragLoadingRetryDelay: 200,      // 更快重试
+      manifestLoadingTimeOut: 6000,    // manifest超时缩短
+      manifestLoadingMaxRetry: 3,
+      manifestLoadingRetryDelay: 200,
+      levelLoadingTimeOut: 6000,
+      levelLoadingMaxRetry: 3,
+      levelLoadingRetryDelay: 200,
       startFragPrefetch: true,         // 预取首个分片
       testBandwidth: true,
       progressive: true,
-      backBufferLength: isAdFreeSource ? 180 : 90, // 无广告源保留更多历史buffer
+      backBufferLength: 90,
       maxFragLookUpTolerance: 0.25,
       appendErrorMaxRetry: 5,
       stretchShortVideoTrack: true,    // 处理短分片
       // 关键：自定义XHR设置
       xhrSetup: function(xhr, xhrUrl) {
-        xhr.timeout = isAdFreeSource ? 20000 : 10000;
+        xhr.timeout = 10000;
       }
     });
     _hlsInstance = hls;
     hls.loadSource(sourceUrl);
     hls.attachMedia(video);
 
-    // 设置超时：无广告源给更多时间（15秒），普通源6秒
-    var manifestTimeout = isAdFreeSource ? 15000 : 6000;
+    // 设置6秒超时：如果6秒内没有解析到manifest就回退iframe
     _autoFallbackTimeout = setTimeout(function() {
       if (_hlsInstance === hls && video.readyState < 2) {
-        // 无广告源不自动回退，而是显示提示让用户选择
-        if (!isAdFreeSource) {
-          _autoFallbackToIframe();
-        }
+        _autoFallbackToIframe();
       }
-    }, manifestTimeout);
-
-    // 无广告源：显示缓冲提示
-    if (isAdFreeSource) {
-      var bufferTip = document.createElement('div');
-      bufferTip.id = 'adFreeBufferTip';
-      bufferTip.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:#fff;padding:16px 24px;border-radius:8px;font-size:14px;z-index:9999;text-align:center;pointer-events:none;';
-      bufferTip.innerHTML = '<div style="margin-bottom:8px;">🟢 无广告源加载中...</div><div style="font-size:12px;opacity:0.8;">正在缓冲，请稍候</div>';
-      var playerArea = document.getElementById('playerArea');
-      if (playerArea) playerArea.appendChild(bufferTip);
-      
-      // 增加超时时间（无广告源需要更长时间）
-      if (_autoFallbackTimeout) clearTimeout(_autoFallbackTimeout);
-      _autoFallbackTimeout = setTimeout(function() {
-        if (_hlsInstance === hls && video.readyState < 2) {
-          var tip = document.getElementById('adFreeBufferTip');
-          if (tip) tip.innerHTML = '<div style="margin-bottom:8px;">⚠️ 无广告源加载较慢</div><div style="font-size:12px;opacity:0.8;">可切换其他线路</div>';
-        }
-      }, 10000);
-    }
+    }, 6000);
 
     hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
       if (_autoFallbackTimeout) { clearTimeout(_autoFallbackTimeout); _autoFallbackTimeout = null; }
-      // 移除缓冲提示
-      var bufferTip = document.getElementById('adFreeBufferTip');
-      if (bufferTip) bufferTip.remove();
       tryPlay();
       // 播放后放宽缓冲限制让体验更流畅
       setTimeout(function() {
         if (hls && hls.config) {
-          hls.config.maxBufferLength = isAdFreeSource ? 120 : 60;
+          hls.config.maxBufferLength = 60;
         }
       }, 3000);
     });
@@ -5014,9 +4965,8 @@ playEp = function(r, i, btn) {
   if (_playerUIActive) _ensureDetectOverlay();
   if(_directMode) {
     var url = _playData[r] && _playData[r].episodes[i] ? _playData[r].episodes[i].url : '';
-    var sourceName = _playData[r] ? _playData[r].source : '';
     if(url) {
-      initDirectPlayer(url, sourceName);
+      initDirectPlayer(url);
     }
   }
 };
@@ -5136,14 +5086,12 @@ window.openPlayer = function(item) {
     // 初始化直连播放器
     if(_directMode) {
       var firstUrl = '';
-      var firstSourceName = '';
       if(_playData.length && _playData[_curRoute] && _playData[_curRoute].episodes.length) {
         var epIdx = _curEpIndex || 0;
         firstUrl = _playData[_curRoute].episodes[epIdx] ? _playData[_curRoute].episodes[epIdx].url : _playData[_curRoute].episodes[0].url;
-        firstSourceName = _playData[_curRoute].source || '';
       }
       if(firstUrl && document.getElementById('dpVideo')) {
-        initDirectPlayer(firstUrl, firstSourceName);
+        initDirectPlayer(firstUrl);
       }
     }
     // 启动统一自动隐藏
