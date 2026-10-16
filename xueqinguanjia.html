@@ -6347,6 +6347,12 @@ function renderScoreDetail() {
     columns.push(scores.slice(i * rowsPerColumn, (i + 1) * rowsPerColumn));
   }
   
+  // 获取分数对应的颜色
+  function getScoreColor(score) {
+    const range = ranges.find(r => score >= r.min && score <= r.max);
+    return range ? range.color : 'var(--gray-800)';
+  }
+  
   const maxRows = Math.max(...columns.map(c => c.length));
   let scoreRows = '';
   
@@ -6360,7 +6366,7 @@ function renderScoreDetail() {
         scoreRows += `
           <td>${rank}</td>
           <td style="font-weight:500">${student.student}</td>
-          <td><span style="font-size:16px;font-weight:600;color:${student.score >= 90 ? 'var(--accent)' : student.score >= 60 ? 'var(--gray-800)' : 'var(--danger)'}">${student.score}</span></td>
+          <td><span style="font-size:16px;font-weight:600;color:${getScoreColor(student.score)}">${student.score}</span></td>
           ${isHeadteacher ? `<td>${historyBtn}</td>` : ''}
         `;
       } else {
