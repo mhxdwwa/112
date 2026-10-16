@@ -6166,17 +6166,35 @@ function renderScoreDetail() {
     if (range) range.count++;
   });
   
-  const scoreRows = scores.map((s, i) => {
-    const historyBtn = isHeadteacher ? `<button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="showStudentHistory('${s.student}','${exam.subject}')">历史</button>` : '';
-    return `
-      <tr>
-        <td>${i + 1}</td>
-        <td style="font-weight:500">${s.student}</td>
-        <td><span style="font-size:16px;font-weight:600;color:${s.score >= 90 ? 'var(--accent)' : s.score >= 60 ? 'var(--gray-800)' : 'var(--danger)'}">${s.score}</span></td>
-        <td>${historyBtn}</td>
-      </tr>
-    `;
-  }).join('');
+  // 将成绩分成4栏显示
+  const rowsPerColumn = Math.ceil(scores.length / 4);
+  const columns = [];
+  for (let i = 0; i < 4; i++) {
+    columns.push(scores.slice(i * rowsPerColumn, (i + 1) * rowsPerColumn));
+  }
+  
+  const maxRows = Math.max(...columns.map(c => c.length));
+  let scoreRows = '';
+  
+  for (let row = 0; row < maxRows; row++) {
+    scoreRows += '<tr>';
+    for (let col = 0; col < 4; col++) {
+      const student = columns[col][row];
+      if (student) {
+        const rank = col * rowsPerColumn + row + 1;
+        const historyBtn = isHeadteacher ? `<button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="showStudentHistory('${student.student}','${exam.subject}')">历史</button>` : '';
+        scoreRows += `
+          <td>${rank}</td>
+          <td style="font-weight:500">${student.student}</td>
+          <td><span style="font-size:16px;font-weight:600;color:${student.score >= 90 ? 'var(--accent)' : student.score >= 60 ? 'var(--gray-800)' : 'var(--danger)'}">${student.score}</span></td>
+          ${isHeadteacher ? `<td>${historyBtn}</td>` : ''}
+        `;
+      } else {
+        scoreRows += `<td></td><td></td><td></td>${isHeadteacher ? '<td></td>' : ''}`;
+      }
+    }
+    scoreRows += '</tr>';
+  }
   
   // 生成分数段分布HTML
   const distributionHtml = ranges.map(r => `
@@ -6255,10 +6273,22 @@ function renderScoreDetail() {
           <table>
             <thead>
               <tr>
-                <th style="width:60px">排名</th>
-                <th>学生姓名</th>
-                <th style="width:100px">分数</th>
-                ${isHeadteacher ? '<th style="width:80px">操作</th>' : ''}
+                <th style="width:50px">排名</th>
+                <th style="width:100px">学生姓名</th>
+                <th style="width:60px">分数</th>
+                ${isHeadteacher ? '<th style="width:60px">操作</th>' : ''}
+                <th style="width:50px">排名</th>
+                <th style="width:100px">学生姓名</th>
+                <th style="width:60px">分数</th>
+                ${isHeadteacher ? '<th style="width:60px">操作</th>' : ''}
+                <th style="width:50px">排名</th>
+                <th style="width:100px">学生姓名</th>
+                <th style="width:60px">分数</th>
+                ${isHeadteacher ? '<th style="width:60px">操作</th>' : ''}
+                <th style="width:50px">排名</th>
+                <th style="width:100px">学生姓名</th>
+                <th style="width:60px">分数</th>
+                ${isHeadteacher ? '<th style="width:60px">操作</th>' : ''}
               </tr>
             </thead>
             <tbody>${scoreRows}</tbody>
