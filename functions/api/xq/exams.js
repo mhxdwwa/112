@@ -223,6 +223,58 @@ export const onRequestPost = async ({ request, env }) => {
     return jsonResponse({ ok: true, history });
   }
 
+  // ===== UPDATE: 更新考试成绩（添加/修改/删除学生成绩）=====
+  if (action === 'update') {
+    const { examId, teacher, updates } = body;
+    if (!examId || !teacher || !updates) {
+      return jsonResponse({ error: 'Missing examId, teacher, or updates' }, 400);
+    }
+
+    // 验证权限：只能编辑自己创建的考试
+    const examResult = await sbSelect(env, 'xq_exams', 'teacher', `id=eq.${examId}`);
+    if (examResult.error || !examResult.data || examResult.data.length === 0) {
+      return jsonResponse({ error: 'Exam not found' }, 404);
+    }
+    if (examResult.data[0].teacher !== teacher) {
+      return jsonResponse({ error: 'Unauthorized: cannot edit other teacher\'s exam' }, 403);
+    }
+
+    // 处理更新
+    for (const update of updates) {
+      if (update.action === 'add') {
+        // 添加学生成绩
+        const { student, score } = update;
+        if (!student || score === undefined) continue;
+        await sbInsert(env, 'xq_exam_scores', [{
+          exam_id: examId,
+          student,
+          score: parseFloat(score)
+        }]);
+      } else if (update.action === 'update') {
+        // 修改学生成绩
+        const { scoreId, score } = update;
+        if (!scoreId || score === undefined) continue;
+        await fetch(`${env.SUPABASE_URL}/rest/v1/xq_exam_scores?id=eq.${scoreId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': env.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({ score: parseFloat(score) })
+        });
+      } else if (update.action === 'delete') {
+        // 删除学生成绩
+        const { scoreId } = update;
+        if (!scoreId) continue;
+        await sbDelete(env, 'xq_exam_scores', `id=eq.${scoreId}`);
+      }
+    }
+
+    return jsonResponse({ ok: true });
+  }
+
   // ===== CLASS_SUBJECT_ANALYSIS: 获取某班级某科目的所有考试及成绩（用于趋势和进退步分析）=====
   if (action === 'class_subject_analysis') {
     const { class: className, subject } = body;

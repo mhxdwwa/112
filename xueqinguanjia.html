@@ -5821,7 +5821,7 @@ function exportAdminRoster(cls) {
 
 /* ===== SCORE MANAGEMENT ===== */
 let scoreExamsCache = [];
-let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail' | 'headteacher-overview' | 'student-history' | 'class-analysis'
+let scoreCurrentView = 'list'; // 'list' | 'create' | 'detail' | 'edit' | 'headteacher-overview' | 'student-history' | 'class-analysis'
 let classAnalysisData = null; // 班级分析数据缓存
 let scoreDetailChartType = 'pie'; // 'pie' | 'bar'
 let scoreDetailRanges = [
@@ -5836,6 +5836,7 @@ let scoreClassSummaryCache = {};
 let scoreStudentHistoryCache = [];
 let scoreCurrentStudent = null;
 let scoreCurrentSubject = null;
+let scoreChanges = []; // 记录编辑模式下的修改
 
 async function loadScoreExams() {
   const teacher = xqCurrentUser?.teacherName;
@@ -5862,6 +5863,7 @@ async function loadStudentScoreHistory(student, subject, className) {
 function renderScoreManage() {
   if (scoreCurrentView === 'create') return renderScoreCreate();
   if (scoreCurrentView === 'detail' && scoreCurrentExam) return renderScoreDetail();
+  if (scoreCurrentView === 'edit' && scoreCurrentExam) return renderScoreEdit();
   if (scoreCurrentView === 'headteacher-overview') return renderHeadteacherOverview();
   if (scoreCurrentView === 'student-history') return renderStudentHistory();
   if (scoreCurrentView === 'student-history-select') return renderStudentHistorySelect();
@@ -5874,7 +5876,9 @@ function renderScoreManage() {
   if (scoreExamsCache.length === 0) {
     examListHtml = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-400)">暂无考试记录，点击上方"新建考试"开始录入成绩</td></tr>';
   } else {
-    examListHtml = scoreExamsCache.map(exam => `
+    examListHtml = scoreExamsCache.map(exam => {
+      const canEdit = exam.teacher === xqCurrentUser?.teacherName;
+      return `
       <tr>
         <td style="font-weight:500">${exam.exam_name}</td>
         <td>${exam.class}</td>
@@ -5883,10 +5887,11 @@ function renderScoreManage() {
         <td>${exam.teacher}</td>
         <td>
           <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="viewScoreDetail('${exam.id}')">查看</button>
+          ${canEdit ? `<button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--accent)" onclick="editExamScores('${exam.id}')">编辑</button>` : ''}
           ${isHeadteacher ? '' : `<button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteExam('${exam.id}','${exam.exam_name}')">删除</button>`}
         </td>
       </tr>
-    `).join('');
+    `}).join('');
   }
   
   // 班主任可以看到全班成绩总览按钮
@@ -6015,6 +6020,7 @@ function renderScoreCreate() {
 function backToScoreList() {
   scoreCurrentView = 'list';
   scoreCurrentExam = null;
+  scoreChanges = [];
   navigate('score-manage');
 }
 
@@ -6114,6 +6120,174 @@ async function viewScoreDetail(examId) {
     navigate('score-manage');
   } else {
     showToast('获取成绩详情失败', 'error');
+  }
+}
+
+async function editExamScores(examId) {
+  const result = await xqApi('exams', { action: 'get', examId });
+  if (result.ok) {
+    scoreCurrentExam = { ...result.exam, scores: result.scores };
+    scoreCurrentView = 'edit';
+    navigate('score-manage');
+  } else {
+    showToast('获取成绩详情失败', 'error');
+  }
+}
+
+function renderScoreEdit() {
+  const exam = scoreCurrentExam;
+  const scores = exam.scores || [];
+  
+  const scoreRows = scores.map((s, i) => `
+    <tr data-score-id="${s.id}">
+      <td>${i + 1}</td>
+      <td style="font-weight:500">${s.student}</td>
+      <td>
+        <input type="number" value="${s.score}" style="width:80px;padding:4px 8px;border:1px solid var(--gray-300);border-radius:4px;font-size:14px" 
+               onchange="markScoreChanged(${s.id}, this.value)">
+      </td>
+      <td>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" 
+                onclick="removeScore(${s.id}, '${s.student}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+  
+  return `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn ghost" onclick="backToScoreList()">← 返回列表</button>
+        <span style="font-size:14px;color:var(--gray-600);margin-left:12px">${exam.exam_name} - 编辑成绩</span>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn primary" onclick="saveScoreChanges()">保存修改</button>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">成绩列表</span>
+        <span style="font-size:12px;color:var(--gray-400)">${exam.class} · ${exam.subject} · ${scores.length}名学生</span>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:16px">
+          <button class="toolbar-btn ghost" style="font-size:13px" onclick="showAddStudentScore()">+ 添加学生成绩</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px">序号</th>
+                <th>学生姓名</th>
+                <th style="width:120px">分数</th>
+                <th style="width:80px">操作</th>
+              </tr>
+            </thead>
+            <tbody>${scoreRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function markScoreChanged(scoreId, newScore) {
+  const existing = scoreChanges.find(c => c.scoreId === scoreId);
+  if (existing) {
+    existing.score = parseFloat(newScore);
+  } else {
+    scoreChanges.push({ action: 'update', scoreId, score: parseFloat(newScore) });
+  }
+}
+
+function removeScore(scoreId, studentName) {
+  if (!confirm(`确定要删除学生"${studentName}"的成绩吗？`)) return;
+  
+  // 从DOM中移除
+  const row = document.querySelector(`tr[data-score-id="${scoreId}"]`);
+  if (row) row.remove();
+  
+  // 记录删除操作
+  scoreChanges.push({ action: 'delete', scoreId });
+}
+
+function showAddStudentScore() {
+  const studentName = prompt('请输入学生姓名：');
+  if (!studentName) return;
+  
+  const score = prompt('请输入分数：');
+  if (score === null) return;
+  
+  const scoreNum = parseFloat(score);
+  if (isNaN(scoreNum) || scoreNum < 0 || scoreNum > 150) {
+    showToast('分数必须在0-150之间', 'error');
+    return;
+  }
+  
+  // 添加到表格
+  const tbody = document.querySelector('tbody');
+  const rowCount = tbody.children.length + 1;
+  const newRow = document.createElement('tr');
+  const tempId = 'new_' + Date.now();
+  newRow.setAttribute('data-temp-id', tempId);
+  newRow.innerHTML = `
+    <td>${rowCount}</td>
+    <td style="font-weight:500">${studentName}</td>
+    <td>
+      <input type="number" value="${scoreNum}" style="width:80px;padding:4px 8px;border:1px solid var(--gray-300);border-radius:4px;font-size:14px" 
+             data-new-student="${studentName}" data-temp-id="${tempId}">
+    </td>
+    <td>
+      <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" 
+              onclick="removeNewStudent('${tempId}')">删除</button>
+    </td>
+  `;
+  tbody.appendChild(newRow);
+  
+  // 记录添加操作
+  scoreChanges.push({ action: 'add', student: studentName, score: scoreNum, tempId });
+}
+
+function removeNewStudent(tempId) {
+  // 从DOM中移除
+  const row = document.querySelector(`tr[data-temp-id="${tempId}"]`);
+  if (row) row.remove();
+  
+  // 从scoreChanges中移除
+  scoreChanges = scoreChanges.filter(c => c.tempId !== tempId);
+}
+
+async function saveScoreChanges() {
+  if (scoreChanges.length === 0) {
+    showToast('没有修改', 'warning');
+    return;
+  }
+  
+  // 过滤掉tempId，只发送必要的数据
+  const updates = scoreChanges.map(c => {
+    if (c.action === 'add') {
+      return { action: 'add', student: c.student, score: c.score };
+    } else if (c.action === 'update') {
+      return { action: 'update', scoreId: c.scoreId, score: c.score };
+    } else if (c.action === 'delete') {
+      return { action: 'delete', scoreId: c.scoreId };
+    }
+    return null;
+  }).filter(c => c !== null);
+  
+  const result = await xqApi('exams', {
+    action: 'update',
+    examId: scoreCurrentExam.id,
+    teacher: xqCurrentUser.teacherName,
+    updates
+  });
+  
+  if (result.ok) {
+    showToast('保存成功', 'success');
+    scoreChanges = [];
+    // 重新加载数据
+    await editExamScores(scoreCurrentExam.id);
+  } else {
+    showToast('保存失败：' + (result.error || '未知错误'), 'error');
   }
 }
 
