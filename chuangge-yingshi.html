@@ -714,67 +714,26 @@ body > div[id*="banner"],body > div[class*="banner"]{display:none!important;visi
 
 // === CONFIG ===
 const API_SOURCES = [
-  // === 🌟 首选：高清、更新快、广告相对最少的优质线路 ===
-  { name:'🌟量子高清', api:'https://cj.lziapi.com/api.php/provide/vod/' },
-  { name:'🌟非凡高清', api:'https://cj.ffzyapi.com/api.php/provide/vod/' },
-  { name:'🌟红牛资源', api:'https://www.hongniuzy2.com/api.php/provide/vod/' },
-  // === 备用优质线路 ===
-  { name:'快播资源', api:'https://www.kuaibozy.com/api.php/provide/vod/' },
-  { name:'酷点资源', api:'https://cj.ikuapi.com/api.php/provide/vod/' },
-  { name:'飞速资源', api:'https://www.feisuzyapi.com/api.php/provide/vod/' },
-  { name:'光速资源', api:'https://collect.wolongzywang.com/api.php/provide/vod/' },
-  { name:'暴风资源', api:'https://bfzyapi.com/api.php/provide/vod/' },
-  // === 第二梯队：资源丰富、稳定 ===
-  { name:'OK资源',   api:'https://okzyapi.com/api.php/provide/vod/' },
-  { name:'天空资源', api:'https://tiankongzy.com/api.php/provide/vod/' },
-  { name:'速播资源', api:'https://subocaiji.com/api.php/provide/vod/' },
-  { name:'豪华资源', api:'https://hhzyapi.com/api.php/provide/vod/' },
-  { name:'魔都资源', api:'https://caiji.moduzy.com/api.php/provide/vod/' },
-  { name:'闪电资源', api:'https://sdzyapi.com/api.php/provide/vod/' },
-  { name:'百度资源', api:'https://api.apibdzy.com/api.php/provide/vod/' },
-  { name:'无尽资源', api:'https://api.wujinzy.com/api.php/provide/vod/' },
-  { name:'华为资源', api:'https://cj.hwzyapi.com/api.php/provide/vod/' },
-  { name:'急速资源', api:'https://jszyapi.com/api.php/provide/vod/' },
-  // === 第三梯队：补充资源 ===
-  { name:'淘片资源', api:'https://taopianapi.com/home/cjapi/vod/mc/' },
-  { name:'新浪资源', api:'https://xinlangapi.com/xinlangapi.php/provide/vod/' },
-  { name:'鱼乐资源', api:'https://ylzy.tv/api.php/provide/vod/' },
-  { name:'光影资源', api:'https://api.guangyinzy.com/api.php/provide/vod/' },
-  { name:'优质资源', api:'https://api.youziyuan.com/api.php/provide/vod/' },
-  { name:'金鹰资源', api:'https://jyzyapi.com/api.php/provide/vod/' },
-  { name:'樱花资源', api:'https://m3u8.apiyhzy.com/api.php/provide/vod/' },
-  { name:'番茄资源', api:'https://api.fanqiezy.com/api.php/provide/vod/' },
-  // === 新增源：扩大覆盖面 ===
-  { name:'海螺资源', api:'https://hailuozyapi.com/api.php/provide/vod/' },
-  { name:'探花资源', api:'https://tanhzy.com/api.php/provide/vod/' },
-  { name:'猫抓资源', api:'https://maozhuazy.com/api.php/provide/vod/' },
-  { name:'畅看资源', api:'https://changkanzy.com/api.php/provide/vod/' },
-  { name:'新奇资源', api:'https://xinqizy.com/api.php/provide/vod/' },
-  { name:'真心资源', api:'https://zhenxinzy.com/api.php/provide/vod/' },
-  { name:'乐看资源', api:'https://lekanzy.com/api.php/provide/vod/' },
-  { name:'优米资源', api:'https://youmizy.com/api.php/provide/vod/' },
-  { name:'蓝光资源', api:'https://languangzy.com/api.php/provide/vod/' },
-  { name:'飞云资源', api:'https://feiyunzy.com/api.php/provide/vod/' },
-  { name:'五五资源', api:'https://wuwuzy.com/api.php/provide/vod/' },
-  { name:'萌米资源', api:'https://mengmizy.com/api.php/provide/vod/' },
+  // === 🌟 首选：经实测可用且速度最快的源（按响应速度排序） ===
+  { name:'🌟速播资源', api:'https://subocaiji.com/api.php/provide/vod/' },       // 170ms
+  { name:'🌟量子高清', api:'https://cj.lziapi.com/api.php/provide/vod/' },       // 338ms
+  { name:'🌟豪华资源', api:'https://hhzyapi.com/api.php/provide/vod/' },         // 396ms
+  { name:'🌟急速资源', api:'https://jszyapi.com/api.php/provide/vod/' },         // 438ms
+  { name:'🌟红牛资源', api:'https://www.hongniuzy2.com/api.php/provide/vod/' },  // 452ms
+  { name:'🌟金鹰资源', api:'https://jyzyapi.com/api.php/provide/vod/' },         // 500ms
+  { name:'🌟暴风资源', api:'https://bfzyapi.com/api.php/provide/vod/' },         // 620ms
+  { name:'🌟非凡高清', api:'https://cj.ffzyapi.com/api.php/provide/vod/' },      // 1073ms
 ];
 const SHORT_DRAMA_SOURCES = [
   { name:'短剧天堂', api:'https://duanjutiantang.com/api.php/provide/vod/' },
-  { name:'卧龙短剧', api:'https://collect.wolongzywang.com/api.php/provide/vod/' },
-  { name:'天空短剧', api:'https://tiankongzy.com/api.php/provide/vod/' },
+  { name:'暴风短剧', api:'https://bfzyapi.com/api.php/provide/vod/' },
   { name:'速播短剧', api:'https://subocaiji.com/api.php/provide/vod/' },
   { name:'豪华短剧', api:'https://hhzyapi.com/api.php/provide/vod/' },
-  { name:'番茄短剧', api:'https://api.fanqiezy.com/api.php/provide/vod/' },
   { name:'量子短剧', api:'https://cj.lziapi.com/api.php/provide/vod/' },
   { name:'非凡短剧', api:'https://cj.ffzyapi.com/api.php/provide/vod/' },
   { name:'红果短剧', api:'https://www.hongniuzy2.com/api.php/provide/vod/' },
-  { name:'快播短剧', api:'https://www.kuaibozy.com/api.php/provide/vod/' },
-  { name:'酷点短剧', api:'https://cj.ikuapi.com/api.php/provide/vod/' },
-  { name:'飞速短剧', api:'https://www.feisuzyapi.com/api.php/provide/vod/' },
-  { name:'OK短剧',   api:'https://okzyapi.com/api.php/provide/vod/' },
-  { name:'暴风短剧', api:'https://bfzyapi.com/api.php/provide/vod/' },
-  { name:'淘片短剧', api:'https://taopianapi.com/home/cjapi/vod/mc/' },
-  { name:'光影短剧', api:'https://api.guangyinzy.com/api.php/provide/vod/' },
+  { name:'金鹰短剧', api:'https://jyzyapi.com/api.php/provide/vod/' },
+  { name:'急速短剧', api:'https://jszyapi.com/api.php/provide/vod/' },
 ];
 const PLAYERS = [
   // === 🌟 首选：速度快、广告少、稳定性好的优质线路 ===
