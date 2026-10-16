@@ -360,11 +360,11 @@ body > div[id*="banner"],body > div[class*="banner"]{display:none!important;visi
   .p-bottom-btns{left:auto;right:12px;bottom:50px;gap:8px}
   .p-research-btn{left:auto;right:12px;bottom:140px}
   
-  /* 移动端专属优化：隐藏不需要的悬浮按钮 (全屏、直连/iframe切换、重新搜索、下一集) */
+  /* 移动端专属优化：隐藏不需要的悬浮按钮 (全屏、重新搜索、下一集) */
   .p-fs-btn{display:none!important}
-  .dp-mode-btn{display:none!important}
   .p-next-btn{display:none!important}
   .p-research-btn{display:none!important}
+  /* 保留直连/iframe切换按钮，让用户可以手动切换 */
   /* 移动端放大全屏按钮 */
   #dpFsBtn{width:44px;height:44px;padding:8px}
   #dpFsBtn svg{width:28px;height:28px}
@@ -4265,18 +4265,17 @@ let _dpUpdateTimer = null;
 let _currentM3u8Url = '';
 let _aggressiveBufferTimer = null;
 
-// Default mode: desktop uses direct mode (直连模式), mobile uses iframe mode (普通模式)
+// Default mode: both desktop and mobile use direct mode (直连模式)
 // User can override via settings
 try {
   var _saved = localStorage.getItem('wyh_direct_mode');
   if (_saved !== null) {
     _directMode = _saved === '1';
   } else {
-    // Detect device type
-    var _isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-    _directMode = !_isMobile;
+    // Both desktop and mobile default to direct mode for better performance
+    _directMode = true;
   }
-} catch(e){ _directMode = false; }
+} catch(e){ _directMode = true; }
 
 function setDirectMode(on) {
   _directMode = on;
