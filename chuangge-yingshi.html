@@ -1069,26 +1069,35 @@ async function apiSearch(keyword, sourceIdx, onPartial) {
       const normName = it.name.replace(/\s+/g,'').toLowerCase();
       const nameKey = normName + '|' + (it.type||'未知');
       const key = normName + '|' + it.source;
-      // 无广告源：直接覆盖已有结果（替换掉有广告源的结果）
+      
+      // 查找是否已有同名结果
+      const existingIdx = allResults.findIndex(r => 
+        r.name.replace(/\s+/g,'').toLowerCase() === normName && 
+        (r.type||'未知') === (it.type||'未知')
+      );
+      
       if (adFree) {
-        if (seen.has(nameKey)) {
-          // 替换掉之前有广告源的同名结果
-          const idx = allResults.findIndex(r => r.name.replace(/\s+/g,'').toLowerCase() === normName && (r.type||'未知') === (it.type||'未知'));
-          if (idx !== -1) {
-            allResults[idx] = it;
-          }
-        } else {
+        // 无广告源：总是优先
+        if (existingIdx !== -1) {
+          // 替换掉已有结果（无论是否有广告）
+          const oldSource = allResults[existingIdx].source;
+          const oldKey = normName + '|' + oldSource;
+          seen.delete(oldKey);
+          allResults[existingIdx] = it;
+          seen.add(key);
+        } else if (!seen.has(nameKey)) {
+          // 全新结果
           seen.add(key);
           seen.add(nameKey);
           allResults.push(it);
         }
       } else {
-        // 有广告源：只在无广告源还没返回时才添加
-        if (seen.has(key)) return;
-        if (seen.has(nameKey)) return;
-        seen.add(key);
-        seen.add(nameKey);
-        allResults.push(it);
+        // 有广告源：只在没有同名结果时才添加
+        if (existingIdx === -1 && !seen.has(nameKey)) {
+          seen.add(key);
+          seen.add(nameKey);
+          allResults.push(it);
+        }
       }
     });
     if (isPrimary && !srcDone.has(srcName)) {
