@@ -1068,13 +1068,11 @@ async function apiSearch(keyword, sourceIdx, onPartial) {
     }));
     items.forEach(it => {
       const normName = it.name.replace(/\s+/g,'').toLowerCase();
-      const nameKey = normName + '|' + (it.type||'未知');
       const key = normName + '|' + it.source;
       
-      // 先到先得：谁先返回谁占位（快速源优先显示）
-      if (!seen.has(key) && !seen.has(nameKey)) {
+      // 每个源独立保留结果，不去重（因为现在按源分组显示）
+      if (!seen.has(key)) {
         seen.add(key);
-        seen.add(nameKey);
         allResults.push(it);
       }
     });
