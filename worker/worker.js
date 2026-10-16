@@ -177,6 +177,73 @@ export default {
         });
       }
 
+      // GET /vod-proxy?url=xxx - Proxy video API requests (CORS bypass)
+      if (path === '/vod-proxy' && request.method === 'GET') {
+        const targetUrl = url.searchParams.get('url');
+        
+        if (!targetUrl) {
+          return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Only allow known video API domains
+        const allowedDomains = [
+          'api.juliang.live',
+          'api.zuidapi.com',
+          'caiji.xgzyapi.com',
+          'mujiziyuan00.com',
+          'ffzy5.tv',
+          'cj.lziapi.com',
+          'cj.ffzyapi.com',
+          'www.hongniuzy2.com',
+          'bfzyapi.com',
+          'okzyapi.com',
+        ];
+        
+        let targetHost;
+        try {
+          targetHost = new URL(targetUrl).host;
+        } catch (e) {
+          return new Response(JSON.stringify({ error: 'Invalid URL' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        const isAllowed = allowedDomains.some(domain => targetHost === domain || targetHost.endsWith('.' + domain));
+        if (!isAllowed) {
+          return new Response(JSON.stringify({ error: 'Domain not allowed' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        try {
+          const response = await fetch(targetUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'application/json',
+            },
+          });
+          
+          const data = await response.text();
+          return new Response(data, {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json; charset=utf-8',
+              'Cache-Control': 'public, max-age=300',
+            },
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: 'Fetch failed: ' + err.message }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
       return new Response('Not Found', { status: 404, headers: corsHeaders });
 
     } catch (err) {
