@@ -146,7 +146,7 @@ async function main() {
   console.log(`  ✓ ${cssFile}: copied`);
 
   // Copy HTML files
-  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html', 'test-api.html', 'home.html', 'jiangmoji.html', 'starrollcall.html', 'test-seewo.html', 'aoyoutiandi.html', 'bahe.html', 'damaoxian.html', 'jiangyaoji.html', 'mengdaxia.html', 'shendouluo.html', 'wulinzhengba.html', 'shuxuezuotu.html', 'zhandouluo.html', 'zhenjiadasheng.html', 'youlishujianfa.html', 'shouhuyuegong.html', 'jianfadaluandou.html', 'xueqinguanjia.html', 'kaoshijishiqi.html']) {
+  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html', 'test-api.html', 'home.html', 'jiangmoji.html', 'starrollcall.html', 'test-seewo.html', 'aoyoutiandi.html', 'bahe.html', 'damaoxian.html', 'jiangyaoji.html', 'mengdaxia.html', 'shendouluo.html', 'wulinzhengba.html', 'shuxuezuotu.html', 'zhandouluo.html', 'zhenjiadasheng.html', 'youlishujianfa.html', 'shouhuyuegong.html', 'jianfadaluandou.html', 'xueqinguanjia.html', 'kaoshijishiqi.html', 'chuangge-yingshi.html']) {
     const src = resolve(__dirname, html);
     try {
       copyFileSync(src, join(DIST, html));
@@ -212,6 +212,12 @@ async function main() {
   } catch (e) {
     console.error(`  ✗ books/: ${e.message}`);
   }
+
+  // Copy shows.json for 闯哥影视
+  try {
+    copyFileSync(resolve(__dirname, 'shows.json'), join(DIST, 'shows.json'));
+    console.log('  ✓ shows.json: copied');
+  } catch (e) { /* skip if not exists */ }
 
   // v255: Copy _headers and _redirects for Cloudflare Pages
   for (const cf of ['_headers', '_redirects']) {
