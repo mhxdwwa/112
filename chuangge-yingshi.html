@@ -4372,18 +4372,18 @@ function initDirectPlayer(url) {
     if (_hlsInstance) { try { _hlsInstance.destroy(); } catch(e){} _hlsInstance = null; }
 
     var hls = new Hls({
-      // === 秒开极速策略（优化版） ===
-      maxBufferLength: 15,             // 15秒起播缓冲，平衡速度和流畅度
-      maxMaxBufferLength: 300,         // 播放后逐步缓冲到300秒
-      maxBufferSize: 120 * 1024 * 1024,
+      // === 激进预载策略：尽快缓冲整集视频 ===
+      maxBufferLength: 30,             // 30秒起播缓冲
+      maxMaxBufferLength: 1800,        // 最大缓冲到30分钟（整集预载）
+      maxBufferSize: 600 * 1024 * 1024, // 600MB内存缓冲上限
       maxBufferHole: 0.8,             // 容忍更大的buffer空洞，避免卡住
       highBufferWatchdogPeriod: 2,
       nudgeOffset: 0.3,
       nudgeMaxRetry: 10,
       enableWorker: true,
-      lowLatencyMode: true,            // 低延迟模式，更快拉取分片
+      lowLatencyMode: false,           // 关闭低延迟模式，优先预载
       startLevel: -1,                  // 自动选择清晰度，快速连接时直接高清
-      abrEwmaDefaultEstimate: 3000000, // 3Mbps带宽估计，适合大多数网络
+      abrEwmaDefaultEstimate: 5000000, // 5Mbps带宽估计，鼓励高速下载
       abrBandWidthFactor: 0.7,
       abrBandWidthUpFactor: 0.7,
       fragLoadingTimeOut: 8000,
@@ -4421,12 +4421,13 @@ function initDirectPlayer(url) {
     hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
       if (_autoFallbackTimeout) { clearTimeout(_autoFallbackTimeout); _autoFallbackTimeout = null; }
       tryPlay();
-      // 播放后放宽缓冲限制让体验更流畅
+      // 起播后立即放开缓冲限制，全力预载
       setTimeout(function() {
         if (hls && hls.config) {
-          hls.config.maxBufferLength = 60;
+          hls.config.maxBufferLength = 1800;  // 30分钟，等于预载整集
+          hls.config.maxMaxBufferLength = 1800;
         }
-      }, 3000);
+      }, 1000);
     });
 
     var _hlsNetRetry = 0;
