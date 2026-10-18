@@ -118,7 +118,9 @@ export const onRequestPost = async ({ request, env }) => {
     const beforeXiandan = student.xiandan || 0;
     const beforeCoins = student.coins || 0;
 
-    // v336: 使用原子操作更新金币，防止并发竞态条件
+    // v337: 优化金币更新逻辑，借鉴仙丹的稳定处理方式
+    // 前端已经计算好实际的金币变更（考虑余额不足时转为经验扣除），
+    // 后端直接执行原子更新，不再做额外的余额检查
     let actualBeforeCoins = beforeCoins;
     let actualAfterCoins = beforeCoins;
     
@@ -126,7 +128,7 @@ export const onRequestPost = async ({ request, env }) => {
       const rpcResult = await sbRpc(env, 'atomic_update_coins', {
         p_student_id: studentId,
         p_coin_delta: coinDelta,
-        p_check_balance: checkBalance
+        p_check_balance: false  // v337: 禁用余额检查，信任前端的计算结果
       });
       
       if (rpcResult.error || !rpcResult.data || !rpcResult.data.ok) {
