@@ -6327,9 +6327,16 @@ function renderScoreDetail() {
   const variance = scoreValues.length > 0 ? scoreValues.reduce((sum, s) => sum + Math.pow(s - avg, 2), 0) / scoreValues.length : 0;
   const stdDev = Math.sqrt(variance).toFixed(1);
   
-  // 及格率和优秀率
-  const passCount = scoreValues.filter(s => s >= 60).length;
-  const excellentCount = scoreValues.filter(s => s >= 90).length;
+  // 及格率和优秀率（根据学科满分动态计算）
+  // 语文/英语/数学满分120，及格线72(60%)，优秀线108(90%)
+  // 其他科目满分100，及格线60(60%)，优秀线90(90%)
+  const isMainSubject = (subject === '语文' || subject === '英语' || subject === '数学');
+  const totalScore = isMainSubject ? 120 : 100;
+  const passThreshold = totalScore * 0.6;
+  const excellentThreshold = totalScore * 0.9;
+  
+  const passCount = scoreValues.filter(s => s >= passThreshold).length;
+  const excellentCount = scoreValues.filter(s => s >= excellentThreshold).length;
   const passRate = scoreValues.length > 0 ? ((passCount / scoreValues.length) * 100).toFixed(1) : 0;
   const excellentRate = scoreValues.length > 0 ? ((excellentCount / scoreValues.length) * 100).toFixed(1) : 0;
   

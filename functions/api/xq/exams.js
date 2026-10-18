@@ -308,8 +308,17 @@ export const onRequestPost = async ({ request, env }) => {
       const avg = scoreValues.length > 0 ? Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length * 10) / 10 : 0;
       const max = scoreValues.length > 0 ? Math.max(...scoreValues) : 0;
       const min = scoreValues.length > 0 ? Math.min(...scoreValues) : 0;
-      const passCount = scoreValues.filter(s => s >= 60).length;
-      const excellentCount = scoreValues.filter(s => s >= 90).length;
+      
+      // 根据学科满分动态计算及格线和优秀线
+      // 语文/英语/数学满分120，及格线72(60%)，优秀线108(90%)
+      // 其他科目满分100，及格线60(60%)，优秀线90(90%)
+      const isMainSubject = (subject === '语文' || subject === '英语' || subject === '数学');
+      const totalScore = isMainSubject ? 120 : 100;
+      const passThreshold = totalScore * 0.6;
+      const excellentThreshold = totalScore * 0.9;
+      
+      const passCount = scoreValues.filter(s => s >= passThreshold).length;
+      const excellentCount = scoreValues.filter(s => s >= excellentThreshold).length;
 
       analysis.push({
         id: exam.id,
