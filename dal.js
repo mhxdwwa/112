@@ -3903,9 +3903,9 @@ function _setupRealtimeSubscriptions() {
   
   var channelsCreated = 0;
   var channelsConfirmed = 0;
-  // v338: 动态计算通道总数 — 教师5个(classes+operation_logs+students+pets+snack_configs)，学生2个(students+pets)
+  // v338: 动态计算通道总数 — 教师5个(classes+operation_logs+students+pets+snack_configs)，学生4个(operation_logs+students+pets+snack_configs)
   var _isStudentForChannels = currentUser && currentUser.type === 'student';
-  var totalChannels = _isStudentForChannels ? 2 : 5;
+  var totalChannels = _isStudentForChannels ? 4 : 5;
   var realtimeTimeout = null;
 
   function _onChannelConfirmed() {
@@ -3944,8 +3944,13 @@ function _setupRealtimeSubscriptions() {
   try {
     // v221: Subscribe to classes table — class metadata changes only
     // operation_logs 已迁移到独立表，不再监听 classes 表的 operation_logs_json 变化
-    // 学生不需要 classes 和 operation_logs 的实时推送，减少 40% 并发连接
+    // v338: 重新规划 Realtime 通道分配：
+    //   教师端: classes + operation_logs + students + pets + snack_configs = 5 个
+    //   学生端: operation_logs + students + pets + snack_configs = 4 个
+    //   共享: operation_logs + students + pets + snack_configs（教师和学生都需要）
+    //   教师独有: classes（学生不需要班级元数据变更）
 
+    // v338: 教师独有通道 — classes 表（班级元数据变更）
     if (!_isStudentForChannels) {
       var classChannel = db.channel('dal-classes-' + _clientId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, function(payload) {
@@ -3976,12 +3981,15 @@ function _setupRealtimeSubscriptions() {
         });
       _realtimeChannels.push(classChannel);
       channelsCreated++;
+    }
 
-      // v221: Subscribe to operation_logs table — 日志变更实时推送
+    // v338: 教师和学生共享的 Realtime 通道
+    {
+      // v338: operation_logs 表 — 教师和学生都需要实时看到操作历史
       var logsChannel = db.channel('dal-oplogs-' + _clientId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'operation_logs' }, function(payload) {
           _realtimeLastEventTime = Date.now();
-          console.log('[DAL] v221 Operation logs channel: ' + payload.eventType + ' — lightweight log refresh');
+          console.log('[DAL] v338 Operation logs channel: ' + payload.eventType + ' — lightweight log refresh');
           _refreshLogsOnly();
         })
         .subscribe(function(status) {
@@ -3992,13 +4000,7 @@ function _setupRealtimeSubscriptions() {
         });
       _realtimeChannels.push(logsChannel);
       channelsCreated++;
-    }
 
-    // v338: 学生端也需要 Realtime 通道，确保成长值等数据实时同步
-    // 学生需要订阅: pets (宠物数据) + students (自己的金币等数据)
-    // 教师端订阅: classes + operation_logs + students + pets + snack_configs (共5个)
-    // 学生端订阅: pets + students (共2个)
-    {
       // Subscribe to students table — v100: 直接用 payload.new 更新内存数据
       var studentChannel = db.channel('dal-students-' + _clientId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, function(payload) {
@@ -4052,28 +4054,12 @@ function _setupRealtimeSubscriptions() {
         });
       _realtimeChannels.push(petChannel);
       channelsCreated++;
-    }
 
-    // v338: 教师端额外订阅 snack_configs（学生不需要）
-    if (!_isStudentForChannels) {
-      // v201: Subscribe to snack_configs table — 教师编辑后学生立即看到更新
+      // v338: snack_configs 表 — 教师和学生都需要实时同步（教师编辑后学生立即看到更新）
       var snackChannel = db.channel('dal-snack-configs-' + _clientId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'snack_configs' }, function(payload) {
           _realtimeLastEventTime = Date.now();
-          console.log('[v201] ⚡ Snack configs: realtime update (' + payload.eventType + ')');
-          if (payload.new && payload.new.config_data) {
-            _applySnackConfigRealtimeUpdate(payload.new.config_data);
-          }
-        })
-        .subscribe(function(status) {
-          if (status === 'SUBSCRIBED') _onChannelConfirmed();
-        });
-      _realtimeChannels.push(snackChannel);
-      channelsCreated++;
-    }
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'snack_configs' }, function(payload) {
-          _realtimeLastEventTime = Date.now();
-          console.log('[v201] ⚡ Snack configs: realtime update (' + payload.eventType + ')');
+          console.log('[v338] ⚡ Snack configs: realtime update (' + payload.eventType + ')');
           if (payload.new && payload.new.config_data) {
             _applySnackConfigRealtimeUpdate(payload.new.config_data);
           }
