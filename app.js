@@ -2091,6 +2091,29 @@ function feedPet(student, pet){
     }).then(function(result) {
       if (result.ok) {
         student.coins = result.coinsAfter;
+        // v338: 检查宠物更新是否失败
+        if (result.petUpdateFailed) {
+          // 宠物更新失败，回滚成长值但保留金币扣除
+          pet.growth = prevGrowth;
+          pet.level = prevLevel;
+          pet.lastFeedDate = '';
+          showNotification('宠物数据更新失败', '成长值未变化，请重试', 'error');
+          console.warn('[v338] feedPet: pet update failed, rolled back growth');
+        } else {
+          // v338: 用服务器返回的数据校正本地值
+          if (result.updatedData && result.updatedData[pet.id]) {
+            var serverData = result.updatedData[pet.id];
+            if (serverData.growth !== undefined) pet.growth = serverData.growth;
+            if (serverData.level !== undefined) pet.level = serverData.level;
+          }
+          // v338: 更新 _myBasePets，防止智能刷新覆盖
+          if (typeof _myBasePets !== 'undefined' && _myBasePets) {
+            _myBasePets[pet.id] = pet.growth || 0;
+          }
+          // v338: 主动刷新 UI
+          if (typeof saveClassData === 'function') saveClassData('pet');
+          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+        }
         console.log('[API] feedPet ok');
       } else {
         // 回滚
@@ -2726,7 +2749,31 @@ function playWithPet(student,pet){
       actionType: '玩耍', details: `${pet.nickname||pet.name} +${gain}成长值`,
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
-      if (result.ok) { student.coins = result.coinsAfter; }
+      if (result.ok) {
+        student.coins = result.coinsAfter;
+        // v338: 检查宠物更新是否失败
+        if (result.petUpdateFailed) {
+          pet.growth = prevGrowth;
+          pet.level = prevLevel;
+          pet.lastPlayDate = prevLastPlayDate;
+          showNotification('宠物数据更新失败', '成长值未变化，请重试', 'error');
+          console.warn('[v338] playWithPet: pet update failed, rolled back growth');
+        } else {
+          // v338: 用服务器返回的数据校正本地值
+          if (result.updatedData && result.updatedData[pet.id]) {
+            var serverData = result.updatedData[pet.id];
+            if (serverData.growth !== undefined) pet.growth = serverData.growth;
+            if (serverData.level !== undefined) pet.level = serverData.level;
+          }
+          // v338: 更新 _myBasePets，防止智能刷新覆盖
+          if (typeof _myBasePets !== 'undefined' && _myBasePets) {
+            _myBasePets[pet.id] = pet.growth || 0;
+          }
+          // v338: 主动刷新 UI
+          if (typeof saveClassData === 'function') saveClassData('pet');
+          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+        }
+      }
       else { pet.growth = prevGrowth; pet.level = prevLevel; pet.lastPlayDate = prevLastPlayDate; student.coins = prevCoins; } // v220: 恢复原始玩耍日期
     });
     
@@ -2768,7 +2815,30 @@ function walkPet(student,pet){
       actionType: '散步', details: `${pet.nickname||pet.name} +${gain}成长值`,
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
-      if (result.ok) { student.coins = result.coinsAfter; }
+      if (result.ok) {
+        student.coins = result.coinsAfter;
+        // v338: 检查宠物更新是否失败
+        if (result.petUpdateFailed) {
+          pet.growth = prevGrowth;
+          pet.level = prevLevel;
+          showNotification('宠物数据更新失败', '成长值未变化，请重试', 'error');
+          console.warn('[v338] walkPet: pet update failed, rolled back growth');
+        } else {
+          // v338: 用服务器返回的数据校正本地值
+          if (result.updatedData && result.updatedData[pet.id]) {
+            var serverData = result.updatedData[pet.id];
+            if (serverData.growth !== undefined) pet.growth = serverData.growth;
+            if (serverData.level !== undefined) pet.level = serverData.level;
+          }
+          // v338: 更新 _myBasePets，防止智能刷新覆盖
+          if (typeof _myBasePets !== 'undefined' && _myBasePets) {
+            _myBasePets[pet.id] = pet.growth || 0;
+          }
+          // v338: 主动刷新 UI
+          if (typeof saveClassData === 'function') saveClassData('pet');
+          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+        }
+      }
       else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
     });
     
@@ -2811,7 +2881,30 @@ function shoppingPet(student,pet){
       actionType: '逛街', details: `${pet.nickname||pet.name} +${gain}成长值`,
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
-      if (result.ok) { student.coins = result.coinsAfter; }
+      if (result.ok) {
+        student.coins = result.coinsAfter;
+        // v338: 检查宠物更新是否失败
+        if (result.petUpdateFailed) {
+          pet.growth = prevGrowth;
+          pet.level = prevLevel;
+          showNotification('宠物数据更新失败', '成长值未变化，请重试', 'error');
+          console.warn('[v338] shoppingPet: pet update failed, rolled back growth');
+        } else {
+          // v338: 用服务器返回的数据校正本地值
+          if (result.updatedData && result.updatedData[pet.id]) {
+            var serverData = result.updatedData[pet.id];
+            if (serverData.growth !== undefined) pet.growth = serverData.growth;
+            if (serverData.level !== undefined) pet.level = serverData.level;
+          }
+          // v338: 更新 _myBasePets，防止智能刷新覆盖
+          if (typeof _myBasePets !== 'undefined' && _myBasePets) {
+            _myBasePets[pet.id] = pet.growth || 0;
+          }
+          // v338: 主动刷新 UI
+          if (typeof saveClassData === 'function') saveClassData('pet');
+          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+        }
+      }
       else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
     });
     
@@ -2854,7 +2947,30 @@ function travelPet(student,pet){
       actionType: '旅游', details: `${pet.nickname||pet.name} +${gain}成长值`,
       expDelta: gain, petId: pet.id, checkBalance: true
     }).then(function(result) {
-      if (result.ok) { student.coins = result.coinsAfter; }
+      if (result.ok) {
+        student.coins = result.coinsAfter;
+        // v338: 检查宠物更新是否失败
+        if (result.petUpdateFailed) {
+          pet.growth = prevGrowth;
+          pet.level = prevLevel;
+          showNotification('宠物数据更新失败', '成长值未变化，请重试', 'error');
+          console.warn('[v338] travelPet: pet update failed, rolled back growth');
+        } else {
+          // v338: 用服务器返回的数据校正本地值
+          if (result.updatedData && result.updatedData[pet.id]) {
+            var serverData = result.updatedData[pet.id];
+            if (serverData.growth !== undefined) pet.growth = serverData.growth;
+            if (serverData.level !== undefined) pet.level = serverData.level;
+          }
+          // v338: 更新 _myBasePets，防止智能刷新覆盖
+          if (typeof _myBasePets !== 'undefined' && _myBasePets) {
+            _myBasePets[pet.id] = pet.growth || 0;
+          }
+          // v338: 主动刷新 UI
+          if (typeof saveClassData === 'function') saveClassData('pet');
+          if (typeof scheduleAllRenders === 'function') scheduleAllRenders();
+        }
+      }
       else { pet.growth = prevGrowth; pet.level = prevLevel; student.coins = prevCoins; } // v203: 恢复等级
     });
     

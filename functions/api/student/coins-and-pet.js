@@ -87,6 +87,8 @@ export const onRequestPost = async ({ request, env }) => {
 
   // 5. 更新宠物
   const petResults = [];
+  const updatedPetData = {}; // v338: 返回更新后的宠物数据，供前端校正本地值
+  let petUpdateFailed = false; // v338: 标记是否有宠物更新失败
   const allowedFields = ['growth', 'level', 'is_dead', 'last_feed_date', 'last_play_date', 'today_feed_count', 'today_play_count', 'penalty_streak', 'is_active', 'nickname'];
   for (const pu of petUpdates) {
     const filtered = {};
@@ -103,7 +105,15 @@ export const onRequestPost = async ({ request, env }) => {
 
     if (pu.petId && Object.keys(filtered).length > 0) {
       const petR = await sbUpdate(env, 'pets', filtered, `id=eq.${pu.petId}`);
-      petResults.push({ petId: pu.petId, ok: !petR.error });
+      const ok = !petR.error;
+      petResults.push({ petId: pu.petId, ok });
+      if (!ok) {
+        petUpdateFailed = true;
+        console.error('[coins-and-pet] Pet update failed for petId:', pu.petId, petR.error);
+      } else {
+        // v338: 保存更新后的数据，供前端校正
+        updatedPetData[pu.petId] = { ...filtered };
+      }
     }
   }
 
@@ -148,5 +158,5 @@ export const onRequestPost = async ({ request, env }) => {
     }
   }
 
-  return jsonResponse({ ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, petResults, logId });
+  return jsonResponse({ ok: true, coinsBefore: beforeCoins, coinsAfter: newCoins, petResults, petUpdateFailed, updatedData: updatedPetData, logId });
 };
