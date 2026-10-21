@@ -3486,47 +3486,37 @@ async function doForceChangePassword() {
   if (!name) return;
   
   try {
+    // 先清除 mustChangePassword 标记（在保存之前清除，确保服务器保存的就是正确的状态）
+    if (xqCredentials[name]) {
+      delete xqCredentials[name].mustChangePassword;
+    }
+    
     // 获取当前角色信息以保留
     const cred = xqCredentials[name];
     const role = cred ? cred.role : null;
     const classes = cred ? cred.classes : [];
     const subject = cred ? cred.subject : null;
     
-    // 设置新密码并清除 mustChangePassword 标记
-    await setUserPassword(name, newPwd, role, classes, subject);
-    if (xqCredentials[name]) {
-      xqCredentials[name].mustChangePassword = false;
-      delete xqCredentials[name].mustChangePassword;
-    }
+    // 设置新密码（此时 mustChangePassword 已经清除，保存到服务器时就不会带上这个标记）
+    const result = await setUserPassword(name, newPwd, role, classes, subject);
     
-    // 保存到本地
-    localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
-    
-    // 同步到云端（教师可以更新自己的凭证）
-    try {
-      const result = await xqApi('config', {
-        action: 'set',
-        configKey: 'credentials',
-        configData: { [name]: xqCredentials[name] },
-        teacherName: name
-      });
-      if (result.ok) {
-        console.log('[XQ] Credential synced to cloud for:', name);
-      } else {
-        console.warn('[XQ] Failed to sync credential to cloud:', result.error);
+    if (result.ok) {
+      // 关闭对话框
+      document.getElementById('forceChangePwdDialog').style.display = 'none';
+      
+      showToast('密码修改成功，正在登录...', 'success');
+      
+      // 继续登录流程（用新密码）
+      document.getElementById('loginPass').value = newPwd;
+      setTimeout(() => doLogin(), 500);
+    } else {
+      // 保存失败，恢复 mustChangePassword 标记
+      if (xqCredentials[name]) {
+        xqCredentials[name].mustChangePassword = true;
       }
-    } catch (e) {
-      console.warn('[XQ] Failed to sync credential to cloud:', e);
+      errorDiv.textContent = '密码修改失败：' + (result.error || '服务器同步失败，请重试');
+      errorDiv.style.display = 'block';
     }
-    
-    // 关闭对话框
-    document.getElementById('forceChangePwdDialog').style.display = 'none';
-    
-    showToast('密码修改成功，正在登录...', 'success');
-    
-    // 继续登录流程（用新密码）
-    document.getElementById('loginPass').value = newPwd;
-    setTimeout(() => doLogin(), 500);
   } catch (e) {
     errorDiv.textContent = '密码修改失败，请重试';
     errorDiv.style.display = 'block';
@@ -8478,15 +8468,18 @@ function showStudentDetailInAnalysis(studentName) {
 
 /* ----- ADMIN: Password Management ----- */
 function renderPasswordMgmt() {
-  // 获取所有教师（包括领导、工人、班主任、科任老师）
+  // 分离教师和工人
   const allTeachers = [];
+  const allWorkers = [];
   
   // 从 setupRoles 获取领导和工人
   if (setupRoles && setupRoles.length > 0) {
     setupRoles.forEach(r => {
-      const roleLabel = r.role === 'worker' ? 'worker' : 'leader';
-      const title = r.role === 'worker' ? (r.title || '维修工人') : (r.title || '校领导');
-      allTeachers.push({ name: r.name, role: roleLabel, title: title });
+      if (r.role === 'worker') {
+        allWorkers.push({ name: r.name, role: 'worker', title: r.title || '维修工人' });
+      } else {
+        allTeachers.push({ name: r.name, role: 'leader', title: r.title || '校领导' });
+      }
     });
   }
   
@@ -8517,53 +8510,86 @@ function renderPasswordMgmt() {
     });
   }
   
-  if (allTeachers.length === 0) {
+  if (allTeachers.length === 0 && allWorkers.length === 0) {
     return `<div class="card anim-in">
       <div class="card-body" style="text-align:center;padding:40px">
         <div style="font-size:48px;margin-bottom:16px">👥</div>
-        <div style="font-size:16px;color:var(--gray-500);margin-bottom:16px">暂无教师数据</div>
+        <div style="font-size:16px;color:var(--gray-500);margin-bottom:16px">暂无人员数据</div>
         <div style="font-size:13px;color:var(--gray-400)">请先在"学校数据设置"中导入教师信息</div>
       </div>
     </div>`;
   }
   
-  // 按角色排序：领导 > 班主任 > 科任老师 > 工人
-  const roleOrder = { leader: 1, headteacher: 2, teacher: 3, worker: 4 };
-  allTeachers.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+  // 生成人员标签的辅助函数
+  function renderPersonChips(list, checkboxClass) {
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+    list.forEach(t => {
+      const roleIcon = t.role === 'leader' ? '🔵' :
+                       t.role === 'headteacher' ? '🟢' :
+                       t.role === 'worker' ? '🔧' : '⚪';
+      html += `<label class="teacher-chip" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1.5px solid var(--gray-200);transition:all 0.15s;user-select:none" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--gray-200)'" onclick="setTimeout(()=>{const cb=this.querySelector('input');if(cb.checked){this.style.borderColor='var(--primary)';this.style.background='var(--primary-bg)'}else{this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50)'}},0)">
+        <input type="checkbox" class="${checkboxClass}" data-name="${t.name}" style="width:15px;height:15px;margin:0;accent-color:var(--primary)" onclick="event.stopPropagation()">
+        <span style="font-size:13px;font-weight:500;color:var(--gray-700)">${roleIcon} ${t.name}</span>
+        <span style="font-size:11px;color:var(--gray-400)">${t.title}</span>
+      </label>`;
+    });
+    html += '</div>';
+    return html;
+  }
   
-  // 生成教师列表（紧凑标签布局）
-  let teacherListHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px">';
-  allTeachers.forEach(t => {
-    const roleIcon = t.role === 'leader' ? '🔵' :
-                     t.role === 'headteacher' ? '🟢' :
-                     t.role === 'worker' ? '🔧' : '⚪';
-    teacherListHtml += `<label class="teacher-chip" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1.5px solid var(--gray-200);transition:all 0.15s;user-select:none" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--gray-200)'" onclick="setTimeout(()=>{const cb=this.querySelector('input');if(cb.checked){this.style.borderColor='var(--primary)';this.style.background='var(--primary-bg)'}else{this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50)'}},0)">
-      <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:15px;height:15px;margin:0;accent-color:var(--primary)" onclick="event.stopPropagation()">
-      <span style="font-size:13px;font-weight:500;color:var(--gray-700)">${roleIcon} ${t.name}</span>
-    </label>`;
-  });
-  teacherListHtml += '</div>';
+  // 生成教师区域
+  let teacherSection = '';
+  if (allTeachers.length > 0) {
+    // 按角色排序：领导 > 班主任 > 科任老师
+    const roleOrder = { leader: 1, headteacher: 2, teacher: 3 };
+    allTeachers.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+    
+    teacherSection = `
+      <div style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3 style="margin:0;font-size:15px;font-weight:600;color:var(--gray-700)">👨‍🏫 教师密码重置</h3>
+          <div style="display:flex;gap:8px">
+            <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllTeachers(true)">全选</button>
+            <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllTeachers(false)">取消全选</button>
+          </div>
+        </div>
+        ${renderPersonChips(allTeachers, 'teacher-reset-checkbox')}
+      </div>`;
+  }
+  
+  // 生成工人区域
+  let workerSection = '';
+  if (allWorkers.length > 0) {
+    workerSection = `
+      <div style="margin-bottom:24px;padding-top:20px;border-top:1px solid var(--gray-200)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3 style="margin:0;font-size:15px;font-weight:600;color:var(--gray-700)">🔧 工人密码重置</h3>
+          <div style="display:flex;gap:8px">
+            <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllWorkers(true)">全选</button>
+            <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllWorkers(false)">取消全选</button>
+          </div>
+        </div>
+        ${renderPersonChips(allWorkers, 'worker-reset-checkbox')}
+      </div>`;
+  }
   
   return `
     <div class="card anim-in">
       <div class="card-header">
-        <span class="card-title">重置教师密码</span>
-        <div style="display:flex;gap:8px">
-          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllTeachers(true)">全选</button>
-          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllTeachers(false)">取消全选</button>
-        </div>
+        <span class="card-title">重置密码</span>
       </div>
       <div class="card-body">
         <div style="background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px">
           <div style="font-size:13px;color:var(--warning-dark)">
-            <strong>提示：</strong>勾选需要重置密码的教师，点击"重置密码"按钮后，选中教师的密码将被重置为默认密码 <code style="background:#fff;padding:2px 6px;border-radius:4px">123456</code>，下次登录时将要求修改新密码
+            <strong>提示：</strong>勾选需要重置密码的人员，点击"重置密码"按钮后，选中人员的密码将被重置为默认密码 <code style="background:#fff;padding:2px 6px;border-radius:4px">123456</code>，下次登录时将要求修改新密码
           </div>
         </div>
-        ${teacherListHtml}
+        ${teacherSection}
+        ${workerSection}
         <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);display:flex;gap:12px;justify-content:flex-end">
           <button class="toolbar-btn primary" onclick="resetSelectedPasswords()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-            重置选中教师密码
+            重置选中人员密码
           </button>
         </div>
       </div>
@@ -8572,6 +8598,22 @@ function renderPasswordMgmt() {
 
 function selectAllTeachers(select) {
   document.querySelectorAll('.teacher-reset-checkbox').forEach(cb => {
+    cb.checked = select;
+    const label = cb.closest('label');
+    if (label) {
+      if (select) {
+        label.style.borderColor = 'var(--primary)';
+        label.style.background = 'var(--primary-bg)';
+      } else {
+        label.style.borderColor = 'var(--gray-200)';
+        label.style.background = 'var(--gray-50)';
+      }
+    }
+  });
+}
+
+function selectAllWorkers(select) {
+  document.querySelectorAll('.worker-reset-checkbox').forEach(cb => {
     cb.checked = select;
     const label = cb.closest('label');
     if (label) {
