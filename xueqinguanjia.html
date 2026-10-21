@@ -4216,7 +4216,9 @@ function renderPage(pageId) {
     }
     // 进入授课班级页面时也加载课程表数据（因为嵌入了个人课程表）
     if (pageId === 'teach-classes' || pageId === 'my-classes') {
-      loadTimetableData();
+      loadTimetableData().then(() => {
+        content.innerHTML = renderTeachClasses();
+      });
     }
     // 进入座位表页面时加载纪律数据（用于快速添加留言）
     if (pageId === 'seating' || pageId === 'class-seating' || pageId === 'my-class') {
