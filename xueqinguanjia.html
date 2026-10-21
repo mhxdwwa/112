@@ -3153,9 +3153,11 @@ async function xqSaveCredentials(userNameToUpdate) {
       });
       if (!result.ok) {
         console.warn('[XQ] Failed to sync credentials to server:', result.error);
+        return { ok: false, error: result.error };
       }
     } catch (e) {
       console.warn('[XQ] Failed to sync credentials to server:', e);
+      return { ok: false, error: e.message };
     }
   } else if (userNameToUpdate && xqCredentials[userNameToUpdate]) {
     // 非管理员：只同步自己的凭证（后端支持 canUpdateOwnCredential）
@@ -3169,11 +3171,11 @@ async function xqSaveCredentials(userNameToUpdate) {
       });
       if (!result.ok) {
         console.warn('[XQ] Failed to sync own credential to server:', result.error);
-        return { ok: false, error: result.error };
+        return { ok: false, error: result.error, serverSyncFailed: true };
       }
     } catch (e) {
       console.warn('[XQ] Failed to sync own credential to server:', e);
-      return { ok: false, error: e.message };
+      return { ok: false, error: e.message, serverSyncFailed: true };
     }
   }
   return { ok: true };
@@ -3401,6 +3403,19 @@ async function doSetPasswordAndLogin() {
       // 设置成功，自动登录
       document.getElementById('loginPass').value = p1;
       doLogin();
+    } else if (result && result.serverSyncFailed) {
+      // 服务器同步失败，但仍允许登录（本地已保存）
+      // 但提示用户密码可能无法在其他设备使用
+      const continueLogin = confirm(
+        '密码已保存到本地，但服务器同步失败。\n\n' +
+        '这意味着您只能在此设备上登录，换设备需要重新设置密码。\n\n' +
+        '建议：联系管理员在"学校数据设置→职责分配"中为您设置密码。\n\n' +
+        '是否继续使用此密码登录？'
+      );
+      if (continueLogin) {
+        document.getElementById('loginPass').value = p1;
+        doLogin();
+      }
     } else {
       alert('设置失败：' + (result?.error || '未知错误') + '\n\n密码已保存到本地，但服务器同步失败。请检查网络连接后重试。');
     }
@@ -3549,7 +3564,16 @@ function doLogin() {
   if (!cred) {
     // 显示"首次使用"按钮并提示
     document.getElementById('setPasswordBtn').style.display = 'block';
-    alert('您尚未设置密码，请点击下方的"首次使用？点此设置密码"按钮来设置您的登录密码。');
+    
+    // 检查是否是工人角色
+    const roleInfo = getUserRoleInfo(name);
+    if (roleInfo && roleInfo.isWorker) {
+      alert('您尚未设置密码。\n\n' +
+            '推荐方式：请联系管理员在"学校数据设置→职责分配"中为您设置密码。\n\n' +
+            '或者：点击下方的"首次使用？点此设置密码"按钮自行设置（但可能无法在其他设备登录）。');
+    } else {
+      alert('您尚未设置密码，请点击下方的"首次使用？点此设置密码"按钮来设置您的登录密码。');
+    }
     return;
   }
   
@@ -8452,13 +8476,15 @@ function showStudentDetailInAnalysis(studentName) {
 
 /* ----- ADMIN: Password Management ----- */
 function renderPasswordMgmt() {
-  // 获取所有教师（包括领导、班主任、科任老师）
+  // 获取所有教师（包括领导、工人、班主任、科任老师）
   const allTeachers = [];
   
-  // 从 setupRoles 获取领导
+  // 从 setupRoles 获取领导和工人
   if (setupRoles && setupRoles.length > 0) {
     setupRoles.forEach(r => {
-      allTeachers.push({ name: r.name, role: r.role || 'leader', title: r.title || '校领导' });
+      const roleLabel = r.role === 'worker' ? 'worker' : 'leader';
+      const title = r.role === 'worker' ? (r.title || '维修工人') : (r.title || '校领导');
+      allTeachers.push({ name: r.name, role: roleLabel, title: title });
     });
   }
   
@@ -8499,15 +8525,16 @@ function renderPasswordMgmt() {
     </div>`;
   }
   
-  // 按角色排序：领导 > 班主任 > 科任老师
-  const roleOrder = { leader: 1, headteacher: 2, teacher: 3 };
+  // 按角色排序：领导 > 班主任 > 科任老师 > 工人
+  const roleOrder = { leader: 1, headteacher: 2, teacher: 3, worker: 4 };
   allTeachers.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
   
   // 生成教师列表（紧凑标签布局）
   let teacherListHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px">';
   allTeachers.forEach(t => {
     const roleIcon = t.role === 'leader' ? '🔵' :
-                     t.role === 'headteacher' ? '🟢' : '⚪';
+                     t.role === 'headteacher' ? '🟢' :
+                     t.role === 'worker' ? '🔧' : '⚪';
     teacherListHtml += `<label class="teacher-chip" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1.5px solid var(--gray-200);transition:all 0.15s;user-select:none" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--gray-200)'" onclick="setTimeout(()=>{const cb=this.querySelector('input');if(cb.checked){this.style.borderColor='var(--primary)';this.style.background='var(--primary-bg)'}else{this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50)'}},0)">
       <input type="checkbox" class="teacher-reset-checkbox" data-name="${t.name}" style="width:15px;height:15px;margin:0;accent-color:var(--primary)" onclick="event.stopPropagation()">
       <span style="font-size:13px;font-weight:500;color:var(--gray-700)">${roleIcon} ${t.name}</span>
@@ -13217,11 +13244,11 @@ async function doSetPassword(name) {
     return;
   }
   
-  // 使用新的角色推导逻辑
+  // 使用正确的角色推导逻辑（与 setUserPassword 一致）
   const roleInfo = getUserRoleInfo(name);
-  const role = roleInfo?.role || 'teacher';
-  const classes = roleInfo?.classes || [];
-  const subject = roleInfo?.subject || null;
+  const role = roleInfo?.primaryRole || 'teacher';
+  const classes = roleInfo?.allClasses || [];
+  const subject = null;
   
   const result = await setUserPassword(name, p1, role, classes, subject);
   
