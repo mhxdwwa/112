@@ -3252,23 +3252,29 @@ function isUserInTeacherList(name) {
 }
 
 // 获取用户在名单中的完整角色信息（支持三重角色）
-// 返回: { isLeader, isHeadteacher, isTeacher, headteacherClasses, teachingClasses, teachingSubjects, allClasses, primaryRole, roleText }
+// 返回: { isLeader, isHeadteacher, isTeacher, isWorker, headteacherClasses, teachingClasses, teachingSubjects, allClasses, primaryRole, roleText }
 function getUserRoleInfo(name) {
   const result = {
     isLeader: false,
     isHeadteacher: false,
     isTeacher: false,
+    isWorker: false,
     headteacherClasses: [],      // 作为班主任的班级
     teachingClasses: [],         // 作为科任老师的班级（不包括班主任班级）
     teachingSubjects: {},        // { className: subject }
     allClasses: [],              // 所有相关班级（去重）
-    primaryRole: null,           // 主要角色：leader / headteacher / teacher
+    primaryRole: null,           // 主要角色：leader / headteacher / teacher / worker
     roleText: ''                 // 用于显示的角色文本
   };
   
   // 检查是否是领导
   if (setupRoles.some(r => r.role === 'leader' && r.name === name)) {
     result.isLeader = true;
+  }
+  
+  // 检查是否是工人（维修人员）
+  if (setupRoles.some(r => r.role === 'worker' && r.name === name)) {
+    result.isWorker = true;
   }
   
   // 检查授课分配中的班主任
@@ -3304,7 +3310,7 @@ function getUserRoleInfo(name) {
   result.allClasses = Array.from(allClassesSet);
   
   // 确定主要角色（用于 UI 显示）
-  // 优先级：领导 > 班主任 > 科任老师
+  // 优先级：领导 > 班主任 > 科任老师 > 工人
   if (result.isLeader) {
     result.primaryRole = 'leader';
     result.roleText = '校领导';
@@ -3318,6 +3324,9 @@ function getUserRoleInfo(name) {
     const subjects = Object.values(result.teachingSubjects);
     const subj = subjects[0] || '';
     result.roleText = subj ? `${subj}教师` : '科任教师';
+  } else if (result.isWorker) {
+    result.primaryRole = 'worker';
+    result.roleText = '维修人员';
   }
   
   return result;
@@ -3811,6 +3820,9 @@ function iconMessage() {
 function iconDuty() {
   return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>';
 }
+function iconRepair() {
+  return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+}
 
 /* ============================================================
    SIDEBAR NAVIGATION
@@ -3825,11 +3837,16 @@ const NAV_CONFIG = {
       { id: 'overview', label: '全校到校情况', icon: iconGrid },
       { id: 'family-overview', label: '全校学生家庭情况', icon: iconUsers },
     ]},
+    { section: '全校', items: [
+      { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
+      { id: 'repair-records', label: '设备申报记录', icon: iconRepair },
+    ]},
   ],
   headteacher: [
     { section: '本班', items: [
       { id: 'my-class', label: '本班数据管理', icon: iconGrid },
       { id: 'duty-roster', label: '值日安排', icon: iconDuty },
+      { id: 'repair-declaration', label: '维修申报', icon: iconRepair },
     ]},
     { section: '教学', items: [
       { id: 'teach-classes', label: '授课班级', icon: iconUsers },
@@ -3850,6 +3867,11 @@ const NAV_CONFIG = {
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
     ]},
   ],
+  worker: [
+    { section: '维修管理', items: [
+      { id: 'repair-records', label: '设备申报记录', icon: iconRepair },
+    ]},
+  ],
   admin: [
     { section: '学生管理', items: [
       { id: 'admin-students', label: '上传学生名单', icon: iconUsers },
@@ -3859,10 +3881,11 @@ const NAV_CONFIG = {
 
 function getDefaultPage() {
   const user = xqCurrentUser || {};
-  // 优先级：领导 > 班主任 > 科任老师
+  // 优先级：领导 > 班主任 > 科任老师 > 工人
   if (user.isLeader) return 'teach-classes';
   if (user.isHeadteacher) return 'my-class';
   if (user.isTeacher) return 'my-classes';
+  if (user.isWorker) return 'repair-records';
   return 'teach-classes'; // 默认
 }
 
@@ -3971,6 +3994,23 @@ function buildSidebar() {
           <span class="sidebar-icon">${item.icon()}</span>
           <span>${item.label}</span>
           ${badgeCount > 0 ? `<span class="sidebar-badge">${badgeCount}</span>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    });
+  }
+  
+  // 如果是工人（维修人员），显示工人菜单
+  if (user.isWorker && !user.isLeader && !user.isHeadteacher && !user.isTeacher) {
+    const config = NAV_CONFIG.worker;
+    config.forEach(section => {
+      html += `<div class="sidebar-section">`;
+      html += `<div class="sidebar-section-title">${section.section}</div>`;
+      section.items.forEach(item => {
+        const onclickHandler = `navigate('${item.id}')`;
+        html += `<div class="sidebar-item" data-page="${item.id}" onclick="${onclickHandler}">
+          <span class="sidebar-icon">${item.icon()}</span>
+          <span>${item.label}</span>
         </div>`;
       });
       html += `</div>`;
@@ -4104,6 +4144,8 @@ function renderPage(pageId) {
     'timetable': renderTimetable,
     'discipline': renderDiscipline,
     'duty-roster': renderDutyRoster,
+    'repair-declaration': renderRepairDeclaration,
+    'repair-records': renderRepairRecords,
   };
   if (renderers[pageId]) {
     content.innerHTML = renderers[pageId]();
@@ -4138,6 +4180,18 @@ function renderPage(pageId) {
     if (pageId === 'duty-roster') {
       loadDutyData().then(() => {
         content.innerHTML = renderDutyRoster();
+      });
+    }
+    // 进入维修申报页面时加载数据
+    if (pageId === 'repair-declaration') {
+      loadRepairData().then(() => {
+        content.innerHTML = renderRepairDeclaration();
+      });
+    }
+    // 进入设备申报记录页面时加载数据
+    if (pageId === 'repair-records') {
+      loadRepairData().then(() => {
+        content.innerHTML = renderRepairRecords();
       });
     }
   }
@@ -12877,8 +12931,9 @@ function importTeachingFromExcel(event) {
 
 /* ===== ROLES SETUP (职责分配 - 仅管理领导) ===== */
 function renderRolesSetup() {
-  // 只处理领导角色
+  // 处理领导角色和工人角色
   const leaders = setupRoles.filter(r => r.role === 'leader');
+  const workers = setupRoles.filter(r => r.role === 'worker');
   
   // 统计从授课分配推导出的班主任和科任教师数量
   const headteacherSet = new Set();
@@ -12890,7 +12945,8 @@ function renderRolesSetup() {
     });
   });
   
-  let rows = leaders.map((r, i) => {
+  let leaderRows = leaders.map((r, i) => {
+    const actualIdx = setupRoles.indexOf(r);
     const hasPassword = xqCredentials[r.name] && xqCredentials[r.name].passwordHash;
     const pwdStatus = hasPassword 
       ? '<span style="color:var(--accent);font-size:11px">✓ 已设置</span>' 
@@ -12901,8 +12957,26 @@ function renderRolesSetup() {
       <td>${pwdStatus}</td>
       <td>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '${r.title || '校领导'}')">设密码</button>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${i})">编辑</button>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${i})">删除</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${actualIdx})">编辑</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${actualIdx})">删除</button>
+      </td>
+    </tr>`;
+  }).join('');
+  
+  let workerRows = workers.map((r, i) => {
+    const actualIdx = setupRoles.indexOf(r);
+    const hasPassword = xqCredentials[r.name] && xqCredentials[r.name].passwordHash;
+    const pwdStatus = hasPassword 
+      ? '<span style="color:var(--accent);font-size:11px">✓ 已设置</span>' 
+      : '<span style="color:var(--warning);font-size:11px">⚠ 未设置</span>';
+    return `<tr>
+      <td style="font-weight:500">${r.name}</td>
+      <td><span class="setup-badge orange">${r.title || '维修工人'}</span></td>
+      <td>${pwdStatus}</td>
+      <td>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '${r.title || '维修工人'}')">设密码</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${actualIdx})">编辑</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${actualIdx})">删除</button>
       </td>
     </tr>`;
   }).join('');
@@ -12920,7 +12994,7 @@ function renderRolesSetup() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               下载模板
             </button>
-            <button class="toolbar-btn primary" style="font-size:12px;margin-left:8px" onclick="showAddRoleModal()">
+            <button class="toolbar-btn primary" style="font-size:12px;margin-left:8px" onclick="showAddRoleModal('leader')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               添加领导
             </button>
@@ -12942,7 +13016,26 @@ function renderRolesSetup() {
           </div>
           <table class="setup-table">
             <thead><tr><th>姓名</th><th>职务</th><th>密码状态</th><th>操作</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="4" class="setup-empty">暂无领导数据，请添加或导入</td></tr>'}</tbody>
+            <tbody>${leaderRows || '<tr><td colspan="4" class="setup-empty">暂无领导数据，请添加或导入</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div class="setup-section" style="margin-top:24px">
+        <div class="setup-section-header">
+          <span class="setup-section-title">维修工人管理 (${workers.length}人)</span>
+          <button class="toolbar-btn primary" style="font-size:12px" onclick="showAddRoleModal('worker')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            添加工人
+          </button>
+        </div>
+        <div class="setup-section-body">
+          <div style="padding:12px 16px;background:#FFF7ED;border-radius:8px;margin-bottom:12px;font-size:12px;color:#9A3412">
+            🔧 提示：维修工人可以查看和处理各班的设备维修申报。
+          </div>
+          <table class="setup-table">
+            <thead><tr><th>姓名</th><th>职务</th><th>密码状态</th><th>操作</th></tr></thead>
+            <tbody>${workerRows || '<tr><td colspan="4" class="setup-empty">暂无维修工人数据，请添加</td></tr>'}</tbody>
           </table>
         </div>
       </div>
@@ -12950,45 +13043,60 @@ function renderRolesSetup() {
   `;
 }
 
-function showAddRoleModal() {
-  showModal('添加领导', `
+function showAddRoleModal(roleType) {
+  const isWorker = roleType === 'worker';
+  const title = isWorker ? '添加工人' : '添加领导';
+  const defaultTitle = isWorker ? '维修工人' : '';
+  
+  showModal(title, `
     <div class="form-group">
-      <label class="form-label">职务</label>
-      <input class="form-input" id="newRoleTitle" list="roleTitleList" placeholder="选择或输入职务">
+      <label class="form-label">${isWorker ? '职务' : '职务'}</label>
+      <input class="form-input" id="newRoleTitle" list="roleTitleList" placeholder="选择或输入职务" value="${defaultTitle}">
       <datalist id="roleTitleList">
-        <option value="校长">
-        <option value="副校长">
-        <option value="教导主任">
-        <option value="政教主任">
-        <option value="总务主任">
-        <option value="年级组长">
-        <option value="其他">
+        ${isWorker ? `
+          <option value="维修工人">
+          <option value="电工">
+          <option value="水暖工">
+          <option value="木工">
+          <option value="其他">
+        ` : `
+          <option value="校长">
+          <option value="副校长">
+          <option value="教导主任">
+          <option value="政教主任">
+          <option value="总务主任">
+          <option value="年级组长">
+          <option value="其他">
+        `}
       </datalist>
     </div>
     <div class="form-group">
       <label class="form-label">姓名</label>
-      <input class="form-input" id="newRoleName" placeholder="领导姓名">
+      <input class="form-input" id="newRoleName" placeholder="${isWorker ? '工人姓名' : '领导姓名'}">
     </div>
     <div style="background:var(--info-light);border:1px solid var(--info);border-radius:8px;padding:10px 14px;margin-top:8px">
       <div style="font-size:12px;color:var(--info-dark)">
-        <strong>提示：</strong>添加后可在"密码管理"中为该领导设置登录密码。
+        <strong>提示：</strong>添加后可在"密码管理"中为该${isWorker ? '工人' : '领导'}设置登录密码。
       </div>
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
-      <button class="toolbar-btn primary" onclick="addRoleRow()">添加</button>`);
+      <button class="toolbar-btn primary" onclick="addRoleRow('${roleType}')">添加</button>`);
 }
 
-function addRoleRow() {
+function addRoleRow(roleType) {
   const name = document.getElementById('newRoleName').value.trim();
   const title = document.getElementById('newRoleTitle').value;
   if (!name) { showToast('请输入姓名', 'warning'); return; }
   
-  // 只添加领导角色（不设置密码，后续在密码管理中设置）
-  setupRoles.push({ name, role: 'leader', title: title, classes: [], subject: null, username: name });
+  const role = roleType === 'worker' ? 'worker' : 'leader';
+  const roleLabel = roleType === 'worker' ? '工人' : '领导';
+  
+  // 添加角色（不设置密码，后续在密码管理中设置）
+  setupRoles.push({ name, role: role, title: title || (roleType === 'worker' ? '维修工人' : '校领导'), classes: [], subject: null, username: name });
   
   hideModal();
   renderSetupContent();
-  showToast(`已添加领导：${name}（${title}）`, 'success');
+  showToast(`已添加${roleLabel}：${name}（${title || (roleType === 'worker' ? '维修工人' : '校领导')}）`, 'success');
 }
 
 function downloadRolesTemplate() {
@@ -16225,6 +16333,364 @@ function autoGenerateDutySchedule() {
     showToast('排班已自动生成并保存（已避开法定节假日）');
     document.getElementById('dutyContent').innerHTML = renderDutyRosterContent();
   });
+}
+
+/* ============================================================
+   REPAIR DECLARATION (维修申报)
+   ============================================================ */
+let repairData = {};  // { className: [{ id, category, description, images: [], status, createdAt, resolvedAt, resolvedBy, resolvedImage }] }
+let repairCurrentClass = '';
+let repairCurrentTab = 'form'; // 'form' or 'records'
+
+async function loadRepairData() {
+  const result = await xqApi('config', { action: 'get' });
+  if (result.ok && result.config && result.config.repair) {
+    let rawRepair = result.config.repair.data || {};
+    // 防御性检查
+    if (rawRepair && typeof rawRepair === 'object' && !Array.isArray(rawRepair) && rawRepair.data && typeof rawRepair.data === 'object') {
+      const keys = Object.keys(rawRepair);
+      if (keys.length === 1 && keys[0] === 'data') {
+        rawRepair = rawRepair.data;
+      }
+    }
+    if (!rawRepair || typeof rawRepair !== 'object' || Array.isArray(rawRepair)) {
+      console.warn('[Repair] Data format invalid, resetting to {}');
+      rawRepair = {};
+    }
+    repairData = rawRepair;
+    console.log('[Repair] Loaded data for', Object.keys(repairData).length, 'classes');
+  }
+}
+
+async function saveRepairData() {
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'repair': repairData
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
+  return result;
+}
+
+function getClassRepairData(className) {
+  if (!repairData[className]) {
+    repairData[className] = [];
+  }
+  return repairData[className];
+}
+
+function renderRepairDeclaration() {
+  const user = xqCurrentUser || {};
+  const classes = user.headteacherClasses || [];
+  if (classes.length === 0) {
+    return emptyStateHtml('未找到您的班级信息。只有班主任可以管理维修申报。');
+  }
+  if (!repairCurrentClass) repairCurrentClass = classes[0];
+  
+  let html = '';
+  if (classes.length > 1) {
+    html += `<div class="tabs" id="repairTabs">`;
+    classes.forEach((cls) => {
+      html += `<div class="tab ${cls===repairCurrentClass?'active':''}" onclick="repairCurrentClass='${cls}';repairCurrentTab='form';document.getElementById('repairContent').innerHTML=renderRepairDeclarationContent()">${cls}</div>`;
+    });
+    html += `</div>`;
+  }
+  html += `<div id="repairContent">${renderRepairDeclarationContent()}</div>`;
+  return html;
+}
+
+function renderRepairDeclarationContent() {
+  const records = getClassRepairData(repairCurrentClass);
+  
+  let html = `<div style="padding:20px">`;
+  
+  // Tab buttons
+  html += `<div style="display:flex;gap:8px;margin-bottom:20px">
+    <button class="toolbar-btn ${repairCurrentTab==='form'?'primary':'ghost'}" onclick="repairCurrentTab='form';document.getElementById('repairContent').innerHTML=renderRepairDeclarationContent()">提交申报</button>
+    <button class="toolbar-btn ${repairCurrentTab==='records'?'primary':'ghost'}" onclick="repairCurrentTab='records';document.getElementById('repairContent').innerHTML=renderRepairDeclarationContent()">申报记录 (${records.length})</button>
+  </div>`;
+  
+  if (repairCurrentTab === 'form') {
+    html += renderRepairForm();
+  } else {
+    html += renderRepairRecordsList(records, false);
+  }
+  
+  html += `</div>`;
+  return html;
+}
+
+function renderRepairForm() {
+  return `<div class="card" style="max-width:600px">
+    <div class="card-header">
+      <h3 style="margin:0;font-size:16px">设备维修申报</h3>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">申报分类 *</label>
+        <select class="form-input" id="repairCategory">
+          <option value="">请选择分类</option>
+          <option value="教室设备申报">教室设备申报</option>
+          <option value="宿舍设备申报">宿舍设备申报</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">问题描述 *</label>
+        <textarea class="form-input" id="repairDescription" rows="4" placeholder="请详细描述设备问题，例如：教室投影仪无法开机、宿舍空调不制冷等"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">上传图片（可选）</label>
+        <div style="border:2px dashed var(--gray-300);border-radius:8px;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('repairImageInput').click()">
+          <input type="file" id="repairImageInput" accept="image/*" multiple style="display:none" onchange="handleRepairImageUpload(event)">
+          <div style="color:var(--gray-400)">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0 auto 8px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <div>点击上传图片</div>
+            <div style="font-size:12px;margin-top:4px">支持 JPG、PNG 格式</div>
+          </div>
+        </div>
+        <div id="repairImagePreview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"></div>
+      </div>
+      <button class="toolbar-btn primary" style="width:100%" onclick="submitRepairDeclaration()">提交申报</button>
+    </div>
+  </div>`;
+}
+
+let repairImageQueue = [];
+
+function handleRepairImageUpload(event) {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+  
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      repairImageQueue.push(e.target.result);
+      renderRepairImagePreview();
+    };
+    reader.readAsDataURL(file);
+  });
+  
+  event.target.value = '';
+}
+
+function renderRepairImagePreview() {
+  const container = document.getElementById('repairImagePreview');
+  if (!container) return;
+  
+  container.innerHTML = repairImageQueue.map((img, i) => `
+    <div style="position:relative;width:80px;height:80px">
+      <img src="${img}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--gray-200)">
+      <button onclick="removeRepairImage(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:white;border:none;cursor:pointer;font-size:12px;line-height:1">×</button>
+    </div>
+  `).join('');
+}
+
+function removeRepairImage(index) {
+  repairImageQueue.splice(index, 1);
+  renderRepairImagePreview();
+}
+
+async function submitRepairDeclaration() {
+  const category = document.getElementById('repairCategory').value;
+  const description = document.getElementById('repairDescription').value.trim();
+  
+  if (!category) {
+    showToast('请选择申报分类', 'warning');
+    return;
+  }
+  if (!description) {
+    showToast('请填写问题描述', 'warning');
+    return;
+  }
+  
+  const records = getClassRepairData(repairCurrentClass);
+  const newRecord = {
+    id: Date.now().toString(),
+    category: category,
+    description: description,
+    images: repairImageQueue.slice(),
+    status: 'pending', // pending, resolved
+    createdAt: new Date().toISOString(),
+    createdBy: xqCurrentUser?.teacherName || '未知'
+  };
+  
+  records.unshift(newRecord);
+  repairImageQueue = [];
+  
+  const result = await saveRepairData();
+  if (result.ok) {
+    showToast('申报已提交，等待处理', 'success');
+    repairCurrentTab = 'records';
+    document.getElementById('repairContent').innerHTML = renderRepairDeclarationContent();
+  } else {
+    showToast('提交失败，请重试', 'error');
+  }
+}
+
+function renderRepairRecordsList(records, isGlobalView) {
+  if (records.length === 0) {
+    return `<div style="text-align:center;padding:40px;color:var(--gray-400)">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0 auto 12px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <div>暂无申报记录</div>
+    </div>`;
+  }
+  
+  let html = `<div style="display:flex;flex-direction:column;gap:12px">`;
+  
+  records.forEach((record, index) => {
+    const statusColor = record.status === 'resolved' ? 'var(--success)' : 'var(--warning)';
+    const statusText = record.status === 'resolved' ? '已处理' : '待处理';
+    const date = new Date(record.createdAt).toLocaleString('zh-CN');
+    
+    html += `<div class="card" style="margin:0">
+      <div class="card-body" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+          <div>
+            <span style="display:inline-block;padding:4px 10px;background:var(--primary-bg);color:var(--primary);border-radius:4px;font-size:12px;font-weight:500">${escapeHtml(record.category)}</span>
+            ${isGlobalView ? `<span style="margin-left:8px;font-size:12px;color:var(--gray-500)">申报班级：${record.className || '未知'}</span>` : ''}
+          </div>
+          <span style="padding:4px 10px;background:${statusColor}20;color:${statusColor};border-radius:4px;font-size:12px;font-weight:500">${statusText}</span>
+        </div>
+        <div style="margin-bottom:12px;color:var(--gray-600);line-height:1.6">${escapeHtml(record.description)}</div>
+        ${record.images && record.images.length > 0 ? `
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            ${record.images.map(img => `<img src="${img}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-200);cursor:pointer" onclick="showRepairImage('${img.replace(/'/g, "\\'")}')">`).join('')}
+          </div>
+        ` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--gray-400)">
+          <span>申报人：${escapeHtml(record.createdBy)} | ${date}</span>
+          ${record.status === 'resolved' && record.resolvedAt ? `<span>处理时间：${new Date(record.resolvedAt).toLocaleString('zh-CN')}</span>` : ''}
+        </div>
+        ${record.status === 'resolved' && record.resolvedImage ? `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200)">
+            <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px">处理后照片：</div>
+            <img src="${record.resolvedImage}" style="max-width:200px;border-radius:8px;border:1px solid var(--gray-200);cursor:pointer" onclick="showRepairImage('${record.resolvedImage.replace(/'/g, "\\'")}')">
+          </div>
+        ` : ''}
+        ${isGlobalView && record.status === 'pending' ? `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200)">
+            <button class="toolbar-btn primary" style="font-size:12px" onclick="showResolveRepairModal('${record.className}', '${record.id}')">标记为已解决</button>
+          </div>
+        ` : ''}
+      </div>
+    </div>`;
+  });
+  
+  html += `</div>`;
+  return html;
+}
+
+function showRepairImage(imageSrc) {
+  showModal('查看图片', `
+    <div style="text-align:center">
+      <img src="${imageSrc}" style="max-width:100%;max-height:70vh;border-radius:8px">
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">关闭</button>`);
+}
+
+function showResolveRepairModal(className, recordId) {
+  showModal('标记为已解决', `
+    <div class="form-group">
+      <label class="form-label">处理后照片（可选）</label>
+      <div style="border:2px dashed var(--gray-300);border-radius:8px;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('resolveImageInput').click()">
+        <input type="file" id="resolveImageInput" accept="image/*" style="display:none" onchange="handleResolveImageUpload(event)">
+        <div style="color:var(--gray-400)">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0 auto 8px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <div style="font-size:12px">点击上传处理后照片</div>
+        </div>
+      </div>
+      <div id="resolveImagePreview" style="margin-top:12px"></div>
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+      <button class="toolbar-btn primary" onclick="resolveRepairDeclaration('${className}', '${recordId}')">确认已解决</button>`);
+}
+
+let resolveImageQueue = null;
+
+function handleResolveImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    resolveImageQueue = e.target.result;
+    document.getElementById('resolveImagePreview').innerHTML = `
+      <div style="position:relative;width:120px;height:120px">
+        <img src="${resolveImageQueue}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--gray-200)">
+        <button onclick="removeResolveImage()" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:white;border:none;cursor:pointer;font-size:12px;line-height:1">×</button>
+      </div>
+    `;
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+function removeResolveImage() {
+  resolveImageQueue = null;
+  document.getElementById('resolveImagePreview').innerHTML = '';
+}
+
+async function resolveRepairDeclaration(className, recordId) {
+  const records = getClassRepairData(className);
+  const record = records.find(r => r.id === recordId);
+  
+  if (!record) {
+    showToast('未找到该记录', 'error');
+    return;
+  }
+  
+  record.status = 'resolved';
+  record.resolvedAt = new Date().toISOString();
+  record.resolvedBy = xqCurrentUser?.teacherName || '未知';
+  if (resolveImageQueue) {
+    record.resolvedImage = resolveImageQueue;
+  }
+  
+  const result = await saveRepairData();
+  if (result.ok) {
+    showToast('已标记为已解决', 'success');
+    resolveImageQueue = null;
+    hideModal();
+    document.getElementById('repairContent').innerHTML = renderRepairRecords();
+  } else {
+    showToast('操作失败，请重试', 'error');
+  }
+}
+
+function renderRepairRecords() {
+  const user = xqCurrentUser || {};
+  
+  // 合并所有班级的申报记录
+  let allRecords = [];
+  
+  if (user.isLeader || user.isWorker) {
+    // 领导和工人可以看到所有班级的申报
+    Object.entries(repairData).forEach(([className, records]) => {
+      records.forEach(record => {
+        allRecords.push({ ...record, className });
+      });
+    });
+  } else if (user.isHeadteacher) {
+    // 班主任只能看到自己班级的申报
+    const classes = user.headteacherClasses || [];
+    classes.forEach(className => {
+      const records = getClassRepairData(className);
+      records.forEach(record => {
+        allRecords.push({ ...record, className });
+      });
+    });
+  }
+  
+  // 按时间倒序排列
+  allRecords.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  let html = `<div style="padding:20px">`;
+  html += `<h2 style="margin:0 0 20px;font-size:18px">设备申报记录</h2>`;
+  html += renderRepairRecordsList(allRecords, true);
+  html += `</div>`;
+  
+  return html;
 }
 
 // HTML 转义
