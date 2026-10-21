@@ -13841,7 +13841,7 @@ async function saveClassTimetableData() {
   const result = await xqApi('config', {
     action: 'set_all',
     configs: {
-      'class_timetable': { data: classTimetableData }
+      'class_timetable': classTimetableData
     },
     teacherName: xqCurrentUser?.teacherName || ''
   });
@@ -13852,7 +13852,7 @@ async function savePersonalTimetableData() {
   const result = await xqApi('config', {
     action: 'set_all',
     configs: {
-      'personal_timetable': { data: personalTimetableData }
+      'personal_timetable': personalTimetableData
     },
     teacherName: xqCurrentUser?.teacherName || ''
   });
@@ -14586,7 +14586,7 @@ async function saveDisciplineData() {
   const result = await xqApi('config', {
     action: 'set_all',
     configs: {
-      'discipline': { data: disciplineData }
+      'discipline': disciplineData
     },
     teacherName: xqCurrentUser?.teacherName || ''
   });
@@ -14788,8 +14788,13 @@ let disciplineHtTab = 'summary'; // 'summary' or 'write'
 
 function renderHeadteacherDisciplineV2() {
   const user = xqCurrentUser || {};
-  const htClass = (user.headteacherClasses || [])[0];
-  if (!htClass) return emptyStateHtml('未找到您的班级信息。');
+  const htClasses = user.headteacherClasses || [];
+  const allClasses = user.allClasses || [];
+  
+  // 如果班主任没有班级信息，尝试使用 allClasses
+  if (htClasses.length === 0 && allClasses.length === 0) {
+    return emptyStateHtml('未找到您的班级信息。请先在学校数据设置中分配班级。');
+  }
   
   let html = `<div class="discipline-sub-tabs" id="discHtTabs">
     <div class="discipline-sub-tab ${disciplineHtTab==='summary'?'active':''}" onclick="disciplineHtTab='summary';document.getElementById('discHtContent').innerHTML=renderHtSummaryTab()">本班汇总</div>
@@ -14808,12 +14813,33 @@ function renderHeadteacherDisciplineV2() {
 
 function renderHtSummaryTab() {
   const user = xqCurrentUser || {};
-  const cls = (user.headteacherClasses || [])[0];
-  if (!cls) return '';
+  const htClasses = user.headteacherClasses || [];
+  
+  // 如果没有班主任班级，尝试使用 allClasses 的第一个
+  const availableClasses = htClasses.length > 0 ? htClasses : (user.allClasses || []);
+  if (availableClasses.length === 0) return '';
+  
+  // 支持多个班主任班级切换
+  let classSelector = '';
+  if (availableClasses.length > 1) {
+    if (!disciplineCurrentClass || !availableClasses.includes(disciplineCurrentClass)) {
+      disciplineCurrentClass = availableClasses[0];
+    }
+    classSelector = `<div class="toolbar">
+      <select class="toolbar-select" onchange="disciplineCurrentClass=this.value;document.getElementById('discHtContent').innerHTML=renderHtSummaryTab()">
+        ${availableClasses.map(c => `<option value="${c}" ${c===disciplineCurrentClass?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>`;
+  } else {
+    disciplineCurrentClass = availableClasses[0];
+  }
+  
+  const cls = disciplineCurrentClass;
   const students = STUDENTS[cls] || [];
   let records = disciplineData.filter(r => r.classId === cls);
   
-  let html = `<div class="toolbar">
+  let html = classSelector;
+  html += `<div class="toolbar">
     <span style="font-size:14px;font-weight:600">${cls} 纪律留言汇总</span>
     <div class="toolbar-spacer"></div>
     <button class="toolbar-btn ghost" onclick="exportDisciplineExcel('${cls}')">
@@ -15207,7 +15233,7 @@ async function saveDutyData() {
   const result = await xqApi('config', {
     action: 'set_all',
     configs: {
-      'duty': { data: dutyData }
+      'duty': dutyData
     },
     teacherName: xqCurrentUser?.teacherName || ''
   });
