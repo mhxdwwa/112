@@ -1335,10 +1335,9 @@ tbody tr:last-child td { border-bottom: none; }
   border-radius: var(--radius-sm); font-size: 13px;
 }
 .discipline-form .form-group textarea { resize: vertical; min-height: 60px; }
-.discipline-type-btns { display: flex; gap: 8px; }
+.discipline-type-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .discipline-type-btn {
-  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
-  border: 1px solid var(--gray-200); cursor: pointer; transition: all var(--transition);
+  padding: 6px 12px; border: 1px solid var(--gray-300); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.15s; background: var(--white);
 }
 .discipline-type-btn.praise { color: #059669; }
 .discipline-type-btn.praise.active { background: #D1FAE5; border-color: #059669; }
@@ -1346,6 +1345,16 @@ tbody tr:last-child td { border-bottom: none; }
 .discipline-type-btn.discard.active { background: #FEE2E2; border-color: #DC2626; }
 .discipline-type-btn.remind { color: #D97706; }
 .discipline-type-btn.remind.active { background: #FEF3C7; border-color: #D97706; }
+.discipline-type-btn.truancy { color: #991B1B; }
+.discipline-type-btn.truancy.active { background: #FECACA; border-color: #991B1B; }
+.discipline-type-btn.skip { color: #B91C1C; }
+.discipline-type-btn.skip.active { background: #FEE2E2; border-color: #B91C1C; }
+.discipline-type-btn.talking { color: #EA580C; }
+.discipline-type-btn.talking.active { background: #FFEDD5; border-color: #EA580C; }
+.discipline-type-btn.fighting { color: #7C3AED; }
+.discipline-type-btn.fighting.active { background: #EDE9FE; border-color: #7C3AED; }
+.discipline-type-btn.other { color: #6B7280; }
+.discipline-type-btn.other.active { background: #F3F4F6; border-color: #6B7280; }
 .discipline-record-list { margin-top: 16px; }
 .discipline-record-item {
   display: flex; align-items: flex-start; gap: 12px;
@@ -10252,8 +10261,8 @@ function openQuickDiscipline(cls, studentId, studentName) {
     existingHtml = `<div style="margin-bottom:16px;padding:12px;background:var(--gray-50);border-radius:8px">
       <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px">今日已有 ${existingRecords.length} 条记录：</div>
       ${existingRecords.map(r => {
-        const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
-        const typeColor = r.type === 'praise' ? 'var(--accent)' : r.type === 'discard' ? 'var(--danger)' : 'var(--warning)';
+        const typeLabel = getDisciplineTypeLabel(r.type);
+        const typeColor = getDisciplineTypeColor(r.type);
         return `<div style="font-size:12px;color:var(--gray-700);margin-bottom:4px">
           <span style="color:${typeColor};font-weight:500">[${typeLabel}]</span> ${escapeHtml(r.content)}
         </div>`;
@@ -10273,9 +10282,19 @@ function openQuickDiscipline(cls, studentId, studentName) {
       <option value="praise">表扬</option>
       <option value="discard">违纪</option>
       <option value="remind">提醒</option>
+      <option value="truancy">旷课</option>
+      <option value="skip">逃课</option>
+      <option value="talking">讲话</option>
+      <option value="fighting">打闹</option>
+      <option value="other">其他</option>
     </select>
     <label>科目</label>
     <input type="text" id="quickDiscSubject" value="${escapeHtml(mySubject)}" placeholder="输入科目">
+    <label>第几节课</label>
+    <select id="quickDiscPeriod">
+      <option value="">-- 选择节次 --</option>
+      ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
+    </select>
     <label>内容</label>
     <textarea id="quickDiscContent" rows="3" placeholder="输入留言内容..." style="width:100%;padding:8px 12px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;resize:vertical;font-family:inherit"></textarea>
     <div class="btn-row">
@@ -10297,6 +10316,7 @@ async function submitQuickDiscipline(cls, studentId, studentName) {
   const type = document.getElementById('quickDiscType').value;
   const subject = document.getElementById('quickDiscSubject').value.trim();
   const content = document.getElementById('quickDiscContent').value.trim();
+  const period = document.getElementById('quickDiscPeriod')?.value || '';
   
   if (!content) {
     showToast('请输入留言内容', 'error');
@@ -10311,6 +10331,7 @@ async function submitQuickDiscipline(cls, studentId, studentName) {
     studentName: studentName,
     type: type,
     subject: subject,
+    period: period,
     content: content,
     date: new Date().toISOString().split('T')[0],
     createdAt: new Date().toISOString()
@@ -14939,11 +14960,25 @@ function renderTeacherDiscipline() {
             <div class="discipline-type-btn praise active" onclick="selectDisciplineType('praise',this)">表扬</div>
             <div class="discipline-type-btn discard" onclick="selectDisciplineType('discard',this)">违纪</div>
             <div class="discipline-type-btn remind" onclick="selectDisciplineType('remind',this)">提醒</div>
+            <div class="discipline-type-btn truancy" onclick="selectDisciplineType('truancy',this)">旷课</div>
+            <div class="discipline-type-btn skip" onclick="selectDisciplineType('skip',this)">逃课</div>
+            <div class="discipline-type-btn talking" onclick="selectDisciplineType('talking',this)">讲话</div>
+            <div class="discipline-type-btn fighting" onclick="selectDisciplineType('fighting',this)">打闹</div>
+            <div class="discipline-type-btn other" onclick="selectDisciplineType('other',this)">其他</div>
           </div>
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>科目</label>
           <input type="text" id="discSubject" value="${escapeHtml(mySubject)}" placeholder="科目">
+        </div>
+        <div class="form-group">
+          <label>第几节课</label>
+          <select id="discPeriod" class="toolbar-select">
+            <option value="">-- 选择节次 --</option>
+            ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
+          </select>
         </div>
       </div>
       <div class="form-row">
@@ -14975,12 +15010,13 @@ function renderTeacherDiscipline() {
   }
   
   myRecords.forEach(r => {
-    const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+    const typeLabel = getDisciplineTypeLabel(r.type);
+    const periodStr = r.period ? ` · ${getPeriodName(parseInt(r.period))}` : '';
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
       <div style="flex:1">
         <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.subject || '')} · ${r.date}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.subject || '')}${periodStr} · ${r.date}</div>
       </div>
       <div style="display:flex;gap:4px">
         <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
@@ -15016,7 +15052,7 @@ function renderHeadteacherDiscipline() {
   // Summary by student
   html += `<div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">学生汇总</span></div>
   <div class="card-body no-pad"><div class="table-wrap"><table>
-    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>提醒</th><th>总计</th></tr></thead>
+    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>提醒</th><th>旷课</th><th>逃课</th><th>讲话</th><th>打闹</th><th>其他</th><th>总计</th></tr></thead>
     <tbody>`;
   
   students.forEach(s => {
@@ -15024,6 +15060,11 @@ function renderHeadteacherDiscipline() {
     const praise = sRecords.filter(r => r.type === 'praise').length;
     const discard = sRecords.filter(r => r.type === 'discard').length;
     const remind = sRecords.filter(r => r.type === 'remind').length;
+    const truancy = sRecords.filter(r => r.type === 'truancy').length;
+    const skip = sRecords.filter(r => r.type === 'skip').length;
+    const talking = sRecords.filter(r => r.type === 'talking').length;
+    const fighting = sRecords.filter(r => r.type === 'fighting').length;
+    const other = sRecords.filter(r => r.type === 'other').length;
     const total = sRecords.length;
     if (total > 0) {
       html += `<tr>
@@ -15031,6 +15072,11 @@ function renderHeadteacherDiscipline() {
         <td><span style="color:#059669">${praise}</span></td>
         <td><span style="color:#DC2626">${discard}</span></td>
         <td><span style="color:#D97706">${remind}</span></td>
+        <td><span style="color:#991B1B">${truancy}</span></td>
+        <td><span style="color:#B91C1C">${skip}</span></td>
+        <td><span style="color:#EA580C">${talking}</span></td>
+        <td><span style="color:#7C3AED">${fighting}</span></td>
+        <td><span style="color:#6B7280">${other}</span></td>
         <td><strong>${total}</strong></td>
       </tr>`;
     }
@@ -15049,12 +15095,13 @@ function renderHeadteacherDiscipline() {
   }
   
   records.forEach(r => {
-    const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+    const typeLabel = getDisciplineTypeLabel(r.type);
+    const periodStr = r.period ? ` · ${getPeriodName(parseInt(r.period))}` : '';
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
       <div style="flex:1">
         <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.teacherName)} · ${escapeHtml(r.subject || '')} · ${r.date}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.teacherName)} · ${escapeHtml(r.subject || '')}${periodStr} · ${r.date}</div>
       </div>
     </div>`;
   });
@@ -15129,7 +15176,7 @@ function renderHtSummaryTab() {
   
   html += `<div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">学生汇总</span></div>
   <div class="card-body no-pad"><div class="table-wrap"><table>
-    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>提醒</th><th>总计</th></tr></thead>
+    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>提醒</th><th>旷课</th><th>逃课</th><th>讲话</th><th>打闹</th><th>其他</th><th>总计</th></tr></thead>
     <tbody>`;
   
   students.forEach(s => {
@@ -15137,6 +15184,11 @@ function renderHtSummaryTab() {
     const praise = sRecords.filter(r => r.type === 'praise').length;
     const discard = sRecords.filter(r => r.type === 'discard').length;
     const remind = sRecords.filter(r => r.type === 'remind').length;
+    const truancy = sRecords.filter(r => r.type === 'truancy').length;
+    const skip = sRecords.filter(r => r.type === 'skip').length;
+    const talking = sRecords.filter(r => r.type === 'talking').length;
+    const fighting = sRecords.filter(r => r.type === 'fighting').length;
+    const other = sRecords.filter(r => r.type === 'other').length;
     const total = sRecords.length;
     if (total > 0) {
       html += `<tr>
@@ -15144,6 +15196,11 @@ function renderHtSummaryTab() {
         <td><span style="color:#059669">${praise}</span></td>
         <td><span style="color:#DC2626">${discard}</span></td>
         <td><span style="color:#D97706">${remind}</span></td>
+        <td><span style="color:#991B1B">${truancy}</span></td>
+        <td><span style="color:#B91C1C">${skip}</span></td>
+        <td><span style="color:#EA580C">${talking}</span></td>
+        <td><span style="color:#7C3AED">${fighting}</span></td>
+        <td><span style="color:#6B7280">${other}</span></td>
         <td><strong>${total}</strong></td>
       </tr>`;
     }
@@ -15161,12 +15218,13 @@ function renderHtSummaryTab() {
   }
   
   records.forEach(r => {
-    const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+    const typeLabel = getDisciplineTypeLabel(r.type);
+    const periodStr = r.period ? ` · ${getPeriodName(parseInt(r.period))}` : '';
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
       <div style="flex:1">
         <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.teacherName)} · ${escapeHtml(r.subject || '')} · ${r.date}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.teacherName)} · ${escapeHtml(r.subject || '')}${periodStr} · ${r.date}</div>
       </div>
     </div>`;
   });
@@ -15226,11 +15284,25 @@ function renderHtWriteTab() {
             <div class="discipline-type-btn praise active" onclick="selectDisciplineType('praise',this)">表扬</div>
             <div class="discipline-type-btn discard" onclick="selectDisciplineType('discard',this)">违纪</div>
             <div class="discipline-type-btn remind" onclick="selectDisciplineType('remind',this)">提醒</div>
+            <div class="discipline-type-btn truancy" onclick="selectDisciplineType('truancy',this)">旷课</div>
+            <div class="discipline-type-btn skip" onclick="selectDisciplineType('skip',this)">逃课</div>
+            <div class="discipline-type-btn talking" onclick="selectDisciplineType('talking',this)">讲话</div>
+            <div class="discipline-type-btn fighting" onclick="selectDisciplineType('fighting',this)">打闹</div>
+            <div class="discipline-type-btn other" onclick="selectDisciplineType('other',this)">其他</div>
           </div>
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>科目</label>
           <input type="text" id="discSubject" value="${escapeHtml(mySubject)}" placeholder="科目">
+        </div>
+        <div class="form-group">
+          <label>第几节课</label>
+          <select id="discPeriod" class="toolbar-select">
+            <option value="">-- 选择节次 --</option>
+            ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
+          </select>
         </div>
       </div>
       <div class="form-row">
@@ -15261,7 +15333,7 @@ function renderHtWriteTab() {
   }
   
   myRecords.forEach(r => {
-    const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+    const typeLabel = getDisciplineTypeLabel(r.type);
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
       <div style="flex:1">
@@ -15288,12 +15360,57 @@ function toggleDisciplineStudentHt(studentId) {
   document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
 }
 
+// Helper function to get discipline type from button class
+function getDisciplineTypeFromBtn() {
+  const typeEl = document.querySelector('#discTypeBtns .discipline-type-btn.active');
+  if (!typeEl) return 'remind';
+  if (typeEl.classList.contains('praise')) return 'praise';
+  if (typeEl.classList.contains('discard')) return 'discard';
+  if (typeEl.classList.contains('remind')) return 'remind';
+  if (typeEl.classList.contains('truancy')) return 'truancy';
+  if (typeEl.classList.contains('skip')) return 'skip';
+  if (typeEl.classList.contains('talking')) return 'talking';
+  if (typeEl.classList.contains('fighting')) return 'fighting';
+  if (typeEl.classList.contains('other')) return 'other';
+  return 'remind';
+}
+
+// Helper function to get type label
+function getDisciplineTypeLabel(type) {
+  const labels = {
+    'praise': '表扬',
+    'discard': '违纪',
+    'remind': '提醒',
+    'truancy': '旷课',
+    'skip': '逃课',
+    'talking': '讲话',
+    'fighting': '打闹',
+    'other': '其他'
+  };
+  return labels[type] || '提醒';
+}
+
+// Helper function to get type color
+function getDisciplineTypeColor(type) {
+  const colors = {
+    'praise': 'var(--accent)',
+    'discard': 'var(--danger)',
+    'remind': 'var(--warning)',
+    'truancy': '#991B1B',
+    'skip': '#B91C1C',
+    'talking': '#EA580C',
+    'fighting': '#7C3AED',
+    'other': '#6B7280'
+  };
+  return colors[type] || 'var(--warning)';
+}
+
 async function submitDisciplineRecordHt() {
   const user = xqCurrentUser || {};
-  const typeEl = document.querySelector('#discTypeBtns .discipline-type-btn.active');
-  const type = typeEl ? (typeEl.classList.contains('praise') ? 'praise' : typeEl.classList.contains('discard') ? 'discard' : 'remind') : 'remind';
+  const type = getDisciplineTypeFromBtn();
   const subject = document.getElementById('discSubject').value.trim();
   const content = document.getElementById('discContentText').value.trim();
+  const period = document.getElementById('discPeriod')?.value || '';
   
   if (!content) { showToast('请输入内容描述', 'error'); return; }
   
@@ -15312,6 +15429,7 @@ async function submitDisciplineRecordHt() {
       studentId: studentId,
       studentName: student.name,
       type: type,
+      period: period,
       content: content,
       date: disciplineCurrentDate,
       createdAt: new Date().toISOString()
@@ -15369,10 +15487,10 @@ function refreshDisciplineView() {
 
 async function submitDisciplineRecord() {
   const user = xqCurrentUser || {};
-  const typeEl = document.querySelector('#discTypeBtns .discipline-type-btn.active');
-  const type = typeEl ? (typeEl.classList.contains('praise') ? 'praise' : typeEl.classList.contains('discard') ? 'discard' : 'remind') : 'remind';
+  const type = getDisciplineTypeFromBtn();
   const subject = document.getElementById('discSubject').value.trim();
   const content = document.getElementById('discContentText').value.trim();
+  const period = document.getElementById('discPeriod')?.value || '';
   
   if (!content) { showToast('请输入内容描述', 'error'); return; }
   
@@ -15391,6 +15509,7 @@ async function submitDisciplineRecord() {
       studentId: studentId,
       studentName: student.name,
       type: type,
+      period: period,
       content: content,
       date: disciplineCurrentDate,
       createdAt: new Date().toISOString()
@@ -15432,9 +15551,19 @@ function editDisciplineRecord(recordId) {
       <option value="praise" ${record.type==='praise'?'selected':''}>表扬</option>
       <option value="discard" ${record.type==='discard'?'selected':''}>违纪</option>
       <option value="remind" ${record.type==='remind'?'selected':''}>提醒</option>
+      <option value="truancy" ${record.type==='truancy'?'selected':''}>旷课</option>
+      <option value="skip" ${record.type==='skip'?'selected':''}>逃课</option>
+      <option value="talking" ${record.type==='talking'?'selected':''}>讲话</option>
+      <option value="fighting" ${record.type==='fighting'?'selected':''}>打闹</option>
+      <option value="other" ${record.type==='other'?'selected':''}>其他</option>
     </select>
     <label>科目</label>
     <input type="text" id="discEditSubject" value="${escapeHtml(record.subject || '')}">
+    <label>第几节课</label>
+    <select id="discEditPeriod">
+      <option value="">-- 选择节次 --</option>
+      ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}" ${record.period===(i+1)?'selected':''}>${name}</option>`).join('')}
+    </select>
     <label>内容</label>
     <textarea id="discEditContent" style="width:100%;min-height:80px;padding:8px;border:1px solid var(--gray-200);border-radius:6px;margin-top:4px">${escapeHtml(record.content)}</textarea>
     <div class="btn-row">
@@ -15452,6 +15581,7 @@ async function saveDisciplineEdit(recordId) {
   
   record.type = document.getElementById('discEditType').value;
   record.subject = document.getElementById('discEditSubject').value.trim();
+  record.period = document.getElementById('discEditPeriod').value;
   record.content = document.getElementById('discEditContent').value.trim();
   
   if (!record.content) {
@@ -15473,7 +15603,7 @@ function exportDisciplineExcel(className) {
   const students = STUDENTS[className] || [];
   const records = disciplineData.filter(r => r.classId === className);
   
-  const data = [['学生姓名', '被点名次数', '表扬次数', '违纪次数', '提醒次数', '具体情况']];
+  const data = [['学生姓名', '被点名次数', '表扬', '违纪', '提醒', '旷课', '逃课', '讲话', '打闹', '其他', '具体情况']];
   
   students.forEach(s => {
     const sRecords = records.filter(r => r.studentId === s.id);
@@ -15481,8 +15611,16 @@ function exportDisciplineExcel(className) {
     const praise = sRecords.filter(r => r.type === 'praise').length;
     const discard = sRecords.filter(r => r.type === 'discard').length;
     const remind = sRecords.filter(r => r.type === 'remind').length;
-    const details = sRecords.map(r => `${r.date} ${r.subject||''} ${r.type==='praise'?'表扬':r.type==='discard'?'违纪':'提醒'}:${r.content}`).join('; ');
-    data.push([s.name, sRecords.length, praise, discard, remind, details]);
+    const truancy = sRecords.filter(r => r.type === 'truancy').length;
+    const skip = sRecords.filter(r => r.type === 'skip').length;
+    const talking = sRecords.filter(r => r.type === 'talking').length;
+    const fighting = sRecords.filter(r => r.type === 'fighting').length;
+    const other = sRecords.filter(r => r.type === 'other').length;
+    const details = sRecords.map(r => {
+      const periodStr = r.period ? `第${r.period}节` : '';
+      return `${r.date} ${periodStr} ${r.subject||''} ${getDisciplineTypeLabel(r.type)}:${r.content}`;
+    }).join('; ');
+    data.push([s.name, sRecords.length, praise, discard, remind, truancy, skip, talking, fighting, other, details]);
   });
   
   const ws = XLSX.utils.aoa_to_sheet(data);
