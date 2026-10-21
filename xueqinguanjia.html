@@ -16598,6 +16598,43 @@ function filterDeletedRecords(records) {
   return records.filter(r => !deletedIds.includes(r.id));
 }
 
+// 清理超过7天的已处理记录（所有用户共享）
+async function cleanupExpiredRepairRecords() {
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  let hasCleaned = false;
+  
+  // 遍历所有班级的记录
+  for (const className in repairData) {
+    const records = repairData[className];
+    if (!Array.isArray(records)) continue;
+    
+    const originalLength = records.length;
+    repairData[className] = records.filter(record => {
+      // 未处理的记录保留
+      if (record.status !== 'resolved') return true;
+      
+      // 没有 resolvedAt 的旧数据保留（兼容）
+      if (!record.resolvedAt) return true;
+      
+      // 检查是否超过7天
+      const resolvedTime = new Date(record.resolvedAt).getTime();
+      return (now - resolvedTime) < SEVEN_DAYS_MS;
+    });
+    
+    if (repairData[className].length < originalLength) {
+      hasCleaned = true;
+      console.log('[Repair] Cleaned up', originalLength - repairData[className].length, 'expired records for class', className);
+    }
+  }
+  
+  // 如果有清理，同步到服务器（所有用户都会看到删除）
+  if (hasCleaned) {
+    await saveRepairData();
+    console.log('[Repair] Expired records cleanup saved to server');
+  }
+}
+
 async function loadRepairData(forceRefresh) {
   // 先尝试从本地缓存加载（快速响应）
   if (!forceRefresh) {
@@ -16633,6 +16670,9 @@ async function loadRepairData(forceRefresh) {
     }
     repairData = rawRepair;
     console.log('[Repair] Loaded data for', Object.keys(repairData).length, 'classes');
+    
+    // 清理超过7天的已处理记录（所有用户共享）
+    await cleanupExpiredRepairRecords();
     
     // 更新本地缓存
     try {
