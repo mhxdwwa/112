@@ -3,12 +3,18 @@
  * 
  * Actions:
  * - get: 获取所有配置（所有人可读取）
- * - set: 设置单个配置（管理员可设置任何配置，班主任/科任老师只能设置自己班级的 seating_XXX 和 cadres_XXX）
- * - set_all: 批量设置所有配置（管理员可设置任何配置，班主任/科任老师只能设置自己班级的 seating_XXX 和 cadres_XXX）
+ * - set: 设置单个配置（管理员可设置任何配置，班主任/科任老师只能设置自己班级的数据）
+ * - set_all: 批量设置所有配置（管理员可设置任何配置，班主任/科任老师只能设置自己班级的数据）
  * - delete: 删除配置（仅管理员 吴胜闯）
  * 
  * 权限控制: teacherName === '吴胜闯' 即为管理员
- * 班主任/科任老师只能保存自己班级的座位表数据（seating_XXX）和班干部数据（cadres_XXX）
+ * 班主任/科任老师可以保存的数据类型:
+ * - seating_XXX: 座位表
+ * - cadres_XXX: 班干部
+ * - class_timetable: 班级课程表（班主任编辑）
+ * - personal_timetable: 个人课程表（教师自己编辑）
+ * - discipline: 纪律留言
+ * - duty: 值日安排
  */
 import { jsonResponse, handleOptions, checkEnv, sbSelect, sbInsert, sbUpdate, sbDelete } from '../../_utils.js';
 
@@ -20,9 +26,14 @@ function isAdmin(body) {
   return body.teacherName === ADMIN_NAME;
 }
 
-// 检查是否是教师可以保存的配置键（允许 seating_XXX 和 cadres_XXX）
+// 检查是否是教师可以保存的配置键
+// 允许: seating_XXX, cadres_XXX, class_timetable, personal_timetable, discipline, duty
 function isTeacherAllowedKey(key) {
-  return key && (key.startsWith('seating_') || key.startsWith('cadres_'));
+  if (!key) return false;
+  if (key.startsWith('seating_') || key.startsWith('cadres_')) return true;
+  // 教师可以保存课程表、纪律留言、值日安排数据
+  const teacherAllowedKeys = ['class_timetable', 'personal_timetable', 'discipline', 'duty'];
+  return teacherAllowedKeys.includes(key);
 }
 
 // 检查教师是否有权限保存该配置
@@ -94,7 +105,7 @@ export const onRequestPost = async ({ request, env }) => {
     
     // 权限检查
     if (!isAdmin(body) && !canTeacherSave(body, configKey) && !canUpdateOwnCredential(body, configKey, configData)) {
-      return jsonResponse({ error: 'Unauthorized: 班主任/科任老师只能保存自己班级的座位表数据或自己的凭证' }, 403);
+      return jsonResponse({ error: 'Unauthorized: 班主任/科任老师只能保存座位表、班干部、课程表、纪律留言、值日安排数据' }, 403);
     }
 
     // 特殊处理：教师更新自己的凭证时，需要合并到现有的 credentials 中
@@ -148,11 +159,11 @@ export const onRequestPost = async ({ request, env }) => {
       return jsonResponse({ error: 'Missing configs object' }, 400);
     }
 
-    // 权限检查：非管理员只能保存 seating_XXX 和 cadres_XXX 配置
+    // 权限检查：非管理员只能保存允许的配置键
     if (!isAdmin(body)) {
-      const nonAllowedKeys = Object.keys(configs).filter(key => !key.startsWith('seating_') && !key.startsWith('cadres_'));
+      const nonAllowedKeys = Object.keys(configs).filter(key => !isTeacherAllowedKey(key));
       if (nonAllowedKeys.length > 0) {
-        return jsonResponse({ error: 'Unauthorized: 班主任/科任老师只能保存座位表数据（seating_XXX）和班干部数据（cadres_XXX）' }, 403);
+        return jsonResponse({ error: 'Unauthorized: 班主任/科任老师只能保存座位表、班干部、课程表、纪律留言、值日安排数据' }, 403);
       }
     }
 
