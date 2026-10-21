@@ -3237,6 +3237,9 @@ function isUserInTeacherList(name) {
   // 检查职责分配中的领导
   if (setupRoles.some(r => r.role === 'leader' && r.name === name)) return true;
   
+  // 检查职责分配中的工人
+  if (setupRoles.some(r => r.role === 'worker' && r.name === name)) return true;
+  
   // 检查授课分配中的班主任
   if (setupTeaching.some(t => t.headteacher === name)) return true;
   
