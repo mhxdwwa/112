@@ -3917,12 +3917,22 @@ function buildSidebar() {
   // 如果是班主任，显示班主任菜单（本班管理）
   if (user.isHeadteacher) {
     const config = NAV_CONFIG.headteacher;
+    // 收集领导菜单中已有的 item id，用于去重
+    const leaderItemIds = new Set();
+    if (user.isLeader) {
+      NAV_CONFIG.leader.forEach(section => {
+        section.items.forEach(item => leaderItemIds.add(item.id));
+      });
+    }
     config.forEach(section => {
-      // 如果用户已经是领导，跳过"教学"分栏（领导菜单已有授课班级）
-      if (user.isLeader && section.section === '教学') return;
+      // 过滤掉已经在领导菜单中显示的项（但保留纪律留言等独有功能）
+      const filteredItems = user.isLeader
+        ? section.items.filter(item => !leaderItemIds.has(item.id))
+        : section.items;
+      if (filteredItems.length === 0) return; // 该分栏没有可显示的项，跳过
       html += `<div class="sidebar-section">`;
       html += `<div class="sidebar-section-title">${section.section}</div>`;
-      section.items.forEach(item => {
+      filteredItems.forEach(item => {
         const badgeCount = item.id === 'leave-mgmt' ? getPendingLeaveCount() :
                            item.id === 'anomaly' ? getAnomalyCount() : 0;
         const onclickHandler = item.id === 'score-manage' ? 'navigateToScoreManage()' : `navigate('${item.id}')`;
@@ -10444,7 +10454,12 @@ function renderTeachClasses() {
   html += `<div class="teacher-tt-section">
     <div class="tt-header">
       <h3>我的课程表</h3>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:12px;color:var(--gray-600);margin-right:4px">节数：</label>
+        <select class="toolbar-select" style="width:70px;font-size:12px" onchange="changePersonalTimetablePeriods(this.value)">
+          ${[6,7,8,9,10,11,12].map(n => `<option value="${n}" ${n===personalTimetablePeriods?'selected':''}>${n}节</option>`).join('')}
+        </select>
+        <button class="toolbar-btn ghost" style="font-size:12px" onclick="showPeriodNamesEditor()">节次名称</button>
         <button class="toolbar-btn ghost" style="font-size:12px" onclick="saveTeacherTimetableAll()">保存课程表</button>
       </div>
     </div>
@@ -13935,6 +13950,7 @@ let classTimetableData = {};  // { 'className': { '1-1': {subject, teacher, room
 // 个人课程表：教师自己编辑的课程段（存储在班级课程表中，但标记为个人编辑）
 let personalTimetableData = {};  // { 'teacherName': { 'className': { '1-1': {subject, room}, ... } } }
 let timetablePeriods = 8;  // 默认8节课
+let personalTimetablePeriods = 8;  // 个人课程表默认8节课
 let timetablePeriodNames = ['早读', '第一节', '第二节', '第三节', '第四节', '第五节', '第六节', '第七节', '第八节', '第九节', '第十节', '第十一节', '第十二节'];
 let timetableReminderInterval = null;
 
@@ -13951,7 +13967,20 @@ async function loadTimetableData() {
   if (result.ok && result.config) {
     // 加载班级课程表
     if (result.config.class_timetable) {
-      classTimetableData = result.config.class_timetable.data || {};
+      let rawCT = result.config.class_timetable.data || {};
+      // 防御性检查：如果旧数据被双重包装，则解包
+      if (rawCT && typeof rawCT === 'object' && !Array.isArray(rawCT) && rawCT.data && typeof rawCT.data === 'object') {
+        // 检查是否是双重包装：如果 rawCT 只有 data 属性且 data 是对象
+        const keys = Object.keys(rawCT);
+        if (keys.length === 1 && keys[0] === 'data') {
+          rawCT = rawCT.data;
+        }
+      }
+      if (!rawCT || typeof rawCT !== 'object' || Array.isArray(rawCT)) {
+        console.warn('[ClassTimetable] Data format invalid, resetting to {}', typeof rawCT);
+        rawCT = {};
+      }
+      classTimetableData = rawCT;
       console.log('[ClassTimetable] Loaded data for', Object.keys(classTimetableData).length, 'classes');
       // 加载节次名称
       if (classTimetableData._periodNames && Array.isArray(classTimetableData._periodNames)) {
@@ -13967,8 +13996,28 @@ async function loadTimetableData() {
     }
     // 加载个人课程表
     if (result.config.personal_timetable) {
-      personalTimetableData = result.config.personal_timetable.data || {};
+      let rawPT = result.config.personal_timetable.data || {};
+      // 防御性检查：如果旧数据被双重包装，则解包
+      if (rawPT && typeof rawPT === 'object' && !Array.isArray(rawPT) && rawPT.data && typeof rawPT.data === 'object') {
+        const keys = Object.keys(rawPT);
+        if (keys.length === 1 && keys[0] === 'data') {
+          rawPT = rawPT.data;
+        }
+      }
+      if (!rawPT || typeof rawPT !== 'object' || Array.isArray(rawPT)) {
+        console.warn('[PersonalTimetable] Data format invalid, resetting to {}');
+        rawPT = {};
+      }
+      personalTimetableData = rawPT;
       console.log('[PersonalTimetable] Loaded data for', Object.keys(personalTimetableData).length, 'teachers');
+      // 加载个人课程表节数
+      if (personalTimetableData._periods && typeof personalTimetableData._periods === 'number') {
+        personalTimetablePeriods = personalTimetableData._periods;
+      }
+      // 加载节次名称（如果班级课程表没有提供）
+      if (personalTimetableData._periodNames && Array.isArray(personalTimetableData._periodNames) && timetablePeriodNames.every(n => n.startsWith('第'))) {
+        timetablePeriodNames = personalTimetableData._periodNames;
+      }
     }
   }
 }
@@ -14090,13 +14139,25 @@ function changeTimetablePeriods(className, periods) {
   document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
 }
 
+function changePersonalTimetablePeriods(periods) {
+  personalTimetablePeriods = parseInt(periods);
+  // Save period count to personal timetable data
+  personalTimetableData._periods = personalTimetablePeriods;
+  // Re-render the teach-classes page
+  const content = document.getElementById('content');
+  if (content) content.innerHTML = renderTeachClasses();
+  // Auto-save
+  savePersonalTimetableData();
+}
+
 function showPeriodNamesEditor() {
   const modal = document.createElement('div');
   modal.className = 'timetable-edit-modal';
   modal.id = 'periodNamesModal';
   
+  const maxPeriods = Math.max(timetablePeriods, personalTimetablePeriods);
   let inputsHtml = '';
-  for (let i = 0; i < timetablePeriods; i++) {
+  for (let i = 0; i < maxPeriods; i++) {
     inputsHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="min-width:60px;font-size:13px;color:var(--gray-600)">第${i+1}节：</span>
       <input type="text" id="periodName_${i}" value="${escapeHtml(timetablePeriodNames[i] || `第${i+1}节`)}" 
@@ -14127,15 +14188,17 @@ function closePeriodNamesEditor() {
 }
 
 function savePeriodNames() {
-  for (let i = 0; i < timetablePeriods; i++) {
+  const maxPeriods = Math.max(timetablePeriods, personalTimetablePeriods);
+  for (let i = 0; i < maxPeriods; i++) {
     const input = document.getElementById(`periodName_${i}`);
     if (input) {
       const name = input.value.trim();
       timetablePeriodNames[i] = name || `第${i+1}节`;
     }
   }
-  // Save to data
-  classTimetableData._periodNames = timetablePeriodNames.slice(0, timetablePeriods);
+  // Save to both class and personal timetable data
+  classTimetableData._periodNames = timetablePeriodNames.slice(0, maxPeriods);
+  personalTimetableData._periodNames = timetablePeriodNames.slice(0, maxPeriods);
   closePeriodNamesEditor();
   // Refresh the current view
   const content = document.getElementById('ttContent');
@@ -14145,6 +14208,14 @@ function savePeriodNames() {
       content.innerHTML = renderTimetableGrid(className);
     }
   }
+  // Also refresh teach-classes page if visible
+  const mainContent = document.getElementById('content');
+  if (mainContent && mainContent.querySelector('.teacher-tt-section')) {
+    mainContent.innerHTML = renderTeachClasses();
+  }
+  // Auto-save both
+  saveClassTimetableData();
+  savePersonalTimetableData();
   showToast('节次名称已保存');
 }
 
@@ -14228,7 +14299,7 @@ function renderTeacherTimetable() {
   });
   
   // Periods
-  for (let p = 1; p <= timetablePeriods; p++) {
+  for (let p = 1; p <= personalTimetablePeriods; p++) {
     html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
     for (let w = 1; w <= 5; w++) {
       const key = `${w}-${p}`;
@@ -14262,7 +14333,7 @@ function renderEditableTeacherTimetable() {
   html += `<div class="timetable-cell header">节次</div>`;
   weekdays.forEach(d => { html += `<div class="timetable-cell header">${d}</div>`; });
   
-  for (let p = 1; p <= timetablePeriods; p++) {
+  for (let p = 1; p <= personalTimetablePeriods; p++) {
     html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
     for (let w = 1; w <= 5; w++) {
       const key = `${w}-${p}`;
@@ -14774,7 +14845,16 @@ let disciplineCurrentDate = '';
 async function loadDisciplineData() {
   const result = await xqApi('config', { action: 'get' });
   if (result.ok && result.config && result.config.discipline) {
-    disciplineData = result.config.discipline.data || [];
+    let raw = result.config.discipline.data || [];
+    // 防御性检查：如果旧数据被双重包装（{ data: [...] }），则解包
+    if (!Array.isArray(raw) && raw && typeof raw === 'object' && Array.isArray(raw.data)) {
+      raw = raw.data;
+    }
+    if (!Array.isArray(raw)) {
+      console.warn('[Discipline] Data is not an array, resetting to []', typeof raw, raw);
+      raw = [];
+    }
+    disciplineData = raw;
     console.log('[Discipline] Loaded', disciplineData.length, 'records');
   }
 }
@@ -15422,7 +15502,19 @@ let dutyDragGroupIndex = null;
 async function loadDutyData() {
   const result = await xqApi('config', { action: 'get' });
   if (result.ok && result.config && result.config.duty) {
-    dutyData = result.config.duty.data || {};
+    let rawDuty = result.config.duty.data || {};
+    // 防御性检查：如果旧数据被双重包装，则解包
+    if (rawDuty && typeof rawDuty === 'object' && !Array.isArray(rawDuty) && rawDuty.data && typeof rawDuty.data === 'object') {
+      const keys = Object.keys(rawDuty);
+      if (keys.length === 1 && keys[0] === 'data') {
+        rawDuty = rawDuty.data;
+      }
+    }
+    if (!rawDuty || typeof rawDuty !== 'object' || Array.isArray(rawDuty)) {
+      console.warn('[Duty] Data format invalid, resetting to {}');
+      rawDuty = {};
+    }
+    dutyData = rawDuty;
     console.log('[Duty] Loaded data for', Object.keys(dutyData).length, 'classes');
   }
 }
