@@ -13812,41 +13812,79 @@ function closeXqQrScanner() {
 }
 
 // ============================================================
-// FEATURE 1: 课程表 (TIMETABLE)
+// FEATURE 1: 课程表 (TIMETABLE) - 分离个人课程表和班级课程表
 // ============================================================
-let timetableData = {};  // { 'className': { '1-1': {subject, teacher, room}, ... } }
-// Key format: 'weekday-period' e.g. '1-1' = Monday period 1
+// 班级课程表：班主任编辑自己班级的课程表
+let classTimetableData = {};  // { 'className': { '1-1': {subject, teacher, room}, ... } }
+// 个人课程表：教师自己编辑的课程段（存储在班级课程表中，但标记为个人编辑）
+let personalTimetableData = {};  // { 'teacherName': { 'className': { '1-1': {subject, room}, ... } } }
 let timetablePeriods = 8;  // 默认8节课
 let timetableReminderInterval = null;
 
 async function loadTimetableData() {
   const result = await xqApi('config', { action: 'get' });
-  if (result.ok && result.config && result.config.timetable) {
-    timetableData = result.config.timetable.data || {};
-    console.log('[Timetable] Loaded data for', Object.keys(timetableData).length, 'classes');
+  if (result.ok && result.config) {
+    // 加载班级课程表
+    if (result.config.class_timetable) {
+      classTimetableData = result.config.class_timetable.data || {};
+      console.log('[ClassTimetable] Loaded data for', Object.keys(classTimetableData).length, 'classes');
+    }
+    // 加载个人课程表
+    if (result.config.personal_timetable) {
+      personalTimetableData = result.config.personal_timetable.data || {};
+      console.log('[PersonalTimetable] Loaded data for', Object.keys(personalTimetableData).length, 'teachers');
+    }
   }
 }
 
-async function saveTimetableData() {
-  const result = await xqSaveConfigToServer('timetable', { data: timetableData });
+async function saveClassTimetableData() {
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'class_timetable': { data: classTimetableData }
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
   return result;
 }
 
+async function savePersonalTimetableData() {
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'personal_timetable': { data: personalTimetableData }
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
+  return result;
+}
+
+// 兼容旧数据：如果旧数据存在，迁移到新结构
+async function migrateTimetableData() {
+  const result = await xqApi('config', { action: 'get' });
+  if (result.ok && result.config && result.config.timetable && result.config.timetable.data) {
+    const oldData = result.config.timetable.data;
+    // 迁移到班级课程表
+    classTimetableData = oldData;
+    await saveClassTimetableData();
+    console.log('[Timetable] Migrated old data to class_timetable');
+  }
+}
+
 function getTimetableForClass(className) {
-  return timetableData[className] || {};
+  return classTimetableData[className] || {};
 }
 
 function getTimetableForTeacher(teacherName) {
-  // Build teacher's personal timetable from all class timetables
-  const teacherTT = {};
-  Object.entries(timetableData).forEach(([cls, slots]) => {
+  // 从个人课程表获取
+  const personalTT = personalTimetableData[teacherName] || {};
+  const result = {};
+  Object.entries(personalTT).forEach(([cls, slots]) => {
     Object.entries(slots).forEach(([key, val]) => {
-      if (val.teacher === teacherName) {
-        teacherTT[key] = { ...val, className: cls };
-      }
+      result[key] = { ...val, className: cls };
     });
   });
-  return teacherTT;
+  return result;
 }
 
 function renderTimetable() {
@@ -13857,22 +13895,24 @@ function renderTimetable() {
     return renderTimetableSelector();
   }
   
-  // Fallback: headteacher can also view their class timetable here
+  // Headteacher: show their class timetable directly (no selection needed)
   const classes = user.headteacherClasses || [];
   if (classes.length === 0) {
     return emptyStateHtml('未找到您的班级信息。请在"授课班级"页面查看课程表。');
   }
   
-  if (classes.length > 1) {
-    let html = `<div class="tabs" id="ttTabs">`;
-    classes.forEach((cls, i) => {
-      html += `<div class="tab ${i===0?'active':''}" onclick="switchTimetableClass('${cls}',this)">${cls}</div>`;
-    });
-    html += `</div><div id="ttContent">${renderTimetableGrid(classes[0])}</div>`;
-    return html;
+  // If headteacher has only one class, show it directly
+  if (classes.length === 1) {
+    return renderTimetableGrid(classes[0]);
   }
   
-  return renderTimetableGrid(classes[0]);
+  // Multiple classes: show tabs
+  let html = `<div class="tabs" id="ttTabs">`;
+  classes.forEach((cls, i) => {
+    html += `<div class="tab ${i===0?'active':''}" onclick="switchTimetableClass('${cls}',this)">${cls}</div>`;
+  });
+  html += `</div><div id="ttContent">${renderTimetableGrid(classes[0])}</div>`;
+  return html;
 }
 
 function renderTimetableSelector() {
@@ -13907,17 +13947,18 @@ function switchTimetableClass(cls, el) {
 function changeTimetablePeriods(className, periods) {
   timetablePeriods = parseInt(periods);
   // Save period count to data
-  if (!timetableData._periods) timetableData._periods = {};
-  timetableData._periods[className] = timetablePeriods;
+  if (!classTimetableData._periods) classTimetableData._periods = {};
+  classTimetableData._periods[className] = timetablePeriods;
   document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
 }
 
 function renderTimetableGrid(className) {
   const tt = getTimetableForClass(className);
   const user = xqCurrentUser || {};
-  const canEdit = user.isHeadteacher || user.isLeader || isXqAdmin();
+  // Headteacher can only edit their own class, leader/admin can edit all
+  const isOwnClass = (user.headteacherClasses || []).includes(className);
+  const canEdit = (user.isHeadteacher && isOwnClass) || user.isLeader || isXqAdmin();
   const weekdays = ['周一', '周二', '周三', '周四', '周五'];
-  const cols = 6; // period label + 5 weekdays
   
   let html = `<div class="toolbar">
     <span style="font-size:14px;font-weight:600">${className} 课程表</span>
@@ -13928,7 +13969,7 @@ function renderTimetableGrid(className) {
     </select>
     <button class="toolbar-btn ghost" onclick="showTimetableImportModal()">导入Excel</button>
     <button class="toolbar-btn ghost" onclick="exportTimetableExcel('${className}')">导出Excel</button>
-    ${canEdit ? `<button class="toolbar-btn primary" onclick="saveTimetableData().then(r=>{if(r.ok)showToast('课程表已保存');else showToast('保存失败','error')})">保存</button>` : ''}
+    ${canEdit ? `<button class="toolbar-btn primary" onclick="saveClassTimetableData().then(r=>{if(r.ok)showToast('课程表已保存');else showToast('保存失败','error')})">保存</button>` : ''}
   </div>`;
   
   html += `<div class="timetable-grid" style="grid-template-columns: 60px repeat(5, 1fr);">`;
@@ -14140,15 +14181,17 @@ async function saveNewTeacherSlot(weekday, period) {
   const subject = document.getElementById('ttEditSubject').value;
   const room = document.getElementById('ttEditRoom').value.trim();
   const user = xqCurrentUser || {};
+  const teacherName = user.teacherName;
   
   if (!subject) { showToast('请选择科目', 'error'); return; }
   
   const key = `${weekday}-${period}`;
-  if (!timetableData[className]) timetableData[className] = {};
-  timetableData[className][key] = { subject, teacher: user.teacherName, room };
+  if (!personalTimetableData[teacherName]) personalTimetableData[teacherName] = {};
+  if (!personalTimetableData[teacherName][className]) personalTimetableData[teacherName][className] = {};
+  personalTimetableData[teacherName][className][key] = { subject, room };
   
   closeTimetableEdit();
-  const result = await saveTimetableData();
+  const result = await savePersonalTimetableData();
   if (result.ok) {
     showToast('课程已保存');
     const ttSection = document.querySelector('.teacher-tt-section');
@@ -14157,7 +14200,7 @@ async function saveNewTeacherSlot(weekday, period) {
       if (grid) grid.outerHTML = renderEditableTeacherTimetable();
     }
   } else {
-    showToast('保存失败: ' + result.error, 'error');
+    showToast('保存失败: ' + (result.error || '未知错误'), 'error');
   }
 }
 
@@ -14171,15 +14214,17 @@ async function saveTeacherTimetableSlot(className, weekday, period) {
   }
   const room = document.getElementById('ttEditRoom').value.trim();
   const user = xqCurrentUser || {};
+  const teacherName = user.teacherName;
   
   if (!subject) { showToast('请输入或选择科目名称', 'error'); return; }
   
   const key = `${weekday}-${period}`;
-  if (!timetableData[className]) timetableData[className] = {};
-  timetableData[className][key] = { subject, teacher: user.teacherName, room };
+  if (!personalTimetableData[teacherName]) personalTimetableData[teacherName] = {};
+  if (!personalTimetableData[teacherName][className]) personalTimetableData[teacherName][className] = {};
+  personalTimetableData[teacherName][className][key] = { subject, room };
   
   closeTimetableEdit();
-  const result = await saveTimetableData();
+  const result = await savePersonalTimetableData();
   if (result.ok) {
     showToast('课程已保存');
     const ttSection = document.querySelector('.teacher-tt-section');
@@ -14188,17 +14233,19 @@ async function saveTeacherTimetableSlot(className, weekday, period) {
       if (grid) grid.outerHTML = renderEditableTeacherTimetable();
     }
   } else {
-    showToast('保存失败: ' + result.error, 'error');
+    showToast('保存失败: ' + (result.error || '未知错误'), 'error');
   }
 }
 
 async function clearTeacherTimetableSlot(className, weekday, period) {
   const key = `${weekday}-${period}`;
-  if (timetableData[className]) {
-    delete timetableData[className][key];
+  const user = xqCurrentUser || {};
+  const teacherName = user.teacherName;
+  if (personalTimetableData[teacherName] && personalTimetableData[teacherName][className]) {
+    delete personalTimetableData[teacherName][className][key];
   }
   closeTimetableEdit();
-  const result = await saveTimetableData();
+  const result = await savePersonalTimetableData();
   if (result.ok) {
     showToast('已清空');
     const ttSection = document.querySelector('.teacher-tt-section');
@@ -14210,11 +14257,11 @@ async function clearTeacherTimetableSlot(className, weekday, period) {
 }
 
 async function saveTeacherTimetableAll() {
-  const result = await saveTimetableData();
+  const result = await savePersonalTimetableData();
   if (result.ok) {
     showToast('课程表已保存');
   } else {
-    showToast('保存失败: ' + result.error, 'error');
+    showToast('保存失败: ' + (result.error || '未知错误'), 'error');
   }
 }
 
@@ -14313,28 +14360,28 @@ async function saveTimetableSlot(className, weekday, period) {
   if (!subject) { showToast('请输入或选择科目名称', 'error'); return; }
   
   const key = `${weekday}-${period}`;
-  if (!timetableData[className]) timetableData[className] = {};
-  timetableData[className][key] = { subject, teacher, room };
+  if (!classTimetableData[className]) classTimetableData[className] = {};
+  classTimetableData[className][key] = { subject, teacher, room };
   
   closeTimetableEdit();
-  const result = await saveTimetableData();
+  const result = await saveClassTimetableData();
   if (result.ok) {
     showToast('课程已保存');
     if (document.getElementById('ttContent')) {
       document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
     }
   } else {
-    showToast('保存失败: ' + result.error, 'error');
+    showToast('保存失败: ' + (result.error || '未知错误'), 'error');
   }
 }
 
 async function clearTimetableSlot(className, weekday, period) {
   const key = `${weekday}-${period}`;
-  if (timetableData[className]) {
-    delete timetableData[className][key];
+  if (classTimetableData[className]) {
+    delete classTimetableData[className][key];
   }
   closeTimetableEdit();
-  const result = await saveTimetableData();
+  const result = await saveClassTimetableData();
   if (result.ok) {
     showToast('已清空');
     document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
@@ -14382,7 +14429,7 @@ async function doTimetableImport() {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
   
-  if (!timetableData[className]) timetableData[className] = {};
+  if (!classTimetableData[className]) classTimetableData[className] = {};
   
   // Parse rows: skip header row if present
   let startRow = 0;
@@ -14400,21 +14447,21 @@ async function doTimetableImport() {
         const teacher = parts[1] ? parts[1].trim() : '';
         const room = parts[2] ? parts[2].trim() : '';
         if (subject) {
-          timetableData[className][`${w}-${period}`] = { subject, teacher, room };
+          classTimetableData[className][`${w}-${period}`] = { subject, teacher, room };
         }
       }
     }
   }
   
   closeTimetableImport();
-  const result = await saveTimetableData();
+  const result = await saveClassTimetableData();
   if (result.ok) {
     showToast('课程表导入成功');
     if (document.getElementById('ttContent')) {
       document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
     }
   } else {
-    showToast('导入失败: ' + result.error, 'error');
+    showToast('导入失败: ' + (result.error || '未知错误'), 'error');
   }
 }
 
@@ -14536,7 +14583,13 @@ async function loadDisciplineData() {
 }
 
 async function saveDisciplineData() {
-  const result = await xqSaveConfigToServer('discipline', { data: disciplineData });
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'discipline': { data: disciplineData }
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
   return result;
 }
 
@@ -15151,7 +15204,13 @@ async function loadDutyData() {
 }
 
 async function saveDutyData() {
-  const result = await xqSaveConfigToServer('duty', { data: dutyData });
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'duty': { data: dutyData }
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
   return result;
 }
 
@@ -15554,7 +15613,13 @@ function autoGenerateDutySchedule() {
   if (!dd.schedule[catKey]) dd.schedule[catKey] = {};
   const schedule = dd.schedule[catKey];
   
-  const startDate = new Date(dd.settings.startDate);
+  // Start from current week's Monday, not from settings.startDate
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday=0, Monday=1
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() + mondayOffset);
+  
   const skipWeekends = dd.settings.skipWeekends;
   
   // Generate for 4 weeks (28 days)
@@ -15570,9 +15635,10 @@ function autoGenerateDutySchedule() {
     const date = new Date(startDate);
     date.setDate(startDate.getDate() + i);
     const dateStr = date.toISOString().split('T')[0];
-    const dayOfWeek = date.getDay();
+    const dateDayOfWeek = date.getDay();
     
-    if (skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) continue;
+    // Skip weekends if configured (Sunday=0, Saturday=6)
+    if (skipWeekends && (dateDayOfWeek === 0 || dateDayOfWeek === 6)) continue;
     
     // Don't overwrite locked entries or holidays
     if (schedule[dateStr] && (schedule[dateStr].locked || schedule[dateStr].holiday)) continue;
