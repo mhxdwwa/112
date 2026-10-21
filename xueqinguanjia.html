@@ -3592,6 +3592,7 @@ function doLogin() {
       isLeader: roleInfo.isLeader,
       isHeadteacher: roleInfo.isHeadteacher,
       isTeacher: roleInfo.isTeacher,
+      isWorker: roleInfo.isWorker,
       headteacherClasses: roleInfo.headteacherClasses,
       teachingClasses: roleInfo.teachingClasses,
       allClasses: roleInfo.allClasses,
@@ -3676,7 +3677,8 @@ function restoreSession() {
     USERS[session.role] = {
       name: session.user.teacherName,
       role: session.user.role === 'leader' ? '校领导' : 
-            session.user.role === 'headteacher' ? '班主任' : '科任老师',
+            session.user.role === 'headteacher' ? '班主任' : 
+            session.user.role === 'worker' ? '维修人员' : '科任老师',
       avatar: session.user.teacherName.charAt(0)
     };
     
@@ -3687,7 +3689,8 @@ function restoreSession() {
     document.getElementById('sidebarAvatar').textContent = session.user.teacherName.charAt(0);
     document.getElementById('sidebarName').textContent = session.user.teacherName;
     document.getElementById('sidebarRole').textContent = session.user.role === 'leader' ? '校领导' : 
-                                                          session.user.role === 'headteacher' ? '班主任' : '科任老师';
+                                                          session.user.role === 'headteacher' ? '班主任' : 
+                                                          session.user.role === 'worker' ? '维修人员' : '科任老师';
     buildSidebar();
     updateDate();
     
@@ -13871,7 +13874,8 @@ async function doXqAutoLogin(email) {
       classes: user.classes || [],
       isHeadteacher: user.role === 'headteacher',
       isLeader: user.role === 'leader',
-      isTeacher: user.role === 'teacher'
+      isTeacher: user.role === 'teacher',
+      isWorker: user.role === 'worker'
     };
 
     // 同步更新 USERS 对象（saveSession 依赖此对象保存 userInfo）
