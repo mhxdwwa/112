@@ -3137,12 +3137,13 @@ async function xqLoadCredentials() {
 }
 
 // 保存凭证到服务器和本地
-async function xqSaveCredentials() {
+async function xqSaveCredentials(userNameToUpdate) {
   // 始终保存到 localStorage
   localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
   
-  // 同步到服务器（仅管理员可写入）
+  // 同步到服务器
   if (isXqAdmin()) {
+    // 管理员：同步所有凭证
     try {
       const result = await xqApi('config', {
         action: 'set',
@@ -3155,6 +3156,24 @@ async function xqSaveCredentials() {
       }
     } catch (e) {
       console.warn('[XQ] Failed to sync credentials to server:', e);
+    }
+  } else if (userNameToUpdate && xqCredentials[userNameToUpdate]) {
+    // 非管理员：只同步自己的凭证（后端支持 canUpdateOwnCredential）
+    try {
+      const ownCredential = { [userNameToUpdate]: xqCredentials[userNameToUpdate] };
+      const result = await xqApi('config', {
+        action: 'set',
+        configKey: 'credentials',
+        configData: ownCredential,
+        teacherName: userNameToUpdate
+      });
+      if (!result.ok) {
+        console.warn('[XQ] Failed to sync own credential to server:', result.error);
+        return { ok: false, error: result.error };
+      }
+    } catch (e) {
+      console.warn('[XQ] Failed to sync own credential to server:', e);
+      return { ok: false, error: e.message };
     }
   }
   return { ok: true };
@@ -3188,7 +3207,8 @@ async function setUserPassword(name, password, role, classes, subject) {
     updatedAt: new Date().toISOString()
   };
   
-  return await xqSaveCredentials();
+  // 传递用户名，以便非管理员也能同步自己的凭证到服务器
+  return await xqSaveCredentials(name);
 }
 
 // 检查登录状态，动态显示/隐藏按钮
@@ -16751,6 +16771,11 @@ function renderRepairRecordsList(records, isGlobalView) {
             <button class="toolbar-btn primary" style="font-size:12px" onclick="showResolveRepairModal('${record.className}', '${record.id}')">标记为已解决</button>
           </div>
         ` : ''}
+        ${record.status === 'resolved' ? `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end">
+            <button class="toolbar-btn ghost" style="font-size:12px;color:var(--danger);border-color:var(--danger)" onclick="deleteRepairRecord('${record.className || repairCurrentClass}', '${record.id}', ${isGlobalView})">删除记录</button>
+          </div>
+        ` : ''}
       </div>
     </div>`;
   });
@@ -16836,6 +16861,35 @@ async function resolveRepairDeclaration(className, recordId) {
   }
 }
 
+async function deleteRepairRecord(className, recordId, isGlobalView) {
+  if (!confirm('确定要删除这条已处理的记录吗？')) return;
+  
+  const records = getClassRepairData(className);
+  const index = records.findIndex(r => r.id === recordId);
+  
+  if (index === -1) {
+    showToast('未找到该记录', 'error');
+    return;
+  }
+  
+  records.splice(index, 1);
+  
+  const result = await saveRepairData();
+  if (result.ok) {
+    showToast('记录已删除', 'success');
+    // 根据视图刷新对应的页面
+    if (isGlobalView) {
+      // 工人/领导视图
+      document.getElementById('repairContent').innerHTML = renderRepairRecords();
+    } else {
+      // 班主任视图
+      document.getElementById('repairContent').innerHTML = renderRepairDeclarationContent();
+    }
+  } else {
+    showToast('删除失败，请重试', 'error');
+  }
+}
+
 function renderRepairRecords() {
   const user = xqCurrentUser || {};
   
@@ -16860,12 +16914,60 @@ function renderRepairRecords() {
     });
   }
   
-  // 按时间倒序排列
-  allRecords.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  // 分离待处理和已处理的记录
+  const pendingRecords = allRecords.filter(r => r.status === 'pending');
+  const resolvedRecords = allRecords.filter(r => r.status === 'resolved');
+  
+  // 各自按时间倒序排列
+  pendingRecords.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  resolvedRecords.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   
   let html = `<div style="padding:20px">`;
-  html += `<h2 style="margin:0 0 20px;font-size:18px">设备申报记录</h2>`;
-  html += renderRepairRecordsList(allRecords, true);
+  
+  // 页面标题和统计
+  html += `<div style="margin-bottom:24px">
+    <h2 style="margin:0 0 12px;font-size:20px;font-weight:700;color:var(--gray-800)">设备申报记录</h2>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--warning);background:rgba(245,158,11,0.1);border-radius:10px">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--warning)"></div>
+        <span style="font-size:13px;color:var(--gray-600)">待处理</span>
+        <span style="font-size:18px;font-weight:700;color:var(--warning)">${pendingRecords.length}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:rgba(16,185,129,0.1);border-radius:10px">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--success)"></div>
+        <span style="font-size:13px;color:var(--gray-600)">已处理</span>
+        <span style="font-size:18px;font-weight:700;color:var(--success)">${resolvedRecords.length}</span>
+      </div>
+    </div>
+  </div>`;
+  
+  // 待处理记录
+  if (pendingRecords.length > 0) {
+    html += `<div style="margin-bottom:28px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--warning)"></div>
+        <h3 style="margin:0;font-size:15px;font-weight:600;color:var(--gray-700)">待处理记录</h3>
+      </div>
+      ${renderRepairRecordsList(pendingRecords, true)}
+    </div>`;
+  }
+  
+  // 已处理记录
+  if (resolvedRecords.length > 0) {
+    html += `<div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--success)"></div>
+        <h3 style="margin:0;font-size:15px;font-weight:600;color:var(--gray-700)">已处理记录</h3>
+      </div>
+      ${renderRepairRecordsList(resolvedRecords, true)}
+    </div>`;
+  }
+  
+  // 无记录
+  if (allRecords.length === 0) {
+    html += renderRepairRecordsList([], true);
+  }
+  
   html += `</div>`;
   
   return html;
