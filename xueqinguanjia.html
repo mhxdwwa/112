@@ -1640,7 +1640,7 @@ tbody tr:last-child td { border-bottom: none; }
 </div>
 
 <!-- ==================== WATERMARK ==================== -->
-<div class="watermark" id="watermark">学勤管家@ 吴胜闯老师</div>
+<div class="watermark" id="watermark">© 学勤管家  版权所有<br>开发者：吴胜闯</div>
 
 <!-- ==================== TOAST ==================== -->
 <div class="toast-container" id="toastContainer"></div>
@@ -10271,7 +10271,7 @@ function renderTeachClasses() {
   });
 
   const showFilter = Object.keys(classes).length > 3;
-  return `
+  let html = `
     <div class="toolbar">
       ${showFilter ? `
       <div class="toolbar-search">
@@ -10287,6 +10287,14 @@ function renderTeachClasses() {
       <span style="font-size:13px;color:var(--gray-500)">点击班级卡片查看座位表</span>
     </div>
     <div class="class-cards" id="teachClassCards">${cards}</div>`;
+  
+  // Add teacher's personal timetable below
+  html += `<div style="margin-top:32px;padding-top:24px;border-top:2px solid var(--gray-200)">
+    <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--gray-800)">我的课程表</h3>
+    ${renderTeacherTimetable()}
+  </div>`;
+  
+  return html;
 }
 
 function filterTeachClasses() {
@@ -13860,6 +13868,14 @@ function switchTimetableClass(cls, el) {
   document.getElementById('ttContent').innerHTML = renderTimetableGrid(cls);
 }
 
+function changeTimetablePeriods(className, periods) {
+  timetablePeriods = parseInt(periods);
+  // Save period count to data
+  if (!timetableData._periods) timetableData._periods = {};
+  timetableData._periods[className] = timetablePeriods;
+  document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
+}
+
 function renderTimetableGrid(className) {
   const tt = getTimetableForClass(className);
   const user = xqCurrentUser || {};
@@ -13870,8 +13886,13 @@ function renderTimetableGrid(className) {
   let html = `<div class="toolbar">
     <span style="font-size:14px;font-weight:600">${className} 课程表</span>
     <div class="toolbar-spacer"></div>
+    <label style="font-size:12px;color:var(--gray-600);margin-right:8px">节数：</label>
+    <select class="toolbar-select" style="width:80px" onchange="changeTimetablePeriods('${className}', this.value)">
+      ${[6,7,8,9,10,11,12].map(n => `<option value="${n}" ${n===timetablePeriods?'selected':''}>${n}节</option>`).join('')}
+    </select>
     <button class="toolbar-btn ghost" onclick="showTimetableImportModal()">导入Excel</button>
     <button class="toolbar-btn ghost" onclick="exportTimetableExcel('${className}')">导出Excel</button>
+    ${canEdit ? `<button class="toolbar-btn primary" onclick="saveTimetableData().then(r=>{if(r.ok)showToast('课程表已保存');else showToast('保存失败','error')})">保存</button>` : ''}
   </div>`;
   
   html += `<div class="timetable-grid" style="grid-template-columns: 60px repeat(5, 1fr);">`;
@@ -13958,12 +13979,20 @@ function editTimetableSlot(className, weekday, period) {
   const key = `${weekday}-${period}`;
   const slot = tt[key] || {};
   
-  // Get list of teachers from setupTeaching
+  // Get subjects and teachers for this class from setupTeaching
+  const classTeaching = setupTeaching.find(t => t.name === className);
+  const subjects = classTeaching ? Object.keys(classTeaching.subjects || {}) : [];
   const teachers = new Set();
   setupTeaching.forEach(t => {
     Object.values(t.subjects || {}).forEach(name => { if (name) teachers.add(name); });
   });
-  const teacherOptions = Array.from(teachers).map(t => 
+  const allTeachers = Array.from(teachers);
+  
+  const subjectOptions = subjects.map(s => 
+    `<option value="${escapeHtml(s)}" ${slot.subject === s ? 'selected' : ''}>${escapeHtml(s)}</option>`
+  ).join('');
+  
+  const teacherOptions = allTeachers.map(t => 
     `<option value="${escapeHtml(t)}" ${slot.teacher === t ? 'selected' : ''}>${escapeHtml(t)}</option>`
   ).join('');
   
@@ -13973,7 +14002,12 @@ function editTimetableSlot(className, weekday, period) {
   modal.innerHTML = `<div class="timetable-edit-card">
     <h3>编辑课程 — ${className} 周${['','一','二','三','四','五'][weekday]} 第${period}节</h3>
     <label>科目</label>
-    <input type="text" id="ttEditSubject" value="${escapeHtml(slot.subject || '')}" placeholder="如：语文">
+    <select id="ttEditSubject" onchange="autoSelectTeacher('${className}', this.value)">
+      <option value="">-- 选择科目 --</option>
+      ${subjectOptions}
+      <option value="__custom__">自定义...</option>
+    </select>
+    <input type="text" id="ttEditSubjectCustom" style="display:none;margin-top:8px" placeholder="输入科目名称">
     <label>授课教师</label>
     <select id="ttEditTeacher">
       <option value="">-- 选择教师 --</option>
@@ -13989,6 +14023,31 @@ function editTimetableSlot(className, weekday, period) {
   </div>`;
   modal.onclick = function(e) { if (e.target === modal) closeTimetableEdit(); };
   document.body.appendChild(modal);
+  
+  // If custom subject was used before, show custom input
+  if (slot.subject && !subjects.includes(slot.subject)) {
+    document.getElementById('ttEditSubject').value = '__custom__';
+    document.getElementById('ttEditSubjectCustom').style.display = 'block';
+    document.getElementById('ttEditSubjectCustom').value = slot.subject;
+  }
+}
+
+function autoSelectTeacher(className, subject) {
+  const customInput = document.getElementById('ttEditSubjectCustom');
+  if (subject === '__custom__') {
+    customInput.style.display = 'block';
+    customInput.focus();
+    return;
+  } else {
+    customInput.style.display = 'none';
+  }
+  
+  // Find teacher for this subject in this class
+  const classTeaching = setupTeaching.find(t => t.name === className);
+  if (classTeaching && classTeaching.subjects && classTeaching.subjects[subject]) {
+    const teacherSelect = document.getElementById('ttEditTeacher');
+    teacherSelect.value = classTeaching.subjects[subject];
+  }
 }
 
 function closeTimetableEdit() {
@@ -13997,11 +14056,17 @@ function closeTimetableEdit() {
 }
 
 async function saveTimetableSlot(className, weekday, period) {
-  const subject = document.getElementById('ttEditSubject').value.trim();
+  let subject = '';
+  const subjectSelect = document.getElementById('ttEditSubject');
+  if (subjectSelect.value === '__custom__') {
+    subject = document.getElementById('ttEditSubjectCustom').value.trim();
+  } else {
+    subject = subjectSelect.value;
+  }
   const teacher = document.getElementById('ttEditTeacher').value;
   const room = document.getElementById('ttEditRoom').value.trim();
   
-  if (!subject) { showToast('请输入科目名称', 'error'); return; }
+  if (!subject) { showToast('请输入或选择科目名称', 'error'); return; }
   
   const key = `${weekday}-${period}`;
   if (!timetableData[className]) timetableData[className] = {};
@@ -14011,7 +14076,9 @@ async function saveTimetableSlot(className, weekday, period) {
   const result = await saveTimetableData();
   if (result.ok) {
     showToast('课程已保存');
-    document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
+    if (document.getElementById('ttContent')) {
+      document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
+    }
   } else {
     showToast('保存失败: ' + result.error, 'error');
   }
@@ -14306,37 +14373,46 @@ function renderTeacherDiscipline() {
       <div class="form-row">
         <div class="form-group">
           <label>内容描述</label>
-          <textarea id="discContent" placeholder="请描述具体情况..."></textarea>
+          <textarea id="discContentText" placeholder="请描述具体情况..."></textarea>
         </div>
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="toolbar-btn ghost" onclick="disciplineSelectedStudents.clear();document.getElementById('discContent').innerHTML=renderTeacherDiscipline()">取消</button>
         <button class="toolbar-btn primary" onclick="submitDisciplineRecord()">提交留言</button>
       </div>
     </div>`;
   }
   
-  // My records for this class today
+  // My records for this class (all dates)
   const myRecords = disciplineData.filter(r => 
-    r.classId === disciplineCurrentClass && r.teacherName === user.teacherName && r.date === disciplineCurrentDate
+    r.classId === disciplineCurrentClass && r.teacherName === user.teacherName
   ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   
-  if (myRecords.length > 0) {
-    html += `<div class="card"><div class="card-header"><span class="card-title">我的留言记录 (${disciplineCurrentDate})</span></div>
-    <div class="card-body"><div class="discipline-record-list">`;
-    myRecords.forEach(r => {
-      const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
-      html += `<div class="discipline-record-item">
-        <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
-        <div style="flex:1">
-          <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
-          <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.subject || '')} · ${r.date}</div>
-        </div>
-        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecord('${r.id}')">删除</button>
-      </div>`;
-    });
-    html += `</div></div></div>`;
+  html += `<div class="card"><div class="card-header">
+    <span class="card-title">我的留言记录 (共${myRecords.length}条)</span>
+    <button class="toolbar-btn ghost" style="font-size:12px" onclick="saveDisciplineData().then(r=>{if(r.ok)showToast('已保存');else showToast('保存失败','error')})">保存</button>
+  </div>
+  <div class="card-body"><div class="discipline-record-list">`;
+  
+  if (myRecords.length === 0) {
+    html += `<div style="text-align:center;color:var(--gray-400);padding:20px">暂无留言记录</div>`;
   }
+  
+  myRecords.forEach(r => {
+    const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+    html += `<div class="discipline-record-item">
+      <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
+      <div style="flex:1">
+        <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.subject || '')} · ${r.date}</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecord('${r.id}')">撤回</button>
+      </div>
+    </div>`;
+  });
+  html += `</div></div></div>`;
   
   html += `</div>`;
   return html;
@@ -14430,7 +14506,7 @@ async function submitDisciplineRecord() {
   const typeEl = document.querySelector('#discTypeBtns .discipline-type-btn.active');
   const type = typeEl ? (typeEl.classList.contains('praise') ? 'praise' : typeEl.classList.contains('discard') ? 'discard' : 'remind') : 'remind';
   const subject = document.getElementById('discSubject').value.trim();
-  const content = document.getElementById('discContent').value.trim();
+  const content = document.getElementById('discContentText').value.trim();
   
   if (!content) { showToast('请输入内容描述', 'error'); return; }
   
@@ -14466,11 +14542,64 @@ async function submitDisciplineRecord() {
 }
 
 async function deleteDisciplineRecord(recordId) {
+  if (!confirm('确定要撤回这条留言吗？')) return;
   disciplineData = disciplineData.filter(r => r.id !== recordId);
   const result = await saveDisciplineData();
   if (result.ok) {
-    showToast('已删除');
+    showToast('已撤回');
     document.getElementById('discContent').innerHTML = renderTeacherDiscipline();
+  }
+}
+
+function editDisciplineRecord(recordId) {
+  const record = disciplineData.find(r => r.id === recordId);
+  if (!record) return;
+  
+  const modal = document.createElement('div');
+  modal.className = 'timetable-edit-modal';
+  modal.id = 'discEditModal';
+  modal.innerHTML = `<div class="timetable-edit-card">
+    <h3>编辑留言</h3>
+    <label>学生：${escapeHtml(record.studentName)}</label>
+    <label>类型</label>
+    <select id="discEditType">
+      <option value="praise" ${record.type==='praise'?'selected':''}>表扬</option>
+      <option value="discard" ${record.type==='discard'?'selected':''}>违纪</option>
+      <option value="remind" ${record.type==='remind'?'selected':''}>提醒</option>
+    </select>
+    <label>科目</label>
+    <input type="text" id="discEditSubject" value="${escapeHtml(record.subject || '')}">
+    <label>内容</label>
+    <textarea id="discEditContent" style="width:100%;min-height:80px;padding:8px;border:1px solid var(--gray-200);border-radius:6px;margin-top:4px">${escapeHtml(record.content)}</textarea>
+    <div class="btn-row">
+      <button class="toolbar-btn ghost" onclick="document.getElementById('discEditModal').remove()">取消</button>
+      <button class="toolbar-btn primary" onclick="saveDisciplineEdit('${recordId}')">保存</button>
+    </div>
+  </div>`;
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+}
+
+async function saveDisciplineEdit(recordId) {
+  const record = disciplineData.find(r => r.id === recordId);
+  if (!record) return;
+  
+  record.type = document.getElementById('discEditType').value;
+  record.subject = document.getElementById('discEditSubject').value.trim();
+  record.content = document.getElementById('discEditContent').value.trim();
+  
+  if (!record.content) {
+    showToast('内容不能为空', 'error');
+    return;
+  }
+  
+  document.getElementById('discEditModal').remove();
+  const result = await saveDisciplineData();
+  if (result.ok) {
+    showToast('已更新');
+    document.getElementById('discContent').innerHTML = renderTeacherDiscipline();
+  } else {
+    showToast('保存失败: ' + result.error, 'error');
   }
 }
 
@@ -14571,17 +14700,18 @@ function renderDutyRosterContent() {
   html += `<div class="duty-setup-panel">
     <div class="setup-row">
       <label>轮换方式</label>
-      <select onchange="dutyData['${dutyCurrentClass}'].settings.cycleType=this.value;saveDutyData()">
+      <select id="dutyCycleType" onchange="dutyData['${dutyCurrentClass}'].settings.cycleType=this.value">
         <option value="daily" ${dd.settings.cycleType==='daily'?'selected':''}>按天轮换</option>
         <option value="weekly" ${dd.settings.cycleType==='weekly'?'selected':''}>按周轮换</option>
       </select>
       <label>起始日期</label>
-      <input type="date" value="${dd.settings.startDate}" onchange="dutyData['${dutyCurrentClass}'].settings.startDate=this.value;saveDutyData()">
+      <input type="date" id="dutyStartDate" value="${dd.settings.startDate}" onchange="dutyData['${dutyCurrentClass}'].settings.startDate=this.value">
       <label style="display:flex;align-items:center;gap:6px;min-width:auto;cursor:pointer">
-        <input type="checkbox" ${dd.settings.skipWeekends?'checked':''} onchange="dutyData['${dutyCurrentClass}'].settings.skipWeekends=this.checked;saveDutyData();document.getElementById('dutyContent').innerHTML=renderDutyRosterContent()">
+        <input type="checkbox" id="dutySkipWeekends" ${dd.settings.skipWeekends?'checked':''} onchange="dutyData['${dutyCurrentClass}'].settings.skipWeekends=this.checked">
         跳过周末
       </label>
       <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn ghost" onclick="saveDutyData().then(r=>{if(r.ok)showToast('已保存');else showToast('保存失败','error')})">保存设置</button>
       <button class="toolbar-btn primary" onclick="autoGenerateDutySchedule()">自动生成排班</button>
     </div>
   </div>`;
