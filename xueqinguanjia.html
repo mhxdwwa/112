@@ -16567,37 +16567,6 @@ let repairData = {};  // { className: [{ id, category, description, images: [], 
 let repairCurrentClass = '';
 let repairCurrentTab = 'form'; // 'form' or 'records'
 
-// ===== 用户维度的删除记录管理（各自删除互不影响）=====
-function getDeletedRepairIds() {
-  const userName = xqCurrentUser?.teacherName;
-  if (!userName) return [];
-  try {
-    const key = 'xq_deleted_repair_' + userName;
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
-  } catch (e) { return []; }
-}
-
-function addDeletedRepairId(recordId) {
-  const userName = xqCurrentUser?.teacherName;
-  if (!userName) return;
-  try {
-    const key = 'xq_deleted_repair_' + userName;
-    const ids = getDeletedRepairIds();
-    if (!ids.includes(recordId)) {
-      ids.push(recordId);
-      localStorage.setItem(key, JSON.stringify(ids));
-    }
-  } catch (e) {}
-}
-
-// 过滤掉当前用户已删除的记录
-function filterDeletedRecords(records) {
-  const deletedIds = getDeletedRepairIds();
-  if (deletedIds.length === 0) return records;
-  return records.filter(r => !deletedIds.includes(r.id));
-}
-
 // 清理超过7天的已处理记录（所有用户共享）
 async function cleanupExpiredRepairRecords() {
   const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -16860,9 +16829,6 @@ async function submitRepairDeclaration() {
 }
 
 function renderRepairRecordsList(records, isGlobalView) {
-  // 过滤掉当前用户已删除的记录
-  records = filterDeletedRecords(records);
-  
   if (records.length === 0) {
     return `<div style="text-align:center;padding:40px;color:var(--gray-400)">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0 auto 12px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -16909,7 +16875,7 @@ function renderRepairRecordsList(records, isGlobalView) {
         ` : ''}
         ${record.status === 'resolved' ? `
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end">
-            <button class="toolbar-btn ghost" style="font-size:12px;color:var(--danger);border-color:var(--danger)" onclick="deleteRepairRecord('${record.id}', ${isGlobalView})">删除记录</button>
+            <button class="toolbar-btn ghost" style="font-size:12px;color:var(--danger);border-color:var(--danger)" onclick="deleteRepairRecord('${record.className || repairCurrentClass}', '${record.id}', ${isGlobalView})">删除记录</button>
           </div>
         ` : ''}
       </div>
@@ -16997,21 +16963,34 @@ async function resolveRepairDeclaration(className, recordId) {
   }
 }
 
-async function deleteRepairRecord(recordId, isGlobalView) {
-  if (!confirm('确定要删除这条记录吗？（仅从您的视图中移除，其他用户仍可查看）')) return;
+async function deleteRepairRecord(className, recordId, isGlobalView) {
+  if (!confirm('确定要删除这条记录吗？删除后所有用户都将无法看到此记录。')) return;
   
-  // 添加到当前用户的已删除列表
-  addDeletedRepairId(recordId);
+  const records = getClassRepairData(className);
+  const index = records.findIndex(r => r.id === recordId);
   
-  showToast('记录已从您的视图中移除', 'success');
+  if (index === -1) {
+    showToast('未找到该记录', 'error');
+    return;
+  }
   
-  // 根据视图刷新对应的页面
-  if (isGlobalView) {
-    // 工人/领导视图
-    document.getElementById('repairContent').innerHTML = renderRepairRecords();
+  // 从共享数据中删除
+  records.splice(index, 1);
+  
+  // 同步到服务器（所有用户都会看到删除结果）
+  const result = await saveRepairData();
+  if (result.ok) {
+    showToast('记录已删除', 'success');
+    // 根据视图刷新对应的页面
+    if (isGlobalView) {
+      // 工人/领导视图
+      document.getElementById('repairContent').innerHTML = renderRepairRecords();
+    } else {
+      // 班主任视图
+      document.getElementById('repairContent').innerHTML = renderRepairDeclarationContent();
+    }
   } else {
-    // 班主任视图
-    document.getElementById('repairContent').innerHTML = renderRepairDeclarationContent();
+    showToast('删除失败，请重试', 'error');
   }
 }
 
