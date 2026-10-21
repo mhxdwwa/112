@@ -13974,14 +13974,26 @@ async function loadTimetableData() {
 }
 
 async function saveClassTimetableData() {
-  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
-  const result = await xqSaveConfigToServer('class_timetable', classTimetableData);
+  // 使用与座位表相同的保存模式（set_all）
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'class_timetable': classTimetableData
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
   return result;
 }
 
 async function savePersonalTimetableData() {
-  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
-  const result = await xqSaveConfigToServer('personal_timetable', personalTimetableData);
+  // 使用与座位表相同的保存模式（set_all）
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'personal_timetable': personalTimetableData
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
   return result;
 }
 
@@ -14768,8 +14780,14 @@ async function loadDisciplineData() {
 }
 
 async function saveDisciplineData() {
-  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
-  const result = await xqSaveConfigToServer('discipline', disciplineData);
+  // 使用与座位表相同的保存模式（set_all）
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'discipline': disciplineData
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
   return result;
 }
 
@@ -15410,8 +15428,14 @@ async function loadDutyData() {
 }
 
 async function saveDutyData() {
-  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
-  const result = await xqSaveConfigToServer('duty', dutyData);
+  // 使用与座位表相同的保存模式（set_all）
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'duty': dutyData
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
   return result;
 }
 
