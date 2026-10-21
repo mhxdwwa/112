@@ -10347,7 +10347,7 @@ function openQuickDiscipline(cls, studentId, studentName) {
     <label>第几节课</label>
     <select id="quickDiscPeriod">
       <option value="">-- 选择节次 --</option>
-      ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
+      ${timetablePeriodNames.map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
     </select>
     <label>内容</label>
     <textarea id="quickDiscContent" rows="3" placeholder="输入留言内容..." style="width:100%;padding:8px 12px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;resize:vertical;font-family:inherit"></textarea>
@@ -15085,7 +15085,7 @@ function renderTeacherDiscipline() {
           <label>第几节课</label>
           <select id="discPeriod" class="toolbar-select">
             <option value="">-- 选择节次 --</option>
-            ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
+            ${timetablePeriodNames.map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -15409,7 +15409,7 @@ function renderHtWriteTab() {
           <label>第几节课</label>
           <select id="discPeriod" class="toolbar-select">
             <option value="">-- 选择节次 --</option>
-            ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
+            ${timetablePeriodNames.map((name, i) => `<option value="${i+1}">${name}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -15879,6 +15879,9 @@ function renderDutyRosterContent() {
     
     html += `<div class="duty-group-item" draggable="true" 
       ondragstart="dutyDragStart(event,${gi})" 
+      ondragover="dutyGroupDragOver(event,${gi})"
+      ondrop="dutyGroupDrop(event,${gi})"
+      oncontextmenu="showDutyGroupContextMenu(event,${gi})"
       onclick="toggleDutyGroupExpand('${catKey}',${gi})">
       <span class="group-toggle ${isExpanded?'open':''}">&#9654;</span>
       <span class="group-label">第${gi+1}组</span>
@@ -15890,7 +15893,7 @@ function renderDutyRosterContent() {
     </div>`;
     html += `<div class="duty-group-detail ${isExpanded?'show':''}" id="dutyGroupDetail_${catKey}_${gi}">
       <strong>成员：</strong>${studentNames.join('、') || '（空）'}
-      <div style="margin-top:6px;color:var(--gray-400);font-size:11px">拖拽此组到上方日期可安排值日</div>
+      <div style="margin-top:6px;color:var(--gray-400);font-size:11px">拖拽此组到上方可交换顺序 | 右键可设置罚做</div>
     </div>`;
   });
   html += `</div></div></div>`;
@@ -16042,6 +16045,9 @@ function renderDutyDailyStrip(schedule, groups, students) {
       
       if (entry && entry.holiday) {
         html += `<div class="daily-holiday">${entry.name || '放假'}</div>`;
+      } else if (entry && entry.punished) {
+        html += `<div class="daily-holiday" style="color:var(--danger)">罚做</div>
+        <div class="daily-group" style="text-decoration:line-through;opacity:0.6">第${entry.groupIndex+1}组</div>`;
       } else if (entry && groups[entry.groupIndex] !== undefined) {
         const group = groups[entry.groupIndex];
         const names = (group.students || []).map(sid => {
@@ -16070,6 +16076,169 @@ function dutyDragStart(event, groupIndex) {
   dutyDragGroupIndex = groupIndex;
   event.dataTransfer.setData('text/plain', String(groupIndex));
   event.dataTransfer.effectAllowed = 'move';
+}
+
+// Drag over another group to swap order
+function dutyGroupDragOver(event, targetIndex) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+}
+
+// Drop on another group to swap order
+function dutyGroupDrop(event, targetIndex) {
+  event.preventDefault();
+  event.stopPropagation();
+  
+  const sourceIndex = dutyDragGroupIndex;
+  if (sourceIndex === null || sourceIndex === undefined || sourceIndex === targetIndex) return;
+  
+  const dd = getClassDutyData(dutyCurrentClass);
+  const catKey = String(dutyCurrentCategory);
+  const groups = dd.groups[catKey] || [];
+  
+  if (sourceIndex >= 0 && sourceIndex < groups.length && targetIndex >= 0 && targetIndex < groups.length) {
+    // Swap the two groups
+    const temp = groups[sourceIndex];
+    groups[sourceIndex] = groups[targetIndex];
+    groups[targetIndex] = temp;
+    
+    // Update schedule to reflect new group indices
+    const schedule = dd.schedule[catKey] || {};
+    Object.keys(schedule).forEach(dateStr => {
+      const entry = schedule[dateStr];
+      if (entry && !entry.holiday && entry.groupIndex !== undefined) {
+        if (entry.groupIndex === sourceIndex) {
+          entry.groupIndex = targetIndex;
+        } else if (entry.groupIndex === targetIndex) {
+          entry.groupIndex = sourceIndex;
+        }
+      }
+    });
+    
+    dutyDragGroupIndex = null;
+    saveDutyData().then(() => {
+      showToast('已交换分组顺序');
+      document.getElementById('dutyContent').innerHTML = renderDutyRosterContent();
+    });
+  }
+}
+
+// Right-click context menu for group
+function showDutyGroupContextMenu(event, groupIndex) {
+  event.preventDefault();
+  event.stopPropagation();
+  
+  // Remove existing context menu if any
+  const existingMenu = document.getElementById('dutyContextMenu');
+  if (existingMenu) existingMenu.remove();
+  
+  const menu = document.createElement('div');
+  menu.id = 'dutyContextMenu';
+  menu.style.cssText = `
+    position: fixed;
+    left: ${event.clientX}px;
+    top: ${event.clientY}px;
+    background: white;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 10000;
+    min-width: 150px;
+  `;
+  
+  menu.innerHTML = `
+    <div onclick="punishDutyGroup(${groupIndex}, 1)" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--gray-200);font-size:13px" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='white'">
+      罚做 1 天
+    </div>
+    <div onclick="punishDutyGroup(${groupIndex}, 2)" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--gray-200);font-size:13px" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='white'">
+      罚做 2 天
+    </div>
+    <div onclick="punishDutyGroup(${groupIndex}, 3)" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--gray-200);font-size:13px" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='white'">
+      罚做 3 天
+    </div>
+    <div onclick="showCustomPunishDialog(${groupIndex})" style="padding:10px 16px;cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='white'">
+      自定义天数...
+    </div>
+  `;
+  
+  document.body.appendChild(menu);
+  
+  // Close menu when clicking elsewhere
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu() {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }, { once: true });
+  }, 0);
+}
+
+// Punish a group by skipping it for N days
+function punishDutyGroup(groupIndex, days) {
+  const dd = getClassDutyData(dutyCurrentClass);
+  const catKey = String(dutyCurrentCategory);
+  const schedule = dd.schedule[catKey] || {};
+  const groups = dd.groups[catKey] || [];
+  
+  if (groups.length === 0) {
+    showToast('没有分组可罚做', 'warning');
+    return;
+  }
+  
+  // Find today and the next N working days
+  const today = new Date();
+  let workingDaysFound = 0;
+  let currentDate = new Date(today);
+  const datesToPunish = [];
+  
+  while (workingDaysFound < days) {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const holidayInfo = isDutyHoliday(dateStr, currentDate);
+    
+    if (!holidayInfo.isHoliday) {
+      // This is a working day
+      const entry = schedule[dateStr];
+      if (!entry || (!entry.holiday && !entry.locked)) {
+        // Only punish if the day is not already locked or holiday
+        datesToPunish.push(dateStr);
+        workingDaysFound++;
+      }
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+    
+    // Safety limit: don't search more than 60 days ahead
+    if (currentDate > new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000)) {
+      break;
+    }
+  }
+  
+  // Mark these days as "punished" (skip this group)
+  datesToPunish.forEach(dateStr => {
+    schedule[dateStr] = { punished: true, groupIndex: groupIndex, locked: true };
+  });
+  
+  // Close context menu
+  const menu = document.getElementById('dutyContextMenu');
+  if (menu) menu.remove();
+  
+  saveDutyData().then(() => {
+    showToast(`已设置第${groupIndex + 1}组罚做${days}天`);
+    document.getElementById('dutyContent').innerHTML = renderDutyRosterContent();
+  });
+}
+
+// Show custom punishment dialog
+function showCustomPunishDialog(groupIndex) {
+  const menu = document.getElementById('dutyContextMenu');
+  if (menu) menu.remove();
+  
+  showModal('自定义罚做天数', `
+    <div class="form-group">
+      <label class="form-label">罚做天数</label>
+      <input type="number" class="form-input" id="customPunishDays" min="1" max="30" value="1" placeholder="输入天数">
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+      <button class="toolbar-btn primary" onclick="const days=parseInt(document.getElementById('customPunishDays').value);if(days>0){punishDutyGroup(${groupIndex},days);hideModal();}else{showToast('请输入有效天数','warning');}">确认</button>`);
 }
 
 function dutyDropOnDay(event, dateStr) {
