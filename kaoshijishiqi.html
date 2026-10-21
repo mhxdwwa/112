@@ -1113,12 +1113,8 @@
 
     if(lastRem !== null){
       if(lastRem > 905000 && rem <= 905000 && rem > 0){
-        chime(2, 784);
         speak('距离考试结束时间还有15分钟');
       }
-      if(lastRem > 300000 && rem <= 300000 && rem > 60000) chime(2, 784);
-      if(lastRem > 60000  && rem <= 60000  && rem > 0)     chime(3, 880);
-      if(lastRem > 0      && rem <= 0)                      startEndAlarm();
     }
     lastRem = rem;
   }
