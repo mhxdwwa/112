@@ -4210,15 +4210,15 @@ function renderPage(pageId) {
         content.innerHTML = renderDutyRoster();
       });
     }
-    // 进入维修申报页面时加载数据
+    // 进入维修申报页面时加载数据（强制刷新以获取最新数据）
     if (pageId === 'repair-declaration') {
-      loadRepairData().then(() => {
+      loadRepairData(true).then(() => {
         content.innerHTML = renderRepairDeclaration();
       });
     }
-    // 进入设备申报记录页面时加载数据
+    // 进入设备申报记录页面时加载数据（强制刷新以获取最新数据）
     if (pageId === 'repair-records') {
-      loadRepairData().then(() => {
+      loadRepairData(true).then(() => {
         content.innerHTML = renderRepairRecords();
       });
     }
@@ -16540,7 +16540,25 @@ let repairData = {};  // { className: [{ id, category, description, images: [], 
 let repairCurrentClass = '';
 let repairCurrentTab = 'form'; // 'form' or 'records'
 
-async function loadRepairData() {
+async function loadRepairData(forceRefresh) {
+  // 先尝试从本地缓存加载（快速响应）
+  if (!forceRefresh) {
+    try {
+      const cached = localStorage.getItem('xq_repair_data');
+      const cacheTime = parseInt(localStorage.getItem('xq_repair_data_time') || '0');
+      // 如果缓存存在且不超过30秒，直接使用
+      if (cached && (Date.now() - cacheTime < 30000)) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') {
+          repairData = parsed;
+          console.log('[Repair] Loaded from local cache');
+          return;
+        }
+      }
+    } catch (e) {}
+  }
+  
+  // 从服务器加载最新数据
   const result = await xqApi('config', { action: 'get' });
   if (result.ok && result.config && result.config.repair) {
     let rawRepair = result.config.repair.data || {};
@@ -16557,17 +16575,34 @@ async function loadRepairData() {
     }
     repairData = rawRepair;
     console.log('[Repair] Loaded data for', Object.keys(repairData).length, 'classes');
+    
+    // 更新本地缓存
+    try {
+      localStorage.setItem('xq_repair_data', JSON.stringify(repairData));
+      localStorage.setItem('xq_repair_data_time', Date.now().toString());
+    } catch (e) {}
   }
 }
 
 async function saveRepairData() {
+  // 使用 set 而不是 set_all，只保存 repair 数据，减少传输量
   const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'repair': repairData
-    },
+    action: 'set',
+    configKey: 'repair',
+    configData: repairData,
     teacherName: xqCurrentUser?.teacherName || ''
   });
+  
+  // 保存成功后，更新本地缓存
+  if (result.ok) {
+    try {
+      localStorage.setItem('xq_repair_data', JSON.stringify(repairData));
+      localStorage.setItem('xq_repair_data_time', Date.now().toString());
+    } catch (e) {
+      console.warn('[Repair] Failed to cache repair data:', e);
+    }
+  }
+  
   return result;
 }
 
