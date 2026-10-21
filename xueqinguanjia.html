@@ -1428,6 +1428,8 @@ tbody tr:last-child td { border-bottom: none; }
 .duty-daily-item:hover { border-color: var(--primary-light); background: var(--primary-bg); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
 .duty-daily-item.today { border-color: var(--primary); background: var(--primary-bg); box-shadow: 0 0 0 1px var(--primary-light); }
 .duty-daily-item.empty-slot { border-style: dashed; opacity: 0.5; }
+.duty-daily-item.holiday { background: var(--gray-50); border-color: var(--gray-200); opacity: 0.7; }
+.duty-daily-item.workday-override { border-color: var(--warning); border-style: dashed; }
 .duty-daily-item .daily-date { font-size: 11px; color: var(--gray-500); font-weight: 500; }
 .duty-daily-item .daily-weekday { font-size: 14px; font-weight: 600; color: var(--gray-700); margin-top: 2px; }
 .duty-daily-item .daily-group { font-size: 12px; color: var(--primary); font-weight: 600; margin-top: 6px; padding: 2px 6px; background: var(--primary-bg); border-radius: 4px; display: inline-block; }
@@ -15655,6 +15657,99 @@ function dd_settings_save(key, val) {
   dd.settings[key] = val;
 }
 
+// 中国法定节假日（含调休）
+// 数据来源：国务院办公厅公告（2025）+ 预估（2026）
+// 格式：'YYYY-MM-DD': '假期名称'
+function getChineseHolidays(year) {
+  const holidays = {};
+  
+  if (year === 2025) {
+    // 元旦 1.1-1.1
+    holidays['2025-01-01'] = '元旦';
+    // 春节 1.28-2.4
+    for (let d = 28; d <= 31; d++) holidays[`2025-01-${String(d).padStart(2,'0')}`] = '春节';
+    for (let d = 1; d <= 4; d++) holidays[`2025-02-${String(d).padStart(2,'0')}`] = '春节';
+    // 清明节 4.4-4.6
+    holidays['2025-04-04'] = '清明节';
+    holidays['2025-04-05'] = '清明节';
+    holidays['2025-04-06'] = '清明节';
+    // 劳动节 5.1-5.5
+    for (let d = 1; d <= 5; d++) holidays[`2025-05-${String(d).padStart(2,'0')}`] = '劳动节';
+    // 端午节 5.31-6.2
+    holidays['2025-05-31'] = '端午节';
+    holidays['2025-06-01'] = '端午节';
+    holidays['2025-06-02'] = '端午节';
+    // 中秋节+国庆节 10.1-10.8
+    for (let d = 1; d <= 8; d++) holidays[`2025-10-${String(d).padStart(2,'0')}`] = '国庆节';
+    // 调休上班日（周末需上班）
+    // 春节调休：1.26(周日)、2.8(周六)上班
+    // 劳动节调休：4.27(周日)上班
+    // 国庆节调休：9.28(周日)、10.11(周六)上班
+  } else if (year === 2026) {
+    // 2026年预估（以国务院正式公告为准）
+    holidays['2026-01-01'] = '元旦';
+    holidays['2026-01-02'] = '元旦';
+    holidays['2026-01-03'] = '元旦';
+    // 春节预估（2.17除夕）
+    for (let d = 16; d <= 22; d++) holidays[`2026-02-${String(d).padStart(2,'0')}`] = '春节';
+    // 清明节预估
+    holidays['2026-04-04'] = '清明节';
+    holidays['2026-04-05'] = '清明节';
+    holidays['2026-04-06'] = '清明节';
+    // 劳动节预估
+    for (let d = 1; d <= 5; d++) holidays[`2026-05-${String(d).padStart(2,'0')}`] = '劳动节';
+    // 端午节预估（6.19）
+    holidays['2026-06-19'] = '端午节';
+    holidays['2026-06-20'] = '端午节';
+    holidays['2026-06-21'] = '端午节';
+    // 中秋节预估（9.25）
+    holidays['2026-09-25'] = '中秋节';
+    holidays['2026-09-26'] = '中秋节';
+    holidays['2026-09-27'] = '中秋节';
+    // 国庆节预估
+    for (let d = 1; d <= 7; d++) holidays[`2026-10-${String(d).padStart(2,'0')}`] = '国庆节';
+  }
+  
+  return holidays;
+}
+
+// 调休上班日（周末需要上班的日期）
+function getWorkdayOverrides(year) {
+  const workdays = new Set();
+  if (year === 2025) {
+    // 春节调休
+    workdays.add('2025-01-26'); // 周日上班
+    workdays.add('2025-02-08'); // 周六上班
+    // 劳动节调休
+    workdays.add('2025-04-27'); // 周日上班
+    // 国庆节调休
+    workdays.add('2025-09-28'); // 周日上班
+    workdays.add('2025-10-11'); // 周六上班
+  } else if (year === 2026) {
+    // 2026年调休待国务院公布后更新
+  }
+  return workdays;
+}
+
+// 判断某天是否是休息日（法定节假日 或 普通周末且非调休上班）
+function isDutyHoliday(dateStr, dateObj) {
+  const year = dateObj.getFullYear();
+  const holidays = getChineseHolidays(year);
+  const workdays = getWorkdayOverrides(year);
+  const day = dateObj.getDay(); // 0=Sun, 6=Sat
+  
+  // 法定节假日 → 休息
+  if (holidays[dateStr]) return { isHoliday: true, name: holidays[dateStr] };
+  
+  // 调休上班日（周末但要上班）→ 正常值日
+  if (workdays.has(dateStr)) return { isHoliday: false, name: null };
+  
+  // 普通周末 → 休息
+  if (day === 0 || day === 6) return { isHoliday: true, name: '周末' };
+  
+  return { isHoliday: false, name: null };
+}
+
 // === Daily duty overview strip ===
 function renderDutyDailyStrip(schedule, groups, students) {
   const today = new Date();
@@ -15664,10 +15759,10 @@ function renderDutyDailyStrip(schedule, groups, students) {
   
   let html = `<div class="card" style="margin-bottom:20px"><div class="card-header">
     <span class="card-title">每日值日</span>
-    <span style="font-size:11px;color:var(--gray-400)">拖拽分组到日期安排值日 | 点击日期可设为放假/清空</span>
+    <span style="font-size:11px;color:var(--gray-400)">拖拽分组到日期安排值日 | 点击日期可设为放假/清空 | 法定节假日自动标记</span>
   </div><div class="card-body">`;
   
-  // Show 3 weeks, only weekdays (Mon-Fri)
+  // Show 3 weeks, 7 days a week
   for (let weekOffset = 0; weekOffset < 3; weekOffset++) {
     const weekStart = new Date(startOfWeek);
     weekStart.setDate(startOfWeek.getDate() + weekOffset * 7);
@@ -15676,17 +15771,20 @@ function renderDutyDailyStrip(schedule, groups, students) {
       ${weekStart.getMonth()+1}月${weekStart.getDate()}日 起</div>`;
     html += `<div class="duty-daily-strip">`;
     
-    // Only show Monday to Friday (5 days)
-    for (let d = 0; d < 5; d++) {
+    for (let d = 0; d < 7; d++) {
       const cellDate = new Date(weekStart);
       cellDate.setDate(weekStart.getDate() + d);
       const dateStr = cellDate.toISOString().split('T')[0];
       const isToday = dateStr === today.toISOString().split('T')[0];
       const entry = schedule[dateStr];
+      const holidayInfo = isDutyHoliday(dateStr, cellDate);
+      const isWeekend = d >= 5;
       
       let cls = 'duty-daily-item';
       if (isToday) cls += ' today';
-      if (!entry) cls += ' empty-slot';
+      if (holidayInfo.isHoliday && !entry) cls += ' holiday';
+      else if (!entry) cls += ' empty-slot';
+      if (isWeekend && !holidayInfo.isHoliday) cls += ' workday-override';
       
       html += `<div class="${cls}" 
         ondragover="event.preventDefault();this.classList.add('drag-over')" 
@@ -15697,7 +15795,7 @@ function renderDutyDailyStrip(schedule, groups, students) {
         <div class="daily-weekday">${weekDayNames[cellDate.getDay()]}</div>`;
       
       if (entry && entry.holiday) {
-        html += `<div class="daily-holiday">放假</div>`;
+        html += `<div class="daily-holiday">${entry.name || '放假'}</div>`;
       } else if (entry && groups[entry.groupIndex] !== undefined) {
         const group = groups[entry.groupIndex];
         const names = (group.students || []).map(sid => {
@@ -15706,6 +15804,8 @@ function renderDutyDailyStrip(schedule, groups, students) {
         });
         html += `<div class="daily-group">第${entry.groupIndex+1}组</div>
         <div class="daily-names">${names.join('、')}</div>`;
+      } else if (holidayInfo.isHoliday) {
+        html += `<div class="daily-holiday">${holidayInfo.name}</div>`;
       } else {
         html += `<div class="daily-holiday" style="color:var(--gray-300)">未安排</div>`;
       }
@@ -15963,18 +16063,28 @@ function autoGenerateDutySchedule() {
     const dateStr = date.toISOString().split('T')[0];
     const dateDayOfWeek = date.getDay();
     
-    // Skip weekends if configured (Sunday=0, Saturday=6)
-    if (skipWeekends && (dateDayOfWeek === 0 || dateDayOfWeek === 6)) continue;
+    // Don't overwrite locked entries
+    if (schedule[dateStr] && schedule[dateStr].locked) continue;
     
-    // Don't overwrite locked entries or holidays
-    if (schedule[dateStr] && (schedule[dateStr].locked || schedule[dateStr].holiday)) continue;
+    // Check Chinese national holidays
+    const holidayInfo = isDutyHoliday(dateStr, date);
+    
+    // If it's a holiday (national holiday or weekend), mark as holiday
+    if (holidayInfo.isHoliday) {
+      schedule[dateStr] = { holiday: true, locked: false, name: holidayInfo.name };
+      continue;
+    }
+    
+    // It's a workday (including workday overrides on weekends)
+    // Don't overwrite existing holiday entries
+    if (schedule[dateStr] && schedule[dateStr].holiday) continue;
     
     schedule[dateStr] = { groupIndex: groupPointer, locked: false };
     groupPointer = (groupPointer + 1) % groups.length;
   }
   
   saveDutyData().then(() => {
-    showToast('排班已自动生成并保存');
+    showToast('排班已自动生成并保存（已避开法定节假日）');
     document.getElementById('dutyContent').innerHTML = renderDutyRosterContent();
   });
 }
