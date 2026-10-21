@@ -4104,6 +4104,10 @@ function renderPage(pageId) {
     if (pageId === 'teach-classes' || pageId === 'my-classes') {
       loadTimetableData();
     }
+    // 进入座位表页面时加载纪律数据（用于快速添加留言）
+    if (pageId === 'seating' || pageId === 'class-seating' || pageId === 'my-class') {
+      loadDisciplineData();
+    }
     // 进入纪律留言页面时加载数据
     if (pageId === 'discipline') {
       loadDisciplineData().then(() => {
@@ -10186,6 +10190,22 @@ function showStudentDetail(cls, id) {
     </div>
   `;
 
+  // 纪律留言按钮（仅教师/班主任/领导可见）
+  let disciplineBtnHtml = '';
+  const userForDisc = xqCurrentUser || {};
+  if (userForDisc.isTeacher || userForDisc.isHeadteacher || userForDisc.isLeader) {
+    disciplineBtnHtml = `
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-200)">
+        <button class="toolbar-btn primary" style="width:100%" onclick="openQuickDiscipline('${cls}',${s.id},'${escapeHtml(s.name)}')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          添加纪律留言
+        </button>
+      </div>
+    `;
+  }
+
   showModal(`${s.name} 详细信息`, `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="form-group"><div class="form-label">学生姓名</div><div style="font-weight:600;font-size:15px">${s.name}</div></div>
@@ -10199,7 +10219,103 @@ function showStudentDetail(cls, id) {
     ${leaveDetails}
     ${markBoardingHtml}
     ${familyHtml}
+    ${disciplineBtnHtml}
   `, '<button class="toolbar-btn primary" onclick="hideModal()">关闭</button>', true);
+}
+
+function openQuickDiscipline(cls, studentId, studentName) {
+  hideModal(); // 关闭学生详情弹窗
+  
+  const user = xqCurrentUser || {};
+  const classSubjects = getTeacherClassSubjects();
+  const mySubject = classSubjects[cls] || '';
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 获取该学生今日的纪律记录
+  const existingRecords = disciplineData.filter(r => 
+    r.classId === cls && r.studentId === studentId && r.date === today
+  );
+  
+  let existingHtml = '';
+  if (existingRecords.length > 0) {
+    existingHtml = `<div style="margin-bottom:16px;padding:12px;background:var(--gray-50);border-radius:8px">
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px">今日已有 ${existingRecords.length} 条记录：</div>
+      ${existingRecords.map(r => {
+        const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+        const typeColor = r.type === 'praise' ? 'var(--accent)' : r.type === 'discard' ? 'var(--danger)' : 'var(--warning)';
+        return `<div style="font-size:12px;color:var(--gray-700);margin-bottom:4px">
+          <span style="color:${typeColor};font-weight:500">[${typeLabel}]</span> ${escapeHtml(r.content)}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  
+  const modal = document.createElement('div');
+  modal.className = 'timetable-edit-modal';
+  modal.id = 'quickDiscModal';
+  modal.innerHTML = `<div class="timetable-edit-card" style="max-width:500px">
+    <h3>添加纪律留言 — ${escapeHtml(studentName)}</h3>
+    <p style="font-size:12px;color:var(--gray-500);margin-bottom:12px">${escapeHtml(cls)} · ${today}</p>
+    ${existingHtml}
+    <label>类型</label>
+    <select id="quickDiscType">
+      <option value="praise">表扬</option>
+      <option value="discard">违纪</option>
+      <option value="remind">提醒</option>
+    </select>
+    <label>科目</label>
+    <input type="text" id="quickDiscSubject" value="${escapeHtml(mySubject)}" placeholder="输入科目">
+    <label>内容</label>
+    <textarea id="quickDiscContent" rows="3" placeholder="输入留言内容..." style="width:100%;padding:8px 12px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;resize:vertical;font-family:inherit"></textarea>
+    <div class="btn-row">
+      <button class="toolbar-btn ghost" onclick="closeQuickDiscipline()">取消</button>
+      <button class="toolbar-btn primary" onclick="submitQuickDiscipline('${cls}',${studentId},'${escapeHtml(studentName)}')">提交</button>
+    </div>
+  </div>`;
+  
+  modal.onclick = function(e) { if (e.target === modal) closeQuickDiscipline(); };
+  document.body.appendChild(modal);
+}
+
+function closeQuickDiscipline() {
+  const modal = document.getElementById('quickDiscModal');
+  if (modal) modal.remove();
+}
+
+async function submitQuickDiscipline(cls, studentId, studentName) {
+  const type = document.getElementById('quickDiscType').value;
+  const subject = document.getElementById('quickDiscSubject').value.trim();
+  const content = document.getElementById('quickDiscContent').value.trim();
+  
+  if (!content) {
+    showToast('请输入留言内容', 'error');
+    return;
+  }
+  
+  const user = xqCurrentUser || {};
+  const record = {
+    classId: cls,
+    teacherName: user.teacherName || '',
+    studentId: studentId,
+    studentName: studentName,
+    type: type,
+    subject: subject,
+    content: content,
+    date: new Date().toISOString().split('T')[0],
+    createdAt: new Date().toISOString()
+  };
+  
+  disciplineData.push(record);
+  const result = await saveDisciplineData();
+  
+  if (result.ok) {
+    showToast('纪律留言已保存');
+    closeQuickDiscipline();
+  } else {
+    showToast('保存失败：' + (result.error || '未知错误'), 'error');
+    // 移除刚添加的记录
+    disciplineData.pop();
+  }
 }
 
 function copyPhoneNumber(phone, btn) {
@@ -13819,7 +13935,16 @@ let classTimetableData = {};  // { 'className': { '1-1': {subject, teacher, room
 // 个人课程表：教师自己编辑的课程段（存储在班级课程表中，但标记为个人编辑）
 let personalTimetableData = {};  // { 'teacherName': { 'className': { '1-1': {subject, room}, ... } } }
 let timetablePeriods = 8;  // 默认8节课
+let timetablePeriodNames = ['早读', '第一节', '第二节', '第三节', '第四节', '第五节', '第六节', '第七节', '第八节', '第九节', '第十节', '第十一节', '第十二节'];
 let timetableReminderInterval = null;
+
+// 获取节次名称
+function getPeriodName(period) {
+  if (period >= 1 && period <= timetablePeriodNames.length) {
+    return timetablePeriodNames[period - 1];
+  }
+  return `第${period}节`;
+}
 
 async function loadTimetableData() {
   const result = await xqApi('config', { action: 'get' });
@@ -13828,6 +13953,17 @@ async function loadTimetableData() {
     if (result.config.class_timetable) {
       classTimetableData = result.config.class_timetable.data || {};
       console.log('[ClassTimetable] Loaded data for', Object.keys(classTimetableData).length, 'classes');
+      // 加载节次名称
+      if (classTimetableData._periodNames && Array.isArray(classTimetableData._periodNames)) {
+        timetablePeriodNames = classTimetableData._periodNames;
+      }
+      // 加载节数（从第一个班级获取）
+      if (classTimetableData._periods) {
+        const firstClass = Object.keys(classTimetableData._periods)[0];
+        if (firstClass && classTimetableData._periods[firstClass]) {
+          timetablePeriods = classTimetableData._periods[firstClass];
+        }
+      }
     }
     // 加载个人课程表
     if (result.config.personal_timetable) {
@@ -13838,24 +13974,14 @@ async function loadTimetableData() {
 }
 
 async function saveClassTimetableData() {
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'class_timetable': classTimetableData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
+  const result = await xqSaveConfigToServer('class_timetable', classTimetableData);
   return result;
 }
 
 async function savePersonalTimetableData() {
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'personal_timetable': personalTimetableData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
+  const result = await xqSaveConfigToServer('personal_timetable', personalTimetableData);
   return result;
 }
 
@@ -13952,6 +14078,64 @@ function changeTimetablePeriods(className, periods) {
   document.getElementById('ttContent').innerHTML = renderTimetableGrid(className);
 }
 
+function showPeriodNamesEditor() {
+  const modal = document.createElement('div');
+  modal.className = 'timetable-edit-modal';
+  modal.id = 'periodNamesModal';
+  
+  let inputsHtml = '';
+  for (let i = 0; i < timetablePeriods; i++) {
+    inputsHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="min-width:60px;font-size:13px;color:var(--gray-600)">第${i+1}节：</span>
+      <input type="text" id="periodName_${i}" value="${escapeHtml(timetablePeriodNames[i] || `第${i+1}节`)}" 
+        style="flex:1;padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px"
+        placeholder="输入节次名称">
+    </div>`;
+  }
+  
+  modal.innerHTML = `<div class="timetable-edit-card" style="max-width:400px">
+    <h3>自定义节次名称</h3>
+    <p style="font-size:12px;color:var(--gray-500);margin-bottom:12px">为每个节次设置显示名称，如"早读"、"第一节"等</p>
+    <div style="max-height:400px;overflow-y:auto;margin-bottom:16px">
+      ${inputsHtml}
+    </div>
+    <div class="btn-row">
+      <button class="toolbar-btn ghost" onclick="closePeriodNamesEditor()">取消</button>
+      <button class="toolbar-btn primary" onclick="savePeriodNames()">保存</button>
+    </div>
+  </div>`;
+  
+  modal.onclick = function(e) { if (e.target === modal) closePeriodNamesEditor(); };
+  document.body.appendChild(modal);
+}
+
+function closePeriodNamesEditor() {
+  const modal = document.getElementById('periodNamesModal');
+  if (modal) modal.remove();
+}
+
+function savePeriodNames() {
+  for (let i = 0; i < timetablePeriods; i++) {
+    const input = document.getElementById(`periodName_${i}`);
+    if (input) {
+      const name = input.value.trim();
+      timetablePeriodNames[i] = name || `第${i+1}节`;
+    }
+  }
+  // Save to data
+  classTimetableData._periodNames = timetablePeriodNames.slice(0, timetablePeriods);
+  closePeriodNamesEditor();
+  // Refresh the current view
+  const content = document.getElementById('ttContent');
+  if (content) {
+    const className = content.querySelector('.toolbar-select')?.closest('.toolbar')?.querySelector('span')?.textContent?.split(' ')[0];
+    if (className) {
+      content.innerHTML = renderTimetableGrid(className);
+    }
+  }
+  showToast('节次名称已保存');
+}
+
 function renderTimetableGrid(className) {
   const tt = getTimetableForClass(className);
   const user = xqCurrentUser || {};
@@ -13967,6 +14151,7 @@ function renderTimetableGrid(className) {
     <select class="toolbar-select" style="width:80px" onchange="changeTimetablePeriods('${className}', this.value)">
       ${[6,7,8,9,10,11,12].map(n => `<option value="${n}" ${n===timetablePeriods?'selected':''}>${n}节</option>`).join('')}
     </select>
+    <button class="toolbar-btn ghost" onclick="showPeriodNamesEditor()" title="自定义节次名称">节次名称</button>
     <button class="toolbar-btn ghost" onclick="showTimetableImportModal()">导入Excel</button>
     <button class="toolbar-btn ghost" onclick="exportTimetableExcel('${className}')">导出Excel</button>
     ${canEdit ? `<button class="toolbar-btn primary" onclick="saveClassTimetableData().then(r=>{if(r.ok)showToast('课程表已保存');else showToast('保存失败','error')})">保存</button>` : ''}
@@ -13982,7 +14167,7 @@ function renderTimetableGrid(className) {
   
   // Period rows
   for (let p = 1; p <= timetablePeriods; p++) {
-    html += `<div class="timetable-cell period-label">第${p}节</div>`;
+    html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
     for (let w = 1; w <= 5; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
@@ -14032,7 +14217,7 @@ function renderTeacherTimetable() {
   
   // Periods
   for (let p = 1; p <= timetablePeriods; p++) {
-    html += `<div class="timetable-cell period-label">第${p}节</div>`;
+    html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
     for (let w = 1; w <= 5; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
@@ -14066,7 +14251,7 @@ function renderEditableTeacherTimetable() {
   weekdays.forEach(d => { html += `<div class="timetable-cell header">${d}</div>`; });
   
   for (let p = 1; p <= timetablePeriods; p++) {
-    html += `<div class="timetable-cell period-label">第${p}节</div>`;
+    html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
     for (let w = 1; w <= 5; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
@@ -14103,7 +14288,7 @@ function editTeacherTimetableSlot(className, weekday, period) {
   modal.className = 'timetable-edit-modal';
   modal.id = 'ttEditModal';
   modal.innerHTML = `<div class="timetable-edit-card">
-    <h3>编辑课程 — ${className} 周${['','一','二','三','四','五'][weekday]} 第${period}节</h3>
+    <h3>编辑课程 — ${className} 周${['','一','二','三','四','五'][weekday]} ${getPeriodName(period)}</h3>
     <label>科目</label>
     <select id="ttEditSubject" onchange="autoSelectTeacher('${className}', this.value)">
       <option value="">-- 选择科目 --</option>
@@ -14140,7 +14325,7 @@ function addTeacherTimetableSlot(weekday, period) {
   modal.className = 'timetable-edit-modal';
   modal.id = 'ttEditModal';
   modal.innerHTML = `<div class="timetable-edit-card">
-    <h3>添加课程 — 周${['','一','二','三','四','五'][weekday]} 第${period}节</h3>
+    <h3>添加课程 — 周${['','一','二','三','四','五'][weekday]} ${getPeriodName(period)}</h3>
     <label>班级</label>
     <select id="ttAddClass" onchange="updateAddSubjectOptions(this.value)">
       ${classOptions}
@@ -14291,7 +14476,7 @@ function editTimetableSlot(className, weekday, period) {
   modal.className = 'timetable-edit-modal';
   modal.id = 'ttEditModal';
   modal.innerHTML = `<div class="timetable-edit-card">
-    <h3>编辑课程 — ${className} 周${['','一','二','三','四','五'][weekday]} 第${period}节</h3>
+    <h3>编辑课程 — ${className} 周${['','一','二','三','四','五'][weekday]} ${getPeriodName(period)}</h3>
     <label>科目</label>
     <select id="ttEditSubject" onchange="autoSelectTeacher('${className}', this.value)">
       <option value="">-- 选择科目 --</option>
@@ -14471,7 +14656,7 @@ function exportTimetableExcel(className) {
   const data = [['节次', ...weekdays]];
   
   for (let p = 1; p <= timetablePeriods; p++) {
-    const row = [`第${p}节`];
+    const row = [getPeriodName(p)];
     for (let w = 1; w <= 5; w++) {
       const slot = tt[`${w}-${p}`];
       if (slot && slot.subject) {
@@ -14583,13 +14768,8 @@ async function loadDisciplineData() {
 }
 
 async function saveDisciplineData() {
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'discipline': disciplineData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
+  const result = await xqSaveConfigToServer('discipline', disciplineData);
   return result;
 }
 
@@ -15230,13 +15410,8 @@ async function loadDutyData() {
 }
 
 async function saveDutyData() {
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'duty': dutyData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  // 使用与座位表相同的保存模式（xqSaveConfigToServer）
+  const result = await xqSaveConfigToServer('duty', dutyData);
   return result;
 }
 
