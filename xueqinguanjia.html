@@ -13080,7 +13080,6 @@ function renderRolesSetup() {
   });
   
   let leaderRows = leaders.map((r, i) => {
-    const actualIdx = setupRoles.indexOf(r);
     const hasPassword = xqCredentials[r.name] && xqCredentials[r.name].passwordHash;
     const pwdStatus = hasPassword 
       ? '<span style="color:var(--accent);font-size:11px">✓ 已设置</span>' 
@@ -13091,14 +13090,13 @@ function renderRolesSetup() {
       <td>${pwdStatus}</td>
       <td>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '${r.title || '校领导'}')">设密码</button>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${actualIdx})">编辑</button>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${actualIdx})">删除</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow('leader', ${i})">编辑</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow('leader', ${i})">删除</button>
       </td>
     </tr>`;
   }).join('');
   
   let workerRows = workers.map((r, i) => {
-    const actualIdx = setupRoles.indexOf(r);
     const hasPassword = xqCredentials[r.name] && xqCredentials[r.name].passwordHash;
     const pwdStatus = hasPassword 
       ? '<span style="color:var(--accent);font-size:11px">✓ 已设置</span>' 
@@ -13109,8 +13107,8 @@ function renderRolesSetup() {
       <td>${pwdStatus}</td>
       <td>
         <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--primary)" onclick="showSetPasswordModal('${r.name}', '${r.title || '维修工人'}')">设密码</button>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow(${actualIdx})">编辑</button>
-        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow(${actualIdx})">删除</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editRoleRow('worker', ${i})">编辑</button>
+        <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="deleteRoleRow('worker', ${i})">删除</button>
       </td>
     </tr>`;
   }).join('');
@@ -13340,33 +13338,35 @@ async function doSetPassword(name) {
   }
 }
 
-function editRoleRow(idx) {
-  // 只处理领导角色
-  const r = setupRoles.filter(role => role.role === 'leader')[idx];
+function editRoleRow(roleType, idx) {
+  const filtered = setupRoles.filter(role => role.role === roleType);
+  const r = filtered[idx];
   if (!r) return;
-  showModal('编辑领导', `
+  const roleLabel = roleType === 'worker' ? '工人' : '领导';
+  showModal(`编辑${roleLabel}`, `
     <div class="form-group">
       <label class="form-label">姓名</label>
       <input class="form-input" id="editRoleName" value="${r.name}">
     </div>
   `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
-      <button class="toolbar-btn primary" onclick="saveRoleEdit(${idx})">保存</button>`);
+      <button class="toolbar-btn primary" onclick="saveRoleEdit('${roleType}', ${idx})">保存</button>`);
 }
 
-function saveRoleEdit(idx) {
-  const leaders = setupRoles.filter(role => role.role === 'leader');
-  const r = leaders[idx];
+function saveRoleEdit(roleType, idx) {
+  const filtered = setupRoles.filter(role => role.role === roleType);
+  const r = filtered[idx];
   if (!r) return;
   r.name = document.getElementById('editRoleName').value.trim();
   hideModal();
   renderSetupContent();
 }
 
-function deleteRoleRow(idx) {
-  // 找到领导数组中的对应索引
-  const leaders = setupRoles.filter(role => role.role === 'leader');
-  const r = leaders[idx];
+function deleteRoleRow(roleType, idx) {
+  const filtered = setupRoles.filter(role => role.role === roleType);
+  const r = filtered[idx];
   if (!r) return;
+  const roleLabel = roleType === 'worker' ? '工人' : '领导';
+  if (!confirm(`确定要删除${roleLabel}「${r.name}」吗？`)) return;
   const actualIdx = setupRoles.indexOf(r);
   if (actualIdx !== -1) {
     setupRoles.splice(actualIdx, 1);
