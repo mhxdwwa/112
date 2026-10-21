@@ -1415,6 +1415,40 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 8px 12px; border: 1px solid var(--gray-200);
   border-radius: var(--radius-sm); font-size: 13px;
 }
+/* Duty: collapsible groups */
+.duty-group-item { cursor: pointer; transition: background 0.15s; }
+.duty-group-item:hover { background: var(--gray-50); }
+.duty-group-item .group-toggle { font-size: 10px; color: var(--gray-400); transition: transform 0.2s; margin-right: 4px; }
+.duty-group-item .group-toggle.open { transform: rotate(90deg); }
+.duty-group-detail { padding: 8px 12px 8px 58px; background: var(--gray-50); border-radius: 0 0 8px 8px; margin-top: -4px; margin-bottom: 4px; font-size: 12px; color: var(--gray-600); display: none; }
+.duty-group-detail.show { display: block; }
+/* Duty: daily overview strip */
+.duty-daily-strip { display: flex; gap: 0; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px; }
+.duty-daily-item { flex: 1; min-width: 100px; text-align: center; padding: 10px 8px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; position: relative; }
+.duty-daily-item:hover { border-color: var(--primary-light); background: var(--primary-bg); }
+.duty-daily-item.today { border-color: var(--primary); background: var(--primary-bg); }
+.duty-daily-item.empty-slot { border-style: dashed; opacity: 0.6; }
+.duty-daily-item .daily-date { font-size: 11px; color: var(--gray-500); }
+.duty-daily-item .daily-weekday { font-size: 13px; font-weight: 600; color: var(--gray-700); }
+.duty-daily-item .daily-group { font-size: 12px; color: var(--primary); font-weight: 500; margin-top: 4px; }
+.duty-daily-item .daily-names { font-size: 10px; color: var(--gray-500); margin-top: 2px; line-height: 1.3; max-height: 2.6em; overflow: hidden; }
+.duty-daily-item .daily-holiday { font-size: 10px; color: var(--gray-400); margin-top: 4px; }
+/* Duty: drag source/target */
+.duty-group-item[draggable="true"] { cursor: grab; }
+.duty-group-item[draggable="true"]:active { cursor: grabbing; }
+.duty-daily-item.drag-over { border-color: var(--primary); background: var(--primary-bg); box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+/* Duty: calendar compact */
+.duty-calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.duty-calendar-cell { min-height: 60px; }
+/* Discipline: tabs within page */
+.discipline-sub-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 20px; }
+.discipline-sub-tab { padding: 8px 20px; font-size: 13px; color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
+.discipline-sub-tab:hover { color: var(--gray-700); }
+.discipline-sub-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 500; }
+/* Teacher timetable in teach classes */
+.teacher-tt-section { margin-top: 32px; padding-top: 24px; border-top: 2px solid var(--gray-200); }
+.teacher-tt-section .tt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.teacher-tt-section .tt-header h3 { font-size: 16px; font-weight: 600; color: var(--gray-800); margin: 0; }
 </style>
 <script type="importmap">
 {
@@ -3785,12 +3819,11 @@ const NAV_CONFIG = {
   headteacher: [
     { section: '本班', items: [
       { id: 'my-class', label: '本班数据管理', icon: iconGrid },
-      { id: 'timetable', label: '课程表', icon: iconTimetable },
-      { id: 'discipline', label: '纪律留言', icon: iconMessage },
       { id: 'duty-roster', label: '值日安排', icon: iconDuty },
     ]},
     { section: '教学', items: [
       { id: 'teach-classes', label: '授课班级', icon: iconUsers },
+      { id: 'discipline', label: '纪律留言', icon: iconMessage },
       { id: 'score-manage', label: '成绩管理', icon: iconFile },
     ]},
     { section: '全校', items: [
@@ -3800,7 +3833,6 @@ const NAV_CONFIG = {
   teacher: [
     { section: '教学', items: [
       { id: 'my-classes', label: '授课班级', icon: iconGrid },
-      { id: 'timetable', label: '我的课程表', icon: iconTimetable },
       { id: 'discipline', label: '纪律留言', icon: iconMessage },
       { id: 'score-manage', label: '成绩管理', icon: iconFile },
     ]},
@@ -4067,6 +4099,10 @@ function renderPage(pageId) {
         content.innerHTML = renderTimetable();
         startTimetableReminder();
       });
+    }
+    // 进入授课班级页面时也加载课程表数据（因为嵌入了个人课程表）
+    if (pageId === 'teach-classes' || pageId === 'my-classes') {
+      loadTimetableData();
     }
     // 进入纪律留言页面时加载数据
     if (pageId === 'discipline') {
@@ -10288,10 +10324,15 @@ function renderTeachClasses() {
     </div>
     <div class="class-cards" id="teachClassCards">${cards}</div>`;
   
-  // Add teacher's personal timetable below
-  html += `<div style="margin-top:32px;padding-top:24px;border-top:2px solid var(--gray-200)">
-    <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--gray-800)">我的课程表</h3>
-    ${renderTeacherTimetable()}
+  // Add teacher's personal timetable below (editable)
+  html += `<div class="teacher-tt-section">
+    <div class="tt-header">
+      <h3>我的课程表</h3>
+      <div style="display:flex;gap:8px">
+        <button class="toolbar-btn ghost" style="font-size:12px" onclick="saveTeacherTimetableAll()">保存课程表</button>
+      </div>
+    </div>
+    ${renderEditableTeacherTimetable()}
   </div>`;
   
   return html;
@@ -13810,23 +13851,18 @@ function getTimetableForTeacher(teacherName) {
 
 function renderTimetable() {
   const user = xqCurrentUser || {};
-  const isTeacherOnly = user.isTeacher && !user.isHeadteacher && !user.isLeader;
   
-  if (isTeacherOnly) {
-    return renderTeacherTimetable();
-  }
-  
-  // For headteacher/leader: show class timetable
-  const classes = user.headteacherClasses || [];
-  if (classes.length === 0 && user.isLeader) {
-    // Leader can see all classes - show selector
+  // Leader: show all classes selector
+  if (user.isLeader) {
     return renderTimetableSelector();
   }
+  
+  // Fallback: headteacher can also view their class timetable here
+  const classes = user.headteacherClasses || [];
   if (classes.length === 0) {
-    return emptyStateHtml('未找到您的班级信息。');
+    return emptyStateHtml('未找到您的班级信息。请在"授课班级"页面查看课程表。');
   }
   
-  // If headteacher has multiple classes, show tabs
   if (classes.length > 1) {
     let html = `<div class="tabs" id="ttTabs">`;
     classes.forEach((cls, i) => {
@@ -13972,6 +14008,214 @@ function renderTeacherTimetable() {
   
   html += `</div>`;
   return html;
+}
+
+function renderEditableTeacherTimetable() {
+  const user = xqCurrentUser || {};
+  const teacherName = user.teacherName;
+  const tt = getTimetableForTeacher(teacherName);
+  const weekdays = ['周一', '周二', '周三', '周四', '周五'];
+  
+  let reminderHtml = getTimetableReminderHtml(tt);
+  let html = '';
+  if (reminderHtml) html += reminderHtml;
+  
+  html += `<div class="timetable-grid" style="grid-template-columns: 60px repeat(5, 1fr);">`;
+  html += `<div class="timetable-cell header">节次</div>`;
+  weekdays.forEach(d => { html += `<div class="timetable-cell header">${d}</div>`; });
+  
+  for (let p = 1; p <= timetablePeriods; p++) {
+    html += `<div class="timetable-cell period-label">第${p}节</div>`;
+    for (let w = 1; w <= 5; w++) {
+      const key = `${w}-${p}`;
+      const slot = tt[key];
+      if (slot) {
+        html += `<div class="timetable-cell editable" onclick="editTeacherTimetableSlot('${slot.className}',${w},${p})">
+          <span class="subject-name">${escapeHtml(slot.className)}</span>
+          <span class="subject-teacher">${escapeHtml(slot.subject)}</span>
+        </div>`;
+      } else {
+        html += `<div class="timetable-cell editable empty" onclick="addTeacherTimetableSlot(${w},${p})">
+          <span style="color:var(--gray-300);font-size:11px">点击添加</span>
+        </div>`;
+      }
+    }
+  }
+  html += `</div>`;
+  return html;
+}
+
+function editTeacherTimetableSlot(className, weekday, period) {
+  const tt = getTimetableForClass(className);
+  const key = `${weekday}-${period}`;
+  const slot = tt[key] || {};
+  const user = xqCurrentUser || {};
+  
+  const classTeaching = setupTeaching.find(t => t.name === className);
+  const subjects = classTeaching ? Object.keys(classTeaching.subjects || {}) : [];
+  
+  const subjectOptions = subjects.map(s => 
+    `<option value="${escapeHtml(s)}" ${slot.subject === s ? 'selected' : ''}>${escapeHtml(s)}</option>`
+  ).join('');
+  
+  const modal = document.createElement('div');
+  modal.className = 'timetable-edit-modal';
+  modal.id = 'ttEditModal';
+  modal.innerHTML = `<div class="timetable-edit-card">
+    <h3>编辑课程 — ${className} 周${['','一','二','三','四','五'][weekday]} 第${period}节</h3>
+    <label>科目</label>
+    <select id="ttEditSubject" onchange="autoSelectTeacher('${className}', this.value)">
+      <option value="">-- 选择科目 --</option>
+      ${subjectOptions}
+      <option value="__custom__">自定义...</option>
+    </select>
+    <input type="text" id="ttEditSubjectCustom" style="display:none;margin-top:8px" placeholder="输入科目名称">
+    <label>教室/地点（可选）</label>
+    <input type="text" id="ttEditRoom" value="${escapeHtml(slot.room || '')}" placeholder="如：教学楼302">
+    <div class="btn-row">
+      <button class="toolbar-btn ghost" style="color:var(--danger);margin-right:auto" onclick="clearTeacherTimetableSlot('${className}',${weekday},${period})">清空</button>
+      <button class="toolbar-btn ghost" onclick="closeTimetableEdit()">取消</button>
+      <button class="toolbar-btn primary" onclick="saveTeacherTimetableSlot('${className}',${weekday},${period})">保存</button>
+    </div>
+  </div>`;
+  modal.onclick = function(e) { if (e.target === modal) closeTimetableEdit(); };
+  document.body.appendChild(modal);
+  
+  if (slot.subject && !subjects.includes(slot.subject)) {
+    document.getElementById('ttEditSubject').value = '__custom__';
+    document.getElementById('ttEditSubjectCustom').style.display = 'block';
+    document.getElementById('ttEditSubjectCustom').value = slot.subject;
+  }
+}
+
+function addTeacherTimetableSlot(weekday, period) {
+  const user = xqCurrentUser || {};
+  const teachClasses = user.teachingClasses || [];
+  if (teachClasses.length === 0) { showToast('未找到授课班级', 'error'); return; }
+  
+  const classOptions = teachClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+  
+  const modal = document.createElement('div');
+  modal.className = 'timetable-edit-modal';
+  modal.id = 'ttEditModal';
+  modal.innerHTML = `<div class="timetable-edit-card">
+    <h3>添加课程 — 周${['','一','二','三','四','五'][weekday]} 第${period}节</h3>
+    <label>班级</label>
+    <select id="ttAddClass" onchange="updateAddSubjectOptions(this.value)">
+      ${classOptions}
+    </select>
+    <label>科目</label>
+    <select id="ttEditSubject">
+      <option value="">-- 选择科目 --</option>
+    </select>
+    <label>教室/地点（可选）</label>
+    <input type="text" id="ttEditRoom" placeholder="如：教学楼302">
+    <div class="btn-row">
+      <button class="toolbar-btn ghost" onclick="closeTimetableEdit()">取消</button>
+      <button class="toolbar-btn primary" onclick="saveNewTeacherSlot(${weekday},${period})">保存</button>
+    </div>
+  </div>`;
+  modal.onclick = function(e) { if (e.target === modal) closeTimetableEdit(); };
+  document.body.appendChild(modal);
+  updateAddSubjectOptions(teachClasses[0]);
+}
+
+function updateAddSubjectOptions(className) {
+  const classTeaching = setupTeaching.find(t => t.name === className);
+  const user = xqCurrentUser || {};
+  const teacherName = user.teacherName;
+  const subjects = [];
+  if (classTeaching) {
+    Object.entries(classTeaching.subjects || {}).forEach(([subj, teacher]) => {
+      if (teacher === teacherName) subjects.push(subj);
+    });
+  }
+  const sel = document.getElementById('ttEditSubject');
+  sel.innerHTML = '<option value="">-- 选择科目 --</option>' + 
+    subjects.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+}
+
+async function saveNewTeacherSlot(weekday, period) {
+  const className = document.getElementById('ttAddClass').value;
+  const subject = document.getElementById('ttEditSubject').value;
+  const room = document.getElementById('ttEditRoom').value.trim();
+  const user = xqCurrentUser || {};
+  
+  if (!subject) { showToast('请选择科目', 'error'); return; }
+  
+  const key = `${weekday}-${period}`;
+  if (!timetableData[className]) timetableData[className] = {};
+  timetableData[className][key] = { subject, teacher: user.teacherName, room };
+  
+  closeTimetableEdit();
+  const result = await saveTimetableData();
+  if (result.ok) {
+    showToast('课程已保存');
+    const ttSection = document.querySelector('.teacher-tt-section');
+    if (ttSection) {
+      const grid = ttSection.querySelector('.timetable-grid');
+      if (grid) grid.outerHTML = renderEditableTeacherTimetable();
+    }
+  } else {
+    showToast('保存失败: ' + result.error, 'error');
+  }
+}
+
+async function saveTeacherTimetableSlot(className, weekday, period) {
+  let subject = '';
+  const subjectSelect = document.getElementById('ttEditSubject');
+  if (subjectSelect.value === '__custom__') {
+    subject = document.getElementById('ttEditSubjectCustom').value.trim();
+  } else {
+    subject = subjectSelect.value;
+  }
+  const room = document.getElementById('ttEditRoom').value.trim();
+  const user = xqCurrentUser || {};
+  
+  if (!subject) { showToast('请输入或选择科目名称', 'error'); return; }
+  
+  const key = `${weekday}-${period}`;
+  if (!timetableData[className]) timetableData[className] = {};
+  timetableData[className][key] = { subject, teacher: user.teacherName, room };
+  
+  closeTimetableEdit();
+  const result = await saveTimetableData();
+  if (result.ok) {
+    showToast('课程已保存');
+    const ttSection = document.querySelector('.teacher-tt-section');
+    if (ttSection) {
+      const grid = ttSection.querySelector('.timetable-grid');
+      if (grid) grid.outerHTML = renderEditableTeacherTimetable();
+    }
+  } else {
+    showToast('保存失败: ' + result.error, 'error');
+  }
+}
+
+async function clearTeacherTimetableSlot(className, weekday, period) {
+  const key = `${weekday}-${period}`;
+  if (timetableData[className]) {
+    delete timetableData[className][key];
+  }
+  closeTimetableEdit();
+  const result = await saveTimetableData();
+  if (result.ok) {
+    showToast('已清空');
+    const ttSection = document.querySelector('.teacher-tt-section');
+    if (ttSection) {
+      const grid = ttSection.querySelector('.timetable-grid');
+      if (grid) grid.outerHTML = renderEditableTeacherTimetable();
+    }
+  }
+}
+
+async function saveTeacherTimetableAll() {
+  const result = await saveTimetableData();
+  if (result.ok) {
+    showToast('课程表已保存');
+  } else {
+    showToast('保存失败: ' + result.error, 'error');
+  }
 }
 
 function editTimetableSlot(className, weekday, period) {
@@ -14300,7 +14544,7 @@ function renderDiscipline() {
   const user = xqCurrentUser || {};
   
   if (user.isHeadteacher) {
-    return renderHeadteacherDiscipline();
+    return renderHeadteacherDisciplineV2();
   }
   
   if (user.isTeacher) {
@@ -14487,18 +14731,282 @@ function renderHeadteacherDiscipline() {
   return html;
 }
 
+let disciplineHtTab = 'summary'; // 'summary' or 'write'
+
+function renderHeadteacherDisciplineV2() {
+  const user = xqCurrentUser || {};
+  const htClass = (user.headteacherClasses || [])[0];
+  if (!htClass) return emptyStateHtml('未找到您的班级信息。');
+  
+  let html = `<div class="discipline-sub-tabs" id="discHtTabs">
+    <div class="discipline-sub-tab ${disciplineHtTab==='summary'?'active':''}" onclick="disciplineHtTab='summary';document.getElementById('discHtContent').innerHTML=renderHtSummaryTab()">本班汇总</div>
+    <div class="discipline-sub-tab ${disciplineHtTab==='write'?'active':''}" onclick="disciplineHtTab='write';disciplineSelectedStudents.clear();document.getElementById('discHtContent').innerHTML=renderHtWriteTab()">写留言</div>
+  </div>
+  <div id="discHtContent">`;
+  
+  if (disciplineHtTab === 'summary') {
+    html += renderHtSummaryTab();
+  } else {
+    html += renderHtWriteTab();
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderHtSummaryTab() {
+  const user = xqCurrentUser || {};
+  const cls = (user.headteacherClasses || [])[0];
+  if (!cls) return '';
+  const students = STUDENTS[cls] || [];
+  let records = disciplineData.filter(r => r.classId === cls);
+  
+  let html = `<div class="toolbar">
+    <span style="font-size:14px;font-weight:600">${cls} 纪律留言汇总</span>
+    <div class="toolbar-spacer"></div>
+    <button class="toolbar-btn ghost" onclick="exportDisciplineExcel('${cls}')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载汇总报表
+    </button>
+  </div>`;
+  
+  html += `<div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">学生汇总</span></div>
+  <div class="card-body no-pad"><div class="table-wrap"><table>
+    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>提醒</th><th>总计</th></tr></thead>
+    <tbody>`;
+  
+  students.forEach(s => {
+    const sRecords = records.filter(r => r.studentId === s.id);
+    const praise = sRecords.filter(r => r.type === 'praise').length;
+    const discard = sRecords.filter(r => r.type === 'discard').length;
+    const remind = sRecords.filter(r => r.type === 'remind').length;
+    const total = sRecords.length;
+    if (total > 0) {
+      html += `<tr>
+        <td style="font-weight:500">${escapeHtml(s.name)}</td>
+        <td><span style="color:#059669">${praise}</span></td>
+        <td><span style="color:#DC2626">${discard}</span></td>
+        <td><span style="color:#D97706">${remind}</span></td>
+        <td><strong>${total}</strong></td>
+      </tr>`;
+    }
+  });
+  
+  html += `</tbody></table></div></div></div>`;
+  
+  records.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
+  
+  html += `<div class="card"><div class="card-header"><span class="card-title">留言明细 (共${records.length}条)</span></div>
+  <div class="card-body"><div class="discipline-record-list">`;
+  
+  if (records.length === 0) {
+    html += `<div style="text-align:center;color:var(--gray-400);padding:20px">暂无纪律留言记录</div>`;
+  }
+  
+  records.forEach(r => {
+    const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+    html += `<div class="discipline-record-item">
+      <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
+      <div style="flex:1">
+        <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.teacherName)} · ${escapeHtml(r.subject || '')} · ${r.date}</div>
+      </div>
+    </div>`;
+  });
+  
+  html += `</div></div></div>`;
+  return html;
+}
+
+function renderHtWriteTab() {
+  const user = xqCurrentUser || {};
+  const allClasses = user.allClasses || [];
+  if (allClasses.length === 0) return emptyStateHtml('未找到您的授课班级信息。');
+  
+  if (!disciplineCurrentClass || !allClasses.includes(disciplineCurrentClass)) {
+    disciplineCurrentClass = allClasses[0];
+  }
+  if (!disciplineCurrentDate) disciplineCurrentDate = new Date().toISOString().split('T')[0];
+  
+  const students = STUDENTS[disciplineCurrentClass] || [];
+  const classSubjects = getTeacherClassSubjects();
+  const mySubject = classSubjects[disciplineCurrentClass] || '';
+  
+  let html = `<div class="toolbar">
+    <select class="toolbar-select" onchange="disciplineCurrentClass=this.value;disciplineSelectedStudents.clear();document.getElementById('discHtContent').innerHTML=renderHtWriteTab()">
+      ${allClasses.map(c => `<option value="${c}" ${c===disciplineCurrentClass?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <input type="date" class="toolbar-select" value="${disciplineCurrentDate}" onchange="disciplineCurrentDate=this.value;document.getElementById('discHtContent').innerHTML=renderHtWriteTab()">
+    <div class="toolbar-spacer"></div>
+    <span style="font-size:12px;color:var(--gray-500)">点击学生选择，可多选</span>
+  </div>`;
+  
+  html += `<div id="discContent">`;
+  
+  html += `<div class="discipline-student-grid">`;
+  students.forEach(s => {
+    const count = disciplineData.filter(r => 
+      r.classId === disciplineCurrentClass && r.studentId === s.id && r.date === disciplineCurrentDate
+    ).length;
+    const selected = disciplineSelectedStudents.has(s.id);
+    html += `<div class="discipline-student-card ${selected ? 'selected' : ''}" onclick="toggleDisciplineStudentHt(${s.id})">
+      <div class="student-name">${escapeHtml(s.name)}</div>
+      <div class="student-count ${count > 0 ? 'has-records' : ''}">${count > 0 ? count + '条记录' : '无记录'}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  
+  if (disciplineSelectedStudents.size > 0) {
+    const selectedNames = students.filter(s => disciplineSelectedStudents.has(s.id)).map(s => s.name);
+    html += `<div class="discipline-form">
+      <div style="font-size:13px;color:var(--gray-600);margin-bottom:12px">
+        已选择：<strong>${selectedNames.join('、')}</strong>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>类型</label>
+          <div class="discipline-type-btns" id="discTypeBtns">
+            <div class="discipline-type-btn praise active" onclick="selectDisciplineType('praise',this)">表扬</div>
+            <div class="discipline-type-btn discard" onclick="selectDisciplineType('discard',this)">违纪</div>
+            <div class="discipline-type-btn remind" onclick="selectDisciplineType('remind',this)">提醒</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>科目</label>
+          <input type="text" id="discSubject" value="${escapeHtml(mySubject)}" placeholder="科目">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>内容描述</label>
+          <textarea id="discContentText" placeholder="请描述具体情况..."></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="toolbar-btn ghost" onclick="disciplineSelectedStudents.clear();document.getElementById('discHtContent').innerHTML=renderHtWriteTab()">取消</button>
+        <button class="toolbar-btn primary" onclick="submitDisciplineRecordHt()">提交留言</button>
+      </div>
+    </div>`;
+  }
+  
+  // My records for this class
+  const myRecords = disciplineData.filter(r => 
+    r.classId === disciplineCurrentClass && r.teacherName === user.teacherName
+  ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  
+  html += `<div class="card" style="margin-top:20px"><div class="card-header">
+    <span class="card-title">我的留言记录 (${disciplineCurrentClass}，共${myRecords.length}条)</span>
+  </div>
+  <div class="card-body"><div class="discipline-record-list">`;
+  
+  if (myRecords.length === 0) {
+    html += `<div style="text-align:center;color:var(--gray-400);padding:20px">暂无留言记录</div>`;
+  }
+  
+  myRecords.forEach(r => {
+    const typeLabel = r.type === 'praise' ? '表扬' : r.type === 'discard' ? '违纪' : '提醒';
+    html += `<div class="discipline-record-item">
+      <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
+      <div style="flex:1">
+        <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.subject || '')} · ${r.date}</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecordHt('${r.id}')">撤回</button>
+      </div>
+    </div>`;
+  });
+  html += `</div></div></div>`;
+  html += `</div>`;
+  return html;
+}
+
+function toggleDisciplineStudentHt(studentId) {
+  if (disciplineSelectedStudents.has(studentId)) {
+    disciplineSelectedStudents.delete(studentId);
+  } else {
+    disciplineSelectedStudents.add(studentId);
+  }
+  document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
+}
+
+async function submitDisciplineRecordHt() {
+  const user = xqCurrentUser || {};
+  const typeEl = document.querySelector('#discTypeBtns .discipline-type-btn.active');
+  const type = typeEl ? (typeEl.classList.contains('praise') ? 'praise' : typeEl.classList.contains('discard') ? 'discard' : 'remind') : 'remind';
+  const subject = document.getElementById('discSubject').value.trim();
+  const content = document.getElementById('discContentText').value.trim();
+  
+  if (!content) { showToast('请输入内容描述', 'error'); return; }
+  
+  const students = STUDENTS[disciplineCurrentClass] || [];
+  const classSubjects = getTeacherClassSubjects();
+  
+  for (const studentId of disciplineSelectedStudents) {
+    const student = students.find(s => s.id === studentId);
+    if (!student) continue;
+    
+    disciplineData.push({
+      id: 'disc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      classId: disciplineCurrentClass,
+      teacherName: user.teacherName,
+      subject: subject || classSubjects[disciplineCurrentClass] || '',
+      studentId: studentId,
+      studentName: student.name,
+      type: type,
+      content: content,
+      date: disciplineCurrentDate,
+      createdAt: new Date().toISOString()
+    });
+  }
+  
+  disciplineSelectedStudents.clear();
+  const result = await saveDisciplineData();
+  if (result.ok) {
+    showToast('留言已提交');
+    document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
+  } else {
+    showToast('提交失败: ' + result.error, 'error');
+  }
+}
+
+async function deleteDisciplineRecordHt(recordId) {
+  if (!confirm('确定要撤回这条留言吗？')) return;
+  disciplineData = disciplineData.filter(r => r.id !== recordId);
+  const result = await saveDisciplineData();
+  if (result.ok) {
+    showToast('已撤回');
+    document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
+  }
+}
+
 function toggleDisciplineStudent(studentId) {
   if (disciplineSelectedStudents.has(studentId)) {
     disciplineSelectedStudents.delete(studentId);
   } else {
     disciplineSelectedStudents.add(studentId);
   }
-  document.getElementById('discContent').innerHTML = renderTeacherDiscipline();
+  const el = document.getElementById('discContent');
+  if (el) el.innerHTML = renderTeacherDiscipline();
 }
 
 function selectDisciplineType(type, el) {
   document.querySelectorAll('#discTypeBtns .discipline-type-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
+}
+
+function refreshDisciplineView() {
+  const user = xqCurrentUser || {};
+  if (user.isHeadteacher) {
+    const el = document.getElementById('discHtContent');
+    if (el) {
+      if (disciplineHtTab === 'summary') el.innerHTML = renderHtSummaryTab();
+      else el.innerHTML = renderHtWriteTab();
+    }
+  } else {
+    const el = document.getElementById('discContent');
+    if (el) el.innerHTML = renderTeacherDiscipline();
+  }
 }
 
 async function submitDisciplineRecord() {
@@ -14547,7 +15055,7 @@ async function deleteDisciplineRecord(recordId) {
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('已撤回');
-    document.getElementById('discContent').innerHTML = renderTeacherDiscipline();
+    refreshDisciplineView();
   }
 }
 
@@ -14597,7 +15105,7 @@ async function saveDisciplineEdit(recordId) {
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('已更新');
-    document.getElementById('discContent').innerHTML = renderTeacherDiscipline();
+    refreshDisciplineView();
   } else {
     showToast('保存失败: ' + result.error, 'error');
   }
@@ -14626,11 +15134,13 @@ function exportDisciplineExcel(className) {
 }
 
 // ============================================================
-// FEATURE 3: 值日安排 (DUTY ROSTER)
+// FEATURE 3: 值日安排 (DUTY ROSTER) — Redesigned
 // ============================================================
-let dutyData = {};  // { 'className': { categories: [...], groups: {...}, schedule: {...}, settings: {...} } }
+let dutyData = {};
 let dutyCurrentClass = '';
 let dutyCurrentCategory = 0;
+let dutyGroupExpanded = {};  // track which groups are expanded
+let dutyDragGroupIndex = null;
 
 async function loadDutyData() {
   const result = await xqApi('config', { action: 'get' });
@@ -14649,8 +15159,8 @@ function getClassDutyData(className) {
   if (!dutyData[className]) {
     dutyData[className] = {
       categories: ['教室卫生', '清洁区卫生'],
-      groups: {},      // { 'categoryIndex': [{students: [ids]}, ...] }
-      schedule: {},    // { 'categoryIndex': { 'YYYY-MM-DD': {groupIndex, locked} } }
+      groups: {},
+      schedule: {},
       settings: { cycleType: 'daily', startDate: new Date().toISOString().split('T')[0], skipWeekends: true }
     };
   }
@@ -14663,18 +15173,16 @@ function renderDutyRoster() {
   if (classes.length === 0) {
     return emptyStateHtml('未找到您的班级信息。只有班主任可以管理值日安排。');
   }
-  
   if (!dutyCurrentClass) dutyCurrentClass = classes[0];
   
   let html = '';
   if (classes.length > 1) {
     html += `<div class="tabs" id="dutyTabs">`;
-    classes.forEach((cls, i) => {
+    classes.forEach((cls) => {
       html += `<div class="tab ${cls===dutyCurrentClass?'active':''}" onclick="dutyCurrentClass='${cls}';dutyCurrentCategory=0;document.getElementById('dutyContent').innerHTML=renderDutyRosterContent()">${cls}</div>`;
     });
     html += `</div>`;
   }
-  
   html += `<div id="dutyContent">${renderDutyRosterContent()}</div>`;
   return html;
 }
@@ -14683,9 +15191,9 @@ function renderDutyRosterContent() {
   const dd = getClassDutyData(dutyCurrentClass);
   const students = STUDENTS[dutyCurrentClass] || [];
   const categories = dd.categories;
-  
   if (dutyCurrentCategory >= categories.length) dutyCurrentCategory = 0;
   
+  // Category tabs
   let html = `<div class="duty-category-tabs">`;
   categories.forEach((cat, i) => {
     html += `<div class="duty-category-tab ${i===dutyCurrentCategory?'active':''}" onclick="dutyCurrentCategory=${i};document.getElementById('dutyContent').innerHTML=renderDutyRosterContent()">${escapeHtml(cat)}</div>`;
@@ -14695,28 +15203,35 @@ function renderDutyRosterContent() {
   
   const catKey = String(dutyCurrentCategory);
   const groups = dd.groups[catKey] || [];
+  const schedule = dd.schedule[catKey] || {};
   
-  // Settings panel
+  // === 1. DAILY DUTY OVERVIEW (most prominent, at top) ===
+  html += renderDutyDailyStrip(schedule, groups, students);
+  
+  // === 2. Settings + Save + Auto-generate ===
   html += `<div class="duty-setup-panel">
     <div class="setup-row">
       <label>轮换方式</label>
-      <select id="dutyCycleType" onchange="dutyData['${dutyCurrentClass}'].settings.cycleType=this.value">
+      <select id="dutyCycleType" onchange="dd_settings_save('cycleType',this.value)">
         <option value="daily" ${dd.settings.cycleType==='daily'?'selected':''}>按天轮换</option>
         <option value="weekly" ${dd.settings.cycleType==='weekly'?'selected':''}>按周轮换</option>
       </select>
       <label>起始日期</label>
-      <input type="date" id="dutyStartDate" value="${dd.settings.startDate}" onchange="dutyData['${dutyCurrentClass}'].settings.startDate=this.value">
+      <input type="date" id="dutyStartDate" value="${dd.settings.startDate}" onchange="dd_settings_save('startDate',this.value)">
       <label style="display:flex;align-items:center;gap:6px;min-width:auto;cursor:pointer">
-        <input type="checkbox" id="dutySkipWeekends" ${dd.settings.skipWeekends?'checked':''} onchange="dutyData['${dutyCurrentClass}'].settings.skipWeekends=this.checked">
+        <input type="checkbox" id="dutySkipWeekends" ${dd.settings.skipWeekends?'checked':''} onchange="dd_settings_save('skipWeekends',this.checked)">
         跳过周末
       </label>
       <div class="toolbar-spacer"></div>
-      <button class="toolbar-btn ghost" onclick="saveDutyData().then(r=>{if(r.ok)showToast('已保存');else showToast('保存失败','error')})">保存设置</button>
-      <button class="toolbar-btn primary" onclick="autoGenerateDutySchedule()">自动生成排班</button>
+      <button class="toolbar-btn ghost" onclick="autoGenerateDutySchedule()">自动排班</button>
+      <button class="toolbar-btn primary" onclick="saveDutyData().then(r=>{if(r.ok)showToast('已全部保存');else showToast('保存失败','error')})">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        保存全部
+      </button>
     </div>
   </div>`;
   
-  // Group management
+  // === 3. Collapsible Group Management ===
   html += `<div class="card" style="margin-bottom:20px"><div class="card-header">
     <span class="card-title">分组设置 (${groups.length}组)</span>
     <div style="display:flex;gap:8px">
@@ -14726,46 +15241,170 @@ function renderDutyRosterContent() {
   </div><div class="card-body">`;
   
   if (groups.length === 0) {
-    html += `<div style="text-align:center;color:var(--gray-400);padding:16px">
-      暂无分组，请点击"自动分组"或"添加组"
-    </div>`;
+    html += `<div style="text-align:center;color:var(--gray-400);padding:16px">暂无分组，请点击"自动分组"或"添加组"</div>`;
   }
   
-  html += `<div class="duty-group-list">`;
+  html += `<div class="duty-group-list" id="dutyGroupList">`;
   groups.forEach((group, gi) => {
+    const isExpanded = dutyGroupExpanded[catKey + '_' + gi];
     const studentNames = (group.students || []).map(sid => {
       const s = students.find(st => st.id === sid);
       return s ? s.name : '?';
     });
-    html += `<div class="duty-group-item">
+    const shortNames = studentNames.length > 4 ? studentNames.slice(0,4).join('、') + '...' : studentNames.join('、') || '（空）';
+    
+    html += `<div class="duty-group-item" draggable="true" 
+      ondragstart="dutyDragStart(event,${gi})" 
+      onclick="toggleDutyGroupExpand('${catKey}',${gi})">
+      <span class="group-toggle ${isExpanded?'open':''}">&#9654;</span>
       <span class="group-label">第${gi+1}组</span>
-      <span class="group-students">${studentNames.join('、') || '（空）'}</span>
-      <div class="group-actions">
+      <span class="group-students">${shortNames}</span>
+      <div class="group-actions" onclick="event.stopPropagation()">
         <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDutyGroup(${gi})">编辑</button>
         <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="removeDutyGroup(${gi})">删除</button>
       </div>
     </div>`;
+    html += `<div class="duty-group-detail ${isExpanded?'show':''}" id="dutyGroupDetail_${catKey}_${gi}">
+      <strong>成员：</strong>${studentNames.join('、') || '（空）'}
+      <div style="margin-top:6px;color:var(--gray-400);font-size:11px">拖拽此组到上方日期可安排值日</div>
+    </div>`;
   });
   html += `</div></div></div>`;
   
-  // Calendar view
-  html += renderDutyCalendar();
+  // === 4. Calendar view (compact) ===
+  html += renderDutyCalendar(schedule, groups, students);
   
   return html;
 }
 
-function renderDutyCalendar() {
+function dd_settings_save(key, val) {
   const dd = getClassDutyData(dutyCurrentClass);
-  const catKey = String(dutyCurrentCategory);
-  const schedule = dd.schedule[catKey] || {};
-  const groups = dd.groups[catKey] || [];
-  const students = STUDENTS[dutyCurrentClass] || [];
-  
-  // Generate dates for current week + next 2 weeks
+  dd.settings[key] = val;
+}
+
+// === Daily duty overview strip ===
+function renderDutyDailyStrip(schedule, groups, students) {
   const today = new Date();
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+  startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+  const weekDayNames = ['周日','周一','周二','周三','周四','周五','周六'];
   
+  let html = `<div class="card" style="margin-bottom:20px"><div class="card-header">
+    <span class="card-title">每日值日</span>
+    <span style="font-size:11px;color:var(--gray-400)">拖拽分组到日期安排值日 | 点击日期可设为放假/清空</span>
+  </div><div class="card-body">`;
+  
+  // Show 2 weeks
+  for (let weekOffset = 0; weekOffset < 2; weekOffset++) {
+    const weekStart = new Date(startOfWeek);
+    weekStart.setDate(startOfWeek.getDate() + weekOffset * 7);
+    
+    html += `<div style="font-size:12px;font-weight:600;color:var(--gray-500);margin:${weekOffset>0?'16px':'0'} 0 8px">
+      ${weekStart.getMonth()+1}月${weekStart.getDate()}日起</div>`;
+    html += `<div class="duty-daily-strip">`;
+    
+    for (let d = 0; d < 7; d++) {
+      const cellDate = new Date(weekStart);
+      cellDate.setDate(weekStart.getDate() + d);
+      const dateStr = cellDate.toISOString().split('T')[0];
+      const isToday = dateStr === today.toISOString().split('T')[0];
+      const isWeekend = d >= 5;
+      const entry = schedule[dateStr];
+      
+      let cls = 'duty-daily-item';
+      if (isToday) cls += ' today';
+      if (isWeekend) cls += ' weekend';
+      if (!entry && !isWeekend) cls += ' empty-slot';
+      
+      html += `<div class="${cls}" 
+        ondragover="event.preventDefault();this.classList.add('drag-over')" 
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="dutyDropOnDay(event,'${dateStr}');this.classList.remove('drag-over')"
+        onclick="dutyDayClick('${dateStr}')">
+        <div class="daily-date">${cellDate.getMonth()+1}/${cellDate.getDate()}</div>
+        <div class="daily-weekday">${weekDayNames[cellDate.getDay()]}</div>`;
+      
+      if (entry && entry.holiday) {
+        html += `<div class="daily-holiday">放假</div>`;
+      } else if (entry && groups[entry.groupIndex] !== undefined) {
+        const group = groups[entry.groupIndex];
+        const names = (group.students || []).map(sid => {
+          const s = students.find(st => st.id === sid);
+          return s ? s.name : '?';
+        });
+        html += `<div class="daily-group">第${entry.groupIndex+1}组</div>
+        <div class="daily-names">${names.join('、')}</div>`;
+      } else if (isWeekend) {
+        html += `<div class="daily-holiday">休息</div>`;
+      } else {
+        html += `<div class="daily-holiday" style="color:var(--gray-300)">未安排</div>`;
+      }
+      
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  
+  html += `</div></div>`;
+  return html;
+}
+
+// Drag & Drop
+function dutyDragStart(event, groupIndex) {
+  dutyDragGroupIndex = groupIndex;
+  event.dataTransfer.setData('text/plain', String(groupIndex));
+  event.dataTransfer.effectAllowed = 'move';
+}
+
+function dutyDropOnDay(event, dateStr) {
+  event.preventDefault();
+  const gi = dutyDragGroupIndex;
+  if (gi === null || gi === undefined) return;
+  
+  const dd = getClassDutyData(dutyCurrentClass);
+  const catKey = String(dutyCurrentCategory);
+  if (!dd.schedule[catKey]) dd.schedule[catKey] = {};
+  
+  dd.schedule[catKey][dateStr] = { groupIndex: gi, locked: true };
+  dutyDragGroupIndex = null;
+  document.getElementById('dutyContent').innerHTML = renderDutyRosterContent();
+}
+
+// Click on a day to toggle holiday/empty
+function dutyDayClick(dateStr) {
+  const dd = getClassDutyData(dutyCurrentClass);
+  const catKey = String(dutyCurrentCategory);
+  if (!dd.schedule[catKey]) dd.schedule[catKey] = {};
+  
+  const entry = dd.schedule[catKey][dateStr];
+  if (!entry) {
+    // Set as holiday
+    dd.schedule[catKey][dateStr] = { holiday: true, locked: true };
+  } else if (entry.holiday) {
+    // Remove holiday
+    delete dd.schedule[catKey][dateStr];
+  } else {
+    // Has group — clear it (set as empty/holiday)
+    dd.schedule[catKey][dateStr] = { holiday: true, locked: true };
+  }
+  document.getElementById('dutyContent').innerHTML = renderDutyRosterContent();
+}
+
+// Toggle group expand/collapse
+function toggleDutyGroupExpand(catKey, gi) {
+  const key = catKey + '_' + gi;
+  dutyGroupExpanded[key] = !dutyGroupExpanded[key];
+  const detail = document.getElementById('dutyGroupDetail_' + catKey + '_' + gi);
+  const toggle = event.currentTarget.querySelector('.group-toggle');
+  if (detail) detail.classList.toggle('show');
+  if (toggle) toggle.classList.toggle('open');
+}
+
+// Calendar view (compact, 3 weeks)
+function renderDutyCalendar(schedule, groups, students) {
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay() + 1);
   const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
   let html = `<div class="card"><div class="card-header"><span class="card-title">排班日历</span></div><div class="card-body">`;
@@ -14775,16 +15414,11 @@ function renderDutyCalendar() {
     weekStart.setDate(startOfWeek.getDate() + weekOffset * 7);
     
     html += `<div style="font-size:13px;font-weight:600;color:var(--gray-600);margin:${weekOffset>0?'20px':'0'} 0 8px">
-      ${weekStart.getFullYear()}年${weekStart.getMonth()+1}月${weekStart.getDate()}日 周
-    </div>`;
+      ${weekStart.getFullYear()}年${weekStart.getMonth()+1}月${weekStart.getDate()}日</div>`;
     html += `<div class="duty-calendar-grid">`;
     
-    // Headers
-    weekDays.forEach(d => {
-      html += `<div class="duty-calendar-header">${d}</div>`;
-    });
+    weekDays.forEach(d => { html += `<div class="duty-calendar-header">${d}</div>`; });
     
-    // Cells
     for (let d = 0; d < 7; d++) {
       const cellDate = new Date(weekStart);
       cellDate.setDate(weekStart.getDate() + d);
@@ -14796,12 +15430,17 @@ function renderDutyCalendar() {
       let cellClass = 'duty-calendar-cell';
       if (isToday) cellClass += ' today';
       if (isWeekend) cellClass += ' weekend';
-      if (entry && entry.locked) cellClass += ' locked';
+      if (entry && entry.locked && !entry.holiday) cellClass += ' locked';
       
-      html += `<div class="${cellClass}" style="position:relative">
+      html += `<div class="${cellClass}" style="position:relative"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="dutyDropOnDay(event,'${dateStr}');this.classList.remove('drag-over')">
         <div class="cell-date">${cellDate.getDate()}日</div>`;
       
-      if (entry && groups[entry.groupIndex]) {
+      if (entry && entry.holiday) {
+        html += `<div style="font-size:10px;color:var(--gray-400)">放假</div>`;
+      } else if (entry && groups[entry.groupIndex] !== undefined) {
         const group = groups[entry.groupIndex];
         const names = (group.students || []).map(sid => {
           const s = students.find(st => st.id === sid);
@@ -14815,7 +15454,6 @@ function renderDutyCalendar() {
       
       html += `</div>`;
     }
-    
     html += `</div>`;
   }
   
@@ -14860,10 +15498,8 @@ function editDutyGroup(groupIndex) {
   const group = dd.groups[catKey][groupIndex];
   const students = STUDENTS[dutyCurrentClass] || [];
   
-  const allStudentNames = students.map(s => `${s.id}:${s.name}`).join(',');
   const currentIds = (group.students || []).join(',');
-  
-  const input = prompt(`请输入该组学生座号（用逗号分隔），当前班级共${students}人：\n当前：${currentIds}`, currentIds);
+  const input = prompt(`请输入该组学生座号（用逗号分隔），当前班级共${students.length}人：\n当前：${currentIds}`, currentIds);
   if (input === null) return;
   
   const ids = input.split(/[,，]/).map(s => parseInt(s.trim())).filter(n => !isNaN(n));
@@ -14882,14 +15518,12 @@ function autoDistributeGroups() {
   const groupCount = parseInt(prompt('请输入分组数量：', '5'));
   if (!groupCount || groupCount < 1) return;
   
-  // Shuffle students using Fisher-Yates
   const shuffled = [...students.map(s => s.id)];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   
-  // Distribute evenly
   dd.groups[catKey] = [];
   const baseSize = Math.floor(shuffled.length / groupCount);
   const remainder = shuffled.length % groupCount;
@@ -14897,8 +15531,7 @@ function autoDistributeGroups() {
   
   for (let g = 0; g < groupCount; g++) {
     const size = baseSize + (g < remainder ? 1 : 0);
-    const groupStudents = shuffled.slice(idx, idx + size);
-    dd.groups[catKey].push({ students: groupStudents });
+    dd.groups[catKey].push({ students: shuffled.slice(idx, idx + size) });
     idx += size;
   }
   
@@ -14922,51 +15555,34 @@ function autoGenerateDutySchedule() {
   const schedule = dd.schedule[catKey];
   
   const startDate = new Date(dd.settings.startDate);
-  const cycleType = dd.settings.cycleType;
   const skipWeekends = dd.settings.skipWeekends;
   
-  // Generate for 4 weeks
-  const totalDays = cycleType === 'weekly' ? 28 : 28;
+  // Generate for 4 weeks (28 days)
+  let groupPointer = 0;
+  // Find the last used groupIndex to continue from there
+  const existingDates = Object.keys(schedule).filter(d => !schedule[d].holiday && schedule[d].groupIndex !== undefined).sort();
+  if (existingDates.length > 0) {
+    const lastEntry = schedule[existingDates[existingDates.length - 1]];
+    groupPointer = (lastEntry.groupIndex + 1) % groups.length;
+  }
   
-  for (let i = 0; i < totalDays; i++) {
+  for (let i = 0; i < 28; i++) {
     const date = new Date(startDate);
     date.setDate(startDate.getDate() + i);
     const dateStr = date.toISOString().split('T')[0];
     const dayOfWeek = date.getDay();
     
-    // Skip weekends if configured
     if (skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) continue;
     
-    // Don't overwrite locked entries
-    if (schedule[dateStr] && schedule[dateStr].locked) continue;
+    // Don't overwrite locked entries or holidays
+    if (schedule[dateStr] && (schedule[dateStr].locked || schedule[dateStr].holiday)) continue;
     
-    // Calculate group index
-    let groupIndex;
-    if (cycleType === 'daily') {
-      // Count non-skipped days from start
-      let validDayCount = 0;
-      for (let j = 0; j <= i; j++) {
-        const d = new Date(startDate);
-        d.setDate(startDate.getDate() + j);
-        const dow = d.getDay();
-        if (skipWeekends && (dow === 0 || dow === 6)) continue;
-        if (j === i) {
-          groupIndex = validDayCount % groups.length;
-          break;
-        }
-        validDayCount++;
-      }
-    } else {
-      // Weekly: change group each week
-      const weekNum = Math.floor(i / 7);
-      groupIndex = weekNum % groups.length;
-    }
-    
-    schedule[dateStr] = { groupIndex: groupIndex, locked: false };
+    schedule[dateStr] = { groupIndex: groupPointer, locked: false };
+    groupPointer = (groupPointer + 1) % groups.length;
   }
   
   saveDutyData().then(() => {
-    showToast('排班已自动生成');
+    showToast('排班已自动生成并保存');
     document.getElementById('dutyContent').innerHTML = renderDutyRosterContent();
   });
 }
