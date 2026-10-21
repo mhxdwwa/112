@@ -8483,20 +8483,14 @@ function renderPasswordMgmt() {
     });
   }
   
-  // 从 setupTeaching 获取老师（从 subjects 中提取教师名字）
+  // 第一步：收集所有班主任（优先级最高）
+  const headteacherNames = new Set();
+  
+  // 从 setupTeaching 获取班主任
   if (setupTeaching && setupTeaching.length > 0) {
     setupTeaching.forEach(t => {
-      // 添加班主任
-      if (t.headteacher && !allTeachers.find(x => x.name === t.headteacher)) {
-        allTeachers.push({ name: t.headteacher, role: 'headteacher', title: t.className + '班主任' });
-      }
-      // 从 subjects 中提取科任老师
-      if (t.subjects && typeof t.subjects === 'object') {
-        Object.values(t.subjects).forEach(teacherName => {
-          if (teacherName && !allTeachers.find(x => x.name === teacherName)) {
-            allTeachers.push({ name: teacherName, role: 'teacher', title: t.className + '科任' });
-          }
-        });
+      if (t.headteacher) {
+        headteacherNames.add(t.headteacher);
       }
     });
   }
@@ -8504,8 +8498,39 @@ function renderPasswordMgmt() {
   // 从 setupClasses 获取班主任
   if (setupClasses && setupClasses.length > 0) {
     setupClasses.forEach(cls => {
-      if (cls.headteacher && !allTeachers.find(x => x.name === cls.headteacher)) {
-        allTeachers.push({ name: cls.headteacher, role: 'headteacher', title: '班主任' });
+      if (cls.headteacher) {
+        headteacherNames.add(cls.headteacher);
+      }
+    });
+  }
+  
+  // 添加班主任到列表（去重）
+  headteacherNames.forEach(name => {
+    if (!allTeachers.find(x => x.name === name)) {
+      // 找到该班主任的第一个班级
+      let title = '班主任';
+      if (setupTeaching && setupTeaching.length > 0) {
+        const cls = setupTeaching.find(t => t.headteacher === name);
+        if (cls) title = cls.className + '班主任';
+      }
+      if (title === '班主任' && setupClasses && setupClasses.length > 0) {
+        const cls = setupClasses.find(c => c.headteacher === name);
+        if (cls) title = cls.className + '班主任';
+      }
+      allTeachers.push({ name: name, role: 'headteacher', title: title });
+    }
+  });
+  
+  // 第二步：从 setupTeaching 获取科任老师（排除已经是班主任的人）
+  if (setupTeaching && setupTeaching.length > 0) {
+    setupTeaching.forEach(t => {
+      // 从 subjects 中提取科任老师
+      if (t.subjects && typeof t.subjects === 'object') {
+        Object.values(t.subjects).forEach(teacherName => {
+          if (teacherName && !allTeachers.find(x => x.name === teacherName)) {
+            allTeachers.push({ name: teacherName, role: 'teacher', title: t.className + '科任' });
+          }
+        });
       }
     });
   }
@@ -8630,16 +8655,26 @@ function selectAllWorkers(select) {
 
 async function resetSelectedPasswords() {
   const selected = [];
+  const selectedWorkers = [];
   document.querySelectorAll('.teacher-reset-checkbox:checked').forEach(cb => {
     selected.push(cb.dataset.name);
   });
+  document.querySelectorAll('.worker-reset-checkbox:checked').forEach(cb => {
+    selectedWorkers.push(cb.dataset.name);
+  });
   
-  if (selected.length === 0) {
-    showToast('请先勾选要重置密码的教师', 'warning');
+  const allSelected = [...selected, ...selectedWorkers];
+  
+  if (allSelected.length === 0) {
+    showToast('请先勾选要重置密码的人员', 'warning');
     return;
   }
   
-  if (!confirm(`确定要重置以下 ${selected.length} 位教师的密码吗？\n\n${selected.join('、')}\n\n密码将被重置为：123456\n重置后教师下次登录时需修改新密码`)) {
+  const workerCount = selectedWorkers.length;
+  const teacherCount = selected.length;
+  let confirmMsg = `确定要重置以下 ${allSelected.length} 位人员的密码吗？\n\n${allSelected.join('、')}\n\n密码将被重置为：123456\n重置后下次登录时需修改新密码`;
+  
+  if (!confirm(confirmMsg)) {
     return;
   }
   
@@ -8651,7 +8686,7 @@ async function resetSelectedPasswords() {
   const hash = await hashPassword(defaultPassword);
   
   // 批量更新本地凭证（不立即保存到云端）
-  for (const name of selected) {
+  for (const name of allSelected) {
     try {
       // 保留现有的凭证字段，只更新密码
       const existingCred = xqCredentials[name] || {};
@@ -8679,7 +8714,7 @@ async function resetSelectedPasswords() {
     }
   }
   
-  let msg = `已重置 ${successCount} 位教师的密码`;
+  let msg = `已重置 ${successCount} 位人员的密码`;
   if (failCount > 0) msg += `，${failCount} 位失败`;
   
   showToast(msg, failCount > 0 ? 'warning' : 'success');
