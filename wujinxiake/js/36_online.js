@@ -76,40 +76,14 @@ function connect(){
     config: { presence: { key: uid }, broadcast: { self: false } }
   });
 
-  ch.on('broadcast', { event: 'pos' },  function(m){ onPos(m.payload); });
-  ch.on('broadcast', { event: 'chat' }, function(m){ onChat(m.payload); });
-  ch.on('broadcast', { event: 'pkinv' }, function(m){
-    const p = m.payload || {};
-    if(!p.id || p.id === uid) return;
-    if(p.to && p.to !== uid) return;
-    const ok = confirm((p.n || '有人') + ' 邀请你切磋一场，接受吗？\n\n接受后立刻进入战斗，你已经学会的技能都能用。');
-    try{
-      ch.send({ type:'broadcast', event:'pkrsp',
-        payload:{ id: uid, n: myName, to: p.id, ok: !!ok, cid: myCharIdx() } });
-    }catch(e){}
-    if(ok) startSpar(p.cid | 0);
-    else chatLine('', '你拒绝了 ' + (p.n || '对方') + ' 的切磋邀请', true);
-  });
-  ch.on('broadcast', { event: 'pkrsp' }, function(m){
-    const p = m.payload || {};
-    if(p.to !== uid) return;
-    if(p.ok){ chatLine('', (p.n || '对方') + ' 接受了切磋，开始！', true); startSpar(p.cid | 0); }
-    else chatLine('', (p.n || '对方') + ' 拒绝了切磋邀请', true);
-  });
-  /* 有人点我 → 我回一份装备/属性资料 */
-  ch.on('broadcast', { event: 'pkinfo' }, function(m){
-    const p = m.payload || {};
-    if(!p.id || p.to !== uid) return;
-    try{
-      ch.send({ type:'broadcast', event:'pkinfo_d', payload:{ id:uid, to:p.id, d: myProfile() } });
-    }catch(e){}
-  });
-  ch.on('broadcast', { event: 'pkinfo_d' }, function(m){
-    const p = m.payload || {};
-    if(!p.d || p.to !== uid) return;
-    if(cardTarget && p.id !== cardTarget) return;
-    renderCardProfile(p.d);
-  });
+  /* ★ Supabase 只作为「中继连不上时的保底通道」；中继正常时这些广播直接忽略，
+       避免同一条消息被处理两次 */
+  ch.on('broadcast', { event: 'pos' },  function(m){ if(relayOk()) return; onPos(m.payload); });
+  ch.on('broadcast', { event: 'chat' }, function(m){ if(relayOk()) return; onChat(m.payload); });
+  ch.on('broadcast', { event: 'pkinv' }, function(m){ if(relayOk()) return; handlePkInvite(m.payload); });
+  ch.on('broadcast', { event: 'pkrsp' }, function(m){ if(relayOk()) return; handlePkResp(m.payload); });
+  ch.on('broadcast', { event: 'pkinfo' }, function(m){ if(relayOk()) return; handlePkInfo(m.payload); });
+  ch.on('broadcast', { event: 'pkinfo_d' }, function(m){ if(relayOk()) return; handlePkInfoD(m.payload); });
   ch.on('broadcast', { event: 'bye' },  function(m){
     const p = m.payload || {};
     if(p.id) remotes.delete(p.id);
@@ -231,6 +205,64 @@ function leaveRoom(silent){
   }
 }
 
+/* ---------- 传输层：优先走 Cloudflare 中继，失败退回 Supabase ---------- */
+function relayOk(){
+  try{ return !!(window.RELAY && window.RELAY.ok); }catch(e){ return false; }
+}
+
+/* 统一出口：先试中继，再试 Supabase；两者都不通返回 false */
+function rtSend(event, payload){
+  try{
+    if(window.RELAY && window.RELAY.ok && window.RELAY.send) return !!window.RELAY.send({ e: event, p: payload });
+  }catch(e){}
+  if(ch && joined){
+    try{ ch.send({ type:'broadcast', event: event, payload: payload }); return true; }catch(e){}
+  }
+  return false;
+}
+
+/* 中继收到别人消息 → 交给同一批业务处理器 */
+function wireRelay(){
+  if(!window.RELAY || wireRelay.done) return;
+  wireRelay.done = true;
+  RELAY.on('pos',      function(p){ onPos(p); });
+  RELAY.on('chat',     function(p){ onChat(p); });
+  RELAY.on('pkinv',    function(p){ handlePkInvite(p); });
+  RELAY.on('pkrsp',    function(p){ handlePkResp(p); });
+  RELAY.on('pkinfo',   function(p){ handlePkInfo(p); });
+  RELAY.on('pkinfo_d', function(p){ handlePkInfoD(p); });
+  /* 中继刚连上时补发一次位置，免得别人看不到站着的你 */
+  if(othersOnline()){ lastPosSig = ''; try{ sendPos(); }catch(e){} }
+}
+
+/* ---------- 切磋 / 资料卡 消息处理（两条通道共用） ---------- */
+function handlePkInvite(p){
+  p = p || {};
+  if(!p.id || p.id === uid) return;
+  if(p.to && p.to !== uid) return;
+  const yes = confirm((p.n || '有人') + ' 邀请你切磋一场，接受吗？\n\n接受后立刻进入战斗，你已经学会的技能都能用。');
+  rtSend('pkrsp', { id: uid, n: myName, to: p.id, ok: !!yes, cid: myCharIdx() });
+  if(yes) startSpar(p.cid | 0);
+  else chatLine('', '你拒绝了 ' + (p.n || '对方') + ' 的切磋邀请', true);
+}
+function handlePkResp(p){
+  p = p || {};
+  if(p.to !== uid) return;
+  if(p.ok){ chatLine('', (p.n || '对方') + ' 接受了切磋，开始！', true); startSpar(p.cid | 0); }
+  else chatLine('', (p.n || '对方') + ' 拒绝了切磋邀请', true);
+}
+function handlePkInfo(p){
+  p = p || {};
+  if(!p.id || p.to !== uid) return;
+  rtSend('pkinfo_d', { id: uid, to: p.id, d: myProfile() });
+}
+function handlePkInfoD(p){
+  p = p || {};
+  if(!p.d || p.to !== uid) return;
+  if(cardTarget && p.id !== cardTarget) return;
+  renderCardProfile(p.d);
+}
+
 /* ---------- 位置同步 ---------- */
 function startSend(){
   if(sendTimer) return;
@@ -269,18 +301,13 @@ function sendPos(){
     lastPosAt = _now;
   }
 
-  try{
-    ch.send({
-      type: 'broadcast', event: 'pos',
-      payload: {
-        id: uid, n: myName, lv: myLv, w: myJob, r: myRoom(),
-        x: Math.round(p.x), y: Math.round(p.y),
-        f: p.facing >= 0 ? 1 : -1,
-        s: (p.state === 'walk' || p.state === 'run') ? 'w' : 'i',
-        t: Date.now()
-      }
-    });
-  }catch(e){}
+  rtSend('pos', {
+    id: uid, n: myName, lv: myLv, w: myJob, r: myRoom(),
+    x: Math.round(p.x), y: Math.round(p.y),
+    f: p.facing >= 0 ? 1 : -1,
+    s: (p.state === 'walk' || p.state === 'run') ? 'w' : 'i',
+    t: Date.now()
+  });
 }
 
 function onPos(p){
@@ -381,9 +408,7 @@ function showCard(r){
   const cl = $('ocClose');
   if(cl) cl.addEventListener('click', hideCard);
   /* 向对方要一份资料 */
-  try{
-    if(ch && joined) ch.send({ type:'broadcast', event:'pkinfo', payload:{ id:uid, to:r.id } });
-  }catch(e){}
+  rtSend('pkinfo', { id: uid, to: r.id });
 }
 
 function renderCardProfile(d){
@@ -421,11 +446,8 @@ function invitePk(id){
   if(!id) return;
   const r = remotes.get(id);
   if(!r){ chatLine('', '对方已离开', true); hideCard(); return; }
-  if(!ch || !joined){ chatLine('', '还没连上服务器，稍后再试', true); return; }
-  try{
-    ch.send({ type:'broadcast', event:'pkinv',
-      payload:{ id: uid, n: myName, to: id, cid: myCharIdx() } });
-  }catch(e){}
+  if(!relayOk() && (!ch || !joined)){ chatLine('', '还没连上服务器，稍后再试', true); return; }
+  rtSend('pkinv', { id: uid, n: myName, to: id, cid: myCharIdx() });
   chatLine('', '已向 ' + (r.name || '对方') + ' 发出切磋邀请，等对方回应…', true);
   hideCard();
 }
@@ -518,10 +540,7 @@ function sendChat(){
   if(!m) return;
   el.value = '';
   chatLine(myName, m);
-  if(!ch || !joined) return;
-  try{
-    ch.send({ type: 'broadcast', event: 'chat', payload: { id: uid, n: myName, m: m, r: myRoom() } });
-  }catch(e){}
+  rtSend('chat', { id: uid, n: myName, m: m, r: myRoom() });
 }
 
 /* ---------- 对外接口 ---------- */
@@ -570,6 +589,13 @@ function boot(){
 
   initIdentity();
   hookCanvasClick();
+  /* 中继脚本可能比本文件后加载，等一下再挂上 */
+  (function ensureRelay(tries){
+    try{
+      if(window.RELAY){ window.RELAY.connect(); wireRelay(); return; }
+    }catch(e){}
+    if(tries > 0) setTimeout(function(){ ensureRelay(tries - 1); }, 120);
+  })(25);
   setText('opName', myName);
   setText('opAccount', logged() ? myName : '游客（未登录）');
   setText('opState', logged() ? '连接中…' : '游客模式');
