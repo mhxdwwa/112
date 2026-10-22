@@ -3843,6 +3843,11 @@ function initAppAfterLogin() {
   // 启动定期云同步
   startPeriodicSync();
   
+  // 预加载收集数据（用于侧边栏徽章）
+  loadCollectionData(true).then(() => {
+    buildSidebar(); // 数据加载完成后重建侧边栏以显示徽章
+  });
+  
   // 刷新用户信息并导航
   refreshCurrentUserClass();
   buildSidebar();
@@ -18248,6 +18253,8 @@ async function submitSpreadsheetData(taskId) {
   const result = await saveCollectionData();
   if (result.ok) {
     showToast('保存成功', 'success');
+    // 重建侧边栏以更新徽章
+    buildSidebar();
     // 刷新页面以显示最新数据
     document.getElementById('content').innerHTML = renderDataFill();
   } else {
