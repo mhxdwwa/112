@@ -142,3 +142,10 @@
   .auth-submit{margin-top:8px; height:34px; font-size:13px;}
   .auth-foot{margin-top:5px; padding-top:5px;}
 }
+
+/* 登录页顶部小提示：说清「注册」和「登录」分别怎么走 */
+.auth-hint{margin:-2px 0 8px; padding:6px 8px; border-radius:6px; font-size:10.5px; line-height:1.5;
+  color:#8fa8bd; background:rgba(120,180,255,.07); border:1px solid rgba(120,180,255,.13);}
+@media (max-height:560px){
+  .auth-hint{margin:-4px 0 6px; padding:4px 6px; font-size:9.5px;}
+}
