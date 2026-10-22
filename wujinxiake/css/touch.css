@@ -118,7 +118,8 @@
 
 /* ---------- 触屏专用的 ESC 键：贴在浏览器左边正中间 ---------- */
 #btnEsc{
-  position:fixed; left:8px; top:50%; transform:translateY(-50%);
+  /* 位置由 JS 算：贴在左边、摇杆正上方，既不压图标列也不挡任务框 */
+  position:fixed; left:8px; top:58%;
   z-index:9997; display:none; align-items:center; justify-content:center;
   width:46px; height:46px; border-radius:50%;
   font:700 12px/1 "Microsoft YaHei",system-ui,sans-serif; letter-spacing:.02em;
@@ -129,7 +130,7 @@
   user-select:none; padding:0;
 }
 #btnEsc.show{display:flex;}
-#btnEsc:active{background:rgba(120,180,240,.35); color:#fff; transform:translateY(-50%) scale(.94);}
+#btnEsc:active{background:rgba(120,180,240,.35); color:#fff; transform:scale(.94);}
 @media (max-height:430px){
   #btnEsc{width:38px; height:38px; font-size:10.5px; left:5px;}
 }
