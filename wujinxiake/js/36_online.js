@@ -76,6 +76,38 @@ function connect(){
 
   ch.on('broadcast', { event: 'pos' },  function(m){ onPos(m.payload); });
   ch.on('broadcast', { event: 'chat' }, function(m){ onChat(m.payload); });
+  ch.on('broadcast', { event: 'pkinv' }, function(m){
+    const p = m.payload || {};
+    if(!p.id || p.id === uid) return;
+    if(p.to && p.to !== uid) return;
+    const ok = confirm((p.n || '有人') + ' 邀请你切磋一场，接受吗？\n\n接受后立刻进入战斗，你已经学会的技能都能用。');
+    try{
+      ch.send({ type:'broadcast', event:'pkrsp',
+        payload:{ id: uid, n: myName, to: p.id, ok: !!ok, cid: myCharIdx() } });
+    }catch(e){}
+    if(ok) startSpar(p.cid | 0);
+    else chatLine('', '你拒绝了 ' + (p.n || '对方') + ' 的切磋邀请', true);
+  });
+  ch.on('broadcast', { event: 'pkrsp' }, function(m){
+    const p = m.payload || {};
+    if(p.to !== uid) return;
+    if(p.ok){ chatLine('', (p.n || '对方') + ' 接受了切磋，开始！', true); startSpar(p.cid | 0); }
+    else chatLine('', (p.n || '对方') + ' 拒绝了切磋邀请', true);
+  });
+  /* 有人点我 → 我回一份装备/属性资料 */
+  ch.on('broadcast', { event: 'pkinfo' }, function(m){
+    const p = m.payload || {};
+    if(!p.id || p.to !== uid) return;
+    try{
+      ch.send({ type:'broadcast', event:'pkinfo_d', payload:{ id:uid, to:p.id, d: myProfile() } });
+    }catch(e){}
+  });
+  ch.on('broadcast', { event: 'pkinfo_d' }, function(m){
+    const p = m.payload || {};
+    if(!p.d || p.to !== uid) return;
+    if(cardTarget && p.id !== cardTarget) return;
+    renderCardProfile(p.d);
+  });
   ch.on('broadcast', { event: 'bye' },  function(m){
     const p = m.payload || {};
     if(p.id) remotes.delete(p.id);
@@ -167,26 +199,13 @@ function randCode(){
   return s;
 }
 
+/* ★ 单频道：全服只有一个公共频道，所有人都在里面，不再分房间 */
 function joinRoom(code){
-  if(!sb()){ chatLine('', '网络组件未加载，无法联机', true); return; }
-  code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if(!code){ chatLine('', '请输入房间码', true); return; }
-  if(!joined){
-    pendingRoom = code;
-    chatLine('', '正在连接服务器，连上后自动进入房间 ' + code, true);
-    connect();
-    return;
-  }
-
-  leaveRoom(true);
-  roomCode = code;
-  remotes.clear();
-  setText('opRoomCode', roomCode);
-  const r = $('opRoom'); if(r) r.classList.remove('hidden');
-  chatLine('', '进入房间 ' + roomCode, true);
-  track();
-  renderMembers();
-  setTimeout(function(){ if(roomCode) track(); }, 1200);
+  chatLine('', '现在所有玩家都在同一个公共频道，不用房间码，进城镇就能互相看见。', true);
+  if(roomCode) leaveRoom(true);
+}
+function createRoom(){
+  chatLine('', '公共频道只有一个，全服玩家自动同频道。', true);
 }
 
 function leaveRoom(silent){
@@ -280,6 +299,145 @@ function updateRemotes(dt, now){
   });
 }
 
+/* ---------- 点击其他玩家：信息卡 + 邀请切磋 ---------- */
+let cardTarget = '';
+
+function jobName(w){
+  try{
+    if(typeof CHARACTERS !== 'undefined' && CHARACTERS[w]) return CHARACTERS[w].name || ('门派' + ((w | 0) + 1));
+  }catch(e){}
+  return '门派' + ((w | 0) + 1);
+}
+function myCharIdx(){
+  try{ if(typeof G !== 'undefined' && G && G.player) return G.player.weaponIdx | 0; }catch(e){}
+  try{ if(window.CHARS && CHARS.active()) return CHARS.active().charIdx | 0; }catch(e){}
+  return 0;
+}
+const SLOT_CN = { weapon:'武器', head:'头饰', armor:'上衣', shoes:'鞋', necklace:'项链', ring:'戒指', bracer:'护腕', accessory:'戒指' };
+
+/* 我自己的资料（发给对方看） */
+function myProfile(){
+  const out = { name: myName, lv: myLv, job: myCharIdx(), eq: [], st: null };
+  try{
+    const p = (typeof G !== 'undefined' && G && G.player) ? G.player : null;
+    if(p){
+      out.lv = p.level | 0;
+      out.name = (typeof CHARS !== 'undefined' && CHARS.active && CHARS.active() ? CHARS.active().name : null) || myName;
+      out.st = {
+        atk: Math.round(p.atk || 0), def: Math.round(p.def || 0),
+        hp: Math.round(p.maxHp || 0), mp: Math.round(p.maxMp || 0),
+        crit: Math.round((p.critBonus || 0) * 100),
+        dmg: WEAPONS[p.weaponIdx] ? (WEAPONS[p.weaponIdx].dmgType === 'magic' ? '魔法' : '物理') : '物理'
+      };
+      const eqs = p.equipment || {};
+      const slots = (typeof EQUIP_SLOTS !== 'undefined') ? EQUIP_SLOTS : Object.keys(eqs);
+      slots.forEach(function(s){
+        const it = eqs[s];
+        if(!it || !it.name) return;
+        out.eq.push({ s:s, n:it.name, e:it.enhance | 0, a:it.amplify | 0, l:it.level | 0 });
+      });
+    }
+  }catch(e){}
+  return out;
+}
+
+function showCard(r){
+  const c = $('opCard');
+  if(!c) return;
+  cardTarget = r.id;
+  c.innerHTML = '<div class="oc-head"><b>' + esc(r.name) + '</b>' +
+    '<em>Lv.' + (r.lv || 1) + ' · ' + esc(jobName(r.weaponIdx)) + '</em></div>' +
+    '<div class="oc-body" id="ocBody"><div class="oc-tip">正在读取对方的装备与属性…</div></div>' +
+    '<div class="oc-acts"><button id="ocPk" type="button">邀请切磋</button>' +
+    '<button id="ocClose" type="button">关闭</button></div>';
+  c.classList.add('open');
+  const pk = $('ocPk');
+  if(pk) pk.addEventListener('click', function(){ invitePk(cardTarget); });
+  const cl = $('ocClose');
+  if(cl) cl.addEventListener('click', hideCard);
+  /* 向对方要一份资料 */
+  try{
+    if(ch && joined) ch.send({ type:'broadcast', event:'pkinfo', payload:{ id:uid, to:r.id } });
+  }catch(e){}
+}
+
+function renderCardProfile(d){
+  const box = $('ocBody');
+  if(!box || !d) return;
+  let h = '';
+  if(d.st){
+    h += '<div class="oc-stats">' +
+      '<span>攻击 <b>' + (d.st.atk | 0) + '</b><i>' + esc(d.st.dmg || '') + '</i></span>' +
+      '<span>防御 <b>' + (d.st.def | 0) + '</b></span>' +
+      '<span>生命 <b>' + (d.st.hp | 0) + '</b></span>' +
+      '<span>法力 <b>' + (d.st.mp | 0) + '</b></span>' +
+      '<span>暴击 <b>' + (d.st.crit | 0) + '%</b></span>' +
+      '</div>';
+  }
+  if(d.eq && d.eq.length){
+    h += '<div class="oc-eqs">' + d.eq.map(function(it){
+      const pre = (it.e ? '+' + it.e + ' ' : '') + (it.a ? '增幅' + it.a + ' ' : '');
+      return '<div class="oc-eq"><span>' + esc(SLOT_CN[it.s] || it.s) + '</span>' +
+             '<b>' + esc(pre + it.n) + '</b>' +
+             '<em>' + (it.l ? 'Lv.' + it.l : '') + '</em></div>';
+    }).join('') + '</div>';
+  } else {
+    h += '<div class="oc-tip">对方还没穿装备</div>';
+  }
+  box.innerHTML = h;
+}
+function hideCard(){ const c = $('opCard'); if(c) c.classList.remove('open'); cardTarget = ''; }
+
+function invitePk(id){
+  if(!id) return;
+  const r = remotes.get(id);
+  if(!r){ chatLine('', '对方已离开', true); hideCard(); return; }
+  if(!ch || !joined){ chatLine('', '还没连上服务器，稍后再试', true); return; }
+  try{
+    ch.send({ type:'broadcast', event:'pkinv',
+      payload:{ id: uid, n: myName, to: id, cid: myCharIdx() } });
+  }catch(e){}
+  chatLine('', '已向 ' + (r.name || '对方') + ' 发出切磋邀请，等对方回应…', true);
+  hideCard();
+}
+
+/* 切磋：进入战斗（用当前角色属性 vs 对手角色），已学技能都能用 */
+function startSpar(oppChar){
+  hideCard();
+  try{
+    if(typeof startGatekeeperPvp === 'function'){ startGatekeeperPvp(); return; }
+    if(typeof startPvpWithChar === 'function') startPvpWithChar(myCharIdx(), oppChar | 0);
+  }catch(e){ console.warn('[online] 切磋启动失败', e); }
+}
+
+function hookCanvasClick(){
+  const cv = document.getElementById('c');
+  if(!cv || cv.__wjxClickBound) return;
+  cv.__wjxClickBound = true;
+  cv.addEventListener('click', function(e){
+    if(typeof gameState === 'undefined' || gameState !== 'town') return;
+    if(!remotes.size) return;
+    const r0 = cv.getBoundingClientRect();
+    if(!r0.width) return;
+    const vw = (typeof VW !== 'undefined' && VW) ? VW : 1280;
+    const vh = (typeof VH !== 'undefined' && VH) ? VH : 720;
+    let wx = (e.clientX - r0.left) * (vw / r0.width);
+    let wy = (e.clientY - r0.top) * (vh / r0.height);
+    try{ if(typeof townCam !== 'undefined' && townCam){ wx += townCam.x; wy += townCam.y; } }catch(err){}
+    let best = null, bd = 1e9;
+    remotes.forEach(function(r){
+      const d = Math.hypot(r.x - wx, (r.y - 40) - wy);
+      if(d < bd){ bd = d; best = r; }
+    });
+    if(best && bd < 120) showCard(best);
+    else if(cardTarget) hideCard();
+  });
+  /* 手机/触屏：点屏幕空白或按 ESC 也关掉卡片 */
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && cardTarget) hideCard();
+  });
+}
+
 /* ---------- 绘制 ---------- */
 let _lastTick = 0;
 function collectDrawables(arr){
@@ -363,7 +521,7 @@ function boot(){
   if(close) close.addEventListener('click', function(){ panel(false); });
 
   const create = $('opCreate');
-  if(create) create.addEventListener('click', function(){ joinRoom(randCode()); });
+  if(create) create.addEventListener('click', function(){ createRoom(); });
   const join = $('opJoin');
   if(join) join.addEventListener('click', function(){ joinRoom($('opCode') ? $('opCode').value : ''); });
   const code = $('opCode');
@@ -382,6 +540,7 @@ function boot(){
   }, true);
 
   initIdentity();
+  hookCanvasClick();
   setText('opName', myName);
   setText('opAccount', logged() ? myName : '游客（未登录）');
   setText('opState', logged() ? '连接中…' : '游客模式');
@@ -417,6 +576,9 @@ function boot(){
     if(joined && Date.now() - lastTrack > 60000) track();
   }, 5000);
 }
+
+/* 对外暴露：触屏 ESC / 其他模块需要能关掉资料卡 */
+window.__wjxCard = { show: showCard, hide: hideCard, render: renderCardProfile };
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
