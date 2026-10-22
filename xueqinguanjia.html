@@ -3905,6 +3905,12 @@ function iconDuty() {
 function iconRepair() {
   return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
 }
+function iconCollection() {
+  return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="11" y2="18"/></svg>';
+}
+function iconDataFill() {
+  return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+}
 
 /* ============================================================
    SIDEBAR NAVIGATION
@@ -3922,6 +3928,7 @@ const NAV_CONFIG = {
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
       { id: 'repair-records', label: '设备申报记录', icon: iconRepair },
+      { id: 'data-collection', label: '收集数据', icon: iconCollection },
     ]},
   ],
   headteacher: [
@@ -3937,6 +3944,7 @@ const NAV_CONFIG = {
     ]},
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
+      { id: 'data-fill', label: '数据填写', icon: iconDataFill },
     ]},
   ],
   teacher: [
@@ -3947,6 +3955,7 @@ const NAV_CONFIG = {
     ]},
     { section: '全校', items: [
       { id: 'all-classes-view', label: '全校班级查看', icon: iconLayout },
+      { id: 'data-fill', label: '数据填写', icon: iconDataFill },
     ]},
   ],
   worker: [
@@ -4230,6 +4239,8 @@ function renderPage(pageId) {
     'duty-roster': renderDutyRoster,
     'repair-declaration': renderRepairDeclaration,
     'repair-records': renderRepairRecords,
+    'data-collection': renderDataCollection,
+    'data-fill': renderDataFill,
   };
   if (renderers[pageId]) {
     content.innerHTML = renderers[pageId]();
@@ -4278,6 +4289,18 @@ function renderPage(pageId) {
     if (pageId === 'repair-records') {
       loadRepairData(true).then(() => {
         content.innerHTML = renderRepairRecords();
+      });
+    }
+    // 进入收集数据页面时加载数据
+    if (pageId === 'data-collection') {
+      loadCollectionData(true).then(() => {
+        content.innerHTML = renderDataCollection();
+      });
+    }
+    // 进入数据填写页面时加载数据
+    if (pageId === 'data-fill') {
+      loadCollectionData(true).then(() => {
+        content.innerHTML = renderDataFill();
       });
     }
   }
@@ -17583,6 +17606,514 @@ function renderRepairRecords() {
   html += `</div>`;
   
   return html;
+}
+
+// ============================================================
+// FEATURE: 数据收集 (DATA COLLECTION)
+// ============================================================
+let collectionData = {};  // { taskId: { id, title, columns, recipients, responses, createdAt, createdBy } }
+let collectionCurrentView = 'list';  // list, create, detail
+let collectionCurrentTaskId = null;
+
+// 加载收集数据
+async function loadCollectionData(forceRefresh = false) {
+  // 检查本地缓存
+  if (!forceRefresh) {
+    try {
+      const cached = localStorage.getItem('xq_collection_data');
+      const cacheTime = localStorage.getItem('xq_collection_data_time');
+      if (cached && cacheTime && Date.now() - parseInt(cacheTime) < 30000) {
+        collectionData = JSON.parse(cached);
+        console.log('[Collection] Loaded from cache');
+        return;
+      }
+    } catch (e) {}
+  }
+  
+  // 从服务器加载最新数据
+  const result = await xqApi('config', { action: 'get' });
+  if (result.ok && result.config && result.config.collection) {
+    let rawData = result.config.collection.data || {};
+    // 防御性检查
+    if (rawData && typeof rawData === 'object' && !Array.isArray(rawData) && rawData.data && typeof rawData.data === 'object') {
+      const keys = Object.keys(rawData);
+      if (keys.length === 1 && keys[0] === 'data') {
+        rawData = rawData.data;
+      }
+    }
+    if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
+      console.warn('[Collection] Data format invalid, resetting to {}');
+      rawData = {};
+    }
+    collectionData = rawData;
+    console.log('[Collection] Loaded', Object.keys(collectionData).length, 'tasks');
+    
+    // 更新本地缓存
+    try {
+      localStorage.setItem('xq_collection_data', JSON.stringify(collectionData));
+      localStorage.setItem('xq_collection_data_time', Date.now().toString());
+    } catch (e) {}
+  }
+}
+
+// 保存收集数据
+async function saveCollectionData() {
+  const result = await xqApi('config', {
+    action: 'set',
+    configKey: 'collection',
+    configData: collectionData,
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
+  
+  if (result.ok) {
+    try {
+      localStorage.setItem('xq_collection_data', JSON.stringify(collectionData));
+      localStorage.setItem('xq_collection_data_time', Date.now().toString());
+    } catch (e) {
+      console.warn('[Collection] Failed to cache:', e);
+    }
+  }
+  
+  return result;
+}
+
+// 获取所有教师名单（包括领导、班主任、科任老师）
+function getAllTeachersList() {
+  const teachers = new Set();
+  
+  // 从 setupRoles 获取领导
+  if (setupRoles && setupRoles.length > 0) {
+    setupRoles.forEach(r => {
+      if (r.role === 'leader') teachers.add(r.name);
+    });
+  }
+  
+  // 从 setupTeaching 获取班主任和科任老师
+  if (setupTeaching && setupTeaching.length > 0) {
+    setupTeaching.forEach(t => {
+      if (t.headteacher) teachers.add(t.headteacher);
+      if (t.subjects && typeof t.subjects === 'object') {
+        Object.values(t.subjects).forEach(name => {
+          if (name) teachers.add(name);
+        });
+      }
+    });
+  }
+  
+  // 从 setupClasses 获取班主任
+  if (setupClasses && setupClasses.length > 0) {
+    setupClasses.forEach(cls => {
+      if (cls.headteacher) teachers.add(cls.headteacher);
+    });
+  }
+  
+  return Array.from(teachers);
+}
+
+// 渲染收集数据页面（领导端）
+function renderDataCollection() {
+  const user = xqCurrentUser || {};
+  if (!user.isLeader) {
+    return emptyStateHtml('只有领导可以管理收集数据。');
+  }
+  
+  if (collectionCurrentView === 'create') {
+    return renderCollectionCreate();
+  }
+  
+  if (collectionCurrentView === 'detail' && collectionCurrentTaskId) {
+    return renderCollectionDetail(collectionCurrentTaskId);
+  }
+  
+  // 列表视图
+  const tasks = Object.values(collectionData).sort((a, b) => 
+    new Date(b.createdAt) - new Date(a.createdAt)
+  );
+  
+  let html = `<div class="toolbar">
+    <span style="font-size:14px;font-weight:600">收集数据</span>
+    <div class="toolbar-spacer"></div>
+    <button class="toolbar-btn primary" onclick="collectionCurrentView='create';document.getElementById('content').innerHTML=renderDataCollection()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      创建收集任务
+    </button>
+  </div>`;
+  
+  if (tasks.length === 0) {
+    html += `<div style="text-align:center;padding:60px 20px;color:var(--gray-400)">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 16px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+      <div style="font-size:16px;margin-bottom:8px">暂无收集任务</div>
+      <div style="font-size:13px">点击"创建收集任务"开始收集数据</div>
+    </div>`;
+  } else {
+    html += `<div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">`;
+    tasks.forEach(task => {
+      const totalRecipients = task.recipients ? task.recipients.length : 0;
+      const completedCount = task.responses ? Object.keys(task.responses).length : 0;
+      const progress = totalRecipients > 0 ? Math.round((completedCount / totalRecipients) * 100) : 0;
+      const date = new Date(task.createdAt).toLocaleString('zh-CN');
+      
+      html += `<div class="card" style="margin:0;cursor:pointer" onclick="collectionCurrentView='detail';collectionCurrentTaskId='${task.id}';document.getElementById('content').innerHTML=renderDataCollection()">
+        <div class="card-body" style="padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+            <div>
+              <div style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:4px">${escapeHtml(task.title)}</div>
+              <div style="font-size:12px;color:var(--gray-500)">创建人：${escapeHtml(task.createdBy)} | ${date}</div>
+            </div>
+            <span style="padding:4px 10px;background:${progress === 100 ? 'var(--success)' : 'var(--warning)'};color:#fff;border-radius:4px;font-size:12px;font-weight:500">${progress === 100 ? '已完成' : '进行中'}</span>
+          </div>
+          <div style="display:flex;gap:20px;font-size:13px;color:var(--gray-600)">
+            <span>填写人数：<strong>${completedCount}</strong> / ${totalRecipients}</span>
+            <span>完成率：<strong>${progress}%</strong></span>
+          </div>
+          <div style="margin-top:8px;height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${progress}%;background:${progress === 100 ? 'var(--success)' : 'var(--primary)'};border-radius:3px;transition:width 0.3s"></div>
+          </div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  
+  return html;
+}
+
+// 渲染创建收集任务页面
+function renderCollectionCreate() {
+  let html = `<div class="toolbar">
+    <button class="toolbar-btn ghost" onclick="collectionCurrentView='list';document.getElementById('content').innerHTML=renderDataCollection()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      返回列表
+    </button>
+    <span style="font-size:14px;font-weight:600">创建收集任务</span>
+    <div class="toolbar-spacer"></div>
+  </div>`;
+  
+  html += `<div class="card" style="max-width:700px;margin-top:16px">
+    <div class="card-body" style="padding:24px">
+      <div class="form-group">
+        <label class="form-label">任务标题 *</label>
+        <input type="text" class="form-input" id="collectionTitle" placeholder="例如：学生紧急联系人信息收集">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">收集字段 *</label>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px">每行一个字段名称，第一列固定为"姓名"，无需填写</div>
+        <textarea class="form-input" id="collectionColumns" rows="6" placeholder="手机号&#10;紧急联系人&#10;家庭住址&#10;备注"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">下发对象 *</label>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllRecipients(true)">全选</button>
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectAllRecipients(false)">取消全选</button>
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectRecipientsByRole('headteacher')">只选班主任</button>
+          <button class="toolbar-btn ghost" style="font-size:12px" onclick="selectRecipientsByRole('leader')">只选领导</button>
+        </div>
+        <div id="recipientList" style="display:flex;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid var(--gray-200);border-radius:8px;max-height:200px;overflow-y:auto">
+          ${getAllTeachersList().map(name => `
+            <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--gray-50);border-radius:6px;cursor:pointer;border:1px solid var(--gray-200);font-size:13px">
+              <input type="checkbox" class="recipient-checkbox" value="${escapeHtml(name)}" style="accent-color:var(--primary)">
+              ${escapeHtml(name)}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+      
+      <button class="toolbar-btn primary" style="width:100%" onclick="submitCollectionTask()">下发收集任务</button>
+    </div>
+  </div>`;
+  
+  return html;
+}
+
+function selectAllRecipients(select) {
+  document.querySelectorAll('.recipient-checkbox').forEach(cb => cb.checked = select);
+}
+
+function selectRecipientsByRole(role) {
+  const headteachers = new Set();
+  const leaders = new Set();
+  
+  if (setupRoles && setupRoles.length > 0) {
+    setupRoles.forEach(r => {
+      if (r.role === 'leader') leaders.add(r.name);
+    });
+  }
+  if (setupTeaching && setupTeaching.length > 0) {
+    setupTeaching.forEach(t => {
+      if (t.headteacher) headteachers.add(t.headteacher);
+    });
+  }
+  if (setupClasses && setupClasses.length > 0) {
+    setupClasses.forEach(cls => {
+      if (cls.headteacher) headteachers.add(cls.headteacher);
+    });
+  }
+  
+  document.querySelectorAll('.recipient-checkbox').forEach(cb => {
+    if (role === 'headteacher') {
+      cb.checked = headteachers.has(cb.value);
+    } else if (role === 'leader') {
+      cb.checked = leaders.has(cb.value);
+    }
+  });
+}
+
+async function submitCollectionTask() {
+  const title = document.getElementById('collectionTitle').value.trim();
+  const columnsText = document.getElementById('collectionColumns').value.trim();
+  
+  if (!title) {
+    showToast('请输入任务标题', 'warning');
+    return;
+  }
+  
+  if (!columnsText) {
+    showToast('请输入收集字段', 'warning');
+    return;
+  }
+  
+  const columns = ['姓名', ...columnsText.split('\n').map(s => s.trim()).filter(s => s)];
+  
+  const recipients = [];
+  document.querySelectorAll('.recipient-checkbox:checked').forEach(cb => {
+    recipients.push(cb.value);
+  });
+  
+  if (recipients.length === 0) {
+    showToast('请至少选择一个下发对象', 'warning');
+    return;
+  }
+  
+  const taskId = Date.now().toString();
+  collectionData[taskId] = {
+    id: taskId,
+    title: title,
+    columns: columns,
+    recipients: recipients,
+    responses: {},
+    createdAt: new Date().toISOString(),
+    createdBy: xqCurrentUser?.teacherName || '未知'
+  };
+  
+  const result = await saveCollectionData();
+  if (result.ok) {
+    showToast('收集任务已下发', 'success');
+    collectionCurrentView = 'detail';
+    collectionCurrentTaskId = taskId;
+    document.getElementById('content').innerHTML = renderDataCollection();
+  } else {
+    showToast('下发失败，请重试', 'error');
+  }
+}
+
+// 渲染收集任务详情页面
+function renderCollectionDetail(taskId) {
+  const task = collectionData[taskId];
+  if (!task) {
+    return emptyStateHtml('未找到该收集任务。');
+  }
+  
+  const totalRecipients = task.recipients ? task.recipients.length : 0;
+  const completedCount = task.responses ? Object.keys(task.responses).length : 0;
+  const pendingRecipients = task.recipients.filter(name => !task.responses || !task.responses[name]);
+  
+  let html = `<div class="toolbar">
+    <button class="toolbar-btn ghost" onclick="collectionCurrentView='list';document.getElementById('content').innerHTML=renderDataCollection()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      返回列表
+    </button>
+    <span style="font-size:14px;font-weight:600">${escapeHtml(task.title)}</span>
+    <div class="toolbar-spacer"></div>
+    <button class="toolbar-btn ghost" onclick="exportCollectionToExcel('${taskId}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载Excel
+    </button>
+    <button class="toolbar-btn ghost" style="color:var(--danger);border-color:var(--danger)" onclick="deleteCollectionTask('${taskId}')">删除任务</button>
+  </div>`;
+  
+  // 统计卡片
+  html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:16px 0">
+    <div class="card" style="margin:0;text-align:center">
+      <div style="font-size:24px;font-weight:700;color:var(--primary)">${totalRecipients}</div>
+      <div style="font-size:12px;color:var(--gray-500)">总人数</div>
+    </div>
+    <div class="card" style="margin:0;text-align:center">
+      <div style="font-size:24px;font-weight:700;color:var(--success)">${completedCount}</div>
+      <div style="font-size:12px;color:var(--gray-500)">已填写</div>
+    </div>
+    <div class="card" style="margin:0;text-align:center">
+      <div style="font-size:24px;font-weight:700;color:var(--warning)">${pendingRecipients.length}</div>
+      <div style="font-size:12px;color:var(--gray-500)">未填写</div>
+    </div>
+  </div>`;
+  
+  // 数据表格
+  html += `<div class="card" style="margin-top:16px">
+    <div class="card-header">
+      <h3 style="margin:0;font-size:15px">填写数据</h3>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--gray-50)">
+            ${task.columns.map(col => `<th style="padding:12px;text-align:left;border-bottom:1px solid var(--gray-200);font-weight:600;color:var(--gray-700)">${escapeHtml(col)}</th>`).join('')}
+            <th style="padding:12px;text-align:center;border-bottom:1px solid var(--gray-200);font-weight:600;color:var(--gray-700)">状态</th>
+          </tr>
+        </thead>
+        <tbody>`;
+  
+  task.recipients.forEach(name => {
+    const response = task.responses && task.responses[name];
+    html += `<tr style="border-bottom:1px solid var(--gray-100)">`;
+    task.columns.forEach((col, idx) => {
+      if (idx === 0) {
+        html += `<td style="padding:12px;font-weight:500">${escapeHtml(name)}</td>`;
+      } else {
+        html += `<td style="padding:12px;color:var(--gray-600)">${response ? escapeHtml(response[col] || '') : '<span style="color:var(--gray-300)">-</span>'}</td>`;
+      }
+    });
+    html += `<td style="padding:12px;text-align:center">
+      <span style="padding:4px 8px;border-radius:4px;font-size:11px;font-weight:500;background:${response ? 'var(--success-bg)' : 'var(--gray-100)'};color:${response ? 'var(--success)' : 'var(--gray-400)'}">${response ? '已填写' : '未填写'}</span>
+    </td>`;
+    html += `</tr>`;
+  });
+  
+  html += `</tbody></table></div></div>`;
+  
+  return html;
+}
+
+function deleteCollectionTask(taskId) {
+  if (!confirm('确定要删除这个收集任务吗？所有填写数据将丢失。')) return;
+  
+  delete collectionData[taskId];
+  saveCollectionData().then(result => {
+    if (result.ok) {
+      showToast('任务已删除', 'success');
+      collectionCurrentView = 'list';
+      document.getElementById('content').innerHTML = renderDataCollection();
+    } else {
+      showToast('删除失败', 'error');
+    }
+  });
+}
+
+function exportCollectionToExcel(taskId) {
+  const task = collectionData[taskId];
+  if (!task) return;
+  
+  const data = [task.columns];
+  
+  task.recipients.forEach(name => {
+    const response = task.responses && task.responses[name];
+    const row = task.columns.map((col, idx) => {
+      if (idx === 0) return name;
+      return response ? (response[col] || '') : '';
+    });
+    data.push(row);
+  });
+  
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '收集数据');
+  XLSX.writeFile(wb, `${task.title}_${new Date().toLocaleDateString('zh-CN')}.xlsx`);
+}
+
+// 渲染数据填写页面（教师端）
+function renderDataFill() {
+  const user = xqCurrentUser || {};
+  const userName = user.teacherName;
+  
+  if (!userName) {
+    return emptyStateHtml('未找到您的用户信息。');
+  }
+  
+  // 找出该用户需要填写的任务
+  const myTasks = Object.values(collectionData).filter(task => 
+    task.recipients && task.recipients.includes(userName)
+  ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  let html = `<div class="toolbar">
+    <span style="font-size:14px;font-weight:600">数据填写</span>
+    <div class="toolbar-spacer"></div>
+  </div>`;
+  
+  if (myTasks.length === 0) {
+    html += `<div style="text-align:center;padding:60px 20px;color:var(--gray-400)">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 16px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      <div style="font-size:16px;margin-bottom:8px">暂无待填写的数据</div>
+      <div style="font-size:13px">领导下发的收集任务会显示在这里</div>
+    </div>`;
+  } else {
+    html += `<div style="display:flex;flex-direction:column;gap:16px;margin-top:16px">`;
+    myTasks.forEach(task => {
+      const response = task.responses && task.responses[userName];
+      const isCompleted = !!response;
+      const date = new Date(task.createdAt).toLocaleString('zh-CN');
+      
+      html += `<div class="card" style="margin:0">
+        <div class="card-body" style="padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:16px">
+            <div>
+              <div style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:4px">${escapeHtml(task.title)}</div>
+              <div style="font-size:12px;color:var(--gray-500)">创建人：${escapeHtml(task.createdBy)} | ${date}</div>
+            </div>
+            <span style="padding:4px 10px;background:${isCompleted ? 'var(--success)' : 'var(--warning)'};color:#fff;border-radius:4px;font-size:12px;font-weight:500">${isCompleted ? '已填写' : '待填写'}</span>
+          </div>
+          
+          <div style="display:flex;flex-direction:column;gap:12px">
+            ${task.columns.slice(1).map(col => `
+              <div class="form-group" style="margin:0">
+                <label class="form-label">${escapeHtml(col)}</label>
+                <input type="text" class="form-input collection-fill-input" data-task="${task.id}" data-col="${escapeHtml(col)}" 
+                  value="${response ? escapeHtml(response[col] || '') : ''}" 
+                  placeholder="请输入${escapeHtml(col)}">
+              </div>
+            `).join('')}
+          </div>
+          
+          <button class="toolbar-btn primary" style="margin-top:16px" onclick="submitCollectionFill('${task.id}')">
+            ${isCompleted ? '更新填写' : '提交填写'}
+          </button>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  
+  return html;
+}
+
+async function submitCollectionFill(taskId) {
+  const task = collectionData[taskId];
+  if (!task) return;
+  
+  const userName = xqCurrentUser?.teacherName;
+  if (!userName) {
+    showToast('未找到用户信息', 'error');
+    return;
+  }
+  
+  const inputs = document.querySelectorAll(`.collection-fill-input[data-task="${taskId}"]`);
+  const response = { '姓名': userName };
+  
+  inputs.forEach(input => {
+    const col = input.dataset.col;
+    response[col] = input.value.trim();
+  });
+  
+  if (!task.responses) task.responses = {};
+  task.responses[userName] = response;
+  
+  const result = await saveCollectionData();
+  if (result.ok) {
+    showToast('填写成功', 'success');
+    document.getElementById('content').innerHTML = renderDataFill();
+  } else {
+    showToast('提交失败，请重试', 'error');
+  }
 }
 
 // HTML 转义
