@@ -17798,7 +17798,14 @@ function renderCollectionCreate() {
       
       <div class="form-group">
         <label class="form-label">收集字段 *</label>
-        <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px">每行一个字段名称，第一列固定为"姓名"，无需填写</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:12px;color:var(--gray-500)">每行一个字段名称，第一列固定为"姓名"，无需填写</div>
+          <label class="toolbar-btn ghost" style="font-size:12px;cursor:pointer;margin:0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            导入模板
+            <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importCollectionTemplate(event)">
+          </label>
+        </div>
         <textarea class="form-input" id="collectionColumns" rows="6" placeholder="手机号&#10;紧急联系人&#10;家庭住址&#10;备注"></textarea>
       </div>
       
@@ -17906,6 +17913,45 @@ async function submitCollectionTask() {
   } else {
     showToast('下发失败，请重试', 'error');
   }
+}
+
+// 导入模板文件（Excel/CSV）
+async function importCollectionTemplate(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+    
+    if (jsonData.length === 0) {
+      showToast('模板文件为空', 'warning');
+      return;
+    }
+    
+    // 取第一行作为表头
+    const headers = jsonData[0].map(h => String(h || '').trim()).filter(h => h);
+    
+    // 过滤掉"姓名"列（如果存在），因为姓名列是固定的
+    const columns = headers.filter(h => h !== '姓名');
+    
+    if (columns.length === 0) {
+      showToast('未找到有效的字段名称', 'warning');
+      return;
+    }
+    
+    // 填充到文本框
+    document.getElementById('collectionColumns').value = columns.join('\n');
+    showToast(`已导入 ${columns.length} 个字段`, 'success');
+  } catch (err) {
+    console.error('Import template error:', err);
+    showToast('导入失败，请检查文件格式', 'error');
+  }
+  
+  // 清空 input 以便再次导入同一文件
+  event.target.value = '';
 }
 
 // 渲染收集任务详情页面
@@ -18021,7 +18067,7 @@ function exportCollectionToExcel(taskId) {
   XLSX.writeFile(wb, `${task.title}_${new Date().toLocaleDateString('zh-CN')}.xlsx`);
 }
 
-// 渲染数据填写页面（教师端）
+// 渲染数据填写页面（教师端）- 在线表格形式
 function renderDataFill() {
   const user = xqCurrentUser || {};
   const userName = user.teacherName;
@@ -18047,38 +18093,9 @@ function renderDataFill() {
       <div style="font-size:13px">领导下发的收集任务会显示在这里</div>
     </div>`;
   } else {
-    html += `<div style="display:flex;flex-direction:column;gap:16px;margin-top:16px">`;
+    html += `<div style="display:flex;flex-direction:column;gap:20px;margin-top:16px">`;
     myTasks.forEach(task => {
-      const response = task.responses && task.responses[userName];
-      const isCompleted = !!response;
-      const date = new Date(task.createdAt).toLocaleString('zh-CN');
-      
-      html += `<div class="card" style="margin:0">
-        <div class="card-body" style="padding:20px">
-          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:16px">
-            <div>
-              <div style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:4px">${escapeHtml(task.title)}</div>
-              <div style="font-size:12px;color:var(--gray-500)">创建人：${escapeHtml(task.createdBy)} | ${date}</div>
-            </div>
-            <span style="padding:4px 10px;background:${isCompleted ? 'var(--success)' : 'var(--warning)'};color:#fff;border-radius:4px;font-size:12px;font-weight:500">${isCompleted ? '已填写' : '待填写'}</span>
-          </div>
-          
-          <div style="display:flex;flex-direction:column;gap:12px">
-            ${task.columns.slice(1).map(col => `
-              <div class="form-group" style="margin:0">
-                <label class="form-label">${escapeHtml(col)}</label>
-                <input type="text" class="form-input collection-fill-input" data-task="${task.id}" data-col="${escapeHtml(col)}" 
-                  value="${response ? escapeHtml(response[col] || '') : ''}" 
-                  placeholder="请输入${escapeHtml(col)}">
-              </div>
-            `).join('')}
-          </div>
-          
-          <button class="toolbar-btn primary" style="margin-top:16px" onclick="submitCollectionFill('${task.id}')">
-            ${isCompleted ? '更新填写' : '提交填写'}
-          </button>
-        </div>
-      </div>`;
+      html += renderSpreadsheetTask(task, userName);
     });
     html += `</div>`;
   }
@@ -18086,7 +18103,82 @@ function renderDataFill() {
   return html;
 }
 
-async function submitCollectionFill(taskId) {
+// 渲染单个任务的在线表格
+function renderSpreadsheetTask(task, userName) {
+  const date = new Date(task.createdAt).toLocaleString('zh-CN');
+  const myResponse = task.responses && task.responses[userName];
+  const isMyRowEditable = true; // 自己的行始终可编辑
+  
+  let html = `<div class="card" style="margin:0">
+    <div class="card-body" style="padding:16px">
+      <div style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:4px">${escapeHtml(task.title)}</div>
+        <div style="font-size:12px;color:var(--gray-500)">创建人：${escapeHtml(task.createdBy)} | ${date}</div>
+      </div>
+      
+      <div style="overflow-x:auto;border:1px solid var(--gray-200);border-radius:8px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:500px">
+          <thead>
+            <tr style="background:var(--gray-50)">
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--gray-200);font-weight:600;color:var(--gray-700);width:40px">#</th>
+              ${task.columns.map(col => `<th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--gray-200);font-weight:600;color:var(--gray-700)">${escapeHtml(col)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>`;
+  
+  task.recipients.forEach((name, idx) => {
+    const isMyRow = name === userName;
+    const response = task.responses && task.responses[name];
+    const rowBg = isMyRow ? 'background:var(--primary-bg)' : (idx % 2 === 0 ? 'background:#fff' : 'background:var(--gray-50)');
+    
+    html += `<tr style="${rowBg};border-bottom:1px solid var(--gray-100)">`;
+    html += `<td style="padding:8px 12px;color:var(--gray-400);font-size:12px">${idx + 1}</td>`;
+    
+    task.columns.forEach((col, colIdx) => {
+      if (colIdx === 0) {
+        // 姓名列
+        html += `<td style="padding:8px 12px;font-weight:${isMyRow ? '600' : '500'};color:${isMyRow ? 'var(--primary)' : 'var(--gray-800)'}">
+          ${escapeHtml(name)}${isMyRow ? ' <span style="font-size:11px;color:var(--primary);font-weight:400">(我)</span>' : ''}
+        </td>`;
+      } else {
+        // 数据列
+        if (isMyRow) {
+          // 自己的行：可编辑
+          html += `<td style="padding:4px 8px">
+            <input type="text" class="form-input spreadsheet-input" data-task="${task.id}" data-user="${escapeHtml(name)}" data-col="${escapeHtml(col)}" 
+              value="${response ? escapeHtml(response[col] || '') : ''}" 
+              placeholder="填写${escapeHtml(col)}"
+              style="padding:6px 8px;font-size:13px;border:1px solid var(--gray-300);background:#fff">
+          </td>`;
+        } else {
+          // 他人的行：只读显示
+          const cellValue = response ? (response[col] || '') : '';
+          html += `<td style="padding:8px 12px;color:${cellValue ? 'var(--gray-700)' : 'var(--gray-300)'}">
+            ${cellValue ? escapeHtml(cellValue) : '-'}
+          </td>`;
+        }
+      }
+    });
+    
+    html += `</tr>`;
+  });
+  
+  html += `</tbody></table></div>
+      
+      <div style="margin-top:12px;display:flex;justify-content:flex-end">
+        <button class="toolbar-btn primary" onclick="submitSpreadsheetData('${task.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          保存我的填写
+        </button>
+      </div>
+    </div>
+  </div>`;
+  
+  return html;
+}
+
+// 提交在线表格数据
+async function submitSpreadsheetData(taskId) {
   const task = collectionData[taskId];
   if (!task) return;
   
@@ -18096,7 +18188,8 @@ async function submitCollectionFill(taskId) {
     return;
   }
   
-  const inputs = document.querySelectorAll(`.collection-fill-input[data-task="${taskId}"]`);
+  // 收集当前用户的所有输入
+  const inputs = document.querySelectorAll(`.spreadsheet-input[data-task="${taskId}"][data-user="${userName}"]`);
   const response = { '姓名': userName };
   
   inputs.forEach(input => {
@@ -18109,10 +18202,11 @@ async function submitCollectionFill(taskId) {
   
   const result = await saveCollectionData();
   if (result.ok) {
-    showToast('填写成功', 'success');
+    showToast('保存成功', 'success');
+    // 刷新页面以显示最新数据
     document.getElementById('content').innerHTML = renderDataFill();
   } else {
-    showToast('提交失败，请重试', 'error');
+    showToast('保存失败，请重试', 'error');
   }
 }
 
