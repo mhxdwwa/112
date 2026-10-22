@@ -47,6 +47,12 @@ function snapshot(){
 
 /* 把快照写回游戏（只在菜单/选角阶段调用，避免打断战斗） */
 function apply(data){
+  if(!data) return false;
+  /* 多角色整包：先载入角色列表，再取当前角色那份进度 */
+  if(data.chars && data.chars.length && window.CHARS && window.CHARS.loadBundle){
+    window.CHARS.loadBundle(data, true);
+    data = window.CHARS.activeSave();
+  }
   if(!data || !data.p) return false;
   if(typeof startSingleWithChar !== 'function') return false;
   if(typeof gameState !== 'undefined' &&
@@ -109,7 +115,7 @@ function loadLocal(){
     const s = localStorage.getItem(keyOf());
     if(!s) return null;
     const d = JSON.parse(s);
-    return (d && d.p) ? d : null;
+    return (d && (d.p || (d.chars && d.chars.length))) ? d : null;
   }catch(e){ return null; }
 }
 /* 游客存档迁移：登录后第一次没找到账号自己的存档时，用游客那份兜底，
@@ -128,7 +134,7 @@ function loadGuest(){
     const s = localStorage.getItem(KEY);
     if(!s) return null;
     const d = JSON.parse(s);
-    return (d && d.p) ? d : null;
+    return (d && (d.p || (d.chars && d.chars.length))) ? d : null;
   }catch(e){ return null; }
 }
 
@@ -145,7 +151,7 @@ async function pullCloud(){
     }
     cloudState = 'ok';
     const d = res.data && res.data.data;
-    return (d && d.p) ? d : null;
+    return (d && (d.p || (d.chars && d.chars.length))) ? d : null;
   }catch(e){
     cloudState = 'error';
     return null;
@@ -182,8 +188,16 @@ async function pushCloud(data){
 }
 
 /* ---------- 保存入口 ---------- */
+/* 存档打包：单角色进度写进当前角色，再把整个角色列表一起存 */
+function payload(){
+  const one = snapshot();
+  if(!one) return null;
+  if(window.CHARS && window.CHARS.pack) return window.CHARS.pack(one);
+  return one;
+}
+
 function saveNow(force){
-  const data = snapshot();
+  const data = payload();
   if(!data) return;
   const str = JSON.stringify(data);
   if(str === lastStr && !force) return;
@@ -231,7 +245,9 @@ async function boot(){
     /* 游客进度已经并入账号，标记作废，避免下次又拿它兜底 */
     if(pick === guestLocal){ try{ localStorage.removeItem('wjx_guest_at'); }catch(e){} }
     setTimeout(function(){
-      if(typeof showToast === 'function') showToast('已读取存档：' + (pick.name || '无名侠客') + '  Lv.' + ((pick.p && pick.p.level) || 1), '#7af0c8');
+      var who = (window.CHARS && window.CHARS.active && window.CHARS.active()) || pick;
+      var lv = (who && who.level) || (pick.p && pick.p.level) || 1;
+      if(typeof showToast === 'function') showToast('已读取角色：' + ((who && who.name) || pick.name || '无名侠客') + '  Lv.' + lv, '#7af0c8');
     }, 700);
   }
 }
@@ -260,6 +276,9 @@ window.CloudSave = {
   save: function(){ saveNow(true); },
   queue: queueSave,
   load: function(){ return loadLocal(); },
+  snapshotNow: function(){ return snapshot(); },
+  applyData: function(d){ return apply(d); },
+  applyBundle: function(b){ return apply(b); },
   status: function(){ return { cloud: cloudState, logged: logged(), user: uname, last: lastSaveAt }; },
   reset: function(){
     try{ localStorage.removeItem(keyOf()); }catch(e){}
