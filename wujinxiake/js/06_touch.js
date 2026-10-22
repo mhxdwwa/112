@@ -146,11 +146,28 @@ function positionEsc(){
   const b = document.getElementById('btnEsc');
   if(!b) return;
   const h = b.offsetHeight || 46;
-  const joy = document.querySelector('.p1-area .joystick-container');
+  const w = b.offsetWidth || 46;
+  const cv = document.getElementById('c');
+  /* 城镇左侧按钮列（26_hud.js）：x=84, y0=158, gap=62, 尺寸 52
+     第 3 个是「角色」→ 中心 y = 158 + 2*62 + 26 = 308（画布坐标）
+     左侧留出 84px 的独立竖条放 ESC，所以 ESC 与图标列不重叠 */
+  const LEFT = 8, cy = 308, iconX = 84, iconY = 282;
   let top = 8;
-  if(joy){
-    const r = joy.getBoundingClientRect();
-    if(r.height > 0) top = Math.round(r.top - 10 - h);
+  b.style.left = LEFT + 'px';
+  if(cv){
+    const r = cv.getBoundingClientRect();
+    const vw = (typeof VW !== 'undefined' && VW) ? VW : 1280;
+    const vh = (typeof VH !== 'undefined' && VH) ? VH : 720;
+    if(r.height > 0){
+      const sx = r.width / vw, sy = r.height / vh;
+      const iconLeft = r.left + iconX * sx;
+      if(LEFT + w + 6 > iconLeft){
+        /* 屏幕太窄（手机）：横向塞不下，就挪到图标列正上方，仍然不压图标 */
+        top = Math.round(r.top + 158 * sy - h - 8);   /* 158 = 图标列顶端 */
+      } else {
+        top = Math.round(r.top + cy * sy - h / 2);
+      }
+    }
   }
   b.style.top = (top > 8 ? top : 8) + 'px';
 }
@@ -403,6 +420,15 @@ bindMobileFrame();
 (function(){
   function escAction(){
     if(typeof gameState === 'undefined') return;
+    /* 城镇里的玩家资料卡优先关掉 */
+    try{
+      const oc = document.getElementById('opCard');
+      if(oc && oc.classList.contains('open')){
+        if(window.__wjxCard && window.__wjxCard.hide) window.__wjxCard.hide();
+        else oc.classList.remove('open');
+        return;
+      }
+    }catch(e){}
     try{
       if(typeof DIALOGUE !== 'undefined' && DIALOGUE){
         if(typeof advanceDialogue === 'function') advanceDialogue();
@@ -421,8 +447,8 @@ bindMobileFrame();
   function boot(){
     const b = document.getElementById('btnEsc');
     if(!b) return;
-    const force = /[?&](ui=mobile|touch=1)\b/.test(location.search);
-    if(IS_TOUCH || IS_MOBILE_BROWSER || force) b.classList.add('show');
+    /* 电脑浏览器也显示（用户要求：手机/电脑都要有 ESC） */
+    b.classList.add('show');
     let lock = 0;
     const fire = function(e){
       if(e){ e.preventDefault(); e.stopPropagation(); }
