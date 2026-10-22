@@ -14811,7 +14811,8 @@ function renderTimetableGrid(className) {
   weekdays.forEach((d, idx) => {
     const dayNum = idx + 1;
     const isCurrentDay = currentClass && currentClass.weekday === dayNum;
-    const headerClass = isCurrentDay ? 'current-class' : '';
+    const isNextDay = !currentClass && nextClass && nextClass.weekday === dayNum;
+    const headerClass = (isCurrentDay || isNextDay) ? 'current-class' : '';
     html += `<div class="timetable-cell header ${headerClass}">${d}</div>`;
   });
   
@@ -14823,13 +14824,15 @@ function renderTimetableGrid(className) {
       const slot = tt[key];
       const timeStr = getPeriodTime(w, p);
       
-      // 判断是否是当前课
+      // 判断是否是当前课（正在上课）或下一节课（课间休息时）
       const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
-      let cellClass = isCurrent ? 'current-class' : '';
+      // 只在没有当前课时，才高亮下一节课
+      const isNext = !currentClass && nextClass && nextClass.weekday === w && nextClass.period === p;
+      let cellClass = (isCurrent || isNext) ? 'current-class' : '';
       
-      // 判断是否是当前登录老师的课（当前是我的课标红）
+      // 判断是否是当前登录老师的课
       const isMyClass = slot && slot.teacher && user.teacherName && slot.teacher === user.teacherName;
-      if (isCurrent && isMyClass) {
+      if ((isCurrent || isNext) && isMyClass) {
         cellClass += ' my-class';
       }
       
@@ -14881,7 +14884,8 @@ function renderTeacherTimetable() {
   weekdays.forEach((d, idx) => {
     const dayNum = idx + 1;
     const isCurrentDay = currentClass && currentClass.weekday === dayNum;
-    const headerClass = isCurrentDay ? 'current-class' : '';
+    const isNextDay = !currentClass && nextClass && nextClass.weekday === dayNum;
+    const headerClass = (isCurrentDay || isNextDay) ? 'current-class' : '';
     html += `<div class="timetable-cell header ${headerClass}">${d}</div>`;
   });
   
@@ -14893,12 +14897,13 @@ function renderTeacherTimetable() {
       const slot = tt[key];
       const timeStr = getPeriodTime(w, p);
       
-      // 判断是否是当前课
+      // 判断是否是当前课（正在上课）或下一节课（课间休息时）
       const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
-      let cellClass = isCurrent ? 'current-class' : '';
+      const isNext = !currentClass && nextClass && nextClass.weekday === w && nextClass.period === p;
+      let cellClass = (isCurrent || isNext) ? 'current-class' : '';
       
-      // 这是教师自己的课程表，当前有课标红
-      if (isCurrent && slot) {
+      // 这是教师自己的课程表，当前或下一节课有课标红
+      if ((isCurrent || isNext) && slot) {
         cellClass += ' my-class';
       }
       
@@ -14939,7 +14944,8 @@ function renderEditableTeacherTimetable() {
   weekdays.forEach((d, idx) => {
     const dayNum = idx + 1;
     const isCurrentDay = currentClass && currentClass.weekday === dayNum;
-    const headerClass = isCurrentDay ? 'current-class' : '';
+    const isNextDay = !currentClass && nextClass && nextClass.weekday === dayNum;
+    const headerClass = (isCurrentDay || isNextDay) ? 'current-class' : '';
     html += `<div class="timetable-cell header ${headerClass}">${d}</div>`;
   });
   
@@ -14950,12 +14956,13 @@ function renderEditableTeacherTimetable() {
       const slot = tt[key];
       const timeStr = getPeriodTime(w, p);
       
-      // 判断是否是当前课
+      // 判断是否是当前课（正在上课）或下一节课（课间休息时）
       const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
-      let cellClass = isCurrent ? 'current-class' : '';
+      const isNext = !currentClass && nextClass && nextClass.weekday === w && nextClass.period === p;
+      let cellClass = (isCurrent || isNext) ? 'current-class' : '';
       
-      // 这是教师自己的课程表，当前有课标红
-      if (isCurrent && slot) {
+      // 这是教师自己的课程表，当前或下一节课有课标红
+      if ((isCurrent || isNext) && slot) {
         cellClass += ' my-class';
       }
       
