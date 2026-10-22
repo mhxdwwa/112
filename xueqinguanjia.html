@@ -1281,18 +1281,25 @@ tbody tr:last-child td { border-bottom: none; }
   font-weight: 700;
   text-shadow: 0 0 2px rgba(217, 119, 6, 0.3);
 }
-.timetable-cell.current-class.my-class .period-time { color: #D97706; }
 .timetable-cell.next-class {
   background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
   border-color: #F59E0B !important;
 }
 /* 课程时间显示 */
 .timetable-cell .period-time {
-  font-size: 9px;
-  color: var(--gray-400);
-  margin-top: 1px;
+  font-size: 10px;
+  color: var(--gray-500);
+  margin-top: 2px;
+  font-weight: 500;
 }
-.timetable-cell.current-class .period-time { color: #DC2626; }
+.timetable-cell.current-class .period-time { 
+  color: #7F1D1D; 
+  font-weight: 600;
+}
+.timetable-cell.current-class.my-class .period-time { 
+  color: #78350F; 
+  font-weight: 600;
+}
 .timetable-reminder {
   background: linear-gradient(135deg, #FEF3C7, #FDE68A);
   border: 1px solid #F59E0B;
