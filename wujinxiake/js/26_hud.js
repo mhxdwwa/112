@@ -84,7 +84,7 @@ function drawTownSideButtons(){
     { id:'characterInfo', key:'C', label:'角色', color:'#5be08a' },
     { id:'questMenu',     key:'Q', label:'任务', color:'#ffd166' }
   ];
-  const S = 52, x = 18, y0 = 158, gap = 62;
+  const S = 52, x = 84, y0 = 158, gap = 62;   /* x=84：给左边的 ESC 键留出独立一条，避免压住图标 */
   townSideBtnRegions = [];
   const mx = MOUSE.in ? MOUSE.x : -9999, my = MOUSE.in ? MOUSE.y : -9999;
   for(let i = 0; i < items.length; i++){
