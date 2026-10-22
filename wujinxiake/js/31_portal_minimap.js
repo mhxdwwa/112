@@ -770,8 +770,8 @@ function drawMenu(){
   const bx = VW/2 - btnW/2;
 
   const buttons = [
-    { id:'single', label:'单人冒险', desc:'城镇刷图 · 装备成长', color:'#3cb478' },
-    { id:'pvp',    label:'双人PK',   desc:'本地对战 · 1级平衡', color:'#3c78b4' },
+    { id:'single', label:'侠客之路', desc:'城镇刷图 · 装备成长', color:'#3cb478' },
+    { id:'pvp',    label:'练习模式', desc:'本地对战 · 1级平衡', color:'#3c78b4' },
     { id:'start',  label:'开始',     desc:'新的冒险旅程',         color:'#b4783c' }
   ];
 
