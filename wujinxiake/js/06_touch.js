@@ -18,11 +18,95 @@ function isMobileBrowser(){
 const IS_MOBILE_BROWSER = isMobileBrowser();
 window.IS_MOBILE_BROWSER = IS_MOBILE_BROWSER;
 
+/* ★ 手机端按键：整块控制层对齐到「画布」而不是窗口
+   画布按 16:9 居中留边，控制层跟着它走，按键就不会跑到黑边上；
+   尺寸全部算成像素写进 CSS 变量，不用 vh / % / env()——
+   各家手机浏览器（尤其带浮动地址栏、支持手势缩放的那种）对这些单位
+   解释不一致，会出现「摇杆悬在半空、按键叠在一起」。
+   画布还没插入/尺寸异常时退回 visualViewport。 */
+let _frameKey = '';
+function applyMobileFrame(){
+  const tc = document.getElementById('touchControls');
+  if(!tc || !tc.classList.contains('mobile')) return;
+
+  let x = 0, y = 0, w = 0, h = 0, src = 'vv';
+  const cv = document.getElementById('c');
+  if(cv){
+    const r = cv.getBoundingClientRect();
+    if(r.width >= 240 && r.height >= 160){
+      x = r.left; y = r.top; w = Math.round(r.width); h = Math.round(r.height); src = 'canvas';
+    }
+  }
+  if(!w || !h){
+    const vv = window.visualViewport;
+    w = Math.round((vv && vv.width) || window.innerWidth || 360);
+    h = Math.round((vv && vv.height) || window.innerHeight || 640);
+    if(!(h > 200)) h = Math.round(window.innerHeight || 640);
+    if(!(w > 240)) w = Math.round(window.innerWidth || 360);
+  }
+
+  const tb  = Math.max(36, Math.min(54, Math.round(h * 0.112)));
+  const joy = Math.max(72, Math.min(108, Math.round(h * 0.225)));
+  const gap = Math.max(4, Math.min(8, Math.round(h * 0.012)));
+  const edge = Math.max(6, Math.round(Math.min(h, w) * 0.022));
+
+  const key = [x, y, w, h, tb, joy, src].join('|');
+  if(key === _frameKey) return;
+  _frameKey = key;
+
+  tc.style.left = x + 'px'; tc.style.top = y + 'px';
+  tc.style.right = 'auto'; tc.style.bottom = 'auto';
+  tc.style.width = w + 'px'; tc.style.height = h + 'px';
+  tc.style.setProperty('--tb', tb + 'px');
+  tc.style.setProperty('--tk', Math.round(tb * 1.30) + 'px');
+  tc.style.setProperty('--tj', Math.round(tb * 1.06) + 'px');
+  tc.style.setProperty('--joy', joy + 'px');
+  tc.style.setProperty('--gap', gap + 'px');
+  tc.style.setProperty('--edge', edge + 'px');
+  window.__uiFrame = { x: Math.round(x), y: Math.round(y), w: w, h: h, tb: tb, joy: joy, src: src, dpr: window.devicePixelRatio || 1 };
+}
+window.applyMobileFrame = applyMobileFrame;
+
+/* ?ui=dbg —— 排布异常时把窗口/画布实测值显示在左上角，截一张图就能定位 */
+function mountUiDebug(){
+  if(!/[?&]ui=dbg\b/.test(location.search)) return;
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:0;top:0;z-index:10001;background:rgba(0,0,0,.78);color:#7fffa0;' +
+    'font:11px/1.5 monospace;padding:5px 7px;white-space:pre;pointer-events:none;border-radius:0 0 6px 0';
+  document.body.appendChild(d);
+  setInterval(function(){
+    const cv = document.getElementById('c');
+    const r = cv ? cv.getBoundingClientRect() : null;
+    const vv = window.visualViewport;
+    d.textContent =
+      'win  ' + window.innerWidth + 'x' + window.innerHeight + '  dpr ' + (window.devicePixelRatio || 1) +
+      '\nvv   ' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' @' + Math.round(vv.offsetLeft) + ',' + Math.round(vv.offsetTop) + ' s' + vv.scale.toFixed(2) : '-') +
+      '\ncvs  ' + (r ? Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) : '-') +
+      '\nframe ' + JSON.stringify(window.__uiFrame) +
+      '\nmobileUI ' + !!window.IS_MOBILE_UI;
+  }, 700);
+}
+
+function bindMobileFrame(){
+  if(!(IS_MOBILE_BROWSER || /[?&]ui=mobile\b/.test(location.search))) return;
+  applyMobileFrame();
+  window.addEventListener('resize', applyMobileFrame);
+  window.addEventListener('orientationchange', function(){ setTimeout(applyMobileFrame, 260); });
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', applyMobileFrame);
+    window.visualViewport.addEventListener('scroll', applyMobileFrame);
+  }
+  /* 兜底：地址栏收放、旋转后个别浏览器不发事件 */
+  setInterval(applyMobileFrame, 1200);
+  mountUiDebug();
+}
+
 function setupTouchControls(){
   const touchControls = document.getElementById('touchControls');
   /* 手机浏览器才启用紧凑阵列；电脑触屏维持原有弧形排布
      （调试时可用 ?ui=mobile 强制预览手机排布） */
   const forceMobile = /[?&]ui=mobile\b/.test(location.search);
+  window.IS_MOBILE_UI = !!(IS_MOBILE_BROWSER || forceMobile);
   if(touchControls && (IS_MOBILE_BROWSER || forceMobile)) touchControls.classList.add('mobile');
   function setupJoystick(joystickId, stickId, playerKey){
     const joystick = document.getElementById(joystickId);
@@ -91,6 +175,9 @@ function setupTouchControls(){
     touchControls.classList.add('active');
     const p2Area = document.getElementById('p2Controls');
     if(p2Area) p2Area.style.display = isPvp ? 'block' : 'none';
+    /* 双人同屏时按键改为各贴自己那一侧的摇杆内侧，单人时 8 键全在右下角 */
+    touchControls.classList.toggle('pvp', !!isPvp);
+    applyMobileFrame();
     if(window.syncTouchSkillIcons) window.syncTouchSkillIcons();
     if(window.refreshSkillLockUI) window.refreshSkillLockUI();
     syncTouchMode();
@@ -147,4 +234,5 @@ function updateSkillButtonCD(){
   if(G.isPvp && G.player2) upd(2, G.player2);
 }
 setupTouchControls();
+bindMobileFrame();
 

@@ -551,6 +551,8 @@ function drawBottomUI(){
     ctx.fillText(`攻击 ${Math.round(playerAtk())}`, wepX, panelY+36);
     const skillBaseX = VW-478;
     ctx.textAlign = 'center';
+    /* 手机浏览器：右下角已有触屏按键（自带冷却显示），这里不再重复画技能格 */
+    if(!window.IS_MOBILE_UI)
     for(let i=0;i<6;i++){
       const sk = w.skills[i];
       if(!sk) continue;

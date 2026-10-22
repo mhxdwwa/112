@@ -4,7 +4,7 @@
    ② #touchControls.mobile（手机浏览器）＝ 左下角紧凑 2×4 阵列，8 键贴底
    由 js/06_touch.js 判断设备后给容器加 .mobile 类，只切这一处。
    ================================================================ */
-.touch-controls{position:fixed;bottom:0;left:0;right:0;height:100%;pointer-events:none;display:none;z-index:9999;}
+.touch-controls{position:fixed;top:0;left:0;right:0;bottom:0;height:auto;pointer-events:none;display:none;z-index:9999;}
 .touch-controls.active{display:block;}
 
 /* ---------- ① 电脑：原排布（勿动） ---------- */
@@ -60,31 +60,39 @@
 .p2-area .skill-btn.skill5{right:84px;bottom:184px;left:auto;}
 .p2-area .skill-btn.skill6{right:148px;bottom:200px;left:auto;}
 
-/* ---------- ② 手机浏览器：左下角 8 键紧凑阵列 ----------
-   摇杆贴左下角，右侧 4 列×2 行：上排技能 3–6，下排 普攻/跳跃/技能 1–2。
-   尺寸由视口高度推导，短屏自动缩小，全部键都落在拇指一小段弧线上。 */
+/* ---------- ② 手机浏览器：摇杆贴左下，8 键贴右下 ----------
+   左手拇指管摇杆，右手拇指管按键，横屏握持最顺手。
+   网格 4 列×2 行：上排技能 3–6，下排 普攻/跳跃/技能 1–2；
+   rtl 让普攻落在最靠屏幕角落的位置（右手拇指不用往里够）。
+   尺寸全部由 js/06_touch.js 按可视区域算成 px 写进变量，
+   不再依赖 vh/%/safe-area（各家手机浏览器对这几个单位处理不一致，
+   会出现「摇杆跑到半空、按键叠在一起」）。 */
 #touchControls.mobile{
-  --tb: clamp(42px, 11.2vh, 56px);         /* 技能键直径 */
-  --tk: calc(var(--tb) * 1.30);            /* 普攻键 */
-  --tj: calc(var(--tb) * 1.06);            /* 跳跃键 */
-  --joy: clamp(84px, 22.5vh, 108px);       /* 摇杆直径 */
-  --gap: clamp(5px, 1.1vh, 8px);           /* 键间距 */
-  --edge: 8px;                             /* 距屏幕边缘 */
+  --tb:44px; --tk:57px; --tj:47px; --joy:90px; --gap:6px; --edge:10px;
+  position:fixed; left:0; top:0; right:auto; bottom:auto;
 }
-#touchControls.mobile .p1-area{position:fixed;left:calc(var(--edge) + env(safe-area-inset-left,0px));bottom:calc(var(--edge) + env(safe-area-inset-bottom,0px));width:0;height:0;}
-#touchControls.mobile .p2-area{position:fixed;right:calc(var(--edge) + env(safe-area-inset-right,0px));bottom:calc(var(--edge) + env(safe-area-inset-bottom,0px));width:0;height:0;}
-#touchControls.mobile .joystick-container{position:absolute;left:0;bottom:0;width:var(--joy);height:var(--joy);pointer-events:auto;}
-#touchControls.mobile .p2-area .joystick-container{left:auto;right:0;}
+/* 两个玩家区都铺满整块可视区域，按键各自贴边 */
+#touchControls.mobile .p1-area,
+#touchControls.mobile .p2-area{position:absolute; inset:0; width:auto; height:auto;}
+
+#touchControls.mobile .joystick-container{position:absolute; left:var(--edge); bottom:var(--edge);
+  width:var(--joy); height:var(--joy); pointer-events:auto;}
+#touchControls.mobile .p2-area .joystick-container{left:auto; right:var(--edge);}
 #touchControls.mobile .joystick-base{background:rgba(255,255,255,0.07);border:2px solid rgba(255,255,255,0.22);}
 #touchControls.mobile .joystick-stick{width:calc(var(--joy)*0.42);height:calc(var(--joy)*0.42);}
 
+/* 单人：整组按键贴右下角 */
 #touchControls.mobile .action-pad{
-  inset:auto; position:absolute; bottom:0; left:calc(var(--joy) + 10px);
+  position:absolute; inset:auto; left:auto; right:var(--edge); bottom:var(--edge);
   width:auto; height:auto;
   display:grid; grid-template-columns:repeat(4, auto);
   align-items:end; justify-items:center; gap:var(--gap);
+  direction:rtl;
 }
-#touchControls.mobile .p2-area .action-pad{left:auto; right:calc(var(--joy) + 10px); direction:rtl;}
+/* 双人同屏：按键让到各自摇杆内侧，左右各占一半，避免和对方控件打架 */
+#touchControls.mobile.pvp .p1-area .action-pad{left:calc(var(--joy) + var(--edge) + 12px); right:auto; direction:ltr;}
+#touchControls.mobile.pvp .p2-area .action-pad{right:calc(var(--joy) + var(--edge) + 12px); left:auto; direction:rtl;}
+#touchControls.mobile.pvp .skill-btn{--tb:40px;}
 
 /* 网格内的按键：清掉电脑排布的绝对坐标与固定尺寸 */
 #touchControls.mobile .skill-btn{position:relative; left:auto; right:auto; top:auto; bottom:auto; width:var(--tb); height:var(--tb);}
@@ -100,10 +108,10 @@
 #touchControls.mobile .skill6 .skill-icon{width:calc(var(--tb)*.54); height:calc(var(--tb)*.54);}
 #touchControls.mobile .attack-btn .skill-icon{width:calc(var(--tk)*.54); height:calc(var(--tk)*.54);}
 
-#touchControls.mobile .player-label{top:auto; bottom:calc(var(--joy) + 4px); left:4px; transform:none; font-size:13px; opacity:.85;}
-#touchControls.mobile .p2-area .player-label{left:auto; right:4px;}
+#touchControls.mobile .player-label{top:auto; bottom:calc(var(--joy) + var(--edge) + 2px); left:var(--edge); transform:none; font-size:13px; opacity:.85;}
+#touchControls.mobile .p2-area .player-label{left:auto; right:var(--edge);}
 
-/* ---------- 手机浏览器：城镇里收起 6 个技能键（普攻＝交互，跳跃保留），进关卡再出现 ---------- */
-#touchControls.mobile.town-mode .skill-btn[data-action^="skill"]{
-  opacity:0 !important; pointer-events:none !important; transform:scale(.7);
+/* ---------- 城镇：所有设备都收起 6 个技能键（普攻＝交互，跳跃保留），进关卡再出现 ---------- */
+#touchControls.town-mode .skill-btn[data-action^="skill"]{
+  opacity:0 !important; pointer-events:none !important; transform:scale(.72);
 }

@@ -110,3 +110,35 @@
   .auth-card{width:100%; padding:20px 18px 14px;}
   .auth-form input{height:44px; font-size:16px;}  /* iOS 防缩放 */
 }
+
+/* 横屏手机（高度很矮）：左右并排 + 压缩间距，保证「进入江湖」和「游客试玩」都在屏内 */
+@media (max-height:560px){
+  #authLayer{align-items:center; overflow-y:auto; padding:8px 0;}
+  .auth-wrap{flex-direction:row; gap:26px; width:min(96vw,900px); padding:0 10px;}
+  .auth-brand{text-align:left;}
+  .auth-points{display:none;}
+  .auth-logo{font-size:clamp(24px,5.2vh,34px); letter-spacing:.1em;}
+  .auth-slogan{margin-top:6px; font-size:10px;}
+  .auth-divider{margin:10px 0 0;}
+  .auth-card{padding:14px 16px 10px; width:min(62vw,360px);}
+  .auth-tabs{margin-bottom:10px;}
+  .auth-tab{padding:6px 0; font-size:13px;}
+  .auth-form label{margin:5px 0 3px; font-size:11px;}
+  .auth-form input{height:34px; font-size:13px; padding:0 10px;}
+  .auth-submit{margin-top:10px; height:38px; font-size:14px;}
+  .auth-msg{min-height:16px; margin-top:6px; font-size:11.5px;}
+  .auth-foot{margin-top:7px; padding-top:7px; font-size:10.5px;}
+  .auth-link{font-size:10.5px;}
+}
+
+/* 更矮的横屏（约 390px 高）：再压一档，注册四个输入框也放得下 */
+@media (max-height:430px){
+  #authLayer{align-items:flex-start;}
+  .auth-card{padding:10px 14px 8px;}
+  .auth-logo{font-size:24px;}
+  .auth-slogan{margin-top:4px;}
+  .auth-form label{margin:4px 0 2px; font-size:10.5px;}
+  .auth-form input{height:30px;}
+  .auth-submit{margin-top:8px; height:34px; font-size:13px;}
+  .auth-foot{margin-top:5px; padding-top:5px;}
+}

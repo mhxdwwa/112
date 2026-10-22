@@ -1,0 +1,63 @@
+/* ===== 账号状态胶囊 + 存档说明面板 =====
+   放在联机按钮上方：游客是琥珀色点，登录后是绿色点。
+   点开能看到「当前身份 / 存档在哪 / 最近保存」，游客可直接去注册。 */
+#btnAccount{
+  position:fixed; right:14px; top:34px; z-index:9000;
+  height:30px; padding:0 12px 0 9px; border-radius:15px; cursor:pointer;
+  display:flex; align-items:center; gap:7px;
+  border:1px solid rgba(201,154,78,.42);
+  background:linear-gradient(180deg,rgba(28,40,56,.94),rgba(14,20,30,.96));
+  color:#ffd98e; font-size:11.5px; font-family:"Microsoft YaHei",sans-serif;
+  letter-spacing:.04em; max-width:150px;
+  box-shadow:0 6px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
+  transition:.2s;
+}
+#btnAccount:hover{border-color:rgba(201,154,78,.8); transform:translateY(-1px);}
+#btnAccount span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+#btnAccount i{width:7px; height:7px; border-radius:50%; flex:none; background:#ffcf6e;
+  box-shadow:0 0 8px rgba(255,207,110,.85);}
+#btnAccount.cloud i{background:#6fdc9a; box-shadow:0 0 8px rgba(111,220,154,.85);}
+
+#accountPanel{
+  position:fixed; right:14px; top:72px; z-index:9001; width:252px;
+  border-radius:14px; overflow:hidden;
+  background:linear-gradient(180deg,rgba(20,29,41,.97),rgba(11,16,24,.98));
+  border:1px solid rgba(201,154,78,.35);
+  box-shadow:0 18px 46px rgba(0,0,0,.6);
+  font-family:"Microsoft YaHei",system-ui,sans-serif; color:#d8e4ef;
+  opacity:0; visibility:hidden; transform:translateY(-8px);
+  transition:.22s ease;
+}
+#accountPanel.open{opacity:1; visibility:visible; transform:none;}
+.acc-head{display:flex; align-items:center; justify-content:space-between;
+  padding:10px 13px; font-size:12.5px; letter-spacing:.1em; color:#ffd98e;
+  background:linear-gradient(180deg,rgba(201,154,78,.16),rgba(201,154,78,.03));
+  border-bottom:1px solid rgba(201,154,78,.18);}
+.acc-head b{font-weight:600}
+.acc-head button{background:none;border:0;color:#8fa6bb;font-size:18px;cursor:pointer;line-height:1;padding:0 2px}
+.acc-head button:hover{color:#ffd98e}
+.acc-body{padding:11px 13px 12px;}
+.acc-row{display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  font-size:12px; color:#7d92a6; padding:4px 0;}
+.acc-row b{color:#ffd98e; font-weight:600; font-size:12.5px; text-align:right;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.acc-row b.ok{color:#6fdc9a}
+.acc-row b.warn{color:#ffb27a}
+.acc-tip{margin:8px 0 10px; font-size:11px; line-height:1.65; color:#6f8496;
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.05);
+  border-radius:8px; padding:7px 9px;}
+.acc-acts{display:flex; gap:7px; margin-top:7px;}
+.acc-acts button{flex:1; height:32px; border-radius:8px; cursor:pointer; font-family:inherit;
+  font-size:12px; letter-spacing:.04em; transition:.18s;}
+.acc-acts .primary{border:0; color:#2a1a06; font-weight:700;
+  background:linear-gradient(180deg,#f6d491,#d9a850);
+  box-shadow:0 4px 12px rgba(201,154,78,.28);}
+.acc-acts .ghost{border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.04); color:#c6d6e4;}
+.acc-acts button:hover{filter:brightness(1.08)}
+.acc-acts button:active{transform:translateY(1px)}
+.acc-acts .hidden{display:none}
+
+@media (max-width:720px){
+  #btnAccount{top:30px; height:28px; font-size:11px;}
+  #accountPanel{width:min(78vw,252px);}
+}

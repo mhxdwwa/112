@@ -320,9 +320,10 @@ function drawTownHud(){
   ctx.fillStyle = '#ffd166';
   ctx.fillText(goldTxt, gx + 27, gy + 18);
 
-  /* ---------------- 底部技能快捷栏 ---------------- */
+  /* ---------------- 底部技能快捷栏 ----------------
+     手机浏览器由右下角的触屏按键代替，这里不再画，避免两排图标叠在一起 */
   const w = WEAPONS[p.weaponIdx || 0];
-  if(w && w.skills){
+  if(w && w.skills && !window.IS_MOBILE_UI){
     const SS = 46, SG = 6, SL = 6;
     const totalW = SL * SS + (SL - 1) * SG;
     const sx = VW/2 - totalW/2, sy = VH - SS - 14;
@@ -366,10 +367,12 @@ function drawTownHud(){
   }
 
   /* ---------------- 底部操作提示（小字，避开左手触控区） ---------------- */
-  ctx.textAlign = 'right';
-  ctx.font = '11px "Microsoft YaHei"';
-  ctx.fillStyle = 'rgba(170,188,204,0.55)';
-  ctx.fillText('WASD 移动　J 交互　Q 任务　I 背包　U 技能　C 角色', VW - 20, VH - 12);
+  if(!window.IS_MOBILE_UI){
+    ctx.textAlign = 'right';
+    ctx.font = '11px "Microsoft YaHei"';
+    ctx.fillStyle = 'rgba(170,188,204,0.55)';
+    ctx.fillText('WASD 移动　J 交互　Q 任务　I 背包　U 技能　C 角色', VW - 20, VH - 12);
+  }
 
   ctx.restore();
 }

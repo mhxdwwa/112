@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/toast.css" />
 <link rel="stylesheet" href="css/auth.css" />
 <link rel="stylesheet" href="css/online.css" />
+<link rel="stylesheet" href="css/account.css" />
 <style>
 /* 载入界面：内联样式，保证首帧就有效果（不等外部 CSS） */
 #bootOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
@@ -86,7 +87,7 @@
       <div class="auth-msg" id="authMsg"></div>
       <div class="auth-foot">
         <span id="authLoadTip">资源加载中…</span>
-        <button type="button" class="auth-link" id="authOffline">离线游玩</button>
+        <button type="button" class="auth-link" id="authOffline">游客试玩（不存档云端）</button>
       </div>
     </div>
   </div>
@@ -99,24 +100,20 @@
       <div class="joystick-base"></div>
       <div class="joystick-stick" id="stick1"></div>
     </div>
-    <!-- 2 行 × 4 列：上排技能 3–6，下排 普攻 / 跳跃 / 技能 1–2 -->
+    <!-- 2 行 × 4 列：上排技能 3–6，下排 普攻 / 跳跃 / 技能 1–2（直接作为网格子项，不套行容器） -->
     <div class="action-pad">
-      <div class="pad-row">
-        <div class="skill-btn skill3" data-player="1" data-action="skill3" id="p1skill3"></div>
-        <div class="skill-btn skill4" data-player="1" data-action="skill4" id="p1skill4"><span class="slot-num">4</span></div>
-        <div class="skill-btn skill5" data-player="1" data-action="skill5" id="p1skill5"><span class="slot-num">5</span></div>
-        <div class="skill-btn skill6" data-player="1" data-action="skill6" id="p1skill6"><span class="slot-num">6</span></div>
+      <div class="skill-btn skill3" data-player="1" data-action="skill3" id="p1skill3"></div>
+      <div class="skill-btn skill4" data-player="1" data-action="skill4" id="p1skill4"><span class="slot-num">4</span></div>
+      <div class="skill-btn skill5" data-player="1" data-action="skill5" id="p1skill5"><span class="slot-num">5</span></div>
+      <div class="skill-btn skill6" data-player="1" data-action="skill6" id="p1skill6"><span class="slot-num">6</span></div>
+      <div class="skill-btn attack-btn" data-player="1" data-action="attack">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
       </div>
-      <div class="pad-row">
-        <div class="skill-btn attack-btn" data-player="1" data-action="attack">
-          <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
-        </div>
-        <div class="skill-btn jump-btn" data-player="1" data-action="jump">
-          <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-        </div>
-        <div class="skill-btn skill1" data-player="1" data-action="skill1" id="p1skill1"></div>
-        <div class="skill-btn skill2" data-player="1" data-action="skill2" id="p1skill2"></div>
+      <div class="skill-btn jump-btn" data-player="1" data-action="jump">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
       </div>
+      <div class="skill-btn skill1" data-player="1" data-action="skill1" id="p1skill1"></div>
+      <div class="skill-btn skill2" data-player="1" data-action="skill2" id="p1skill2"></div>
     </div>
   </div>
   <div class="p2-area" id="p2Controls" style="display:none;">
@@ -126,27 +123,39 @@
       <div class="joystick-stick" id="stick2"></div>
     </div>
     <div class="action-pad">
-      <div class="pad-row">
-        <div class="skill-btn skill3" data-player="2" data-action="skill3" id="p2skill3"></div>
-        <div class="skill-btn skill4" data-player="2" data-action="skill4" id="p2skill4"><span class="slot-num">4</span></div>
-        <div class="skill-btn skill5" data-player="2" data-action="skill5" id="p2skill5"><span class="slot-num">5</span></div>
-        <div class="skill-btn skill6" data-player="2" data-action="skill6" id="p2skill6"><span class="slot-num">6</span></div>
+      <div class="skill-btn skill3" data-player="2" data-action="skill3" id="p2skill3"></div>
+      <div class="skill-btn skill4" data-player="2" data-action="skill4" id="p2skill4"><span class="slot-num">4</span></div>
+      <div class="skill-btn skill5" data-player="2" data-action="skill5" id="p2skill5"><span class="slot-num">5</span></div>
+      <div class="skill-btn skill6" data-player="2" data-action="skill6" id="p2skill6"><span class="slot-num">6</span></div>
+      <div class="skill-btn attack-btn" data-player="2" data-action="attack">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
       </div>
-      <div class="pad-row">
-        <div class="skill-btn attack-btn" data-player="2" data-action="attack">
-          <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
-        </div>
-        <div class="skill-btn jump-btn" data-player="2" data-action="jump">
-          <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-        </div>
-        <div class="skill-btn skill1" data-player="2" data-action="skill1" id="p2skill1"></div>
-        <div class="skill-btn skill2" data-player="2" data-action="skill2" id="p2skill2"></div>
+      <div class="skill-btn jump-btn" data-player="2" data-action="jump">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
       </div>
+      <div class="skill-btn skill1" data-player="2" data-action="skill1" id="p2skill1"></div>
+      <div class="skill-btn skill2" data-player="2" data-action="skill2" id="p2skill2"></div>
     </div>
   </div>
 </div>
 <!-- 联机入口与面板 -->
 <button id="btnOnline" type="button"><span><i>◈</i>联机</span></button>
+<!-- 账号 / 存档状态：点开看「我是谁、进度存在哪」 -->
+<button id="btnAccount" type="button"><i></i><span id="accName">游客</span></button>
+<div id="accountPanel">
+  <div class="acc-head"><b>账号与存档</b><button id="accClose" type="button">×</button></div>
+  <div class="acc-body">
+    <div class="acc-row"><span>当前身份</span><b id="accWho">游客（未登录）</b></div>
+    <div class="acc-row"><span>存档位置</span><b id="accWhere" class="warn">仅本机（浏览器）</b></div>
+    <div class="acc-row"><span>最近保存</span><b id="accWhen">尚未保存</b></div>
+    <div class="acc-tip" id="accTip">游客进度只存在这台浏览器（localStorage），换设备、清缓存或换浏览器都会丢。注册后才有云端存档。</div>
+    <div class="acc-acts">
+      <button id="accLogin" class="primary" type="button">注册 / 登录</button>
+      <button id="accSave" class="ghost hidden" type="button">立即存档</button>
+      <button id="accSwitch" class="ghost hidden" type="button">切换账号</button>
+    </div>
+  </div>
+</div>
 <div id="onlinePanel">
   <div class="op-head">
     <b>联机大厅</b>
@@ -225,5 +234,6 @@
 <script src="js/34_dev_debug.js"></script>
 <script src="js/35_cloud_save.js"></script>
 <script src="js/36_online.js"></script>
+<script src="js/37_account.js"></script>
 </body>
 </html>

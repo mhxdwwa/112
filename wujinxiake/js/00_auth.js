@@ -197,9 +197,9 @@ function bindUI(){
 
   var off = $('authOffline');
   if(off) off.addEventListener('click', function(){
-    if(!confirm('离线游玩时进度只保存在这台设备上，换电脑/清缓存会丢失。确定继续？')) return;
+    if(!confirm('确定以「游客」身份试玩？\n\n· 进度只存在这台浏览器里，换设备或清缓存会丢\n· 没有账号密码，也没法在别的设备接着玩\n\n想要云端存档，请点「取消」回去注册。')) return;
     state.offline = true;
-    msg('离线模式：进度只存本机', 'ok');
+    msg('游客模式：进度只存本机', 'ok');
     window.Boot.auth();
   });
 

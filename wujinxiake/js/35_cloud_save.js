@@ -24,6 +24,7 @@ const PERSIST = [
 let uid = '', uname = '';
 let cloudState = 'idle';     /* idle | ok | unavailable | error */
 let lastPushAt = 0, lastStr = '', pushing = false, timer = null, warned = false;
+let lastSaveAt = 0;          /* 最近一次落盘时间（账号面板展示用） */
 
 function sb(){ return window.SB || null; }
 function logged(){ return !!(window.AUTH && window.AUTH.loggedIn && window.AUTH.uid); }
@@ -161,6 +162,7 @@ function saveNow(force){
   lastStr = str;
   saveLocal(data);
   lastPushAt = Date.now();
+  lastSaveAt = lastPushAt;
 
   if(!logged() || cloudState === 'unavailable') return;
   if(pushing) return;
@@ -226,7 +228,7 @@ window.CloudSave = {
   save: function(){ saveNow(true); },
   queue: queueSave,
   load: function(){ return loadLocal(); },
-  status: function(){ return { cloud: cloudState, logged: logged(), user: uname }; },
+  status: function(){ return { cloud: cloudState, logged: logged(), user: uname, last: lastSaveAt }; },
   reset: function(){
     try{ localStorage.removeItem(KEY); }catch(e){}
     if(logged() && sb()) sb().from(TABLE).delete().eq('user_id', uid).then(function(){});
