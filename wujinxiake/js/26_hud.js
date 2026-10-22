@@ -378,6 +378,7 @@ function drawTownHud(){
 }
 
 function drawTown(){
+  if(!townPlayer) return;   /* 城镇玩家还没初始化时不要空转（避免整帧异常） */
   const area = townRegionAt(townPlayer.x, townPlayer.y);
   // 天空渐变（屏幕固定，随坊区换色）
   const skyGrad = ctx.createLinearGradient(0, 0, 0, GY_TOP);
