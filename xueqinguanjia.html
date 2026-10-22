@@ -1265,6 +1265,17 @@ tbody tr:last-child td { border-bottom: none; }
   box-shadow: inset 0 0 0 2px #EF4444;
 }
 .timetable-cell.current-class .subject-name { color: #DC2626; }
+.timetable-cell.current-class.my-class {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
+  border-color: #F59E0B !important;
+  box-shadow: inset 0 0 0 2px #F59E0B, 0 0 8px rgba(245, 158, 11, 0.4);
+}
+.timetable-cell.current-class.my-class .subject-name { 
+  color: #D97706; 
+  font-weight: 700;
+  text-shadow: 0 0 2px rgba(217, 119, 6, 0.3);
+}
+.timetable-cell.current-class.my-class .period-time { color: #D97706; }
 .timetable-cell.next-class {
   background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
   border-color: #F59E0B !important;
@@ -14247,9 +14258,10 @@ let timetableSchedule = {
   '4': [{start:'07:30',end:'07:50'},{start:'08:00',end:'08:45'},{start:'09:00',end:'09:45'},{start:'10:15',end:'11:00'},{start:'11:15',end:'12:00'},{start:'14:30',end:'15:15'},{start:'15:30',end:'16:15'},{start:'16:30',end:'17:15'},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'},{start:'21:10',end:'21:50'}],
   // 周五默认时间表（只上6节课）
   '5': [{start:'07:30',end:'07:50'},{start:'08:00',end:'08:45'},{start:'09:00',end:'09:45'},{start:'10:15',end:'11:00'},{start:'11:15',end:'12:00'},{start:'13:30',end:'14:15'},{start:'14:30',end:'15:15'}],
-  // 周六周日默认（可自定义）
+  // 周六默认（可自定义）
   '6': [],
-  '7': []
+  // 周日默认（晚自习）
+  '7': [{},{},{},{},{},{},{},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'}]
 };
 
 // 获取指定天指定节次的时间
@@ -14769,7 +14781,13 @@ function renderTimetableGrid(className) {
       // 判断是否是当前课或下一节课
       const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
       const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
-      const cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      let cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      
+      // 判断是否是当前登录老师的课
+      const isMyClass = slot && slot.teacher && user.teacherName && slot.teacher === user.teacherName;
+      if (isCurrent && isMyClass) {
+        cellClass += ' my-class';
+      }
       
       if (slot && slot.subject) {
         html += `<div class="timetable-cell ${cellClass} ${canEdit ? 'editable' : ''}" 
@@ -14835,7 +14853,12 @@ function renderTeacherTimetable() {
       // 判断是否是当前课或下一节课
       const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
       const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
-      const cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      let cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      
+      // 这是教师自己的课程表，所有显示的课都是自己的
+      if (isCurrent && slot) {
+        cellClass += ' my-class';
+      }
       
       if (slot) {
         html += `<div class="timetable-cell ${cellClass}">
@@ -14889,7 +14912,12 @@ function renderEditableTeacherTimetable() {
       // 判断是否是当前课或下一节课
       const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
       const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
-      const cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      let cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      
+      // 这是教师自己的课程表，所有显示的课都是自己的
+      if (isCurrent && slot) {
+        cellClass += ' my-class';
+      }
       
       if (slot) {
         html += `<div class="timetable-cell ${cellClass} editable" onclick="editTeacherTimetableSlot('${slot.className}',${w},${p})">
