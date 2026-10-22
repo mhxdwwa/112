@@ -1,8 +1,29 @@
 /* ===== 触屏控制 ===== */
 const touchState = { p1: { x: 0, y: 0, active: false }, p2: { x: 0, y: 0, active: false } };
 
+/* ★ 区分「手机浏览器」和「电脑浏览器/电脑触屏」
+   只有手机才切到左下角紧凑阵列（#touchControls.mobile），电脑一律保持原排布。
+   判据：移动端 UA + 有触摸；UA 认不出来时用「粗指针 + 小屏」兜底，
+   电脑显示器即便支持触摸，主指针仍是鼠标（fine），不会被误判。 */
+function isMobileBrowser(){
+  const ua = navigator.userAgent || '';
+  const touch = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
+  if(!touch) return false;
+  const mobileUA = /Android|iPhone|iPod|iPad|Windows Phone|HarmonyOS|OpenHarmony|Mobile Safari|MicroMessenger/i.test(ua);
+  if(mobileUA) return true;
+  const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  const minSide = Math.min(screen.width || 9999, screen.height || 9999);
+  return coarse && minSide < 820;
+}
+const IS_MOBILE_BROWSER = isMobileBrowser();
+window.IS_MOBILE_BROWSER = IS_MOBILE_BROWSER;
+
 function setupTouchControls(){
   const touchControls = document.getElementById('touchControls');
+  /* 手机浏览器才启用紧凑阵列；电脑触屏维持原有弧形排布
+     （调试时可用 ?ui=mobile 强制预览手机排布） */
+  const forceMobile = /[?&]ui=mobile\b/.test(location.search);
+  if(touchControls && (IS_MOBILE_BROWSER || forceMobile)) touchControls.classList.add('mobile');
   function setupJoystick(joystickId, stickId, playerKey){
     const joystick = document.getElementById(joystickId);
     const stick = document.getElementById(stickId);
@@ -11,12 +32,14 @@ function setupTouchControls(){
     const updateStick = (cx, cy) => {
       const rect = base.getBoundingClientRect();
       const ccx = rect.left + rect.width / 2, ccy = rect.top + rect.height / 2;
+      /* 摇杆半径随控件尺寸走（手机横屏下摇杆会缩到 ~90px） */
+      const maxR = Math.max(28, rect.width * 0.42);
       const dx = cx - ccx, dy = cy - ccy;
-      const dist = Math.min(Math.hypot(dx, dy), 50);
+      const dist = Math.min(Math.hypot(dx, dy), maxR);
       const ang = Math.atan2(dy, dx);
       stick.style.transform = `translate(calc(-50% + ${Math.cos(ang)*dist}px), calc(-50% + ${Math.sin(ang)*dist}px))`;
-      touchState[playerKey].x = Math.cos(ang)*dist/50;
-      touchState[playerKey].y = Math.sin(ang)*dist/50;
+      touchState[playerKey].x = Math.cos(ang)*dist/maxR;
+      touchState[playerKey].y = Math.sin(ang)*dist/maxR;
       touchState[playerKey].active = true;
     };
     const resetStick = () => { stick.style.transform='translate(-50%,-50%)'; touchState[playerKey]={x:0,y:0,active:false}; };
@@ -70,6 +93,7 @@ function setupTouchControls(){
     if(p2Area) p2Area.style.display = isPvp ? 'block' : 'none';
     if(window.syncTouchSkillIcons) window.syncTouchSkillIcons();
     if(window.refreshSkillLockUI) window.refreshSkillLockUI();
+    syncTouchMode();
   };
   window.hideTouchControls = ()=>{
     touchControls.classList.remove('active');
@@ -78,6 +102,20 @@ function setupTouchControls(){
       const o = btn.querySelector('.cd-overlay'); if(o) o.remove();
     });
   };
+  /* ★ 城镇里收起 6 个技能键，进关卡后再出现（普攻键在城镇是「交互」，必须保留） */
+  window.syncTouchMode = syncTouchMode;
+  setInterval(syncTouchMode, 260);
+}
+
+/* 当前应显示哪套按键：town = 只留摇杆/普攻/跳跃，battle = 8 键全开 */
+let lastTouchMode = '';
+function syncTouchMode(){
+  const tc = document.getElementById('touchControls');
+  if(!tc) return;
+  const mode = (typeof gameState !== 'undefined' && gameState === 'town') ? 'town' : 'battle';
+  if(mode === lastTouchMode) return;
+  lastTouchMode = mode;
+  tc.classList.toggle('town-mode', mode === 'town');
 }
 
 function getTouchInput(n){ const k=n===1?'p1':'p2'; const s=touchState[k]; return s.active?{mx:s.x,my:s.y}:{mx:0,my:0}; }
