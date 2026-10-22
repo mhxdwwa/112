@@ -380,3 +380,44 @@ function updateSkillButtonCD(){
 setupTouchControls();
 bindMobileFrame();
 
+
+/* ---------- 触屏 ESC 键：左侧正中间 ----------
+   手机/触屏电脑没有键盘，给一个等效于 Esc 的圆钮：
+   战斗中暂停、城镇里开关系统菜单、弹窗里关掉回到上一层。 */
+(function(){
+  function escAction(){
+    if(typeof gameState === 'undefined') return;
+    try{
+      if(typeof DIALOGUE !== 'undefined' && DIALOGUE){
+        if(typeof advanceDialogue === 'function') advanceDialogue();
+        return;
+      }
+    }catch(e){}
+    if(gameState === 'playing') gameState = 'paused';
+    else if(gameState === 'paused') gameState = 'playing';
+    else if(gameState === 'equipWiki') gameState = 'gameMenu';
+    else if(gameState === 'gameMenu') gameState = 'town';
+    else if(gameState === 'town') gameState = 'gameMenu';
+    else if(gameState === 'inventory' || gameState === 'skillMenu' || gameState === 'characterInfo' ||
+            gameState === 'questMenu' || gameState === 'enhanceMenu' || gameState === 'shopMenu' ||
+            gameState === 'levelSelect' || gameState === 'dungeonSelect') gameState = 'town';
+  }
+  function boot(){
+    const b = document.getElementById('btnEsc');
+    if(!b) return;
+    const force = /[?&](ui=mobile|touch=1)\b/.test(location.search);
+    if(IS_TOUCH || IS_MOBILE_BROWSER || force) b.classList.add('show');
+    let lock = 0;
+    const fire = function(e){
+      if(e){ e.preventDefault(); e.stopPropagation(); }
+      const now = Date.now();
+      if(now - lock < 260) return;   /* 防止 click + touchstart 触发两次 */
+      lock = now;
+      escAction();
+    };
+    b.addEventListener('touchstart', fire, { passive: false });
+    b.addEventListener('mousedown', fire);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
