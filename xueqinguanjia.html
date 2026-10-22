@@ -1221,17 +1221,17 @@ tbody tr:last-child td { border-bottom: none; }
   background: #fff;
 }
 .timetable-cell {
-  padding: 10px 8px;
+  padding: 8px 4px;
   border: 1px solid var(--gray-100);
   text-align: center;
-  min-height: 64px;
+  min-height: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background var(--transition);
-  font-size: 13px;
+  font-size: 12px;
 }
 .timetable-cell:hover { background: var(--primary-bg); }
 .timetable-cell.header {
@@ -1239,8 +1239,8 @@ tbody tr:last-child td { border-bottom: none; }
   font-weight: 600;
   color: var(--gray-700);
   cursor: default;
-  min-height: 40px;
-  font-size: 13px;
+  min-height: 36px;
+  font-size: 12px;
 }
 .timetable-cell.header:hover { background: var(--gray-50); }
 .timetable-cell.period-label {
@@ -1248,13 +1248,13 @@ tbody tr:last-child td { border-bottom: none; }
   font-weight: 600;
   color: var(--gray-600);
   cursor: default;
-  font-size: 12px;
-  min-width: 60px;
+  font-size: 11px;
+  min-width: 50px;
 }
 .timetable-cell.period-label:hover { background: var(--gray-50); }
-.timetable-cell .subject-name { font-weight: 600; color: var(--gray-800); font-size: 13px; }
-.timetable-cell .subject-teacher { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
-.timetable-cell .subject-room { font-size: 10px; color: var(--gray-400); margin-top: 1px; }
+.timetable-cell .subject-name { font-weight: 600; color: var(--gray-800); font-size: 12px; }
+.timetable-cell .subject-teacher { font-size: 10px; color: var(--gray-500); margin-top: 2px; }
+.timetable-cell .subject-room { font-size: 9px; color: var(--gray-400); margin-top: 1px; }
 .timetable-cell.empty { color: var(--gray-300); }
 .timetable-cell.editable { cursor: pointer; }
 .timetable-cell.editable:hover { background: var(--primary-bg); border-color: var(--primary-light); }
@@ -14490,7 +14490,7 @@ function renderTimetableGrid(className) {
   // Headteacher can only edit their own class, leader/admin can edit all
   const isOwnClass = (user.headteacherClasses || []).includes(className);
   const canEdit = (user.isHeadteacher && isOwnClass) || user.isLeader || isXqAdmin();
-  const weekdays = ['周一', '周二', '周三', '周四', '周五'];
+  const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
   let html = `<div class="toolbar">
     <span style="font-size:14px;font-weight:600">${className} 课程表</span>
@@ -14505,7 +14505,7 @@ function renderTimetableGrid(className) {
     ${canEdit ? `<button class="toolbar-btn primary" onclick="saveClassTimetableData().then(r=>{if(r.ok)showToast('课程表已保存');else showToast('保存失败','error')})">保存</button>` : ''}
   </div>`;
   
-  html += `<div class="timetable-grid" style="grid-template-columns: 60px repeat(5, 1fr);">`;
+  html += `<div class="timetable-grid" style="grid-template-columns: 50px repeat(7, 1fr);">`;
   
   // Header row
   html += `<div class="timetable-cell header">节次</div>`;
@@ -14516,7 +14516,7 @@ function renderTimetableGrid(className) {
   // Period rows
   for (let p = 1; p <= timetablePeriods; p++) {
     html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
-    for (let w = 1; w <= 5; w++) {
+    for (let w = 1; w <= 7; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
       if (slot && slot.subject) {
@@ -14543,7 +14543,7 @@ function renderTeacherTimetable() {
   const user = xqCurrentUser || {};
   const teacherName = user.teacherName;
   const tt = getTimetableForTeacher(teacherName);
-  const weekdays = ['周一', '周二', '周三', '周四', '周五'];
+  const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
   // Build reminder if class is coming up
   let reminderHtml = getTimetableReminderHtml(tt);
@@ -14555,7 +14555,7 @@ function renderTeacherTimetable() {
     <span style="font-size:14px;font-weight:600">我的课程表 — ${escapeHtml(teacherName)}</span>
   </div>`;
   
-  html += `<div class="timetable-grid" style="grid-template-columns: 60px repeat(5, 1fr);">`;
+  html += `<div class="timetable-grid" style="grid-template-columns: 50px repeat(7, 1fr);">`;
   
   // Header
   html += `<div class="timetable-cell header">节次</div>`;
@@ -14566,7 +14566,7 @@ function renderTeacherTimetable() {
   // Periods
   for (let p = 1; p <= personalTimetablePeriods; p++) {
     html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
-    for (let w = 1; w <= 5; w++) {
+    for (let w = 1; w <= 7; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
       if (slot) {
@@ -14588,19 +14588,19 @@ function renderEditableTeacherTimetable() {
   const user = xqCurrentUser || {};
   const teacherName = user.teacherName;
   const tt = getTimetableForTeacher(teacherName);
-  const weekdays = ['周一', '周二', '周三', '周四', '周五'];
+  const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
   let reminderHtml = getTimetableReminderHtml(tt);
   let html = '';
   if (reminderHtml) html += reminderHtml;
   
-  html += `<div class="timetable-grid" style="grid-template-columns: 60px repeat(5, 1fr);">`;
+  html += `<div class="timetable-grid" style="grid-template-columns: 50px repeat(7, 1fr);">`;
   html += `<div class="timetable-cell header">节次</div>`;
   weekdays.forEach(d => { html += `<div class="timetable-cell header">${d}</div>`; });
   
   for (let p = 1; p <= personalTimetablePeriods; p++) {
     html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
-    for (let w = 1; w <= 5; w++) {
+    for (let w = 1; w <= 7; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
       if (slot) {
@@ -15000,12 +15000,12 @@ async function doTimetableImport() {
 
 function exportTimetableExcel(className) {
   const tt = getTimetableForClass(className);
-  const weekdays = ['周一', '周二', '周三', '周四', '周五'];
+  const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   const data = [['节次', ...weekdays]];
   
   for (let p = 1; p <= timetablePeriods; p++) {
     const row = [getPeriodName(p)];
-    for (let w = 1; w <= 5; w++) {
+    for (let w = 1; w <= 7; w++) {
       const slot = tt[`${w}-${p}`];
       if (slot && slot.subject) {
         let cell = slot.subject;
