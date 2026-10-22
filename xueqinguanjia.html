@@ -1248,23 +1248,22 @@ tbody tr:last-child td { border-bottom: none; }
 .timetable-cell.empty { color: var(--gray-300); }
 .timetable-cell.editable { cursor: pointer; }
 .timetable-cell.editable:hover { background: var(--primary-bg); border-color: var(--primary-light); }
-/* 当前课程高亮 */
+/* 当前课程（非我的课）- 黄色 */
 .timetable-cell.current-class {
-  background: linear-gradient(135deg, #FEE2E2, #FECACA) !important;
-  border-color: #EF4444 !important;
-  box-shadow: inset 0 0 0 2px #EF4444;
-}
-.timetable-cell.current-class .subject-name { color: #DC2626; }
-.timetable-cell.current-class.my-class {
   background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
   border-color: #F59E0B !important;
-  box-shadow: inset 0 0 0 2px #F59E0B, 0 0 8px rgba(245, 158, 11, 0.4);
+}
+/* 当前课程（我的课）- 红色高亮 */
+.timetable-cell.current-class.my-class {
+  background: linear-gradient(135deg, #FEE2E2, #FECACA) !important;
+  border-color: #EF4444 !important;
+  box-shadow: inset 0 0 0 2px #EF4444, 0 0 8px rgba(239, 68, 68, 0.4);
 }
 .timetable-cell.current-class.my-class .subject-name { 
-  color: #D97706; 
+  color: #DC2626; 
   font-weight: 700;
-  text-shadow: 0 0 2px rgba(217, 119, 6, 0.3);
 }
+/* 下一节课 - 黄色 */
 .timetable-cell.next-class {
   background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
   border-color: #F59E0B !important;
@@ -1277,11 +1276,11 @@ tbody tr:last-child td { border-bottom: none; }
   font-weight: 500;
 }
 .timetable-cell.current-class .period-time { 
-  color: #7F1D1D; 
+  color: #78350F; 
   font-weight: 600;
 }
 .timetable-cell.current-class.my-class .period-time { 
-  color: #78350F; 
+  color: #7F1D1D; 
   font-weight: 600;
 }
 .timetable-reminder {
@@ -14830,9 +14829,9 @@ function renderTimetableGrid(className) {
       const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
       let cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
       
-      // 判断是否是当前登录老师的课
+      // 判断是否是当前登录老师的课（当前或下一节是我的课都标红）
       const isMyClass = slot && slot.teacher && user.teacherName && slot.teacher === user.teacherName;
-      if (isCurrent && isMyClass) {
+      if ((isCurrent || isNext) && isMyClass) {
         cellClass += ' my-class';
       }
       
@@ -14902,8 +14901,8 @@ function renderTeacherTimetable() {
       const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
       let cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
       
-      // 这是教师自己的课程表，所有显示的课都是自己的
-      if (isCurrent && slot) {
+      // 这是教师自己的课程表，当前或下一节有课都标红
+      if ((isCurrent || isNext) && slot) {
         cellClass += ' my-class';
       }
       
@@ -14961,8 +14960,8 @@ function renderEditableTeacherTimetable() {
       const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
       let cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
       
-      // 这是教师自己的课程表，所有显示的课都是自己的
-      if (isCurrent && slot) {
+      // 这是教师自己的课程表，当前或下一节有课都标红
+      if ((isCurrent || isNext) && slot) {
         cellClass += ' my-class';
       }
       
