@@ -33,7 +33,9 @@ function applyMobileFrame(){
   const cv = document.getElementById('c');
   if(cv){
     const r = cv.getBoundingClientRect();
-    if(r.width >= 240 && r.height >= 160){
+    /* 只在「画布基本铺满屏幕」（横屏正常游玩）时对齐画布；
+       竖屏时画布很小、上下留白多，仍按窗口贴边，免得按键飘到屏幕中间 */
+    if(r.width >= 240 && r.height >= 160 && r.height >= (window.innerHeight || 0) * 0.6){
       x = r.left; y = r.top; w = Math.round(r.width); h = Math.round(r.height); src = 'canvas';
     }
   }
