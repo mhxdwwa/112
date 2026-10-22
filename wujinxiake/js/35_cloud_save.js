@@ -91,12 +91,40 @@ function apply(data){
 }
 
 /* ---------- 本地 ---------- */
+/* 每个账号一份本机存档：wjx_save_v1:<uid>；游客仍用 wjx_save_v1。
+   同一台电脑/手机换账号时，不会把上一个人的进度带过去。 */
+function acctId(){ return uid || (window.AUTH && window.AUTH.uid) || ''; }
+function keyOf(){ const id = acctId(); return id ? KEY + ':' + id : KEY; }
 function saveLocal(data){
-  try{ localStorage.setItem(KEY, JSON.stringify(data)); return true; }
+  try{
+    localStorage.setItem(keyOf(), JSON.stringify(data));
+    /* 游客每次落盘都刷新时间戳：之后注册时凭它把这份进度认领过去 */
+    if(!acctId()) localStorage.setItem('wjx_guest_at', String(Date.now()));
+    return true;
+  }
   catch(e){ console.warn('[save] 本地写入失败', e); return false; }
 }
 function loadLocal(){
   try{
+    const s = localStorage.getItem(keyOf());
+    if(!s) return null;
+    const d = JSON.parse(s);
+    return (d && d.p) ? d : null;
+  }catch(e){ return null; }
+}
+/* 游客存档迁移：登录后第一次没找到账号自己的存档时，用游客那份兜底，
+   这样「先试玩、再注册」的进度不会丢。
+   只认最近 6 小时内确实点过「游客试玩」的那份，避免同一台机器上
+   别的同学很久以前留下的游客进度被新账号继承。 */
+function guestFresh(){
+  try{
+    const t = Number(localStorage.getItem('wjx_guest_at') || 0);
+    return !!t && (Date.now() - t) < 6 * 3600 * 1000;
+  }catch(e){ return false; }
+}
+function loadGuest(){
+  try{
+    if(!uid || !guestFresh()) return null;
     const s = localStorage.getItem(KEY);
     if(!s) return null;
     const d = JSON.parse(s);
@@ -181,7 +209,9 @@ async function boot(){
   uid = window.AUTH.uid;
   uname = window.AUTH.username;
 
-  const local = loadLocal();
+  const ownLocal = loadLocal();
+  const guestLocal = ownLocal ? null : loadGuest();
+  const local = ownLocal || guestLocal;
   const cloud = await pullCloud();
 
   /* ?new=1 忽略存档，重新开局 */
@@ -198,6 +228,8 @@ async function boot(){
 
   if(apply(pick)){
     lastStr = JSON.stringify(pick);
+    /* 游客进度已经并入账号，标记作废，避免下次又拿它兜底 */
+    if(pick === guestLocal){ try{ localStorage.removeItem('wjx_guest_at'); }catch(e){} }
     setTimeout(function(){
       if(typeof showToast === 'function') showToast('已读取存档：' + (pick.name || '无名侠客') + '  Lv.' + ((pick.p && pick.p.level) || 1), '#7af0c8');
     }, 700);
@@ -230,7 +262,7 @@ window.CloudSave = {
   load: function(){ return loadLocal(); },
   status: function(){ return { cloud: cloudState, logged: logged(), user: uname, last: lastSaveAt }; },
   reset: function(){
-    try{ localStorage.removeItem(KEY); }catch(e){}
+    try{ localStorage.removeItem(keyOf()); }catch(e){}
     if(logged() && sb()) sb().from(TABLE).delete().eq('user_id', uid).then(function(){});
     location.href = location.pathname + '?new=1';
   }

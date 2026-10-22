@@ -199,6 +199,7 @@ function bindUI(){
   if(off) off.addEventListener('click', function(){
     if(!confirm('确定以「游客」身份试玩？\n\n· 进度只存在这台浏览器里，换设备或清缓存会丢\n· 没有账号密码，也没法在别的设备接着玩\n\n想要云端存档，请点「取消」回去注册。')) return;
     state.offline = true;
+    try{ localStorage.setItem('wjx_guest_at', String(Date.now())); }catch(e){}
     msg('游客模式：进度只存本机', 'ok');
     window.Boot.auth();
   });
