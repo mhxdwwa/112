@@ -4026,7 +4026,8 @@ function buildSidebar() {
       html += `<div class="sidebar-section-title">${section.section}</div>`;
       section.items.forEach(item => {
         const badgeCount = item.id === 'leave-mgmt' ? getPendingLeaveCount() :
-                           item.id === 'anomaly' ? getAnomalyCount() : 0;
+                           item.id === 'anomaly' ? getAnomalyCount() :
+                           item.id === 'data-fill' ? getPendingCollectionCount() : 0;
         const onclickHandler = item.id === 'score-manage' ? 'navigateToScoreManage()' : `navigate('${item.id}')`;
         html += `<div class="sidebar-item" data-page="${item.id}" onclick="${onclickHandler}">
           <span class="sidebar-icon">${item.icon()}</span>
@@ -4058,7 +4059,8 @@ function buildSidebar() {
       html += `<div class="sidebar-section-title">${section.section}</div>`;
       filteredItems.forEach(item => {
         const badgeCount = item.id === 'leave-mgmt' ? getPendingLeaveCount() :
-                           item.id === 'anomaly' ? getAnomalyCount() : 0;
+                           item.id === 'anomaly' ? getAnomalyCount() :
+                           item.id === 'data-fill' ? getPendingCollectionCount() : 0;
         const onclickHandler = item.id === 'score-manage' ? 'navigateToScoreManage()' : `navigate('${item.id}')`;
         html += `<div class="sidebar-item" data-page="${item.id}" onclick="${onclickHandler}">
           <span class="sidebar-icon">${item.icon()}</span>
@@ -4079,7 +4081,8 @@ function buildSidebar() {
       html += `<div class="sidebar-section-title">${section.section}</div>`;
       section.items.forEach(item => {
         const badgeCount = item.id === 'leave-mgmt' ? getPendingLeaveCount() :
-                           item.id === 'anomaly' ? getAnomalyCount() : 0;
+                           item.id === 'anomaly' ? getAnomalyCount() :
+                           item.id === 'data-fill' ? getPendingCollectionCount() : 0;
         const onclickHandler = item.id === 'score-manage' ? 'navigateToScoreManage()' : `navigate('${item.id}')`;
         html += `<div class="sidebar-item" data-page="${item.id}" onclick="${onclickHandler}">
           <span class="sidebar-icon">${item.icon()}</span>
@@ -17760,7 +17763,7 @@ function renderDataCollection() {
               <div style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:4px">${escapeHtml(task.title)}</div>
               <div style="font-size:12px;color:var(--gray-500)">创建人：${escapeHtml(task.createdBy)} | ${date}</div>
             </div>
-            <span style="padding:4px 10px;background:${progress === 100 ? 'var(--success)' : 'var(--warning)'};color:#fff;border-radius:4px;font-size:12px;font-weight:500">${progress === 100 ? '已完成' : '进行中'}</span>
+            <span style="padding:4px 10px;background:${task.completed ? 'var(--success)' : progress === 100 ? 'var(--success)' : 'var(--warning)'};color:#fff;border-radius:4px;font-size:12px;font-weight:500">${task.completed ? '已完成' : progress === 100 ? '已完成' : '进行中'}</span>
           </div>
           <div style="display:flex;gap:20px;font-size:13px;color:var(--gray-600)">
             <span>填写人数：<strong>${completedCount}</strong> / ${totalRecipients}</span>
@@ -17972,6 +17975,11 @@ function renderCollectionDetail(taskId) {
     </button>
     <span style="font-size:14px;font-weight:600">${escapeHtml(task.title)}</span>
     <div class="toolbar-spacer"></div>
+    ${task.completed ? `<span style="padding:6px 12px;background:var(--success);color:#fff;border-radius:6px;font-size:13px;font-weight:500">已完成</span>` : 
+    `<button class="toolbar-btn ghost" style="color:var(--success);border-color:var(--success)" onclick="completeCollectionTask('${taskId}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      完成收集
+    </button>`}
     <button class="toolbar-btn ghost" onclick="exportCollectionToExcel('${taskId}')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       下载Excel
@@ -18046,6 +18054,25 @@ function deleteCollectionTask(taskId) {
   });
 }
 
+// 完成收集任务
+async function completeCollectionTask(taskId) {
+  if (!confirm('确定要完成本次数据收集吗？完成后将标记为已完成状态。')) return;
+  
+  const task = collectionData[taskId];
+  if (!task) return;
+  
+  task.completed = true;
+  task.completedAt = new Date().toISOString();
+  
+  const result = await saveCollectionData();
+  if (result.ok) {
+    showToast('数据收集已完成', 'success');
+    document.getElementById('content').innerHTML = renderDataCollection();
+  } else {
+    showToast('操作失败，请重试', 'error');
+  }
+}
+
 function exportCollectionToExcel(taskId) {
   const task = collectionData[taskId];
   if (!task) return;
@@ -18107,13 +18134,16 @@ function renderDataFill() {
 function renderSpreadsheetTask(task, userName) {
   const date = new Date(task.createdAt).toLocaleString('zh-CN');
   const myResponse = task.responses && task.responses[userName];
-  const isMyRowEditable = true; // 自己的行始终可编辑
+  const isSubmitted = !!myResponse;
   
   let html = `<div class="card" style="margin:0">
     <div class="card-body" style="padding:16px">
-      <div style="margin-bottom:16px">
-        <div style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:4px">${escapeHtml(task.title)}</div>
-        <div style="font-size:12px;color:var(--gray-500)">创建人：${escapeHtml(task.createdBy)} | ${date}</div>
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:16px">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:4px">${escapeHtml(task.title)}</div>
+          <div style="font-size:12px;color:var(--gray-500)">创建人：${escapeHtml(task.createdBy)} | ${date}</div>
+        </div>
+        <span style="padding:4px 10px;background:${isSubmitted ? 'var(--success)' : 'var(--warning)'};color:#fff;border-radius:4px;font-size:12px;font-weight:500">${isSubmitted ? '已提交' : '待提交'}</span>
       </div>
       
       <div style="overflow-x:auto;border:1px solid var(--gray-200);border-radius:8px">
@@ -18165,16 +18195,31 @@ function renderSpreadsheetTask(task, userName) {
   
   html += `</tbody></table></div>
       
-      <div style="margin-top:12px;display:flex;justify-content:flex-end">
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+        ${isSubmitted ? `<button class="toolbar-btn ghost" onclick="editCollectionData('${task.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          编辑修改
+        </button>` : ''}
         <button class="toolbar-btn primary" onclick="submitSpreadsheetData('${task.id}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          保存我的填写
+          ${isSubmitted ? '更新提交' : '保存提交'}
         </button>
       </div>
     </div>
   </div>`;
   
   return html;
+}
+
+// 启用编辑模式（点击编辑按钮后聚焦到输入框）
+function editCollectionData(taskId) {
+  const firstInput = document.querySelector(`.spreadsheet-input[data-task="${taskId}"]`);
+  if (firstInput) {
+    firstInput.focus();
+    firstInput.style.borderColor = 'var(--primary)';
+    firstInput.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+  }
+  showToast('现在可以修改您的填写内容', 'info');
 }
 
 // 提交在线表格数据
@@ -18208,6 +18253,23 @@ async function submitSpreadsheetData(taskId) {
   } else {
     showToast('保存失败，请重试', 'error');
   }
+}
+
+// 获取待填写的收集任务数量（用于侧边栏徽章）
+function getPendingCollectionCount() {
+  const user = xqCurrentUser || {};
+  const userName = user.teacherName;
+  if (!userName) return 0;
+  
+  const pendingTasks = Object.values(collectionData).filter(task => {
+    // 只统计未完成的且未填写的任务
+    if (task.completed) return false; // 已完成的任务不计入
+    if (!task.recipients || !task.recipients.includes(userName)) return false;
+    const response = task.responses && task.responses[userName];
+    return !response; // 没有填写记录则为待处理
+  });
+  
+  return pendingTasks.length;
 }
 
 // HTML 转义
