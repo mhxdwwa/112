@@ -157,3 +157,6 @@
 }
 
 .op-note{margin-top:6px; line-height:1.7; color:#8fa5ba; font-size:11px}
+
+/* 资料卡打开时把 ESC 让开，避免叠在一起 */
+#btnEsc.behind{opacity:0; pointer-events:none;}
