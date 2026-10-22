@@ -11,12 +11,150 @@ function isMobileBrowser(){
   if(!touch) return false;
   const mobileUA = /Android|iPhone|iPod|iPad|Windows Phone|HarmonyOS|OpenHarmony|Mobile Safari|MicroMessenger/i.test(ua);
   if(mobileUA) return true;
+  /* 窗口够宽（≥1000px）一律当电脑：触屏笔记本屏幕小、pointer 又是 coarse，
+     不加这条会被误判成手机，把电脑的弧形排布换掉。手机横屏最宽也就 ~950。 */
+  if((window.innerWidth || 0) >= 1000) return false;
   const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   const minSide = Math.min(screen.width || 9999, screen.height || 9999);
   return coarse && minSide < 820;
 }
 const IS_MOBILE_BROWSER = isMobileBrowser();
 window.IS_MOBILE_BROWSER = IS_MOBILE_BROWSER;
+
+/* ★ 这台机器到底有没有触摸屏
+   鼠标电脑（没有触摸）不显示虚拟按键，只留键盘操作与画面里的快捷键提示；
+   电脑触屏 / 手机才显示。万一真的想在鼠标电脑上看，加 ?touch=1。 */
+const IS_TOUCH = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
+window.IS_TOUCH = IS_TOUCH;
+function shouldShowTouch(){
+  if(/[?&](ui=mobile|touch=1)\b/.test(location.search)) return true;
+  if(!IS_TOUCH) return false;
+  if(IS_MOBILE_BROWSER) return true;
+  /* 电脑触屏：小窗口（笔记本）才显示，大屏桌面键鼠更顺手 */
+  const short = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+  return short > 0 && short < 900;
+}
+
+/* ★ 按键位置一律由 JS 写死成像素（inline style），不依赖 CSS 层叠
+   原因：浏览器/Cloudflare 可能缓存到旧版 touch.css，出现「摇杆在左下、按键却叠在旁边」
+   这种只在部分机器上复现的错位。坐标与原来 CSS 里的数值完全一致，视觉不变。 */
+const ARC_BTN = {
+  attack:[124,6,70,70], jump:[196,24,50,50],
+  skill1:[198,92,52,52], skill2:[138,122,52,52], skill3:[78,132,52,52],
+  skill4:[24,116,46,46], skill5:[84,184,46,46], skill6:[148,200,46,46]
+};
+
+function placeBtn(el, o){
+  if(!el) return;
+  const s = el.style;
+  s.position = 'absolute';
+  s.left = s.right = s.top = s.bottom = 'auto';
+  if(o.left != null) s.left = o.left + 'px';
+  if(o.right != null) s.right = o.right + 'px';
+  if(o.bottom != null) s.bottom = o.bottom + 'px';
+  if(o.top != null) s.top = o.top + 'px';
+  if(o.width != null){ s.width = o.width + 'px'; s.height = o.height + 'px'; }
+}
+function clearBtnPos(el){
+  if(!el) return;
+  const s = el.style;
+  s.left = s.right = s.top = s.bottom = s.width = s.height = '';
+}
+
+/* 电脑排布：原弧形坐标（与历史版本一致，一名一数都没改） */
+function layoutArc(){
+  [1, 2].forEach(function(n){
+    const area = document.querySelector('.p' + n + '-area');
+    if(!area) return;
+    area.style.position = 'fixed';
+    area.style.top = 'auto'; area.style.bottom = '10px';
+    area.style.width = '260px'; area.style.height = '260px';
+    if(n === 1){ area.style.left = '10px'; area.style.right = 'auto'; }
+    else { area.style.right = '10px'; area.style.left = 'auto'; }
+
+    const joy = area.querySelector('.joystick-container');
+    if(joy){
+      joy.style.position = 'absolute';
+      joy.style.top = 'auto'; joy.style.bottom = '0px';
+      joy.style.width = '110px'; joy.style.height = '110px';
+      if(n === 1){ joy.style.left = '0px'; joy.style.right = 'auto'; }
+      else { joy.style.right = '0px'; joy.style.left = 'auto'; }
+    }
+    const pad = area.querySelector('.action-pad');
+    if(pad){ pad.style.position = 'absolute'; pad.style.inset = '0'; pad.style.display = 'block'; pad.style.width = 'auto'; pad.style.height = 'auto'; }
+
+    area.querySelectorAll('.skill-btn').forEach(function(btn){
+      const a = ARC_BTN[btn.dataset.action];
+      if(!a) return;
+      const o = { bottom: a[1], width: a[2], height: a[3] };
+      if(n === 1) o.left = a[0]; else o.right = a[0];
+      placeBtn(btn, o);
+    });
+  });
+}
+
+/* 手机排布：摇杆贴左下、8 键贴右下（4 列 × 2 行，普攻落最角上） */
+function layoutPhone(){
+  const f = window.__uiFrame || {};
+  const W = f.w || window.innerWidth || 360;
+  const H = f.h || window.innerHeight || 640;
+  const tb = f.tb || 44;
+  const joy = f.joy || 90;
+  const gap = Math.max(4, Math.round(H * 0.012));
+  const edge = Math.max(6, Math.round(Math.min(H, W) * 0.022));
+  const tk = Math.round(tb * 1.30), tj = Math.round(tb * 1.06);
+
+  const area = document.querySelector('.p1-area');
+  if(!area) return;
+  area.style.position = 'absolute';
+  area.style.left = '0px'; area.style.top = '0px'; area.style.right = 'auto'; area.style.bottom = 'auto';
+  area.style.width = W + 'px'; area.style.height = H + 'px';
+
+  const joyEl = area.querySelector('.joystick-container');
+  if(joyEl){
+    joyEl.style.position = 'absolute';
+    joyEl.style.width = joy + 'px'; joyEl.style.height = joy + 'px';
+    joyEl.style.left = edge + 'px'; joyEl.style.right = 'auto';
+    joyEl.style.bottom = edge + 'px'; joyEl.style.top = 'auto';
+  }
+  const pad = area.querySelector('.action-pad');
+  if(pad){ pad.style.position = 'absolute'; pad.style.inset = '0'; pad.style.display = 'block'; pad.style.width = 'auto'; pad.style.height = 'auto'; }
+
+  const rowH2 = Math.max(tk, tj);
+  const cols = [
+    [['skill3', tb], ['attack', tk]],
+    [['skill4', tb], ['jump', tj]],
+    [['skill5', tb], ['skill1', tb]],
+    [['skill6', tb], ['skill2', tb]]
+  ];
+  let x = W - edge;
+  cols.forEach(function(col){
+    const w = Math.max(col[0][1], col[1][1]);
+    const cx = x - w / 2;
+    col.forEach(function(item, i){
+      const action = item[0], size = item[1];
+      const btn = area.querySelector('.skill-btn[data-action="' + action + '"]');
+      const bottom = i === 0 ? (edge + rowH2 + gap) : edge;   /* 0＝上排技能 3–6 */
+      placeBtn(btn, { left: Math.round(cx - size / 2), bottom: bottom, width: size, height: size });
+    });
+    x -= (w + gap);
+  });
+}
+
+function layoutTouch(){
+  const tc = document.getElementById('touchControls');
+  if(!tc) return;
+  if(!tc.classList.contains('active')) return;
+  if(!tc.classList.contains('mobile')){ layoutArc(); return; }
+  /* 双人同屏交给 CSS 网格（左右各占一侧）：把之前写进去的 inline 坐标全部清掉 */
+  if(tc.classList.contains('pvp')){
+    document.querySelectorAll('#touchControls .p1-area, #touchControls .p2-area, #touchControls .action-pad, #touchControls .joystick-container, #touchControls .skill-btn')
+      .forEach(function(el){ el.style.cssText = ''; });
+    return;
+  }
+  layoutPhone();
+}
+window.layoutTouch = layoutTouch;
 
 /* ★ 手机端按键：整块控制层对齐到「画布」而不是窗口
    画布按 16:9 居中留边，控制层跟着它走，按键就不会跑到黑边上；
@@ -66,6 +204,8 @@ function applyMobileFrame(){
   tc.style.setProperty('--gap', gap + 'px');
   tc.style.setProperty('--edge', edge + 'px');
   window.__uiFrame = { x: Math.round(x), y: Math.round(y), w: w, h: h, tb: tb, joy: joy, src: src, dpr: window.devicePixelRatio || 1 };
+  /* 量完尺寸立刻按像素摆键，避免任何 CSS 层叠/缓存导致的错位 */
+  if(typeof layoutTouch === 'function') layoutTouch();
 }
 window.applyMobileFrame = applyMobileFrame;
 
@@ -173,6 +313,8 @@ function setupTouchControls(){
     btn.addEventListener('mousedown', trigger);
   });
   window.showTouchControls = (isPvp)=>{
+    /* 鼠标电脑（无触摸屏）不显示虚拟按键，避免挡住画面；键盘照旧可用 */
+    if(!shouldShowTouch()){ touchControls.classList.remove('active'); return; }
     /* 触屏控件常驻：方向拨杆 + 基本攻击 + 跳跃始终存在，技能槽按学习情况显隐 */
     touchControls.classList.add('active');
     const p2Area = document.getElementById('p2Controls');
@@ -180,6 +322,7 @@ function setupTouchControls(){
     /* 双人同屏时按键改为各贴自己那一侧的摇杆内侧，单人时 8 键全在右下角 */
     touchControls.classList.toggle('pvp', !!isPvp);
     applyMobileFrame();
+    layoutTouch();
     if(window.syncTouchSkillIcons) window.syncTouchSkillIcons();
     if(window.refreshSkillLockUI) window.refreshSkillLockUI();
     syncTouchMode();
