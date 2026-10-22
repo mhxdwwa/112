@@ -12,8 +12,8 @@ const CHANNEL_NAME = 'wjx:world';
 /* 不进房间时，所有在城镇的人共用这个公共频道 —— 这就是「同一频道看到多人」 */
 const LOBBY = 'LOBBY';
 function myRoom(){ return roomCode || LOBBY; }
-const SEND_MS  = 240;      /* 位置广播间隔（有移动时）。原 110ms，为省 Supabase 实时消息额度调慢 */
-const IDLE_MS  = 3000;     /* 原地不动时的保活广播（原来不动也在 9 次/秒地发，极耗额度） */
+const SEND_MS  = 300;      /* 位置广播间隔（有移动时）。原 110ms → 300ms，省 ~2.7 倍消息，远端靠插值保持顺滑 */
+const IDLE_MS  = 4000;     /* 原地不动时的保活广播（原来不动也在 9 次/秒地发，极耗额度） */
 const DROP_MS  = 9000;     /* 这么久没消息就当掉线 */
 
 let uid = '', myName = '', myLv = 1, myJob = 0;
@@ -312,7 +312,7 @@ function updateRemotes(dt, now){
     const dx = r.tx - r.x, dy = r.ty - r.y;
     const d = Math.hypot(dx, dy);
     if(d > 0.8){
-      const k = Math.min(1, dt * 16);
+      const k = Math.min(1, dt * 8);   /* 200ms 时间常数：配合 300ms 广播间隔，远端走动不跳格 */
       r.x += dx * k; r.y += dy * k;
       if(Math.abs(dx) > 0.5) r.f = dx > 0 ? 1 : -1;
       r.phase += dt * 9;
