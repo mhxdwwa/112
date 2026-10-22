@@ -10469,7 +10469,7 @@ function openQuickDiscipline(cls, studentId, studentName) {
     <select id="quickDiscType">
       <option value="praise">表扬</option>
       <option value="discard">违纪</option>
-      <option value="remind">提醒</option>
+      <option value="remind">睡觉</option>
       <option value="truancy">旷课</option>
       <option value="skip">逃课</option>
       <option value="talking">讲话</option>
@@ -15202,7 +15202,7 @@ function renderTeacherDiscipline() {
           <div class="discipline-type-btns" id="discTypeBtns">
             <div class="discipline-type-btn praise active" onclick="selectDisciplineType('praise',this)">表扬</div>
             <div class="discipline-type-btn discard" onclick="selectDisciplineType('discard',this)">违纪</div>
-            <div class="discipline-type-btn remind" onclick="selectDisciplineType('remind',this)">提醒</div>
+            <div class="discipline-type-btn remind" onclick="selectDisciplineType('remind',this)">睡觉</div>
             <div class="discipline-type-btn truancy" onclick="selectDisciplineType('truancy',this)">旷课</div>
             <div class="discipline-type-btn skip" onclick="selectDisciplineType('skip',this)">逃课</div>
             <div class="discipline-type-btn talking" onclick="selectDisciplineType('talking',this)">讲话</div>
@@ -15295,7 +15295,7 @@ function renderHeadteacherDiscipline() {
   // Summary by student
   html += `<div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">学生汇总</span></div>
   <div class="card-body no-pad"><div class="table-wrap"><table>
-    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>提醒</th><th>旷课</th><th>逃课</th><th>讲话</th><th>打闹</th><th>其他</th><th>总计</th></tr></thead>
+    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>睡觉</th><th>旷课</th><th>逃课</th><th>讲话</th><th>打闹</th><th>其他</th><th>总计</th></tr></thead>
     <tbody>`;
   
   students.forEach(s => {
@@ -15419,7 +15419,7 @@ function renderHtSummaryTab() {
   
   html += `<div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">学生汇总</span></div>
   <div class="card-body no-pad"><div class="table-wrap"><table>
-    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>提醒</th><th>旷课</th><th>逃课</th><th>讲话</th><th>打闹</th><th>其他</th><th>总计</th></tr></thead>
+    <thead><tr><th>学生</th><th>表扬</th><th>违纪</th><th>睡觉</th><th>旷课</th><th>逃课</th><th>讲话</th><th>打闹</th><th>其他</th><th>总计</th></tr></thead>
     <tbody>`;
   
   students.forEach(s => {
@@ -15526,7 +15526,7 @@ function renderHtWriteTab() {
           <div class="discipline-type-btns" id="discTypeBtns">
             <div class="discipline-type-btn praise active" onclick="selectDisciplineType('praise',this)">表扬</div>
             <div class="discipline-type-btn discard" onclick="selectDisciplineType('discard',this)">违纪</div>
-            <div class="discipline-type-btn remind" onclick="selectDisciplineType('remind',this)">提醒</div>
+            <div class="discipline-type-btn remind" onclick="selectDisciplineType('remind',this)">睡觉</div>
             <div class="discipline-type-btn truancy" onclick="selectDisciplineType('truancy',this)">旷课</div>
             <div class="discipline-type-btn skip" onclick="selectDisciplineType('skip',this)">逃课</div>
             <div class="discipline-type-btn talking" onclick="selectDisciplineType('talking',this)">讲话</div>
@@ -15623,14 +15623,14 @@ function getDisciplineTypeLabel(type) {
   const labels = {
     'praise': '表扬',
     'discard': '违纪',
-    'remind': '提醒',
+    'remind': '睡觉',
     'truancy': '旷课',
     'skip': '逃课',
     'talking': '讲话',
     'fighting': '打闹',
     'other': '其他'
   };
-  return labels[type] || '提醒';
+  return labels[type] || '睡觉';
 }
 
 // Helper function to get type color
@@ -15793,7 +15793,7 @@ function editDisciplineRecord(recordId) {
     <select id="discEditType">
       <option value="praise" ${record.type==='praise'?'selected':''}>表扬</option>
       <option value="discard" ${record.type==='discard'?'selected':''}>违纪</option>
-      <option value="remind" ${record.type==='remind'?'selected':''}>提醒</option>
+      <option value="remind" ${record.type==='remind'?'selected':''}>睡觉</option>
       <option value="truancy" ${record.type==='truancy'?'selected':''}>旷课</option>
       <option value="skip" ${record.type==='skip'?'selected':''}>逃课</option>
       <option value="talking" ${record.type==='talking'?'selected':''}>讲话</option>
@@ -15846,7 +15846,7 @@ function exportDisciplineExcel(className) {
   const students = STUDENTS[className] || [];
   const records = disciplineData.filter(r => r.classId === className);
   
-  const data = [['学生姓名', '被点名次数', '表扬', '违纪', '提醒', '旷课', '逃课', '讲话', '打闹', '其他', '具体情况']];
+  const data = [['学生姓名', '被点名次数', '表扬', '违纪', '睡觉', '旷课', '逃课', '讲话', '打闹', '其他', '具体情况']];
   
   students.forEach(s => {
     const sRecords = records.filter(r => r.studentId === s.id);
