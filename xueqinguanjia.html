@@ -3845,13 +3845,33 @@ function initAppAfterLogin() {
   
   // 预加载收集数据（用于侧边栏徽章）
   loadCollectionData(true).then(() => {
-    buildSidebar(); // 数据加载完成后重建侧边栏以显示徽章
+    updateCollectionBadge(); // 数据加载完成后更新徽章
   });
   
   // 刷新用户信息并导航
   refreshCurrentUserClass();
   buildSidebar();
   navigate(getDefaultPage());
+}
+
+// 更新数据填写徽章
+function updateCollectionBadge() {
+  const count = getPendingCollectionCount();
+  const dataFillItems = document.querySelectorAll('.sidebar-item[data-page="data-fill"]');
+  
+  dataFillItems.forEach(item => {
+    // 移除现有徽章
+    const existingBadge = item.querySelector('.sidebar-badge');
+    if (existingBadge) existingBadge.remove();
+    
+    // 添加新徽章
+    if (count > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'sidebar-badge';
+      badge.textContent = count;
+      item.appendChild(badge);
+    }
+  });
 }
 
 function doLogout() {
@@ -4308,6 +4328,7 @@ function renderPage(pageId) {
     // 进入数据填写页面时加载数据
     if (pageId === 'data-fill') {
       loadCollectionData(true).then(() => {
+        updateCollectionBadge();
         content.innerHTML = renderDataFill();
       });
     }
@@ -18166,13 +18187,13 @@ function renderCollectionDetail(taskId) {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
       完成收集
     </button>`}
-    <button class="toolbar-btn ghost" onclick="exportCollectionToExcel('${taskId}')">
+    <button class="toolbar-btn primary" onclick="exportCollectionToExcel('${taskId}')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      下载Excel
+      ${task.type === 'class' ? '合并下载Excel' : '下载Excel'}
     </button>
     ${task.type === 'class' ? `<button class="toolbar-btn ghost" onclick="downloadAllClassFiles('${taskId}')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      下载所有文件
+      下载原始文件
     </button>` : ''}
     <button class="toolbar-btn ghost" style="color:var(--danger);border-color:var(--danger)" onclick="deleteCollectionTask('${taskId}')">删除任务</button>
   </div>`;
@@ -18363,29 +18384,13 @@ async function completeCollectionTask(taskId) {
   }
 }
 
-function exportCollectionToExcel(taskId) {
+async function exportCollectionToExcel(taskId) {
   const task = collectionData[taskId];
   if (!task) return;
   
   if (task.type === 'class') {
-    // 班级模式：导出提交情况汇总
-    const data = [['姓名', '提交状态', '文件名', '提交时间']];
-    
-    task.recipients.forEach(name => {
-      const response = task.responses && task.responses[name];
-      const isSubmitted = response && response._fileData;
-      data.push([
-        name,
-        isSubmitted ? '已提交' : '未提交',
-        isSubmitted ? (response._fileName || '') : '',
-        isSubmitted && response._submittedAt ? new Date(response._submittedAt).toLocaleString('zh-CN') : ''
-      ]);
-    });
-    
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '提交情况');
-    XLSX.writeFile(wb, `${task.title}_提交情况_${new Date().toLocaleDateString('zh-CN')}.xlsx`);
+    // 班级模式：合并所有提交的 Excel 文件
+    await mergeClassExcelFiles(task);
   } else {
     // 单人模式：导出数据表格
     const data = [task.columns];
@@ -18404,6 +18409,78 @@ function exportCollectionToExcel(taskId) {
     XLSX.utils.book_append_sheet(wb, ws, '收集数据');
     XLSX.writeFile(wb, `${task.title}_${new Date().toLocaleDateString('zh-CN')}.xlsx`);
   }
+}
+
+// 合并所有班级 Excel 文件
+async function mergeClassExcelFiles(task) {
+  const allData = [];
+  let headers = null;
+  let hasData = false;
+  
+  showToast('正在合并文件...', 'info');
+  
+  for (const name of task.recipients) {
+    const response = task.responses && task.responses[name];
+    if (!response || !response._fileData) continue;
+    
+    try {
+      // 解析 Base64 数据
+      const base64Data = response._fileData.split(',')[1];
+      const binaryStr = atob(base64Data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      
+      // 读取 Excel 文件
+      const workbook = XLSX.read(bytes, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+      
+      if (jsonData.length === 0) continue;
+      
+      // 第一行是表头
+      if (!headers) {
+        headers = ['提交人', ...jsonData[0].map(h => String(h || '').trim())];
+      }
+      
+      // 添加提交人标识
+      const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== '' && cell != null));
+      if (rows.length > 0) {
+        // 添加分隔行（空行）
+        if (hasData) {
+          allData.push([]);
+        }
+        
+        // 添加该班级的数据
+        rows.forEach(row => {
+          allData.push([name, ...row]);
+        });
+        
+        hasData = true;
+      }
+    } catch (err) {
+      console.error(`Failed to parse file from ${name}:`, err);
+    }
+  }
+  
+  if (!headers || allData.length === 0) {
+    showToast('没有可合并的数据', 'warning');
+    return;
+  }
+  
+  // 创建合并后的表格
+  const mergedData = [headers, ...allData];
+  const ws = XLSX.utils.aoa_to_sheet(mergedData);
+  
+  // 设置列宽
+  ws['!cols'] = headers.map((h, i) => ({ wch: i === 0 ? 12 : 15 }));
+  
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '合并数据');
+  XLSX.writeFile(wb, `${task.title}_合并数据_${new Date().toLocaleDateString('zh-CN')}.xlsx`);
+  
+  showToast('合并完成', 'success');
 }
 
 // 渲染数据填写页面（教师端）
@@ -18562,6 +18639,7 @@ async function uploadClassFile(event, taskId) {
     const result = await saveCollectionData();
     if (result.ok) {
       showToast('文件上传成功', 'success');
+      updateCollectionBadge();
       buildSidebar();
       document.getElementById('content').innerHTML = renderDataFill();
     } else {
@@ -18693,6 +18771,8 @@ async function submitSpreadsheetData(taskId) {
   const result = await saveCollectionData();
   if (result.ok) {
     showToast('保存成功', 'success');
+    // 更新徽章
+    updateCollectionBadge();
     // 重建侧边栏以更新徽章
     buildSidebar();
     // 刷新页面以显示最新数据
