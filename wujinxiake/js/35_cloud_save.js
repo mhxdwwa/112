@@ -1,0 +1,237 @@
+/* ===== 云存档 =====
+   本地 localStorage 永远写一份（离线也能玩），登录后再同步到 Supabase。
+   进游戏时比对本地/云端时间戳，谁新用谁。
+   依赖表 wujinxiake_saves（SQL 见 sql/wujinxiake_saves.sql）。
+   表没建好时自动降级为「仅本机存档」，不报错、不卡流程。
+*/
+(function(){
+'use strict';
+
+const KEY      = 'wjx_save_v1';
+const TABLE    = 'wujinxiake_saves';
+const SAVE_EVERY = 20000;   /* 自动保存间隔 */
+const DEBOUNCE   = 2500;    /* 操作后延迟落盘 */
+
+/* 需要持久化的玩家字段（其余是运行时状态，不进存档） */
+const PERSIST = [
+  'weaponIdx', 'level', 'exp',
+  'skillPoints', 'skillLevels', 'skillsUnlocked',
+  'equipment', 'inventory', 'gold', 'materials', 'amplifyStones',
+  'props', 'propBonuses', 'clearedLevels',
+  'hp', 'mp'
+];
+
+let uid = '', uname = '';
+let cloudState = 'idle';     /* idle | ok | unavailable | error */
+let lastPushAt = 0, lastStr = '', pushing = false, timer = null, warned = false;
+
+function sb(){ return window.SB || null; }
+function logged(){ return !!(window.AUTH && window.AUTH.loggedIn && window.AUTH.uid); }
+
+/* 取当前进度快照 */
+function snapshot(){
+  if(typeof G === 'undefined' || !G || !G.player) return null;
+  const p = G.player;
+  let nm = G.playerName || '';
+  if(!nm && typeof playerName !== 'undefined') nm = playerName;
+  /* 注意：charIdx 是「角色位」不是武器索引，两者在 CHARACTERS 里并不相同 */
+  const ci = (typeof G.selectedChar === 'number') ? G.selectedChar : (p.weaponIdx | 0);
+  const out = { v: 2, t: Date.now(), name: nm, charIdx: ci, p: {} };
+  for(let i = 0; i < PERSIST.length; i++){
+    const k = PERSIST[i];
+    if(p[k] !== undefined && p[k] !== null) out.p[k] = p[k];
+  }
+  return out;
+}
+
+/* 把快照写回游戏（只在菜单/选角阶段调用，避免打断战斗） */
+function apply(data){
+  if(!data || !data.p) return false;
+  if(typeof startSingleWithChar !== 'function') return false;
+  if(typeof gameState !== 'undefined' &&
+     gameState !== 'menu' && gameState !== 'charSelect' && gameState !== 'nameInput') return false;
+
+  const chars = (typeof CHARACTERS !== 'undefined' && CHARACTERS.length) ? CHARACTERS.length : 8;
+  let idx = 0;
+  if(typeof data.charIdx === 'number'){
+    idx = data.charIdx;
+  } else if(data.p && typeof data.p.weaponIdx === 'number' && typeof CHARACTERS !== 'undefined'){
+    /* 兼容老存档：那时候存的是武器索引，找回对应角色位 */
+    for(let i = 0; i < CHARACTERS.length; i++){
+      if(CHARACTERS[i].weaponIdx === data.p.weaponIdx){ idx = i; break; }
+    }
+  }
+  idx = Math.max(0, Math.min(chars - 1, idx | 0));
+  startSingleWithChar(idx);
+
+  G.playerName = data.name || '无名侠客';
+  try{ if(typeof playerName !== 'undefined') playerName = G.playerName; }catch(e){}
+
+  for(let i = 0; i < PERSIST.length; i++){
+    const k = PERSIST[i];
+    if(data.p[k] !== undefined) G.player[k] = data.p[k];
+  }
+  /* 老存档缺字段时补齐 */
+  try{
+    if(typeof ensureBaseStat === 'function') ensureBaseStat(G.player);
+    if(typeof recalcPlayerStats === 'function') recalcPlayerStats();
+  }catch(e){ console.warn('[save] 属性重算失败', e); }
+
+  const hp = Number(data.p.hp), mp = Number(data.p.mp);
+  G.player.hp = Math.min(G.player.maxHp, Math.max(1, isFinite(hp) && hp > 0 ? hp : G.player.maxHp));
+  G.player.mp = Math.min(G.player.maxMp, Math.max(0, isFinite(mp) ? mp : G.player.maxMp));
+
+  try{
+    if(typeof initTown === 'function') initTown();
+    gameState = 'town';
+    if(typeof startBGM === 'function') startBGM();
+  }catch(e){ console.warn('[save] 进入城镇失败', e); }
+  return true;
+}
+
+/* ---------- 本地 ---------- */
+function saveLocal(data){
+  try{ localStorage.setItem(KEY, JSON.stringify(data)); return true; }
+  catch(e){ console.warn('[save] 本地写入失败', e); return false; }
+}
+function loadLocal(){
+  try{
+    const s = localStorage.getItem(KEY);
+    if(!s) return null;
+    const d = JSON.parse(s);
+    return (d && d.p) ? d : null;
+  }catch(e){ return null; }
+}
+
+/* ---------- 云端 ---------- */
+async function pullCloud(){
+  if(!logged() || !sb()) return null;
+  try{
+    const res = await sb().from(TABLE).select('data,updated_at').eq('user_id', uid).maybeSingle();
+    if(res.error){
+      const code = String(res.error.code || '');
+      if(code === '42P01' || code === 'PGRST205'){ cloudState = 'unavailable'; }
+      else { cloudState = 'error'; console.warn('[save] 拉取失败', res.error); }
+      return null;
+    }
+    cloudState = 'ok';
+    const d = res.data && res.data.data;
+    return (d && d.p) ? d : null;
+  }catch(e){
+    cloudState = 'error';
+    return null;
+  }
+}
+
+async function pushCloud(data){
+  if(!logged() || !sb()) return false;
+  try{
+    const res = await sb().from(TABLE).upsert(
+      { user_id: uid, data: data, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+    if(res.error){
+      const code = String(res.error.code || '');
+      if(code === '42P01' || code === 'PGRST205'){
+        cloudState = 'unavailable';
+        if(!warned){
+          warned = true;
+          console.warn('[save] 云存档表不存在，已降级为本地存档');
+        }
+      } else {
+        cloudState = 'error';
+        console.warn('[save] 云端保存失败', res.error);
+      }
+      return false;
+    }
+    cloudState = 'ok';
+    return true;
+  }catch(e){
+    cloudState = 'error';
+    return false;
+  }
+}
+
+/* ---------- 保存入口 ---------- */
+function saveNow(force){
+  const data = snapshot();
+  if(!data) return;
+  const str = JSON.stringify(data);
+  if(str === lastStr && !force) return;
+  lastStr = str;
+  saveLocal(data);
+  lastPushAt = Date.now();
+
+  if(!logged() || cloudState === 'unavailable') return;
+  if(pushing) return;
+  pushing = true;
+  pushCloud(data).finally(function(){ pushing = false; });
+}
+
+function queueSave(){
+  if(timer) clearTimeout(timer);
+  timer = setTimeout(function(){ timer = null; saveNow(); }, DEBOUNCE);
+}
+
+/* ---------- 启动：比对本地 / 云端 ---------- */
+async function boot(){
+  if(!logged()){ return; }
+  uid = window.AUTH.uid;
+  uname = window.AUTH.username;
+
+  const local = loadLocal();
+  const cloud = await pullCloud();
+
+  /* ?new=1 忽略存档，重新开局 */
+  const url = String(location.search || '');
+  if(url.indexOf('new=1') >= 0){ return; }
+
+  let pick = null;
+  if(cloud && local) pick = (Number(cloud.t) || 0) >= (Number(local.t) || 0) ? cloud : local;
+  else pick = cloud || local;
+  if(!pick) return;
+
+  /* 云端比本地新很多 → 采用云端 */
+  if(cloud && local && Number(cloud.t) > Number(local.t) + 3000) pick = cloud;
+
+  if(apply(pick)){
+    lastStr = JSON.stringify(pick);
+    setTimeout(function(){
+      if(typeof showToast === 'function') showToast('已读取存档：' + (pick.name || '无名侠客') + '  Lv.' + ((pick.p && pick.p.level) || 1), '#7af0c8');
+    }, 700);
+  }
+}
+
+/* ---------- 事件 ---------- */
+window.addEventListener('wjx:enter', function(){ setTimeout(boot, 260); });
+
+window.addEventListener('load', function(){
+  /* 定时自动保存 */
+  setInterval(function(){
+    if(typeof gameState === 'undefined') return;
+    if(gameState === 'town' || gameState === 'playing' || gameState === 'shopMenu' ||
+       gameState === 'inventory' || gameState === 'skillMenu' || gameState === 'enhanceMenu'){
+      saveNow();
+    }
+  }, SAVE_EVERY);
+
+  /* 切后台 / 关页面立即存 */
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) saveNow(true); });
+  window.addEventListener('pagehide', function(){ saveNow(true); });
+  window.addEventListener('beforeunload', function(){ saveNow(true); });
+});
+
+/* ---------- 对外接口 ---------- */
+window.CloudSave = {
+  save: function(){ saveNow(true); },
+  queue: queueSave,
+  load: function(){ return loadLocal(); },
+  status: function(){ return { cloud: cloudState, logged: logged(), user: uname }; },
+  reset: function(){
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    if(logged() && sb()) sb().from(TABLE).delete().eq('user_id', uid).then(function(){});
+    location.href = location.pathname + '?new=1';
+  }
+};
+
+})();

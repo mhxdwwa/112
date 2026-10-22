@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="css/base.css" />
 <link rel="stylesheet" href="css/touch.css" />
 <link rel="stylesheet" href="css/toast.css" />
+<link rel="stylesheet" href="css/auth.css" />
+<link rel="stylesheet" href="css/online.css" />
 <style>
 /* 载入界面：内联样式，保证首帧就有效果（不等外部 CSS） */
 #bootOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
@@ -41,6 +43,54 @@
 </div>
 <canvas id="c"></canvas>
 <div id="uiToast"></div>
+
+<!-- 账号界面：登录 / 注册。资源在它后面偷偷加载，登录完直接进游戏 -->
+<div id="authLayer">
+  <div class="auth-wrap">
+    <div class="auth-brand">
+      <div class="auth-logo">无尽侠客</div>
+      <div class="auth-slogan">WU JIN XIA KE</div>
+      <div class="auth-divider"></div>
+      <ul class="auth-points">
+        <li>登录后自动云端存档，换设备继续玩</li>
+        <li>和朋友一起组队闯荡江湖</li>
+        <li>八大门派，各有所长</li>
+      </ul>
+    </div>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-tab="login">登录</button>
+        <button type="button" class="auth-tab" data-tab="reg">注册</button>
+      </div>
+
+      <form class="auth-form" id="formLogin" autocomplete="on">
+        <label for="lgUser">用户名</label>
+        <input id="lgUser" type="text" placeholder="你的用户名" autocomplete="username" maxlength="16" />
+        <label for="lgPass">密码</label>
+        <input id="lgPass" type="password" placeholder="密码" autocomplete="current-password" maxlength="64" />
+        <button type="submit" class="auth-submit" id="lgBtn">进入江湖</button>
+      </form>
+
+      <form class="auth-form hidden" id="formReg" autocomplete="on">
+        <label for="rgMail">邮箱</label>
+        <input id="rgMail" type="email" placeholder="用于找回账号" autocomplete="email" maxlength="80" />
+        <label for="rgUser">用户名</label>
+        <input id="rgUser" type="text" placeholder="2-16 位，中文/字母/数字" autocomplete="username" maxlength="16" />
+        <label for="rgPass">密码</label>
+        <input id="rgPass" type="password" placeholder="至少 6 位" autocomplete="new-password" maxlength="64" />
+        <label for="rgPass2">确认密码</label>
+        <input id="rgPass2" type="password" placeholder="再输一次" autocomplete="new-password" maxlength="64" />
+        <button type="submit" class="auth-submit" id="rgBtn">注册并进入</button>
+      </form>
+
+      <div class="auth-msg" id="authMsg"></div>
+      <div class="auth-foot">
+        <span id="authLoadTip">资源加载中…</span>
+        <button type="button" class="auth-link" id="authOffline">离线游玩</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="touch-controls" id="touchControls">
   <div class="p1-area">
@@ -94,6 +144,45 @@
     </div>
   </div>
 </div>
+<!-- 联机入口与面板 -->
+<button id="btnOnline" type="button"><span><i>◈</i>联机</span></button>
+<div id="onlinePanel">
+  <div class="op-head">
+    <b>联机大厅</b>
+    <span id="opState">连接中…</span>
+    <button id="opClose" type="button">×</button>
+  </div>
+  <div class="op-body">
+    <div class="op-me">我：<b id="opName">—</b></div>
+    <div class="op-sec">
+      <div class="op-label">在线玩家 <span id="opCount">0</span></div>
+      <div class="op-list" id="opPlayers"></div>
+    </div>
+    <div class="op-sec">
+      <div class="op-label">房间（同房间可在城镇里互相看见）</div>
+      <div class="op-row">
+        <input id="opCode" maxlength="6" placeholder="房间码，如 A3K9" />
+        <button id="opJoin" type="button">加入</button>
+        <button id="opCreate" type="button">创建</button>
+      </div>
+      <div class="op-room hidden" id="opRoom">
+        <div>房间 <b id="opRoomCode"></b><button id="opLeave" type="button">离开</button></div>
+        <div id="opMembers"></div>
+      </div>
+    </div>
+    <div class="op-sec">
+      <div class="op-label">房间聊天</div>
+      <div class="op-chat" id="opChat"></div>
+      <div class="op-row">
+        <input id="opMsg" maxlength="60" placeholder="说点什么…" />
+        <button id="opSend" type="button">发送</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/supabase.js"></script>
+<script src="js/00_auth.js"></script>
 <script src="js/00_loader.js"></script>
 <script src="js/01_core.js"></script>
 <script src="js/02_char_atlases.js"></script>
@@ -129,5 +218,7 @@
 <script src="js/32_naming.js"></script>
 <script src="js/33_main_loop.js"></script>
 <script src="js/34_dev_debug.js"></script>
+<script src="js/35_cloud_save.js"></script>
+<script src="js/36_online.js"></script>
 </body>
 </html>

@@ -613,6 +613,8 @@ function drawTown(){
     drawables.push({ y:npc.y, fn:()=>drawNPC(npc) });
   }
   if(townPlayer) drawables.push({ y:townPlayer.y, fn:()=>drawTownPlayer(townPlayer) });
+  /* ★ 联机：同房间的其他玩家一起参与 y 排序，才能正确前后遮挡 */
+  if(window.ONLINE && window.ONLINE.collectDrawables) window.ONLINE.collectDrawables(drawables);
   drawables.sort((a,b)=>a.y-b.y);
   for(const d of drawables) d.fn();
 

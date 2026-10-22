@@ -1,0 +1,92 @@
+/* ===== 无尽侠客 · 联机面板 ===== */
+#btnOnline{
+  position:fixed; right:14px; top:96px; z-index:9000;
+  width:56px; height:56px; border-radius:14px; cursor:pointer;
+  border:1px solid rgba(201,154,78,.45);
+  background:linear-gradient(180deg,rgba(28,40,56,.94),rgba(14,20,30,.96));
+  color:#ffd98e; font-size:11px; line-height:1.3; font-family:"Microsoft YaHei",sans-serif;
+  letter-spacing:.06em; display:flex; align-items:center; justify-content:center; text-align:center;
+  box-shadow:0 8px 22px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07);
+  transition:.2s;
+}
+#btnOnline:hover{transform:translateY(-1px); border-color:rgba(201,154,78,.8);}
+#btnOnline.on{background:linear-gradient(180deg,rgba(201,154,78,.3),rgba(120,88,40,.35)); color:#fff2cf;}
+#btnOnline i{display:block; font-style:normal; font-size:15px; margin-bottom:2px;}
+
+#onlinePanel{
+  position:fixed; right:14px; top:162px; z-index:9001;
+  width:300px; max-height:min(72vh,560px); display:flex; flex-direction:column;
+  border-radius:14px; overflow:hidden;
+  background:linear-gradient(180deg,rgba(20,29,41,.97),rgba(11,16,24,.98));
+  border:1px solid rgba(201,154,78,.35);
+  box-shadow:0 20px 50px rgba(0,0,0,.6);
+  font-family:"Microsoft YaHei",system-ui,sans-serif; color:#d8e4ef;
+  opacity:0; visibility:hidden; transform:translateY(-8px);
+  transition:.22s ease;
+}
+#onlinePanel.open{opacity:1; visibility:visible; transform:none;}
+
+.op-head{display:flex; align-items:center; justify-content:space-between;
+  padding:11px 13px; font-size:13px; letter-spacing:.1em; color:#ffd98e;
+  background:linear-gradient(180deg,rgba(201,154,78,.16),rgba(201,154,78,.03));
+  border-bottom:1px solid rgba(201,154,78,.18);}
+.op-head b{font-weight:600}
+.op-head #opState{font-size:10.5px; color:#7d92a6; letter-spacing:0;}
+.op-head button{background:none;border:0;color:#8fa6bb;font-size:18px;cursor:pointer;line-height:1;padding:0 2px}
+.op-head button:hover{color:#ffd98e}
+
+.op-body{padding:10px 12px 12px; overflow-y:auto;}
+.op-me{display:flex; align-items:center; gap:8px; font-size:12px; color:#9fb3c6; margin-bottom:10px;}
+.op-me b{color:#ffe1a6; font-weight:600}
+
+.op-sec{margin-bottom:12px}
+.op-label{font-size:11px; color:#6f8496; letter-spacing:.1em; margin-bottom:6px; display:flex; gap:6px; align-items:center}
+.op-label span{color:#9fe6ff}
+
+.op-list{max-height:132px; overflow-y:auto; border-radius:9px; background:rgba(255,255,255,.03);
+  padding:4px; border:1px solid rgba(255,255,255,.05);}
+.op-player{display:flex; align-items:center; gap:7px; font-size:12px; padding:5px 7px; border-radius:6px; color:#c6d6e4;}
+.op-player span{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.op-player em{font-style:normal; font-size:10.5px; color:#7d92a6}
+.op-player i{font-style:normal; font-size:9.5px; color:#ffd98e; background:rgba(201,154,78,.16);
+  padding:1px 5px; border-radius:99px;}
+.op-player.me{background:rgba(120,200,255,.08)}
+.op-player.me span{color:#9fe6ff}
+.op-empty{font-size:11.5px; color:#56697b; padding:9px; text-align:center}
+
+.op-row{display:flex; gap:6px; align-items:center}
+.op-row input{
+  flex:1; min-width:0; height:32px; padding:0 9px; border-radius:8px; font-size:12.5px;
+  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:#eaf3fb;
+  outline:none; font-family:inherit;
+}
+.op-row input:focus{border-color:rgba(201,154,78,.6)}
+.op-row button{
+  height:32px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:12px; font-family:inherit;
+  background:linear-gradient(180deg,rgba(201,154,78,.3),rgba(201,154,78,.14));
+  color:#ffe1a6; border:1px solid rgba(201,154,78,.35); white-space:nowrap;
+}
+.op-row button:hover{filter:brightness(1.12)}
+.op-row button:active{transform:translateY(1px)}
+
+.op-room{margin-top:8px; padding:8px 9px; border-radius:9px; background:rgba(120,200,255,.06);
+  border:1px solid rgba(120,200,255,.16); font-size:11.5px; color:#9fb3c6;}
+.op-room.hidden{display:none}
+.op-room b{color:#9fe6ff; letter-spacing:.14em; font-size:13px}
+.op-room button{margin-left:6px; background:none; border:0; color:#ff9a7a; font-size:11px; cursor:pointer; text-decoration:underline}
+#opMembers{margin-top:7px; display:flex; flex-wrap:wrap; gap:5px}
+.op-chip{font-size:10.5px; padding:2px 7px; border-radius:99px; background:rgba(255,255,255,.06); color:#c6d6e4}
+.op-chip.me{background:rgba(120,200,255,.16); color:#9fe6ff}
+.op-chip em{font-style:normal; color:#7d92a6}
+
+.op-chat{height:104px; overflow-y:auto; font-size:11.5px; line-height:1.65; padding:6px 8px;
+  border-radius:9px; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.05); margin-bottom:6px;}
+.op-line{color:#c6d6e4; word-break:break-word}
+.op-line b{color:#9fe6ff; font-weight:600; margin-right:2px}
+.op-line.sys{color:#6f8496; font-style:italic; text-align:center; font-size:11px}
+
+@media (max-width:520px){
+  #btnOnline{width:46px; height:46px; font-size:10px; top:78px; right:10px; border-radius:12px;}
+  #btnOnline i{font-size:13px}
+  #onlinePanel{right:8px; left:8px; width:auto; top:132px; max-height:66vh;}
+}
