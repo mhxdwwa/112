@@ -85,6 +85,14 @@
 .op-line b{color:#9fe6ff; font-weight:600; margin-right:2px}
 .op-line.sys{color:#6f8496; font-style:italic; text-align:center; font-size:11px}
 
+.op-account{display:flex; align-items:center; justify-content:space-between; gap:8px;
+  margin-top:10px; padding-top:9px; border-top:1px solid rgba(255,255,255,.06);
+  font-size:11px; color:#6f8496;}
+.op-account b{color:#9fe6ff; font-weight:600}
+.op-account button{background:none; border:0; color:#ff9a7a; font-size:11px; cursor:pointer;
+  font-family:inherit; text-decoration:underline; text-underline-offset:3px; padding:0;}
+.op-account button:hover{color:#ffb9a0}
+
 @media (max-width:520px){
   #btnOnline{width:46px; height:46px; font-size:10px; top:78px; right:10px; border-radius:12px;}
   #btnOnline i{font-size:13px}

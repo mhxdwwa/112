@@ -381,7 +381,17 @@ function boot(){
 
   initIdentity();
   setText('opName', myName);
+  setText('opAccount', logged() ? myName : '游客（未登录）');
   setText('opState', logged() ? '连接中…' : '游客模式');
+
+  const lo = $('opLogout');
+  if(lo) lo.addEventListener('click', function(){
+    if(!logged()){
+      chatLine('', '当前是游客模式，刷新页面即可注册或登录', true);
+      return;
+    }
+    if(confirm('退出 ' + myName + ' 并切换其他账号？\n（进度已自动保存）')) window.AUTH.logout();
+  });
 
   if(!sb()){
     setText('opState', '联机不可用');
@@ -394,6 +404,7 @@ function boot(){
   window.addEventListener('wjx:enter', function(){
     initIdentity();
     setText('opName', myName);
+    setText('opAccount', logged() ? myName : '游客（未登录）');
     track();
   });
 
