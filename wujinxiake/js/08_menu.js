@@ -81,11 +81,15 @@ function handleCanvasClick(cx, cy){
     const r = hitTestRegion(pos.x, pos.y, menuClickRegions);
     if(r){
       if(r.id==='single' || r.id==='start'){
-        /* 单人冒险：进入职业选择 */
-        charSelectState.phase = 'single';
-        charSelectState.step = 0;
-        charSelectState.selections = [0, 0];
-        gameState = 'charSelect';
+        /* 单人冒险：已有角色先弹「选择角色」，没有角色直接进职业选择 */
+        if(window.CHARS && window.CHARS.count() > 0){
+          window.CHARS.openPanel();
+        } else {
+          charSelectState.phase = 'single';
+          charSelectState.step = 0;
+          charSelectState.selections = [0, 0];
+          gameState = 'charSelect';
+        }
       } else if(r.id==='pvp'){
         /* 双人PK：进入职业选择，选完后打AI */
         charSelectState.phase = 'pvp';
@@ -119,14 +123,22 @@ function handleCanvasClick(cx, cy){
   } else if(gameState==='nameInput'){
     const r = hitTestRegion(pos.x, pos.y, nameInputClickRegions);
     if(r && r.confirm){
-      // 确认按钮：开始游戏
-      if(!playerName) playerName = '无名侠客'; // 默认名字
-      G.playerName = playerName;
-      initTown();
-      gameState = 'town';
-      startBGM();
-      nameInputBox.blur();
-      maybeShowPrologue();
+      // 确认按钮：先查角色名是否重复，再开始游戏
+      const nm = (playerName || '').trim() || '无名侠客';
+      const goOn = function(){
+        if(!playerName) playerName = nm;
+        G.playerName = playerName;
+        initTown();
+        gameState = 'town';
+        startBGM();
+        nameInputBox.blur();
+        maybeShowPrologue();
+      };
+      if(window.CHARS && window.CHARS.createFromNaming){
+        window.CHARS.createFromNaming(nm, charSelectState.selections[0], goOn);
+      } else {
+        goOn();
+      }
     } else {
       // 点击输入框区域时重新聚焦
       nameInputBox.focus();
