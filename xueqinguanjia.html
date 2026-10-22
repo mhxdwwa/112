@@ -1258,6 +1258,24 @@ tbody tr:last-child td { border-bottom: none; }
 .timetable-cell.empty { color: var(--gray-300); }
 .timetable-cell.editable { cursor: pointer; }
 .timetable-cell.editable:hover { background: var(--primary-bg); border-color: var(--primary-light); }
+/* 当前课程高亮 */
+.timetable-cell.current-class {
+  background: linear-gradient(135deg, #FEE2E2, #FECACA) !important;
+  border-color: #EF4444 !important;
+  box-shadow: inset 0 0 0 2px #EF4444;
+}
+.timetable-cell.current-class .subject-name { color: #DC2626; }
+.timetable-cell.next-class {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
+  border-color: #F59E0B !important;
+}
+/* 课程时间显示 */
+.timetable-cell .period-time {
+  font-size: 9px;
+  color: var(--gray-400);
+  margin-top: 1px;
+}
+.timetable-cell.current-class .period-time { color: #DC2626; }
 .timetable-reminder {
   background: linear-gradient(135deg, #FEF3C7, #FDE68A);
   border: 1px solid #F59E0B;
@@ -14219,6 +14237,83 @@ let personalTimetablePeriods = 8;  // 个人课程表默认8节课
 let timetablePeriodNames = ['早读', '第一节', '第二节', '第三节', '第四节', '第五节', '第六节', '第七节', '第八节', '晚自习1', '晚自习2', '第十一节', '第十二节'];
 let timetableReminderInterval = null;
 
+// 作息时间表：按天存储，key为1-7（周一到周日）
+// 每个值是一个数组，索引对应节次（0=早读, 1=第一节...）
+let timetableSchedule = {
+  // 周一到周四默认时间表
+  '1': [{start:'07:30',end:'07:50'},{start:'08:00',end:'08:45'},{start:'09:00',end:'09:45'},{start:'10:15',end:'11:00'},{start:'11:15',end:'12:00'},{start:'14:30',end:'15:15'},{start:'15:30',end:'16:15'},{start:'16:30',end:'17:15'},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'},{start:'21:10',end:'21:50'}],
+  '2': [{start:'07:30',end:'07:50'},{start:'08:00',end:'08:45'},{start:'09:00',end:'09:45'},{start:'10:15',end:'11:00'},{start:'11:15',end:'12:00'},{start:'14:30',end:'15:15'},{start:'15:30',end:'16:15'},{start:'16:30',end:'17:15'},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'},{start:'21:10',end:'21:50'}],
+  '3': [{start:'07:30',end:'07:50'},{start:'08:00',end:'08:45'},{start:'09:00',end:'09:45'},{start:'10:15',end:'11:00'},{start:'11:15',end:'12:00'},{start:'14:30',end:'15:15'},{start:'15:30',end:'16:15'},{start:'16:30',end:'17:15'},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'},{start:'21:10',end:'21:50'}],
+  '4': [{start:'07:30',end:'07:50'},{start:'08:00',end:'08:45'},{start:'09:00',end:'09:45'},{start:'10:15',end:'11:00'},{start:'11:15',end:'12:00'},{start:'14:30',end:'15:15'},{start:'15:30',end:'16:15'},{start:'16:30',end:'17:15'},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'},{start:'21:10',end:'21:50'}],
+  // 周五默认时间表（只上6节课）
+  '5': [{start:'07:30',end:'07:50'},{start:'08:00',end:'08:45'},{start:'09:00',end:'09:45'},{start:'10:15',end:'11:00'},{start:'11:15',end:'12:00'},{start:'13:30',end:'14:15'},{start:'14:30',end:'15:15'}],
+  // 周六周日默认（可自定义）
+  '6': [],
+  '7': []
+};
+
+// 获取指定天指定节次的时间
+function getPeriodTime(weekday, period) {
+  const daySchedule = timetableSchedule[String(weekday)] || [];
+  const time = daySchedule[period - 1];
+  if (time && time.start && time.end) {
+    return `${time.start}-${time.end}`;
+  }
+  return '';
+}
+
+// 获取当前正在上的课（返回 {weekday, period} 或 null）
+function getCurrentClass() {
+  const now = new Date();
+  let weekday = now.getDay(); // 0=周日, 1=周一...
+  if (weekday === 0) weekday = 7; // 转为1-7
+  
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTime = currentHour * 60 + currentMinute;
+  
+  const daySchedule = timetableSchedule[String(weekday)] || [];
+  for (let i = 0; i < daySchedule.length; i++) {
+    const slot = daySchedule[i];
+    if (!slot || !slot.start || !slot.end) continue;
+    
+    const [startH, startM] = slot.start.split(':').map(Number);
+    const [endH, endM] = slot.end.split(':').map(Number);
+    const startTime = startH * 60 + startM;
+    const endTime = endH * 60 + endM;
+    
+    if (currentTime >= startTime && currentTime < endTime) {
+      return { weekday, period: i + 1 };
+    }
+  }
+  return null;
+}
+
+// 获取下一节课（返回 {weekday, period} 或 null）
+function getNextClass() {
+  const now = new Date();
+  let weekday = now.getDay();
+  if (weekday === 0) weekday = 7;
+  
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTime = currentHour * 60 + currentMinute;
+  
+  const daySchedule = timetableSchedule[String(weekday)] || [];
+  for (let i = 0; i < daySchedule.length; i++) {
+    const slot = daySchedule[i];
+    if (!slot || !slot.start || !slot.end) continue;
+    
+    const [startH, startM] = slot.start.split(':').map(Number);
+    const startTime = startH * 60 + startM;
+    
+    if (startTime > currentTime) {
+      return { weekday, period: i + 1 };
+    }
+  }
+  return null;
+}
+
 // 获取节次名称
 function getPeriodName(period) {
   if (period >= 1 && period <= timetablePeriodNames.length) {
@@ -14258,6 +14353,13 @@ async function loadTimetableData() {
           timetablePeriods = classTimetableData._periods[firstClass];
         }
       }
+      // 加载作息时间表
+      if (classTimetableData._schedule && typeof classTimetableData._schedule === 'object') {
+        // 合并加载的schedule到默认值（保留默认值中可能缺少的天）
+        Object.keys(classTimetableData._schedule).forEach(day => {
+          timetableSchedule[day] = classTimetableData._schedule[day];
+        });
+      }
     }
     // 加载个人课程表
     if (result.config.personal_timetable) {
@@ -14288,6 +14390,8 @@ async function loadTimetableData() {
 }
 
 async function saveClassTimetableData() {
+  // 保存作息时间表
+  classTimetableData._schedule = timetableSchedule;
   // 使用与座位表相同的保存模式（set_all）
   const result = await xqApi('config', {
     action: 'set_all',
@@ -14484,6 +14588,138 @@ function savePeriodNames() {
   showToast('节次名称已保存');
 }
 
+// 作息时间表编辑器
+function showScheduleEditor() {
+  const modal = document.createElement('div');
+  modal.className = 'timetable-edit-modal';
+  modal.id = 'scheduleEditorModal';
+  
+  const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  const maxPeriods = Math.max(timetablePeriods, personalTimetablePeriods, 12);
+  
+  let html = `<div class="timetable-edit-card" style="max-width:700px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column">
+    <h3 style="margin-bottom:8px">作息时间表设置</h3>
+    <p style="font-size:12px;color:var(--gray-500);margin-bottom:12px">为每天每节课设置上课时间。可以批量设置周一到周四相同时间。</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="applyMonThuToAll()">周一~周四 → 全部</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="copyScheduleDay(1,6)">周一 → 周六</button>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="copyScheduleDay(1,7)">周一 → 周日</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">`;
+  
+  for (let d = 1; d <= 7; d++) {
+    html += `<div style="background:var(--gray-50);border-radius:8px;padding:8px">
+      <div style="font-weight:600;font-size:12px;text-align:center;margin-bottom:8px;color:var(--gray-700)">${dayNames[d-1]}</div>`;
+    for (let p = 0; p < maxPeriods; p++) {
+      const schedule = timetableSchedule[String(d)] || [];
+      const time = schedule[p] || {};
+      html += `<div style="margin-bottom:4px">
+        <div style="font-size:10px;color:var(--gray-500);margin-bottom:2px">${getPeriodName(p+1)}</div>
+        <div style="display:flex;gap:2px">
+          <input type="time" id="sched_${d}_${p}_start" value="${time.start || ''}" 
+            style="width:100%;padding:3px 4px;border:1px solid var(--gray-200);border-radius:4px;font-size:11px">
+          <input type="time" id="sched_${d}_${p}_end" value="${time.end || ''}" 
+            style="width:100%;padding:3px 4px;border:1px solid var(--gray-200);border-radius:4px;font-size:11px">
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  
+  html += `</div></div>
+    <div class="btn-row">
+      <button class="toolbar-btn ghost" onclick="closeScheduleEditor()">取消</button>
+      <button class="toolbar-btn primary" onclick="saveSchedule()">保存</button>
+    </div>
+  </div>`;
+  
+  modal.innerHTML = html;
+  modal.onclick = function(e) { if (e.target === modal) closeScheduleEditor(); };
+  document.body.appendChild(modal);
+}
+
+function closeScheduleEditor() {
+  const modal = document.getElementById('scheduleEditorModal');
+  if (modal) modal.remove();
+}
+
+function saveSchedule() {
+  const maxPeriods = Math.max(timetablePeriods, personalTimetablePeriods, 12);
+  
+  for (let d = 1; d <= 7; d++) {
+    timetableSchedule[String(d)] = [];
+    for (let p = 0; p < maxPeriods; p++) {
+      const startInput = document.getElementById(`sched_${d}_${p}_start`);
+      const endInput = document.getElementById(`sched_${d}_${p}_end`);
+      if (startInput && endInput && startInput.value && endInput.value) {
+        timetableSchedule[String(d)][p] = {
+          start: startInput.value,
+          end: endInput.value
+        };
+      }
+    }
+  }
+  
+  closeScheduleEditor();
+  saveClassTimetableData();
+  
+  // 刷新当前视图
+  const content = document.getElementById('ttContent');
+  if (content) {
+    const className = content.querySelector('.toolbar-select')?.closest('.toolbar')?.querySelector('span')?.textContent?.split(' ')[0];
+    if (className) {
+      content.innerHTML = renderTimetableGrid(className);
+    }
+  }
+  const mainContent = document.getElementById('content');
+  if (mainContent && mainContent.querySelector('.teacher-tt-section')) {
+    mainContent.innerHTML = renderTeachClasses();
+  }
+  
+  showToast('作息时间表已保存');
+}
+
+// 将周一的时间应用到周二到周四
+function applyMonThuToAll() {
+  const maxPeriods = Math.max(timetablePeriods, personalTimetablePeriods, 12);
+  const monSchedule = timetableSchedule['1'] || [];
+  
+  for (let d = 2; d <= 4; d++) {
+    timetableSchedule[String(d)] = [];
+    for (let p = 0; p < maxPeriods; p++) {
+      if (monSchedule[p]) {
+        timetableSchedule[String(d)][p] = { ...monSchedule[p] };
+        // 更新输入框
+        const startInput = document.getElementById(`sched_${d}_${p}_start`);
+        const endInput = document.getElementById(`sched_${d}_${p}_end`);
+        if (startInput) startInput.value = monSchedule[p].start || '';
+        if (endInput) endInput.value = monSchedule[p].end || '';
+      }
+    }
+  }
+  showToast('已将周一时间应用到周二~周四');
+}
+
+// 复制某一天的时间到另一天
+function copyScheduleDay(fromDay, toDay) {
+  const maxPeriods = Math.max(timetablePeriods, personalTimetablePeriods, 12);
+  const fromSchedule = timetableSchedule[String(fromDay)] || [];
+  
+  timetableSchedule[String(toDay)] = [];
+  for (let p = 0; p < maxPeriods; p++) {
+    if (fromSchedule[p]) {
+      timetableSchedule[String(toDay)][p] = { ...fromSchedule[p] };
+      const startInput = document.getElementById(`sched_${toDay}_${p}_start`);
+      const endInput = document.getElementById(`sched_${toDay}_${p}_end`);
+      if (startInput) startInput.value = fromSchedule[p].start || '';
+      if (endInput) endInput.value = fromSchedule[p].end || '';
+    }
+  }
+  const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  showToast(`已复制${dayNames[fromDay-1]}时间到${dayNames[toDay-1]}`);
+}
+
 function renderTimetableGrid(className) {
   const tt = getTimetableForClass(className);
   const user = xqCurrentUser || {};
@@ -14492,6 +14728,10 @@ function renderTimetableGrid(className) {
   const canEdit = (user.isHeadteacher && isOwnClass) || user.isLeader || isXqAdmin();
   const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
+  // 获取当前课程和下一节课
+  const currentClass = getCurrentClass();
+  const nextClass = getNextClass();
+  
   let html = `<div class="toolbar">
     <span style="font-size:14px;font-weight:600">${className} 课程表</span>
     <div class="toolbar-spacer"></div>
@@ -14499,6 +14739,7 @@ function renderTimetableGrid(className) {
     <select class="toolbar-select" style="width:80px" onchange="changeTimetablePeriods('${className}', this.value)">
       ${[6,7,8,9,10,11,12].map(n => `<option value="${n}" ${n===timetablePeriods?'selected':''}>${n}节</option>`).join('')}
     </select>
+    <button class="toolbar-btn ghost" onclick="showScheduleEditor()" title="设置作息时间表">作息时间</button>
     <button class="toolbar-btn ghost" onclick="showPeriodNamesEditor()" title="自定义节次名称">节次名称</button>
     <button class="toolbar-btn ghost" onclick="showTimetableImportModal()">导入Excel</button>
     <button class="toolbar-btn ghost" onclick="exportTimetableExcel('${className}')">导出Excel</button>
@@ -14509,8 +14750,12 @@ function renderTimetableGrid(className) {
   
   // Header row
   html += `<div class="timetable-cell header">节次</div>`;
-  weekdays.forEach(d => {
-    html += `<div class="timetable-cell header">${d}</div>`;
+  weekdays.forEach((d, idx) => {
+    const dayNum = idx + 1;
+    const isCurrentDay = currentClass && currentClass.weekday === dayNum;
+    const isNextDay = nextClass && nextClass.weekday === dayNum;
+    const headerClass = isCurrentDay ? 'current-class' : (isNextDay ? 'next-class' : '');
+    html += `<div class="timetable-cell header ${headerClass}">${d}</div>`;
   });
   
   // Period rows
@@ -14519,17 +14764,25 @@ function renderTimetableGrid(className) {
     for (let w = 1; w <= 7; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
+      const timeStr = getPeriodTime(w, p);
+      
+      // 判断是否是当前课或下一节课
+      const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
+      const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
+      const cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      
       if (slot && slot.subject) {
-        html += `<div class="timetable-cell ${canEdit ? 'editable' : ''}" 
+        html += `<div class="timetable-cell ${cellClass} ${canEdit ? 'editable' : ''}" 
           ${canEdit ? `onclick="editTimetableSlot('${className}',${w},${p})"` : ''}>
           <span class="subject-name">${escapeHtml(slot.subject)}</span>
           <span class="subject-teacher">${escapeHtml(slot.teacher || '')}</span>
           ${slot.room ? `<span class="subject-room">${escapeHtml(slot.room)}</span>` : ''}
+          ${timeStr ? `<span class="period-time">${timeStr}</span>` : ''}
         </div>`;
       } else {
-        html += `<div class="timetable-cell empty ${canEdit ? 'editable' : ''}" 
+        html += `<div class="timetable-cell empty ${cellClass} ${canEdit ? 'editable' : ''}" 
           ${canEdit ? `onclick="editTimetableSlot('${className}',${w},${p})"` : ''}>
-          ${canEdit ? '<span style="color:var(--gray-300);font-size:11px">点击编辑</span>' : ''}
+          ${canEdit ? `<span style="color:var(--gray-300);font-size:11px">点击编辑${timeStr ? '<br>' + timeStr : ''}</span>` : (timeStr ? `<span class="period-time">${timeStr}</span>` : '')}
         </div>`;
       }
     }
@@ -14545,6 +14798,10 @@ function renderTeacherTimetable() {
   const tt = getTimetableForTeacher(teacherName);
   const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
+  // 获取当前课程和下一节课
+  const currentClass = getCurrentClass();
+  const nextClass = getNextClass();
+  
   // Build reminder if class is coming up
   let reminderHtml = getTimetableReminderHtml(tt);
   
@@ -14559,8 +14816,12 @@ function renderTeacherTimetable() {
   
   // Header
   html += `<div class="timetable-cell header">节次</div>`;
-  weekdays.forEach(d => {
-    html += `<div class="timetable-cell header">${d}</div>`;
+  weekdays.forEach((d, idx) => {
+    const dayNum = idx + 1;
+    const isCurrentDay = currentClass && currentClass.weekday === dayNum;
+    const isNextDay = nextClass && nextClass.weekday === dayNum;
+    const headerClass = isCurrentDay ? 'current-class' : (isNextDay ? 'next-class' : '');
+    html += `<div class="timetable-cell header ${headerClass}">${d}</div>`;
   });
   
   // Periods
@@ -14569,13 +14830,23 @@ function renderTeacherTimetable() {
     for (let w = 1; w <= 7; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
+      const timeStr = getPeriodTime(w, p);
+      
+      // 判断是否是当前课或下一节课
+      const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
+      const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
+      const cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      
       if (slot) {
-        html += `<div class="timetable-cell">
+        html += `<div class="timetable-cell ${cellClass}">
           <span class="subject-name">${escapeHtml(slot.className)}</span>
           <span class="subject-teacher">${escapeHtml(slot.subject)}</span>
+          ${timeStr ? `<span class="period-time">${timeStr}</span>` : ''}
         </div>`;
       } else {
-        html += `<div class="timetable-cell empty"></div>`;
+        html += `<div class="timetable-cell empty ${cellClass}">
+          ${timeStr ? `<span class="period-time">${timeStr}</span>` : ''}
+        </div>`;
       }
     }
   }
@@ -14590,27 +14861,45 @@ function renderEditableTeacherTimetable() {
   const tt = getTimetableForTeacher(teacherName);
   const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   
+  // 获取当前课程和下一节课
+  const currentClass = getCurrentClass();
+  const nextClass = getNextClass();
+  
   let reminderHtml = getTimetableReminderHtml(tt);
   let html = '';
   if (reminderHtml) html += reminderHtml;
   
   html += `<div class="timetable-grid" style="grid-template-columns: 50px repeat(7, 1fr);">`;
   html += `<div class="timetable-cell header">节次</div>`;
-  weekdays.forEach(d => { html += `<div class="timetable-cell header">${d}</div>`; });
+  weekdays.forEach((d, idx) => {
+    const dayNum = idx + 1;
+    const isCurrentDay = currentClass && currentClass.weekday === dayNum;
+    const isNextDay = nextClass && nextClass.weekday === dayNum;
+    const headerClass = isCurrentDay ? 'current-class' : (isNextDay ? 'next-class' : '');
+    html += `<div class="timetable-cell header ${headerClass}">${d}</div>`;
+  });
   
   for (let p = 1; p <= personalTimetablePeriods; p++) {
     html += `<div class="timetable-cell period-label">${getPeriodName(p)}</div>`;
     for (let w = 1; w <= 7; w++) {
       const key = `${w}-${p}`;
       const slot = tt[key];
+      const timeStr = getPeriodTime(w, p);
+      
+      // 判断是否是当前课或下一节课
+      const isCurrent = currentClass && currentClass.weekday === w && currentClass.period === p;
+      const isNext = nextClass && nextClass.weekday === w && nextClass.period === p;
+      const cellClass = isCurrent ? 'current-class' : (isNext ? 'next-class' : '');
+      
       if (slot) {
-        html += `<div class="timetable-cell editable" onclick="editTeacherTimetableSlot('${slot.className}',${w},${p})">
+        html += `<div class="timetable-cell ${cellClass} editable" onclick="editTeacherTimetableSlot('${slot.className}',${w},${p})">
           <span class="subject-name">${escapeHtml(slot.className)}</span>
           <span class="subject-teacher">${escapeHtml(slot.subject)}</span>
+          ${timeStr ? `<span class="period-time">${timeStr}</span>` : ''}
         </div>`;
       } else {
-        html += `<div class="timetable-cell editable empty" onclick="addTeacherTimetableSlot(${w},${p})">
-          <span style="color:var(--gray-300);font-size:11px">点击添加</span>
+        html += `<div class="timetable-cell ${cellClass} editable empty" onclick="addTeacherTimetableSlot(${w},${p})">
+          <span style="color:var(--gray-300);font-size:11px">点击添加${timeStr ? '<br>' + timeStr : ''}</span>
         </div>`;
       }
     }
