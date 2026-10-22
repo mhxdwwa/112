@@ -12,12 +12,14 @@ const CHANNEL_NAME = 'wjx:world';
 /* 不进房间时，所有在城镇的人共用这个公共频道 —— 这就是「同一频道看到多人」 */
 const LOBBY = 'LOBBY';
 function myRoom(){ return roomCode || LOBBY; }
-const SEND_MS  = 110;      /* 位置广播间隔 */
+const SEND_MS  = 240;      /* 位置广播间隔（有移动时）。原 110ms，为省 Supabase 实时消息额度调慢 */
+const IDLE_MS  = 3000;     /* 原地不动时的保活广播（原来不动也在 9 次/秒地发，极耗额度） */
 const DROP_MS  = 9000;     /* 这么久没消息就当掉线 */
 
 let uid = '', myName = '', myLv = 1, myJob = 0;
 let ch = null, joined = false, roomCode = '', pendingRoom = '';
 let sendTimer = null, lastTrack = 0;
+let lastPosSig = '', lastPosAt = 0;   /* 位置去重 + 保活时间戳 */
 const remotes = new Map();
 
 function sb(){ return window.SB || null; }
@@ -112,7 +114,11 @@ function connect(){
     const p = m.payload || {};
     if(p.id) remotes.delete(p.id);
   });
-  ch.on('presence', { event: 'sync' }, function(){ renderPlayers(); renderMembers(); });
+  ch.on('presence', { event: 'sync' }, function(){
+    renderPlayers(); renderMembers();
+    /* 有人进来：立刻补发一次位置，否则站立不动的玩家对方看不见 */
+    if(othersOnline()){ lastPosSig = ''; try{ sendPos(); }catch(e){} }
+  });
 
   setText('opState', '连接中…');
   ch.subscribe(function(status, err){
@@ -150,6 +156,10 @@ function track(){
   try{
     ch.track({ uid: uid, name: myName, lv: myLv, job: myJob, room: myRoom(), at: lastTrack });
   }catch(e){}
+}
+
+function othersOnline(){
+  try{ return presenceList().filter(function(p){ return p.uid !== uid; }).length > 0; }catch(e){ return true; }
 }
 
 function presenceList(){
@@ -234,9 +244,10 @@ function inPlayableState(){
          gameState === 'characterInfo' || gameState === 'gameMenu' || gameState === 'questMenu';
 }
 
+/* 只在「城镇」广播位置：副本/菜单里根本看不到其他玩家，发了纯是浪费额度 */
 function sendPos(){
   if(!ch || !joined) return;
-  if(!inPlayableState()) return;
+  if(typeof gameState === 'undefined' || gameState !== 'town') return;
   const p = (typeof townPlayer !== 'undefined' && townPlayer) ? townPlayer
           : (typeof G !== 'undefined' && G && G.player ? G.player : null);
   if(!p) return;
@@ -245,6 +256,19 @@ function sendPos(){
     myJob = G.player.weaponIdx | 0;
     myLv = G.player.level | 0;
   }
+  /* ★ 省额度：内容没变就别发；只有自己一个人在线时也不发（没人需要接收） */
+  const _sig = [Math.round(p.x / 4), Math.round(p.y / 4), p.facing >= 0 ? 1 : -1,
+                (p.state === 'walk' || p.state === 'run') ? 'w' : 'i'].join(',');
+  const _now = Date.now();
+  if(_sig !== lastPosSig){
+    lastPosSig = _sig;
+    lastPosAt = _now;
+  } else {
+    if(_now - lastPosAt < IDLE_MS) return;      /* 没动 → 除非到保活时间，否则不广播 */
+    if(!othersOnline()) return;                 /* 频道里只有我 → 发了也没人收 */
+    lastPosAt = _now;
+  }
+
   try{
     ch.send({
       type: 'broadcast', event: 'pos',
