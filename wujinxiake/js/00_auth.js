@@ -74,10 +74,21 @@ window.AUTH = {
   get offline(){ return state.offline; },
   get loggedIn(){ return !!state.user; },
   loginEmail: loginEmail,
-  logout: function(){
-    try{ if(window.SB) window.SB.auth.signOut(); }catch(e){}
-    try{ localStorage.removeItem('wjx_session_hint'); }catch(e){}
-    location.reload();
+  /* 退出登录：mode='reg' 时退出后直接打开「注册」页 */
+  logout: function(mode){
+    function go(){
+      try{ localStorage.removeItem('wjx_session_hint'); }catch(e){}
+      try{ localStorage.removeItem('wjx_last_user'); }catch(e){}
+      var url = location.pathname + (mode === 'reg' ? '?auth=reg' : '');
+      location.replace(url);
+    }
+    try{
+      if(window.SB && window.SB.auth && window.SB.auth.signOut){
+        window.SB.auth.signOut().then(go).catch(go);
+        return;
+      }
+    }catch(e){}
+    go();
   }
 };
 window.SB = null;
@@ -178,18 +189,22 @@ function adopt(user){
 }
 
 /* ---------- 界面 ---------- */
+function selectTab(reg){
+  document.querySelectorAll('.auth-tab').forEach(function(x){
+    x.classList.toggle('active', (x.getAttribute('data-tab') === 'reg') === !!reg);
+  });
+  var fl = $('formLogin'), fr = $('formReg');
+  if(fl) fl.classList.toggle('hidden', !!reg);
+  if(fr) fr.classList.toggle('hidden', !reg);
+  msg('');
+  var first = reg ? $('rgMail') : $('lgUser');
+  if(first) try{ first.focus(); }catch(e){}
+}
+
 function bindUI(){
   document.querySelectorAll('.auth-tab').forEach(function(t){
     t.addEventListener('click', function(){
-      document.querySelectorAll('.auth-tab').forEach(function(x){ x.classList.remove('active'); });
-      t.classList.add('active');
-      var reg = t.getAttribute('data-tab') === 'reg';
-      var fl = $('formLogin'), fr = $('formReg');
-      if(fl) fl.classList.toggle('hidden', reg);
-      if(fr) fr.classList.toggle('hidden', !reg);
-      msg('');
-      var first = reg ? $('rgMail') : $('lgUser');
-      if(first) try{ first.focus(); }catch(e){}
+      selectTab(t.getAttribute('data-tab') === 'reg');
     });
   });
   var fl = $('formLogin'); if(fl) fl.addEventListener('submit', doLogin);
@@ -252,19 +267,31 @@ function start(){
     return;
   }
 
+  /* ?auth=reg / ?auth=login：从「退出 / 换账号」跳过来，强制停在登录页 */
+  var wantReg = /[?&]auth=(reg|login|switch)\b/.test(location.search);
+  if(wantReg){
+    try{ history.replaceState(null, '', location.pathname); }catch(e){}
+  }
+
   /* 已登录过：静默恢复会话，直接进游戏 */
   window.SB.auth.getSession().then(function(res){
     var s = res && res.data && res.data.session;
-    if(s && s.user){
+    if(s && s.user && !wantReg){
       adopt(s.user);
       window.Boot.auth();
       return;
     }
+    /* 要换账号：先把旧会话清掉，免得又自动登回去 */
+    if(s && wantReg){
+      try{ window.SB.auth.signOut(); }catch(e){}
+    }
     window.__dbgFreeze = true;   /* 登录时先冻结主循环，省点性能 */
     showAuth();
+    if(wantReg) selectTab(true);
   }).catch(function(){
     window.__dbgFreeze = true;
     showAuth();
+    if(wantReg) selectTab(true);
   });
 
   /* token 过期自动续期失败 → 提示重新登录 */
