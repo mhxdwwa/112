@@ -17341,6 +17341,11 @@ function renderRepairRecordsList(records, isGlobalView) {
             <button class="toolbar-btn primary" style="font-size:12px" onclick="showResolveRepairModal('${record.className}', '${record.id}')">标记为已解决</button>
           </div>
         ` : ''}
+        ${!isGlobalView && record.status === 'pending' ? `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end">
+            <button class="toolbar-btn ghost" style="font-size:12px;color:var(--danger);border-color:var(--danger)" onclick="withdrawRepairRecord('${record.className || repairCurrentClass}', '${record.id}')">撤回申报</button>
+          </div>
+        ` : ''}
         ${record.status === 'resolved' ? `
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end">
             <button class="toolbar-btn ghost" style="font-size:12px;color:var(--danger);border-color:var(--danger)" onclick="deleteRepairRecord('${record.className || repairCurrentClass}', '${record.id}', ${isGlobalView})">删除记录</button>
@@ -17461,6 +17466,36 @@ async function deleteRepairRecord(className, recordId, isGlobalView) {
     }
   } else {
     showToast('删除失败，请重试', 'error');
+  }
+}
+
+async function withdrawRepairRecord(className, recordId) {
+  if (!confirm('确定要撤回这条申报吗？撤回后所有人（包括工人和领导）都将看不到此记录。')) return;
+  
+  const records = getClassRepairData(className);
+  const index = records.findIndex(r => r.id === recordId);
+  
+  if (index === -1) {
+    showToast('未找到该记录', 'error');
+    return;
+  }
+  
+  // 只有待处理的记录才能撤回
+  if (records[index].status !== 'pending') {
+    showToast('只能撤回待处理的申报', 'warning');
+    return;
+  }
+  
+  // 从共享数据中完全删除
+  records.splice(index, 1);
+  
+  // 同步到服务器
+  const result = await saveRepairData();
+  if (result.ok) {
+    showToast('申报已撤回', 'success');
+    document.getElementById('repairContent').innerHTML = renderRepairDeclarationContent();
+  } else {
+    showToast('撤回失败，请重试', 'error');
   }
 }
 
