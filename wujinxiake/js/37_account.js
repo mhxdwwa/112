@@ -49,9 +49,11 @@ function update(){
   }
 
   const loginBtn = $('accLogin'), saveBtn = $('accSave'), switchBtn = $('accSwitch');
+  const charsBtn = $('accChars');
   if(loginBtn) loginBtn.classList.toggle('hidden', i.logged);
   if(saveBtn) saveBtn.classList.toggle('hidden', !i.logged);
   if(switchBtn) switchBtn.classList.toggle('hidden', !i.logged);
+  if(charsBtn) charsBtn.classList.toggle('hidden', !(window.CHARS && window.CHARS.count() > 0));
 }
 
 function open(on){
@@ -83,6 +85,12 @@ function boot(){
     try{ window.CloudSave && window.CloudSave.save(); }catch(e){}
     toast('已保存', '#7af0c8');
     setTimeout(update, 400);
+  });
+
+  const chars = $('accChars');
+  if(chars) chars.addEventListener('click', function(){
+    open(false);
+    if(window.CHARS) window.CHARS.openPanel();
   });
 
   const sw = $('accSwitch');
