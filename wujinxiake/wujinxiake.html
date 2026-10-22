@@ -7,8 +7,38 @@
 <link rel="stylesheet" href="css/base.css" />
 <link rel="stylesheet" href="css/touch.css" />
 <link rel="stylesheet" href="css/toast.css" />
+<style>
+/* 载入界面：内联样式，保证首帧就有效果（不等外部 CSS） */
+#bootOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 34%,#12233a 0%,#080b12 62%,#05070b 100%);
+  transition:opacity .45s ease;font-family:"Microsoft YaHei",system-ui,sans-serif;}
+#bootOverlay.boot-hide{opacity:0;pointer-events:none;}
+.boot-box{width:min(78vw,420px);text-align:center;color:#cfe6f5;padding:0 8px;}
+.boot-title{font-size:34px;font-weight:700;letter-spacing:6px;color:#9fe6ff;
+  text-shadow:0 0 18px rgba(120,220,255,.55);margin-bottom:8px;}
+.boot-sub{font-size:12px;color:#7f93a8;letter-spacing:3px;margin-bottom:26px;}
+.boot-track{height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+#bootBar{display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,#3ec9ff,#7af0c8);box-shadow:0 0 12px rgba(80,220,255,.65);
+  transition:width .25s ease;}
+.boot-info{display:flex;justify-content:space-between;align-items:center;margin-top:12px;
+  font-size:12px;color:#7f93a8;gap:10px;}
+.boot-info b{color:#9fe6ff;font-weight:600;font-variant-numeric:tabular-nums;}
+#bootSkip{margin-left:8px;padding:4px 10px;border-radius:99px;border:1px solid rgba(120,220,255,.45);
+  background:transparent;color:#9fe6ff;font-size:12px;cursor:pointer;font-family:inherit;}
+</style>
 </head>
 <body>
+<!-- 载入界面：核心图片准备好后再进入游戏 -->
+<div id="bootOverlay">
+  <div class="boot-box">
+    <div class="boot-title">无尽侠客</div>
+    <div class="boot-sub">2.5D 横版武侠格斗</div>
+    <div class="boot-track"><i id="bootBar"></i></div>
+    <div class="boot-info"><span id="bootTip">正在加载游戏资源…</span><b id="bootPct">0%</b></div>
+  </div>
+</div>
 <canvas id="c"></canvas>
 <div id="uiToast"></div>
 
@@ -64,6 +94,7 @@
     </div>
   </div>
 </div>
+<script src="js/00_loader.js"></script>
 <script src="js/01_core.js"></script>
 <script src="js/02_char_atlases.js"></script>
 <script src="js/03_monster_atlases.js"></script>

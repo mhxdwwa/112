@@ -142,11 +142,12 @@ function drawMonsterSprite(e){
   return true;
 }
 
-/* 职业 -> 精灵表 */
+/* 职业 -> 精灵表（未就绪时顺手把这个职业的图集提到最前加载，避免角色迟迟不出） */
 function atlasOf(weaponIdx){
   const w = WEAPONS[weaponIdx];
   if(!w) return null;
   const at = CHAR_ATLASES[w.id];
+  if(at && !at.ready && !at._started && typeof ensureCharAtlas === 'function') ensureCharAtlas(w.id);
   return (at && at.ready) ? at : null;
 }
 
@@ -182,6 +183,9 @@ function fighterAnimFor(p){
 /* 按精灵表绘制一帧；bodyPx = 角色身体在屏幕上的像素高度
    glow（可选）: {color, alpha, blur} 用同帧绘制发光轮廓 */
 function drawSpriteFrame(at, animName, prog, x, y, facing, bodyPx, glow){
+  /* ★ 角色图集还没下载完时退回 256px 预览图，画面不会出现空白等待（怪物图集无预览，行为不变） */
+  if(typeof charAtlasDrawable === 'function') at = charAtlasDrawable(at);
+  if(!at) return false;
   const def = at.anims[animName] || at.anims.idle;
   const frames = def.frames, n = frames.length;
   if(!n) return false;

@@ -49,3 +49,17 @@
 # JSON 数据文件 - 只缓存5分钟
 /*.json
   Cache-Control: public, max-age=300, must-revalidate
+
+# ===== 无尽侠客（/wujinxiake/）=====
+# HTML / JS / CSS：不缓存，保证改动立即生效
+/wujinxiake/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+/wujinxiake/js/*
+  Cache-Control: no-cache, no-store, must-revalidate
+/wujinxiake/css/*
+  Cache-Control: no-cache, must-revalidate
+# 图片 / 图集 / 立绘：文件名固定，长期缓存（二次进入秒开）
+/wujinxiake/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/wujinxiake/*.webp
+  Cache-Control: public, max-age=31536000, immutable

@@ -8,6 +8,10 @@ const VW = 1280, VH = 720;
 const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 cvs.width = Math.round(VW * DPR); cvs.height = Math.round(VH * DPR);
 
+/* ★ 游戏状态提前声明：菜单/音频等脚本里的监听器可能在后续文件加载完成前就被触发，
+   若声明写在 18_jobs.js 里会报 "gameState is not defined" */
+let gameState = 'menu';
+
 /* NPC图片加载 */
 const npcImages = {
   blacksmith: new Image(),

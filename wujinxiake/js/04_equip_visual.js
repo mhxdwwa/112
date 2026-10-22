@@ -597,12 +597,12 @@ function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
   ctx.restore();
 }
 
-/* 选人界面的立绘（待机） */
+/* 选人界面的立绘（待机）——图集未就绪时 drawSpriteFrame 会自动用预览图顶上 */
 function drawCharCardSprite(weaponIdx, x, y, bodyPx, phase){
-  const at = atlasOf(weaponIdx);
+  const w = (typeof WEAPONS !== 'undefined') ? WEAPONS[weaponIdx] : null;
+  const at = w ? CHAR_ATLASES[w.id] : null;
   if(!at) return false;
-  drawSpriteFrame(at, 'idle', (phase % 1), x, y, 1, bodyPx);
-  return true;
+  return drawSpriteFrame(at, 'idle', (phase % 1), x, y, 1, bodyPx);
 }
 
 function fit(){

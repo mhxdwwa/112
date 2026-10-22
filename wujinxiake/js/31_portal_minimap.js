@@ -741,7 +741,8 @@ function drawMenu(){
   
   for(const pos of charPositions){
     const at = CHAR_ATLASES[WEAPONS[pos.weaponIdx] ? WEAPONS[pos.weaponIdx].id : 'sword'];
-    if(at && at.ready){
+    /* 完整图集未就绪时用预览图先顶上，标题界面不再空白 */
+    if(at && charAtlasDrawable(at)){
       const bodyPx = 150 * (at.bodyWorld / 110);
       const prog = (t * 0.32 + pos.weaponIdx * 0.11) % 1;
       ctx.save();
@@ -822,7 +823,7 @@ function drawPvpSelect(){
     /* 立绘 */
     const at = CHAR_ATLASES[w.id];
     const feetY = sy + 116;
-    if(at && at.ready){
+    if(at && charAtlasDrawable(at)){
       const _t = G ? G.t : performance.now()*0.001;
       drawCharCardSprite(ch.weaponIdx, sx+cardW/2, feetY, 120*((at.bodyWorld||110)/110), _t*0.34 + i*0.05);
     }
@@ -915,10 +916,9 @@ function drawCharSelect(){
     const at = CHAR_ATLASES[weapon.id];
     const bodyPx = 128 * ((at ? at.bodyWorld : 110) / 110);
     let drawn = false;
-    if(at && at.ready){
+    if(at && charAtlasDrawable(at)){
       const _selT = G ? G.t : performance.now()*0.001;
-      drawCharCardSprite(char.weaponIdx, previewX, feetY, bodyPx, (_selT * 0.34 + i * 0.07));
-      drawn = true;
+      drawn = drawCharCardSprite(char.weaponIdx, previewX, feetY, bodyPx, (_selT * 0.34 + i * 0.07));
     }
     if(!drawn){
       ctx.save();

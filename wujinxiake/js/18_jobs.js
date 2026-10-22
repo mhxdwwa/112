@@ -76,7 +76,8 @@ const STAT_CAPS = {
   maxMp: 999
 };
 
-let G = null, gameState = 'menu', gameMode = '', menuSelection = 0;
+/* gameState 已在 01_core.js 提前声明（避免加载期监听器报未定义） */
+let G = null, gameMode = '', menuSelection = 0;
 let pvpState = 'select1', pvpSelect = [0,0], pvpWinner = -1;
 let pvpFromMenu = true; // true=主菜单双人PK(1级平衡)，false=守门人PK(用当前角色属性)
 let savedSingleG = null; // 守门人PK前保存的单人冒险G状态
