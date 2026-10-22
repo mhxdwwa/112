@@ -4,12 +4,12 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>无尽侠客 · 2.5D 横版格斗</title>
-<link rel="stylesheet" href="css/base.css" />
-<link rel="stylesheet" href="css/touch.css" />
-<link rel="stylesheet" href="css/toast.css" />
-<link rel="stylesheet" href="css/auth.css" />
-<link rel="stylesheet" href="css/online.css" />
-<link rel="stylesheet" href="css/account.css" />
+<link rel="stylesheet" href="css/base.css?v=6" />
+<link rel="stylesheet" href="css/touch.css?v=6" />
+<link rel="stylesheet" href="css/toast.css?v=6" />
+<link rel="stylesheet" href="css/auth.css?v=6" />
+<link rel="stylesheet" href="css/online.css?v=6" />
+<link rel="stylesheet" href="css/account.css?v=6" />
 <style>
 /* 载入界面：内联样式，保证首帧就有效果（不等外部 CSS） */
 #bootOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
@@ -63,6 +63,7 @@
         <button type="button" class="auth-tab active" data-tab="login">登录</button>
         <button type="button" class="auth-tab" data-tab="reg">注册</button>
       </div>
+      <div class="auth-hint">第一次玩请点「注册」：邮箱 + 用户名 + 密码，注册完直接进游戏；已有账号在「登录」页输入用户名和密码。</div>
 
       <form class="auth-form" id="formLogin" autocomplete="on">
         <label for="lgUser">用户名</label>
@@ -152,9 +153,9 @@
     <div class="acc-acts">
       <button id="accLogin" class="primary" type="button">注册 / 登录</button>
       <button id="accSave" class="ghost hidden" type="button">立即存档</button>
-      <button id="accSwitch" class="ghost hidden" type="button">切换账号</button>
+      <button id="accSwitch" class="ghost hidden" type="button">退出 / 换账号</button>
     </div>
-    <div class="acc-ver">版本 v5 · 2026-10-23</div>
+    <div class="acc-ver">版本 v6 · 2026-10-23</div>
   </div>
 </div>
 <div id="onlinePanel">
@@ -196,45 +197,45 @@
   </div>
 </div>
 
-<script src="js/vendor/supabase.js"></script>
-<script src="js/00_auth.js"></script>
-<script src="js/00_loader.js"></script>
-<script src="js/01_core.js"></script>
-<script src="js/02_char_atlases.js"></script>
-<script src="js/03_monster_atlases.js"></script>
-<script src="js/04_equip_visual.js"></script>
-<script src="js/05_audio.js"></script>
-<script src="js/06_touch.js"></script>
-<script src="js/07_skill_icons.js"></script>
-<script src="js/08_menu.js"></script>
-<script src="js/09_world.js"></script>
-<script src="js/10_skill_growth.js"></script>
-<script src="js/11_levels.js"></script>
-<script src="js/12_equip_data.js"></script>
-<script src="js/13_drops.js"></script>
-<script src="js/14_town_data.js"></script>
-<script src="js/15_quests.js"></script>
-<script src="js/16_abyss.js"></script>
-<script src="js/17_escmenu.js"></script>
-<script src="js/18_jobs.js"></script>
-<script src="js/19_skills.js"></script>
-<script src="js/20_boss_skills.js"></script>
-<script src="js/21_combat.js"></script>
-<script src="js/22_player.js"></script>
-<script src="js/23_town_sys.js"></script>
-<script src="js/24_enhance_ui.js"></script>
-<script src="js/25_equip_icons.js"></script>
-<script src="js/26_hud.js"></script>
-<script src="js/27_level_select.js"></script>
-<script src="js/28_shop.js"></script>
-<script src="js/29_render_world.js"></script>
-<script src="js/30_rooms.js"></script>
-<script src="js/31_portal_minimap.js"></script>
-<script src="js/32_naming.js"></script>
-<script src="js/33_main_loop.js"></script>
-<script src="js/34_dev_debug.js"></script>
-<script src="js/35_cloud_save.js"></script>
-<script src="js/36_online.js"></script>
-<script src="js/37_account.js"></script>
+<script src="js/vendor/supabase.js?v=6"></script>
+<script src="js/00_auth.js?v=6"></script>
+<script src="js/00_loader.js?v=6"></script>
+<script src="js/01_core.js?v=6"></script>
+<script src="js/02_char_atlases.js?v=6"></script>
+<script src="js/03_monster_atlases.js?v=6"></script>
+<script src="js/04_equip_visual.js?v=6"></script>
+<script src="js/05_audio.js?v=6"></script>
+<script src="js/06_touch.js?v=6"></script>
+<script src="js/07_skill_icons.js?v=6"></script>
+<script src="js/08_menu.js?v=6"></script>
+<script src="js/09_world.js?v=6"></script>
+<script src="js/10_skill_growth.js?v=6"></script>
+<script src="js/11_levels.js?v=6"></script>
+<script src="js/12_equip_data.js?v=6"></script>
+<script src="js/13_drops.js?v=6"></script>
+<script src="js/14_town_data.js?v=6"></script>
+<script src="js/15_quests.js?v=6"></script>
+<script src="js/16_abyss.js?v=6"></script>
+<script src="js/17_escmenu.js?v=6"></script>
+<script src="js/18_jobs.js?v=6"></script>
+<script src="js/19_skills.js?v=6"></script>
+<script src="js/20_boss_skills.js?v=6"></script>
+<script src="js/21_combat.js?v=6"></script>
+<script src="js/22_player.js?v=6"></script>
+<script src="js/23_town_sys.js?v=6"></script>
+<script src="js/24_enhance_ui.js?v=6"></script>
+<script src="js/25_equip_icons.js?v=6"></script>
+<script src="js/26_hud.js?v=6"></script>
+<script src="js/27_level_select.js?v=6"></script>
+<script src="js/28_shop.js?v=6"></script>
+<script src="js/29_render_world.js?v=6"></script>
+<script src="js/30_rooms.js?v=6"></script>
+<script src="js/31_portal_minimap.js?v=6"></script>
+<script src="js/32_naming.js?v=6"></script>
+<script src="js/33_main_loop.js?v=6"></script>
+<script src="js/34_dev_debug.js?v=6"></script>
+<script src="js/35_cloud_save.js?v=6"></script>
+<script src="js/36_online.js?v=6"></script>
+<script src="js/37_account.js?v=6"></script>
 </body>
 </html>
