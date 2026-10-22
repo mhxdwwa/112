@@ -1,0 +1,51 @@
+/* ===== 选择角色面板 ===== */
+#charPanel{
+  position:fixed; inset:0; z-index:10050; display:none;
+  align-items:center; justify-content:center;
+  background:rgba(4,7,12,.62); backdrop-filter:blur(2px);
+  font-family:"Microsoft YaHei",system-ui,sans-serif;
+}
+#charPanel.open{display:flex;}
+.cp-box{
+  width:min(92vw,480px); max-height:86vh; overflow:auto; padding:16px 16px 14px;
+  border-radius:14px; color:#d6e6f5;
+  background:linear-gradient(180deg,#141e2b,#0c1219);
+  border:1px solid rgba(120,180,255,.18);
+  box-shadow:0 18px 50px rgba(0,0,0,.6);
+}
+.cp-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+.cp-head b{font-size:16px; letter-spacing:.08em; color:#ffd88a;}
+.cp-head button{background:none; border:0; color:#7f96ac; font-size:20px; line-height:1; cursor:pointer; padding:2px 6px;}
+.cp-head button:hover{color:#fff;}
+.cp-list{display:flex; flex-direction:column; gap:8px;}
+.cp-empty{padding:22px 6px; text-align:center; color:#7b8ea3; font-size:12.5px; line-height:1.7;}
+.cp-item{
+  display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px;
+  background:rgba(120,180,255,.05); border:1px solid rgba(120,180,255,.12);
+}
+.cp-item.cur{border-color:rgba(255,214,138,.5); background:rgba(255,214,138,.07);}
+.cp-main{flex:1; min-width:0;}
+.cp-main b{display:block; font-size:14px; color:#eaf4ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cp-main em{display:block; margin-top:2px; font-style:normal; font-size:11px; color:#8aa2b8;}
+.cp-go, .cp-del{
+  flex:none; height:30px; padding:0 12px; border-radius:8px; cursor:pointer;
+  font-size:12px; font-family:inherit; border:1px solid transparent;
+}
+.cp-go{background:linear-gradient(180deg,#ffd98a,#e8b354); color:#2a1c06; font-weight:700;}
+.cp-go:hover{filter:brightness(1.06);}
+.cp-del{background:rgba(255,255,255,.05); color:#9db1c4; border-color:rgba(255,255,255,.12);}
+.cp-del:hover{color:#ff9a8a; border-color:rgba(255,120,100,.4);}
+.cp-acts{margin-top:12px;}
+#cpNew{
+  width:100%; height:40px; border-radius:10px; cursor:pointer; font-family:inherit;
+  font-size:13.5px; font-weight:700; color:#0d1a12;
+  background:linear-gradient(180deg,#9fe8b8,#5fbf87); border:0;
+}
+#cpNew:hover{filter:brightness(1.05);}
+
+@media (max-height:520px){
+  .cp-box{padding:10px 12px; max-height:92vh;}
+  .cp-item{padding:7px 9px;}
+  .cp-main b{font-size:13px;}
+  #cpNew{height:34px; font-size:12.5px;}
+}
