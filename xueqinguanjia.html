@@ -18187,13 +18187,13 @@ function renderCollectionDetail(taskId) {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
       完成收集
     </button>`}
-    <button class="toolbar-btn primary" onclick="exportCollectionToExcel('${taskId}')">
+    ${task.type !== 'class' ? `<button class="toolbar-btn primary" onclick="exportCollectionToExcel('${taskId}')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      ${task.type === 'class' ? '合并下载Excel' : '下载Excel'}
-    </button>
+      下载Excel
+    </button>` : ''}
     ${task.type === 'class' ? `<button class="toolbar-btn ghost" onclick="downloadAllClassFiles('${taskId}')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      下载原始文件
+      下载所有原始文件
     </button>` : ''}
     <button class="toolbar-btn ghost" style="color:var(--danger);border-color:var(--danger)" onclick="deleteCollectionTask('${taskId}')">删除任务</button>
   </div>`;
@@ -18262,9 +18262,25 @@ function renderIndividualTaskDetail(task) {
 
 // 渲染班级数据收集详情
 function renderClassTaskDetail(task) {
+  let submittedCount = 0;
+  task.recipients.forEach(name => {
+    const response = task.responses && task.responses[name];
+    if (response && response._fileData) submittedCount++;
+  });
+  
   let html = `<div class="card" style="margin-top:16px">
-    <div class="card-header">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
       <h3 style="margin:0;font-size:15px">提交情况</h3>
+      <div style="display:flex;gap:8px">
+        <button class="toolbar-btn ghost" style="font-size:12px" onclick="viewMergedData('${task.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          查看合并数据
+        </button>
+        <button class="toolbar-btn primary" style="font-size:12px" onclick="exportCollectionToExcel('${task.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          下载合并数据
+        </button>
+      </div>
     </div>
     <div class="card-body" style="padding:16px">
       <div style="display:flex;flex-direction:column;gap:12px">`;
@@ -18286,7 +18302,7 @@ function renderClassTaskDetail(task) {
       <div style="display:flex;align-items:center;gap:8px">
         ${isSubmitted ? `<button class="toolbar-btn ghost" style="font-size:12px" onclick="downloadClassSubmission('${task.id}', '${escapeHtml(name)}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          下载
+          下载原始文件
         </button>` : ''}
         <span style="padding:4px 10px;background:${isSubmitted ? 'var(--success)' : 'var(--gray-200)'};color:${isSubmitted ? '#fff' : 'var(--gray-500)'};border-radius:4px;font-size:11px;font-weight:500">${isSubmitted ? '已提交' : '未提交'}</span>
       </div>
@@ -18294,7 +18310,114 @@ function renderClassTaskDetail(task) {
   });
   
   html += `</div></div></div>`;
+  
+  // 合并数据预览区域（默认隐藏）
+  html += `<div id="mergedDataPreview" style="display:none;margin-top:16px"></div>`;
+  
   return html;
+}
+
+// 查看合并数据
+async function viewMergedData(taskId) {
+  const task = collectionData[taskId];
+  if (!task) return;
+  
+  const previewDiv = document.getElementById('mergedDataPreview');
+  if (!previewDiv) return;
+  
+  showToast('正在加载合并数据...', 'info');
+  
+  const allData = [];
+  let headers = null;
+  let hasData = false;
+  
+  for (const name of task.recipients) {
+    const response = task.responses && task.responses[name];
+    if (!response || !response._fileData) continue;
+    
+    try {
+      // 解析 Base64 数据
+      const base64Data = response._fileData.split(',')[1];
+      const binaryStr = atob(base64Data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      
+      // 读取 Excel 文件
+      const workbook = XLSX.read(bytes, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+      
+      if (jsonData.length === 0) continue;
+      
+      // 第一行是表头
+      if (!headers) {
+        headers = ['提交人', ...jsonData[0].map(h => String(h || '').trim())];
+      }
+      
+      // 添加提交人标识
+      const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== '' && cell != null));
+      if (rows.length > 0) {
+        // 添加该班级的数据
+        rows.forEach(row => {
+          allData.push([name, ...row]);
+        });
+        
+        hasData = true;
+      }
+    } catch (err) {
+      console.error(`Failed to parse file from ${name}:`, err);
+    }
+  }
+  
+  if (!headers || allData.length === 0) {
+    showToast('没有可显示的数据', 'warning');
+    return;
+  }
+  
+  // 生成预览表格
+  let html = `<div class="card">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+      <h3 style="margin:0;font-size:15px">合并数据预览</h3>
+      <button class="toolbar-btn ghost" style="font-size:12px" onclick="hideMergedPreview()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        关闭预览
+      </button>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--gray-50)">
+            ${headers.map(col => `<th style="padding:12px;text-align:left;border-bottom:1px solid var(--gray-200);font-weight:600;color:var(--gray-700)">${escapeHtml(col)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>`;
+  
+  allData.forEach((row, idx) => {
+    const isSeparator = idx > 0 && allData[idx - 1][0] !== row[0];
+    html += `<tr style="border-bottom:1px solid var(--gray-100);${isSeparator ? 'border-top:2px solid var(--gray-300)' : ''}">`;
+    row.forEach((cell, colIdx) => {
+      html += `<td style="padding:12px;color:var(--gray-600);${colIdx === 0 ? 'font-weight:500;color:var(--gray-800)' : ''}">${escapeHtml(cell || '')}</td>`;
+    });
+    html += `</tr>`;
+  });
+  
+  html += `</tbody></table></div></div>`;
+  
+  previewDiv.innerHTML = html;
+  previewDiv.style.display = 'block';
+  previewDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  
+  showToast('合并数据加载完成', 'success');
+}
+
+// 隐藏合并数据预览
+function hideMergedPreview() {
+  const previewDiv = document.getElementById('mergedDataPreview');
+  if (previewDiv) {
+    previewDiv.style.display = 'none';
+  }
 }
 
 // 下载单个班级提交的文件
