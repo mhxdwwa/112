@@ -313,9 +313,8 @@ function setupTouchControls(){
     btn.addEventListener('mousedown', trigger);
   });
   window.showTouchControls = (isPvp)=>{
-    /* 鼠标电脑（无触摸屏）不显示虚拟按键，避免挡住画面；键盘照旧可用 */
-    if(!shouldShowTouch()){ touchControls.classList.remove('active'); return; }
-    /* 触屏控件常驻：方向拨杆 + 基本攻击 + 跳跃始终存在，技能槽按学习情况显隐 */
+    /* 触屏控件常驻（电脑也显示：不少人是触屏本/也习惯点按钮），
+       位置由 layoutTouch() 按像素写死，电脑仍是原来的弧形排布 */
     touchControls.classList.add('active');
     const p2Area = document.getElementById('p2Controls');
     if(p2Area) p2Area.style.display = isPvp ? 'block' : 'none';
