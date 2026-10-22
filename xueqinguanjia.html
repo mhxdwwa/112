@@ -228,6 +228,9 @@ a { text-decoration: none; color: inherit; }
   font-size: 11px; color: var(--gray-400);
   white-space: nowrap;
   user-select: none;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--gray-200);
 }
 .header-copyright span {
   margin-right: 8px;
@@ -904,7 +907,6 @@ tbody tr:last-child td { border-bottom: none; }
   .header-title { font-size: 15px; }
   .header-breadcrumb { display: none; }
   .header-date { display: none; }
-  .header-copyright { display: none; }
   .header-left { gap: 8px; }
 
   /* === 内容区域 === */
@@ -1690,9 +1692,9 @@ tbody tr:last-child td { border-bottom: none; }
         </button>
         <h1 class="header-title" id="headerTitle">全校概览</h1>
         <span class="header-breadcrumb" id="headerBreadcrumb">首页 / 全校概览</span>
+        <span class="header-copyright"><span>© 学勤管家</span><span>开发者：吴胜闯</span></span>
       </div>
       <div class="header-right">
-        <span class="header-copyright"><span>© 学勤管家</span><span>开发者：吴胜闯</span></span>
         <span class="header-date" id="headerDate"></span>
         <button class="header-btn" id="scanQrBtn" onclick="openXqQrScanner()" style="display:none" title="扫码登录">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><rect x="7" y="7" width="3" height="3"/><rect x="14" y="7" width="3" height="3"/><rect x="7" y="14" width="3" height="3"/><rect x="14" y="14" width="3" height="3"/></svg>
