@@ -141,18 +141,34 @@ function layoutPhone(){
   });
 }
 
+/* ESC 圆钮：贴左边，位置放在摇杆正上方（不压左侧图标列 / 任务追踪框） */
+function positionEsc(){
+  const b = document.getElementById('btnEsc');
+  if(!b) return;
+  const h = b.offsetHeight || 46;
+  const joy = document.querySelector('.p1-area .joystick-container');
+  let top = 8;
+  if(joy){
+    const r = joy.getBoundingClientRect();
+    if(r.height > 0) top = Math.round(r.top - 10 - h);
+  }
+  b.style.top = (top > 8 ? top : 8) + 'px';
+}
+
 function layoutTouch(){
   const tc = document.getElementById('touchControls');
   if(!tc) return;
   if(!tc.classList.contains('active')) return;
-  if(!tc.classList.contains('mobile')){ layoutArc(); return; }
+  if(!tc.classList.contains('mobile')){ layoutArc(); positionEsc(); return; }
   /* 双人同屏交给 CSS 网格（左右各占一侧）：把之前写进去的 inline 坐标全部清掉 */
   if(tc.classList.contains('pvp')){
     document.querySelectorAll('#touchControls .p1-area, #touchControls .p2-area, #touchControls .action-pad, #touchControls .joystick-container, #touchControls .skill-btn')
       .forEach(function(el){ el.style.cssText = ''; });
+    positionEsc();
     return;
   }
   layoutPhone();
+  positionEsc();
 }
 window.layoutTouch = layoutTouch;
 
@@ -417,6 +433,9 @@ bindMobileFrame();
     };
     b.addEventListener('touchstart', fire, { passive: false });
     b.addEventListener('mousedown', fire);
+    window.addEventListener('resize', positionEsc);
+    window.addEventListener('orientationchange', function(){ setTimeout(positionEsc, 260); });
+    setTimeout(positionEsc, 300);
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
