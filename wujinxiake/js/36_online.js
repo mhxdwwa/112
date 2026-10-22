@@ -9,6 +9,9 @@
 'use strict';
 
 const CHANNEL_NAME = 'wjx:world';
+/* 不进房间时，所有在城镇的人共用这个公共频道 —— 这就是「同一频道看到多人」 */
+const LOBBY = 'LOBBY';
+function myRoom(){ return roomCode || LOBBY; }
 const SEND_MS  = 110;      /* 位置广播间隔 */
 const DROP_MS  = 9000;     /* 这么久没消息就当掉线 */
 
@@ -113,7 +116,7 @@ function track(){
   if(!ch || !joined) return;
   lastTrack = Date.now();
   try{
-    ch.track({ uid: uid, name: myName, lv: myLv, job: myJob, room: roomCode, at: lastTrack });
+    ch.track({ uid: uid, name: myName, lv: myLv, job: myJob, room: myRoom(), at: lastTrack });
   }catch(e){}
 }
 
@@ -138,7 +141,7 @@ function renderPlayers(){
   box.innerHTML = list.map(function(p){
     const isMe = p.uid === uid;
     const cls = 'op-player' + (isMe ? ' me' : '') + (p.room ? ' inroom' : '');
-    const tag = p.room ? '<i>房 ' + esc(p.room) + '</i>' : '';
+    const tag = (p.room && p.room !== LOBBY) ? '<i>房 ' + esc(p.room) + '</i>' : '';
     return '<div class="' + cls + '"><span>' + esc(p.name || '侠客') + '</span>' +
            '<em>Lv.' + (p.lv || 1) + '</em>' + tag + '</div>';
   }).join('');
@@ -213,7 +216,7 @@ function inPlayableState(){
 }
 
 function sendPos(){
-  if(!ch || !joined || !roomCode) return;
+  if(!ch || !joined) return;
   if(!inPlayableState()) return;
   const p = (typeof townPlayer !== 'undefined' && townPlayer) ? townPlayer
           : (typeof G !== 'undefined' && G && G.player ? G.player : null);
@@ -227,7 +230,7 @@ function sendPos(){
     ch.send({
       type: 'broadcast', event: 'pos',
       payload: {
-        id: uid, n: myName, lv: myLv, w: myJob, r: roomCode,
+        id: uid, n: myName, lv: myLv, w: myJob, r: myRoom(),
         x: Math.round(p.x), y: Math.round(p.y),
         f: p.facing >= 0 ? 1 : -1,
         s: (p.state === 'walk' || p.state === 'run') ? 'w' : 'i',
@@ -239,7 +242,7 @@ function sendPos(){
 
 function onPos(p){
   if(!p || !p.id || p.id === uid) return;
-  if(!roomCode || p.r !== roomCode) return;   /* 不同房间不显示 */
+  if(p.r !== myRoom()) return;   /* 公共频道 = 所有在城镇的人；房间内只看同房间的 */
   let r = remotes.get(p.id);
   if(!r){
     r = { id: p.id, x: p.x, y: p.y, tx: p.x, ty: p.y, f: p.f || 1, state: 'i',
@@ -256,7 +259,7 @@ function onPos(p){
 
 function onChat(p){
   if(!p || p.id === uid) return;
-  if(p.r !== roomCode) return;
+  if(p.r !== myRoom()) return;
   chatLine(p.n || '侠客', p.m || '');
 }
 
@@ -286,7 +289,7 @@ function collectDrawables(arr){
   _lastTick = nowMs;
   updateRemotes(dt, Date.now());
 
-  if(!remotes.size || !roomCode) return;
+  if(!remotes.size) return;
   remotes.forEach(function(r){ arr.push({ y: r.y, fn: function(){ drawOne(r); } }); });
 }
 
@@ -327,11 +330,10 @@ function sendChat(){
   const m = String(el.value || '').trim();
   if(!m) return;
   el.value = '';
-  if(!roomCode){ chatLine('', '先加入一个房间才能聊天', true); return; }
   chatLine(myName, m);
   if(!ch || !joined) return;
   try{
-    ch.send({ type: 'broadcast', event: 'chat', payload: { id: uid, n: myName, m: m, r: roomCode } });
+    ch.send({ type: 'broadcast', event: 'chat', payload: { id: uid, n: myName, m: m, r: myRoom() } });
   }catch(e){}
 }
 
