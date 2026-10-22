@@ -44,7 +44,7 @@ function update(){
 
   if(tip){
     tip.textContent = i.logged
-      ? '已登录：每 20 秒自动同步到云端，切后台或关页面也会立刻保存；换设备登录同一账号即可继续。'
+      ? '已登录：每 20 秒自动同步云端，关页面也会立刻保存。这个账号是浏览器里已有的登录状态（本站其他页面登录过会自动沿用）；想用自己的账号，点「退出 / 换账号」注册即可。'
       : '游客进度只存在这台浏览器（localStorage），换设备、清缓存或换浏览器都会丢。注册后才有云端存档。';
   }
 
@@ -87,8 +87,14 @@ function boot(){
 
   const sw = $('accSwitch');
   if(sw) sw.addEventListener('click', function(){
-    if(!window.AUTH || !window.AUTH.loggedIn){ location.reload(); return; }
-    if(confirm('退出 ' + (window.AUTH.username || '当前账号') + ' 并切换其他账号？\n（进度已自动保存到云端）')) window.AUTH.logout();
+    const name = (window.AUTH && window.AUTH.username) || '当前账号';
+    const ok = confirm('退出「' + name + '」？\n\n· 退出后可以直接注册一个属于自己的账号，或登录别的账号\n· 当前进度已存在这个账号的云存档里，重新登录同一账号即可继续');
+    if(!ok) return;
+    try{ window.CloudSave && window.CloudSave.save(); }catch(e){}
+    setTimeout(function(){
+      if(window.AUTH && window.AUTH.loggedIn) window.AUTH.logout('reg');
+      else location.replace(location.pathname + '?auth=reg');
+    }, 450);
   });
 
   /* 点面板外面收起 */
