@@ -643,18 +643,24 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 /* === CLASS CARD === */
-.class-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.class-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 160px)); gap: 12px; justify-content: start; }
 .class-card {
-  background: #fff; border-radius: var(--radius); padding: 20px;
+  background: #fff; border-radius: var(--radius); padding: 14px;
   border: 1px solid var(--gray-200); cursor: pointer;
   transition: var(--transition);
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
 }
 .class-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); border-color: var(--primary-light); }
 .class-card-title { font-size: 15px; font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
-.class-card-sub { font-size: 12px; color: var(--gray-400); margin-bottom: 14px; }
-.class-card-stats { display: flex; gap: 16px; }
-.class-card-stat { font-size: 12px; color: var(--gray-500); }
-.class-card-stat strong { color: var(--gray-800); font-weight: 600; font-size: 16px; display: block; }
+.class-card-sub { font-size: 11px; color: var(--gray-400); margin-bottom: 10px; }
+.class-card-stats { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.class-card-stat { font-size: 11px; color: var(--gray-500); text-align: center; }
+.class-card-stat strong { color: var(--gray-800); font-weight: 600; font-size: 15px; display: block; }
 
 /* === ANIMATIONS === */
 @keyframes fadeInUp {
@@ -1240,7 +1246,7 @@ tbody tr:last-child td { border-bottom: none; }
   color: var(--gray-700);
   cursor: default;
   min-height: 36px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .timetable-cell.header:hover { background: var(--gray-50); }
 .timetable-cell.period-label {
@@ -1248,13 +1254,13 @@ tbody tr:last-child td { border-bottom: none; }
   font-weight: 600;
   color: var(--gray-600);
   cursor: default;
-  font-size: 11px;
+  font-size: 12px;
   min-width: 50px;
 }
 .timetable-cell.period-label:hover { background: var(--gray-50); }
-.timetable-cell .subject-name { font-weight: 600; color: var(--gray-800); font-size: 12px; }
-.timetable-cell .subject-teacher { font-size: 10px; color: var(--gray-500); margin-top: 2px; }
-.timetable-cell .subject-room { font-size: 9px; color: var(--gray-400); margin-top: 1px; }
+.timetable-cell .subject-name { font-weight: 700; color: var(--gray-900); font-size: 14px; letter-spacing: 0.5px; }
+.timetable-cell .subject-teacher { font-size: 11px; color: var(--gray-600); margin-top: 2px; font-weight: 500; }
+.timetable-cell .subject-room { font-size: 10px; color: var(--gray-400); margin-top: 1px; }
 .timetable-cell.empty { color: var(--gray-300); }
 .timetable-cell.editable { cursor: pointer; }
 .timetable-cell.editable:hover { background: var(--primary-bg); border-color: var(--primary-light); }
@@ -14800,7 +14806,7 @@ function renderTimetableGrid(className) {
       } else {
         html += `<div class="timetable-cell empty ${cellClass} ${canEdit ? 'editable' : ''}" 
           ${canEdit ? `onclick="editTimetableSlot('${className}',${w},${p})"` : ''}>
-          ${canEdit ? `<span style="color:var(--gray-300);font-size:11px">点击编辑${timeStr ? '<br>' + timeStr : ''}</span>` : (timeStr ? `<span class="period-time">${timeStr}</span>` : '')}
+          ${timeStr ? `<span class="period-time">${timeStr}</span>` : ''}
         </div>`;
       }
     }
@@ -14927,7 +14933,7 @@ function renderEditableTeacherTimetable() {
         </div>`;
       } else {
         html += `<div class="timetable-cell ${cellClass} editable empty" onclick="addTeacherTimetableSlot(${w},${p})">
-          <span style="color:var(--gray-300);font-size:11px">点击添加${timeStr ? '<br>' + timeStr : ''}</span>
+          ${timeStr ? `<span class="period-time">${timeStr}</span>` : ''}
         </div>`;
       }
     }
