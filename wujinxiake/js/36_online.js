@@ -351,6 +351,7 @@ function showCard(r){
     '<div class="oc-acts"><button id="ocPk" type="button">邀请切磋</button>' +
     '<button id="ocClose" type="button">关闭</button></div>';
   c.classList.add('open');
+  var _esc = document.getElementById('btnEsc'); if(_esc) _esc.classList.add('behind');
   const pk = $('ocPk');
   if(pk) pk.addEventListener('click', function(){ invitePk(cardTarget); });
   const cl = $('ocClose');
@@ -386,7 +387,11 @@ function renderCardProfile(d){
   }
   box.innerHTML = h;
 }
-function hideCard(){ const c = $('opCard'); if(c) c.classList.remove('open'); cardTarget = ''; }
+function hideCard(){
+  const c = $('opCard'); if(c) c.classList.remove('open');
+  const e = document.getElementById('btnEsc'); if(e) e.classList.remove('behind');
+  cardTarget = '';
+}
 
 function invitePk(id){
   if(!id) return;
