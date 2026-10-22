@@ -253,7 +253,11 @@ function maxEnhanceLv(p){
 function questStepDone(p, st){
   if(!st) return false;
   switch(st.type){
-    case 'story': return !!(p.prologueSeen || (p.quest && p.quest.storyDone));
+    case 'story': {
+      /* 老存档里没有 prologueSeen：只要已经玩过（升级过 / 任务推进过）就算听完 */
+      const played = (p.level | 0) > 1 || (p.quest && p.quest.idx > 0);
+      return !!(p.prologueSeen || (p.quest && p.quest.storyDone) || played);
+    }
     case 'level': return (p.level || 1) >= st.level;
     case 'clear': return (p.clearedLevels || []).indexOf(st.level) >= 0;
     case 'kills': { /* 击杀数按“接取该步之后”计数（DNF式委托），避免旧击杀直接完成任务 */
