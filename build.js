@@ -192,6 +192,17 @@ async function main() {
     console.error(`  ✗ qingya-wenjian/: ${e.message}`);
   }
 
+  // v301: Copy wujinxiake game directory (无尽侠客 · 2.5D 横版武侠格斗)
+  // 入口：wujinxiake/wujinxiake.html
+  try {
+    const wjxSrc = resolve(__dirname, 'wujinxiake');
+    const wjxDist = join(DIST, 'wujinxiake');
+    copyDirRecursive(wjxSrc, wjxDist);
+    console.log('  ✓ wujinxiake/: 无尽侠客 game directory copied');
+  } catch (e) {
+    console.error(`  ✗ wujinxiake/: ${e.message}`);
+  }
+
   // Copy root images
   for (const img of ['小猪.png', '小猪.webp']) {
     try {

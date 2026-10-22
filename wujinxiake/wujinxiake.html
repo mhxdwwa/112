@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>无尽侠客 · 2.5D 横版格斗</title>
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/touch.css" />
+<link rel="stylesheet" href="css/toast.css" />
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="uiToast"></div>
+
+<div class="touch-controls" id="touchControls">
+  <div class="p1-area">
+    <div class="player-label" style="color:#5ee7ff;">P1</div>
+    <div class="joystick-container" id="joystick1" style="position:absolute;left:0;bottom:0;">
+      <div class="joystick-base"></div>
+      <div class="joystick-stick" id="stick1"></div>
+    </div>
+    <div class="skill-btn attack-btn" data-player="1" data-action="attack" style="left:124px;bottom:6px;">
+      <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
+    </div>
+    <div class="skill-btn jump-btn" data-player="1" data-action="jump" style="left:196px;bottom:24px;">
+      <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </div>
+    <div class="skill-btn skill1" data-player="1" data-action="skill1" id="p1skill1" style="left:198px;bottom:92px;"></div>
+    <div class="skill-btn skill2" data-player="1" data-action="skill2" id="p1skill2" style="left:138px;bottom:122px;"></div>
+    <div class="skill-btn skill3" data-player="1" data-action="skill3" id="p1skill3" style="left:78px;bottom:132px;"></div>
+    <div class="skill-btn skill4" data-player="1" data-action="skill4" id="p1skill4" style="left:24px;bottom:116px;">
+      <span style="font-size:17px;opacity:.85;pointer-events:none">4</span>
+    </div>
+    <div class="skill-btn skill5" data-player="1" data-action="skill5" id="p1skill5" style="left:84px;bottom:184px;">
+      <span style="font-size:17px;opacity:.85;pointer-events:none">5</span>
+    </div>
+    <div class="skill-btn skill6" data-player="1" data-action="skill6" id="p1skill6" style="left:148px;bottom:200px;">
+      <span style="font-size:17px;opacity:.85;pointer-events:none">6</span>
+    </div>
+  </div>
+  <div class="p2-area" id="p2Controls" style="display:none;">
+    <div class="player-label" style="color:#ff6a5a;">P2</div>
+    <div class="joystick-container" id="joystick2" style="position:absolute;right:0;bottom:0;">
+      <div class="joystick-base"></div>
+      <div class="joystick-stick" id="stick2"></div>
+    </div>
+    <div class="skill-btn attack-btn" data-player="2" data-action="attack" style="right:124px;bottom:6px;">
+      <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
+    </div>
+    <div class="skill-btn jump-btn" data-player="2" data-action="jump" style="right:196px;bottom:24px;">
+      <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </div>
+    <div class="skill-btn skill1" data-player="2" data-action="skill1" id="p2skill1" style="right:198px;bottom:92px;"></div>
+    <div class="skill-btn skill2" data-player="2" data-action="skill2" id="p2skill2" style="right:138px;bottom:122px;"></div>
+    <div class="skill-btn skill3" data-player="2" data-action="skill3" id="p2skill3" style="right:78px;bottom:132px;"></div>
+    <div class="skill-btn skill4" data-player="2" data-action="skill4" id="p2skill4" style="right:24px;bottom:116px;">
+      <span style="font-size:17px;opacity:.85;pointer-events:none">4</span>
+    </div>
+    <div class="skill-btn skill5" data-player="2" data-action="skill5" id="p2skill5" style="right:84px;bottom:184px;">
+      <span style="font-size:17px;opacity:.85;pointer-events:none">5</span>
+    </div>
+    <div class="skill-btn skill6" data-player="2" data-action="skill6" id="p2skill6" style="right:148px;bottom:200px;">
+      <span style="font-size:17px;opacity:.85;pointer-events:none">6</span>
+    </div>
+  </div>
+</div>
+<script src="js/01_core.js"></script>
+<script src="js/02_char_atlases.js"></script>
+<script src="js/03_monster_atlases.js"></script>
+<script src="js/04_equip_visual.js"></script>
+<script src="js/05_audio.js"></script>
+<script src="js/06_touch.js"></script>
+<script src="js/07_skill_icons.js"></script>
+<script src="js/08_menu.js"></script>
+<script src="js/09_world.js"></script>
+<script src="js/10_skill_growth.js"></script>
+<script src="js/11_levels.js"></script>
+<script src="js/12_equip_data.js"></script>
+<script src="js/13_drops.js"></script>
+<script src="js/14_town_data.js"></script>
+<script src="js/15_quests.js"></script>
+<script src="js/16_abyss.js"></script>
+<script src="js/17_escmenu.js"></script>
+<script src="js/18_jobs.js"></script>
+<script src="js/19_skills.js"></script>
+<script src="js/20_boss_skills.js"></script>
+<script src="js/21_combat.js"></script>
+<script src="js/22_player.js"></script>
+<script src="js/23_town_sys.js"></script>
+<script src="js/24_enhance_ui.js"></script>
+<script src="js/25_equip_icons.js"></script>
+<script src="js/26_hud.js"></script>
+<script src="js/27_level_select.js"></script>
+<script src="js/28_shop.js"></script>
+<script src="js/29_render_world.js"></script>
+<script src="js/30_rooms.js"></script>
+<script src="js/31_portal_minimap.js"></script>
+<script src="js/32_naming.js"></script>
+<script src="js/33_main_loop.js"></script>
+<script src="js/34_dev_debug.js"></script>
+</body>
+</html>
