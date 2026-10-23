@@ -3,25 +3,20 @@
 /* ===== 基础 ===== */
 const cvs = document.getElementById('c');
 const ctx = cvs.getContext('2d');
-/* ★ 动态计算画布尺寸：铺满整个窗口，保持 16:9 比例 */
+/* ★ 动态计算画布尺寸：铺满整个窗口，高度固定720，宽度按实际屏幕比例扩展 */
 let VW = 1280, VH = 720;
 function updateCanvasSize(){
   const winW = window.innerWidth;
   const winH = window.innerHeight;
-  const aspect = 16/9;
-  if(winW / winH > aspect){
-    /* 窗口更宽，以高度为基准 */
-    VH = winH;
-    VW = Math.round(winH * aspect);
-  } else {
-    /* 窗口更高，以宽度为基准 */
-    VW = winW;
-    VH = Math.round(winW / aspect);
-  }
+  /* 高度始终为720，宽度按屏幕实际比例计算 */
+  VH = 720;
+  VW = Math.round(720 * (winW / winH));
+  /* 确保最小宽度 */
+  if(VW < 1280) VW = 1280;
   cvs.width = Math.round(VW * DPR);
   cvs.height = Math.round(VH * DPR);
-  cvs.style.width = VW + 'px';
-  cvs.style.height = VH + 'px';
+  cvs.style.width = '100vw';
+  cvs.style.height = '100vh';
 }
 /* ★ 高清渲染：按设备像素比放大画布，逻辑坐标不变（解决画面发糊） */
 const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
