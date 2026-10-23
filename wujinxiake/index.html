@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+<script>
+/* 版本自检：旧版 HTML/资源被缓存时自动重载一次（扫码深链不动） */
+(function () {
+  try {
+    var V = '18';
+    if (/[?&]qr=/.test(location.search)) return;
+    var k = 'wjx_ver';
+    if (localStorage.getItem(k) !== V) {
+      localStorage.setItem(k, V);
+      if (!/[?&]r=/.test(location.search)) {
+        location.replace(location.pathname + '?r=' + V + '.' + Date.now());
+      }
+    }
+  } catch (e) {}
+})();
+</script>
+
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>无尽侠客 · 2.5D 横版格斗</title>
