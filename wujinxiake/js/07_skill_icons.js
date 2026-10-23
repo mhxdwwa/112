@@ -176,6 +176,7 @@ function updateSkillDamageDisplay(){
   if(!G) return;
   const pairs = [[1, G.player], [2, G.player2]];
   for(const [num, p] of pairs){
+    if(!p) continue;
     const prefix = num === 1 ? 'p1' : 'p2';
     for(let i = 0; i < 6; i++){
       const el = document.getElementById(prefix + 'skill' + (i + 1));
@@ -187,7 +188,7 @@ function updateSkillDamageDisplay(){
       if(oldLv) oldLv.remove();
       /* 检查技能是否已解锁 */
       let locked = false;
-      if(p && !p.pvpAllSkills && !G.isPvp){
+      if(!p.pvpAllSkills && !G.isPvp){
         locked = !(p.skillsUnlocked && p.skillsUnlocked[i]);
       }
       if(locked) continue;
@@ -218,12 +219,13 @@ function refreshSkillLockUI(){
   if(!G) return;
   const pairs = [[1, G.player], [2, G.player2]];
   for(const [num, p] of pairs){
+    if(!p) continue;
     const prefix = num === 1 ? 'p1' : 'p2';
     for(let i = 0; i < 6; i++){
       const el = document.getElementById(prefix + 'skill' + (i + 1));
       if(!el) continue;
       let locked = false;
-      if(p && !p.pvpAllSkills && !G.isPvp){
+      if(!p.pvpAllSkills && !G.isPvp){
         locked = !(p.skillsUnlocked && p.skillsUnlocked[i]);
       }
       /* 隐藏而非灰显：未学习的技能不占视觉，学会后再出现 */

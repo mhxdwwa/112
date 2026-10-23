@@ -1,1 +1,1 @@
-{"v":"27","t":"2026-10-23 22:00","note":"fix: 修复点击已有角色进入时仍显示命名界面的bug"}
+{"v":"28","t":"2026-10-23 22:30","note":"fix: 修复updateSkillDamageDisplay在单人模式下访问undefined的player2导致崩溃"}
