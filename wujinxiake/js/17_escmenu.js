@@ -55,8 +55,10 @@ function buildWikiList(){
   wikiItems = [];
   const lv = wikiLvIdx;
   /* ★ 与掉落规则一致：50 级以下档位不出传说/史诗（图鉴中同样不展示） */
+  /* ★ 飞行道具不受等级限制，固定品阶全部展示 */
+  const isMountTab = wikiSlot === 'mount';
   const tiers = (wikiTierIdx < 0 ? [0, 1, 2, 3, 4, 5] : [wikiTierIdx])
-    .filter(function(ti){ return !(lv <= 4 && ti >= 4); });
+    .filter(function(ti){ return isMountTab || !(lv <= 4 && ti >= 4); });
   for(const ti of tiers){
     if(wikiSlot === 'weapon'){
       /* 武器：8 种职业武器各出一件，展示全部武器谱系 */
