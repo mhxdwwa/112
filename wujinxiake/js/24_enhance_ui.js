@@ -1130,7 +1130,7 @@ function drawSkillMenu(){
   ctx.fillStyle = '#9fe6ff'; ctx.font = '14px "Microsoft YaHei"';
   ctx.fillText('角色 Lv.' + p.level + '   ｜   剩余技能点 ' + remain + ' SP   ｜   已投入 ' + spent + ' SP   ｜   累计获得 ' + (remain + spent) + ' SP', VW/2, 72);
   ctx.fillStyle = '#6f8b9e'; ctx.font = '12px "Microsoft YaHei"';
-  ctx.fillText('每升 1 级获得 ' + SP_PER_LEVEL + ' SP · 技能可升到的等级受角色等级限制（基础技每 2 级 +1，高阶技每 3 级 +1）· 技能等级每+1，伤害+6%', VW/2, 96);
+  ctx.fillText('每升 1 级获得 ' + SP_PER_LEVEL + ' SP · 技能可升到的等级受角色等级限制（基础技每 2 级 +1，高阶技每 3 级 +1）· 技能等级每+1，伤害+12%', VW/2, 96);
 
   skillMenuClickRegions = [];
 
@@ -1235,14 +1235,21 @@ function drawSkillMenu(){
     ctx.fillStyle = dead ? '#5d6875' : '#8fa8bc'; ctx.font = '11px "Microsoft YaHei"';
     ctx.fillText(sk.desc || '', x+84, y+97);
 
-    /* 伤害成长 */
-    if(!isLocked && i < 3){
-      const nowMul = 1 + Math.max(0, curLv-1) * SKILL_DMG_PER_LV;
-      const nextMul = 1 + Math.max(0, curLv) * SKILL_DMG_PER_LV;
-      ctx.fillStyle = '#2ee6a8'; ctx.font = '11px "Microsoft YaHei"';
-      ctx.fillText(isMax
-        ? '技能伤害 +' + Math.round((nowMul-1)*100) + '%（已满级）'
-        : '技能伤害 +' + Math.round((nowMul-1)*100) + '%   →   升级后 +' + Math.round((nextMul-1)*100) + '%', x+84, y+117);
+    /* 伤害成长：显示实际伤害数值对比 */
+    if(!isLocked && typeof calcSkillDamage === 'function'){
+      const curDmg = calcSkillDamage(p, i);
+      const nextDmg = calcSkillDamageNext(p, i);
+      const pctNow = Math.round((Math.max(0, curLv-1) * SKILL_DMG_PER_LV)*100);
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 11px "Microsoft YaHei"';
+      if(isMax){
+        ctx.fillText('伤害：' + curDmg.toLocaleString() + '（已满级）', x+84, y+117);
+      } else if(nextDmg > 0){
+        const diff = nextDmg - curDmg;
+        const pctNext = Math.round((Math.max(0, curLv) * SKILL_DMG_PER_LV)*100);
+        ctx.fillText('伤害：' + curDmg.toLocaleString() + ' → ' + nextDmg.toLocaleString() + '（+' + diff.toLocaleString() + '，+' + (pctNext-pctNow) + '%）', x+84, y+117);
+      } else {
+        ctx.fillText('伤害：' + curDmg.toLocaleString() + '（当前等级上限）', x+84, y+117);
+      }
     } else {
       ctx.fillStyle = '#5d6875'; ctx.font = '11px "Microsoft YaHei"';
       ctx.fillText(isLocked ? '该技能尚未设计开放，技能槽已预留' : ('角色等级达到 Lv.' + unlockLv + ' 后可学习'), x+84, y+117);

@@ -5,7 +5,7 @@
 */
 const SP_PER_LEVEL = 4;          // 每级获得技能点
 const SP_START = 4;              // 初始技能点
-const SKILL_DMG_PER_LV = 0.06;   // 每级技能伤害成长
+const SKILL_DMG_PER_LV = 0.12;   // 每级技能伤害成长（12%，更明显）
 
 function skillMaxLv(sk){ return (sk && sk.maxLv) ? sk.maxLv : 20; }
 

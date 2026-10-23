@@ -137,7 +137,7 @@ function updateSkillIcons(num, weaponIdx){
   refreshSkillLockUI();
 }
 
-/* ★ 计算技能当前等级的总伤害 */
+/* ★ 计算技能当前等级的总伤害（包含技能威力系数） */
 function calcSkillDamage(p, skillIdx){
   if(!p || !p.equipment) return 0;
   const w = WEAPONS[p.weaponIdx];
@@ -150,10 +150,28 @@ function calcSkillDamage(p, skillIdx){
   atkVal *= (1 + (lv - 1) * SKILL_DMG_PER_LV);
   /* 魔法系职业：智力转化为技能伤害加成 */
   if(p.skillIntBonus) atkVal *= (1 + p.skillIntBonus);
+  /* 技能威力系数（每个技能不同，大招系数更高） */
   return Math.round(atkVal * power);
 }
 
-/* ★ 更新技能按钮上的伤害数值显示 */
+/* ★ 计算技能下一级伤害（用于对比显示） */
+function calcSkillDamageNext(p, skillIdx){
+  if(!p || !p.equipment) return 0;
+  const w = WEAPONS[p.weaponIdx];
+  if(!w || !w.skills[skillIdx]) return 0;
+  const sk = w.skills[skillIdx];
+  const lv = (p.skillLevels && p.skillLevels[skillIdx]) || 1;
+  const nextLv = lv + 1;
+  const maxLv = sk.maxLv || 20;
+  if(nextLv > maxLv) return 0; // 已满级
+  const power = sk.power || 1.0;
+  let atkVal = p.atk * (w.atkMul || 1.0);
+  atkVal *= (1 + (nextLv - 1) * SKILL_DMG_PER_LV);
+  if(p.skillIntBonus) atkVal *= (1 + p.skillIntBonus);
+  return Math.round(atkVal * power);
+}
+
+/* ★ 更新技能按钮上的伤害数值和等级显示 */
 function updateSkillDamageDisplay(){
   if(!G) return;
   const pairs = [[1, G.player], [2, G.player2]];
@@ -162,15 +180,26 @@ function updateSkillDamageDisplay(){
     for(let i = 0; i < 6; i++){
       const el = document.getElementById(prefix + 'skill' + (i + 1));
       if(!el) continue;
-      /* 移除旧的伤害显示元素 */
+      /* 移除旧的显示元素 */
       const oldDmg = el.querySelector('.skill-dmg');
       if(oldDmg) oldDmg.remove();
+      const oldLv = el.querySelector('.skill-lv');
+      if(oldLv) oldLv.remove();
       /* 检查技能是否已解锁 */
       let locked = false;
       if(p && !p.pvpAllSkills && !G.isPvp){
         locked = !(p.skillsUnlocked && p.skillsUnlocked[i]);
       }
       if(locked) continue;
+      /* 获取技能等级 */
+      const lv = (p.skillLevels && p.skillLevels[i]) || 1;
+      /* 添加等级显示 */
+      if(lv > 1){
+        const lvEl = document.createElement('span');
+        lvEl.className = 'skill-lv';
+        lvEl.textContent = 'Lv' + lv;
+        el.appendChild(lvEl);
+      }
       /* 计算伤害并添加显示 */
       const dmg = calcSkillDamage(p, i);
       if(dmg > 0){
