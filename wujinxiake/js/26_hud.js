@@ -195,9 +195,9 @@ function questGuideTarget(){
   /* 深渊前置任务：qa2 通关子夜鬼门 → 指向深渊传送使·玄冥 */
   if(cq.id === 'qa2') return NPCS.find(n => n.id === 'porter') || null;
   if(needDungeon){
-    if(q.idx < 6) id = 'gate_east';        /* 前期任务 → 青鸾（1~20 级图） */
-    else if(q.idx < 14) id = 'gate_south'; /* 中期任务 → 朱明（21~40 级图） */
-    else id = 'gate_west';                 /* 后期任务 → 白泽（41~60 级图） */
+    if(q.idx < 11) id = 'gate_east';        /* 第一~三章 → 青鸾（1~22 级图，索引 0~6） */
+    else if(q.idx < 18) id = 'gate_south';  /* 第四~五章 → 朱明（22~41 级图，索引 7~12） */
+    else id = 'gate_west';                  /* 第六章+ → 白泽（41~60 级图，索引 13~23） */
   }
   return NPCS.find(n => n.id === id) || null;
 }
