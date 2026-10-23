@@ -52,12 +52,12 @@ function unlockPlayerSkill(p, idx){
   questToastMsg('领悟新技 · ' + nm, (w && w.skills[idx]) ? w.skills[idx].desc : '', '#7dffd4');
   refreshSkillLockUI();
 }
-function grantQuestReward(p, q){
+function grantQuestReward(p, q, skipExp){
   const r = q.reward || {};
   if(r.gold) p.gold = (p.gold || 0) + r.gold;
   if(r.sp) p.skillPoints = (p.skillPoints || 0) + r.sp;
-  /* ★ 任务经验：大量经验，让前期升级更快 */
-  if(r.exp){
+  /* ★ 任务经验：大量经验，让前期升级更快（跳过任务时不发经验） */
+  if(r.exp && !skipExp){
     p.exp = (p.exp || 0) + r.exp;
     spawnText(p.x, p.y - 90, 90, `经验 +${r.exp}`, '#c9ffa2', 20);
     /* 经验可能跨多级，统一走升级检测 */

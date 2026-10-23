@@ -357,7 +357,8 @@ function skipAllEligibleQuests(p){
     if((p.level || 1) >= unlockLv){
       const cq = MAIN_QUESTS[i];
       q.done.push(cq.id);
-      try{ grantQuestReward(p, cq); }catch(e){}
+      /* ★ 跳过任务时不发经验（避免一次性发放大量经验导致连升多级） */
+      try{ grantQuestReward(p, cq, true); }catch(e){}
       skipped++;
     }
   }
