@@ -3,10 +3,30 @@
 /* ===== 基础 ===== */
 const cvs = document.getElementById('c');
 const ctx = cvs.getContext('2d');
-const VW = 1280, VH = 720;
+/* ★ 动态计算画布尺寸：铺满整个窗口，保持 16:9 比例 */
+let VW = 1280, VH = 720;
+function updateCanvasSize(){
+  const winW = window.innerWidth;
+  const winH = window.innerHeight;
+  const aspect = 16/9;
+  if(winW / winH > aspect){
+    /* 窗口更宽，以高度为基准 */
+    VH = winH;
+    VW = Math.round(winH * aspect);
+  } else {
+    /* 窗口更高，以宽度为基准 */
+    VW = winW;
+    VH = Math.round(winW / aspect);
+  }
+  cvs.width = Math.round(VW * DPR);
+  cvs.height = Math.round(VH * DPR);
+  cvs.style.width = VW + 'px';
+  cvs.style.height = VH + 'px';
+}
 /* ★ 高清渲染：按设备像素比放大画布，逻辑坐标不变（解决画面发糊） */
 const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-cvs.width = Math.round(VW * DPR); cvs.height = Math.round(VH * DPR);
+updateCanvasSize();
+window.addEventListener('resize', updateCanvasSize);
 
 /* ★ 游戏状态提前声明：菜单/音频等脚本里的监听器可能在后续文件加载完成前就被触发，
    若声明写在 18_jobs.js 里会报 "gameState is not defined" */
