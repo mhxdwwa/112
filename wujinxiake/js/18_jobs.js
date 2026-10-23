@@ -73,7 +73,7 @@ const STAT_CAPS = {
   maxMoveSpeed: 500,
   maxCrit: 50, // 暴击率上限50%
   maxHp: 999999,
-  maxMp: 999
+  maxMp: 99999
 };
 
 /* gameState 已在 01_core.js 提前声明（避免加载期监听器报未定义） */
