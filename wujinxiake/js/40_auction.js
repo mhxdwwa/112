@@ -51,14 +51,25 @@
     try { if (typeof G !== 'undefined' && G && G.player) return G.player; } catch (e) {}
     return null;
   }
-  function myUid() {
-    try { if (window.AUTH && window.AUTH.uid) return window.AUTH.uid; } catch (e) {}
+  /* ★ 卖家身份：可能同时有「账号 uid」和「本机游客 id」两个，
+     两个都要记住 —— 之前挂单是游客身份、后来登录了，也要能领到钱、能下架 */
+  function myUids(){
+    const out = [];
+    try { if (window.AUTH && window.AUTH.uid) out.push(String(window.AUTH.uid)); } catch (e) {}
+    let g = '';
     try {
-      let id = localStorage.getItem('wjx_guest_id');
-      if (!id) { id = 'guest-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('wjx_guest_id', id); }
-      return id;
-    } catch (e) { return 'anon'; }
+      g = localStorage.getItem('wjx_guest_id') || '';
+      if (!g) { g = 'guest-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('wjx_guest_id', g); }
+    } catch (e) { g = 'anon'; }
+    if (g) out.push(g);
+    try {
+      const extra = JSON.parse(localStorage.getItem('wjx_trade_uids') || '[]');
+      for (let i = 0; i < extra.length; i++) if (extra[i] && out.indexOf(String(extra[i])) < 0) out.push(String(extra[i]));
+    } catch (e) {}
+    try { localStorage.setItem('wjx_trade_uids', JSON.stringify(out.slice(0, 8))); } catch (e) {}
+    return out;
   }
+  function myUid() { return myUids()[0]; }
   function myName() {
     const p = player();
     if (p && p.name) return p.name;
@@ -103,6 +114,7 @@
     el.classList.add('open');
     setTab('buy');
     refresh();
+    claim();          /* ★ 打开就顺手把「卖出去的钱」领回来 */
   }
   function close() { const el = $('ahPanel'); if (el) el.classList.remove('open'); }
 
@@ -148,11 +160,11 @@
       box.innerHTML = '<div class="ah-empty">还没有人上架装备，你可以先去「我要上架」</div>';
       return;
     }
-    const uid = myUid();
+    const mineUids = myUids();
     box.innerHTML = listings.map(function (l) {
       const eq = l.item || {};
       const color = isMat(eq) ? ((MAT_META[eq.matId] || {}).color || '#cfd8e3') : (TIER_COLOR[eq.tier] || '#dfe6ee');
-      const mine = l.seller === uid;
+      const mine = mineUids.indexOf(String(l.seller || '')) >= 0;
       const price = (l.price | 0).toLocaleString('zh-CN');
       return '' +
         '<div class="ah-row" data-id="' + l.id + '">' +
@@ -270,6 +282,33 @@
     el.style.color = bad ? '#ff9a7a' : '#8fa5ba';
   }
 
+  /* ---------- 卖家收款 ----------
+     卖出瞬间买家扣了金币、卖家却不在同一个客户端，所以钱先存在
+     Worker 的账本里；卖家下次打开交易行（或任意时刻调用）领走。 */
+  var claimBusy = false;
+  function claim() {
+    if (claimBusy) return;
+    claimBusy = true;
+    fetch(apiBase() + '/claim', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sellers: myUids() })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      claimBusy = false;
+      if (!d || !d.ok || !(d.gold > 0)) return;
+      const p = player();
+      if (!p) return;
+      p.gold = (p.gold | 0) + (d.gold | 0);
+      save();
+      renderGold();
+      let msg = '交易行到账 +' + (d.gold | 0).toLocaleString('zh-CN') + ' 金币';
+      const s = (d.sales && d.sales[0]) || null;
+      if (s) msg += '（' + (s.name || '物品') + ' 被 ' + (s.buyerName || '侠客') + ' 买走）';
+      try { if (typeof showToast === 'function') showToast(msg, '#ffd166'); } catch (e) {}
+      try { alert(msg); } catch (e) {}
+    }).catch(function () { claimBusy = false; });
+  }
+
   /* ---------- 上架 / 购买 / 下架 ---------- */
   function doSell() {
     const p = player();
@@ -366,7 +405,7 @@
     fetch(apiBase() + '/cancel', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: id, seller: myUid() })
+      body: JSON.stringify({ id: id, seller: myUid(), sellers: myUids() })
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d || !d.ok) { alert('下架失败'); refresh(); return; }
       const p = player();
@@ -385,6 +424,8 @@
   function boot() {
     const closeBtn = $('ahClose');
     if (closeBtn) closeBtn.addEventListener('click', close);
+    /* 面板开着时每 60 秒看一次有没有新的卖出款到账 */
+    setInterval(function(){ if (isOpen()) claim(); }, 60000);
     document.querySelectorAll('#ahPanel .ah-tabs button').forEach(function (b) {
       b.addEventListener('click', function () { setTab(b.dataset.tab); });
     });
@@ -397,7 +438,7 @@
     }, true);
   }
 
-  window.AUCTION = { open: open, close: close, isOpen: isOpen, refresh: refresh };
+  window.AUCTION = { open: open, close: close, isOpen: isOpen, refresh: refresh, claim: claim };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
