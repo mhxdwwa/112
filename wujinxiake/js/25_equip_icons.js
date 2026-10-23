@@ -492,12 +492,12 @@ function drawInventory(){
       ctx.textAlign = 'left';
     }
 
-    /* ---- 中：背包（6 × 5 整齐方格） ---- */
+    /* ---- 中：背包（10 × 6 整齐方格） ---- */
     const bagX = eqX + eqPanelW + 22, bagY = contentY + 22;
-    const CELL = 58, C_GAP = 6, GRID_COLS = 6, GRID_ROWS = 5;
+    const CELL = 52, C_GAP = 5, GRID_COLS = 10, GRID_ROWS = 6;
     const bagGridW = GRID_COLS * (CELL + C_GAP) - C_GAP;
     const bagGridH = GRID_ROWS * (CELL + C_GAP) - C_GAP;
-    const bagPanelW = bagGridW + 24, bagPanelH = bagGridH + 46;
+    const bagPanelW = bagGridW + 24, bagPanelH = bagGridH + 80;
 
     ctx.fillStyle = 'rgba(18,22,36,0.72)';
     ctx.beginPath(); ctx.roundRect(bagX, bagY, bagPanelW, bagPanelH, 8); ctx.fill();
@@ -517,11 +517,37 @@ function drawInventory(){
       (inv.length >= bagCap ? '（已满，请分解）' : (inv.length >= bagWarn ? '（即将满）' : '')), bagX + bagPanelW - 12, bagY + 22);
     ctx.textAlign = 'left';
 
+    /* ★ 一键排序 & 一键分解按钮 */
+    const btnRowY = bagY + 30;
+    const sortBtnW = 70, sortBtnH = 24, decomposeBtnW = 100, decomposeBtnH = 24;
+    const sortBtnX = bagX + 12;
+    const decomposeBtnX = sortBtnX + sortBtnW + 8;
+
+    // 排序按钮
+    ctx.fillStyle = 'rgba(60,120,200,0.85)';
+    ctx.beginPath(); ctx.roundRect(sortBtnX, btnRowY, sortBtnW, sortBtnH, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(100,180,255,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(sortBtnX + 0.5, btnRowY + 0.5, sortBtnW - 1, sortBtnH - 1, 4); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
+    ctx.textAlign = 'center';
+    ctx.fillText('一键排序', sortBtnX + sortBtnW/2, btnRowY + 16);
+    inventoryClickRegions.push({ x: sortBtnX, y: btnRowY, w: sortBtnW, h: sortBtnH, action: 'sortBag' });
+
+    // 一键分解按钮（紫色及以下）
+    ctx.fillStyle = 'rgba(200,80,40,0.85)';
+    ctx.beginPath(); ctx.roundRect(decomposeBtnX, btnRowY, decomposeBtnW, decomposeBtnH, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,120,80,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(decomposeBtnX + 0.5, btnRowY + 0.5, decomposeBtnW - 1, decomposeBtnH - 1, 4); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
+    ctx.fillText('分解紫及以下', decomposeBtnX + decomposeBtnW/2, btnRowY + 16);
+    inventoryClickRegions.push({ x: decomposeBtnX, y: btnRowY, w: decomposeBtnW, h: decomposeBtnH, action: 'decomposeLow' });
+    ctx.textAlign = 'left';
+
     for(let r = 0; r < GRID_ROWS; r++){
       for(let c = 0; c < GRID_COLS; c++){
         const idx = r * GRID_COLS + c;
         const bx = bagX + 12 + c * (CELL + C_GAP);
-        const by = bagY + 34 + r * (CELL + C_GAP);
+        const by = btnRowY + 30 + r * (CELL + C_GAP);
         const eq = inv[idx] || null;
         const sel = inventorySelectedIndex === idx;
         const tcol = eq ? (eq.tierColor || '#8fa8bc') : '#2c3444';

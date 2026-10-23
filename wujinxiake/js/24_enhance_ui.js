@@ -1047,8 +1047,8 @@ function drawCompareStrip(newEq, curEq, ax, ay, w){
   ctx.restore();
 }
 /* ★ 背包容量上限 */
-const BAG_CAPACITY = 30;
-const BAG_WARN_THRESHOLD = 25;  /* 达到此数量时弹出提醒 */
+const BAG_CAPACITY = 60;
+const BAG_WARN_THRESHOLD = 50;  /* 达到此数量时弹出提醒 */
 let bagWarnShown = false;        /* 本次登录是否已提醒过（避免反复弹窗） */
 function isBagFull(){ return G && G.player && (G.player.inventory || []).length >= BAG_CAPACITY; }
 function isBagNearlyFull(){ return G && G.player && (G.player.inventory || []).length >= BAG_WARN_THRESHOLD; }
@@ -1066,6 +1066,86 @@ let inventorySelectedIndex = -1; // 背包中选中的装备索引
 let selectedMaterial = null; // 选中的材料
 let inventoryMessage = ''; // 背包提示消息
 let inventoryMessageTimer = 0; // 消息计时器
+
+/* ★ 背包排序：按种类（部位）+ 品阶（从高到低）排序 */
+function sortInventory(){
+  if(!G || !G.player || !G.player.inventory) return;
+  const inv = G.player.inventory;
+  // 品阶优先级：史诗>传说>神器>稀有>高级>普通
+  const tierOrder = { mythic:0, legend:1, epic:2, rare:3, advanced:4, common:5 };
+  // 部位优先级：武器>护甲>饰品>其他
+  const slotOrder = { weapon:0, armor:1, head:2, shoes:3, necklace:4, ring:5, bracer:6 };
+  inv.sort(function(a, b){
+    // 先按品阶排
+    const ta = tierOrder[a.tier] !== undefined ? tierOrder[a.tier] : 99;
+    const tb = tierOrder[b.tier] !== undefined ? tierOrder[b.tier] : 99;
+    if(ta !== tb) return ta - tb;
+    // 同品阶按部位排
+    const sa = slotOrder[a.slot] !== undefined ? slotOrder[a.slot] : 99;
+    const sb = slotOrder[b.slot] !== undefined ? slotOrder[b.slot] : 99;
+    if(sa !== sb) return sa - sb;
+    // 同部位按等级排
+    return (b.level || 1) - (a.level || 1);
+  });
+  inventorySelectedIndex = -1;
+  inventoryMessage = '背包已排序';
+  inventoryMessageTimer = 60;
+}
+
+/* ★ 一键分解紫色及以下装备 */
+function decomposeLowTierEquip(){
+  if(!G || !G.player || !G.player.inventory) return { count: 0, msg: '' };
+  const p = G.player;
+  const inv = p.inventory;
+  // 紫色及以下：common(普通), advanced(高级), rare(稀有)
+  const lowTiers = ['common', 'advanced', 'rare'];
+  const toDecompose = [];
+  for(let i = inv.length - 1; i >= 0; i--){
+    const eq = inv[i];
+    if(!eq) continue;
+    if(eq.sysGift) continue; // 系统赠送的不可分解
+    if(lowTiers.indexOf(eq.tier) >= 0){
+      toDecompose.push(i);
+    }
+  }
+  if(toDecompose.length === 0){
+    return { count: 0, msg: '背包中没有可分解的装备（紫色及以下）' };
+  }
+  // 统计奖励
+  if(!p.amplifyStones) p.amplifyStones = {};
+  const stoneTotals = {};
+  let totalItems = 0;
+  for(let ii = 0; ii < toDecompose.length; ii++){
+    const eq = inv[toDecompose[ii]];
+    if(!eq) continue;
+    const stoneKey = (typeof equipTierKey === 'function') ? equipTierKey(eq) : 'common';
+    const stoneInfo = (typeof AMPLIFY_STONES !== 'undefined' && AMPLIFY_STONES[stoneKey]) ? AMPLIFY_STONES[stoneKey] : { id:'common_amplify', name:'普通增幅石' };
+    const stoneCount = 1 + (eq.enhance || 0) + Math.floor((eq.level || 1) / 10);
+    if(!stoneTotals[stoneInfo.id]){
+      stoneTotals[stoneInfo.id] = { info: stoneInfo, count: 0 };
+    }
+    stoneTotals[stoneInfo.id].count += stoneCount;
+    totalItems++;
+  }
+  // 移除装备（从大到小排序避免索引错位）
+  toDecompose.sort(function(a,b){ return b - a; });
+  for(let ii = 0; ii < toDecompose.length; ii++){
+    inv.splice(toDecompose[ii], 1);
+  }
+  // 发放奖励
+  for(const key in stoneTotals){
+    const st = stoneTotals[key];
+    p.amplifyStones[st.info.id] = (p.amplifyStones[st.info.id] || 0) + st.count;
+  }
+  // 生成奖励描述
+  const rewardParts = [];
+  for(const key in stoneTotals){
+    const st = stoneTotals[key];
+    rewardParts.push(st.info.name + ' x' + st.count);
+  }
+  inventorySelectedIndex = -1;
+  return { count: totalItems, msg: '分解成功！' + totalItems + '件装备 → ' + rewardParts.join('，') };
+}
 
 /* 技能升级界面 */
 let skillMenuClickRegions = [];

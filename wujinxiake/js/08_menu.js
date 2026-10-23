@@ -290,6 +290,22 @@ function handleCanvasClick(cx, cy){
       } else if(r.tab){
         inventoryTab = r.tab;
         inventorySelectedIndex = -1;
+      } else if(r.action === 'sortBag'){
+        // 一键排序
+        if(typeof sortInventory === 'function') sortInventory();
+      } else if(r.action === 'decomposeLow'){
+        // 一键分解紫色及以下
+        if(typeof decomposeLowTierEquip === 'function'){
+          const result = decomposeLowTierEquip();
+          if(result.count > 0){
+            inventoryMessage = result.msg;
+            inventoryMessageTimer = 180;
+            if(typeof playSound === 'function') playSound('skillCast');
+          } else {
+            inventoryMessage = result.msg;
+            inventoryMessageTimer = 90;
+          }
+        }
       } else if(typeof r.selectIndex === 'number'){
         // 点击选中装备
         inventorySelectedIndex = r.selectIndex;
