@@ -91,6 +91,7 @@ function layoutArc(){
       placeBtn(btn, o);
     });
   });
+  updateHudIconAnchor();
 }
 
 /* 手机排布：摇杆贴左下、8 键贴右下（4 列 × 2 行，普攻落最角上） */
@@ -170,6 +171,32 @@ function positionEsc(){
     }
   }
   b.style.top = (top > 8 ? top : 8) + 'px';
+}
+
+
+/* ---------- 给 HUD 图标用的锚点：↑（跳跃）键的右侧 ----------
+   四个功能图标画在 canvas 上，位置需要跟着 DOM 里的跳跃键走，
+   所以按画布缩放换算成「虚拟坐标」交给 26_hud.js 使用。 */
+function updateHudIconAnchor(){
+  try{
+    const cv = document.getElementById('c');
+    const tc = document.getElementById('touchControls');
+    const jb = document.querySelector('#touchControls .p1-area .jump-btn');
+    if(!cv || !tc || !jb || !tc.classList.contains('active') || tc.classList.contains('mobile')){
+      window.__hudIconAnchor = null;
+      return;
+    }
+    const r = cv.getBoundingClientRect();
+    const b = jb.getBoundingClientRect();
+    if(!r.width || !b.width){ window.__hudIconAnchor = null; return; }
+    const vw = (typeof VW !== 'undefined' && VW) ? VW : 1280;
+    const vh = (typeof VH !== 'undefined' && VH) ? VH : 720;
+    const sx = vw / r.width, sy = vh / r.height;
+    window.__hudIconAnchor = {
+      x: (b.right - r.left) * sx + 14,                 /* 紧贴 ↑ 键右侧 */
+      y: (b.top - r.top) * sy + (b.height * sy) / 2    /* 与 ↑ 键垂直居中 */
+    };
+  }catch(e){ window.__hudIconAnchor = null; }
 }
 
 function layoutTouch(){
@@ -459,7 +486,10 @@ bindMobileFrame();
     };
     b.addEventListener('touchstart', fire, { passive: false });
     b.addEventListener('mousedown', fire);
-    window.addEventListener('resize', positionEsc);
+    window.addEventListener('resize', function(){ positionEsc(); setTimeout(updateHudIconAnchor, 60); });
+    window.addEventListener('orientationchange', function(){ setTimeout(updateHudIconAnchor, 320); });
+    setTimeout(updateHudIconAnchor, 400);
+    setTimeout(updateHudIconAnchor, 1500);
     window.addEventListener('orientationchange', function(){ setTimeout(positionEsc, 260); });
     setTimeout(positionEsc, 300);
   }
