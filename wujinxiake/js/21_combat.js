@@ -239,6 +239,8 @@ function growBaseStat(p, atkMul, dHp, dMp){
 function recalcPlayerStats(){
   const p = G.player;
   if(!p) return;
+  /* ★ 兜底：任何玩家对象都先确保有飞行道具（新号 / 老存档 / 直接开战都覆盖） */
+  if(window.MOUNT) MOUNT.ensure(p);
   const bs = ensureBaseStat(p);
   const b  = calcEquipmentBonus(p.equipment);
   const pb = p.propBonuses || { atk:0, hp:0, mp:0, cdReduce:0, crit:0 };
