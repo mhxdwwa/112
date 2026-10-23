@@ -230,15 +230,36 @@ function loopBody(now){
             ctx.fillText('【套装】', drawX, drawY - 31);
           }
         } else if(d.type === 'prop'){
-          // 属性道具：绿色药丸
-          ctx.fillStyle = '#2ee6a8';
-          ctx.beginPath(); ctx.arc(drawX, drawY, 7, 0, TAU); ctx.fill();
-          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
-          // 道具名称
-          ctx.fillStyle = '#2ee6a8';
+          /* 药水：红瓶（回血）/ 蓝瓶（回蓝） */
+          const pid = (d.prop && d.prop.id) || 'hp1';
+          const pm = (typeof potionMeta === 'function') ? potionMeta(pid) : { kind:'hp', color:'#ff5f6d', name:'生命药水' };
+          const isHp = pm.kind === 'hp';
+          const bw2 = 13, bh2 = 17;
+          ctx.save();
+          ctx.translate(drawX, drawY);
+          /* 瓶身 */
+          ctx.fillStyle = isHp ? 'rgba(255,80,95,0.95)' : 'rgba(70,150,255,0.95)';
+          ctx.beginPath(); ctx.roundRect(-bw2/2, -bh2/2 + 3, bw2, bh2 - 3, 3); ctx.fill();
+          /* 瓶口 + 塞子 */
+          ctx.fillStyle = 'rgba(230,240,255,0.9)';
+          ctx.fillRect(-3, -bh2/2 - 1, 6, 5);
+          ctx.fillStyle = '#c9a84c';
+          ctx.fillRect(-4, -bh2/2 - 4, 8, 4);
+          /* 高光 */
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.fillRect(-bw2/2 + 2, -bh2/2 + 6, 2.4, bh2 - 11);
+          /* 十字 / 水滴 */
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          if(isHp){ ctx.fillRect(-4, -1.2, 8, 2.4); ctx.fillRect(-1.2, -4, 2.4, 8); }
+          else { ctx.beginPath(); ctx.moveTo(0,-4); ctx.quadraticCurveTo(4,1,0,4); ctx.quadraticCurveTo(-4,1,0,-4); ctx.fill(); }
+          ctx.restore();
+          /* 名称 */
+          ctx.fillStyle = pm.color;
           ctx.font = 'bold 10px "Microsoft YaHei"';
           ctx.textAlign = 'center';
-          ctx.fillText(d.propName || '属性丹', drawX, drawY - 14);
+          ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+          ctx.strokeText(pm.name, drawX, drawY - 14);
+          ctx.fillText(pm.name, drawX, drawY - 14);
         } else if(d.type === 'material'){
           // 强化材料：灰色石头
           ctx.fillStyle = '#88ccff';
