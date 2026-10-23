@@ -20,6 +20,20 @@
     necklace: '项链', ring: '戒指', bracer: '护腕', accessory: '戒指', mount: '飞行道具'
   };
 
+  /* 强化 / 增幅材料：史诗级（高级强化石、史诗增幅石）不可交易 */
+  const MAT_META = {
+    enhance_stone_low:    { name: '下级强化石', color: '#cfd8e3', trade: true },
+    enhance_stone_mid:    { name: '中级强化石', color: '#5aa9ff', trade: true },
+    enhance_stone_high:   { name: '高级强化石', color: '#ff9f43', trade: false },
+    chaos_stone:          { name: '混沌魔石',   color: '#b57bff', trade: true },
+    amplify_stone_common: { name: '普通增幅石', color: '#cfd8e3', trade: true },
+    amplify_stone_advanced:{ name: '高级增幅石', color: '#5aa9ff', trade: true },
+    amplify_stone_rare:   { name: '稀有增幅石', color: '#b57bff', trade: true },
+    amplify_stone_epic:   { name: '神器增幅石', color: '#ff5fa2', trade: true },
+    amplify_stone_legend: { name: '传说增幅石', color: '#ff9f43', trade: true },
+    amplify_stone_mythic: { name: '史诗增幅石', color: '#ffd166', trade: false }
+  };
+
   let tab = 'buy';
   let listings = [];
   let sellPick = -1;
@@ -60,11 +74,24 @@
   function canList(eq) {
     if (!eq || !eq.name || !eq.slot) return false;
     if (eq.locked) return false;
+    if (eq.tier === 'mythic') return false;      /* 史诗不可交易 */
+    if (eq.sealed === false) return false;       /* 已开封不可上架 */
     return tierIdx(eq.tier) <= TIER_ORDER.indexOf('legend');
   }
+  function noTradeWhy(eq){
+    if (!eq) return '';
+    if (eq.tier === 'mythic') return '史诗装备不可交易';
+    if (eq.sealed === false) return '已开封 · 不能上架';
+    return '不可上架';
+  }
+  function isMat(eq){ return !!(eq && eq.kind === 'material'); }
   function itemLabel(eq) {
+    if (isMat(eq)) {
+      const m = MAT_META[eq.matId] || {};
+      return (m.name || eq.name || '材料') + ' ×' + (eq.qty | 0);
+    }
     const pre = (eq.enhance ? '+' + eq.enhance + ' ' : '') + (eq.amplify ? '增幅' + eq.amplify + ' ' : '');
-    return pre + eq.name;
+    return pre + eq.name + (eq.sealed ? '（未开封）' : '');
   }
 
   /* ---------- 面板 ---------- */
@@ -124,7 +151,7 @@
     const uid = myUid();
     box.innerHTML = listings.map(function (l) {
       const eq = l.item || {};
-      const color = TIER_COLOR[eq.tier] || '#dfe6ee';
+      const color = isMat(eq) ? ((MAT_META[eq.matId] || {}).color || '#cfd8e3') : (TIER_COLOR[eq.tier] || '#dfe6ee');
       const mine = l.seller === uid;
       const price = (l.price | 0).toLocaleString('zh-CN');
       return '' +
@@ -148,6 +175,19 @@
     });
   }
 
+  function matCount(p, id) {
+    if (id.indexOf('amplify_') === 0) return (p.amplifyStones || {})[id] | 0;
+    return (p.materials || {})[id] | 0;
+  }
+  function matTake(p, id, n) {
+    if (id.indexOf('amplify_') === 0) p.amplifyStones[id] = (p.amplifyStones[id] | 0) - n;
+    else p.materials[id] = (p.materials[id] | 0) - n;
+  }
+  function matGive(p, id, n) {
+    if (id.indexOf('amplify_') === 0) { if (!p.amplifyStones) p.amplifyStones = {}; p.amplifyStones[id] = (p.amplifyStones[id] | 0) + n; }
+    else { if (!p.materials) p.materials = {}; p.materials[id] = (p.materials[id] | 0) + n; }
+  }
+
   function renderSell() {
     const box = $('ahSell');
     if (!box) return;
@@ -166,28 +206,57 @@
           '<div class="ah-name" style="color:' + color + '">' + esc(itemLabel(eq)) +
             '<em>· ' + esc(SLOT_CN[eq.slot] || eq.slot) + (eq.level ? ' · Lv.' + (eq.level | 0) : '') + '</em>' +
           '</div>' +
-          '<div class="ah-meta">' + (ok ? '可上架' : '史诗品质不可上架') + '</div>' +
+          '<div class="ah-meta">' + (ok ? '可上架' : noTradeWhy(eq)) + '</div>' +
         '</div>');
     }
+    /* 材料：强化石 / 增幅石 / 混沌魔石，史诗级材料不可交易 */
+    const matRows = [];
+    Object.keys(MAT_META).forEach(function (id) {
+      const n = matCount(p, id);
+      if (n <= 0) return;
+      const ok = !!MAT_META[id].trade;
+      const key = 'm:' + id;
+      matRows.push('' +
+        '<div class="ah-row pick' + (sellPick === key ? ' on' : '') + (ok ? '' : ' off') + '" data-mat="' + id + '">' +
+          '<div class="ah-name" style="color:' + MAT_META[id].color + '">' + esc(MAT_META[id].name) +
+            '<em>· 材料 × ' + n + '</em>' +
+          '</div>' +
+          '<div class="ah-meta">' + (ok ? '可上架' : '史诗级材料 · 不可交易') + '</div>' +
+        '</div>');
+    });
+
     box.innerHTML = '' +
-      '<div class="ah-sell-head">背包里的装备（传说及以下可上架）</div>' +
+      '<div class="ah-sell-head">背包里的装备（传说及以下 · 需未开封）</div>' +
       '<div class="ah-sell-list">' + (rows.length ? rows.join('') : '<div class="ah-empty">背包里没有装备</div>') + '</div>' +
+      '<div class="ah-sell-head">材料（强化 / 增幅）</div>' +
+      '<div class="ah-sell-list">' + (matRows.length ? matRows.join('') : '<div class="ah-empty">没有可上架的材料</div>') + '</div>' +
       '<div class="ah-sell-bar">' +
+        '<span>数量</span><input id="ahQty" type="number" min="1" max="999" value="1" style="width:64px" />' +
         '<span>售价</span>' +
         '<input id="ahPrice" type="number" min="1" max="100000000" placeholder="输入金币" />' +
         '<button id="ahAdd" class="ah-btn" type="button">上架</button>' +
       '</div>' +
-      '<div class="ah-sell-tip" id="ahSellTip">选中一件装备 → 填价格 → 上架</div>';
+      '<div class="ah-sell-tip" id="ahSellTip">选中一件装备或材料 → 填价格 → 上架（材料可填数量）</div>';
 
-    box.querySelectorAll('.ah-row.pick').forEach(function (r) {
+    box.querySelectorAll('.ah-row.pick[data-i]').forEach(function (r) {
       r.addEventListener('click', function () {
         const i = r.dataset.i | 0;
         const eq = (player().inventory || [])[i];
-        if (!canList(eq)) { tip('这件装备不能上架（只有传说及以下可以）', true); return; }
+        if (!canList(eq)) { tip(noTradeWhy(eq) || '这件装备不能上架', true); return; }
         sellPick = i;
         box.querySelectorAll('.ah-row.pick').forEach(function (x) { x.classList.remove('on'); });
         r.classList.add('on');
         tip('已选中：' + itemLabel(eq));
+      });
+    });
+    box.querySelectorAll('.ah-row.pick[data-mat]').forEach(function (r) {
+      r.addEventListener('click', function () {
+        const id = r.dataset.mat;
+        if (!MAT_META[id] || !MAT_META[id].trade) { tip('史诗级材料不可交易', true); return; }
+        sellPick = 'm:' + id;
+        box.querySelectorAll('.ah-row.pick').forEach(function (x) { x.classList.remove('on'); });
+        r.classList.add('on');
+        tip('已选中：' + MAT_META[id].name + ' × ' + matCount(player(), id));
       });
     });
     const add = $('ahAdd');
@@ -207,26 +276,43 @@
     if (!p) return;
     const inp = $('ahPrice');
     const price = Math.floor(Number(inp && inp.value) || 0);
-    if (sellPick < 0 || !(p.inventory || [])[sellPick]) { tip('先选一件装备', true); return; }
     if (!(price >= 1)) { tip('价格要大于 0', true); return; }
-    const eq = p.inventory[sellPick];
-    if (!canList(eq)) { tip('这件装备不能上架', true); return; }
+
+    let payloadItem = null, takeFn = null;
+    if (typeof sellPick === 'string' && sellPick.indexOf('m:') === 0) {
+      const id = sellPick.slice(2);
+      const have = matCount(p, id);
+      const qty = Math.max(1, Math.min(have, Math.floor(Number(($('ahQty') || {}).value) || 1)));
+      if (!MAT_META[id] || !MAT_META[id].trade) { tip('史诗级材料不可交易', true); return; }
+      if (!(have >= qty)) { tip('数量不足', true); return; }
+      payloadItem = { kind: 'material', matId: id, name: MAT_META[id].name, qty: qty, tier: 'common' };
+      takeFn = function () { matTake(p, id, qty); };
+    } else {
+      const i = sellPick | 0;
+      const eq = (p.inventory || [])[i];
+      if (!eq) { tip('先选一件装备', true); return; }
+      if (!canList(eq)) { tip(noTradeWhy(eq) || '这件装备不能上架', true); return; }
+      payloadItem = eq;
+      takeFn = function () { p.inventory.splice(i, 1); };
+    }
+
     const btn = $('ahAdd');
     if (btn) { btn.disabled = true; btn.textContent = '上架中…'; }
 
     fetch(apiBase() + '/add', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ item: eq, price: price, seller: myUid(), sellerName: myName() })
+      body: JSON.stringify({ item: payloadItem, price: price, seller: myUid(), sellerName: myName() })
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (btn) { btn.disabled = false; btn.textContent = '上架'; }
       if (!d || !d.ok) {
-        const why = (d && d.reason) === 'tier-locked' ? '这件品质不能上架' :
+        const why = (d && d.reason) === 'tier-locked' ? '这件物品不能上架（史诗级不可交易）' :
+                    (d && d.reason) === 'unsealed' ? '已开封的装备不能上架' :
                     (d && d.reason) === 'full' ? '交易行满了，稍后再试' : '上架失败，稍后再试';
         tip(why, true);
         return;
       }
-      p.inventory.splice(sellPick, 1);
+      takeFn();
       sellPick = -1;
       save();
       tip('已上架成功');
@@ -260,10 +346,17 @@
         return;
       }
       p.gold = Math.max(0, (p.gold | 0) - (d.price | 0));
-      (p.inventory = p.inventory || []).push(d.item);
-      save();
-      renderGold();
-      alert('购买成功：' + itemLabel(d.item) + '（已放进背包）');
+      if (isMat(d.item)) {
+        matGive(p, d.item.matId, d.item.qty | 0);
+        save();
+        renderGold();
+        alert('购买成功：' + itemLabel(d.item) + '（已放入材料栏）');
+      } else {
+        (p.inventory = p.inventory || []).push(d.item);
+        save();
+        renderGold();
+        alert('购买成功：' + itemLabel(d.item) + '（已放进背包）');
+      }
       refresh();
     }).catch(function () { alert('购买失败：连不上交易行'); });
   }
