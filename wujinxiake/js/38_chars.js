@@ -152,6 +152,7 @@ async function createFromNaming(name, charIdx, done){
     }
   }catch(e){}
 
+  if(typeof p.pills !== 'number') p.pills = 3;   /* ★ 新角色赠送 3 枚重生丸 */
   const c = { id: newId(), name: nm, charIdx: charIdx | 0, level: (p.level | 0) || 1, t: Date.now(), p: p };
   bundle.chars.push(c);
   bundle.activeId = c.id;
