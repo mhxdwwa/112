@@ -84,6 +84,8 @@ function apply(data){
   if(!G.player.prologueSeen) G.player.prologueSeen = true;
   /* ★ 老存档：没有重生丸字段的补发 3 枚（用光了会是 0，不会被重置） */
   if(typeof G.player.pills !== 'number') G.player.pills = 3;
+  /* ★ 老存档：没飞行道具的补一块 1 级白板（踩上就不再用跑动动画） */
+  if(window.MOUNT) MOUNT.ensure(G.player);
   /* 老存档缺字段时补齐 */
   try{
     if(typeof ensureBaseStat === 'function') ensureBaseStat(G.player);
