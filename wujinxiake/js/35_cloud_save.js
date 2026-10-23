@@ -18,7 +18,7 @@ const PERSIST = [
   'skillPoints', 'skillLevels', 'skillsUnlocked',
   'equipment', 'inventory', 'gold', 'materials', 'amplifyStones',
   'props', 'propBonuses', 'clearedLevels',
-  'hp', 'mp',
+  'hp', 'mp', 'pills',
   /* ★ 任务进度也要存：不然每次读档都退回「序章·余烬」，第一个任务永远做不完 */
   'quest', 'prologueSeen', 'questKills'
 ];
@@ -82,6 +82,8 @@ function apply(data){
   }
   /* 有存档 = 序章早就看过了：别重播，也顺便让「听完留音」这一步判定通过 */
   if(!G.player.prologueSeen) G.player.prologueSeen = true;
+  /* ★ 老存档：没有重生丸字段的补发 3 枚（用光了会是 0，不会被重置） */
+  if(typeof G.player.pills !== 'number') G.player.pills = 3;
   /* 老存档缺字段时补齐 */
   try{
     if(typeof ensureBaseStat === 'function') ensureBaseStat(G.player);
