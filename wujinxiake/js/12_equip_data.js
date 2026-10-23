@@ -629,6 +629,12 @@ function calcEquipmentBonus(equipment){
       if(typeof v === 'number') bonus[k] += v;
     }
   }
+  /* ★ 飞行道具（独立第 8 槽）：只带移速 / 回避，单独结算，不参与套装 */
+  if(equipment.mount){
+    const mo = equipFullStats(equipment.mount);
+    if(mo){ for(const k in bonus){ const v = mo[k]; if(typeof v === 'number') bonus[k] += v; } }
+  }
+
   /* ★ 套装加成：按已穿戴件数叠加 2 件 / 4 件效果 */
   const setCount = {};
   for(const slot of EQUIP_SLOTS){
