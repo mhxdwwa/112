@@ -27,6 +27,13 @@ function wikiHash(s){
   for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
+/* ★ 品阶等级门槛：传说≥30级，史诗≥50级；其他品阶全等级 */
+const TIER_MIN_LV_IDX = { common:0, advanced:0, rare:0, epic:0, legend:3, mythic:5 };
+function wikiTierHasLevel(tierIdx, lvIdx){
+  const tier = EQUIP_TIERS[Math.max(0, Math.min(5, tierIdx))];
+  const minLvIdx = TIER_MIN_LV_IDX[tier.id] || 0;
+  return lvIdx >= minLvIdx;
+}
 /* ★ 确定性生成一件图鉴样板装备（固定品阶/等级段），直接按名称构造，不依赖概率 */
 function wikiGenItem(slot, tierIdx, lvIdx, k, wtIdx){
   const key = slot + '|' + tierIdx + '|' + lvIdx + '|' + k + '|' + (wtIdx == null ? -1 : wtIdx);
@@ -96,11 +103,21 @@ function wikiGenItem(slot, tierIdx, lvIdx, k, wtIdx){
 }
 function buildWikiList(){
   wikiItems = [];
-  /* wikiLvIdx=-1 表示全部等级，生成时用最高等级(6)以解锁所有品阶 */
-  const lv = wikiLvIdx < 0 ? 6 : wikiLvIdx;
-  /* 图鉴展示所有品阶，不受等级限制 */
+  /* wikiLvIdx=-1 表示全部等级，每个品阶用其最高有效等级 */
   const tiers = wikiTierIdx < 0 ? [0, 1, 2, 3, 4, 5] : [wikiTierIdx];
   for(const ti of tiers){
+    /* ★ 品阶等级门槛：传说≥30级(idx≥3)，史诗≥50级(idx≥5) */
+    const minLvIdx = TIER_MIN_LV_IDX[EQUIP_TIERS[ti].id] || 0;
+    let lv;
+    if(wikiLvIdx < 0){
+      /* 全部等级：用该品阶的最高等级 */
+      lv = EQUIP_LV_LADDER.length - 1;
+    } else if(wikiLvIdx < minLvIdx){
+      /* 所选等级低于该品阶门槛，跳过 */
+      continue;
+    } else {
+      lv = wikiLvIdx;
+    }
     if(wikiSlot === 'weapon'){
       /* 武器：按品阶展示所有命名武器 */
       if(ti >= 3){
@@ -353,16 +370,21 @@ function drawEquipWiki(){
   let chipX = listX;
   for(const c of tierChips){
     const on = wikiTierIdx === c.idx;
+    /* ★ 品阶等级门槛：当前等级低于该品阶门槛时显示为禁用 */
+    const minLvIdx = c.idx >= 0 ? (TIER_MIN_LV_IDX[EQUIP_TIERS[c.idx].id] || 0) : 0;
+    const disabled = c.idx >= 0 && wikiLvIdx >= 0 && wikiLvIdx < minLvIdx;
     ctx.font = '12px "Microsoft YaHei"';
     const cw2 = 14 + ctx.measureText(c.name).width + 14;
-    ctx.fillStyle = on ? hexA(c.color, 0.28) : 'rgba(36,44,62,0.9)';
+    ctx.fillStyle = disabled ? 'rgba(30,35,48,0.6)' : (on ? hexA(c.color, 0.28) : 'rgba(36,44,62,0.9)');
     ctx.beginPath(); ctx.roundRect(chipX, listY + 2, cw2, 26, 13); ctx.fill();
-    ctx.strokeStyle = on ? c.color : 'rgba(110,125,148,0.4)'; ctx.lineWidth = on ? 1.5 : 1;
+    ctx.strokeStyle = disabled ? 'rgba(80,90,108,0.3)' : (on ? c.color : 'rgba(110,125,148,0.4)'); ctx.lineWidth = on ? 1.5 : 1;
     ctx.beginPath(); ctx.roundRect(chipX + 0.5, listY + 2.5, cw2 - 1, 25, 13); ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = c.color;
+    ctx.fillStyle = disabled ? 'rgba(120,130,148,0.4)' : c.color;
     ctx.fillText(c.name, chipX + cw2 / 2, listY + 20);
-    wikiClickRegions.push({ x: chipX, y: listY + 2, w: cw2, h: 26, tier: c.idx });
+    if(!disabled){
+      wikiClickRegions.push({ x: chipX, y: listY + 2, w: cw2, h: 26, tier: c.idx });
+    }
     chipX += cw2 + 8;
     ctx.textAlign = 'left';
   }

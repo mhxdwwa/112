@@ -452,9 +452,10 @@ function generateEquipment(slot, levelIdx, diffBonus){
   // 普通难度不出史诗（mythic）/ 传说
   if(diff < 2) rates[5] = 0;
   if(diff < 1) rates[4] = 0;
-  /* ★ 等级门槛：50 级以下不出传说/史诗（橙色系），避免高级装备泛滥 */
+  /* ★ 品阶等级门槛：传说≥30级，史诗≥50级 */
   const _tierLv = EQUIP_LV_LADDER[clamp(Math.round(levelIdx), 0, EQUIP_LV_LADDER.length - 1)];
-  if(_tierLv < 50){ rates[4] = 0; rates[5] = 0; }
+  if(_tierLv < 30){ rates[4] = 0; rates[5] = 0; }  // 30级以下不出传说和史诗
+  else if(_tierLv < 50){ rates[5] = 0; }            // 50级以下不出史诗（但传说可以）
   /* 按剩余概率归一化后再掷点，防止清零后 roll 超出累计而错落到白装 */
   const _rollTotal = rates.reduce(function(a, b){ return a + b; }, 0);
   const tierRoll = Math.random() * _rollTotal;
