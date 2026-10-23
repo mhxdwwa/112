@@ -460,7 +460,7 @@ function update(dt){
               equip.tierName = EQUIP_TIERS[betterTierIdx].name;
               equip.tierColor = EQUIP_TIERS[betterTierIdx].color;
               /* 品阶被抬高后同步「未开封」状态 */
-              equip.sealed = (betterTierIdx >= 2 && betterTierIdx <= 4);
+              equip.sealed = (betterTierIdx >= 2 && betterTierIdx <= 4) ? true : undefined;
               equip.tradeable = (betterTierIdx < 5);
             }
             
