@@ -137,28 +137,58 @@ function apply(data){
   G.player.props = {};
   if(!G.player.potions) G.player.potions = {};
   if(!G.player.potionCd) G.player.potionCd = { hp:0, mp:0 };
-  /* ★ 老存档迁移：更新装备品阶颜色（史诗改金色，传说改红色） */
+  /* ★ 老存档迁移：更新装备品阶颜色（史诗改金色，传说改红色）+ 修复高阶装备名字 */
   try{
-    const updateEquipColor = function(eq){
-      if(!eq || !eq.tier) return;
-      const tier = (typeof EQUIP_TIERS !== 'undefined') ? EQUIP_TIERS.find(function(t){ return t.id === eq.tier; }) : null;
-      if(tier){
-        eq.tierColor = tier.color;
+    /* 低阶前缀列表（用于检测名字是否用了低阶前缀） */
+    const LOW_TIER_PREFIXES = ['白·','蓝·','紫·','粉·','橙·'];
+    function isLowTierPrefixName(name){
+      if(!name) return false;
+      for(let i = 0; i < LOW_TIER_PREFIXES.length; i++){
+        if(name.indexOf(LOW_TIER_PREFIXES[i]) === 0) return true;
       }
-    };
+      return false;
+    }
+    /* 为高阶装备重新生成名字（从 ELITE 名池随机取一个） */
+    function fixEquipName(eq){
+      if(!eq || !eq.tier) return;
+      const tierIdx = ['common','advanced','rare','epic','legend','mythic'].indexOf(eq.tier);
+      /* 只有 epic/legend/mythic 需要修复 */
+      if(tierIdx < 3) return;
+      const tier = EQUIP_TIERS[tierIdx];
+      /* 更新颜色 */
+      eq.tierColor = tier.color;
+      /* 如果名字用了低阶前缀，从 ELITE 名池重新取一个 */
+      if(isLowTierPrefixName(eq.name)){
+        const slot = eq.slot || 'accessory';
+        let newName = '';
+        if(slot === 'weapon'){
+          const wt = eq.weaponType || 'sword';
+          const elite = (typeof ELITE_WEAPON_NAMES !== 'undefined') ? (ELITE_WEAPON_NAMES[wt] || ELITE_WEAPON_NAMES.sword) : null;
+          if(elite && elite[tier.id] && elite[tier.id].length){
+            newName = elite[tier.id][Math.floor(Math.random() * elite[tier.id].length)];
+          }
+        } else {
+          const elite = (typeof ELITE_NAMES !== 'undefined') ? (ELITE_NAMES[slot] || (slot === 'accessory' ? ELITE_NAMES.ring : null)) : null;
+          if(elite && elite[tier.id] && elite[tier.id].length){
+            newName = elite[tier.id][Math.floor(Math.random() * elite[tier.id].length)];
+          }
+        }
+        if(newName) eq.name = newName;
+      }
+    }
     /* 更新穿戴装备 */
     if(G.player.equipment){
       for(const slot in G.player.equipment){
-        updateEquipColor(G.player.equipment[slot]);
+        fixEquipName(G.player.equipment[slot]);
       }
     }
     /* 更新背包装备 */
     if(G.player.inventory && Array.isArray(G.player.inventory)){
       for(let i = 0; i < G.player.inventory.length; i++){
-        updateEquipColor(G.player.inventory[i]);
+        fixEquipName(G.player.inventory[i]);
       }
     }
-  }catch(e){ console.warn('[save] 装备颜色迁移失败', e); }
+  }catch(e){ console.warn('[save] 装备颜色/名字迁移失败', e); }
 
   /* ★ 老存档迁移：按新公式重新计算基础属性（HP/MP/ATK成长优化） */
   try{

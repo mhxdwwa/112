@@ -538,9 +538,26 @@ function update(dt){
               const tierIdx = EQUIP_TIERS.findIndex(t => t.id === equip.tier);
               let betterTierIdx = Math.min(EQUIP_TIERS.length - 1, tierIdx + 1);
               if((equip.level || 1) < 50) betterTierIdx = Math.min(betterTierIdx, 3);
-              equip.tier = EQUIP_TIERS[betterTierIdx].id;
-              equip.tierName = EQUIP_TIERS[betterTierIdx].name;
-              equip.tierColor = EQUIP_TIERS[betterTierIdx].color;
+              const betterTier = EQUIP_TIERS[betterTierIdx];
+              equip.tier = betterTier.id;
+              equip.tierName = betterTier.name;
+              equip.tierColor = betterTier.color;
+              /* ★ 品阶抬高后同步名字：从 ELITE 名池取对应品阶的专属名 */
+              if(betterTierIdx >= 3){
+                const slot = equip.slot;
+                if(slot === 'weapon'){
+                  const wt = equip.weaponType || 'sword';
+                  const elite = (typeof ELITE_WEAPON_NAMES !== 'undefined') ? (ELITE_WEAPON_NAMES[wt] || ELITE_WEAPON_NAMES.sword) : null;
+                  if(elite && elite[betterTier.id] && elite[betterTier.id].length){
+                    equip.name = elite[betterTier.id][Math.floor(Math.random() * elite[betterTier.id].length)];
+                  }
+                } else {
+                  const elite = (typeof ELITE_NAMES !== 'undefined') ? (ELITE_NAMES[slot] || (slot === 'accessory' ? ELITE_NAMES.ring : null)) : null;
+                  if(elite && elite[betterTier.id] && elite[betterTier.id].length){
+                    equip.name = elite[betterTier.id][Math.floor(Math.random() * elite[betterTier.id].length)];
+                  }
+                }
+              }
               /* 品阶被抬高后同步「未开封」状态 */
               equip.sealed = (betterTierIdx >= 2 && betterTierIdx <= 4) ? true : undefined;
               equip.tradeable = (betterTierIdx < 5);
@@ -553,27 +570,8 @@ function update(dt){
             }
           }
 
-          /* ★ 深渊保底：通关必给一件传说（未开封，可交易） */
-          {
-            const _lc = (typeof getLevelConfig === 'function') ? getLevelConfig(G.levelIdx) : null;
-            if(_lc && _lc.isAbyss){
-              const slot = slots[Math.floor(Math.random() * slots.length)];
-              const eq = generateEquipment(slot, dropLevelIdx(G.levelIdx), 3);
-              const li = EQUIP_TIERS.length - 2;      /* legend */
-              eq.tier = EQUIP_TIERS[li].id;
-              eq.tierName = EQUIP_TIERS[li].name;
-              eq.tierColor = EQUIP_TIERS[li].color;
-              eq.sealed = true;
-              eq.tradeable = true;
-              rewardEquips.push(eq);
-              if(!p.inventory) p.inventory = [];
-              if(p.inventory.length < BAG_CAPACITY){
-                p.inventory.push(eq);
-              }
-              if(typeof announceDrop === 'function') announceDrop(eq);
-            }
-          }
-          
+          /* ★ 深渊模式：不再保底传说，所有品阶完全随机 */
+
           // 生成奖励材料
           const matTypes = ['enhance_stone_low', 'enhance_stone_mid', 'enhance_stone_high'];
           const rewardMatCount = diffMul >= 3.5 ? 5 : (diffMul >= 2.0 ? 3 : 2);
@@ -597,6 +595,30 @@ function update(dt){
             const eq = generateEquipment(slot, dropLevelIdx(G.levelIdx), 0);
             const t = EQUIP_TIERS[tierIdx];
             eq.tier = t.id; eq.tierName = t.name; eq.tierColor = t.color;
+            /* ★ 品阶被覆盖后同步名字：从 ELITE 名池取对应品阶的专属名 */
+            if(tierIdx >= 3){
+              if(slot === 'weapon'){
+                const wt = eq.weaponType || 'sword';
+                const elite = (typeof ELITE_WEAPON_NAMES !== 'undefined') ? (ELITE_WEAPON_NAMES[wt] || ELITE_WEAPON_NAMES.sword) : null;
+                if(elite && elite[t.id] && elite[t.id].length){
+                  eq.name = elite[t.id][Math.floor(Math.random() * elite[t.id].length)];
+                }
+              } else {
+                const elite = (typeof ELITE_NAMES !== 'undefined') ? (ELITE_NAMES[slot] || (slot === 'accessory' ? ELITE_NAMES.ring : null)) : null;
+                if(elite && elite[t.id] && elite[t.id].length){
+                  eq.name = elite[t.id][Math.floor(Math.random() * elite[t.id].length)];
+                }
+              }
+            } else {
+              /* 低阶：用前缀 + 基础名 */
+              const prefix = (typeof TIER_NAME_PREFIX !== 'undefined') ? TIER_NAME_PREFIX[t.id] : '';
+              if(slot === 'weapon'){
+                const wt = eq.weaponType || 'sword';
+                eq.name = prefix + '·' + ((typeof SIMPLE_WEAPON_NAMES !== 'undefined' && SIMPLE_WEAPON_NAMES[wt]) || '铁剑');
+              } else {
+                eq.name = prefix + '·' + ((typeof SIMPLE_EQUIP_NAMES !== 'undefined' && SIMPLE_EQUIP_NAMES[slot]) || '布衣');
+              }
+            }
             eq.baseAtk = eq.slot === 'weapon' ? Math.round(10 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseAtk;
             eq.baseHp = (eq.slot === 'head' || eq.slot === 'armor') ? Math.round(30 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseHp;
             eq.baseDef = eq.slot === 'armor' ? Math.round(5 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseDef;
