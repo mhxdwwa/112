@@ -30,6 +30,7 @@
 .skill-btn.skill2{width:52px;height:52px;background:radial-gradient(circle at 30% 30%, rgba(255,200,100,0.7), rgba(220,150,50,0.5));border:3px solid rgba(255,200,100,0.8);}
 .skill-btn.skill3{width:52px;height:52px;background:radial-gradient(circle at 30% 30%, rgba(200,100,255,0.7), rgba(150,50,220,0.5));border:3px solid rgba(200,100,255,0.8);}
 .skill-btn.jump-btn{width:50px;height:50px;background:radial-gradient(circle at 30% 30%, rgba(100,255,150,0.7), rgba(50,200,100,0.5));border:3px solid rgba(100,255,150,0.8);font-size:16px;}
+.skill-btn.glide-btn{width:50px;height:50px;background:radial-gradient(circle at 30% 30%, rgba(150,200,255,0.7), rgba(80,140,220,0.5));border:3px solid rgba(150,200,255,0.8);font-size:16px;}
 .skill-btn.skill4{width:46px;height:46px;background:radial-gradient(circle at 30% 30%, rgba(120,255,190,0.7), rgba(40,180,120,0.5));border:3px solid rgba(120,255,190,0.8);}
 .skill-btn.skill5{width:46px;height:46px;background:radial-gradient(circle at 30% 30%, rgba(255,150,220,0.7), rgba(190,60,150,0.5));border:3px solid rgba(255,150,220,0.8);}
 .skill-btn.skill6{width:46px;height:46px;background:radial-gradient(circle at 30% 30%, rgba(255,235,120,0.7), rgba(200,160,40,0.5));border:3px solid rgba(255,235,120,0.8);}
@@ -44,6 +45,7 @@
 /* P1 弧形坐标 */
 .p1-area .skill-btn.attack-btn{left:124px;bottom:6px;}
 .p1-area .skill-btn.jump-btn{left:196px;bottom:24px;}
+.p1-area .skill-btn.glide-btn{left:196px;bottom:80px;}
 .p1-area .skill-btn.skill1{left:198px;bottom:92px;}
 .p1-area .skill-btn.skill2{left:138px;bottom:122px;}
 .p1-area .skill-btn.skill3{left:78px;bottom:132px;}
@@ -53,6 +55,7 @@
 /* P2 镜像坐标 */
 .p2-area .skill-btn.attack-btn{right:124px;bottom:6px;left:auto;}
 .p2-area .skill-btn.jump-btn{right:196px;bottom:24px;left:auto;}
+.p2-area .skill-btn.glide-btn{right:196px;bottom:80px;left:auto;}
 .p2-area .skill-btn.skill1{right:198px;bottom:92px;left:auto;}
 .p2-area .skill-btn.skill2{right:138px;bottom:122px;left:auto;}
 .p2-area .skill-btn.skill3{right:78px;bottom:132px;left:auto;}
@@ -98,6 +101,7 @@
 #touchControls.mobile .skill-btn{position:relative; left:auto; right:auto; top:auto; bottom:auto; width:var(--tb); height:var(--tb);}
 #touchControls.mobile .skill-btn.attack-btn{width:var(--tk); height:var(--tk); font-size:20px;}
 #touchControls.mobile .skill-btn.jump-btn{width:var(--tj); height:var(--tj); font-size:16px;}
+#touchControls.mobile .skill-btn.glide-btn{width:var(--tj); height:var(--tj); font-size:16px;}
 #touchControls.mobile .skill-btn .slot-num{font-size:calc(var(--tb)*.36);}
 #touchControls.mobile .skill-icon,
 #touchControls.mobile .skill1 .skill-icon,

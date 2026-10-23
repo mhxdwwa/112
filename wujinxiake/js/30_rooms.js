@@ -1371,7 +1371,7 @@ function drawEffects(dt){
           if(Math.abs(fdx)>0.1||Math.abs(fdy)>0.1) sw.rot = Math.atan2(fdy,fdx);
           sw.prevX = sw.x; sw.prevY = sw.y;
           if(efOwner.isPlayer){
-            const diveDmg = G.isPvp ? efAtk*5.0 : (36 + efAtk * 0.8);
+            const diveDmg = G.isPvp ? efAtk*10.0 : (72 + efAtk * 1.6);
             for(const e of G.enemies){
               if(!e.alive || sw.hitSet.has(e)) continue;
               const edx = e.x-sw.x, edy = (e.y-sw.y)*2.2;
@@ -1403,7 +1403,7 @@ function drawEffects(dt){
           }
           if(kk >= 1){
             sw.state = 'landed'; sw.landedT = 0; sw.rot = Math.PI/2; sw.x = tx; sw.y = ty;
-            const landDmg = G.isPvp ? efAtk*2.5 : (18 + efAtk * 0.5);
+            const landDmg = G.isPvp ? efAtk*5.0 : (36 + efAtk * 1.0);
             meleeAoe(efOwner, tx, ty, 90, landDmg, {kb:150});
           }
         } else if(sw.state === 'landed'){ sw.landedT += dt; }

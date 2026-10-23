@@ -51,7 +51,7 @@ function shouldShowTouch(){
    原因：浏览器/Cloudflare 可能缓存到旧版 touch.css，出现「摇杆在左下、按键却叠在旁边」
    这种只在部分机器上复现的错位。坐标与原来 CSS 里的数值完全一致，视觉不变。 */
 const ARC_BTN = {
-  attack:[124,6,70,70], jump:[196,24,50,50],
+  attack:[124,6,70,70], jump:[196,24,50,50], glide:[196,80,50,50],
   skill1:[198,92,52,52], skill2:[138,122,52,52], skill3:[78,132,52,52],
   skill4:[24,116,46,46], skill5:[84,184,46,46], skill6:[148,200,46,46]
 };
@@ -135,19 +135,21 @@ function layoutPhone(){
 
   const rowH2 = Math.max(tk, tj);
   const cols = [
-    [['skill3', tb], ['attack', tk]],
-    [['skill4', tb], ['jump', tj]],
-    [['skill5', tb], ['skill1', tb]],
-    [['skill6', tb], ['skill2', tb]]
+    [['skill3', tb], ['attack', tk], [null, 0]],
+    [['skill4', tb], ['jump', tj], ['glide', tj]],
+    [['skill5', tb], ['skill1', tb], [null, 0]],
+    [['skill6', tb], ['skill2', tb], [null, 0]]
   ];
   let x = W - edge;
   cols.forEach(function(col){
-    const w = Math.max(col[0][1], col[1][1]);
+    const sizes = col.filter(c => c[1] > 0).map(c => c[1]);
+    const w = Math.max(...sizes);
     const cx = x - w / 2;
     col.forEach(function(item, i){
       const action = item[0], size = item[1];
+      if(!action || size === 0) return;
       const btn = area.querySelector('.skill-btn[data-action="' + action + '"]');
-      const bottom = i === 0 ? (edge + rowH2 + gap) : edge;   /* 0＝上排技能 3–6 */
+      const bottom = i === 0 ? (edge + rowH2 * 2 + gap * 2) : (i === 1 ? (edge + rowH2 + gap) : edge);
       placeBtn(btn, { left: Math.round(cx - size / 2), bottom: bottom, width: size, height: size });
     });
     x -= (w + gap);
@@ -380,6 +382,7 @@ function setupTouchControls(){
       else if(action==='skill5'){ if(player==='1') pressed['Digit5']=true; else pressed['Numpad8']=true; }
       else if(action==='skill6'){ if(player==='1') pressed['Digit6']=true; else pressed['Numpad9']=true; }
       else if(action==='jump'){ if(player==='1') pressed['Space']=true; else pressed['Numpad0']=true; }
+      else if(action==='glide'){ if(player==='1') pressed['ShiftLeft']=true; else pressed['ShiftRight']=true; }
     };
     btn.addEventListener('touchstart', trigger);
     btn.addEventListener('mousedown', trigger);
