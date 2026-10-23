@@ -81,6 +81,48 @@
     c.closePath();
   }
 
+
+  /* ---------- 翅膀（青鸾 / 炽焰 / 星陨 共用骨架，只换配色与粒子） ---------- */
+  function drawWings(c, sc, T, moving, pal){
+    const flap = Math.sin(T * (moving ? 7 : 2.6)) * (moving ? 0.12 : 0.06);
+    for(let side = -1; side <= 1; side += 2){
+      c.save();
+      c.translate(0, -96 * sc);
+      c.scale(side, 1);
+      c.rotate(-0.34 + flap);
+      for(let i = 0; i < 3; i++){
+        const k = 1 - i * 0.22;
+        const len = (96 - i * 16) * sc * k;
+        const wid = (23 - i * 3) * sc;
+        const g = c.createLinearGradient(0, 0, len, -len * 0.55);
+        g.addColorStop(0, pal[0]);
+        g.addColorStop(0.55, pal[1]);
+        g.addColorStop(1, pal[2]);
+        c.fillStyle = g;
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.quadraticCurveTo(len * 0.55, -wid * 1.9, len, -len * 0.42);
+        c.quadraticCurveTo(len * 0.5, wid * 0.7, 0, wid * 0.5);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = pal[3] || 'rgba(255,255,255,0.22)';
+        c.lineWidth = 0.9 * sc;
+        c.stroke();
+      }
+      c.restore();
+    }
+    /* 粒子：往上飘，移动时更多 */
+    c.globalCompositeOperation = 'lighter';
+    const n = moving ? 7 : 4;
+    for(let i = 0; i < n; i++){
+      const ph = ((T * (0.7 + i * 0.09)) % 1);
+      const dx = Math.sin(T * 1.7 + i) * 34 * sc;
+      const dy = -ph * 76 * sc - 26 * sc;
+      c.fillStyle = pal[4];
+      c.beginPath(); c.arc(dx, dy, (2.4 - ph * 1.6) * sc, 0, Math.PI * 2); c.fill();
+    }
+  }
+
   /* t: 时间（秒），moving: 是否在移动，facing: 1 / -1 */
   function draw(c, x, y, sc, model, t, moving, facing){
     if(!c) return;
@@ -91,7 +133,42 @@
     c.save();
     c.translate(x, y);
 
-    if(model === 'windfire'){
+    if(model === 'hover'){
+      /* ---- 御风滑板：无轮悬浮，底下三圈气流 ---- */
+      var W2 = 80 * sc, H2 = 8 * sc;
+      var bob2 = Math.sin(T * 2.4) * 1.2 * sc;
+      c.fillStyle = 'rgba(0,0,0,0.26)';
+      c.beginPath(); c.ellipse(0, bob2 + H2 + 6 * sc, W2 * 0.5, 5 * sc, 0, 0, Math.PI * 2); c.fill();
+      var gh = c.createLinearGradient(0, bob2, 0, bob2 + H2);
+      gh.addColorStop(0, '#cfe9ff');
+      gh.addColorStop(0.5, '#6fb6e8');
+      gh.addColorStop(1, '#2c5f86');
+      c.fillStyle = gh;
+      c.beginPath(); roundRectPath(c, -W2 / 2, bob2, W2, H2, 5 * sc); c.fill();
+      c.globalCompositeOperation = 'lighter';
+      for(var r2 = 0; r2 < 3; r2++){
+        var pr = ((T * (0.8 + r2 * 0.12) + r2 * 0.33) % 1);
+        c.strokeStyle = 'rgba(120,215,255,' + (0.42 * (1 - pr)).toFixed(3) + ')';
+        c.lineWidth = 1.6 * sc;
+        c.beginPath(); c.ellipse(0, bob2 + H2 + 2 * sc + pr * 10 * sc, (W2 * 0.34) * (0.6 + pr * 0.8), 4 * sc * (0.6 + pr), 0, 0, Math.PI * 2); c.stroke();
+      }
+      if(moving){
+        for(var d2 = 0; d2 < 6; d2++){
+          var pp = ((T * 2.4 + d2 * 0.17) % 1);
+          c.fillStyle = 'rgba(160,225,255,' + (0.4 * (1 - pp)).toFixed(3) + ')';
+          c.beginPath(); c.arc(-F * (16 + pp * 54) * sc, (2 - pp * 8) * sc, (2.4 - pp * 1.6) * sc, 0, Math.PI * 2); c.fill();
+        }
+      }
+      c.globalCompositeOperation = 'source-over';
+    } else if(model === 'wing' || model === 'flame' || model === 'star'){
+      if(model === 'wing'){
+        drawWings(c, sc, T, moving, ['rgba(210,250,255,0.95)', 'rgba(120,220,235,0.75)', 'rgba(70,150,200,0.15)', 'rgba(235,255,255,0.5)', 'rgba(180,245,255,0.75)']);
+      } else if(model === 'flame'){
+        drawWings(c, sc, T, moving, ['rgba(255,240,170,0.98)', 'rgba(255,150,50,0.8)', 'rgba(190,40,10,0.2)', 'rgba(255,215,140,0.55)', 'rgba(255,170,70,0.85)']);
+      } else {
+        drawWings(c, sc, T, moving, ['rgba(235,225,255,0.95)', 'rgba(140,120,255,0.78)', 'rgba(60,40,160,0.18)', 'rgba(220,215,255,0.5)', 'rgba(200,180,255,0.9)']);
+      }
+    } else if(model === 'windfire'){
       /* ---- 风火轮：脚下两只旋转火轮 ---- */
       for(var i = -1; i <= 1; i += 2){
         var cx = i * 17 * sc, cy = 4 * sc;
@@ -180,8 +257,39 @@
 
   /* 未实现模型的兜底：紫以上暂时也用高级外观，等美术补齐 */
   function visualModel(model){
-    if(model === 'windfire' || model === 'hover' || model === 'wing' || model === 'flame' || model === 'star') return 'windfire';
+    if(model === 'windfire' || model === 'hover' || model === 'wing' || model === 'flame' || model === 'star') return model;
     return 'board';
+  }
+
+  /* ---------- 刷图掉落 ----------
+     品阶上限跟着「掉落等级」走：
+       1–20 级地图：最高粉（神器）
+       21–40 级：最高传说
+       50 级以上：才能出史诗
+     小怪不掉，精英 1.5%、BOSS 6%（深渊更高） */
+  function capTierForLevel(lv){
+    if(lv <= 20) return 3;
+    if(lv <= 40) return 4;
+    return 5;
+  }
+  function rollDrop(level, opts){
+    opts = opts || {};
+    var abyss = !!opts.abyss;
+    var p = opts.isBoss ? 0.06 : (opts.isElite ? 0.015 : 0);
+    if(abyss) p = opts.isBoss ? 0.16 : 0.03;
+    if(!(Math.random() < p)) return null;
+
+    var cap = capTierForLevel(level || 1);
+    var w = [0.50, 0.30, 0.14, 0.05, 0.008, 0.0018];
+    var total = 0, i;
+    for(i = 0; i <= cap; i++) total += w[i];
+    var r = Math.random() * total, acc = 0, idx = 0;
+    for(i = 0; i <= cap; i++){ acc += w[i]; if(r <= acc){ idx = i; break; } }
+    var t = TIERS[idx];
+    var eq = make(t.id, Math.max(1, Math.min(80, Math.round(level || 1))));
+    eq.sealed = false;             /* 飞行道具不封装，捡到就能用 */
+    eq.tradeable = idx < 5;
+    return eq;
   }
 
   window.MOUNT = {
@@ -192,6 +300,8 @@
     of: off,
     ensure: ensure,
     modelOf: modelOf,
+    rollDrop: rollDrop,
+    capTierForLevel: capTierForLevel,
     visualModel: visualModel,
     draw: function(c, x, y, sc, model, t, moving, facing){
       draw(c, x, y, sc, visualModel(model), t, moving, facing);
