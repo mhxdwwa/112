@@ -8,6 +8,30 @@ const SP_START = 4;              // 初始技能点
 const SKILL_DMG_PER_LV = 0.06;   // 每级技能伤害成长
 
 function skillMaxLv(sk){ return (sk && sk.maxLv) ? sk.maxLv : 20; }
+
+/* ★ DNF 式「等级门槛」：技能能升到几级，跟着角色等级走
+     · 基础技能（SP 阶梯 1）：角色每升 2 级，技能上限 +1
+     · 高阶技能（SP 阶梯 ≥2）：角色每升 3 级，技能上限 +1
+     · 上限不超过技能自身的 maxLv
+   例：学习等级 1、最高 20 的基础技 → 角色 Lv.39 才能点满
+       学习等级 30、最高 10 的觉醒技 → 角色 Lv.57 才能点满 */
+function skillLvCap(p, sk){
+  if(!sk) return 0;
+  const maxLv = skillMaxLv(sk);
+  const learn = sk.unlock || 1;
+  const lv = (p && p.level) || 1;
+  if(lv < learn) return 0;                 /* 还没学到 */
+  const step = (sk.spStep || 0) >= 2 ? 3 : 2;
+  return Math.max(1, Math.min(maxLv, 1 + Math.floor((lv - learn) / step)));
+}
+/* 再升 1 级技能还差多少角色等级（已经到技能上限时返回 0） */
+function skillNextLvNeed(p, sk){
+  if(!sk) return 0;
+  const cap = skillLvCap(p, sk);
+  if(cap >= skillMaxLv(sk)) return 0;
+  const step = (sk.spStep || 0) >= 2 ? 3 : 2;
+  return (sk.unlock || 1) + cap * step;
+}
 /* 从 curLv 升到 curLv+1 所需SP（每5级涨一次价，DNF式阶梯） */
 function skillSpCost(sk, curLv){
   if(!sk) return 3;
