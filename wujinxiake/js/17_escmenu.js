@@ -64,12 +64,22 @@ function buildWikiList(){
         wikiItems.push({ eq: wikiGenItem('weapon', ti, lv, 0, wi), wtIdx: wi });
       }
     } else if(wikiSlot === 'mount'){
-      /* 飞行道具：按品阶展示，每个品阶一件 */
+      /* 飞行道具：按品阶展示，每个品阶展示所有命名道具 */
       if(window.MOUNT && MOUNT.TIERS){
         const mt = MOUNT.TIERS[ti];
         if(mt){
-          const eq = MOUNT.make(mt.id, mt.lv);
-          wikiItems.push({ eq: eq, isMount: true });
+          var pool = MOUNT.POOL && MOUNT.POOL[mt.id];
+          if(pool){
+            for(var pi = 0; pi < pool.length; pi++){
+              var eq = MOUNT.make(mt.id, pool[pi].lv);
+              eq.name = pool[pi].name;
+              eq.model = pool[pi].model;
+              wikiItems.push({ eq: eq, isMount: true });
+            }
+          } else {
+            var eq = MOUNT.make(mt.id, mt.lv);
+            wikiItems.push({ eq: eq, isMount: true });
+          }
         }
       }
     } else {

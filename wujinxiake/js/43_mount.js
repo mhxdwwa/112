@@ -23,6 +23,26 @@
     { id:'mythic',   name:'史诗', color:'#f39c12', model:'star',     label:'星陨神翼', lv:80, moveSpd:15, dodge:6.5 }
   ];
 
+  /* 道具池：同品阶可有多个命名道具，掉落时随机选一个 */
+  var POOL = {
+    common:   [{ name:'木滑板',   model:'board',        lv:1  }],
+    advanced: [{ name:'风火轮',   model:'windfire',     lv:15 }],
+    rare:     [{ name:'御风滑板', model:'hover',        lv:30 }],
+    epic:     [
+      { name:'青鸾之翼', model:'wing',        lv:45 },
+      { name:'诛仙剑',   model:'flysword',    lv:50 }
+    ],
+    legend:   [
+      { name:'炽焰双翼', model:'flame',       lv:60 },
+      { name:'筋斗云',   model:'goldencloud', lv:50 }
+    ],
+    mythic:   [
+      { name:'星陨神翼', model:'star',        lv:80 },
+      { name:'九天莲座', model:'lotusthrone', lv:60 },
+      { name:'瑶琴仙槎', model:'guqin',       lv:60 }
+    ]
+  };
+
   function tierById(id){
     for(var i = 0; i < TIERS.length; i++) if(TIERS[i].id === id) return TIERS[i];
     return TIERS[0];
@@ -30,14 +50,17 @@
 
   function make(tierId, level){
     var t = tierById(tierId);
+    /* 从道具池随机选一个命名道具，池中没有则用品阶默认 */
+    var pool = POOL[tierId];
+    var v = pool ? pool[Math.floor(Math.random() * pool.length)] : { name:t.label, model:t.model, lv:t.lv };
     return {
       slot: SLOT,
       tier: t.id,
       tierName: t.name,
       tierColor: t.color,
-      name: t.label,
-      model: t.model,
-      level: level || t.lv,
+      name: v.name,
+      model: v.model,
+      level: level || v.lv,
       enhance: 0, amplify: 0,
       baseAtk: 0, baseDef: 0, baseHp: 0, baseSpd: 0, baseCrit: 0,
       affixes: [],
@@ -168,6 +191,320 @@
       } else {
         drawWings(c, sc, T, moving, ['rgba(235,225,255,0.95)', 'rgba(140,120,255,0.78)', 'rgba(60,40,160,0.18)', 'rgba(220,215,255,0.5)', 'rgba(200,180,255,0.9)']);
       }
+    } else if(model === 'goldencloud'){
+      /* ---- 筋斗云：金色祥云，西游记灵感 ---- */
+      var gBob = Math.sin(T * 1.8) * 2.5 * sc;
+      var gScale = sc * 1.15;
+      c.save();
+      c.translate(0, gBob);
+      /* 云团：多个重叠椭圆 */
+      var gClouds = [
+        {x:0, y:0, rx:44, ry:17},
+        {x:-24, y:-5, rx:26, ry:14},
+        {x:24, y:-3, rx:28, ry:15},
+        {x:-10, y:-12, rx:20, ry:11},
+        {x:14, y:-10, rx:22, ry:12}
+      ];
+      /* 底部阴影 */
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      c.beginPath(); c.ellipse(0, 22*gScale, 48*gScale, 6*gScale, 0, 0, Math.PI*2); c.fill();
+      /* 外层辉光 */
+      c.globalCompositeOperation = 'lighter';
+      var gGlow = c.createRadialGradient(0, -4*gScale, 0, 0, -4*gScale, 58*gScale);
+      gGlow.addColorStop(0, 'rgba(255,215,0,0.28)');
+      gGlow.addColorStop(0.5, 'rgba(255,180,0,0.10)');
+      gGlow.addColorStop(1, 'rgba(255,150,0,0)');
+      c.fillStyle = gGlow;
+      c.beginPath(); c.ellipse(0, -4*gScale, 58*gScale, 30*gScale, 0, 0, Math.PI*2); c.fill();
+      c.globalCompositeOperation = 'source-over';
+      /* 云团本体 */
+      for(var ci = 0; ci < gClouds.length; ci++){
+        var gc = gClouds[ci];
+        var gGrad = c.createRadialGradient(gc.x*gScale, (gc.y-4)*gScale, 2, gc.x*gScale, gc.y*gScale, gc.rx*gScale);
+        gGrad.addColorStop(0, 'rgba(255,245,200,0.96)');
+        gGrad.addColorStop(0.35, 'rgba(255,215,80,0.85)');
+        gGrad.addColorStop(0.7, 'rgba(230,170,40,0.60)');
+        gGrad.addColorStop(1, 'rgba(200,140,20,0.15)');
+        c.fillStyle = gGrad;
+        c.beginPath(); c.ellipse(gc.x*gScale, gc.y*gScale, gc.rx*gScale, gc.ry*gScale, 0, 0, Math.PI*2); c.fill();
+      }
+      /* 顶部高光 */
+      c.fillStyle = 'rgba(255,250,230,0.35)';
+      c.beginPath(); c.ellipse(-4*gScale, -16*gScale, 18*gScale, 6*gScale, -0.2, 0, Math.PI*2); c.fill();
+      /* 飘动金色粒子 */
+      c.globalCompositeOperation = 'lighter';
+      var gpn = moving ? 10 : 5;
+      for(var gi = 0; gi < gpn; gi++){
+        var gph = ((T * (0.5 + gi*0.1) + gi*0.2) % 1);
+        var gdx = Math.sin(T*1.3 + gi*1.7) * 38*gScale;
+        var gdy = -gph * 55*gScale - 8*gScale;
+        c.fillStyle = 'rgba(255,230,100,' + (0.6*(1-gph)).toFixed(3) + ')';
+        c.beginPath(); c.arc(gdx, gdy, (2.8 - gph*2)*gScale, 0, Math.PI*2); c.fill();
+      }
+      /* 移动时尾部云迹 */
+      if(moving){
+        for(var gt = 0; gt < 5; gt++){
+          var ttp = ((T*2 + gt*0.2) % 1);
+          var ttx = -F * (20 + ttp*50)*gScale;
+          var tty = (4 - ttp*6)*gScale;
+          c.fillStyle = 'rgba(255,220,120,' + (0.35*(1-ttp)).toFixed(3) + ')';
+          c.beginPath(); c.ellipse(ttx, tty, (10-ttp*7)*gScale, (5-ttp*3)*gScale, 0, 0, Math.PI*2); c.fill();
+        }
+      }
+      c.globalCompositeOperation = 'source-over';
+      c.restore();
+    } else if(model === 'flysword'){
+      /* ---- 诛仙剑：脚踏飞剑，仙侠风格 ---- */
+      var sBob = Math.sin(T * 2.2) * 1.8 * sc;
+      var sSc = sc * 1.1;
+      c.save();
+      c.translate(0, sBob);
+      /* 剑身阴影 */
+      c.fillStyle = 'rgba(0,0,0,0.25)';
+      c.beginPath(); c.ellipse(0, 18*sSc, 52*sSc, 5*sSc, 0, 0, Math.PI*2); c.fill();
+      /* 剑身 */
+      var sLen = 110*sSc, sWid = 8*sSc;
+      var sGrad = c.createLinearGradient(-sLen/2, 0, sLen/2, 0);
+      sGrad.addColorStop(0, 'rgba(180,220,255,0.6)');
+      sGrad.addColorStop(0.15, 'rgba(200,235,255,0.95)');
+      sGrad.addColorStop(0.5, 'rgba(140,200,240,0.85)');
+      sGrad.addColorStop(0.85, 'rgba(200,235,255,0.95)');
+      sGrad.addColorStop(1, 'rgba(100,180,255,0.5)');
+      c.fillStyle = sGrad;
+      c.beginPath();
+      c.moveTo(-sLen/2, 0);
+      c.lineTo(-sLen/2 + 12*sSc, -sWid);
+      c.lineTo(sLen/2 - 6*sSc, -sWid*0.7);
+      c.lineTo(sLen/2, 0);
+      c.lineTo(sLen/2 - 6*sSc, sWid*0.7);
+      c.lineTo(-sLen/2 + 12*sSc, sWid);
+      c.closePath();
+      c.fill();
+      /* 剑身高光 */
+      c.fillStyle = 'rgba(220,245,255,0.4)';
+      c.beginPath();
+      c.moveTo(-sLen/2 + 15*sSc, -sWid*0.3);
+      c.lineTo(sLen/2 - 10*sSc, -sWid*0.2);
+      c.lineTo(sLen/2 - 10*sSc, 0);
+      c.lineTo(-sLen/2 + 15*sSc, 0);
+      c.closePath();
+      c.fill();
+      /* 剑柄 */
+      c.fillStyle = 'rgba(90,60,40,0.9)';
+      c.fillRect(-sLen/2 - 14*sSc, -3*sSc, 16*sSc, 6*sSc);
+      /* 剑格（护手） */
+      var guardGrad = c.createLinearGradient(0, -10*sSc, 0, 10*sSc);
+      guardGrad.addColorStop(0, 'rgba(255,215,100,0.9)');
+      guardGrad.addColorStop(1, 'rgba(200,160,50,0.8)');
+      c.fillStyle = guardGrad;
+      c.beginPath(); c.ellipse(-sLen/2 + 2*sSc, 0, 4*sSc, 10*sSc, 0, 0, Math.PI*2); c.fill();
+      /* 剑刃能量光晕 */
+      c.globalCompositeOperation = 'lighter';
+      var seGlow = c.createLinearGradient(-sLen/2, -14*sSc, sLen/2, 14*sSc);
+      var sPulse = 0.5 + Math.sin(T*3)*0.2;
+      seGlow.addColorStop(0, 'rgba(100,200,255,0)');
+      seGlow.addColorStop(0.3, 'rgba(100,200,255,' + (0.15*sPulse).toFixed(3) + ')');
+      seGlow.addColorStop(0.7, 'rgba(100,200,255,' + (0.15*sPulse).toFixed(3) + ')');
+      seGlow.addColorStop(1, 'rgba(100,200,255,0)');
+      c.fillStyle = seGlow;
+      c.fillRect(-sLen/2, -14*sSc, sLen, 28*sSc);
+      /* 旋转能量环 */
+      c.strokeStyle = 'rgba(120,210,255,' + (0.35*sPulse).toFixed(3) + ')';
+      c.lineWidth = 1.2*sSc;
+      for(var ri = 0; ri < 2; ri++){
+        var rPhase = T*2 + ri*Math.PI;
+        var rx = Math.cos(rPhase)*30*sSc;
+        c.beginPath();
+        c.ellipse(rx, 0, 5*sSc, 12*sSc, 0, 0, Math.PI*2);
+        c.stroke();
+      }
+      /* 剑气粒子 */
+      var spn = moving ? 8 : 4;
+      for(var si = 0; si < spn; si++){
+        var sph = ((T*(0.8+si*0.12) + si*0.25) % 1);
+        var sx = Math.sin(T*2 + si*2.1) * 40*sSc;
+        var sy = -sph*40*sSc - 6*sSc;
+        c.fillStyle = 'rgba(150,220,255,' + (0.5*(1-sph)).toFixed(3) + ')';
+        c.beginPath(); c.arc(sx, sy, (2.2-sph*1.5)*sSc, 0, Math.PI*2); c.fill();
+      }
+      if(moving){
+        for(var st = 0; st < 4; st++){
+          var stp = ((T*2.5 + st*0.25) % 1);
+          var stx = -F*(25+stp*45)*sSc;
+          c.fillStyle = 'rgba(150,220,255,' + (0.3*(1-stp)).toFixed(3) + ')';
+          c.beginPath(); c.arc(stx, (3-stp*5)*sSc, (2-stp*1.4)*sSc, 0, Math.PI*2); c.fill();
+        }
+      }
+      c.globalCompositeOperation = 'source-over';
+      c.restore();
+    } else if(model === 'lotusthrone'){
+      /* ---- 九天莲座：多层莲花瓣台座，佛门风格 ---- */
+      var lBob = Math.sin(T * 1.5) * 2.2 * sc;
+      var lSc = sc * 1.2;
+      c.save();
+      c.translate(0, lBob);
+      /* 底部阴影 */
+      c.fillStyle = 'rgba(0,0,0,0.25)';
+      c.beginPath(); c.ellipse(0, 20*lSc, 42*lSc, 6*lSc, 0, 0, Math.PI*2); c.fill();
+      /* 底部光晕 */
+      c.globalCompositeOperation = 'lighter';
+      var lGlow = c.createRadialGradient(0, 0, 0, 0, 0, 50*lSc);
+      lGlow.addColorStop(0, 'rgba(255,200,100,0.25)');
+      lGlow.addColorStop(0.5, 'rgba(255,150,80,0.08)');
+      lGlow.addColorStop(1, 'rgba(255,100,50,0)');
+      c.fillStyle = lGlow;
+      c.beginPath(); c.ellipse(0, 0, 50*lSc, 28*lSc, 0, 0, Math.PI*2); c.fill();
+      c.globalCompositeOperation = 'source-over';
+      /* 外层花瓣（大，慢转） */
+      var lPetals = 8;
+      c.save();
+      c.rotate(T * 0.3);
+      for(var pi = 0; pi < lPetals; pi++){
+        var pa = (pi / lPetals) * Math.PI * 2;
+        c.save();
+        c.rotate(pa);
+        var pGrad = c.createLinearGradient(0, 0, 38*lSc, 0);
+        pGrad.addColorStop(0, 'rgba(255,180,220,0.9)');
+        pGrad.addColorStop(0.5, 'rgba(255,140,180,0.7)');
+        pGrad.addColorStop(1, 'rgba(255,100,150,0.2)');
+        c.fillStyle = pGrad;
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.quadraticCurveTo(20*lSc, -14*lSc, 38*lSc, -3*lSc);
+        c.quadraticCurveTo(20*lSc, 10*lSc, 0, 0);
+        c.fill();
+        c.strokeStyle = 'rgba(255,200,230,0.4)';
+        c.lineWidth = 0.8*lSc;
+        c.stroke();
+        c.restore();
+      }
+      c.restore();
+      /* 内层花瓣（小，反方向转） */
+      c.save();
+      c.rotate(-T * 0.5);
+      for(var qi = 0; qi < 6; qi++){
+        var qa = (qi / 6) * Math.PI * 2;
+        c.save();
+        c.rotate(qa);
+        var qGrad = c.createLinearGradient(0, 0, 24*lSc, 0);
+        qGrad.addColorStop(0, 'rgba(255,220,240,0.95)');
+        qGrad.addColorStop(0.6, 'rgba(255,180,210,0.6)');
+        qGrad.addColorStop(1, 'rgba(255,150,190,0.15)');
+        c.fillStyle = qGrad;
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.quadraticCurveTo(13*lSc, -9*lSc, 24*lSc, -2*lSc);
+        c.quadraticCurveTo(13*lSc, 7*lSc, 0, 0);
+        c.fill();
+        c.restore();
+      }
+      c.restore();
+      /* 中心莲蓬（金色球） */
+      var cGrad = c.createRadialGradient(0, -2*lSc, 0, 0, 0, 10*lSc);
+      cGrad.addColorStop(0, 'rgba(255,240,180,0.98)');
+      cGrad.addColorStop(0.5, 'rgba(255,200,80,0.8)');
+      cGrad.addColorStop(1, 'rgba(200,150,50,0.3)');
+      c.fillStyle = cGrad;
+      c.beginPath(); c.arc(0, -2*lSc, 10*lSc, 0, Math.PI*2); c.fill();
+      /* 中心脉动光环 */
+      c.globalCompositeOperation = 'lighter';
+      var lPulse = 0.5 + Math.sin(T*2.5)*0.3;
+      c.strokeStyle = 'rgba(255,220,120,' + (0.4*lPulse).toFixed(3) + ')';
+      c.lineWidth = 1.5*lSc;
+      c.beginPath(); c.arc(0, -2*lSc, 14*lSc, 0, Math.PI*2); c.stroke();
+      /* 上升的光点粒子 */
+      var lpn = moving ? 8 : 5;
+      for(var li = 0; li < lpn; li++){
+        var lph = ((T*(0.6+li*0.08) + li*0.2) % 1);
+        var ldx = Math.sin(T*1.1 + li*1.9) * 28*lSc;
+        var ldy = -lph*60*lSc - 10*lSc;
+        c.fillStyle = 'rgba(255,230,150,' + (0.55*(1-lph)).toFixed(3) + ')';
+        c.beginPath(); c.arc(ldx, ldy, (2.5-lph*1.8)*lSc, 0, Math.PI*2); c.fill();
+      }
+      c.globalCompositeOperation = 'source-over';
+      c.restore();
+    } else if(model === 'guqin'){
+      /* ---- 瑶琴仙槎：古琴造型，音波飘动 ---- */
+      var qBob = Math.sin(T * 1.9) * 1.6 * sc;
+      var qSc = sc * 1.05;
+      c.save();
+      c.translate(0, qBob);
+      /* 阴影 */
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      c.beginPath(); c.ellipse(0, 18*qSc, 50*qSc, 5*qSc, 0, 0, Math.PI*2); c.fill();
+      /* 琴身 */
+      var qLen = 100*qSc, qW = 14*qSc;
+      var qGrad = c.createLinearGradient(0, -qW, 0, qW);
+      qGrad.addColorStop(0, '#5a3a1e');
+      qGrad.addColorStop(0.3, '#7a5030');
+      qGrad.addColorStop(0.7, '#6a4528');
+      qGrad.addColorStop(1, '#3a2210');
+      c.fillStyle = qGrad;
+      c.beginPath();
+      c.moveTo(-qLen/2, -qW*0.3);
+      c.quadraticCurveTo(-qLen/4, -qW, 0, -qW*0.8);
+      c.quadraticCurveTo(qLen/4, -qW*0.6, qLen/2, -qW*0.15);
+      c.lineTo(qLen/2, qW*0.15);
+      c.quadraticCurveTo(qLen/4, qW*0.6, 0, qW*0.8);
+      c.quadraticCurveTo(-qLen/4, qW, -qLen/2, qW*0.3);
+      c.closePath();
+      c.fill();
+      /* 琴身高光 */
+      c.fillStyle = 'rgba(200,170,120,0.2)';
+      c.beginPath();
+      c.moveTo(-qLen/2+5*qSc, -qW*0.2);
+      c.quadraticCurveTo(0, -qW*0.7, qLen/2-5*qSc, -qW*0.1);
+      c.lineTo(qLen/2-5*qSc, 0);
+      c.quadraticCurveTo(0, -qW*0.3, -qLen/2+5*qSc, 0);
+      c.closePath();
+      c.fill();
+      /* 琴弦 */
+      c.strokeStyle = 'rgba(220,200,160,0.7)';
+      c.lineWidth = 0.6*qSc;
+      for(var qi = 0; qi < 7; qi++){
+        var qy = -qW*0.5 + qi*(qW/3.5);
+        c.beginPath();
+        c.moveTo(-qLen/2+8*qSc, qy);
+        c.lineTo(qLen/2-8*qSc, qy);
+        c.stroke();
+      }
+      /* 琴徽（标记点） */
+      c.fillStyle = 'rgba(255,240,200,0.6)';
+      for(var mi = 0; mi < 5; mi++){
+        var mx = -qLen/3 + mi*(qLen*2/3/4);
+        c.beginPath(); c.arc(mx, 0, 1.5*qSc, 0, Math.PI*2); c.fill();
+      }
+      /* 音波涟漪 */
+      c.globalCompositeOperation = 'lighter';
+      var qPulse = 0.5 + Math.sin(T*3)*0.3;
+      for(var wi = 0; wi < 3; wi++){
+        var wPhase = ((T*0.8 + wi*0.33) % 1);
+        var wRad = (15 + wPhase*35)*qSc;
+        c.strokeStyle = 'rgba(180,220,255,' + (0.3*(1-wPhase)*qPulse).toFixed(3) + ')';
+        c.lineWidth = (1.5 - wPhase)*qSc;
+        c.beginPath();
+        c.ellipse(0, -8*qSc, wRad, wRad*0.4, 0, 0, Math.PI*2);
+        c.stroke();
+      }
+      /* 音符粒子 */
+      var qpn = moving ? 7 : 4;
+      for(var qpi = 0; qpi < qpn; qpi++){
+        var qph = ((T*(0.5+qpi*0.1) + qpi*0.18) % 1);
+        var qpx = Math.sin(T*1.5 + qpi*2.3) * 32*qSc;
+        var qpy = -qph*50*qSc - 12*qSc;
+        c.fillStyle = 'rgba(180,220,255,' + (0.5*(1-qph)).toFixed(3) + ')';
+        c.beginPath(); c.arc(qpx, qpy, (2.4-qph*1.6)*qSc, 0, Math.PI*2); c.fill();
+      }
+      if(moving){
+        for(var qt = 0; qt < 4; qt++){
+          var qtp = ((T*2.2 + qt*0.25) % 1);
+          var qtx = -F*(20+qtp*40)*qSc;
+          c.fillStyle = 'rgba(180,220,255,' + (0.25*(1-qtp)).toFixed(3) + ')';
+          c.beginPath(); c.arc(qtx, (2-qtp*4)*qSc, (2-qtp*1.3)*qSc, 0, Math.PI*2); c.fill();
+        }
+      }
+      c.globalCompositeOperation = 'source-over';
+      c.restore();
     } else if(model === 'windfire'){
       /* ---- 风火轮：脚下两只旋转火轮 ---- */
       for(var i = -1; i <= 1; i += 2){
@@ -257,7 +594,7 @@
 
   /* 未实现模型的兜底：紫以上暂时也用高级外观，等美术补齐 */
   function visualModel(model){
-    if(model === 'windfire' || model === 'hover' || model === 'wing' || model === 'flame' || model === 'star') return model;
+    if(model === 'windfire' || model === 'hover' || model === 'wing' || model === 'flame' || model === 'star' || model === 'goldencloud' || model === 'flysword' || model === 'lotusthrone' || model === 'guqin') return model;
     return 'board';
   }
 
@@ -300,6 +637,18 @@
     if(m === 'wing' || m === 'flame' || m === 'star'){
       sc = size / 200;                 /* 双翼横向跨度约 190*sc */
       baseY = cy + size * 0.42;
+    } else if(m === 'goldencloud'){
+      sc = size / 120;
+      baseY = cy + size * 0.32;
+    } else if(m === 'flysword'){
+      sc = size / 130;
+      baseY = cy + size * 0.30;
+    } else if(m === 'lotusthrone'){
+      sc = size / 130;
+      baseY = cy + size * 0.34;
+    } else if(m === 'guqin'){
+      sc = size / 120;
+      baseY = cy + size * 0.30;
     } else if(m === 'windfire'){
       sc = size / 92;                  /* 两只火轮跨度约 82*sc */
       baseY = cy + size * 0.32;
@@ -316,6 +665,7 @@
   window.MOUNT = {
     SLOT: SLOT,
     TIERS: TIERS,
+    POOL: POOL,
     tierById: tierById,
     make: make,
     of: off,
