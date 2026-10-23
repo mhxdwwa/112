@@ -257,29 +257,50 @@ function drawFighterSprite(p, scaleMul){
   const bodyPx = at.bodyWorld * sc;
   const showAura = !!(p.isPlayer && p.equipment && p.equipment.weapon);
   const auraScale = bodyPx / 150;
+  const py = p.y - (p.h || 0);
+  const mount = (p.equipment && p.equipment.mount) ? p.equipment.mount : null;
+  const moving = (p.state === 'walk' || p.state === 'run');
+  const facing = p.facing || 1;
+  /* ★ 踩着飞行道具：移动时整体前倾 + 轻微浮动，代替跑动动画 */
+  const ang = (mount && moving) ? 0.10 * facing : 0;
+  const bob = mount ? Math.sin((G ? G.t : 0) * 2.2) * 1.6 * sc : 0;
+
+  ctx.save();
+  if(ang || bob){
+    ctx.translate(p.x, py);
+    ctx.rotate(ang);
+    ctx.translate(-p.x, -py - bob);
+  }
+
+  /* ★ 飞行道具画在脚下（先画，角色盖在上面 = 站在上面） */
+  if(mount && window.MOUNT){
+    MOUNT.draw(ctx, p.x, py + 2 * sc, bodyPx / 150, mount.model, (G ? G.t : 0), moving, facing);
+  }
+
   /* ★ 套装光环（脚下法阵，先于角色绘制） */
   if(p.isPlayer) drawSetAura(p, p.x, p.y, sc);
-  if(showAura) drawPlayerWeaponAura(p, p.x, p.y - (p.h||0), auraScale, {strong:false});
+  if(showAura) drawPlayerWeaponAura(p, p.x, py, auraScale, {strong:false});
   if(showAura){
     const gi = getEquipGlowInfo(p.equipment.weapon);
     if(gi.active){
-      if(gi.enhOn) drawSpriteFrame(at, a.name, a.t, p.x, p.y-(p.h||0), (p.facing||1), bodyPx, {color:'#eaf6ff', alpha:0.6*gi.enhI, blur:26});
-      if(gi.ampOn) drawSpriteFrame(at, a.name, a.t, p.x, p.y-(p.h||0), (p.facing||1), bodyPx, {color:'#ff7ad9', alpha:0.6*gi.ampI, blur:26});
+      if(gi.enhOn) drawSpriteFrame(at, a.name, a.t, p.x, py, facing, bodyPx, {color:'#eaf6ff', alpha:0.6*gi.enhI, blur:26});
+      if(gi.ampOn) drawSpriteFrame(at, a.name, a.t, p.x, py, facing, bodyPx, {color:'#ff7ad9', alpha:0.6*gi.ampI, blur:26});
     }
   }
   if(p.hitFlash > 0) ctx.filter = 'brightness(1.75) saturate(0.7)';
   /* ★ 装备外观（身后层：短披 / 胸口甲光） */
-  drawEquipAppearanceBack(p, p.x, p.y - (p.h||0), bodyPx, {facing:(p.facing||1)});
+  drawEquipAppearanceBack(p, p.x, py, bodyPx, {facing:facing});
   /* ★ 护甲体形辉光：沿角色轮廓染色，比贴色块更贴身形 */
   if(p.isPlayer && p.equipment){
     const _gp = equipLookParts(p);
-    drawEquipBodyGlow(at, a.name, a.t, p.x, p.y-(p.h||0), (p.facing||1), bodyPx, _gp.armor);
+    drawEquipBodyGlow(at, a.name, a.t, p.x, py, facing, bodyPx, _gp.armor);
   }
-  drawSpriteFrame(at, a.name, a.t, p.x, p.y - (p.h||0), (p.facing||1), bodyPx);
+  drawSpriteFrame(at, a.name, a.t, p.x, py, facing, bodyPx);
   ctx.filter = 'none';
   /* ★ 装备外观（身前层：前肩甲 / 头盔冠饰 / 饰品光点 / 踏尘环） */
-  drawEquipAppearanceFront(p, p.x, p.y - (p.h||0), bodyPx, {facing:(p.facing||1)});
-  if(showAura) drawPlayerWeaponAuraFront(p, p.x, p.y - (p.h||0), auraScale, {strong:false});
+  drawEquipAppearanceFront(p, p.x, py, bodyPx, {facing:facing});
+  if(showAura) drawPlayerWeaponAuraFront(p, p.x, py, auraScale, {strong:false});
+  ctx.restore();
   return true;
 }
 
@@ -288,11 +309,30 @@ function drawTownPlayerSprite(p){
   if(!G || !G.player) return false;
   const at = atlasOf(G.player.weaponIdx);
   if(!at) return false;
+  const mount = (G.player.equipment && G.player.equipment.mount) ? G.player.equipment.mount : null;
   const walking = p.state === 'walk';
-  const prog = walking ? (((p.walkPhase/(Math.PI*2)) % 1 + 1) % 1) : ((performance.now()*0.0006) % 1);
+  /* ★ 有飞行道具：永远站姿，移动感全靠前倾 + 浮动 + 拖尾 */
+  const animName = (mount || !walking) ? 'idle' : 'run';
+  const prog = (mount || !walking) ? ((performance.now() * 0.0006) % 1)
+                                   : (((p.walkPhase/(Math.PI*2)) % 1 + 1) % 1);
   const bodyPx = 150 * (at.bodyWorld / 110);
-  const animName = walking ? 'run' : 'idle';
   const facing = p.facing || 1;
+  const moving = walking;
+  const ang = (mount && moving) ? 0.11 * facing : 0;
+  const bob = mount ? Math.sin(performance.now() * 0.0022) * 2.2 : 0;
+
+  ctx.save();
+  if(ang || bob){
+    ctx.translate(p.x, p.y);
+    ctx.rotate(ang);
+    ctx.translate(-p.x, -p.y - bob);
+  }
+
+  /* ★ 飞行道具 */
+  if(mount && window.MOUNT){
+    MOUNT.draw(ctx, p.x, p.y + 2, 1, mount.model, performance.now() / 1000, moving, facing);
+  }
+
   /* ★ 套装光环 */
   drawSetAura(G.player, p.x, p.y, bodyPx / 150);
   /* ★ 强化/增幅轮廓光（绘制在角色身后，形成明显外发光） */
@@ -308,6 +348,7 @@ function drawTownPlayerSprite(p){
   drawSpriteFrame(at, animName, prog, p.x, p.y, facing, bodyPx);
   /* ★ 城镇里也展示装备外观 */
   drawEquipAppearanceFront(G.player, p.x, p.y, bodyPx, {facing:facing});
+  ctx.restore();
   return true;
 }
 
