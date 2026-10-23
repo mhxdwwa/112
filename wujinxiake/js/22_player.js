@@ -607,6 +607,9 @@ function handleInput(){
     gameState = 'questMenu';
     for(const k in pressed) delete pressed[k]; return;
   }
+  /* ★ 药水快捷键：H 喝血瓶，G 喝蓝瓶（城镇 / 战斗都能用） */
+  if(pressed['KeyH'] && typeof drinkPotion === 'function'){ drinkPotion('hp'); delete pressed['KeyH']; }
+  if(pressed['KeyG'] && typeof drinkPotion === 'function'){ drinkPotion('mp'); delete pressed['KeyG']; }
   if(pressed['KeyJ']) tryPlayerAttack(p);
   if(pressed['Digit1']) tryUseSkill(p, 0);
   if(pressed['Digit2']) tryUseSkill(p, 1);
