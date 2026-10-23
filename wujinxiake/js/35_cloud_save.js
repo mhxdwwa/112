@@ -119,6 +119,9 @@ function apply(data){
   const hp = Number(data.p.hp), mp = Number(data.p.mp);
   G.player.hp = Math.min(G.player.maxHp, Math.max(1, isFinite(hp) && hp > 0 ? hp : G.player.maxHp));
   G.player.mp = Math.min(G.player.maxMp, Math.max(0, isFinite(mp) ? mp : G.player.maxMp));
+  /* ★ 进入城镇时恢复满血满蓝 */
+  G.player.hp = G.player.maxHp;
+  G.player.mp = G.player.maxMp;
 
   try{
     if(typeof initTown === 'function') initTown();
