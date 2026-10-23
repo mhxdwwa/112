@@ -130,11 +130,11 @@ function updateQuests(dt){
       questToastMsg('任务推进 · ' + cq.title, '下一步：' + cq.steps[q.step].text + '（跟着金色箭头走）', '#9fe6ff');
       return;
     }
-    /* ★ 整章目标完成：不自动发奖，回城找引灯人交付（DNF 式任务交付） */
+    /* ★ 整章目标完成：不自动发奖，打开任务面板交付 */
     if(!q.readyTurnIn){
       q.readyTurnIn = true;
       questToastMsg('任务目标完成 · ' + cq.title,
-        '回城找「引灯人」交付任务领取奖励（跟着金色箭头走，靠近后按 J 对话）', '#ffd166');
+        '按 Q 打开任务面板，点击「交付任务」按钮领取奖励', '#ffd166');
     }
     return;
   }

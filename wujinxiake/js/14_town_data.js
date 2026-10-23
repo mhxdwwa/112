@@ -983,39 +983,8 @@ function triggerNpc(npc){
       break;
     }
     case 'quest': {
-      /* ★ DNF 式交付：目标完成后对话领奖；否则打开任务面板 */
-      const pq = G && G.player;
-      const qq = pq ? questOf(pq) : null;
-      const cq2 = qq ? MAIN_QUESTS[qq.idx] : null;
-      if(qq && qq.readyTurnIn && cq2){
-        const r = cq2.reward || {};
-        const parts = [];
-        if(r.exp) parts.push('经验 ' + r.exp);
-        if(r.gold) parts.push('金币 ' + r.gold);
-        if(r.sp) parts.push('技能点 ' + r.sp);
-        if(r.equip) parts.push('装备 ×' + r.equip);
-        const npcName = npc.name || '引灯人';
-        showDialogue([
-          npcName + '：「' + (cq2.outro || '做得好，灯又亮了一分。') + '」',
-          npcName + '：「这是你应得的报酬，收好。」',
-          '『获得任务奖励：' + (parts.join(' · ') || '无') + '』'
-        ], function(){
-          qq.done.push(cq2.id);
-          try { grantQuestReward(pq, cq2); } catch(e){}
-          qq.idx++; qq.step = 0; qq.readyTurnIn = false; qq.killsBase = undefined;
-          const nq = MAIN_QUESTS[qq.idx];
-          questToastMsg('任务完成 · ' + cq2.chapter + '「' + cq2.title + '」',
-            '奖励已发放：' + (parts.join(' · ') || '无'), '#ffd166');
-          if(nq){
-            setTimeout(function(){
-              questToastMsg('新任务 · ' + nq.chapter + '「' + nq.title + '」',
-                nq.brief || '跟着金色箭头继续冒险', '#9fe6ff');
-            }, 1200);
-          }
-        });
-      } else {
-        questReturnState = 'town'; gameState = 'questMenu';
-      }
+      /* ★ 直接打开任务面板，可在面板中交付任务 */
+      questReturnState = 'town'; gameState = 'questMenu';
       break;
     }
     case 'heal':

@@ -179,7 +179,8 @@ npcImages.urchin    = npcImages.wanderer;
 
 /* ══════════════════════════════════════════════
    ★ 任务引导箭头（仿 DNF）
-   需要「下副本」的步骤 → 指向守门人；剧情/交任务 → 指向引灯人
+   所有需要下副本的任务 → 指向对应传送使（地图入口）
+   剧情/交任务 → 可直接在任务面板操作，箭头指向传送使
    目标在屏幕内：目标头顶跳动的金色箭头
    目标在屏幕外：屏幕边缘呼吸箭头 + 距离
    ══════════════════════════════════════════════ */
@@ -189,16 +190,14 @@ function questGuideTarget(){
   const cq = MAIN_QUESTS[q.idx];
   if(!cq) return null;
   const st = cq.steps[q.step];
-  /* 下副本 / 击败敌人 / 序章剧情 → 按任务段指向对应的四方传送使；剧情/交任务 → 引灯人 */
-  const needDungeon = !!(st && (st.type === 'clear' || st.type === 'kills' || (st.type === 'story' && q.idx === 0)));
-  let id = 'questmaster';
+  /* 所有任务都指向传送使（地图入口），玩家可直接在任务面板交付 */
+  let id = 'gate_east';
   /* 深渊前置任务：qa2 通关子夜鬼门 → 指向深渊传送使·玄冥 */
-  if(cq.id === 'qa2') return NPCS.find(n => n.id === 'porter') || null;
-  if(needDungeon){
-    if(q.idx < 11) id = 'gate_east';        /* 第一~三章 → 青鸾（1~22 级图，索引 0~6） */
-    else if(q.idx < 18) id = 'gate_south';  /* 第四~五章 → 朱明（22~41 级图，索引 7~12） */
-    else id = 'gate_west';                  /* 第六章+ → 白泽（41~60 级图，索引 13~23） */
-  }
+  if(cq.id === 'qa2' || cq.id === 'qa1') return NPCS.find(n => n.id === 'porter') || null;
+  /* 根据任务索引指向对应的传送使 */
+  if(q.idx < 11) id = 'gate_east';        /* 第一~三章 → 青鸾（1~22 级图，索引 0~6） */
+  else if(q.idx < 18) id = 'gate_south';  /* 第四~五章 → 朱明（22~41 级图，索引 7~12） */
+  else id = 'gate_west';                  /* 第六章+ → 白泽（41~60 级图，索引 13~23） */
   return NPCS.find(n => n.id === id) || null;
 }
 function drawQuestGuideArrow(){

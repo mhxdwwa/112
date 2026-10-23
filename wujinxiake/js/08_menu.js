@@ -393,6 +393,37 @@ function handleCanvasClick(cx, cy){
     const r = hitTestRegion(pos.x, pos.y, questClickRegions);
     if(r && r.id === 'back') gameState = questReturnState || 'town';
     else if(r && r.id === 'view'){ questViewIdx = r.idx; }
+    else if(r && r.id === 'turnIn'){
+      /* 直接交付任务，不需要走到NPC处 */
+      const pq = G && G.player;
+      const qq = pq ? questOf(pq) : null;
+      const cq2 = qq ? MAIN_QUESTS[qq.idx] : null;
+      if(qq && qq.readyTurnIn && cq2){
+        const rew = cq2.reward || {};
+        const parts = [];
+        if(rew.exp) parts.push('经验 ' + rew.exp);
+        if(rew.gold) parts.push('金币 ' + rew.gold);
+        if(rew.sp) parts.push('技能点 ' + rew.sp);
+        if(rew.equip) parts.push('装备 ×' + rew.equip);
+        showDialogue([
+          '「' + (cq2.outro || '做得好，灯又亮了一分。') + '」',
+          '『获得任务奖励：' + (parts.join(' · ') || '无') + '』'
+        ], function(){
+          qq.done.push(cq2.id);
+          try { grantQuestReward(pq, cq2); } catch(e){}
+          qq.idx++; qq.step = 0; qq.readyTurnIn = false; qq.killsBase = undefined;
+          const nq = MAIN_QUESTS[qq.idx];
+          questToastMsg('任务完成 · ' + cq2.chapter + '「' + cq2.title + '」',
+            '奖励已发放：' + (parts.join(' · ') || '无'), '#ffd166');
+          if(nq){
+            setTimeout(function(){
+              questToastMsg('新任务 · ' + nq.chapter + '「' + nq.title + '」',
+                nq.brief || '跟着金色箭头继续冒险', '#9fe6ff');
+            }, 1200);
+          }
+        });
+      }
+    }
   } else if(gameState==='gameMenu'){
     const r = hitTestRegion(pos.x, pos.y, gameMenuClickRegions);
     if(r){

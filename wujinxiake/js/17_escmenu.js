@@ -677,7 +677,7 @@ function drawQuestTracker(x, y){
   }
   ctx.fillStyle = '#d8e4ee'; ctx.font = '12px "Microsoft YaHei"';
   const st = cq.steps[q.step];
-  ctx.fillText('· ' + (q.readyTurnIn ? '目标已完成！回城找「引灯人」交付任务' : (st ? st.text : '任务完成')), x + 14, y + HH + 21);
+  ctx.fillText('· ' + (q.readyTurnIn ? '目标已完成！按 Q 打开任务面板交付' : (st ? st.text : '任务完成')), x + 14, y + HH + 21);
   if(st){
     const pr = questStepProgress(p, st);
     if(pr.max > 1 || st.type === 'kills' || st.type === 'level' || st.type === 'enhance'){
@@ -805,7 +805,7 @@ function drawQuestMenu(){
     ctx.fillText(cq.chapter + '「' + cq.title + '」', rx + 18, ry + 32);
     /* 状态徽标 */
     ctx.font = '11px "Microsoft YaHei"';
-    const stTxt = lockedView ? '🔒 未解锁 · 先完成前面的任务' : (isCur ? (q.readyTurnIn ? '✔ 可交付 · 找引灯人领奖' : '● 进行中') : (q && q.done.indexOf(cq.id) >= 0 ? '✔ 已完成' : '待开启'));
+    const stTxt = lockedView ? '🔒 未解锁 · 先完成前面的任务' : (isCur ? (q.readyTurnIn ? '✔ 可交付 · 点击「交付任务」按钮' : '● 进行中') : (q && q.done.indexOf(cq.id) >= 0 ? '✔ 已完成' : '待开启'));
     ctx.fillStyle = lockedView ? '#8a6a5a' : (isCur ? '#7dd8ff' : '#67788a');
     ctx.textAlign = 'right';
     ctx.fillText(stTxt, rx + rw - 18, ry + 30);
@@ -880,13 +880,30 @@ function drawQuestMenu(){
     }
   }
 
-  /* 返回 */
-  const bw = 120, bh = 38, bx2 = VW / 2 - bw / 2, by2 = py + panelH - 52;
+  /* 操作按钮区域 */
+  const btnY = py + panelH - 52;
+  const btnH = 38;
+  const btnW = 140;
+  
+  /* 交付任务按钮（当 readyTurnIn 时显示） */
+  if(isCur && q.readyTurnIn && cq){
+    const turnInX = rx + rw - btnW - 10;
+    ctx.fillStyle = 'rgba(94,224,138,0.85)';
+    ctx.beginPath(); ctx.roundRect(turnInX, btnY, btnW, btnH, 8); ctx.fill();
+    ctx.strokeStyle = '#5ee08a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(turnInX, btnY, btnW, btnH, 8); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px "Microsoft YaHei"';
+    ctx.fillText('交付任务', turnInX + btnW / 2, btnY + 25);
+    questClickRegions.push({ id:'turnIn', x:turnInX, y:btnY, w:btnW, h:btnH });
+  }
+  
+  /* 返回按钮 */
+  const bw = 120, bx2 = VW / 2 - bw / 2;
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(90,110,130,0.7)';
-  ctx.beginPath(); ctx.roundRect(bx2, by2, bw, bh, 8); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(bx2, btnY, bw, btnH, 8); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = 'bold 16px "Microsoft YaHei"';
-  ctx.fillText('返回 (Q)', VW / 2, by2 + 25);
-  questClickRegions.push({ id:'back', x:bx2, y:by2, w:bw, h:bh });
+  ctx.fillText('返回 (Q)', VW / 2, btnY + 25);
+  questClickRegions.push({ id:'back', x:bx2, y:btnY, w:bw, h:btnH });
 }
 
