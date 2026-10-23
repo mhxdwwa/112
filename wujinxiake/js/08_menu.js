@@ -31,13 +31,18 @@ function handleCanvasClick(cx, cy){
   /* ★ 剧情对话：点击任意位置继续 */
   if(DIALOGUE){ advanceDialogue(); return; }
   
-  /* 战斗中点击背包按钮 */
+  /* 战斗中点击背包按钮 / 药水按钮 */
   if(gameState === 'playing'){
     const bagBtnX = 40, bagBtnY = VH / 2;
     if(Math.hypot(pos.x - bagBtnX, pos.y - bagBtnY) < 25){
       G.inventoryReturnState = 'playing';
       gameState = 'inventory';
       return;
+    }
+    /* ★ 点红 / 蓝药水瓶 = 喝一瓶 */
+    if(typeof hitPotionBtn === 'function'){
+      const kind = hitPotionBtn(pos.x, pos.y);
+      if(kind){ if(typeof drinkPotion === 'function') drinkPotion(kind); return; }
     }
   }
   
@@ -129,6 +134,7 @@ function handleCanvasClick(cx, cy){
       const goOn = function(){
         if(!playerName) playerName = nm;
         G.playerName = playerName;
+        try{ if(window.CloudSave && window.CloudSave.arm) window.CloudSave.arm(); }catch(e){}
         initTown();
         gameState = 'town';
         startBGM();
@@ -331,27 +337,20 @@ function handleCanvasClick(cx, cy){
           p.equipment[slot] = null;
           recalcPlayerStats();
         }
-      } else if(r.useProp){
-        // 使用消耗品
-        const propId = r.useProp;
-        if(!p.props) p.props = {};
-        if((p.props[propId] || 0) > 0){
-          const propDef = DROP_PROPS.find(d => d.id === propId);
-          if(propDef){
-            const bonus = propDef.effect;
-            if(bonus.atk) p.propBonuses.atk += bonus.atk;
-            if(bonus.hp) p.propBonuses.hp += bonus.hp;
-            if(bonus.mp) p.propBonuses.mp += bonus.mp;
-            if(bonus.cdReduce) p.propBonuses.cdReduce += bonus.cdReduce;
-            if(bonus.crit) p.propBonuses.crit += bonus.crit;
-            recalcPlayerStats();
-            if(bonus.hp) p.hp = Math.min(p.maxHp, p.hp + bonus.hp);
-            if(bonus.mp) p.mp = Math.min(p.maxMp, p.mp + bonus.mp);
-            p.props[propId]--;
-            inventoryMessage = `使用了${propDef.name}，${propDef.desc}！`;
-            inventoryMessageTimer = 90;
+      } else if(r.usePotion){
+        /* ★ 喝药水（回血瓶 / 回蓝瓶） */
+        if(window.POTION){
+          const res = POTION.use(p, r.usePotion);
+          inventoryMessage = res.msg;
+          inventoryMessageTimer = 90;
+          if(res.ok && typeof spawnText === 'function' && G && G.player){
+            spawnText(G.player.x, G.player.y - 60, 70, res.msg, '#7af0c8', 16);
           }
         }
+      } else if(r.useProp){
+        // 旧存档残留的属性丹：已经不能用了
+        inventoryMessage = '属性丹已移除（永久加属性的设定不合理），现在掉的是回血瓶 / 回蓝瓶';
+        inventoryMessageTimer = 120;
       }
     }
   } else if(gameState==='enhanceMenu'){
@@ -447,6 +446,9 @@ function handleCanvasClick(cx, cy){
           skillMenuMsgShow('角色等级不足：「' + sk.name + '」需要 Lv.' + sk.unlock);
         } else if(curLv >= maxLv){
           skillMenuMsgShow('「' + sk.name + '」已达最高等级 Lv.' + maxLv);
+        } else if(curLv >= skillLvCap(p, sk)){
+          /* ★ DNF 式：技能还有级，但角色等级不够 */
+          skillMenuMsgShow('角色等级不足：「' + sk.name + '」升到 Lv.' + (curLv + 1) + ' 需要角色 Lv.' + skillNextLvNeed(p, sk));
         } else {
           const cost = skillSpCost(sk, Math.max(1, curLv));
           if((p.skillPoints || 0) < cost){
