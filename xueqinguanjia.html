@@ -15467,38 +15467,51 @@ function startTimetableReminder() {
 // FEATURE 2: 纪律留言 (DISCIPLINE MESSAGES)
 // ============================================================
 let disciplineData = [];  // Array of {id, classId, teacherName, subject, studentId, studentName, type, content, date, createdAt}
+let disciplineHidden = {};  // {teacherName: [recordId1, recordId2, ...]} 科任老师拉黑/隐藏的记录
 let disciplineSelectedStudents = new Set();
 let disciplineCurrentClass = '';
 let disciplineCurrentDate = '';
 
 async function loadDisciplineData() {
   const result = await xqApi('config', { action: 'get' });
-  if (result.ok && result.config && result.config.discipline) {
-    let raw = result.config.discipline.data || [];
-    // 防御性检查：如果旧数据被双重包装（{ data: [...] }），则解包
-    if (!Array.isArray(raw) && raw && typeof raw === 'object' && Array.isArray(raw.data)) {
-      raw = raw.data;
-    }
-    if (!Array.isArray(raw)) {
-      console.warn('[Discipline] Data is not an array, resetting to []', typeof raw, raw);
-      raw = [];
-    }
-    // 确保每条记录都有唯一 ID（修复旧数据缺少 id 的问题）
-    let needsSave = false;
-    raw.forEach((r, i) => {
-      if (!r.id) {
-        r.id = 'disc_fix_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 6);
-        needsSave = true;
-        console.log('[Discipline] Fixed missing ID for record:', r.studentName, '->', r.id);
+  if (result.ok && result.config) {
+    if (result.config.discipline) {
+      let raw = result.config.discipline.data || [];
+      // 防御性检查：如果旧数据被双重包装（{ data: [...] }），则解包
+      if (!Array.isArray(raw) && raw && typeof raw === 'object' && Array.isArray(raw.data)) {
+        raw = raw.data;
       }
-    });
-    disciplineData = raw;
-    console.log('[Discipline] Loaded', disciplineData.length, 'records, IDs:', disciplineData.map(r => r.id));
-    // 如果修复了缺失的 ID，立即保存回后端
-    if (needsSave) {
-      console.log('[Discipline] Saving fixed IDs back to server...');
-      await saveDisciplineData();
+      if (!Array.isArray(raw)) {
+        console.warn('[Discipline] Data is not an array, resetting to []', typeof raw, raw);
+        raw = [];
+      }
+      // 确保每条记录都有唯一 ID（修复旧数据缺少 id 的问题）
+      let needsSave = false;
+      raw.forEach((r, i) => {
+        if (!r.id) {
+          r.id = 'disc_fix_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 6);
+          needsSave = true;
+          console.log('[Discipline] Fixed missing ID for record:', r.studentName, '->', r.id);
+        }
+      });
+      disciplineData = raw;
+      console.log('[Discipline] Loaded', disciplineData.length, 'records, IDs:', disciplineData.map(r => r.id));
+      // 如果修复了缺失的 ID，立即保存回后端
+      if (needsSave) {
+        console.log('[Discipline] Saving fixed IDs back to server...');
+        await saveDisciplineData();
+      }
     }
+    // 加载隐藏记录
+    if (result.config.discipline_hidden) {
+      disciplineHidden = result.config.discipline_hidden.data || {};
+      if (typeof disciplineHidden !== 'object' || Array.isArray(disciplineHidden)) {
+        disciplineHidden = {};
+      }
+    } else {
+      disciplineHidden = {};
+    }
+    console.log('[Discipline] Loaded hidden records:', disciplineHidden);
   }
 }
 
@@ -15521,6 +15534,31 @@ async function saveDisciplineData() {
   });
   console.log('[Discipline] Save result:', result);
   return result;
+}
+
+// 保存科任老师的隐藏记录（拉黑列表）
+async function saveDisciplineHidden() {
+  console.log('[Discipline] Saving hidden records:', disciplineHidden);
+  const result = await xqApi('config', {
+    action: 'set_all',
+    configs: {
+      'discipline_hidden': disciplineHidden
+    },
+    teacherName: xqCurrentUser?.teacherName || ''
+  });
+  console.log('[Discipline] Hidden save result:', result);
+  return result;
+}
+
+// 获取当前老师的隐藏记录ID列表
+function getMyHiddenIds() {
+  const teacherName = xqCurrentUser?.teacherName || '';
+  return disciplineHidden[teacherName] || [];
+}
+
+// 检查某条记录是否被当前老师隐藏
+function isRecordHiddenByMe(recordId) {
+  return getMyHiddenIds().includes(recordId);
 }
 
 function renderDiscipline() {
@@ -15624,16 +15662,17 @@ function renderTeacherDiscipline() {
     </div>`;
   }
   
-  // My records for this class (all dates)
+  // My records for this class (all dates) - 排除已隐藏的记录
+  const myHiddenIds = getMyHiddenIds();
   const myRecords = disciplineData.filter(r => 
-    r.classId === disciplineCurrentClass && r.teacherName === user.teacherName
+    r.classId === disciplineCurrentClass && r.teacherName === user.teacherName && !myHiddenIds.includes(r.id)
   ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   
   html += `<div class="card"><div class="card-header">
     <span class="card-title">我的留言记录 (共${myRecords.length}条)</span>
     <button class="toolbar-btn ghost" style="font-size:12px" onclick="saveDisciplineData().then(r=>{if(r.ok)showToast('已保存');else showToast('保存失败','error')})">保存</button>
   </div>
-  <div style="font-size:11px;color:var(--gray-400);padding:8px 16px 0">提示：留言提交后3天内可撤回或编辑，超过3天仅班主任可删除</div>
+  <div style="font-size:11px;color:var(--gray-400);padding:8px 16px 0">提示：留言提交后3天内可撤回或编辑；点击"删除"仅自己不可见，记录仍保留在班主任处</div>
   <div class="card-body"><div class="discipline-record-list">`;
   
   if (myRecords.length === 0) {
@@ -15650,12 +15689,17 @@ function renderTeacherDiscipline() {
     const within3Days = isDisciplineRecordWithin3Days(r);
     let actionBtns = '';
     if (within3Days) {
-      actionBtns = `<div style="display:flex;gap:4px">
+      actionBtns = `<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
         <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
         <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecord('${r.id}')">撤回</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--gray-500)" onclick="hideDisciplineRecord('${r.id}')">删除</button>
       </div>`;
     } else {
-      actionBtns = `<div style="font-size:11px;color:var(--gray-400);white-space:nowrap">已超过3天，仅班主任可删除</div>`;
+      actionBtns = `<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
+        <button class="toolbar-btn ghost" style="font-size:11px;opacity:0.4;cursor:not-allowed" disabled>编辑</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger);opacity:0.4;cursor:not-allowed" disabled>撤回</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--gray-500)" onclick="hideDisciplineRecord('${r.id}')">删除</button>
+      </div>`;
     }
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
@@ -15964,14 +16008,16 @@ function renderHtWriteTab() {
     </div>`;
   }
   
-  // My records for this class
+  // My records for this class - 排除已隐藏的记录
+  const myHiddenIds = getMyHiddenIds();
   const myRecords = disciplineData.filter(r => 
-    r.classId === disciplineCurrentClass && r.teacherName === user.teacherName
+    r.classId === disciplineCurrentClass && r.teacherName === user.teacherName && !myHiddenIds.includes(r.id)
   ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   
   html += `<div class="card" style="margin-top:20px"><div class="card-header">
     <span class="card-title">我的留言记录 (${disciplineCurrentClass}，共${myRecords.length}条)</span>
   </div>
+  <div style="font-size:11px;color:var(--gray-400);padding:8px 16px 0">提示：留言提交后3天内可撤回或编辑；点击"删除"仅自己不可见</div>
   <div class="card-body"><div class="discipline-record-list">`;
   
   if (myRecords.length === 0) {
@@ -15987,12 +16033,17 @@ function renderHtWriteTab() {
     const within3Days = isDisciplineRecordWithin3Days(r);
     let actionBtns = '';
     if (within3Days) {
-      actionBtns = `<div style="display:flex;gap:4px">
+      actionBtns = `<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
         <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
         <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecordHt('${r.id}')">撤回</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--gray-500)" onclick="hideDisciplineRecord('${r.id}')">删除</button>
       </div>`;
     } else {
-      actionBtns = `<div style="font-size:11px;color:var(--gray-400);white-space:nowrap">已超过3天</div>`;
+      actionBtns = `<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
+        <button class="toolbar-btn ghost" style="font-size:11px;opacity:0.4;cursor:not-allowed" disabled>编辑</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger);opacity:0.4;cursor:not-allowed" disabled>撤回</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--gray-500)" onclick="hideDisciplineRecord('${r.id}')">删除</button>
+      </div>`;
     }
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
@@ -16175,6 +16226,32 @@ function refreshDisciplineView() {
   } else {
     const el = document.getElementById('discContent');
     if (el) el.innerHTML = renderTeacherDiscipline();
+  }
+}
+
+// 科任老师软删除：隐藏记录（仅自己不可见，云端保留）
+async function hideDisciplineRecord(recordId) {
+  if (!confirm('确定要删除这条记录吗？删除后您自己将不再看到此记录，但班主任处仍保留。')) return;
+  const teacherName = xqCurrentUser?.teacherName || '';
+  if (!teacherName) {
+    showToast('无法获取教师信息', 'error');
+    return;
+  }
+  // 重新加载最新数据
+  await loadDisciplineData();
+  // 添加到隐藏列表
+  if (!disciplineHidden[teacherName]) {
+    disciplineHidden[teacherName] = [];
+  }
+  if (!disciplineHidden[teacherName].includes(recordId)) {
+    disciplineHidden[teacherName].push(recordId);
+  }
+  const result = await saveDisciplineHidden();
+  if (result.ok) {
+    showToast('记录已删除（仅您不可见）');
+    refreshDisciplineView();
+  } else {
+    showToast('删除失败，请重试', 'error');
   }
 }
 
