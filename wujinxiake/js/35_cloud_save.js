@@ -137,6 +137,29 @@ function apply(data){
   G.player.props = {};
   if(!G.player.potions) G.player.potions = {};
   if(!G.player.potionCd) G.player.potionCd = { hp:0, mp:0 };
+  /* ★ 老存档迁移：更新装备品阶颜色（史诗改金色，传说改红色） */
+  try{
+    const updateEquipColor = function(eq){
+      if(!eq || !eq.tier) return;
+      const tier = (typeof EQUIP_TIERS !== 'undefined') ? EQUIP_TIERS.find(function(t){ return t.id === eq.tier; }) : null;
+      if(tier){
+        eq.tierColor = tier.color;
+      }
+    };
+    /* 更新穿戴装备 */
+    if(G.player.equipment){
+      for(const slot in G.player.equipment){
+        updateEquipColor(G.player.equipment[slot]);
+      }
+    }
+    /* 更新背包装备 */
+    if(G.player.inventory && Array.isArray(G.player.inventory)){
+      for(let i = 0; i < G.player.inventory.length; i++){
+        updateEquipColor(G.player.inventory[i]);
+      }
+    }
+  }catch(e){ console.warn('[save] 装备颜色迁移失败', e); }
+
   /* ★ 老存档迁移：按新公式重新计算基础属性（HP/MP/ATK成长优化） */
   try{
     if(typeof ensureBaseStat === 'function') ensureBaseStat(G.player);

@@ -378,6 +378,9 @@ function update(dt){
   if(G.drops && G.drops.length > 0 && !G.isPvp){
     const canPick = p && p.alive !== false && !p.dead;
     const MAGNET_DELAY = 0.40;   /* 落地散开 0.4 秒后开始吸附 */
+    /* ★ 深渊模式Boss房间：装备不自动拾取，需要手动捡取 */
+    const lvlCfg = G.currentLvlCfg;
+    const isAbyssBossRoom = lvlCfg && lvlCfg.isAbyss && G.currentIsBoss;
     for(let i = G.drops.length - 1; i >= 0; i--){
       const d = G.drops[i];
       d.life -= dt;
@@ -385,6 +388,21 @@ function update(dt){
       d.bobPhase += dt * 3;
       let dx = d.x - p.x, dy = d.y - p.y;
       let dist = Math.sqrt(dx*dx + dy*dy);
+
+      /* ★ 深渊Boss房间装备：跳过自动吸附，只允许手动近距离拾取 */
+      if(isAbyssBossRoom && d.type === 'equip'){
+        /* 只有玩家非常接近（< 40像素）才拾取 */
+        if(canPick && dist < 40){
+          pickupDrop(d);
+          G.drops.splice(i, 1);
+          continue;
+        }
+        /* 过期消失 */
+        if(d.life <= 0){
+          G.drops.splice(i, 1);
+        }
+        continue;
+      }
 
       if(d.magnet && canPick){
         /* —— 吸附阶段：加速追踪玩家胸口 —— */

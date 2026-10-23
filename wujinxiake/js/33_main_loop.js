@@ -179,26 +179,52 @@ function loopBody(now){
           ctx.beginPath(); ctx.ellipse(drawX, drawY + 7, 36, 12, 0, 0, TAU); ctx.fill();
           /* ---- 品阶光柱（稀有以上） ---- */
           if(tierIdx >= 2){
-            const ph = 72 + tierIdx * 24;
-            const pulse = 0.26 + Math.sin(gt * 4 + d.bobPhase) * 0.10;
+            const isMythic = eq.tier === 'mythic';
+            const ph = isMythic ? 180 : (72 + tierIdx * 24);
+            const pulse = isMythic ? (0.50 + Math.sin(gt * 6 + d.bobPhase) * 0.15) : (0.26 + Math.sin(gt * 4 + d.bobPhase) * 0.10);
             const pg = ctx.createLinearGradient(drawX, drawY - ph, drawX, drawY + 7);
             pg.addColorStop(0, hexA(tcol, 0));
-            pg.addColorStop(0.45, hexA(tcol, pulse));
-            pg.addColorStop(1, hexA(tcol, 0.52));
+            pg.addColorStop(0.3, hexA(tcol, pulse * 0.6));
+            pg.addColorStop(0.6, hexA(tcol, pulse));
+            pg.addColorStop(1, hexA(tcol, isMythic ? 0.85 : 0.52));
             ctx.fillStyle = pg;
+            const pillarW = isMythic ? 28 : 15;
             ctx.beginPath();
-            ctx.moveTo(drawX - 5, drawY + 7);
-            ctx.lineTo(drawX - 15, drawY - ph);
-            ctx.lineTo(drawX + 15, drawY - ph);
-            ctx.lineTo(drawX + 5, drawY + 7);
+            ctx.moveTo(drawX - pillarW * 0.35, drawY + 7);
+            ctx.lineTo(drawX - pillarW, drawY - ph);
+            ctx.lineTo(drawX + pillarW, drawY - ph);
+            ctx.lineTo(drawX + pillarW * 0.35, drawY + 7);
             ctx.closePath(); ctx.fill();
+            /* 史诗光柱两侧额外辉光 */
+            if(isMythic){
+              const glowW = 60;
+              const sideGlow = ctx.createLinearGradient(drawX - glowW, drawY, drawX + glowW, drawY);
+              sideGlow.addColorStop(0, hexA(tcol, 0));
+              sideGlow.addColorStop(0.5, hexA(tcol, 0.18));
+              sideGlow.addColorStop(1, hexA(tcol, 0));
+              ctx.fillStyle = sideGlow;
+              ctx.fillRect(drawX - glowW, drawY - ph, glowW * 2, ph + 7);
+            }
             /* 上升光尘 */
-            for(let k = 0; k < 3; k++){
-              const u = ((gt * 0.55 + k * 0.34) % 1);
-              ctx.fillStyle = hexA(tcol, (1 - u) * 0.75);
+            const dustCount = isMythic ? 8 : 3;
+            for(let k = 0; k < dustCount; k++){
+              const u = ((gt * (isMythic ? 0.8 : 0.55) + k * (1 / dustCount)) % 1);
+              const dustSize = isMythic ? 3.2 : 1.9;
+              const dustAlpha = (1 - u) * (isMythic ? 0.95 : 0.75);
+              ctx.fillStyle = hexA(tcol, dustAlpha);
               ctx.beginPath();
-              ctx.arc(drawX + Math.sin(u * 9 + k * 2) * 9, drawY + 4 - u * ph, 1.9, 0, TAU);
+              const dustX = drawX + Math.sin(u * 9 + k * 2) * (isMythic ? 18 : 9);
+              ctx.arc(dustX, drawY + 4 - u * ph, dustSize, 0, TAU);
               ctx.fill();
+            }
+            /* 史诗顶部扩散光环 */
+            if(isMythic){
+              const ringR = 22 + Math.sin(gt * 3) * 6;
+              ctx.strokeStyle = hexA(tcol, 0.6);
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.ellipse(drawX, drawY - ph + 10, ringR, ringR * 0.35, 0, 0, TAU);
+              ctx.stroke();
             }
           }
           ctx.restore();
