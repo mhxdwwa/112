@@ -15483,14 +15483,35 @@ async function loadDisciplineData() {
       console.warn('[Discipline] Data is not an array, resetting to []', typeof raw, raw);
       raw = [];
     }
+    // 确保每条记录都有唯一 ID（修复旧数据缺少 id 的问题）
+    let needsSave = false;
+    raw.forEach((r, i) => {
+      if (!r.id) {
+        r.id = 'disc_fix_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 6);
+        needsSave = true;
+        console.log('[Discipline] Fixed missing ID for record:', r.studentName, '->', r.id);
+      }
+    });
     disciplineData = raw;
-    console.log('[Discipline] Loaded', disciplineData.length, 'records');
+    console.log('[Discipline] Loaded', disciplineData.length, 'records, IDs:', disciplineData.map(r => r.id));
+    // 如果修复了缺失的 ID，立即保存回后端
+    if (needsSave) {
+      console.log('[Discipline] Saving fixed IDs back to server...');
+      await saveDisciplineData();
+    }
   }
 }
 
 async function saveDisciplineData() {
+  // 保存前确保每条记录都有 ID
+  disciplineData.forEach((r, i) => {
+    if (!r.id) {
+      r.id = 'disc_gen_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 6);
+      console.log('[Discipline] Generated missing ID before save:', r.studentName, '->', r.id);
+    }
+  });
   // 使用与座位表相同的保存模式（set_all）
-  console.log('[Discipline] Saving', disciplineData.length, 'records');
+  console.log('[Discipline] Saving', disciplineData.length, 'records, IDs:', disciplineData.map(r => r.id));
   const result = await xqApi('config', {
     action: 'set_all',
     configs: {
@@ -15619,6 +15640,10 @@ function renderTeacherDiscipline() {
   }
   
   myRecords.forEach(r => {
+    if (!r.id) {
+      console.error('[Discipline] Record missing ID, skipping render:', r);
+      return;
+    }
     const typeLabel = getDisciplineTypeLabel(r.type);
     const periodStr = r.period ? ` · ${getPeriodName(parseInt(r.period))}` : '';
     html += `<div class="discipline-record-item">
@@ -15942,6 +15967,10 @@ function renderHtWriteTab() {
   }
   
   myRecords.forEach(r => {
+    if (!r.id) {
+      console.error('[Discipline] Record missing ID in HtWriteTab, skipping:', r);
+      return;
+    }
     const typeLabel = getDisciplineTypeLabel(r.type);
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
