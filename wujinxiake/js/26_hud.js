@@ -355,7 +355,8 @@ function drawTownHud(){
   /* ---------------- 底部技能快捷栏 ----------------
      手机浏览器由右下角的触屏按键代替，这里不再画，避免两排图标叠在一起 */
   const w = WEAPONS[p.weaponIdx || 0];
-  if(w && w.skills && !window.IS_MOBILE_UI){
+  /* ★ 城镇里不画技能快捷栏：城镇没有战斗，那排图标只会挡住画面 */
+  if(w && w.skills && !window.IS_MOBILE_UI && gameState !== 'town'){
     const SS = 46, SG = 6, SL = 6;
     const totalW = SL * SS + (SL - 1) * SG;
     const sx = VW/2 - totalW/2, sy = VH - SS - 14;
