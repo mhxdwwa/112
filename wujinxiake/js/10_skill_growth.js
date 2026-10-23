@@ -3,8 +3,8 @@
    · 角色每升1级获得固定SP（有限），技能点不足时无法升级
    · 技能等级每+1，技能伤害 +6%（线性叠加）
 */
-const SP_PER_LEVEL = 4;          // 每级获得技能点
-const SP_START = 4;              // 初始技能点
+const SP_PER_LEVEL = 10;         // 每级获得技能点
+const SP_START = 10;             // 初始技能点
 const SKILL_DMG_PER_LV = 0.12;   // 每级技能伤害成长（12%，更明显）
 
 function skillMaxLv(sk){ return (sk && sk.maxLv) ? sk.maxLv : 20; }
