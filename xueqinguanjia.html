@@ -15757,8 +15757,8 @@ function renderHeadteacherDisciplineV2() {
   }
   
   let html = `<div class="discipline-sub-tabs" id="discHtTabs">
-    <div class="discipline-sub-tab ${disciplineHtTab==='summary'?'active':''}" onclick="disciplineHtTab='summary';document.getElementById('discHtContent').innerHTML=renderHtSummaryTab()">本班汇总</div>
-    <div class="discipline-sub-tab ${disciplineHtTab==='write'?'active':''}" onclick="disciplineHtTab='write';disciplineSelectedStudents.clear();document.getElementById('discHtContent').innerHTML=renderHtWriteTab()">写留言</div>
+    <div class="discipline-sub-tab ${disciplineHtTab==='summary'?'active':''}" onclick="disciplineHtTab='summary';loadDisciplineData().then(()=>{document.getElementById('discHtContent').innerHTML=renderHtSummaryTab()})">本班汇总</div>
+    <div class="discipline-sub-tab ${disciplineHtTab==='write'?'active':''}" onclick="disciplineHtTab='write';disciplineSelectedStudents.clear();loadDisciplineData().then(()=>{document.getElementById('discHtContent').innerHTML=renderHtWriteTab()})">写留言</div>
   </div>
   <div id="discHtContent">`;
   
