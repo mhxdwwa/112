@@ -69,7 +69,7 @@ const CHARACTERS = [
 
 /* 属性上限 */
 const STAT_CAPS = {
-  maxAtk: 999,
+  maxAtk: 99999,
   maxMoveSpeed: 500,
   maxCrit: 50, // 暴击率上限50%
   maxHp: 999999,
