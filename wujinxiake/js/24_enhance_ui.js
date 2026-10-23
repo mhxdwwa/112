@@ -516,28 +516,34 @@ function drawCharacterInfo(){
   ctx.fillStyle = '#ffffff';
   ctx.fillText('💀 击杀: ' + (G.totalKills || 0), rightX + 8, ry + 30);
 
-  // 返回按钮：底部居中
-  const btnW = 200, btnH = 40;
-  const btnX = VW/2 - btnW/2;
-  const btnY = panelY + panelH - 50;
+  // 关闭按钮：右上角 X
+  const closeSize = 32;
+  const closeX = panelX + panelW - closeSize - 8;
+  const closeY = panelY + 8;
 
-  const bg = ctx.createLinearGradient(0, btnY, 0, btnY+btnH);
-  bg.addColorStop(0, '#FFC107');
-  bg.addColorStop(1, '#FFA000');
-  ctx.fillStyle = bg;
+  // 绘制 X 按钮背景
+  ctx.fillStyle = 'rgba(255,215,0,0.15)';
   ctx.beginPath();
-  ctx.roundRect(btnX, btnY, btnW, btnH, 6);
+  ctx.roundRect(closeX, closeY, closeSize, closeSize, 6);
   ctx.fill();
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 15px "Microsoft YaHei"';
-  ctx.textAlign = 'center';
-  ctx.fillText('返回 (C)', VW/2, btnY + 25);
+  // 绘制 X 符号
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(closeX + 8, closeY + 8);
+  ctx.lineTo(closeX + closeSize - 8, closeY + closeSize - 8);
+  ctx.moveTo(closeX + closeSize - 8, closeY + 8);
+  ctx.lineTo(closeX + 8, closeY + closeSize - 8);
+  ctx.stroke();
 
   // 注册点击区域
   if(!G.charInfoClickRegions) G.charInfoClickRegions = [];
   G.charInfoClickRegions = [
-    { x: btnX, y: btnY, w: btnW, h: btnH, action: 'back' }
+    { x: closeX, y: closeY, w: closeSize, h: closeSize, action: 'back' }
   ];
 }
 
