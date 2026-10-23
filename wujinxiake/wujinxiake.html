@@ -4,13 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>无尽侠客 · 2.5D 横版格斗</title>
-<link rel="stylesheet" href="css/base.css?v=12" />
-<link rel="stylesheet" href="css/touch.css?v=12" />
-<link rel="stylesheet" href="css/toast.css?v=12" />
-<link rel="stylesheet" href="css/auth.css?v=12" />
-<link rel="stylesheet" href="css/online.css?v=12" />
-<link rel="stylesheet" href="css/account.css?v=12" />
-<link rel="stylesheet" href="css/chars.css?v=12" />
+<link rel="stylesheet" href="css/base.css?v=13" />
+<link rel="stylesheet" href="css/touch.css?v=13" />
+<link rel="stylesheet" href="css/toast.css?v=13" />
+<link rel="stylesheet" href="css/auth.css?v=13" />
+<link rel="stylesheet" href="css/online.css?v=13" />
+<link rel="stylesheet" href="css/account.css?v=13" />
+<link rel="stylesheet" href="css/chars.css?v=13" />
+<link rel="stylesheet" href="css/auction.css?v=13" />
+<link rel="stylesheet" href="css/revive.css?v=13" />
 <style>
 /* 载入界面：内联样式，保证首帧就有效果（不等外部 CSS） */
 #bootOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
@@ -160,7 +162,7 @@
       <button id="accChars" class="ghost hidden" type="button">切换角色</button>
       <button id="accSwitch" class="ghost hidden" type="button">退出 / 换账号</button>
     </div>
-    <div class="acc-ver">版本 v12 · 2026-10-23</div>
+    <div class="acc-ver">版本 v13 · 2026-10-23</div>
   </div>
 </div>
 <!-- 选择角色面板：单人冒险 → 开始 → 已有角色 / 创建新角色 -->
@@ -170,6 +172,30 @@
     <div class="cp-list" id="cpList"></div>
     <div class="cp-acts"><button id="cpNew" type="button">＋ 创建新角色</button></div>
   </div>
+</div>
+<!-- 重生丸：死亡时询问是否复活 -->
+<div id="reviveBox">
+  <div class="rv-box">
+    <div class="rv-title">你倒下了</div>
+    <div class="rv-sub">还剩 <b id="rvCount">3</b> 枚重生丸，使用可以原地满血复活。</div>
+    <div class="rv-acts">
+      <button id="rvUse" type="button">使用重生丸 · 满血复活</button>
+      <button id="rvGiveUp" type="button">放弃 · 返回城镇</button>
+    </div>
+  </div>
+</div>
+<!-- 交易行：传说及以下装备上架 / 购买 -->
+<div id="ahPanel">
+  <div class="ah-head"><b>交易行</b><span id="ahGold">金币 0</span><button id="ahClose" type="button">×</button></div>
+  <div class="ah-tabs">
+    <button type="button" data-tab="buy" class="on">全部商品</button>
+    <button type="button" data-tab="sell">我要上架</button>
+  </div>
+  <div class="ah-body">
+    <div id="ahList"></div>
+    <div id="ahSell" style="display:none;"></div>
+  </div>
+  <div class="ah-foot">传说及以下装备可上架（普通 / 高级 / 稀有 / 神器 / 传说），史诗不可上架。购买后直接进背包。</div>
 </div>
 <!-- 城镇点击其他玩家：资料卡（装备 / 属性 / 邀请切磋） -->
 <div id="opCard"></div>
@@ -207,47 +233,49 @@
   </div>
 </div>
 
-<script src="js/vendor/supabase.js?v=12"></script>
-<script src="js/00_auth.js?v=12"></script>
-<script src="js/00_loader.js?v=12"></script>
-<script src="js/01_core.js?v=12"></script>
-<script src="js/02_char_atlases.js?v=12"></script>
-<script src="js/03_monster_atlases.js?v=12"></script>
-<script src="js/04_equip_visual.js?v=12"></script>
-<script src="js/05_audio.js?v=12"></script>
-<script src="js/06_touch.js?v=12"></script>
-<script src="js/07_skill_icons.js?v=12"></script>
-<script src="js/08_menu.js?v=12"></script>
-<script src="js/09_world.js?v=12"></script>
-<script src="js/10_skill_growth.js?v=12"></script>
-<script src="js/11_levels.js?v=12"></script>
-<script src="js/12_equip_data.js?v=12"></script>
-<script src="js/13_drops.js?v=12"></script>
-<script src="js/14_town_data.js?v=12"></script>
-<script src="js/15_quests.js?v=12"></script>
-<script src="js/16_abyss.js?v=12"></script>
-<script src="js/17_escmenu.js?v=12"></script>
-<script src="js/18_jobs.js?v=12"></script>
-<script src="js/19_skills.js?v=12"></script>
-<script src="js/20_boss_skills.js?v=12"></script>
-<script src="js/21_combat.js?v=12"></script>
-<script src="js/22_player.js?v=12"></script>
-<script src="js/23_town_sys.js?v=12"></script>
-<script src="js/24_enhance_ui.js?v=12"></script>
-<script src="js/25_equip_icons.js?v=12"></script>
-<script src="js/26_hud.js?v=12"></script>
-<script src="js/27_level_select.js?v=12"></script>
-<script src="js/28_shop.js?v=12"></script>
-<script src="js/29_render_world.js?v=12"></script>
-<script src="js/30_rooms.js?v=12"></script>
-<script src="js/31_portal_minimap.js?v=12"></script>
-<script src="js/32_naming.js?v=12"></script>
-<script src="js/33_main_loop.js?v=12"></script>
-<script src="js/34_dev_debug.js?v=12"></script>
-<script src="js/35_cloud_save.js?v=12"></script>
-<script src="js/36_online.js?v=12"></script>
-<script src="js/39_relay.js?v=12"></script>
-<script src="js/37_account.js?v=12"></script>
-<script src="js/38_chars.js?v=12"></script>
+<script src="js/vendor/supabase.js?v=13"></script>
+<script src="js/00_auth.js?v=13"></script>
+<script src="js/00_loader.js?v=13"></script>
+<script src="js/01_core.js?v=13"></script>
+<script src="js/02_char_atlases.js?v=13"></script>
+<script src="js/03_monster_atlases.js?v=13"></script>
+<script src="js/04_equip_visual.js?v=13"></script>
+<script src="js/05_audio.js?v=13"></script>
+<script src="js/06_touch.js?v=13"></script>
+<script src="js/07_skill_icons.js?v=13"></script>
+<script src="js/08_menu.js?v=13"></script>
+<script src="js/09_world.js?v=13"></script>
+<script src="js/10_skill_growth.js?v=13"></script>
+<script src="js/11_levels.js?v=13"></script>
+<script src="js/12_equip_data.js?v=13"></script>
+<script src="js/13_drops.js?v=13"></script>
+<script src="js/14_town_data.js?v=13"></script>
+<script src="js/15_quests.js?v=13"></script>
+<script src="js/16_abyss.js?v=13"></script>
+<script src="js/17_escmenu.js?v=13"></script>
+<script src="js/18_jobs.js?v=13"></script>
+<script src="js/19_skills.js?v=13"></script>
+<script src="js/20_boss_skills.js?v=13"></script>
+<script src="js/21_combat.js?v=13"></script>
+<script src="js/22_player.js?v=13"></script>
+<script src="js/23_town_sys.js?v=13"></script>
+<script src="js/24_enhance_ui.js?v=13"></script>
+<script src="js/25_equip_icons.js?v=13"></script>
+<script src="js/26_hud.js?v=13"></script>
+<script src="js/27_level_select.js?v=13"></script>
+<script src="js/28_shop.js?v=13"></script>
+<script src="js/29_render_world.js?v=13"></script>
+<script src="js/30_rooms.js?v=13"></script>
+<script src="js/31_portal_minimap.js?v=13"></script>
+<script src="js/32_naming.js?v=13"></script>
+<script src="js/33_main_loop.js?v=13"></script>
+<script src="js/34_dev_debug.js?v=13"></script>
+<script src="js/35_cloud_save.js?v=13"></script>
+<script src="js/36_online.js?v=13"></script>
+<script src="js/39_relay.js?v=13"></script>
+<script src="js/37_account.js?v=13"></script>
+<script src="js/38_chars.js?v=13"></script>
+<script src="js/40_auction.js?v=13"></script>
+<script src="js/41_revive.js?v=13"></script>
 </body>
 </html>
