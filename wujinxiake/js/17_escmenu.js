@@ -27,31 +27,72 @@ function wikiHash(s){
   for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
-/* 确定性生成一件图鉴样板装备（固定品阶/等级段），不污染游戏随机状态 */
+/* ★ 确定性生成一件图鉴样板装备（固定品阶/等级段），直接按名称构造，不依赖概率 */
 function wikiGenItem(slot, tierIdx, lvIdx, k, wtIdx){
   const key = slot + '|' + tierIdx + '|' + lvIdx + '|' + k + '|' + (wtIdx == null ? -1 : wtIdx);
   if(wikiCache.has(key)) return wikiCache.get(key);
-  const savedIdx = (G && G.player) ? G.player.weaponIdx : null;
-  const rng = mulberry32(wikiHash(key));
-  /* diff=2 档位下各品阶累计概率带的带内取值，保证 tierRoll 落进目标品阶 */
-  /* 地狱难度掉率: [0.30, 0.28, 0.25, 0.100, 0.030, 0.002]，累计: 0.30/0.58/0.83/0.93/0.96/0.962 */
-  /* tierRoll = band × 0.962，必须落在对应累计区间内 */
-  const band = [0.15, 0.45, 0.73, 0.915, 0.982, 0.999][Math.max(0, Math.min(5, tierIdx))];
-  const orig = Math.random;
-  let first = true;
-  Math.random = function(){
-    if(first){ first = false; return band; }
-    return rng();
+  const ti = Math.max(0, Math.min(5, tierIdx));
+  const tier = EQUIP_TIERS[ti];
+  const level = EQUIP_LV_LADDER[clamp(lvIdx, 0, EQUIP_LV_LADDER.length - 1)];
+  const wt = (wtIdx != null && wtIdx >= 0 && WEAPONS[wtIdx]) ? WEAPONS[wtIdx].id : 'sword';
+
+  /* ★ 按装备设定的名称来确定品阶分类，而非百分比概率 */
+  let name;
+  if(slot === 'weapon'){
+    if(ti >= 3){
+      /* 粉/橙/史诗：从 ELITE 名池取专属名 */
+      const elite = ELITE_WEAPON_NAMES[wt] || ELITE_WEAPON_NAMES.sword;
+      const pool = elite[tier.id] || [];
+      name = pool.length ? pool[k % pool.length] : (SIMPLE_WEAPON_NAMES[wt] || '铁剑');
+    } else {
+      /* 白/蓝/紫：前缀 + 基础名 */
+      name = TIER_NAME_PREFIX[tier.id] + '·' + (SIMPLE_WEAPON_NAMES[wt] || '铁剑');
+    }
+  } else {
+    if(ti >= 3){
+      /* 粉/橙/史诗：从 ELITE 名池取专属名 */
+      const elite = ELITE_NAMES[slot] || (slot === 'accessory' ? ELITE_NAMES.ring : null);
+      const pool = (elite && elite[tier.id]) ? elite[tier.id] : [];
+      name = pool.length ? pool[k % pool.length] : (SIMPLE_EQUIP_NAMES[slot] || '布衣');
+    } else {
+      /* 白/蓝/紫：前缀 + 基础名 */
+      name = TIER_NAME_PREFIX[tier.id] + '·' + (SIMPLE_EQUIP_NAMES[slot] || '布衣');
+    }
+  }
+
+  /* 直接构造装备对象，指定品阶与名称 */
+  const eq = {
+    slot: slot,
+    name: name,
+    tier: tier.id,
+    tierName: tier.name,
+    tierColor: tier.color,
+    grade: '中级',
+    gradeMul: 1.0,
+    level: level,
+    enhance: 0,
+    amplify: 0,
+    weaponType: slot === 'weapon' ? wt : null,
+    baseAtk: Math.round((slot === 'weapon' ? 10 * tier.baseMul * (1 + level * 0.1) : 0)),
+    baseHp: Math.round((slot === 'head' || slot === 'armor' ? 30 * tier.baseMul * (1 + level * 0.1) : 0)),
+    baseDef: Math.round((slot === 'armor' ? 5 * tier.baseMul * (1 + level * 0.1) : 0)),
+    baseSpd: Math.round((slot === 'shoes' ? 10 * tier.baseMul * (1 + level * 0.08) : 0)),
+    baseCrit: Math.round((slot === 'accessory' || slot === 'necklace' || slot === 'ring' || slot === 'bracer' ? 3 * tier.baseMul * (1 + level * 0.1) : 0)),
+    extraStats: []
   };
+
+  /* 用确定性种子生成 DNF 属性与词条 */
+  const rng = mulberry32(wikiHash(key));
+  const orig = Math.random;
+  Math.random = rng;
   try {
-    if(wtIdx != null && wtIdx >= 0 && G && G.player) G.player.weaponIdx = wtIdx;
-    const eq = generateEquipment(slot, lvIdx, 2);
-    wikiCache.set(key, eq);
-    return eq;
+    rollEquipDnf(eq);
   } finally {
     Math.random = orig;
-    if(savedIdx != null && G && G.player) G.player.weaponIdx = savedIdx;
   }
+
+  wikiCache.set(key, eq);
+  return eq;
 }
 function buildWikiList(){
   wikiItems = [];
@@ -61,9 +102,24 @@ function buildWikiList(){
   const tiers = wikiTierIdx < 0 ? [0, 1, 2, 3, 4, 5] : [wikiTierIdx];
   for(const ti of tiers){
     if(wikiSlot === 'weapon'){
-      /* 武器：8 种职业武器各出一件，展示全部武器谱系 */
-      for(let wi = 0; wi < WEAPONS.length; wi++){
-        wikiItems.push({ eq: wikiGenItem('weapon', ti, lv, 0, wi), wtIdx: wi });
+      /* 武器：按品阶展示所有命名武器 */
+      if(ti >= 3){
+        /* 粉/橙/史诗：展示 ELITE 名池中的所有专属名 */
+        for(let wi = 0; wi < WEAPONS.length; wi++){
+          const wt = WEAPONS[wi].id;
+          const elite = ELITE_WEAPON_NAMES[wt] || ELITE_WEAPON_NAMES.sword;
+          const tier = EQUIP_TIERS[ti];
+          const pool = elite[tier.id] || [];
+          const count = Math.max(1, pool.length);
+          for(let k = 0; k < count; k++){
+            wikiItems.push({ eq: wikiGenItem('weapon', ti, lv, k, wi), wtIdx: wi });
+          }
+        }
+      } else {
+        /* 白/蓝/紫：8 种职业武器各出一件 */
+        for(let wi = 0; wi < WEAPONS.length; wi++){
+          wikiItems.push({ eq: wikiGenItem('weapon', ti, lv, 0, wi), wtIdx: wi });
+        }
       }
     } else if(wikiSlot === 'mount'){
       /* 飞行道具：按品阶展示，每个品阶展示所有命名道具 */
@@ -85,8 +141,21 @@ function buildWikiList(){
         }
       }
     } else {
-      for(let k = 0; k < 2; k++){
-        wikiItems.push({ eq: wikiGenItem(wikiSlot, ti, lv, k, -1) });
+      /* 非武器部位：按品阶展示所有命名装备 */
+      if(ti >= 3){
+        /* 粉/橙/史诗：展示 ELITE 名池中的所有专属名 */
+        const tier = EQUIP_TIERS[ti];
+        const elite = ELITE_NAMES[wikiSlot] || (wikiSlot === 'accessory' ? ELITE_NAMES.ring : null);
+        const pool = (elite && elite[tier.id]) ? elite[tier.id] : [];
+        const count = Math.max(1, pool.length);
+        for(let k = 0; k < count; k++){
+          wikiItems.push({ eq: wikiGenItem(wikiSlot, ti, lv, k, -1) });
+        }
+      } else {
+        /* 白/蓝/紫：展示 2 件（相同名称，不同品级） */
+        for(let k = 0; k < 2; k++){
+          wikiItems.push({ eq: wikiGenItem(wikiSlot, ti, lv, k, -1) });
+        }
       }
     }
   }
