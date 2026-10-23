@@ -344,15 +344,4 @@ function canSkipQuest(p, idx){
   const unlockLv = questUnlockLevel(idx);
   return (p.level || 1) >= unlockLv;
 }
-    case 'level': return (p.level || 1) >= st.level;
-    case 'clear': return (p.clearedLevels || []).indexOf(st.level) >= 0;
-    case 'kills': { /* 击杀数按“接取该步之后”计数（DNF式委托），避免旧击杀直接完成任务 */
-      const base = (p.quest && p.quest.killsBase) || 0;
-      return ((p.questKills || 0) - base) >= st.count;
-    }
-    case 'enhance': return maxEnhanceLv(p) >= st.lv;
-    case 'collect': return (((p.materials || {})[st.mat]) || 0) >= st.count;
-    default: return false;
-  }
-}
 
