@@ -16,7 +16,7 @@ function enemySwordSlash(){
       
       /* 伤害判定 */
       if(Math.abs(p.x-slashX)<80 && Math.abs((p.y-slashY)*2.2)<50 && p.invuln<=0){
-        damagePlayer(atkVal*0.8);
+        damagePlayer(atkVal*0.64);
       }
       spawnParticles(slashX, slashY-30, 8, {color:'#ff4444', angle:e.facing>0?0:Math.PI, spread:0.5, spMin:100, spMax:250, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:300});
     }, i*150);
@@ -55,7 +55,7 @@ function enemyBladeCharge(){
     addEffect('slashArc', e.x+e.facing*80, e.y, 0.35, {facing:e.facing, color:'#ff6600', size:2.5, typeStr:'blade'});
     
     if(Math.abs(p.x-e.x)<120 && Math.abs((p.y-e.y)*2.2)<60 && p.invuln<=0){
-      damagePlayer(atkVal*1.5);
+      damagePlayer(atkVal*1.2);
       p.launchT = 0.3; p.vy = -300; p.h = Math.max(p.h, 1);
     }
     
@@ -76,7 +76,7 @@ function enemySpearThrust(){
   /* 发射枪气 */
   const projX = e.x+e.facing*50;
   const projY = e.y-30;
-  G.projectiles.push({ kind:'realSpear', x:projX, y:projY, h:50, vx:e.facing*800, vy:0, life:1.0, w:90, hh:40, dmg:atkVal*1.2, pierce:1, hitSet:new Set(), color:'#ffaa00', facing:e.facing, rot:Math.atan2(0,e.facing*800), owner:e });
+  G.projectiles.push({ kind:'realSpear', x:projX, y:projY, h:50, vx:e.facing*800, vy:0, life:1.0, w:90, hh:40, dmg:atkVal*0.96, pierce:1, hitSet:new Set(), color:'#ffaa00', facing:e.facing, rot:Math.atan2(0,e.facing*800), owner:e });
   
   addEffect('spearLine', e.x, e.y, 0.2, {facing:e.facing, color:'#ffaa00'});
   spawnParticles(projX, projY, 10, {color:'#ffaa00', angle:e.facing>0?0:Math.PI, spread:0.4, spMin:150, spMax:350, lifeMin:0.2, lifeMax:0.4, sizeMin:3, sizeMax:6, grav:0});
@@ -106,7 +106,7 @@ function enemyFistWave(){
   setTimeout(()=>{
     if(!G || gameState!=='playing' || !e.alive) return;
     playSound('explosion');
-    G.projectiles.push({ kind:'qiBomb', x:e.x+e.facing*50, y:e.y-50, h:50, vx:e.facing*600, vy:0, life:1.5, w:100, hh:80, dmg:atkVal*1.8, pierce:2, hitSet:new Set(), color:'#ff3300', facing:e.facing, owner:e });
+    G.projectiles.push({ kind:'qiBomb', x:e.x+e.facing*50, y:e.y-50, h:50, vx:e.facing*600, vy:0, life:1.5, w:100, hh:80, dmg:atkVal*1.44, pierce:2, hitSet:new Set(), color:'#ff3300', facing:e.facing, owner:e });
     
     spawnParticles(e.x+e.facing*50, e.y-50, 20, {color:'#ff3300', angle:e.facing>0?0:Math.PI, spread:0.6, spMin:150, spMax:400, lifeMin:0.3, lifeMax:0.6, sizeMin:4, sizeMax:8, grav:0});
     addEffect('hitRing', e.x+e.facing*50, e.y-50, 0.3, {color:'#ff3300', r:40});
@@ -122,15 +122,16 @@ const ENEMY_SKILL_FUNCS = {
 
 /* ============ BOSS专属技能系统 ============ */
 /* 每个Boss有3个独特技能，带可见轨迹可躲避 */
+/* ★ 难度调整：Boss伤害统一降为0.8倍，避免前期被秒杀 */
 function _bDmg(dmg){
   const p = G.player;
-  if(p && !p.dead && p.invuln<=0) damagePlayer(dmg);
+  if(p && !p.dead && p.invuln<=0) damagePlayer(dmg*0.8);
 }
 function _bDmgAoe(cx,cy,r,dmg,opt){
   const p = G.player;
   if(p && !p.dead && p.invuln<=0){
     if(Math.abs(p.x-cx)<r && Math.abs((p.y-cy)*2.2)<r*0.6){
-      damagePlayer(dmg);
+      damagePlayer(dmg*0.8);
       if(opt&&opt.kb) p.kx = (Math.sign(p.x-cx)||1)*opt.kb;
       if(opt&&opt.launch){ p.launchT=0.4; p.vy=-400; p.h=Math.max(p.h,1); }
     }
