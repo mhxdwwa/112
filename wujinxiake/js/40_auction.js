@@ -87,12 +87,14 @@
   function canList(eq) {
     if (!eq || !eq.name || !eq.slot) return false;
     if (eq.locked) return false;
+    if (eq.sysGift) return false;      /* ★ 系统赠送的飞行道具不可交易 */
     if (eq.tier === 'mythic') return false;      /* 史诗不可交易 */
     if (eq.sealed === false && tierIdx(eq.tier) >= 2) return false;   /* 紫以上开封后不可上架 */
     return tierIdx(eq.tier) <= TIER_ORDER.indexOf('legend');
   }
   function noTradeWhy(eq){
     if (!eq) return '';
+    if (eq.sysGift) return '系统赠送物品 · 不可交易';
     if (eq.tier === 'mythic') return '史诗装备不可交易';
     if (eq.sealed === false && tierIdx(eq.tier) >= 2) return '已开封 · 不能上架';
     return '不可上架';

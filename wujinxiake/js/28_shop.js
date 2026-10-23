@@ -316,6 +316,8 @@ function drawShop(){
       equipHoverRegions = []; /* 出售模式：悬停显示装备详情 */
       for(let i = 0; i < p.inventory.length; i++){
         const eq = p.inventory[i];
+        /* ★ 系统赠送的飞行道具不可出售，跳过 */
+        if(eq && eq.sysGift) continue;
         const col = i % bagCols;
         const row = Math.floor(i / bagCols);
         const sx = bagStartX + col * (bagSlotSize + 4);

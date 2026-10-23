@@ -773,6 +773,7 @@ function drawEquipCard(eq, ax, ay, opt){
   if(affixes.length) H += 9 + 13 + affixes.length * LH;
   if(setDef) H += 9 + 13 + 2 * LH;
   if(showDetail) H += 9 + 13 + (ampLv > 0 ? 13 : 0);
+  if(eq.sysGift) H += 13;   /* ★ 系统赠送标记行 */
   H += PAD - 2;
   const fullH = H;
   if(opt.maxH && H > opt.maxH) H = opt.maxH;
@@ -848,6 +849,13 @@ function drawEquipCard(eq, ax, ay, opt){
   if(ampLv > 0){
     ctx.fillStyle = '#ff9ae0';
     ctx.fillText('增幅+' + ampLv, tx + 52, ty);
+  }
+  /* ★ 系统赠送标记 */
+  if(eq.sysGift){
+    ty += 13;
+    ctx.fillStyle = '#ff8a7a';
+    ctx.font = '10px "Microsoft YaHei"';
+    ctx.fillText('系统赠送 · 不可分解/出售/交易', tx, ty);
   }
   /* 战力 */
   ty += 15;

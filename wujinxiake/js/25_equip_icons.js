@@ -553,6 +553,16 @@ function drawInventory(){
             ctx.fillStyle = 'rgba(255,209,102,0.92)';
             ctx.beginPath(); ctx.arc(bx + CELL - 7, by + 7, 3, 0, TAU); ctx.fill();
           }
+          /* ★ 系统赠送的飞行道具：左上角显示「赠」标记 */
+          if(eq.sysGift){
+            ctx.fillStyle = 'rgba(200,60,30,0.85)';
+            ctx.beginPath(); ctx.roundRect(bx + 1, by + 1, 14, 12, 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 8px "Microsoft YaHei"';
+            ctx.textAlign = 'center';
+            ctx.fillText('赠', bx + 8, by + 10);
+            ctx.textAlign = 'left';
+          }
           inventoryClickRegions.push({ x: bx, y: by, w: CELL, h: CELL, selectIndex: idx });
           equipHoverRegions.push({ x: bx, y: by, w: CELL, h: CELL, equip: eq });
         }

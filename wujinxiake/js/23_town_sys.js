@@ -256,7 +256,10 @@ function drawEnhanceOverlay(){
 
       equipHoverRegions.push({ x: bx, y: by, w: bagSlotSize, h: bagSlotSize, equip: eq });
       if(blacksmithTab === 'decompose'){
-        G.enhanceClickRegions.push({ x: bx, y: by, w: bagSlotSize, h: bagSlotSize, action: 'selectDecompose', index: i });
+        /* ★ 系统赠送的飞行道具不可分解，不添加选择区域 */
+        if(!eq.sysGift){
+          G.enhanceClickRegions.push({ x: bx, y: by, w: bagSlotSize, h: bagSlotSize, action: 'selectDecompose', index: i });
+        }
       }
     }
   } else {

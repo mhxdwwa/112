@@ -72,19 +72,42 @@
   function off(p){ return (p && p.equipment) ? p.equipment.mount : null; }
   function modelOf(p){ var m = off(p); return m ? (m.model || 'board') : ''; }
 
-  /* 新手 / 老存档兜底：没有就发一块 1 级白板并自动装备 */
+  /* 新手 / 老存档兜底：没有就发一块 1 级白板并自动装备
+     ★ 防刷 bug：系统赠送的 1 级飞行道具标记为 sysGift，不可分解/出售/交易。
+     玩家只能获得一个系统赠送飞行道具（通过 p.mountSysGifted 标记），
+     卸下后再触发 ensure 不会重复发放。 */
   function ensure(p){
     if(!p) return null;
     if(!p.equipment) p.equipment = {};
+
+    /* 老存档迁移：已装备飞行道具但没有 mountSysGifted 标记的，
+       如果是 common 1 级则补标记（说明是之前系统赠送的） */
+    if(p.equipment.mount && !p.mountSysGifted){
+      var om = p.equipment.mount;
+      if(om.tier === 'common' && (om.level || 1) <= 1 && om.sysGift){
+        p.mountSysGifted = true;
+      }
+    }
+
     if(!p.equipment.mount){
-      p.equipment.mount = make('common', 1);
+      /* 已经领过系统赠送的飞行道具，不再补发 */
+      if(p.mountSysGifted) return null;
+      var m = make('common', 1);
+      m.sysGift = true;          /* 标记为系统赠送 */
+      m.locked = true;           /* 锁定，不可交易 */
+      m.noDecompose = true;      /* 不可分解 */
+      m.noSell = true;           /* 不可出售 */
+      p.equipment.mount = m;
+      p.mountSysGifted = true;   /* 记录已领取 */
       return p.equipment.mount;
     }
-    var m = p.equipment.mount;
+    var m2 = p.equipment.mount;
     /* 补字段：老数据可能只有 tier */
-    if(!m.model){ var t = tierById(m.tier); m.model = t.model; m.tierName = m.tierName || t.name; m.tierColor = m.tierColor || t.color; }
-    if(!m.dnf) m.dnf = { moveSpd: tierById(m.tier).moveSpd, dodge: tierById(m.tier).dodge };
-    return m;
+    if(!m2.model){ var t = tierById(m2.tier); m2.model = t.model; m2.tierName = m2.tierName || t.name; m2.tierColor = m2.tierColor || t.color; }
+    if(!m2.dnf) m2.dnf = { moveSpd: tierById(m2.tier).moveSpd, dodge: tierById(m2.tier).dodge };
+    /* 老存档的系统赠送道具补标记 */
+    if(m2.sysGift && !p.mountSysGifted) p.mountSysGifted = true;
+    return m2;
   }
 
   /* ============================================================

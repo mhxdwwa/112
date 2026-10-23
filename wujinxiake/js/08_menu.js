@@ -217,11 +217,17 @@ function handleCanvasClick(cx, cy){
         const p = G.player;
         if(p.inventory && p.inventory[r.sellItem]){
           const eq = p.inventory[r.sellItem];
-          const sellPrice = calcSellPrice(eq);
-          p.gold = (p.gold || 0) + sellPrice;
-          p.inventory.splice(r.sellItem, 1);
-          shopSelectedIndex = -1;
-          spawnText(townPlayer.x, townPlayer.y - 80, 60, `出售获得 ${sellPrice} 金币`, '#ffd700', 16);
+          /* ★ 系统赠送的飞行道具不可出售 */
+          if(eq.sysGift){
+            shopSelectedIndex = -1;
+            spawnText(townPlayer.x, townPlayer.y - 80, 60, '系统赠送物品不可出售', '#ff6a4a', 16);
+          } else {
+            const sellPrice = calcSellPrice(eq);
+            p.gold = (p.gold || 0) + sellPrice;
+            p.inventory.splice(r.sellItem, 1);
+            shopSelectedIndex = -1;
+            spawnText(townPlayer.x, townPlayer.y - 80, 60, `出售获得 ${sellPrice} 金币`, '#ffd700', 16);
+          }
         }
       } else if(r.locked){ /* 等级不足的装备，无响应 */ }
       else if(!r.item){ gameState = 'town'; shopTab = 'buy'; shopSelectedIndex = -1; }

@@ -80,7 +80,12 @@ function doDecompose(){
     : (decomposeSelectedIndex >= 0 ? [decomposeSelectedIndex] : []);
 
   // 过滤有效索引并排序（从大到小，避免splice时索引错位）
-  indices = indices.filter(function(i){ return i >= 0 && i < p.inventory.length && p.inventory[i]; });
+  // ★ 系统赠送的飞行道具（sysGift）不可分解
+  indices = indices.filter(function(i){
+    if(i < 0 || i >= p.inventory.length || !p.inventory[i]) return false;
+    if(p.inventory[i].sysGift) return false;
+    return true;
+  });
   if(indices.length === 0){
     enhanceMsg('请先在左侧背包中点选要分解的装备', '#ff8a7a');
     return;

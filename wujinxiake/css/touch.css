@@ -46,7 +46,7 @@
 .p1-area .skill-btn.attack-btn{left:124px;bottom:6px;}
 .p1-area .skill-btn.jump-btn{left:196px;bottom:24px;}
 .p1-area .skill-btn.glide-btn{left:196px;bottom:80px;}
-.p1-area .skill-btn.skill1{left:198px;bottom:92px;}
+.p1-area .skill-btn.skill1{left:198px;bottom:142px;}
 .p1-area .skill-btn.skill2{left:138px;bottom:122px;}
 .p1-area .skill-btn.skill3{left:78px;bottom:132px;}
 .p1-area .skill-btn.skill4{left:24px;bottom:116px;}
@@ -56,7 +56,7 @@
 .p2-area .skill-btn.attack-btn{right:124px;bottom:6px;left:auto;}
 .p2-area .skill-btn.jump-btn{right:196px;bottom:24px;left:auto;}
 .p2-area .skill-btn.glide-btn{right:196px;bottom:80px;left:auto;}
-.p2-area .skill-btn.skill1{right:198px;bottom:92px;left:auto;}
+.p2-area .skill-btn.skill1{right:198px;bottom:142px;left:auto;}
 .p2-area .skill-btn.skill2{right:138px;bottom:122px;left:auto;}
 .p2-area .skill-btn.skill3{right:78px;bottom:132px;left:auto;}
 .p2-area .skill-btn.skill4{right:24px;bottom:116px;left:auto;}
