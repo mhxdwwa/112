@@ -5,13 +5,59 @@ const DROP_TABLE = {
   boss: { equipRate:1.0, propRate:1.0, materialRate:1.0, gold: 200 }
 };
 
-const DROP_PROPS = [
-  { id:'atk_pill', name:'攻击丹', desc:'攻击力+2', maxStack:50, effect:{atk:2} },
-  { id:'hp_pill', name:'生命丹', desc:'生命+20', maxStack:50, effect:{hp:20} },
-  { id:'mp_pill', name:'内力丹', desc:'内力+10', maxStack:30, effect:{mp:10} },
-  { id:'cd_book', name:'CD缩减书', desc:'冷却-1%', maxStack:20, effect:{cdReduce:1} },
-  { id:'crit_gem', name:'暴击宝石', desc:'暴击+1%', maxStack:15, effect:{crit:1} }
+/* ============================================================
+   ★ 药水（2026-10-23 改）：删掉「永久加属性的属性丹」，
+     改为模仿 DNF 的分级回血瓶 / 回蓝瓶：
+       · 按等级分 6 档，等级越高掉落的档越高
+       · 恢复量是「最大生命的百分比」，等级越高档位回复越多
+       · 同类药水有使用冷却（战斗里不能无限灌）
+   ============================================================ */
+const POTION_GRADES = [
+  { g:1, name:'新手', minLv:1,  maxLv:9,  hp:0.15, mp:0.20, color:'#9fd7ff' },
+  { g:2, name:'下级', minLv:10, maxLv:19, hp:0.20, mp:0.25, color:'#5ee08a' },
+  { g:3, name:'中级', minLv:20, maxLv:29, hp:0.25, mp:0.30, color:'#5aa9ff' },
+  { g:4, name:'上级', minLv:30, maxLv:39, hp:0.30, mp:0.35, color:'#b57bff' },
+  { g:5, name:'特级', minLv:40, maxLv:49, hp:0.35, mp:0.40, color:'#ff9f43' },
+  { g:6, name:'大师', minLv:50, maxLv:999,hp:0.40, mp:0.45, color:'#ffd166' }
 ];
+const POTION_CD = 10;            /* 同类药水冷却（秒） */
+const POTION_MAX_STACK = 200;
+
+/* id 规则：hp3 = 中级回血瓶，mp5 = 特级回蓝瓶 */
+function potionId(kind, g){ return kind + g; }
+function potionGradeOf(id){
+  const g = parseInt(String(id || '').replace(/^(hp|mp)/, ''), 10);
+  return (g >= 1 && g <= 6) ? g : 1;
+}
+function potionKindOf(id){ return String(id || '').indexOf('mp') === 0 ? 'mp' : 'hp'; }
+function potionGradeInfo(g){ return POTION_GRADES[Math.max(0, Math.min(5, (g | 0) - 1))]; }
+function potionMeta(id){
+  const g = potionGradeOf(id), k = potionKindOf(id), gi = potionGradeInfo(g);
+  return {
+    id: id, kind: k, grade: g,
+    name: gi.name + (k === 'hp' ? '生命药水' : '法力药水'),
+    short: gi.name + (k === 'hp' ? '血瓶' : '蓝瓶'),
+    color: k === 'hp' ? '#ff5f6d' : gi.color,
+    pct: k === 'hp' ? gi.hp : gi.mp,
+    desc: '立刻回复' + Math.round((k === 'hp' ? gi.hp : gi.mp) * 100) + '% 的' + (k === 'hp' ? '生命' : '法力')
+  };
+}
+/* 按等级挑一档（向下取整，偶尔跳一档高等级的） */
+function potionGradeForLevel(lv){
+  let g = 1;
+  for(let i = 0; i < POTION_GRADES.length; i++){
+    if(lv >= POTION_GRADES[i].minLv) g = POTION_GRADES[i].g;
+  }
+  if(Math.random() < 0.12 && g < 6) g += 1;    /* 偶尔掉高一档 */
+  return g;
+}
+function rollPotion(levelIdx){
+  const g = potionGradeForLevel(levelIdx || 1);
+  const kind = Math.random() < 0.58 ? 'hp' : 'mp';   /* 血瓶稍多一点 */
+  return potionMeta(potionId(kind, g));
+}
+/* 兼容旧代码：DROP_PROPS 不再用于掉落（属性丹已删除），保留空数组防报错 */
+const DROP_PROPS = [];
 
 const DROP_MATERIALS = [
   { id:'enhance_stone_low', name:'下级强化石', desc:'用于+1~+7强化', tier:'low' },
@@ -146,11 +192,10 @@ function rollEnemyDrops(enemy, levelIdx){
     if(_mo){ drops.push({ type:'equip', equip: _mo }); announceDrop(_mo); }
   }
   
-  // 属性道具掉落
-  const propCount = isBoss ? 2 + Math.floor(Math.random()*2) + diffBonus : (Math.random() < table.propRate ? 1 : 0);
-  for(let i = 0; i < propCount; i++){
-    const prop = DROP_PROPS[Math.floor(Math.random() * DROP_PROPS.length)];
-    drops.push({ type:'prop', prop: prop });
+  /* ★ 药水：按地图等级掉对应档位的回血瓶 / 回蓝瓶 */
+  const potCount = isBoss ? 2 + Math.floor(Math.random()*3) + diffBonus : (Math.random() < table.propRate ? 1 : 0);
+  for(let i = 0; i < potCount; i++){
+    drops.push({ type:'prop', prop: { id: rollPotion(dropLevelIdx(levelIdx)).id } });
   }
   
   // 强化材料掉落（只从三种强化石里抽）
