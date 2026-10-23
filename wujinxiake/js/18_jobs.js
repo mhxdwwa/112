@@ -673,6 +673,9 @@ function damagePlayer(dmg){
   spawnText(p.x, p.y, 120, '-'+finalDmg, '#ff6a5a', 24);
   spawnParticles(p.x, p.y-50, 15, {color:'#cc0000', spMin:100, spMax:300, lifeMin:0.3, lifeMax:0.8, sizeMin:2, sizeMax:5, grav:1500, vh:rand(50,150), isBlood:true});
   addEffect('bloodStain', p.x, p.y, 2.0, {size:rand(10,20)});
-  if(p.hp <= 0){ p.hp = 0; p.dead = true; if(!G.isPvp) gameState = 'gameover'; }
+  if(p.hp <= 0){
+    p.hp = 0; p.dead = true;
+    if(!G.isPvp && !(window.REVIVE && REVIVE.ask())) gameState = 'gameover';
+  }
 }
 
