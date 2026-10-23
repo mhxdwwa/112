@@ -25,7 +25,7 @@ const LEVEL_TEMPLATES = [
       ['bandit','bandit','brute','brute','assassin','bandit']
     ],
     boss:'bandit', bossName:'山贼哨兵', bossPool:['bandit','brute'],
-    bossHpMul:12.0, bossAtkMul:3.2, bossScaleMul:1.6 },
+    bossHpMul:6.0, bossAtkMul:1.6, bossScaleMul:1.6 },
 
   { name:'乱石岗·匪寨', desc:'山贼的老巢，寨主就在里面', theme:0, minLevel:4, maxLevel:7,
     waves:[
@@ -34,7 +34,7 @@ const LEVEL_TEMPLATES = [
       ['bandit','brute','brute','assassin','assassin','assassin','bandit','brute','brute']
     ],
     boss:'boss', bossName:'寨主·刀疤', bossPool:['boss'],
-    bossHpMul:18.0, bossAtkMul:4.6, bossScaleMul:2.1 },
+    bossHpMul:9.0, bossAtkMul:2.3, bossScaleMul:2.1 },
 
   /* ── 第二章 · 野狼谷（Lv.7~13）── 野兽登场 ── */
   { name:'野狼谷·谷口', desc:'狼群在谷口徘徊，注意它们的突进', theme:0, minLevel:7, maxLevel:9,
@@ -44,7 +44,7 @@ const LEVEL_TEMPLATES = [
       ['wolf','wolf','bandit','brute','wolf','wolf','bandit']
     ],
     boss:'wolf', bossName:'灰狼头领', bossPool:['wolf','bear'],
-    bossHpMul:16.0, bossAtkMul:4.0, bossScaleMul:1.8 },
+    bossHpMul:8.0, bossAtkMul:2.0, bossScaleMul:1.8 },
 
   { name:'野狼谷·狼巢', desc:'狼巢深处，巨熊也在觊觎', theme:0, minLevel:10, maxLevel:13,
     waves:[
@@ -53,7 +53,7 @@ const LEVEL_TEMPLATES = [
       ['wolf','wolf','wolf','brute','brute','assassin','wolf','wolf','bandit']
     ],
     boss:'bear', bossName:'巨熊王', bossPool:['bear'],
-    bossHpMul:22.0, bossAtkMul:5.2, bossScaleMul:2.3 },
+    bossHpMul:11.0, bossAtkMul:2.6, bossScaleMul:2.3 },
 
   /* ── 第三章 · 阴兵道（Lv.13~22）── 不死系，远程与幽灵 ── */
   { name:'阴兵道·前道', desc:'阴兵借道，鬼火引路', theme:0, minLevel:13, maxLevel:15,
@@ -63,7 +63,7 @@ const LEVEL_TEMPLATES = [
       ['ghost','ghost','skeleton','skeleton','demon_soldier','bat','ghost']
     ],
     boss:'ghost', bossName:'鬼火引路者', bossPool:['ghost','bat'],
-    bossHpMul:20.0, bossAtkMul:4.8, bossScaleMul:1.9 },
+    bossHpMul:10.0, bossAtkMul:2.4, bossScaleMul:1.9 },
 
   { name:'阴兵道·冥桥', desc:'冥桥之上，骷髅将军镇守', theme:0, minLevel:16, maxLevel:18,
     waves:[
@@ -72,7 +72,7 @@ const LEVEL_TEMPLATES = [
       ['skeleton','ghost','demon_soldier','demon_soldier','ghost','bat','skeleton','bat','ghost']
     ],
     boss:'skeleton', bossName:'骷髅将军', bossPool:['skeleton'],
-    bossHpMul:25.0, bossAtkMul:5.8, bossScaleMul:2.4 },
+    bossHpMul:12.5, bossAtkMul:2.9, bossScaleMul:2.4 },
 
   { name:'阴兵道·幽室', desc:'幽室深处，阴兵队长列阵以待', theme:0, minLevel:19, maxLevel:22,
     waves:[
@@ -81,7 +81,7 @@ const LEVEL_TEMPLATES = [
       ['demon_soldier','demon_soldier','demon_soldier','skeleton','ghost','ghost','bat','bat','skeleton','demon_soldier']
     ],
     boss:'demon_soldier', bossName:'阴兵队长', bossPool:['demon_soldier','skeleton'],
-    bossHpMul:27.0, bossAtkMul:6.0, bossScaleMul:2.3 },
+    bossHpMul:13.5, bossAtkMul:3.0, bossScaleMul:2.3 },
 
   /* ── 第四章 · 妖魔岭（Lv.22~31）── 妖怪系，毒与幻术 ── */
   { name:'妖魔岭·外岭', desc:'妖气弥漫，狐妖出没', theme:1, minLevel:22, maxLevel:24,
@@ -91,7 +91,7 @@ const LEVEL_TEMPLATES = [
       ['fox','spider','spider','snake','scorpion','fox','fox']
     ],
     boss:'fox', bossName:'狐妖', bossPool:['fox','snake'],
-    bossHpMul:24.0, bossAtkMul:5.4, bossScaleMul:2.0 },
+    bossHpMul:12.0, bossAtkMul:2.7, bossScaleMul:2.0 },
 
   { name:'妖魔岭·毒沼', desc:'毒沼深处，蛛母织网', theme:1, minLevel:25, maxLevel:27,
     waves:[
@@ -100,7 +100,7 @@ const LEVEL_TEMPLATES = [
       ['spider','spider','snake','scorpion','scorpion','tree_demon','tree_demon','fox','fox']
     ],
     boss:'spider', bossName:'蛛母', bossPool:['spider','tree_demon'],
-    bossHpMul:26.0, bossAtkMul:5.8, bossScaleMul:2.2 },
+    bossHpMul:13.0, bossAtkMul:2.9, bossScaleMul:2.2 },
 
   { name:'妖魔岭·妖窟', desc:'妖窟最深处，九尾妖狐的真身', theme:1, minLevel:28, maxLevel:31,
     waves:[
@@ -109,7 +109,7 @@ const LEVEL_TEMPLATES = [
       ['fox','fox','spider','tree_demon','tree_demon','snake','snake','scorpion','scorpion','fox']
     ],
     boss:'fox', bossName:'九尾妖狐', bossPool:['fox','tree_demon'],
-    bossHpMul:30.0, bossAtkMul:6.4, bossScaleMul:2.5 },
+    bossHpMul:15.0, bossAtkMul:3.2, bossScaleMul:2.5 },
 
   /* ── 第五章 · 万兽谷（Lv.31~41）── 魔兽，高速与高伤 ── */
   { name:'万兽谷·谷地', desc:'魔兽聚集，兽吼震天', theme:0, minLevel:31, maxLevel:33,
@@ -119,7 +119,7 @@ const LEVEL_TEMPLATES = [
       ['tiger','bear','bear','snake','eagle','tiger','wolf']
     ],
     boss:'tiger', bossName:'猛虎王', bossPool:['tiger','bear'],
-    bossHpMul:28.0, bossAtkMul:6.2, bossScaleMul:2.4 },
+    bossHpMul:14.0, bossAtkMul:3.1, bossScaleMul:2.4 },
 
   { name:'万兽谷·兽穴', desc:'兽穴深处，远古青龙盘踞', theme:0, minLevel:34, maxLevel:37,
     waves:[
@@ -128,7 +128,7 @@ const LEVEL_TEMPLATES = [
       ['tiger','tiger','dragon','bear','eagle','eagle','tiger','tiger','wolf']
     ],
     boss:'dragon', bossName:'远古青龙', bossPool:['dragon','qilin'],
-    bossHpMul:32.0, bossAtkMul:6.8, bossScaleMul:2.7 },
+    bossHpMul:16.0, bossAtkMul:3.4, bossScaleMul:2.7 },
 
   { name:'万兽谷·麒麟崖', desc:'麒麟崖上，火麒麟怒视来者', theme:0, minLevel:38, maxLevel:41,
     waves:[
@@ -137,7 +137,7 @@ const LEVEL_TEMPLATES = [
       ['tiger','dragon','dragon','qilin','qilin','eagle','eagle','tiger','tiger','dragon']
     ],
     boss:'qilin', bossName:'火麒麟', bossPool:['qilin','dragon','phoenix'],
-    bossHpMul:35.0, bossAtkMul:7.2, bossScaleMul:2.8 },
+    bossHpMul:17.5, bossAtkMul:3.6, bossScaleMul:2.8 },
 
   /* ── 第六章 · 幽冥殿（Lv.41~51）── 阴兵精锐，法系压制 ── */
   { name:'幽冥殿·前殿', desc:'阴兵列阵，前殿守卫森严', theme:1, minLevel:41, maxLevel:43,
@@ -147,7 +147,7 @@ const LEVEL_TEMPLATES = [
       ['demon_soldier','demon_soldier','demon_mage','ghost','ghost','skeleton','demon_mage']
     ],
     boss:'demon_soldier', bossName:'幽冥守卫', bossPool:['demon_soldier','skeleton'],
-    bossHpMul:30.0, bossAtkMul:6.4, bossScaleMul:2.3 },
+    bossHpMul:15.0, bossAtkMul:3.2, bossScaleMul:2.3 },
 
   { name:'幽冥殿·魔将殿', desc:'魔将殿中，阴兵魔将法力无边', theme:1, minLevel:44, maxLevel:47,
     waves:[
@@ -156,7 +156,7 @@ const LEVEL_TEMPLATES = [
       ['demon_mage','demon_mage','demon_soldier','dragon','dragon','ghost','ghost','skeleton']
     ],
     boss:'demon_mage', bossName:'阴兵魔将', bossPool:['demon_mage','fire_god'],
-    bossHpMul:33.0, bossAtkMul:7.0, bossScaleMul:2.5 },
+    bossHpMul:16.5, bossAtkMul:3.5, bossScaleMul:2.5 },
 
   { name:'幽冥殿·密库', desc:'密库深处，幽冥殿主亲自出手', theme:1, minLevel:48, maxLevel:51,
     waves:[
@@ -165,7 +165,7 @@ const LEVEL_TEMPLATES = [
       ['demon_mage','demon_mage','demon_mage','demon_mage','dragon','dragon','ghost','ghost','skeleton','demon_soldier']
     ],
     boss:'demon_mage', bossName:'幽冥殿主', bossPool:['demon_mage','fire_god'],
-    bossHpMul:36.0, bossAtkMul:7.4, bossScaleMul:2.6 },
+    bossHpMul:18.0, bossAtkMul:3.7, bossScaleMul:2.6 },
 
   /* ── 第七章 · 天雷峰（Lv.51~57）── 神兽，全屏技能 ── */
   { name:'天雷峰·山脚', desc:'神兽降世，天威难测', theme:2, minLevel:51, maxLevel:53,
@@ -175,7 +175,7 @@ const LEVEL_TEMPLATES = [
       ['phoenix','qilin','qilin','dragon','eagle','eagle','dragon']
     ],
     boss:'phoenix', bossName:'雷兽·朱雀', bossPool:['phoenix','qilin'],
-    bossHpMul:34.0, bossAtkMul:7.2, bossScaleMul:2.6 },
+    bossHpMul:17.0, bossAtkMul:3.6, bossScaleMul:2.6 },
 
   { name:'天雷峰·峰顶', desc:'峰顶雷云翻滚，天神·雷神在此', theme:2, minLevel:54, maxLevel:57,
     waves:[
@@ -184,7 +184,7 @@ const LEVEL_TEMPLATES = [
       ['phoenix','phoenix','qilin','qilin','dragon','dragon','eagle','eagle','thunder_god']
     ],
     boss:'thunder_god', bossName:'天神·雷神', bossPool:['thunder_god','fire_god'],
-    bossHpMul:38.0, bossAtkMul:7.8, bossScaleMul:2.8 },
+    bossHpMul:19.0, bossAtkMul:3.9, bossScaleMul:2.8 },
 
   /* ── 第八章 · 魔尊殿（Lv.57~60）── 终极 ── */
   { name:'魔尊殿·前厅', desc:'魔尊殿前，护卫拦路', theme:1, minLevel:57, maxLevel:59,
@@ -194,7 +194,7 @@ const LEVEL_TEMPLATES = [
       ['demon_mage','demon_mage','demon_mage','dragon','dragon','tiger','tiger']
     ],
     boss:'dark_lord', bossName:'魔尊护卫', bossPool:['dark_lord','demon_mage'],
-    bossHpMul:40.0, bossAtkMul:8.2, bossScaleMul:2.8 },
+    bossHpMul:20.0, bossAtkMul:4.1, bossScaleMul:2.8 },
 
   { name:'魔尊殿·魔尊殿', desc:'魔尊降临，终极一战', theme:1, minLevel:60, maxLevel:60,
     waves:[
@@ -203,7 +203,7 @@ const LEVEL_TEMPLATES = [
       ['dragon','dragon','dragon','demon_mage','demon_mage','qilin','qilin','phoenix','dark_lord']
     ],
     boss:'dark_lord', bossName:'魔尊', bossPool:['dark_lord'],
-    bossHpMul:48.0, bossAtkMul:9.2, bossScaleMul:3.2 },
+    bossHpMul:24.0, bossAtkMul:4.6, bossScaleMul:3.2 },
 
   /* ============================================================
      ★ 终局四窟（索引 20~23）：给满级玩家准备的挑战线
@@ -217,7 +217,7 @@ const LEVEL_TEMPLATES = [
       ['ghost_wraith','ghost_wraith','spider','spider','demon_mage','demon_mage','demon_soldier','demon_soldier']
     ],
     boss:'spider_queen', bossName:'渡口·蛛后', bossPool:['spider_queen','fox'],
-    bossHpMul:34.0, bossAtkMul:7.4, bossScaleMul:2.6 },
+    bossHpMul:17.0, bossAtkMul:3.7, bossScaleMul:2.6 },
 
   { name:'枯骨佛窟', desc:'佛前无香，只有骨', theme:4, minLevel:57, maxLevel:60,
     waves:[
@@ -227,7 +227,7 @@ const LEVEL_TEMPLATES = [
       ['skeleton_mage','skeleton_mage','skeleton_mage','tree_demon','tree_demon','ghost_wraith','ghost_wraith','skeleton']
     ],
     boss:'skeleton_mage', bossName:'佛窟·骨咒师', bossPool:['skeleton_mage','skeleton'],
-    bossHpMul:32.0, bossAtkMul:7.2, bossScaleMul:2.5 },
+    bossHpMul:16.0, bossAtkMul:3.6, bossScaleMul:2.5 },
 
   { name:'焚天火窟', desc:'岩在烧，气在烧，你也在烧', theme:5, minLevel:58, maxLevel:60,
     waves:[
@@ -237,7 +237,7 @@ const LEVEL_TEMPLATES = [
       ['dragon_flame','dragon_flame','dragon_flame','phoenix_dark','phoenix_dark','demon_mage','demon_mage','demon_soldier']
     ],
     boss:'dragon_flame', bossName:'火窟·赤炎龙', bossPool:['dragon_flame','fire_god','phoenix_dark'],
-    bossHpMul:36.0, bossAtkMul:7.8, bossScaleMul:2.7 },
+    bossHpMul:18.0, bossAtkMul:3.9, bossScaleMul:2.7 },
 
   { name:'太墟剑冢', desc:'万剑插地，剑柄朝天，像一片没有叶子的林', theme:6, minLevel:59, maxLevel:60,
     waves:[
@@ -247,7 +247,7 @@ const LEVEL_TEMPLATES = [
       ['tiger_thunder','tiger_thunder','tiger_thunder','dragon_flame','dragon_flame','phoenix_dark','phoenix_dark','demon_mage']
     ],
     boss:'void_lord', bossName:'灯外之物·墟主', bossPool:['void_lord','dark_lord'],
-    bossHpMul:48.0, bossAtkMul:9.6, bossScaleMul:3.3 },
+    bossHpMul:24.0, bossAtkMul:4.8, bossScaleMul:3.3 },
 
   /* ============================================================
      ★ 深渊五境（索引 24~28）：50 级准入，Boss 难度约为对应
@@ -259,8 +259,8 @@ const LEVEL_TEMPLATES = [
       ['zrat','zrat','skeleton','bat','bat','ghost']
     ],
     boss:'abthunder', bossName:'子帝·玄夜雷君', bossPool:['abthunder'],
-    bossHpMul:350.0, bossAtkMul:14.0, bossScaleMul:3.4,
-    enemyHpMul:8.0, enemyAtkMul:3.2, enemySpdMul:1.2 },
+    bossHpMul:117.0, bossAtkMul:4.7, bossScaleMul:3.4,
+    enemyHpMul:2.7, enemyAtkMul:1.07, enemySpdMul:1.2 },
 
   { name:'深渊·丑牛铁壁', desc:'牛角撞碎过三次城门', theme:0, minLevel:52, maxLevel:60, isAbyss:true,
     waves:[
@@ -268,8 +268,8 @@ const LEVEL_TEMPLATES = [
       ['zox','zboar','zboar','brute','brute','zgoat']
     ],
     boss:'abbull', bossName:'丑罡·铁壁牛魔', bossPool:['abbull'],
-    bossHpMul:450.0, bossAtkMul:18.0, bossScaleMul:3.8,
-    enemyHpMul:9.0, enemyAtkMul:3.5, enemySpdMul:1.1 },
+    bossHpMul:150.0, bossAtkMul:6.0, bossScaleMul:3.8,
+    enemyHpMul:3.0, enemyAtkMul:1.17, enemySpdMul:1.1 },
 
   { name:'深渊·寅虎啸林', desc:'虎啸过处，连风都跪着走', theme:0, minLevel:54, maxLevel:60, isAbyss:true,
     waves:[
@@ -277,8 +277,8 @@ const LEVEL_TEMPLATES = [
       ['zrabbit','zdog','zdog','tiger','tiger','zrat']
     ],
     boss:'abtiger', bossName:'寅啸·风虎麒麟', bossPool:['abtiger'],
-    bossHpMul:520.0, bossAtkMul:21.0, bossScaleMul:3.6,
-    enemyHpMul:10.0, enemyAtkMul:3.8, enemySpdMul:1.35 },
+    bossHpMul:173.0, bossAtkMul:7.0, bossScaleMul:3.6,
+    enemyHpMul:3.3, enemyAtkMul:1.27, enemySpdMul:1.35 },
 
   { name:'深渊·辰渊龙墟', desc:'龙骨为山，龙血为河', theme:2, minLevel:56, maxLevel:60, isAbyss:true,
     waves:[
@@ -286,8 +286,8 @@ const LEVEL_TEMPLATES = [
       ['zhorse','zrooster','zrooster','zgoat','zgoat','dragon']
     ],
     boss:'abdragon', bossName:'辰帝·渊火龙皇', bossPool:['abdragon'],
-    bossHpMul:620.0, bossAtkMul:25.0, bossScaleMul:3.9,
-    enemyHpMul:11.0, enemyAtkMul:4.2, enemySpdMul:1.25 },
+    bossHpMul:207.0, bossAtkMul:8.3, bossScaleMul:3.9,
+    enemyHpMul:3.7, enemyAtkMul:1.4, enemySpdMul:1.25 },
 
   { name:'深渊·巳狱毒渊', desc:'井底的东西比深渊更老', theme:1, minLevel:58, maxLevel:60, isAbyss:true,
     waves:[
@@ -295,8 +295,8 @@ const LEVEL_TEMPLATES = [
       ['zmonkey','snake','snake','scorpion','scorpion','zdog']
     ],
     boss:'abserpent', bossName:'巳祖·万毒蛇渊', bossPool:['abserpent'],
-    bossHpMul:760.0, bossAtkMul:30.0, bossScaleMul:4.0,
-    enemyHpMul:12.0, enemyAtkMul:4.5, enemySpdMul:1.3 }
+    bossHpMul:253.0, bossAtkMul:10.0, bossScaleMul:4.0,
+    enemyHpMul:4.0, enemyAtkMul:1.5, enemySpdMul:1.3 }
 ];
 
 /* 无限关卡生成函数 */
@@ -325,11 +325,11 @@ function getLevelConfig(levelIdx){
     };
   }
 
-  // ★ DNF式数值递增：HP每关+10%，ATK每关+8%（更平滑的难度曲线）
+  // ★ DNF式数值递增：HP每关+5%，ATK每关+4%（平滑的难度曲线，降低整体难度）
   const chapter = Math.floor(levelIdx / TPL_N); // 每 TPL_N 关一个轮回
-  const hpMul = Math.pow(1.10, levelIdx);
-  const atkMul = Math.pow(1.08, levelIdx);
-  const spdMul = Math.min(Math.pow(1.03, levelIdx), 1.5);
+  const hpMul = Math.pow(1.05, levelIdx);
+  const atkMul = Math.pow(1.04, levelIdx);
+  const spdMul = Math.min(Math.pow(1.015, levelIdx), 1.3);
 
   // 章节名称前缀（注意：chapter=0 时前缀就是空串，不能用 || 兜底，否则第 1 关会显示"轮回·"）
   const chapterNames = ['', '轮回·', '深渊·', '炼狱·', '混沌·', '无尽·'];
@@ -355,8 +355,8 @@ function getLevelConfig(levelIdx){
     waves: template.waves,
     boss: bossKey,
     bossName: bossLabel + (chapter > 0 ? ' +' + chapter : ''),
-    bossHpMul: template.bossHpMul * (1 + chapter * 0.3),
-    bossAtkMul: template.bossAtkMul * (1 + chapter * 0.2),
+    bossHpMul: template.bossHpMul * (1 + chapter * 0.15),
+    bossAtkMul: template.bossAtkMul * (1 + chapter * 0.1),
     bossScaleMul: template.bossScaleMul,
     enemyHpMul: hpMul,
     enemyAtkMul: atkMul,

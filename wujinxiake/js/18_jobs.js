@@ -394,12 +394,12 @@ function getExpNeed(level){
   return Math.round(260 * Math.pow(level, 1.6));
 }
 
-/* 获取升级后属性成长（DNF式指数成长） */
+/* 获取升级后属性成长（优化版：每级成长更明显，60级裸装HP>20000） */
 function getLevelGrowth(level){
   return {
-    hp: Math.round(15 * level),
-    mp: Math.round(8 * level),
-    atk: Math.round(2 * level)
+    hp: Math.round(80 + 15 * level),
+    mp: Math.round(40 + 8 * level),
+    atk: Math.round(3 + 2 * level)
   };
 }
 /* ★ DNF式伤害计算：获取敌人防御力 */
