@@ -78,38 +78,26 @@
     var r = joy.getBoundingClientRect();
     if(!r || r.width < 24){ bar.classList.remove('on'); return; }
 
-    var portrait = (window.innerHeight || 0) >= (window.innerWidth || 0);
-    var size, gap = 6;
-    if(portrait){
-      /* 竖屏：横着排一排，放在「摇杆正上方」——
-         摇杆右边到右下角攻击键之间只有 180px 左右，横排放不下 5 个 */
-      var room = (window.innerWidth || 360) - 16;
-      size = Math.round(Math.max(36, Math.min(50, (room - gap * 4) / 5)));
-    } else {
-      size = Math.round(Math.max(38, Math.min(50, r.width * 0.45)));
-      /* 横屏（高度只有 390 左右）竖排，要按可用高度压缩 */
-      var avail = (window.innerHeight || 640) - (window.innerHeight - r.bottom) - 24;
-      var fit = Math.floor((avail - gap * 4) / 5);
-      if(fit > 0 && fit < size) size = Math.max(30, fit);
-    }
-    if(bar.classList.contains('hz') !== portrait){
-      bar.classList.toggle('hz', portrait);
-    }
+    /* ★ 竖屏 / 横屏都横着排一排，贴在「摇杆正上方」——
+       摇杆右边到右下角攻击键之间空间不够，竖排又和触屏按键挤在一起 */
+    var gap = 6;
+    var land = (window.innerWidth || 0) > (window.innerHeight || 0);
+    var room = (window.innerWidth || 360) - 16;
+    var size = Math.round(Math.max(34, Math.min(50, (room - gap * 4) / 5)));
+    /* 摇杆上沿以上的可用高度也别超（横屏尤其紧） */
+    var availH = (r.top || 0) - 26;
+    if(land) availH = Math.min(availH, (window.innerHeight || 640) * 0.30);
+    if(availH > 0 && size > availH) size = Math.max(30, Math.round(availH));
+    if(!bar.classList.contains('hz')) bar.classList.add('hz');
+    bar.style.setProperty('--gap', gap + 'px');
     bar.style.setProperty('--s', size + 'px');
-    var bottom = Math.round(window.innerHeight - r.bottom);
-    var left = Math.round(r.right + 10);
-    if(portrait){
-      /* 横排：贴着摇杆上沿（留 26px 给 P1 标签），字在图标下面 */
-      bar.style.setProperty('--gap', gap + 'px');
-      bar.style.setProperty('--s', size + 'px');
-      bar.style.left = Math.max(8, Math.round(r.left)) + 'px';
-      bar.style.bottom = Math.round(window.innerHeight - r.top + 24) + 'px';
-      return;
-    }
-    var colH = size * ITEMS.length + 7 * (ITEMS.length - 1);
 
-    /* 横屏时「任务追踪」就贴在摇杆上方，会和竖排图标叠在一起：
-       检测到重叠就把整列推到任务框右侧，宁可离远一点也别压字 */
+    var rowW = size * ITEMS.length + gap * (ITEMS.length - 1);
+    var bottom = Math.round(window.innerHeight - r.top + (land ? 14 : 22));
+    var left = Math.max(8, Math.round(r.left));
+
+    /* 「任务追踪」框可能压在这一排上：叠了就整体挪到它右边，
+       右边放不下就挪到它上面 */
     try{
       var box = window.__questTrackerBox, cv = document.getElementById('c');
       if(box && cv){
@@ -119,14 +107,18 @@
         var kx = cr.width / vw, ky = cr.height / vh;
         var ql = cr.left + box.x * kx, qr = ql + box.w * kx;
         var qt = cr.top + box.y * ky, qb = qt + box.h * ky;
-        var bt = window.innerHeight - bottom - colH, bb = window.innerHeight - bottom;
-        var overlap = left < qr && (left + size) > ql && bt < qb && bb > qt;
-        if(overlap){
-          left = Math.round(Math.min(window.innerWidth - size - 48, qr + 10));
+        var bt = window.innerHeight - bottom - size, bb = window.innerHeight - bottom + 20;
+        if(left < qr && (left + rowW) > ql && bt < qb && bb > qt){
+          var tryRight = Math.round(qr + 10);
+          if(tryRight + rowW <= (window.innerWidth || 360) - 8) left = tryRight;
+          else bottom = Math.round(window.innerHeight - qt + 8);
         }
       }
     }catch(e){}
 
+    if(left + rowW > (window.innerWidth || 360) - 8){
+      left = Math.max(8, (window.innerWidth || 360) - rowW - 8);
+    }
     bar.style.left = left + 'px';
     bar.style.bottom = bottom + 'px';
   }
