@@ -23,15 +23,15 @@
   }
   function isPhone() {
     /* 和 06_touch.js 的 isMobileBrowser() 保持一致：
-       有鼠标 → 电脑；无鼠标 + 大屏 → 电脑；无鼠标 + 小屏 → 手机 */
+       屏幕短边 < 600px → 手机；≥ 600px → 电脑/大屏 */
     if(window.matchMedia && window.matchMedia('(pointer: fine)').matches) return false;
     var minSide = Math.min(screen.width || 9999, screen.height || 9999);
-    if(minSide >= 768) return false;
+    if(minSide >= 600) return false;
     var ua = navigator.userAgent || '';
     var mobileUA = /Android|iPhone|iPod|iPad|Windows Phone|HarmonyOS|OpenHarmony|Mobile Safari|MicroMessenger/i.test(ua);
     if(mobileUA) return true;
     var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    return touch && minSide < 768;
+    return touch && minSide < 600;
   }
   function toast(t, c) { try { if (typeof showToast === 'function') showToast(t, c || '#ffcf6e'); } catch (e) {} }
   function esc(s) {

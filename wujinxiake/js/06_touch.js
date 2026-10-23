@@ -2,30 +2,33 @@
 const touchState = { p1: { x: 0, y: 0, active: false }, p2: { x: 0, y: 0, active: false } };
 
 /* ★ 区分「手机浏览器」和「电脑/大屏浏览器」
-   核心判据：有没有物理鼠标（pointer: fine）。
-   ─ 有鼠标 → 电脑模式（键盘操作），无论屏幕大小、是否有触摸屏
-   ─ 无鼠标 + 大屏（≥768px）→ 电脑模式（教室大屏、触屏一体机）
-   ─ 无鼠标 + 小屏（<768px）→ 手机模式（触屏摇杆 + 按键）
-   这样教室大屏即使有触摸屏、UA 含 Android，只要接了鼠标就是电脑模式。 */
+   核心判据：屏幕物理尺寸。
+   ─ 屏幕短边 < 600px → 手机/小平板（7寸以下），用触屏摇杆 + 按键
+   ─ 屏幕短边 ≥ 600px → 电脑 / 教室大屏 / 大平板，用键盘操作
+   手机最大也就 ~4.3 寸（短边 ~750px 但 DPR 高，CSS 像素短边 ~380-430），
+   教室大屏最小也 21 寸（CSS 短边 ≥ 700px），600px 阈值不会混淆。
+   有鼠标时无论屏幕大小一律当电脑。 */
 function isMobileBrowser(){
-  /* 第一判据：有物理鼠标 → 一定是电脑（含教室大屏接鼠标的情况） */
+  /* 第一判据：有物理鼠标 → 一定是电脑 */
   if(window.matchMedia && window.matchMedia('(pointer: fine)').matches) return false;
 
-  /* 到这里：没有鼠标，可能是手机/平板/触屏大屏 */
-  const ua = navigator.userAgent || '';
+  /* 第二判据：屏幕物理尺寸（CSS 像素，已除 DPR）
+     手机竖屏短边 ~320-430，横屏短边 ~320-430
+     教室大屏短边 ≥ 700，600px 阈值留足余量 */
+  var minSide = Math.min(screen.width || 9999, screen.height || 9999);
+  if(minSide >= 600) return false;
 
-  /* 第二判据：屏幕够大 → 电脑模式（教室大屏、触屏一体机、大平板）
-     手机横屏最宽 ~930px，用 768px 做阈值留足余量 */
-  const minSide = Math.min(screen.width || 9999, screen.height || 9999);
-  if(minSide >= 768) return false;
+  /* 到这里：没鼠标 + 小屏，需要确认是移动设备 */
+  var touch = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
+  if(!touch) return false;
 
-  /* 第三判据：移动端 UA → 手机 */
-  const mobileUA = /Android|iPhone|iPod|iPad|Windows Phone|HarmonyOS|OpenHarmony|Mobile Safari|MicroMessenger/i.test(ua);
+  /* 移动端 UA 确认 */
+  var ua = navigator.userAgent || '';
+  var mobileUA = /Android|iPhone|iPod|iPad|Windows Phone|HarmonyOS|OpenHarmony|Mobile Safari|MicroMessenger/i.test(ua);
   if(mobileUA) return true;
 
   /* 兜底：没鼠标 + 小屏 + 有触摸 → 当手机处理 */
-  const touch = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
-  return touch && minSide < 768;
+  return true;
 }
 const IS_MOBILE_BROWSER = isMobileBrowser();
 window.IS_MOBILE_BROWSER = IS_MOBILE_BROWSER;
