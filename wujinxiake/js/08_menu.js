@@ -418,6 +418,32 @@ function handleCanvasClick(cx, cy){
     const r = hitTestRegion(pos.x, pos.y, questClickRegions);
     if(r && r.id === 'back') gameState = questReturnState || 'town';
     else if(r && r.id === 'view'){ questViewIdx = r.idx; }
+    else if(r && r.id === 'skip'){
+      /* ★ DNF式跳过任务：直接完成前置任务并领取奖励 */
+      const skipIdx = r.idx;
+      const pq = G && G.player;
+      const qq = pq ? questOf(pq) : null;
+      if(qq && skipIdx < qq.idx && canSkipQuest(pq, skipIdx)){
+        const cq2 = MAIN_QUESTS[skipIdx];
+        if(cq2 && qq.done.indexOf(cq2.id) < 0){
+          const rew = cq2.reward || {};
+          const parts = [];
+          if(rew.exp) parts.push('经验 ' + rew.exp);
+          if(rew.gold) parts.push('金币 ' + rew.gold);
+          if(rew.sp) parts.push('技能点 ' + rew.sp);
+          if(rew.equip) parts.push('装备 ×' + rew.equip);
+          showDialogue([
+            '「你的实力已经远超这个任务的要求，直接完成！」',
+            '『获得任务奖励：' + (parts.join(' · ') || '无') + '』'
+          ], function(){
+            qq.done.push(cq2.id);
+            try { grantQuestReward(pq, cq2); } catch(e){}
+            questToastMsg('跳过任务 · ' + cq2.chapter + '「' + cq2.title + '」',
+              '奖励已发放：' + (parts.join(' · ') || '无'), '#ffb43c');
+          });
+        }
+      }
+    }
     else if(r && r.id === 'turnIn'){
       /* 直接交付任务，不需要走到NPC处 */
       const pq = G && G.player;

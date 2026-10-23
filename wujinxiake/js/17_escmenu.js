@@ -753,21 +753,22 @@ function drawQuestMenu(){
     const done = q && q.done.indexOf(mq.id) >= 0;
     const cur = q && q.idx === i;
     const locked = questLocked(q, i);
+    const canSkip = !locked && !done && !cur && canSkipQuest(p, i);
     const sel = viewIdx0 === i;
     const y = rowTop(i);
     if(y + rowH < listY || y > listY + listH) continue;
-    ctx.fillStyle = sel ? 'rgba(60,120,170,0.35)' : (done ? 'rgba(40,80,60,0.22)' : (cur ? 'rgba(255,209,102,0.10)' : 'rgba(255,255,255,0.03)'));
+    ctx.fillStyle = sel ? 'rgba(60,120,170,0.35)' : (done ? 'rgba(40,80,60,0.22)' : (cur ? 'rgba(255,209,102,0.10)' : (canSkip ? 'rgba(255,180,60,0.15)' : 'rgba(255,255,255,0.03)')));
     ctx.beginPath(); ctx.roundRect(listX, y, listW, rowH - 8, 6); ctx.fill();
-    ctx.strokeStyle = sel ? '#7dd8ff' : (done ? 'rgba(94,224,138,0.5)' : (cur ? 'rgba(255,209,102,0.65)' : 'rgba(120,130,140,0.25)'));
-    ctx.lineWidth = sel || cur ? 2 : 1;
+    ctx.strokeStyle = sel ? '#7dd8ff' : (done ? 'rgba(94,224,138,0.5)' : (cur ? 'rgba(255,209,102,0.65)' : (canSkip ? 'rgba(255,180,60,0.6)' : 'rgba(120,130,140,0.25)')));
+    ctx.lineWidth = sel || cur || canSkip ? 2 : 1;
     ctx.beginPath(); ctx.roundRect(listX, y, listW, rowH - 8, 6); ctx.stroke();
     ctx.textAlign = 'left';
-    const mark = done ? '✦ ' : (cur ? '▶ ' : (locked ? '🔒 ' : '· '));
-    ctx.fillStyle = done ? '#5ee08a' : (cur ? '#ffd166' : (locked ? '#5a6a78' : '#a9bccd'));
+    const mark = done ? '✦ ' : (cur ? '▶ ' : (locked ? '🔒 ' : (canSkip ? '⚡ ' : '· ')));
+    ctx.fillStyle = done ? '#5ee08a' : (cur ? '#ffd166' : (locked ? '#5a6a78' : (canSkip ? '#ffb43c' : '#a9bccd')));
     ctx.font = 'bold 13px "Microsoft YaHei"';
     ctx.fillText(mark + mq.chapter + '「' + mq.title + '」', listX + 12, y + 17);
-    ctx.fillStyle = locked ? '#4a5a68' : '#67788a'; ctx.font = '10px "Microsoft YaHei"';
-    ctx.fillText(done ? '已完成' : (cur ? '进行中' : (locked ? '🔒 未解锁' : '待开启')), listX + 12, y + 31);
+    ctx.fillStyle = locked ? '#4a5a68' : (canSkip ? '#ffb43c' : '#67788a'); ctx.font = '10px "Microsoft YaHei"';
+    ctx.fillText(done ? '已完成' : (cur ? '进行中' : (locked ? '🔒 未解锁' : (canSkip ? '⚡ 可跳过' : '待开启'))), listX + 12, y + 31);
     questClickRegions.push({ id:'view', idx:i, x:listX, y:y, w:listW, h:rowH - 8 });
   }
   ctx.restore();
@@ -805,8 +806,9 @@ function drawQuestMenu(){
     ctx.fillText(cq.chapter + '「' + cq.title + '」', rx + 18, ry + 32);
     /* 状态徽标 */
     ctx.font = '11px "Microsoft YaHei"';
-    const stTxt = lockedView ? '🔒 未解锁 · 先完成前面的任务' : (isCur ? (q.readyTurnIn ? '✔ 可交付 · 点击「交付任务」按钮' : '● 进行中') : (q && q.done.indexOf(cq.id) >= 0 ? '✔ 已完成' : '待开启'));
-    ctx.fillStyle = lockedView ? '#8a6a5a' : (isCur ? '#7dd8ff' : '#67788a');
+    const canSkipView = !lockedView && !isCur && cq && canSkipQuest(p, viewI);
+    const stTxt = lockedView ? '🔒 未解锁 · 先完成前面的任务' : (isCur ? (q.readyTurnIn ? '✔ 可交付 · 点击「交付任务」按钮' : '● 进行中') : (q && q.done.indexOf(cq.id) >= 0 ? '✔ 已完成' : (canSkipView ? '⚡ 可跳过 · 等级已达标' : '待开启')));
+    ctx.fillStyle = lockedView ? '#8a6a5a' : (isCur ? '#7dd8ff' : (canSkipView ? '#ffb43c' : '#67788a'));
     ctx.textAlign = 'right';
     ctx.fillText(stTxt, rx + rw - 18, ry + 30);
     ctx.textAlign = 'left';
@@ -895,6 +897,19 @@ function drawQuestMenu(){
     ctx.fillStyle = '#fff'; ctx.font = 'bold 16px "Microsoft YaHei"';
     ctx.fillText('交付任务', turnInX + btnW / 2, btnY + 25);
     questClickRegions.push({ id:'turnIn', x:turnInX, y:btnY, w:btnW, h:btnH });
+  }
+  
+  /* ★ DNF式跳过按钮：当前任务之前的任务，且玩家等级已达到解锁等级 */
+  const canSkip = !isCur && cq && !lockedView && canSkipQuest(p, viewI);
+  if(canSkip){
+    const skipW = 120, skipX = rx + rw - skipW - 10;
+    ctx.fillStyle = 'rgba(255,180,60,0.85)';
+    ctx.beginPath(); ctx.roundRect(skipX, btnY, skipW, btnH, 8); ctx.fill();
+    ctx.strokeStyle = '#ffb43c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(skipX, btnY, skipW, btnH, 8); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Microsoft YaHei"';
+    ctx.fillText('跳过任务', skipX + skipW / 2, btnY + 25);
+    questClickRegions.push({ id:'skip', idx:viewI, x:skipX, y:btnY, w:skipW, h:btnH });
   }
   
   /* 返回按钮 */

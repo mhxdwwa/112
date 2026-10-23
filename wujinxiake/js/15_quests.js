@@ -300,6 +300,52 @@ function questStepDone(p, st){
     }
     case 'level': return (p.level || 1) >= st.level;
     case 'clear': return (p.clearedLevels || []).indexOf(st.level) >= 0;
+    case 'kills': { /* 击杀数按"接取该步之后"计数（DNF式委托），避免旧击杀直接完成任务 */
+      const base = (p.quest && p.quest.killsBase) || 0;
+      return ((p.questKills || 0) - base) >= st.count;
+    }
+    case 'enhance': return maxEnhanceLv(p) >= st.lv;
+    case 'collect': return (((p.materials || {})[st.mat]) || 0) >= st.count;
+    default: return false;
+  }
+}
+
+/* ★ DNF式任务跳过：根据任务索引返回"解锁等级"，玩家等级达到后可跳过前置任务 */
+function questUnlockLevel(idx){
+  if(idx < 0 || idx >= MAIN_QUESTS.length) return 999;
+  /* 章节对应的解锁等级 */
+  const chapterLevels = {
+    '序章': 1,
+    '第一章': 7,   /* Lv.1~7 */
+    '第二章': 13,  /* Lv.7~13 */
+    '第三章': 22,  /* Lv.13~22 */
+    '第四章': 31,  /* Lv.22~31 */
+    '第五章': 41,  /* Lv.31~41 */
+    '第六章': 51,  /* Lv.41~51 */
+    '深渊': 50,    /* Lv.50+ */
+    '第七章': 57,  /* Lv.51~57 */
+    '第八章': 60,  /* Lv.57~60 */
+    '终章': 60
+  };
+  const mq = MAIN_QUESTS[idx];
+  return chapterLevels[mq.chapter] || 999;
+}
+
+/* ★ 检查任务是否可以跳过（玩家等级已达到该任务所在章节的解锁等级） */
+function canSkipQuest(p, idx){
+  if(!p || idx < 0) return false;
+  const q = questOf(p);
+  if(!q) return false;
+  /* 只能跳过当前任务之前的任务 */
+  if(idx >= q.idx) return false;
+  /* 已经完成的不能跳过 */
+  if(q.done.indexOf(MAIN_QUESTS[idx].id) >= 0) return false;
+  /* 玩家等级达到该任务的解锁等级 */
+  const unlockLv = questUnlockLevel(idx);
+  return (p.level || 1) >= unlockLv;
+}
+    case 'level': return (p.level || 1) >= st.level;
+    case 'clear': return (p.clearedLevels || []).indexOf(st.level) >= 0;
     case 'kills': { /* 击杀数按“接取该步之后”计数（DNF式委托），避免旧击杀直接完成任务 */
       const base = (p.quest && p.quest.killsBase) || 0;
       return ((p.questKills || 0) - base) >= st.count;
