@@ -72,7 +72,7 @@ const STAT_CAPS = {
   maxAtk: 999,
   maxMoveSpeed: 500,
   maxCrit: 50, // 暴击率上限50%
-  maxHp: 9999,
+  maxHp: 999999,
   maxMp: 999
 };
 
