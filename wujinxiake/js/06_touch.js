@@ -1,22 +1,31 @@
 /* ===== 触屏控制 ===== */
 const touchState = { p1: { x: 0, y: 0, active: false }, p2: { x: 0, y: 0, active: false } };
 
-/* ★ 区分「手机浏览器」和「电脑浏览器/电脑触屏」
-   只有手机才切到左下角紧凑阵列（#touchControls.mobile），电脑一律保持原排布。
-   判据：移动端 UA + 有触摸；UA 认不出来时用「粗指针 + 小屏」兜底，
-   电脑显示器即便支持触摸，主指针仍是鼠标（fine），不会被误判。 */
+/* ★ 区分「手机浏览器」和「电脑/大屏浏览器」
+   核心判据：有没有物理鼠标（pointer: fine）。
+   ─ 有鼠标 → 电脑模式（键盘操作），无论屏幕大小、是否有触摸屏
+   ─ 无鼠标 + 大屏（≥768px）→ 电脑模式（教室大屏、触屏一体机）
+   ─ 无鼠标 + 小屏（<768px）→ 手机模式（触屏摇杆 + 按键）
+   这样教室大屏即使有触摸屏、UA 含 Android，只要接了鼠标就是电脑模式。 */
 function isMobileBrowser(){
+  /* 第一判据：有物理鼠标 → 一定是电脑（含教室大屏接鼠标的情况） */
+  if(window.matchMedia && window.matchMedia('(pointer: fine)').matches) return false;
+
+  /* 到这里：没有鼠标，可能是手机/平板/触屏大屏 */
   const ua = navigator.userAgent || '';
-  const touch = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
-  if(!touch) return false;
+
+  /* 第二判据：屏幕够大 → 电脑模式（教室大屏、触屏一体机、大平板）
+     手机横屏最宽 ~930px，用 768px 做阈值留足余量 */
+  const minSide = Math.min(screen.width || 9999, screen.height || 9999);
+  if(minSide >= 768) return false;
+
+  /* 第三判据：移动端 UA → 手机 */
   const mobileUA = /Android|iPhone|iPod|iPad|Windows Phone|HarmonyOS|OpenHarmony|Mobile Safari|MicroMessenger/i.test(ua);
   if(mobileUA) return true;
-  /* 窗口够宽（≥1000px）一律当电脑：触屏笔记本屏幕小、pointer 又是 coarse，
-     不加这条会被误判成手机，把电脑的弧形排布换掉。手机横屏最宽也就 ~950。 */
-  if((window.innerWidth || 0) >= 1000) return false;
-  const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-  const minSide = Math.min(screen.width || 9999, screen.height || 9999);
-  return coarse && minSide < 820;
+
+  /* 兜底：没鼠标 + 小屏 + 有触摸 → 当手机处理 */
+  const touch = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
+  return touch && minSide < 768;
 }
 const IS_MOBILE_BROWSER = isMobileBrowser();
 window.IS_MOBILE_BROWSER = IS_MOBILE_BROWSER;

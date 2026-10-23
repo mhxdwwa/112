@@ -22,10 +22,16 @@
     }).then(function (r) { return r.json(); });
   }
   function isPhone() {
+    /* 和 06_touch.js 的 isMobileBrowser() 保持一致：
+       有鼠标 → 电脑；无鼠标 + 大屏 → 电脑；无鼠标 + 小屏 → 手机 */
+    if(window.matchMedia && window.matchMedia('(pointer: fine)').matches) return false;
+    var minSide = Math.min(screen.width || 9999, screen.height || 9999);
+    if(minSide >= 768) return false;
     var ua = navigator.userAgent || '';
-    var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 1);
-    var small = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 820;
-    return (touch && small) || /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(ua);
+    var mobileUA = /Android|iPhone|iPod|iPad|Windows Phone|HarmonyOS|OpenHarmony|Mobile Safari|MicroMessenger/i.test(ua);
+    if(mobileUA) return true;
+    var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    return touch && minSide < 768;
   }
   function toast(t, c) { try { if (typeof showToast === 'function') showToast(t, c || '#ffcf6e'); } catch (e) {} }
   function esc(s) {
