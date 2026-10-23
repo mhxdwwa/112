@@ -275,6 +275,25 @@ function drawCharacterInfo(){
   ctx.fillStyle = 'rgba(255,207,107,0.95)';
   ctx.fillText('战力 ' + totalPower(p), VW/2, panelY + 92);
 
+  /* ★ 飞行道具（独立第 8 槽，右上角一行，不挤占属性区） */
+  {
+    const mo = p.equipment && p.equipment.mount;
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 12px "Microsoft YaHei"';
+    if(mo){
+      ctx.fillStyle = mo.tierColor || '#fff';
+      ctx.fillText('飞行道具 · ' + mo.name + '（' + (mo.tierName || '') + '）', panelX + panelW - 34, panelY + 70);
+      ctx.font = '11px "Microsoft YaHei"';
+      ctx.fillStyle = '#7fd7ff';
+      ctx.fillText('移速 +' + ((mo.dnf && mo.dnf.moveSpd) || 0) + '%　回避 +' + ((mo.dnf && mo.dnf.dodge) || 0) + '%',
+                   panelX + panelW - 34, panelY + 86);
+    } else {
+      ctx.fillStyle = 'rgba(160,170,190,.7)';
+      ctx.fillText('飞行道具 · 未装备', panelX + panelW - 34, panelY + 70);
+    }
+    ctx.textAlign = 'center';
+  }
+
   // 经验条
   const expNeed = getExpNeed(p.level);
   const expPct = Math.min(1, (p.exp||0) / expNeed);
