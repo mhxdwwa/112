@@ -465,6 +465,30 @@ function drawRoomMinimap(){
   ctx.restore();
 }
 
+/* ★ 战斗界面的药水快捷按钮点击区（每帧重建） */
+let potionBtnRegions = [];
+function hitPotionBtn(x, y){
+  for(let i = 0; i < potionBtnRegions.length; i++){
+    const r = potionBtnRegions[i];
+    if(x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r.kind;
+  }
+  return null;
+}
+window.hitPotionBtn = hitPotionBtn;
+/* 喝一瓶（供点击 / 快捷键共用） */
+function drinkPotion(kind){
+  if(!G || !G.player || !window.POTION) return;
+  const p = G.player;
+  const res = POTION.quick(p, kind);
+  if(typeof gameState !== 'undefined' && gameState === 'playing' && typeof spawnText === 'function'){
+    spawnText(p.x, p.y - 70, 70, res.msg, res.ok ? '#7af0c8' : '#ff9a7a', 15);
+  } else if(typeof showToast === 'function'){
+    showToast(res.msg, res.ok ? '#7af0c8' : '#ff9a7a');
+  }
+  if(res.ok && typeof playSound === 'function'){ try{ playSound('skillCast'); }catch(e){} }
+}
+window.drinkPotion = drinkPotion;
+
 function drawBottomUI(){
   if(!G || !G.player) return;
   const p = G.player, w = WEAPONS[p.weaponIdx];
@@ -484,6 +508,44 @@ function drawBottomUI(){
   ctx.font = 'bold 11px "Microsoft YaHei"';
   ctx.textAlign = 'center';
   ctx.fillText('背包', bagBtnX, bagBtnY + 4);
+
+  /* ★ 药水快捷键：血瓶（红）/ 蓝瓶（蓝），点一下就喝 */
+  potionBtnRegions = [];
+  if(window.POTION && !G.isPvp){
+    const kinds = [{ k:'hp', dy:-62, label:'H' }, { k:'mp', dy:62, label:'G' }];
+    for(let i = 0; i < kinds.length; i++){
+      const k = kinds[i];
+      const cy = bagBtnY + k.dy, r2 = 21;
+      const n = POTION.total(p, k.k);
+      const cd = POTION.cdLeft(p, k.k);
+      const col = k.k === 'hp' ? [ 'rgba(220,60,70,0.85)', '#ff8a90' ] : [ 'rgba(50,120,220,0.85)', '#8fd0ff' ];
+      ctx.fillStyle = n > 0 ? col[0] : 'rgba(60,66,78,0.7)';
+      ctx.beginPath(); ctx.arc(bagBtnX, cy, r2, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = n > 0 ? col[1] : 'rgba(140,150,165,0.5)';
+      ctx.lineWidth = 2; ctx.stroke();
+      /* 瓶身小图标 */
+      ctx.save();
+      ctx.translate(bagBtnX, cy - 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.beginPath(); ctx.roundRect(-4.5, -8, 9, 13, 2); ctx.fill();
+      ctx.fillStyle = n > 0 ? col[1] : 'rgba(150,160,175,0.6)';
+      ctx.beginPath(); ctx.roundRect(-3.6, -5.6, 7.2, 10.4, 1.6); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = n > 0 ? '#fff' : 'rgba(200,210,225,0.5)';
+      ctx.font = 'bold 11px "Microsoft YaHei"';
+      ctx.fillText('×' + n, bagBtnX, cy + 15);
+      if(cd > 0){
+        ctx.fillStyle = 'rgba(0,0,0,0.62)';
+        ctx.beginPath(); ctx.arc(bagBtnX, cy, r2 - 2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffd166'; ctx.font = 'bold 12px "Microsoft YaHei"';
+        ctx.fillText(cd.toFixed(0) + 's', bagBtnX, cy + 4);
+      }
+      potionBtnRegions.push({ x: bagBtnX - r2, y: cy - r2, w: r2*2, h: r2*2, kind: k.k });
+    }
+    ctx.fillStyle = 'rgba(220,235,250,0.75)';
+    ctx.font = '10px "Microsoft YaHei"';
+    ctx.fillText('H 血 / G 蓝', bagBtnX, bagBtnY - 92);
+  }
   
   ctx.fillStyle = 'rgba(5,10,20,0.85)';
   ctx.fillRect(0,panelY,VW,panelH);
