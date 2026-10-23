@@ -435,25 +435,23 @@ function generateEquipment(slot, levelIdx, diffBonus){
   // diffBonus: 普通=0, 困难=1, 地狱=2
   const diff = diffBonus || 0;
   
-  // 基础掉率（普通难度）
-  let rates = [0.60, 0.25, 0.10, 0.04, 0.009, 0.001];
-  
-  // 高难度提升高品质装备概率
+  /* ★ 品阶掉率（重调）：粉装不再是「每局都有」的廉价货
+     普通：[白蓝为主]　困难：紫装多一点　地狱：才可能见粉/橙
+     深渊（diff>=3）：粉/橙明显提升，史诗只在这里和地狱里出，且都极低 */
+  let rates = [0.62, 0.26, 0.10, 0.018, 0, 0];
   if(diff >= 1){
-    rates = [0.40, 0.30, 0.18, 0.09, 0.02, 0.001];
+    rates = [0.42, 0.30, 0.20, 0.050, 0.004, 0];
   }
   if(diff >= 2){
-    rates = [0.25, 0.28, 0.25, 0.15, 0.06, 0.01];
+    rates = [0.30, 0.28, 0.25, 0.100, 0.030, 0.002];
   }
-  
-  // 普通难度不出史诗（mythic）
-  if(diff < 2){
-    rates[5] = 0;
+  if(diff >= 3){
+    rates = [0.18, 0.26, 0.30, 0.170, 0.080, 0.020];
   }
-  // 普通和困难难度不出传说（legend）
-  if(diff < 1){
-    rates[4] = 0;
-  }
+
+  // 普通难度不出史诗（mythic）/ 传说
+  if(diff < 2) rates[5] = 0;
+  if(diff < 1) rates[4] = 0;
   /* ★ 等级门槛：50 级以下不出传说/史诗（橙色系），避免高级装备泛滥 */
   const _tierLv = EQUIP_LV_LADDER[clamp(Math.round(levelIdx), 0, EQUIP_LV_LADDER.length - 1)];
   if(_tierLv < 50){ rates[4] = 0; rates[5] = 0; }
@@ -533,6 +531,12 @@ function generateEquipment(slot, levelIdx, diffBonus){
   /* ★ DNF 式属性生成：一件装备同时拥有 四维 / 三攻 / 双防 / 暴击命中回避三速 / 随机词条 */
   rollEquipDnf(equip);
 
+  /* ★ 未开封（封装）：紫 / 粉 / 橙 掉出来是封着的，要先开封才能穿；
+     史诗则是「已开封且不可交易」的成品 */
+  if(tierIdx >= 2 && tierIdx <= 4) equip.sealed = true;
+  if(tierIdx >= 5) equip.sealed = false;
+  equip.tradeable = (tierIdx < 5);
+
   /* ★ 套装判定：只有 头/衣/鞋/饰 能成为套装件，稀有以上才出 */
   if(SET_SLOTS.indexOf(slot) >= 0 && tierIdx >= 2 && Math.random() < 0.26){
     const st = EQUIP_SETS[Math.floor(Math.random() * EQUIP_SETS.length)];
@@ -553,6 +557,35 @@ function generateEquipment(slot, levelIdx, diffBonus){
   }
 
   return equip;
+}
+
+/* ============================================================
+   ★ 未开封 / 交易规则（模仿 DNF 的封装装备）
+   · 紫 / 粉 / 橙 掉出来是「未开封」，开封后才能穿，开封后不能上架
+   · 史诗（mythic）掉出来就是已开封的成品，且永远不可交易
+   ============================================================ */
+const SEAL_TIER_IDX = { rare:2, epic:3, legend:4, mythic:5 };
+function equipTierIndex(t){
+  const i = ['common','advanced','rare','epic','legend','mythic'].indexOf(String(t || 'common'));
+  return i < 0 ? 0 : i;
+}
+function unsealCost(eq){
+  if(!eq) return 0;
+  const ti = equipTierIndex(eq.tier);
+  return Math.round((eq.level || 1) * 120 + (ti + 1) * 600);
+}
+/* 能否上架交易行：史诗不行，已开封的不行 */
+function eqTradeable(eq){
+  if(!eq) return false;
+  if(eq.tier === 'mythic') return false;
+  if(eq.sealed === false) return false;
+  return true;
+}
+function eqTradeReason(eq){
+  if(!eq) return '';
+  if(eq.tier === 'mythic') return '史诗装备不可交易';
+  if(eq.sealed === false) return '已开封，不能上架';
+  return '';
 }
 
 /* ============================================================
