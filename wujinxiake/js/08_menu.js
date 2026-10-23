@@ -280,6 +280,19 @@ function handleCanvasClick(cx, cy){
         // 穿戴选中的装备
         const eq = p.inventory[inventorySelectedIndex];
         if(eq){
+          /* ★ 未开封：先花钱开封才能穿（DNF 的封装装备） */
+          if(eq.sealed){
+            const cost = unsealCost(eq);
+            if(!confirm('「' + eq.name + '」还是未开封状态。\n\n开封后才能穿戴，开封后不可再上架交易行。\n开封费用：' + cost + ' 金币（当前 ' + (p.gold || 0) + '）')) return;
+            if((p.gold || 0) < cost){
+              inventoryMessage = '金币不足，开封需要 ' + cost + ' 金币';
+              inventoryMessageTimer = 120;
+              return;
+            }
+            p.gold -= cost;
+            eq.sealed = false;
+            if(typeof toast === 'function') toast('已开封：' + eq.name, '#7fe0a0');
+          }
           // 检查装备等级限制
           if(eq.level > (p.level || 1)){
             inventoryMessage = `装备等级过高！需要Lv.${eq.level}，当前Lv.${p.level || 1}`;
