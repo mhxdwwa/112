@@ -17,7 +17,7 @@
   };
   const SLOT_CN = {
     weapon: '武器', head: '头饰', armor: '上衣', shoes: '鞋',
-    necklace: '项链', ring: '戒指', bracer: '护腕', accessory: '戒指'
+    necklace: '项链', ring: '戒指', bracer: '护腕', accessory: '戒指', mount: '飞行道具'
   };
 
   let tab = 'buy';
