@@ -1312,7 +1312,11 @@ function update(dt){
     if(p2.attackBuffer > 0) p2.attackBuffer -= dt;
   }
 
-  if(!G.isPvp && p.hp <= 0 && !p.dead){ p.dead = true; gameState = 'gameover'; }
+  if(!G.isPvp && p.hp <= 0 && !p.dead){
+    p.dead = true;
+    /* ★ 有重生丸就先问一句，没有才进结算 */
+    if(!(window.REVIVE && REVIVE.ask())) gameState = 'gameover';
+  }
   if(G.isPvp){
     if(p.hp <= 0 && !p.dead) p.dead = true;
     if(G.player2 && G.player2.hp <= 0 && !G.player2.dead) G.player2.dead = true;
