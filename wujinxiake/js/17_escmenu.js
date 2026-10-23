@@ -494,6 +494,8 @@ function drawQuestTracker(x, y){
   const cq = MAIN_QUESTS[q.idx];
   /* 收起时只留「任务追踪」+ 号，宽度收到刚好包住四个字 */
   const W = questTrackerCollapsed ? 112 : 286, HH = 30;
+  /* 给手机端图标栏避让用：框在画布虚拟坐标里的位置（高度按展开时的正文粗估） */
+  window.__questTrackerBox = { x: x, y: y, w: W, h: questTrackerCollapsed ? HH : 112 };
   ctx.save();
   ctx.textAlign = 'left';
   /* 头部栏（常显，点击右侧按钮收起/展开） */
