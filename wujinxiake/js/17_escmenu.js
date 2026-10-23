@@ -117,7 +117,7 @@ function drawGameMenu(){
     ctx.textAlign = 'right';
     ctx.fillStyle = '#ffd700';
     ctx.font = '13px "Microsoft YaHei"';
-    ctx.fillText((p.name || '冒险家') + '　Lv.' + (p.level || 1) + '　金币 ' + (p.gold || 0), px + PW - 26, py + 42);
+    ctx.fillText((p.name || '冒险家') + '　Lv.' + (p.level || 1) + '　金币 ' + (p.gold || 0) + '　重生丸 ' + (p.pills | 0), px + PW - 26, py + 42);
   }
   /* 右上角关闭按钮 */
   ctx.fillStyle = 'rgba(140,40,40,0.85)';
@@ -492,7 +492,8 @@ function drawQuestTracker(x, y){
   const q = questOf(p);
   if(!q) return;
   const cq = MAIN_QUESTS[q.idx];
-  const W = 286, HH = 30;
+  /* 收起时只留「任务追踪」+ 号，宽度收到刚好包住四个字 */
+  const W = questTrackerCollapsed ? 112 : 286, HH = 30;
   ctx.save();
   ctx.textAlign = 'left';
   /* 头部栏（常显，点击右侧按钮收起/展开） */
@@ -508,20 +509,21 @@ function drawQuestTracker(x, y){
   ctx.beginPath(); ctx.arc(x + 15, y + 15, 14, 0, TAU); ctx.fill();
   ctx.fillStyle = '#ffd166'; ctx.font = 'bold 13px "Microsoft YaHei"';
   ctx.fillText('任务追踪', x + 30, y + 20);
+  /* 收起态：字后面直接接 + 号，不再画分隔与章节名 */
   if(cq && !questTrackerCollapsed){
     ctx.fillStyle = '#8ea6b8'; ctx.font = '11px "Microsoft YaHei"';
     ctx.fillText(cq.chapter + '「' + cq.title + '」', x + 96, y + 20);
   }
   /* 收起/展开按钮 */
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.beginPath(); ctx.roundRect(x + W - 26, y + 6, 20, 18, 4); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(x + W - 24, y + 6, 20, 18, 4); ctx.fill();
   ctx.strokeStyle = 'rgba(255,209,102,0.6)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(x + W - 25.5, y + 6.5, 19, 17, 4); ctx.stroke();
-  ctx.fillStyle = '#ffd166'; ctx.font = 'bold 13px "Microsoft YaHei"';
+  ctx.beginPath(); ctx.roundRect(x + W - 23.5, y + 6.5, 19, 17, 4); ctx.stroke();
+  ctx.fillStyle = '#ffd166'; ctx.font = 'bold 14px "Microsoft YaHei"';
   ctx.textAlign = 'center';
-  ctx.fillText(questTrackerCollapsed ? '+' : '−', x + W - 16, y + 19.5);
+  ctx.fillText(questTrackerCollapsed ? '+' : '−', x + W - 14, y + 19.5);
   ctx.textAlign = 'left';
-  questTrackerClickRegions.push({ id:'toggle', x:x + W - 26, y:y + 6, w:20, h:18 });
+  questTrackerClickRegions.push({ id:'toggle', x:x + W - 24, y:y + 6, w:20, h:18 });
   if(questTrackerCollapsed){ ctx.restore(); return; }
 
   /* 内容体 */
