@@ -342,13 +342,20 @@ function handleCanvasClick(cx, cy){
           recalcPlayerStats();
         }
       } else if(r.usePotion){
-        /* ★ 喝药水（回血瓶 / 回蓝瓶） */
+        /* ★ 喝药水（回血瓶 / 回蓝瓶）- 只能在战斗/地图中使用，城镇中不可用 */
         if(window.POTION){
-          const res = POTION.use(p, r.usePotion);
-          inventoryMessage = res.msg;
-          inventoryMessageTimer = 90;
-          if(res.ok && typeof spawnText === 'function' && G && G.player){
-            spawnText(G.player.x, G.player.y - 60, 70, res.msg, '#7af0c8', 16);
+          // 检查是否在城镇状态
+          const fromTown = G && G.inventoryReturnState === 'town';
+          if(fromTown){
+            inventoryMessage = '消耗品只能在战斗中使用';
+            inventoryMessageTimer = 90;
+          } else {
+            const res = POTION.use(p, r.usePotion);
+            inventoryMessage = res.msg;
+            inventoryMessageTimer = 90;
+            if(res.ok && typeof spawnText === 'function' && G && G.player){
+              spawnText(G.player.x, G.player.y - 60, 70, res.msg, '#7af0c8', 16);
+            }
           }
         }
       } else if(r.useProp){
@@ -367,6 +374,7 @@ function handleCanvasClick(cx, cy){
       } else if(r.action === 'switchTab'){
         blacksmithTab = r.tab;
         decomposeSelectedIndex = -1;
+        decomposeSelectedIndices = [];
       } else if(r.action === 'enhance'){
         doEnhance();
       } else if(r.action === 'selectSlot' && r.slot){
@@ -374,9 +382,20 @@ function handleCanvasClick(cx, cy){
         else if(blacksmithTab === 'amplify') amplifySelectedSlot = r.slot;
         else if(blacksmithTab === 'reforge') reforgeSelectedSlot = r.slot;
       } else if(r.action === 'selectDecompose'){
-        decomposeSelectedIndex = r.index;
+        // 多选切换：点击已选中的取消选中，点击未选中的加入
+        const idx = r.index;
+        const pos = decomposeSelectedIndices.indexOf(idx);
+        if(pos >= 0){
+          decomposeSelectedIndices.splice(pos, 1);
+        } else {
+          decomposeSelectedIndices.push(idx);
+        }
+        decomposeSelectedIndex = decomposeSelectedIndices.length > 0 ? decomposeSelectedIndices[decomposeSelectedIndices.length - 1] : -1;
       } else if(r.action === 'decompose'){
         doDecompose();
+      } else if(r.action === 'clearDecompose'){
+        decomposeSelectedIndices = [];
+        decomposeSelectedIndex = -1;
       } else if(r.action === 'amplify'){
         doAmplify();
       } else if(r.action === 'reforge'){

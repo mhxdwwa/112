@@ -245,7 +245,7 @@ function drawEnhanceOverlay(){
       const bx = bagPanelX + 5 + col * (bagSlotSize + 3);
       const by = bagPanelY + 20 + row * (bagSlotSize + 3);
 
-      const isSelected = blacksmithTab === 'decompose' && decomposeSelectedIndex === i;
+      const isSelected = blacksmithTab === 'decompose' && decomposeSelectedIndices.indexOf(i) >= 0;
 
       ctx.fillStyle = isSelected ? 'rgba(230,126,34,0.5)' : 'rgba(25,20,10,0.7)';
       ctx.beginPath(); ctx.roundRect(bx, by, bagSlotSize, bagSlotSize, 3); ctx.fill();
@@ -470,54 +470,79 @@ function drawDecomposeTab(p, fx, fy, fw, fh){
   ctx.fillText('装 备 分 解', fx + fw/2, fy + 20);
 
   ctx.fillStyle = '#aaa'; ctx.font = '12px "Microsoft YaHei"';
-  ctx.fillText('分解背包中的装备，获得对应品阶的增幅石（增幅石用于增幅）', fx + fw/2, fy + 42);
+  ctx.fillText('分解背包中的装备，获得对应品阶的增幅石（可多选）', fx + fw/2, fy + 42);
 
-  if(decomposeSelectedIndex >= 0 && p.inventory && p.inventory[decomposeSelectedIndex]){
-    const eq = p.inventory[decomposeSelectedIndex];
+  // 过滤有效的选中索引
+  const validIndices = (decomposeSelectedIndices || []).filter(function(i){
+    return p.inventory && p.inventory[i];
+  });
 
-    const eqIconX = fx + fw/2 - 35, eqIconY = fy + 60;
-    ctx.fillStyle = 'rgba(30,20,10,0.6)';
-    ctx.beginPath(); ctx.roundRect(eqIconX, eqIconY, 70, 70, 5); ctx.fill();
-    ctx.strokeStyle = eq.tierColor || '#666'; ctx.lineWidth = 2; ctx.stroke();
-    drawEquipIcon(eq.slot, eq.weaponType, eqIconX, eqIconY, 70);
+  if(validIndices.length > 0){
+    // 显示选中数量
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 14px "Microsoft YaHei"';
+    ctx.fillText('已选中 ' + validIndices.length + ' 件装备', fx + fw/2, fy + 68);
 
-    ctx.textAlign = 'center';
-    ctx.fillStyle = eq.tierColor || '#fff'; ctx.font = 'bold 14px "Microsoft YaHei"';
-    ctx.fillText(eq.name + ' +' + (eq.enhance||0), fx + fw/2, eqIconY + 88);
-    ctx.fillStyle = '#aaa'; ctx.font = '12px "Microsoft YaHei"';
-    ctx.fillText((eq.tierName || '') + '  Lv.' + (eq.level||1), fx + fw/2, eqIconY + 106);
+    // 计算总奖励（按品阶分组）
+    const stoneTotals = {};
+    for(let vi = 0; vi < validIndices.length; vi++){
+      const eq = p.inventory[validIndices[vi]];
+      if(!eq) continue;
+      const stoneKey = equipTierKey(eq);
+      const stoneInfo = AMPLIFY_STONES[stoneKey] || AMPLIFY_STONES.common;
+      const stoneCount = 1 + (eq.enhance || 0) + Math.floor((eq.level||1) / 10);
+      if(!stoneTotals[stoneInfo.id]){
+        stoneTotals[stoneInfo.id] = { info: stoneInfo, count: 0 };
+      }
+      stoneTotals[stoneInfo.id].count += stoneCount;
+    }
 
-    const stoneKey = equipTierKey(eq);
-    const stoneInfo = AMPLIFY_STONES[stoneKey] || AMPLIFY_STONES.common;
-    const stoneCount = 1 + (eq.enhance || 0) + Math.floor((eq.level||1) / 10);
-
+    // 显示总奖励
     ctx.fillStyle = '#e67e22'; ctx.font = 'bold 13px "Microsoft YaHei"';
-    ctx.fillText('分解获得', fx + fw/2, eqIconY + 135);
+    ctx.fillText('分解获得', fx + fw/2, fy + 95);
 
-    const stoneX = fx + fw/2 - 20, stoneY = eqIconY + 145;
-    ctx.fillStyle = stoneInfo.color;
-    ctx.beginPath();
-    ctx.moveTo(stoneX + 20, stoneY);
-    ctx.lineTo(stoneX + 35, stoneY + 15);
-    ctx.lineTo(stoneX + 20, stoneY + 35);
-    ctx.lineTo(stoneX + 5, stoneY + 15);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px "Microsoft YaHei"';
-    ctx.fillText('x' + stoneCount, stoneX + 50, stoneY + 22);
+    let stoneY = fy + 110;
+    for(const key in stoneTotals){
+      const st = stoneTotals[key];
+      const stoneInfo = st.info;
+      const stoneCount = st.count;
 
-    ctx.fillStyle = stoneInfo.color; ctx.font = '12px "Microsoft YaHei"';
-    ctx.fillText(stoneInfo.name, fx + fw/2, stoneY + 50);
+      const stoneX = fx + fw/2 - 20;
+      ctx.fillStyle = stoneInfo.color;
+      ctx.beginPath();
+      ctx.moveTo(stoneX + 20, stoneY);
+      ctx.lineTo(stoneX + 35, stoneY + 15);
+      ctx.lineTo(stoneX + 20, stoneY + 35);
+      ctx.lineTo(stoneX + 5, stoneY + 15);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
+      ctx.fillText('x' + stoneCount, stoneX + 50, stoneY + 22);
 
-    const btnX = fx + fw/2 - 70, btnY = stoneY + 65;
+      ctx.fillStyle = stoneInfo.color; ctx.font = '12px "Microsoft YaHei"';
+      ctx.fillText(stoneInfo.name, fx + fw/2, stoneY + 50);
+      stoneY += 60;
+    }
+
+    // 确认分解按钮
+    const btnX = fx + fw/2 - 70, btnY = Math.max(stoneY + 10, fy + 200);
     ctx.fillStyle = 'rgba(230,126,34,0.85)';
     ctx.beginPath(); ctx.roundRect(btnX, btnY, 140, 38, 6); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Microsoft YaHei"'; ctx.textAlign = 'center';
-    ctx.fillText('确认分解', btnX + 70, btnY + 25);
+    ctx.fillText('确认分解 (' + validIndices.length + '件)', btnX + 70, btnY + 25);
     G.enhanceClickRegions.push({ x: btnX, y: btnY, w: 140, h: 38, action: 'decompose' });
+
+    // 清空选择按钮
+    const clearBtnY = btnY + 46;
+    ctx.fillStyle = 'rgba(100,100,100,0.6)';
+    ctx.beginPath(); ctx.roundRect(btnX, clearBtnY, 140, 30, 5); ctx.fill();
+    ctx.fillStyle = '#ccc'; ctx.font = '12px "Microsoft YaHei"';
+    ctx.fillText('清空选择', btnX + 70, clearBtnY + 20);
+    G.enhanceClickRegions.push({ x: btnX, y: clearBtnY, w: 140, h: 30, action: 'clearDecompose' });
   } else {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#888'; ctx.font = '14px "Microsoft YaHei"';
-    ctx.fillText('请在左侧背包中选择要分解的装备', fx + fw/2, fy + 92);
+    ctx.fillText('请在左侧背包中点击选择要分解的装备', fx + fw/2, fy + 80);
+    ctx.fillStyle = '#666'; ctx.font = '12px "Microsoft YaHei"';
+    ctx.fillText('可多选，再次点击已选装备可取消选择', fx + fw/2, fy + 102);
 
     ctx.fillStyle = '#e67e22'; ctx.font = 'bold 13px "Microsoft YaHei"';
     ctx.fillText('当前增幅石', fx + fw/2, fy + 136);

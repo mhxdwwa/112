@@ -69,29 +69,67 @@ function doEnhance(){
   recalcPlayerStats();
 }
 
-/* 分解装备 */
+/* 分解装备（支持多选） */
 function doDecompose(){
   const p = G.player;
   if(!p || !p.inventory) return;
-  if(decomposeSelectedIndex < 0 || decomposeSelectedIndex >= p.inventory.length){
+
+  // 使用多选列表，如果为空则回退到单选
+  let indices = (typeof decomposeSelectedIndices !== 'undefined' && decomposeSelectedIndices.length > 0)
+    ? decomposeSelectedIndices.slice()
+    : (decomposeSelectedIndex >= 0 ? [decomposeSelectedIndex] : []);
+
+  // 过滤有效索引并排序（从大到小，避免splice时索引错位）
+  indices = indices.filter(function(i){ return i >= 0 && i < p.inventory.length && p.inventory[i]; });
+  if(indices.length === 0){
     enhanceMsg('请先在左侧背包中点选要分解的装备', '#ff8a7a');
     return;
   }
-
-  const eq = p.inventory[decomposeSelectedIndex];
-  if(!eq) return;
-
-  const stoneKey = equipTierKey(eq);
-  const stoneInfo = AMPLIFY_STONES[stoneKey] || AMPLIFY_STONES.common;
-  const stoneCount = 1 + (eq.enhance || 0) + Math.floor((eq.level || 1) / 10);
+  indices.sort(function(a,b){ return b - a; });
 
   if(!p.amplifyStones) p.amplifyStones = {};
-  p.amplifyStones[stoneInfo.id] = (p.amplifyStones[stoneInfo.id] || 0) + stoneCount;
 
-  p.inventory.splice(decomposeSelectedIndex, 1);
+  // 统计总奖励
+  const stoneTotals = {};
+  let totalItems = 0;
+  for(let ii = 0; ii < indices.length; ii++){
+    const eq = p.inventory[indices[ii]];
+    if(!eq) continue;
+
+    const stoneKey = equipTierKey(eq);
+    const stoneInfo = AMPLIFY_STONES[stoneKey] || AMPLIFY_STONES.common;
+    const stoneCount = 1 + (eq.enhance || 0) + Math.floor((eq.level || 1) / 10);
+
+    if(!stoneTotals[stoneInfo.id]){
+      stoneTotals[stoneInfo.id] = { info: stoneInfo, count: 0 };
+    }
+    stoneTotals[stoneInfo.id].count += stoneCount;
+    totalItems++;
+  }
+
+  // 逐个移除装备（已从大到小排序）
+  for(let ii = 0; ii < indices.length; ii++){
+    p.inventory.splice(indices[ii], 1);
+  }
+
+  // 发放奖励
+  for(const key in stoneTotals){
+    const st = stoneTotals[key];
+    p.amplifyStones[st.info.id] = (p.amplifyStones[st.info.id] || 0) + st.count;
+  }
+
+  // 清空选择
   decomposeSelectedIndex = -1;
+  decomposeSelectedIndices = [];
   G.enhanceFxAt = performance.now();
-  enhanceMsg('分解成功！获得 ' + stoneInfo.name + ' x' + stoneCount, stoneInfo.color, 3600);
+
+  // 生成奖励描述
+  const rewardParts = [];
+  for(const key in stoneTotals){
+    const st = stoneTotals[key];
+    rewardParts.push(st.info.name + ' x' + st.count);
+  }
+  enhanceMsg('分解成功！' + totalItems + '件装备 → ' + rewardParts.join('，'), '#e67e22', 4200);
   playSound('skillCast');
 }
 
