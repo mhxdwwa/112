@@ -15633,6 +15633,7 @@ function renderTeacherDiscipline() {
     <span class="card-title">我的留言记录 (共${myRecords.length}条)</span>
     <button class="toolbar-btn ghost" style="font-size:12px" onclick="saveDisciplineData().then(r=>{if(r.ok)showToast('已保存');else showToast('保存失败','error')})">保存</button>
   </div>
+  <div style="font-size:11px;color:var(--gray-400);padding:8px 16px 0">提示：留言提交后3天内可撤回或编辑，超过3天仅班主任可删除</div>
   <div class="card-body"><div class="discipline-record-list">`;
   
   if (myRecords.length === 0) {
@@ -15646,16 +15647,23 @@ function renderTeacherDiscipline() {
     }
     const typeLabel = getDisciplineTypeLabel(r.type);
     const periodStr = r.period ? ` · ${getPeriodName(parseInt(r.period))}` : '';
+    const within3Days = isDisciplineRecordWithin3Days(r);
+    let actionBtns = '';
+    if (within3Days) {
+      actionBtns = `<div style="display:flex;gap:4px">
+        <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecord('${r.id}')">撤回</button>
+      </div>`;
+    } else {
+      actionBtns = `<div style="font-size:11px;color:var(--gray-400);white-space:nowrap">已超过3天，仅班主任可删除</div>`;
+    }
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
       <div style="flex:1">
         <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
         <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.subject || '')}${periodStr} · ${r.date}</div>
       </div>
-      <div style="display:flex;gap:4px">
-        <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
-        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecord('${r.id}')">撤回</button>
-      </div>
+      ${actionBtns}
     </div>`;
   });
   html += `</div></div></div>`;
@@ -15852,14 +15860,18 @@ function renderHtSummaryTab() {
   }
   
   records.forEach(r => {
+    if (!r.id) return;
     const typeLabel = getDisciplineTypeLabel(r.type);
     const periodStr = r.period ? ` · ${getPeriodName(parseInt(r.period))}` : '';
+    const within3Days = isDisciplineRecordWithin3Days(r);
+    const timeInfo = within3Days ? ' (3天内，科任老师可撤回)' : '';
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
       <div style="flex:1">
         <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.teacherName)} · ${escapeHtml(r.subject || '')}${periodStr} · ${r.date}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.teacherName)} · ${escapeHtml(r.subject || '')}${periodStr} · ${r.date}${timeInfo}</div>
       </div>
+      <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteHtSummaryRecord('${r.id}')">删除</button>
     </div>`;
   });
   
@@ -15972,16 +15984,23 @@ function renderHtWriteTab() {
       return;
     }
     const typeLabel = getDisciplineTypeLabel(r.type);
+    const within3Days = isDisciplineRecordWithin3Days(r);
+    let actionBtns = '';
+    if (within3Days) {
+      actionBtns = `<div style="display:flex;gap:4px">
+        <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
+        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecordHt('${r.id}')">撤回</button>
+      </div>`;
+    } else {
+      actionBtns = `<div style="font-size:11px;color:var(--gray-400);white-space:nowrap">已超过3天</div>`;
+    }
     html += `<div class="discipline-record-item">
       <span class="discipline-record-badge ${r.type}">${typeLabel}</span>
       <div style="flex:1">
         <div style="font-size:13px"><strong>${escapeHtml(r.studentName)}</strong> — ${escapeHtml(r.content)}</div>
         <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(r.subject || '')} · ${r.date}</div>
       </div>
-      <div style="display:flex;gap:4px">
-        <button class="toolbar-btn ghost" style="font-size:11px" onclick="editDisciplineRecord('${r.id}')">编辑</button>
-        <button class="toolbar-btn ghost" style="font-size:11px;color:var(--danger)" onclick="deleteDisciplineRecordHt('${r.id}')">撤回</button>
-      </div>
+      ${actionBtns}
     </div>`;
   });
   html += `</div></div></div>`;
@@ -16117,6 +16136,32 @@ function toggleDisciplineStudent(studentId) {
 function selectDisciplineType(type, el) {
   document.querySelectorAll('#discTypeBtns .discipline-type-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
+}
+
+// 判断记录是否在3天内（科任老师可撤回的期限）
+function isDisciplineRecordWithin3Days(record) {
+  if (!record.createdAt) return false;
+  const created = new Date(record.createdAt).getTime();
+  const now = Date.now();
+  const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+  return (now - created) < threeDaysMs;
+}
+
+// 班主任在汇总明细中删除记录（永久删除，从云端清除）
+async function deleteHtSummaryRecord(recordId) {
+  if (!confirm('确定要删除这条纪律记录吗？删除后不可恢复。')) return;
+  await loadDisciplineData();
+  disciplineData = disciplineData.filter(r => r.id !== recordId);
+  const result = await saveDisciplineData();
+  if (result.ok) {
+    showToast('记录已删除');
+    await loadDisciplineData();
+    document.getElementById('discHtContent').innerHTML = renderHtSummaryTab();
+  } else {
+    showToast('删除失败，请重试', 'error');
+    await loadDisciplineData();
+    document.getElementById('discHtContent').innerHTML = renderHtSummaryTab();
+  }
 }
 
 function refreshDisciplineView() {
