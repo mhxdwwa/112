@@ -174,6 +174,8 @@ function fighterAnimFor(p){
     return { name:'jump', t: rising ? 0 : 1 };
   }
   if(p.state === 'run'){
+    /* ★ 踩着飞行道具：不用跑动帧，保持站立（移动靠整体平移 + 前倾） */
+    if(window.MOUNT && MOUNT.riding(p)) return { name:'idle', t: ((G.t * 0.5) % 1) };
     const ph = ((p.walkPhase/(Math.PI*2)) % 1 + 1) % 1;
     return { name:'run', t: ph };
   }
