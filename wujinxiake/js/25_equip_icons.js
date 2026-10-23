@@ -263,6 +263,33 @@ function drawInventory(){
     ctx.fillText(gtxt, gx + 28, gy + 20);
     ctx.textAlign = 'center';
   }
+
+  /* ★ 金币正下方：重生丸数量（死亡时能用它原地满血复活） */
+  {
+    const n = (typeof p.pills === 'number') ? (p.pills | 0) : 0;
+    const ptxt = '重生丸 ' + n;
+    ctx.font = 'bold 13px "Microsoft YaHei"';
+    const pw = ctx.measureText(ptxt).width + 34;
+    const px2 = VW - pw - 28, py2 = 58, ph2 = 26;
+    ctx.fillStyle = n > 0 ? 'rgba(30,20,34,0.9)' : 'rgba(24,24,28,0.85)';
+    ctx.beginPath(); ctx.roundRect(px2, py2, pw, ph2, 13); ctx.fill();
+    ctx.strokeStyle = n > 0 ? 'rgba(255,140,190,0.6)' : 'rgba(110,110,120,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(px2 + 0.5, py2 + 0.5, pw - 1, ph2 - 1, 13); ctx.stroke();
+    /* 药丸图标：小胶囊 */
+    ctx.save();
+    ctx.translate(px2 + 16, py2 + ph2/2);
+    ctx.rotate(-0.6);
+    ctx.fillStyle = n > 0 ? '#ff8ab0' : '#666';
+    ctx.beginPath(); ctx.roundRect(-7, -4, 14, 8, 4); ctx.fill();
+    ctx.fillStyle = n > 0 ? '#ffd6e6' : '#888';
+    ctx.beginPath(); ctx.roundRect(-7, -4, 7, 8, 4); ctx.fill();
+    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = n > 0 ? '#ffd6e6' : '#8b8b93';
+    ctx.fillText(ptxt, px2 + 28, py2 + 18);
+    ctx.textAlign = 'center';
+  }
   
   // 提示消息
   if(inventoryMessage && inventoryMessageTimer > 0){
@@ -354,12 +381,12 @@ function drawInventory(){
     ctx.textAlign = 'left';
 
     const slotNames = { weapon:'武器', head:'头', armor:'衣', shoes:'鞋', necklace:'链', ring:'戒', bracer:'腕', mount:'飞' };
-    /* 列优先的 DNF 站位：左列 武器/上衣/项链/戒指，右列 头/鞋/腕/(空) */
+    /* 列优先的 DNF 站位：左列 武器/上衣/项链/戒指，右列 头/鞋/腕/飞行道具 */
     const eqGrid = [
       ['weapon', 'head'],
       ['armor',  'shoes'],
       ['necklace','bracer'],
-      ['ring',    null]
+      ['ring',   'mount']
     ];
 
     for(let r = 0; r < eqGrid.length; r++){
@@ -382,7 +409,12 @@ function drawInventory(){
 
         if(eq){
           ctx.save(); ctx.globalAlpha = 0.96;
-          drawEquipIcon(eq.slot, eq.weaponType, sx + 5, sy + 5, SLOT - 10);
+          if(slot === 'mount' && window.MOUNT && MOUNT.drawIcon){
+            /* ★ 飞行道具：直接画真实模型（滑板 / 风火轮 / 御风滑板 / 翅膀） */
+            MOUNT.drawIcon(ctx, sx + SLOT/2, sy + SLOT/2, SLOT - 6, eq.model || 'board', performance.now()/1000);
+          } else {
+            drawEquipIcon(eq.slot, eq.weaponType, sx + 5, sy + 5, SLOT - 10);
+          }
           ctx.restore();
           if(eq.setId){
             ctx.fillStyle = 'rgba(255,209,102,0.9)';
@@ -390,7 +422,11 @@ function drawInventory(){
           }
         } else {
           ctx.save(); ctx.globalAlpha = 0.13;
-          drawEquipIcon(slot, 'sword', sx + 8, sy + 8, SLOT - 16);
+          if(slot === 'mount' && window.MOUNT && MOUNT.drawIcon){
+            MOUNT.drawIcon(ctx, sx + SLOT/2, sy + SLOT/2, SLOT - 12, 'board', performance.now()/1000);
+          } else {
+            drawEquipIcon(slot, 'sword', sx + 8, sy + 8, SLOT - 16);
+          }
           ctx.restore();
         }
         if(eq && eq.enhance > 0){
@@ -409,6 +445,51 @@ function drawInventory(){
         inventoryClickRegions.push({ x: sx, y: sy, w: SLOT, h: SLOT, unequip: slot });
         if(eq) equipHoverRegions.push({ x: sx, y: sy, w: SLOT, h: SLOT, equip: eq });
       }
+    }
+
+    /* ---- 已装备下方：飞行道具模型预览（真模型，会动） ---- */
+    {
+      const pvY = eqY + eqPanelH + 10;
+      const pvH = Math.max(96, contentY + contentH - pvY - 12);
+      const mo = p.equipment.mount || null;
+      ctx.fillStyle = 'rgba(18,22,36,0.72)';
+      ctx.beginPath(); ctx.roundRect(eqX, pvY, eqPanelW, pvH, 8); ctx.fill();
+      ctx.strokeStyle = mo ? hexA(mo.tierColor || '#8fa8bc', 0.55) : 'rgba(201,168,76,0.30)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(eqX + 0.5, pvY + 0.5, eqPanelW - 1, pvH - 1, 8); ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 12px "Microsoft YaHei"';
+      ctx.fillStyle = mo ? (mo.tierColor || '#ffe9b0') : 'rgba(160,178,196,0.7)';
+      ctx.fillText('飞行道具', eqX + 10, pvY + 17);
+
+      if(mo && window.MOUNT && MOUNT.drawIcon){
+        /* 品阶底光 */
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const rg = ctx.createRadialGradient(eqX + eqPanelW/2, pvY + pvH*0.62, 2, eqX + eqPanelW/2, pvY + pvH*0.62, 46);
+        rg.addColorStop(0, hexA(mo.tierColor || '#8fa8bc', 0.26));
+        rg.addColorStop(1, hexA(mo.tierColor || '#8fa8bc', 0));
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.arc(eqX + eqPanelW/2, pvY + pvH*0.62, 46, 0, TAU); ctx.fill();
+        ctx.restore();
+        MOUNT.drawIcon(ctx, eqX + eqPanelW/2, pvY + pvH*0.44, Math.min(78, pvH - 34),
+                       mo.model || 'board', performance.now()/1000);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 11px "Microsoft YaHei"';
+        ctx.fillStyle = mo.tierColor || '#ffe9b0';
+        ctx.fillText(String(mo.name || '飞行道具').slice(0, 7), eqX + eqPanelW/2, pvY + pvH - 16);
+        ctx.font = '10px "Microsoft YaHei"';
+        ctx.fillStyle = 'rgba(160,220,255,0.9)';
+        const dnf = mo.dnf || {};
+        ctx.fillText('移速 +' + (dnf.moveSpd || 0) + '%　回避 +' + (dnf.dodge || 0) + '%', eqX + eqPanelW/2, pvY + pvH - 4);
+      } else {
+        ctx.textAlign = 'center';
+        ctx.font = '11px "Microsoft YaHei"';
+        ctx.fillStyle = 'rgba(150,164,180,0.6)';
+        ctx.fillText('未装备', eqX + eqPanelW/2, pvY + pvH/2 + 4);
+      }
+      ctx.textAlign = 'left';
     }
 
     /* ---- 中：背包（6 × 5 整齐方格） ---- */
@@ -452,7 +533,11 @@ function drawInventory(){
         ctx.beginPath(); ctx.roundRect(bx + 0.5, by + 0.5, CELL - 1, CELL - 1, 4); ctx.stroke();
         if(eq){
           ctx.save(); ctx.globalAlpha = 0.96;
-          drawEquipIcon(eq.slot, eq.weaponType, bx + 5, by + 5, CELL - 10);
+          if(eq.slot === 'mount' && window.MOUNT && MOUNT.drawIcon){
+            MOUNT.drawIcon(ctx, bx + CELL/2, by + CELL/2, CELL - 8, eq.model || 'board', performance.now()/1000);
+          } else {
+            drawEquipIcon(eq.slot, eq.weaponType, bx + 5, by + 5, CELL - 10);
+          }
           ctx.restore();
           if(eq.enhance > 0){
             ctx.textAlign = 'left';
@@ -647,85 +732,78 @@ function drawInventory(){
     ctx.textAlign = 'left';
     ctx.fillStyle = '#ffd700';
     ctx.font = 'bold 15px "Microsoft YaHei"';
-    ctx.fillText('消耗品 — 使用后永久提升对应属性', contentX + 30, y);
-    y += 30;
-    
-    if(!p.props) p.props = {};
-    for(const propDef of DROP_PROPS){
-      const count = p.props[propDef.id] || 0;
-      const itemY = y;
-      
-      // 物品格子背景
-      ctx.fillStyle = count > 0 ? 'rgba(40,60,50,0.8)' : 'rgba(30,30,40,0.5)';
-      ctx.beginPath();
-      ctx.roundRect(contentX + 25, itemY, contentW - 50, 60, 6);
-      ctx.fill();
-      ctx.strokeStyle = count > 0 ? '#2ee6a8' : '#444';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      
-      // 图标区
-      ctx.fillStyle = 'rgba(20,40,30,0.8)';
-      ctx.beginPath();
-      ctx.roundRect(contentX + 32, itemY + 6, 48, 48, 4);
-      ctx.fill();
-      
-      // 绘制丹药图标
-      const iconCx = contentX + 56, iconCy = itemY + 30;
-      if(propDef.id === 'atk_pill'){
-        ctx.fillStyle = '#ff6a4a';
-        ctx.beginPath(); ctx.arc(iconCx, iconCy, 14, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Microsoft YaHei"'; ctx.textAlign = 'center';
-        ctx.fillText('攻', iconCx, iconCy + 5);
-      } else if(propDef.id === 'hp_pill'){
-        ctx.fillStyle = '#ff4466';
-        ctx.beginPath(); ctx.arc(iconCx, iconCy, 14, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Microsoft YaHei"'; ctx.textAlign = 'center';
-        ctx.fillText('命', iconCx, iconCy + 5);
-      } else if(propDef.id === 'mp_pill'){
-        ctx.fillStyle = '#4488ff';
-        ctx.beginPath(); ctx.arc(iconCx, iconCy, 14, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px "Microsoft YaHei"'; ctx.textAlign = 'center';
-        ctx.fillText('内', iconCx, iconCy + 5);
-      } else if(propDef.id === 'cd_book'){
-        ctx.fillStyle = '#aa66ff';
-        ctx.beginPath(); ctx.roundRect(iconCx-12, iconCy-14, 24, 28, 3); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Microsoft YaHei"'; ctx.textAlign = 'center';
-        ctx.fillText('CD', iconCx, iconCy + 4);
-      } else if(propDef.id === 'crit_gem'){
-        ctx.fillStyle = '#ffcc00';
-        ctx.beginPath();
-        ctx.moveTo(iconCx, iconCy-14); ctx.lineTo(iconCx+12, iconCy); ctx.lineTo(iconCx, iconCy+14); ctx.lineTo(iconCx-12, iconCy);
-        ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#333'; ctx.font = 'bold 11px "Microsoft YaHei"'; ctx.textAlign = 'center';
-        ctx.fillText('暴', iconCx, iconCy + 4);
+    ctx.fillText('消耗品 — 回血瓶 / 回蓝瓶（按等级掉落，回复上限的百分比，同类共享 ' +
+                 (typeof POTION_CD !== 'undefined' ? POTION_CD : 10) + ' 秒冷却）', contentX + 30, y);
+    y += 26;
+
+    if(!p.potions) p.potions = {};
+    if(!p.potionCd) p.potionCd = { hp:0, mp:0 };
+
+    /* 冷却提示 */
+    const cdHp = (window.POTION ? POTION.cdLeft(p, 'hp') : 0);
+    const cdMp = (window.POTION ? POTION.cdLeft(p, 'mp') : 0);
+    ctx.font = '12px "Microsoft YaHei"';
+    ctx.fillStyle = cdHp > 0 ? '#ff9a7a' : 'rgba(150,164,180,0.85)';
+    ctx.fillText('血瓶 ' + (cdHp > 0 ? '冷却 ' + cdHp.toFixed(1) + 's' : '可用'), contentX + 30, y);
+    ctx.fillStyle = cdMp > 0 ? '#ff9a7a' : 'rgba(150,164,180,0.85)';
+    ctx.fillText('蓝瓶 ' + (cdMp > 0 ? '冷却 ' + cdMp.toFixed(1) + 's' : '可用'), contentX + 132, y);
+    y += 12;
+
+    /* 6 档 × 2 种，两列排布 */
+    const colW = Math.floor((contentW - 70) / 2);
+    for(let gi = 0; gi < 6; gi++){
+      for(let ki = 0; ki < 2; ki++){
+        const kind = ki === 0 ? 'hp' : 'mp';
+        const meta = potionMeta(potionId(kind, gi + 1));
+        const cnt = p.potions[meta.id] | 0;
+        const cx0 = contentX + 30 + ki * (colW + 10);
+        const itemY = y + gi * 45;
+        const has = cnt > 0;
+
+        ctx.fillStyle = has ? 'rgba(30,44,56,0.86)' : 'rgba(22,24,32,0.5)';
+        ctx.beginPath(); ctx.roundRect(cx0, itemY, colW, 39, 5); ctx.fill();
+        ctx.strokeStyle = has ? meta.color : 'rgba(80,88,100,0.45)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        /* 小药瓶图标 */
+        ctx.save();
+        ctx.translate(cx0 + 20, itemY + 20);
+        ctx.fillStyle = has ? meta.color : 'rgba(90,100,112,0.5)';
+        ctx.beginPath(); ctx.roundRect(-6, -7, 12, 15, 2.5); ctx.fill();
+        ctx.fillStyle = 'rgba(235,245,255,0.9)';
+        ctx.fillRect(-2.5, -11, 5, 5);
+        ctx.fillStyle = '#c9a84c';
+        ctx.fillRect(-3.5, -14, 7, 3.5);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillRect(-4, -4.5, 2, 9);
+        ctx.restore();
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = has ? '#fff' : '#666';
+        ctx.font = 'bold 12px "Microsoft YaHei"';
+        ctx.fillText(meta.name, cx0 + 34, itemY + 16);
+        ctx.fillStyle = has ? 'rgba(200,215,230,0.85)' : '#555';
+        ctx.font = '10px "Microsoft YaHei"';
+        ctx.fillText('×' + cnt + '　' + meta.desc, cx0 + 34, itemY + 30);
+
+        if(has){
+          const uw = 44, uh = 23, ux = cx0 + colW - uw - 7, uy = itemY + 8;
+          ctx.fillStyle = 'rgba(46,230,168,0.72)';
+          ctx.beginPath(); ctx.roundRect(ux, uy, uw, uh, 4); ctx.fill();
+          ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
+          ctx.textAlign = 'center';
+          ctx.fillText('使用', ux + uw/2, uy + 15);
+          ctx.textAlign = 'left';
+          inventoryClickRegions.push({ x: ux, y: uy, w: uw, h: uh, usePotion: meta.id });
+        }
       }
-      
-      // 名称和数量
-      ctx.textAlign = 'left';
-      ctx.fillStyle = count > 0 ? '#fff' : '#666';
-      ctx.font = 'bold 14px "Microsoft YaHei"';
-      ctx.fillText(propDef.name, contentX + 90, itemY + 20);
-      
-      ctx.fillStyle = count > 0 ? '#aaa' : '#555';
-      ctx.font = '12px "Microsoft YaHei"';
-      ctx.fillText(`数量: ${count}    ${propDef.desc}`, contentX + 90, itemY + 40);
-      
-      // 使用按钮
-      if(count > 0){
-        const useBtnX = contentX + contentW - 100, useBtnY = itemY + 14;
-        const useBtnW = 60, useBtnH = 32;
-        ctx.fillStyle = 'rgba(46,230,168,0.7)';
-        ctx.beginPath(); ctx.roundRect(useBtnX, useBtnY, useBtnW, useBtnH, 4); ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 13px "Microsoft YaHei"';
-        ctx.textAlign = 'center';
-        ctx.fillText('使用', useBtnX + useBtnW/2, useBtnY + 21);
-        inventoryClickRegions.push({ x: useBtnX, y: useBtnY, w: useBtnW, h: useBtnH, useProp: propDef.id });
-      }
-      
-      y += 70;
     }
+    y += 6 * 45 + 12;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(150,164,180,0.72)';
+    ctx.font = '11px "Microsoft YaHei"';
+    ctx.fillText('战斗中也能喝：点战斗界面左侧的红 / 蓝药水瓶，或按 H（血） · G（蓝）。', contentX + 30, y);
   }
   
   // 返回按钮
