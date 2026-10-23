@@ -195,9 +195,9 @@ function questGuideTarget(){
   /* 深渊前置任务：qa2 通关子夜鬼门 → 指向深渊传送使·玄冥 */
   if(cq.id === 'qa2' || cq.id === 'qa1') return NPCS.find(n => n.id === 'porter') || null;
   /* 根据任务索引指向对应的传送使 */
-  if(q.idx < 10) id = 'gate_east';        /* 第一~三章 → 青鸾（q0~q9，关卡索引 0~6） */
-  else if(q.idx < 15) id = 'gate_south';  /* 第四~五章 → 朱明（q10~q14，关卡索引 7~12） */
-  else id = 'gate_west';                  /* 第六章+ → 白泽（q15+，关卡索引 13~23） */
+  if(q.idx < 11) id = 'gate_east';        /* 第一~三章 → 青鸾（q0~q10，关卡索引 0~6） */
+  else if(q.idx < 18) id = 'gate_south';  /* 第四~五章 → 朱明（q11~q17，关卡索引 7~12） */
+  else id = 'gate_west';                  /* 第六章+ → 白泽（q18+，关卡索引 13~23） */
   return NPCS.find(n => n.id === id) || null;
 }
 function drawQuestGuideArrow(){
@@ -272,6 +272,82 @@ function drawBagWarning(){
     ? '⚠ 背包已满！新装备将无法拾取，请分解或出售'
     : '⚠ 背包即将满（' + inv.length + '/' + cap + '），请及时清理';
   ctx.fillText(msg, VW / 2, by + 20);
+  ctx.restore();
+}
+
+/* ★ 城镇小地图 */
+function drawTownMinimap(){
+  if(!townPlayer || !TOWN_DEFS) return;
+  
+  const MAP_W = 180, MAP_H = 108;
+  const MAP_X = VW - MAP_W - 20, MAP_Y = 20;
+  const SCALE = MAP_W / TOWN_W;
+  
+  ctx.save();
+  
+  /* 背景 */
+  ctx.fillStyle = 'rgba(10,16,26,0.85)';
+  ctx.beginPath(); ctx.roundRect(MAP_X, MAP_Y, MAP_W, MAP_H, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(201,168,76,0.5)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.roundRect(MAP_X + 0.5, MAP_Y + 0.5, MAP_W - 1, MAP_H - 1, 6); ctx.stroke();
+  
+  /* 标题 */
+  ctx.fillStyle = '#ffd166';
+  ctx.font = 'bold 11px "Microsoft YaHei"';
+  ctx.textAlign = 'center';
+  ctx.fillText('城镇地图', MAP_X + MAP_W / 2, MAP_Y + 12);
+  
+  /* 绘制五个城镇 */
+  const townColors = {
+    center: '#6a4a7e',
+    east: '#1e4a4e',
+    south: '#4e2418',
+    west: '#343e54',
+    north: '#241a3e'
+  };
+  
+  for(const def of TOWN_DEFS){
+    const tx = MAP_X + def.ox * SCALE;
+    const ty = MAP_Y + 18 + def.oy * SCALE;
+    const tw = TOWN_ZONE_W * SCALE;
+    const th = TOWN_ZONE_H * SCALE;
+    
+    /* 判断玩家是否在这个城镇 */
+    const playerInTown = townPlayer.x >= def.ox && townPlayer.x < def.ox + TOWN_ZONE_W &&
+                         townPlayer.y >= def.oy && townPlayer.y < def.oy + TOWN_ZONE_H;
+    
+    /* 城镇方块 */
+    ctx.fillStyle = playerInTown ? '#ffd166' : townColors[def.key];
+    ctx.globalAlpha = playerInTown ? 0.9 : 0.6;
+    ctx.fillRect(tx, ty, tw, th);
+    
+    /* 边框 */
+    ctx.strokeStyle = playerInTown ? '#ffd166' : 'rgba(201,168,76,0.4)';
+    ctx.lineWidth = playerInTown ? 2 : 1;
+    ctx.strokeRect(tx, ty, tw, th);
+    
+    /* 城镇名称 */
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = playerInTown ? '#000' : '#ccc';
+    ctx.font = '9px "Microsoft YaHei"';
+    ctx.textAlign = 'center';
+    const shortName = def.name.split('·')[0];
+    ctx.fillText(shortName, tx + tw / 2, ty + th / 2 + 3);
+  }
+  
+  /* 玩家位置标记 */
+  const px = MAP_X + townPlayer.x * SCALE;
+  const py = MAP_Y + 18 + townPlayer.y * SCALE;
+  
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#ff4444';
+  ctx.beginPath();
+  ctx.arc(px, py, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  
   ctx.restore();
 }
 
@@ -731,6 +807,9 @@ function drawTown(){
 
   /* ★ 背包容量警告 */
   drawBagWarning();
+
+  /* ★ 城镇小地图 */
+  drawTownMinimap();
 
   /* ★ 环境粒子 - 飘落花瓣 */
   for(let i = 0; i < 12; i++){
