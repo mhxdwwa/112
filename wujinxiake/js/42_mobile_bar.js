@@ -78,23 +78,31 @@
     var r = joy.getBoundingClientRect();
     if(!r || r.width < 24){ bar.classList.remove('on'); return; }
 
-    /* ★ 竖屏 / 横屏都横着排一排，贴在「摇杆正上方」——
-       摇杆右边到右下角攻击键之间空间不够，竖排又和触屏按键挤在一起 */
-    var gap = 6;
-    var land = (window.innerWidth || 0) > (window.innerHeight || 0);
-    var room = (window.innerWidth || 360) - 16;
-    var size = Math.round(Math.max(34, Math.min(50, (room - gap * 4) / 5)));
-    /* 摇杆上沿以上的可用高度也别超（横屏尤其紧） */
-    var availH = (r.top || 0) - 26;
-    if(land) availH = Math.min(availH, (window.innerHeight || 640) * 0.30);
-    if(availH > 0 && size > availH) size = Math.max(30, Math.round(availH));
+    /* ★ 功能按钮和摇杆在同一行，紧挨着摇杆右侧 */
+    var gap = 8;
+    var joySize = r.width || 110;
+    var btnSize = Math.round(Math.max(38, Math.min(48, joySize * 0.42)));
+    
     if(!bar.classList.contains('hz')) bar.classList.add('hz');
     bar.style.setProperty('--gap', gap + 'px');
-    bar.style.setProperty('--s', size + 'px');
+    bar.style.setProperty('--s', btnSize + 'px');
 
-    var rowW = size * ITEMS.length + gap * (ITEMS.length - 1);
-    var bottom = Math.round(window.innerHeight - r.top + (land ? 14 : 22));
-    var left = Math.max(8, Math.round(r.left));
+    var rowW = btnSize * ITEMS.length + gap * (ITEMS.length - 1);
+    var joyRight = r.right || (r.left + joySize);
+    var left = Math.round(joyRight + gap);
+    
+    /* 如果右边放不下，就放在摇杆上方 */
+    if(left + rowW > (window.innerWidth || 360) - 8){
+      left = Math.max(8, Math.round(r.left));
+      var bottom = Math.round(window.innerHeight - r.top + btnSize + gap + 10);
+      bar.style.left = left + 'px';
+      bar.style.bottom = bottom + 'px';
+    } else {
+      /* 和摇杆底部对齐 */
+      var bottom = Math.round(window.innerHeight - r.bottom + 5);
+      bar.style.left = left + 'px';
+      bar.style.bottom = bottom + 'px';
+    }
 
     /* 「任务追踪」框可能压在这一排上：叠了就整体挪到它右边，
        右边放不下就挪到它上面 */
@@ -107,20 +115,16 @@
         var kx = cr.width / vw, ky = cr.height / vh;
         var ql = cr.left + box.x * kx, qr = ql + box.w * kx;
         var qt = cr.top + box.y * ky, qb = qt + box.h * ky;
-        var bt = window.innerHeight - bottom - size, bb = window.innerHeight - bottom + 20;
+        var barRect = bar.getBoundingClientRect();
+        var bt = barRect.top, bb = barRect.bottom;
         if(left < qr && (left + rowW) > ql && bt < qb && bb > qt){
           var tryRight = Math.round(qr + 10);
           if(tryRight + rowW <= (window.innerWidth || 360) - 8) left = tryRight;
-          else bottom = Math.round(window.innerHeight - qt + 8);
+          else bar.style.bottom = Math.round(window.innerHeight - qt + 8) + 'px';
+          bar.style.left = left + 'px';
         }
       }
     }catch(e){}
-
-    if(left + rowW > (window.innerWidth || 360) - 8){
-      left = Math.max(8, (window.innerWidth || 360) - rowW - 8);
-    }
-    bar.style.left = left + 'px';
-    bar.style.bottom = bottom + 'px';
   }
 
   function syncMobileBar(){
