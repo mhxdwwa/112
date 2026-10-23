@@ -306,6 +306,7 @@ function sendPos(){
     x: Math.round(p.x), y: Math.round(p.y),
     f: p.facing >= 0 ? 1 : -1,
     s: (p.state === 'walk' || p.state === 'run') ? 'w' : 'i',
+    mt: (window.MOUNT && typeof G !== 'undefined' && G.player) ? MOUNT.modelOf(G.player) : '',
     t: Date.now()
   });
 }
@@ -324,6 +325,7 @@ function onPos(p){
   r.name = p.n || r.name;
   r.lv = p.lv || r.lv;
   r.weaponIdx = (p.w === undefined || p.w === null) ? r.weaponIdx : (p.w | 0);
+  if(p.mt !== undefined) r.mt = p.mt || '';
   r.seen = Date.now();
 }
 
@@ -528,7 +530,11 @@ function drawOne(r){
   ctx.fillStyle = '#ffe1a6';
   ctx.fillText('Lv.' + r.lv, r.x, ny + 13);
 
-  drawSpriteFrame(at, walking ? 'run' : 'idle', prog, r.x, r.y, r.f || 1, bodyPx);
+  /* ★ 对方也踩着飞行道具：画在脚下，并且保持站姿 */
+  if(r.mt && window.MOUNT){
+    MOUNT.draw(ctx, r.x, r.y + 2, 1, r.mt, performance.now() / 1000, walking, r.f || 1);
+  }
+  drawSpriteFrame(at, (r.mt || !walking) ? 'idle' : 'run', prog, r.x, r.y, r.f || 1, bodyPx);
   ctx.restore();
 }
 
