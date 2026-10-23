@@ -444,7 +444,12 @@
         renderGold();
         alert('购买成功：' + itemLabel(d.item) + '（已放入材料栏）');
       } else {
-        (p.inventory = p.inventory || []).push(d.item);
+        (p.inventory = p.inventory || []);
+        if(p.inventory.length >= BAG_CAPACITY){
+          alert('背包已满（' + p.inventory.length + '/' + BAG_CAPACITY + '），无法购买！请先分解或出售装备');
+          return;
+        }
+        p.inventory.push(d.item);
         save();
         renderGold();
         alert('购买成功：' + itemLabel(d.item) + '（已放进背包）');

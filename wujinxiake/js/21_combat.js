@@ -202,8 +202,12 @@ function pickupDrop(d){
       
       // 检查等级限制
       if(d.equip.level > (p.level || 1)){
-        p.inventory.push(d.equip);
-        spawnText(d.x, d.y-30, 60, '获得装备(等级不足)', '#888', 14);
+        if(isBagFull()){
+          spawnText(d.x, d.y-30, 60, '背包已满!', '#ff6a5a', 16);
+        } else {
+          p.inventory.push(d.equip);
+          spawnText(d.x, d.y-30, 60, '获得装备(等级不足)', '#888', 14);
+        }
         break;
       }
       
@@ -211,8 +215,12 @@ function pickupDrop(d){
       if(d.equip.slot === 'weapon'){
         const playerWeaponType = (WEAPONS[p.weaponIdx || 0] || WEAPONS[0]).id;
         if(d.equip.weaponType !== playerWeaponType){
-          p.inventory.push(d.equip);
-          spawnText(d.x, d.y-30, 60, '获得装备(类型不符)', '#888', 14);
+          if(isBagFull()){
+            spawnText(d.x, d.y-30, 60, '背包已满!', '#ff6a5a', 16);
+          } else {
+            p.inventory.push(d.equip);
+            spawnText(d.x, d.y-30, 60, '获得装备(类型不符)', '#888', 14);
+          }
           break;
         }
       }
@@ -227,8 +235,12 @@ function pickupDrop(d){
         /* 重新计算属性 */
         recalcPlayerStats();
       } else {
-        p.inventory.push(d.equip);
-        spawnText(d.x, d.y-30, 60, '获得装备(背包)', d.equip.tierColor, 16);
+        if(isBagFull()){
+          spawnText(d.x, d.y-30, 60, '背包已满!', '#ff6a5a', 16);
+        } else {
+          p.inventory.push(d.equip);
+          spawnText(d.x, d.y-30, 60, '获得装备(背包)', d.equip.tierColor, 16);
+        }
       }
       break;
     case 'prop':
@@ -511,7 +523,9 @@ function update(dt){
             
             rewardEquips.push(equip);
             if(!p.inventory) p.inventory = [];
-            p.inventory.push(equip);
+            if(p.inventory.length < BAG_CAPACITY){
+              p.inventory.push(equip);
+            }
           }
 
           /* ★ 深渊保底：通关必给一件传说（未开封，可交易） */
@@ -528,7 +542,9 @@ function update(dt){
               eq.tradeable = true;
               rewardEquips.push(eq);
               if(!p.inventory) p.inventory = [];
-              p.inventory.push(eq);
+              if(p.inventory.length < BAG_CAPACITY){
+                p.inventory.push(eq);
+              }
               if(typeof announceDrop === 'function') announceDrop(eq);
             }
           }
@@ -631,7 +647,10 @@ function update(dt){
                 p.gold = (p.gold || 0) + (drop.value || 10);
               } else if(drop.type === 'equip' && drop.equip){
                 if(!p.inventory) p.inventory = [];
-                p.inventory.push(drop.equip);
+                if(p.inventory.length < BAG_CAPACITY){
+                  p.inventory.push(drop.equip);
+                }
+                /* 背包已满则丢弃该装备 */
               } else if(drop.type === 'material' && drop.material){
                 if(!p.materials) p.materials = {};
                 p.materials[drop.material] = (p.materials[drop.material] || 0) + 1;

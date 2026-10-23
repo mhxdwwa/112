@@ -347,6 +347,8 @@ function loopBody(now){
     ctx.restore();
     if(G.player) drawUI();
     drawBottomUI();
+    /* ★ 背包容量警告（战斗中也要显示） */
+    if(typeof drawBagWarning === 'function') drawBagWarning();
     drawRoomMinimap();
     if(G.flash > 0.01){ ctx.fillStyle = G.hitFlashColor; ctx.globalAlpha = G.flash; ctx.fillRect(0,0,VW,VH); ctx.globalAlpha = 1; }
     /* ★ 房间转场黑幕 */

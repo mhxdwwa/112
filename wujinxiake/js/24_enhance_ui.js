@@ -1038,6 +1038,14 @@ function drawCompareStrip(newEq, curEq, ax, ay, w){
   ctx.fillText(line || '两件装备属性相同', ax + 10, ay + 37);
   ctx.restore();
 }
+/* ★ 背包容量上限 */
+const BAG_CAPACITY = 30;
+const BAG_WARN_THRESHOLD = 25;  /* 达到此数量时弹出提醒 */
+let bagWarnShown = false;        /* 本次登录是否已提醒过（避免反复弹窗） */
+function isBagFull(){ return G && G.player && (G.player.inventory || []).length >= BAG_CAPACITY; }
+function isBagNearlyFull(){ return G && G.player && (G.player.inventory || []).length >= BAG_WARN_THRESHOLD; }
+function bagSpaceLeft(){ return BAG_CAPACITY - (G && G.player ? (G.player.inventory || []).length : 0); }
+
 let inventoryClickRegions = [];
 let inventoryTab = 'equipment'; // equipment / material / consumable
 let enhanceSelectedSlot = 'weapon';
@@ -1066,7 +1074,9 @@ function grantCardReward(card){
     p.gold = (p.gold || 0) + (card.amount || 0);
   } else if(card.type === 'equip' && card.equip){
     if(!p.inventory) p.inventory = [];
-    p.inventory.push(card.equip);
+    if(p.inventory.length < BAG_CAPACITY){
+      p.inventory.push(card.equip);
+    }
   }
 }
 

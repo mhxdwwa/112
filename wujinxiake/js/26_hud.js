@@ -248,6 +248,33 @@ function drawQuestGuideArrow(){
   ctx.restore();
 }
 
+/* ★ 背包容量警告横幅 */
+function drawBagWarning(){
+  if(!G || !G.player) return;
+  const inv = G.player.inventory || [];
+  const cap = (typeof BAG_CAPACITY !== 'undefined') ? BAG_CAPACITY : 30;
+  const warn = (typeof BAG_WARN_THRESHOLD !== 'undefined') ? BAG_WARN_THRESHOLD : 25;
+  if(inv.length < warn) return;
+  const full = inv.length >= cap;
+  const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.005);
+  ctx.save();
+  const bw = 320, bh = 30;
+  const bx = VW / 2 - bw / 2, by = 90;
+  ctx.globalAlpha = full ? (0.7 + 0.3 * pulse) : (0.5 + 0.3 * pulse);
+  ctx.fillStyle = full ? 'rgba(180,30,20,0.85)' : 'rgba(180,120,20,0.75)';
+  ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
+  ctx.strokeStyle = full ? '#ff6a5a' : '#ffd166'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.roundRect(bx + 0.5, by + 0.5, bw - 1, bh - 1, 6); ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 13px "Microsoft YaHei"';
+  const msg = full
+    ? '⚠ 背包已满！新装备将无法拾取，请分解或出售'
+    : '⚠ 背包即将满（' + inv.length + '/' + cap + '），请及时清理';
+  ctx.fillText(msg, VW / 2, by + 20);
+  ctx.restore();
+}
+
 
 function drawTownHud(){
   const p = G && G.player;
@@ -701,6 +728,9 @@ function drawTown(){
 
   /* ★ 任务引导箭头（仿 DNF：指向当前任务目标） */
   drawQuestGuideArrow();
+
+  /* ★ 背包容量警告 */
+  drawBagWarning();
 
   /* ★ 环境粒子 - 飘落花瓣 */
   for(let i = 0; i < 12; i++){

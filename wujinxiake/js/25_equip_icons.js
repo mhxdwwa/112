@@ -510,9 +510,11 @@ function drawInventory(){
     ctx.fillText('背包', bagX + 12, bagY + 22);
     ctx.textAlign = 'right';
     ctx.font = '11px "Microsoft YaHei"';
-    ctx.fillStyle = inv.length > GRID_COLS * GRID_ROWS ? '#ff8a6a' : 'rgba(150,164,180,0.7)';
-    ctx.fillText(inv.length + ' / ' + (GRID_COLS * GRID_ROWS) +
-      (inv.length > GRID_COLS * GRID_ROWS ? '（已满，请分解）' : ''), bagX + bagPanelW - 12, bagY + 22);
+    const bagCap = (typeof BAG_CAPACITY !== 'undefined') ? BAG_CAPACITY : (GRID_COLS * GRID_ROWS);
+    const bagWarn = (typeof BAG_WARN_THRESHOLD !== 'undefined') ? BAG_WARN_THRESHOLD : Math.floor(bagCap * 0.83);
+    ctx.fillStyle = inv.length >= bagCap ? '#ff5a5a' : (inv.length >= bagWarn ? '#ffa64a' : 'rgba(150,164,180,0.7)');
+    ctx.fillText(inv.length + ' / ' + bagCap +
+      (inv.length >= bagCap ? '（已满，请分解）' : (inv.length >= bagWarn ? '（即将满）' : '')), bagX + bagPanelW - 12, bagY + 22);
     ctx.textAlign = 'left';
 
     for(let r = 0; r < GRID_ROWS; r++){
