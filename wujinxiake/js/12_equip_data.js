@@ -497,12 +497,13 @@ function generateEquipment(slot, levelIdx, diffBonus){
   // 装备品级（最下/下/中/上/最上），影响属性倍率
   const gradeRoll = Math.random();
   let gradeIdx = 2, gradeMul = 1.0;
+  /* ★ 品级倍率收窄（0.85~1.15 → 0.94~1.06），确保同等级下品阶越高战力一定越高 */
   const GRADES = [
-    { name: '最下级', mul: 0.85 },
-    { name: '下级', mul: 0.92 },
+    { name: '最下级', mul: 0.94 },
+    { name: '下级', mul: 0.97 },
     { name: '中级', mul: 1.0 },
-    { name: '上级', mul: 1.08 },
-    { name: '最上级', mul: 1.15 }
+    { name: '上级', mul: 1.03 },
+    { name: '最上级', mul: 1.06 }
   ];
   if(gradeRoll < 0.15) gradeIdx = 0;
   else if(gradeRoll < 0.35) gradeIdx = 1;
@@ -523,11 +524,12 @@ function generateEquipment(slot, levelIdx, diffBonus){
     enhance: 0,
     amplify: 0,
     weaponType: slot === 'weapon' ? (G && G.player ? (WEAPONS[G.player.weaponIdx] ? WEAPONS[G.player.weaponIdx].id : 'sword') : 'sword') : null,
-    baseAtk: Math.round((slot === 'weapon' ? 10 * tier.baseMul * (1 + level * 0.1) : 0) * gradeMul),
-    baseHp: Math.round((slot === 'head' || slot === 'armor' ? 30 * tier.baseMul * (1 + level * 0.1) : 0) * gradeMul),
-    baseDef: Math.round((slot === 'armor' ? 5 * tier.baseMul * (1 + level * 0.1) : 0) * gradeMul),
-    baseSpd: Math.round((slot === 'shoes' ? 10 * tier.baseMul * (1 + level * 0.08) : 0) * gradeMul),
-    baseCrit: Math.round((slot === 'accessory' || slot === 'necklace' || slot === 'ring' || slot === 'bracer' ? 3 * tier.baseMul * (1 + level * 0.1) : 0) * gradeMul),
+    /* ★ 统一等级成长系数为 0.05，与 DNF 属性一致，防止高等级白装超过低等级粉装 */
+    baseAtk: Math.round((slot === 'weapon' ? 10 * tier.baseMul * (1 + level * 0.05) : 0) * gradeMul),
+    baseHp: Math.round((slot === 'head' || slot === 'armor' ? 30 * tier.baseMul * (1 + level * 0.05) : 0) * gradeMul),
+    baseDef: Math.round((slot === 'armor' ? 5 * tier.baseMul * (1 + level * 0.05) : 0) * gradeMul),
+    baseSpd: Math.round((slot === 'shoes' ? 10 * tier.baseMul * (1 + level * 0.05) : 0) * gradeMul),
+    baseCrit: Math.round((slot === 'accessory' || slot === 'necklace' || slot === 'ring' || slot === 'bracer' ? 3 * tier.baseMul * (1 + level * 0.05) : 0) * gradeMul),
     extraStats: []
   };
   
