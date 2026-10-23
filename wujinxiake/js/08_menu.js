@@ -53,6 +53,7 @@ function handleCanvasClick(cx, cy){
       else if(b.id === 'skillMenu') gameState = 'skillMenu';
       else if(b.id === 'characterInfo') gameState = 'characterInfo';
       else if(b.id === 'questMenu'){ questReturnState = 'town'; gameState = 'questMenu'; }
+      else if(b.id === 'auction'){ if(window.AUCTION) AUCTION.open(); }
       return;
     }
     
