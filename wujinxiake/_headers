@@ -1,0 +1,9 @@
+# Cloudflare Pages 响应头：HTML 一律禁缓存（防止浏览器/360 等拿到旧版入口页）
+/wujinxiake/index.html
+  Cache-Control: no-store, max-age=0
+
+/wujinxiake/wujinxiake.html
+  Cache-Control: no-store, max-age=0
+
+/index.html
+  Cache-Control: no-store, max-age=0
