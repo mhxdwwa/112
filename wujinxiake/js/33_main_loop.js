@@ -14,7 +14,7 @@ function loopBody(now){
   if(window.__dbgFreeze){ requestAnimationFrame(loop); return; }
   const dt = Math.min((now-lastTime)/1000, 0.05);
   lastTime = now;
-  if(gameState === 'playing' || gameState === 'stageClear') update(dt);
+  if((gameState === 'playing' || gameState === 'stageClear') && !(typeof G !== 'undefined' && G && G.awaitRevive)) update(dt);
   if(gameState === 'town') updateTown(dt);
   /* ★ 剧情对话与任务进度推进（任何状态下都保持生命） */
   updateDialogue(dt);
