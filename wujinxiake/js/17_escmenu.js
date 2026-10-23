@@ -6,7 +6,7 @@
 let gameMenuClickRegions = [];
 let wikiClickRegions = [];
 let wikiSlot = 'weapon';      /* 当前部位 */
-let wikiLvIdx = 0;            /* 当前等级段（EQUIP_LV_LADDER 下标 0..6） */
+let wikiLvIdx = -1;           /* 当前等级段（-1 = 全部，0..6 = EQUIP_LV_LADDER 下标） */
 let wikiTierIdx = -1;         /* -1 = 全部品阶 */
 let wikiSelIdx = 0;           /* 图鉴列表选中项 */
 let wikiScroll = 0, wikiScrollMax = 0;
@@ -35,7 +35,8 @@ function wikiGenItem(slot, tierIdx, lvIdx, k, wtIdx){
   const rng = mulberry32(wikiHash(key));
   /* diff=2 档位下各品阶累计概率带的带内取值，保证 tierRoll 落进目标品阶 */
   /* 地狱难度掉率: [0.30, 0.28, 0.25, 0.100, 0.030, 0.002]，累计: 0.30/0.58/0.83/0.93/0.96/0.962 */
-  const band = [0.12, 0.40, 0.65, 0.90, 0.98, 0.999][Math.max(0, Math.min(5, tierIdx))];
+  /* tierRoll = band × 0.962，必须落在对应累计区间内 */
+  const band = [0.15, 0.45, 0.73, 0.915, 0.982, 0.999][Math.max(0, Math.min(5, tierIdx))];
   const orig = Math.random;
   let first = true;
   Math.random = function(){
@@ -54,12 +55,10 @@ function wikiGenItem(slot, tierIdx, lvIdx, k, wtIdx){
 }
 function buildWikiList(){
   wikiItems = [];
-  const lv = wikiLvIdx;
-  /* ★ 与掉落规则一致：50 级以下档位不出传说/史诗（图鉴中同样不展示） */
-  /* ★ 飞行道具不受等级限制，固定品阶全部展示 */
-  const isMountTab = wikiSlot === 'mount';
-  const tiers = (wikiTierIdx < 0 ? [0, 1, 2, 3, 4, 5] : [wikiTierIdx])
-    .filter(function(ti){ return isMountTab || !(lv <= 4 && ti >= 4); });
+  /* wikiLvIdx=-1 表示全部等级，生成时用最高等级(6)以解锁所有品阶 */
+  const lv = wikiLvIdx < 0 ? 6 : wikiLvIdx;
+  /* 图鉴展示所有品阶，不受等级限制 */
+  const tiers = wikiTierIdx < 0 ? [0, 1, 2, 3, 4, 5] : [wikiTierIdx];
   for(const ti of tiers){
     if(wikiSlot === 'weapon'){
       /* 武器：8 种职业武器各出一件，展示全部武器谱系 */
@@ -104,7 +103,7 @@ function buildWikiList(){
   wikiSelIdx = Math.min(wikiSelIdx, Math.max(0, wikiItems.length - 1));
 }
 function openEquipWiki(){
-  wikiSlot = 'weapon'; wikiLvIdx = 0; wikiTierIdx = -1;
+  wikiSlot = 'weapon'; wikiLvIdx = -1; wikiTierIdx = -1;
   wikiSelIdx = 0; wikiScroll = 0; wikiScrollMax = 0;
   wikiCache.clear();  /* 清除缓存，确保使用最新的品阶生成规则 */
   buildWikiList();
@@ -246,8 +245,23 @@ function drawEquipWiki(){
   const lvY = railY + slotTabs.length * 40 + 24;
   ctx.fillStyle = '#ffd166'; ctx.font = 'bold 13px "Microsoft YaHei"';
   ctx.fillText('等级段', railX, lvY - 8);
+  /* 全部等级按钮 */
+  {
+    const ty = lvY;
+    const on = wikiLvIdx === -1;
+    ctx.fillStyle = on ? 'rgba(90,70,25,0.95)' : 'rgba(40,48,66,0.85)';
+    ctx.beginPath(); ctx.roundRect(railX, ty, railW, 30, 6); ctx.fill();
+    ctx.strokeStyle = on ? '#ffd166' : 'rgba(110,125,148,0.45)'; ctx.lineWidth = on ? 1.6 : 1;
+    ctx.beginPath(); ctx.roundRect(railX + 0.5, ty + 0.5, railW - 1, 29, 6); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = on ? '#ffd166' : '#c6d2e0';
+    ctx.font = (on ? 'bold ' : '') + '13px "Microsoft YaHei"';
+    ctx.fillText('全部', railX + railW / 2, ty + 20);
+    wikiClickRegions.push({ x: railX, y: ty, w: railW, h: 30, lv: -1 });
+    ctx.textAlign = 'left';
+  }
   for(let i = 0; i < EQUIP_LV_LADDER.length; i++){
-    const ty = lvY + i * 36;
+    const ty = lvY + (i + 1) * 36;
     const on = wikiLvIdx === i;
     ctx.fillStyle = on ? 'rgba(90,70,25,0.95)' : 'rgba(40,48,66,0.85)';
     ctx.beginPath(); ctx.roundRect(railX, ty, railW, 30, 6); ctx.fill();
