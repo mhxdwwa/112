@@ -2,18 +2,24 @@
 <html lang="zh-CN">
 <head>
 <script>
-/* 版本自检：旧版 HTML/资源被缓存时自动重载一次（扫码深链不动） */
+/* 版本自检：向服务器要「版本清单」（带时间戳必回源），
+   和本文件内置版本不一致就带随机参数重载一次 —— 这样即使入口 HTML
+   被浏览器 / CDN 缓存成旧版，也能自己发现新版本并切过去。          */
 (function () {
+  var MY = '18';
+  function addQ() { var n = 0; try { n = +(sessionStorage.getItem('wjx_q') || 0); } catch (e) {} if (n >= 2) return false; try { sessionStorage.setItem('wjx_q', n + 1); } catch (e) {} return true; }
   try {
-    var V = '18';
-    if (/[?&]qr=/.test(location.search)) return;
-    var k = 'wjx_ver';
-    if (localStorage.getItem(k) !== V) {
-      localStorage.setItem(k, V);
-      if (!/[?&]r=/.test(location.search)) {
-        location.replace(location.pathname + '?r=' + V + '.' + Date.now());
-      }
-    }
+    var x = new XMLHttpRequest();
+    x.open('GET', '/wujinxiake/version.json?t=' + Date.now(), true);
+    x.onload = function () {
+      try {
+        var d = JSON.parse(x.responseText);
+        if (d && d.v && String(d.v) !== MY && addQ()) {
+          location.replace(location.pathname + '?r=' + d.v + '.' + Date.now());
+        }
+      } catch (e) {}
+    };
+    x.send(null);
   } catch (e) {}
 })();
 </script>
