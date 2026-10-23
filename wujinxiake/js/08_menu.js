@@ -485,7 +485,15 @@ function handleCanvasClick(cx, cy){
           let refund = 0;
           for(let i = 0; i < w.skills.length; i++){
             const lv = (p.skillLevels && p.skillLevels[i]) || 0;
-            if(lv > 0) refund += skillSpent(w.skills[i], lv);
+            if(lv > 0){
+              if(i < 3){
+                /* 前3个技能初始1级（免费），返还从1级到当前等级的SP */
+                refund += skillSpent(w.skills[i], lv);
+              } else {
+                /* 后3个技能初始0级，返还从0级到当前等级的SP（含学习费用） */
+                refund += skillSpCost(w.skills[i], 1) + skillSpent(w.skills[i], lv);
+              }
+            }
             p.skillLevels[i] = i < 3 ? 1 : 0;
           }
           p.skillPoints = (p.skillPoints || 0) + refund;

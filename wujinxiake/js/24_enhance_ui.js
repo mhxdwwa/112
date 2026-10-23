@@ -1124,7 +1124,13 @@ function drawSkillMenu(){
   let spent = 0;
   for(let i = 0; i < skills.length; i++){
     const lv = (p.skillLevels && p.skillLevels[i]) || 0;
-    if(lv > 0) spent += skillSpent(skills[i], lv);
+    if(lv > 0){
+      if(i < 3){
+        spent += skillSpent(skills[i], lv);
+      } else {
+        spent += skillSpCost(skills[i], 1) + skillSpent(skills[i], lv);
+      }
+    }
   }
   const remain = p.skillPoints || 0;
   ctx.fillStyle = '#9fe6ff'; ctx.font = '14px "Microsoft YaHei"';
