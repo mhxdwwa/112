@@ -18,6 +18,7 @@ const PERSIST = [
   'skillPoints', 'skillLevels', 'skillsUnlocked',
   'equipment', 'inventory', 'gold', 'materials', 'amplifyStones',
   'props', 'propBonuses', 'clearedLevels',
+  'potions', 'potionCd',
   'hp', 'mp', 'pills',
   /* ★ 任务进度也要存：不然每次读档都退回「序章·余烬」，第一个任务永远做不完 */
   'quest', 'prologueSeen', 'questKills'
@@ -27,6 +28,24 @@ let uid = '', uname = '';
 let cloudState = 'idle';     /* idle | ok | unavailable | error */
 let lastPushAt = 0, lastStr = '', pushing = false, timer = null, warned = false;
 let lastSaveAt = 0;          /* 最近一次落盘时间（账号面板展示用） */
+/* ★ 存档闸门：只有「真正进入了某个角色」之后才允许写盘。
+      登录后先停在「选择角色」界面，此时 G.player 还是空的，
+      若这时被自动保存/关页面触发落盘，会把当前角色的进度覆盖成空档。 */
+let armed = false;
+
+/* ---------- ★ 固定出生点：所有角色都从「引灯亭」旁进城 ---------- */
+function fixedSpawn(){
+  try{
+    const def = (typeof TOWN_DEFS_BY_KEY !== 'undefined' && TOWN_DEFS_BY_KEY.center) || TOWN_DEFS[0];
+    const npc = (def.npcs || []).filter(function(n){ return n.id === 'questmaster'; })[0];
+    const ox = def.ox | 0, oy = def.oy | 0;
+    if(npc) return { x: ox + npc.x, y: oy + npc.y + 80, townKey: def.key };
+    return { x: def.spawn.x, y: def.spawn.y, townKey: def.key };
+  }catch(e){
+    return { x: 4740, y: 2860, townKey: 'center' };
+  }
+}
+window.WJX_FIXED_SPAWN = fixedSpawn;
 
 function sb(){ return window.SB || null; }
 function logged(){ return !!(window.AUTH && window.AUTH.loggedIn && window.AUTH.uid); }
@@ -86,6 +105,11 @@ function apply(data){
   if(typeof G.player.pills !== 'number') G.player.pills = 3;
   /* ★ 老存档：没飞行道具的补一块 1 级白板（踩上就不再用跑动动画） */
   if(window.MOUNT) MOUNT.ensure(G.player);
+  /* ★ 老存档：属性丹已删除，永久加成清零、旧丹药清空，改为回血/回蓝瓶 */
+  G.player.propBonuses = { atk:0, hp:0, mp:0, cdReduce:0, crit:0 };
+  G.player.props = {};
+  if(!G.player.potions) G.player.potions = {};
+  if(!G.player.potionCd) G.player.potionCd = { hp:0, mp:0 };
   /* 老存档缺字段时补齐 */
   try{
     if(typeof ensureBaseStat === 'function') ensureBaseStat(G.player);
@@ -101,6 +125,7 @@ function apply(data){
     gameState = 'town';
     if(typeof startBGM === 'function') startBGM();
   }catch(e){ console.warn('[save] 进入城镇失败', e); }
+  armed = true;      /* ★ 已经真正进角色了，之后才允许写盘 */
   return true;
 }
 
@@ -205,6 +230,8 @@ function payload(){
 }
 
 function saveNow(force){
+  /* ★ 还没进角色就别写盘，避免把角色数据冲掉 */
+  if(!armed) return;
   const data = payload();
   if(!data) return;
   const str = JSON.stringify(data);
@@ -248,6 +275,38 @@ async function boot(){
   /* 云端比本地新很多 → 采用云端 */
   if(cloud && local && Number(cloud.t) > Number(local.t) + 3000) pick = cloud;
 
+  /* ★ 登录后不直接站到大街上：先把角色列表载入，弹出「选择角色」 */
+  if(window.CHARS && window.CHARS.loadBundle){
+    let bundle = pick;
+    /* 老存档（单角色 v2）→ 转成多角色整包 */
+    if(!(bundle.chars && bundle.chars.length)){
+      bundle = {
+        v: 3, t: Number(pick.t) || Date.now(), activeId: 'c_mig',
+        chars: [{
+          id: 'c_mig', name: pick.name || '无名侠客',
+          charIdx: (typeof pick.charIdx === 'number' ? pick.charIdx : 0) | 0,
+          level: (pick.p && pick.p.level) | 0 || 1,
+          t: Number(pick.t) || Date.now(), p: pick.p || {}
+        }]
+      };
+    }
+    window.CHARS.loadBundle(bundle, true);
+    lastStr = JSON.stringify(bundle);
+    /* 游客进度已经并入账号，标记作废，避免下次又拿它兜底 */
+    if(pick === guestLocal){ try{ localStorage.removeItem('wjx_guest_at'); }catch(e){} }
+    setTimeout(function(){
+      try{
+        if(window.CHARS.count() > 0){ window.CHARS.openPanel(); }
+        else { window.CHARS.startCreate(); }
+      }catch(e){}
+      if(typeof showToast === 'function'){
+        showToast('欢迎回来，共 ' + window.CHARS.count() + ' 个角色 · 选一个进入江湖', '#7af0c8');
+      }
+    }, 420);
+    return;
+  }
+
+  /* 兜底：没有角色系统时按老逻辑直接进 */
   if(apply(pick)){
     lastStr = JSON.stringify(pick);
     /* 游客进度已经并入账号，标记作废，避免下次又拿它兜底 */
@@ -284,6 +343,10 @@ window.CloudSave = {
   save: function(){ saveNow(true); },
   queue: queueSave,
   load: function(){ return loadLocal(); },
+  /* ★ 允许写盘（进入角色 / 新建角色后调用） */
+  arm: function(){ armed = true; },
+  isArmed: function(){ return armed; },
+  fixedSpawn: fixedSpawn,
   snapshotNow: function(){ return snapshot(); },
   applyData: function(d){ return apply(d); },
   applyBundle: function(b){ return apply(b); },
