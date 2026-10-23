@@ -460,7 +460,7 @@ function meleeHitRect(src,cx,cy,w,h,dmg,opt){
   } else {
     const t = G.player;
     if(t && !t.dead && t.invuln<=0 && Math.abs(t.x-cx)<w/2+30 && Math.abs((t.y-cy)*2.2)<h/2+25){
-      damagePlayer(dmg*0.8);
+      damagePlayer(dmg);
       if(opt.launch){ t.launchT = 0.4; t.vy = -400; t.h = Math.max(t.h,1); }
     }
   }
@@ -476,7 +476,7 @@ function meleeAoe(src,cx,cy,R,dmg,opt){
   } else {
     const t = G.player;
     if(t && !t.dead && t.invuln<=0){ const dx=t.x-cx, dy=(t.y-cy)*2.2; if(dx*dx+dy*dy < (R+30)*(R+30)){
-      damagePlayer(dmg*0.8);
+      damagePlayer(dmg);
       if(opt.launch){ t.launchT=0.4; t.vy=-400; t.h=Math.max(t.h,1);}
     } }
   }
@@ -576,7 +576,7 @@ function killEnemy(e){
     addEffect('hitRing', e.x, e.y, 0.55, { color:'#8adf5a', r:150 });
     spawnParticles(e.x, e.y-40, 26, { color:'#9be36b', spMin:80, spMax:320, lifeMin:0.5, lifeMax:1.1, sizeMin:3, sizeMax:7, grav:420 });
     const pl = G.player;
-    if(pl && !pl.dead && !pl.isPvp && Math.hypot(pl.x - e.x, pl.y - e.y) < 150) damagePlayer(Math.round(e.atk * 0.48));
+    if(pl && !pl.dead && !pl.isPvp && Math.hypot(pl.x - e.x, pl.y - e.y) < 150) damagePlayer(Math.round(e.atk * 0.6));
   }
   spawnParticles(e.x, e.y-50, 40, {color:'#cc0000', spMin:150, spMax:600, lifeMin:0.4, lifeMax:1.2, sizeMin:3, sizeMax:8, grav:1500, vh:rand(100,300), isBlood:true});
   addEffect('bloodStain', e.x, e.y, 5.0, {size:rand(30,60)});

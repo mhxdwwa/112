@@ -1396,7 +1396,7 @@ function drawEffects(dt){
             if(t && !t.dead && t.invuln<=0 && !sw.hitSet.has(t)){
               const edx = t.x-sw.x, edy = (t.y-sw.y)*2.2;
               if(edx*edx+edy*edy < 70*70){
-                damagePlayer(efAtk*1.6);
+                damagePlayer(efAtk*2.0);
                 sw.hitSet.add(t);
               }
             }

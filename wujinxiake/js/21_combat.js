@@ -849,7 +849,7 @@ function update(dt){
       if(e.action.type === 'attack'){
         if(!e.action.hitDone && e.action.t >= e.action.dur*e.action.hitAt){
           e.action.hitDone = true;
-          if(Math.abs(p.x-e.x) < e.def.reach+20 && Math.abs((p.y-e.y)*2.2) < 56 && (Math.sign(p.x-e.x)===e.facing || p.x===e.x)) damagePlayer(e.atk*0.8);
+          if(Math.abs(p.x-e.x) < e.def.reach+20 && Math.abs((p.y-e.y)*2.2) < 56 && (Math.sign(p.x-e.x)===e.facing || p.x===e.x)) damagePlayer(e.atk);
         }
       } else if(e.action.type === 'enemySkill'){
         if(!e.action.hitDone && e.action.t >= e.action.dur*e.action.hitAt){
@@ -879,10 +879,10 @@ function update(dt){
       const dx = p.x-trap.x, dy = (p.y-trap.y)*2.2, dist = Math.sqrt(dx*dx+dy*dy);
       if(trap.type === 'spike' && dist < 40 && !trap.triggered){
         trap.triggered = true; trap.timer = 0.5;
-        if(p.invuln <= 0){ damagePlayer(trap.dmg*0.8); spawnText(p.x, p.y, 100, '地刺！', '#ff4444', 20); }
+        if(p.invuln <= 0){ damagePlayer(trap.dmg); spawnText(p.x, p.y, 100, '地刺！', '#ff4444', 20); }
       } else if(trap.type === 'pit' && dist < 50 && !trap.triggered){
         trap.triggered = true;
-        if(p.invuln <= 0){ p.h = -30; p.vy = 0; damagePlayer(trap.dmg*0.4); spawnText(p.x, p.y, 100, '落坑！', '#8844ff', 20); setTimeout(()=>{ if(p) p.h = 0; }, 800); }
+        if(p.invuln <= 0){ p.h = -30; p.vy = 0; damagePlayer(trap.dmg*0.5); spawnText(p.x, p.y, 100, '落坑！', '#8844ff', 20); setTimeout(()=>{ if(p) p.h = 0; }, 800); }
       } else if(trap.type === 'rollingStone' && dist < 200 && !trap.triggered){
         trap.triggered = true; trap.vx = (p.x>trap.x?1:-1)*400; trap.vy = 0;
       } else if(trap.type === 'dartTrap' && dist < 250 && !trap.triggered){
@@ -891,7 +891,7 @@ function update(dt){
           setTimeout(()=>{
             if(!G || gameState!=='playing') return;
             const angle = Math.atan2(p.y-trap.y, p.x-trap.x);
-            G.projectiles.push({ kind:'dart', x:trap.x, y:trap.y, h:30, vx:Math.cos(angle)*600, vy:Math.sin(angle)*300, life:1.5, w:20, hh:20, dmg:trap.dmg*0.64, pierce:0, hitSet:new Set(), color:'#888', facing:Math.cos(angle)>0?1:-1, rot:angle, owner:null, enemy:true });
+            G.projectiles.push({ kind:'dart', x:trap.x, y:trap.y, h:30, vx:Math.cos(angle)*600, vy:Math.sin(angle)*300, life:1.5, w:20, hh:20, dmg:trap.dmg*0.8, pierce:0, hitSet:new Set(), color:'#888', facing:Math.cos(angle)>0?1:-1, rot:angle, owner:null, enemy:true });
           }, i*150);
         }
         spawnText(trap.x, trap.y, 50, '暗器！', '#ff8800', 18);
@@ -910,7 +910,7 @@ function update(dt){
         trap.x += (trap.vx||0)*dt; trap.timer = (trap.timer||0)+dt;
         const rdx = p.x-trap.x, rdy = (p.y-trap.y)*2.2;
         if(Math.sqrt(rdx*rdx+rdy*rdy) < 50 && p.invuln <= 0){
-          damagePlayer(trap.dmg*1.2); p.kx = Math.sign(p.x-trap.x)*80;
+          damagePlayer(trap.dmg*1.5); p.kx = Math.sign(p.x-trap.x)*80;
           spawnText(p.x, p.y, 100, '滚石！', '#aa6633', 24); trap.active = false;
         }
         if(trap.timer > 3) trap.active = false;
