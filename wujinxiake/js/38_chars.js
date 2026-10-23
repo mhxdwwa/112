@@ -160,6 +160,8 @@ async function createFromNaming(name, charIdx, done){
   bundle.t = c.t;
   persist();
   reserveName(nm);          /* 异步占名，失败也不拦 */
+  /* ★ 新建角色＝正式进游戏了，允许写盘 */
+  try{ if(window.CloudSave && window.CloudSave.arm) window.CloudSave.arm(); }catch(e){}
   toast('角色「' + nm + '」创建成功', '#7af0c8');
   if(typeof done === 'function') done();
 }
