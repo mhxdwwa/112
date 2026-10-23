@@ -34,7 +34,8 @@ function wikiGenItem(slot, tierIdx, lvIdx, k, wtIdx){
   const savedIdx = (G && G.player) ? G.player.weaponIdx : null;
   const rng = mulberry32(wikiHash(key));
   /* diff=2 档位下各品阶累计概率带的带内取值，保证 tierRoll 落进目标品阶 */
-  const band = [0.12, 0.40, 0.65, 0.85, 0.96, 0.995][Math.max(0, Math.min(5, tierIdx))];
+  /* 地狱难度掉率: [0.30, 0.28, 0.25, 0.100, 0.030, 0.002]，累计: 0.30/0.58/0.83/0.93/0.96/0.962 */
+  const band = [0.12, 0.40, 0.65, 0.90, 0.98, 0.999][Math.max(0, Math.min(5, tierIdx))];
   const orig = Math.random;
   let first = true;
   Math.random = function(){
@@ -105,6 +106,7 @@ function buildWikiList(){
 function openEquipWiki(){
   wikiSlot = 'weapon'; wikiLvIdx = 0; wikiTierIdx = -1;
   wikiSelIdx = 0; wikiScroll = 0; wikiScrollMax = 0;
+  wikiCache.clear();  /* 清除缓存，确保使用最新的品阶生成规则 */
   buildWikiList();
   gameState = 'equipWiki';
 }
