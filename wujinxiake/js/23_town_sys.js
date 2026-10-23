@@ -84,7 +84,7 @@ let townNPCInteract = null;
 let townClickRegions = [];
 
 /* 强化菜单覆盖层 */
-const SLOT_NAMES = { weapon:'武器', head:'头部', armor:'上衣', shoes:'鞋子', necklace:'项链', ring:'戒指', bracer:'护腕', accessory:'戒指' };
+const SLOT_NAMES = { weapon:'武器', head:'头部', armor:'上衣', shoes:'鞋子', necklace:'项链', ring:'戒指', bracer:'护腕', accessory:'戒指', mount:'飞行道具' };
 
 /* 打开铁匠铺时自动选中有装备的部位 */
 function autoSelectEquipSlots(){
