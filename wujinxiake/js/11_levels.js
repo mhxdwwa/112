@@ -259,7 +259,7 @@ const LEVEL_TEMPLATES = [
       ['zrat','zrat','skeleton','bat','bat','ghost']
     ],
     boss:'abthunder', bossName:'子帝·玄夜雷君', bossPool:['abthunder'],
-    bossHpMul:117.0, bossAtkMul:4.7, bossScaleMul:3.4,
+    bossHpMul:117.0, bossAtkMul:7.05, bossScaleMul:3.4,
     enemyHpMul:2.7, enemyAtkMul:1.07, enemySpdMul:1.2 },
 
   { name:'深渊·丑牛铁壁', desc:'牛角撞碎过三次城门', theme:0, minLevel:52, maxLevel:60, isAbyss:true,
@@ -268,7 +268,7 @@ const LEVEL_TEMPLATES = [
       ['zox','zboar','zboar','brute','brute','zgoat']
     ],
     boss:'abbull', bossName:'丑罡·铁壁牛魔', bossPool:['abbull'],
-    bossHpMul:150.0, bossAtkMul:6.0, bossScaleMul:3.8,
+    bossHpMul:150.0, bossAtkMul:9.0, bossScaleMul:3.8,
     enemyHpMul:3.0, enemyAtkMul:1.17, enemySpdMul:1.1 },
 
   { name:'深渊·寅虎啸林', desc:'虎啸过处，连风都跪着走', theme:0, minLevel:54, maxLevel:60, isAbyss:true,
@@ -277,7 +277,7 @@ const LEVEL_TEMPLATES = [
       ['zrabbit','zdog','zdog','tiger','tiger','zrat']
     ],
     boss:'abtiger', bossName:'寅啸·风虎麒麟', bossPool:['abtiger'],
-    bossHpMul:173.0, bossAtkMul:7.0, bossScaleMul:3.6,
+    bossHpMul:173.0, bossAtkMul:10.5, bossScaleMul:3.6,
     enemyHpMul:3.3, enemyAtkMul:1.27, enemySpdMul:1.35 },
 
   { name:'深渊·辰渊龙墟', desc:'龙骨为山，龙血为河', theme:2, minLevel:56, maxLevel:60, isAbyss:true,
@@ -286,7 +286,7 @@ const LEVEL_TEMPLATES = [
       ['zhorse','zrooster','zrooster','zgoat','zgoat','dragon']
     ],
     boss:'abdragon', bossName:'辰帝·渊火龙皇', bossPool:['abdragon'],
-    bossHpMul:207.0, bossAtkMul:8.3, bossScaleMul:3.9,
+    bossHpMul:207.0, bossAtkMul:12.45, bossScaleMul:3.9,
     enemyHpMul:3.7, enemyAtkMul:1.4, enemySpdMul:1.25 },
 
   { name:'深渊·巳狱毒渊', desc:'井底的东西比深渊更老', theme:1, minLevel:58, maxLevel:60, isAbyss:true,
@@ -295,7 +295,7 @@ const LEVEL_TEMPLATES = [
       ['zmonkey','snake','snake','scorpion','scorpion','zdog']
     ],
     boss:'abserpent', bossName:'巳祖·万毒蛇渊', bossPool:['abserpent'],
-    bossHpMul:253.0, bossAtkMul:10.0, bossScaleMul:4.0,
+    bossHpMul:253.0, bossAtkMul:15.0, bossScaleMul:4.0,
     enemyHpMul:4.0, enemyAtkMul:1.5, enemySpdMul:1.3 }
 ];
 

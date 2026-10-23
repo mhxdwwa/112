@@ -4,8 +4,8 @@ const EQUIP_TIERS = [
   { id:'advanced', name:'高级', color:'#3498db', baseMul:1.3, extraStats:1, dropRate:0.25 },
   { id:'rare', name:'稀有', color:'#9b59b6', baseMul:1.7, extraStats:2, dropRate:0.10 },
   { id:'epic', name:'神器', color:'#e91e63', baseMul:2.2, extraStats:3, dropRate:0.04 },
-  { id:'legend', name:'传说', color:'#e67e22', baseMul:2.8, extraStats:4, dropRate:0.009 },
-  { id:'mythic', name:'史诗', color:'#ff3030', baseMul:3.5, extraStats:5, dropRate:0.001 }
+  { id:'legend', name:'传说', color:'#ff0000', baseMul:2.8, extraStats:4, dropRate:0.009 },
+  { id:'mythic', name:'史诗', color:'#ffd700', baseMul:3.5, extraStats:5, dropRate:0.001 }
 ];
 
 /* 7 个装备槽：武器 / 头部 / 上衣 / 鞋子 / 项链 / 戒指 / 护腕 */
@@ -448,7 +448,7 @@ function generateEquipment(slot, levelIdx, diffBonus){
     rates = [0.30, 0.28, 0.25, 0.100, 0.030, 0.002];
   }
   if(diff >= 3){
-    rates = [0.18, 0.26, 0.30, 0.170, 0.080, 0.020];
+    rates = [0.28, 0.30, 0.30, 0.085, 0.040, 0.010];
   }
 
   // 普通难度不出史诗（mythic）/ 传说
