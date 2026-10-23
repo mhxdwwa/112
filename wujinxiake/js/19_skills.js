@@ -1210,9 +1210,23 @@ function castSwordCome(){
   const rain = setInterval(()=>{
     if(!G || gameState !== 'playing'){ clearInterval(rain); return; }
     n++;
+    /* ★ 集火模式：敌人少时所有剑集中攻击目标 */
+    const alive = G.enemies.filter(e=>e.alive);
+    let focusX = null, focusY = null;
+    if(alive.length > 0 && alive.length <= 3){
+      /* 找最近的敌人作为集火中心 */
+      let bestE = alive[0], bestD = Infinity;
+      for(const e of alive){
+        const d = (e.x-p.x)*(e.x-p.x)+(e.y-p.y)*(e.y-p.y);
+        if(d < bestD){ bestD = d; bestE = e; }
+      }
+      focusX = bestE.x;
+      focusY = bestE.y;
+    }
     for(let k=0;k<2;k++){
-      const ex = clamp(p.x + rand(-470, 470), WORLD_L, WORLD_R);
-      const ey = rand(GY_TOP + 20, GY_BOTTOM);
+      /* ★ 集火时剑从目标上方落下，分散时随机 */
+      const ex = focusX !== null ? clamp(focusX + rand(-80, 80), WORLD_L, WORLD_R) : clamp(p.x + rand(-470, 470), WORLD_L, WORLD_R);
+      const ey = focusY !== null ? clamp(focusY + rand(-30, 30), GY_TOP + 20, GY_BOTTOM) : rand(GY_TOP + 20, GY_BOTTOM);
       G.projectiles.push({ kind:'glowWeapon', weaponType:'sword', x:ex + rand(-70,70), y:ey-400, h:1, vx:0, vy:1560, life:0.28, w:76, hh:76, dmg:A*12, pierce:2, hitSet:new Set(), color:'#cfeaff', rot:Math.PI/2, scale:1.7, owner:p });
       spawnParticles(ex, ey, 2, {color:'#eaf6ff', angle:-Math.PI/2, spread:1.1, spMin:70, spMax:220, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:320});
       if(k === 0 && n % 3 === 0) addEffect('hitRing', ex, ey, 0.32, {color:'#eaf6ff', r:52});

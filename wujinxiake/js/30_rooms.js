@@ -1326,7 +1326,21 @@ function drawEffects(dt){
                 const o = efOwner===G.player?G.player2:G.player;
                 if(o && !o.dead) sw.target = {x:o.x+rand(-30,30), y:o.y+rand(-10,10)};
                 else sw.target = {x:efOwner.x+rand(-200,200), y:rand(GY_TOP+50,GY_BOTTOM)};
-              } else if(alive.length) sw.target = alive[(Math.random()*alive.length)|0];
+              } else if(alive.length){
+                /* ★ 集中攻击：敌人少时所有剑集中打同一个，确保伤害打满 */
+                if(alive.length <= 3){
+                  /* 找离剑最近的敌人作为集火目标 */
+                  let bestE = alive[0], bestD = Infinity;
+                  for(const e of alive){
+                    const d = (e.x-sw.x)*(e.x-sw.x)+(e.y-sw.y)*(e.y-sw.y);
+                    if(d < bestD){ bestD = d; bestE = e; }
+                  }
+                  sw.target = {x:bestE.x+rand(-15,15), y:bestE.y+rand(-8,8)};
+                  sw.focusTarget = bestE; /* 标记集火目标，追踪时锁定 */
+                } else {
+                  sw.target = alive[(Math.random()*alive.length)|0];
+                }
+              }
               else sw.target = {x:efOwner.x+rand(-200,200), y:rand(GY_TOP+50,GY_BOTTOM)};
             } else {
               sw.target = {x:G.player.x+rand(-30,30), y:G.player.y+rand(-10,10)};
@@ -1340,22 +1354,28 @@ function drawEffects(dt){
           const kk = clamp(sw.diveT, 0, 1);
           /* ★ 智能追踪：俯冲阶段动态追踪最近敌人 */
           if(efOwner.isPlayer && kk < 0.9){
-            let bestDist = Infinity, bestTarget = null;
-            for(const e of G.enemies){
-              if(!e.alive || sw.hitSet.has(e)) continue;
-              const d = (e.x-sw.x)*(e.x-sw.x) + (e.y-sw.y)*(e.y-sw.y);
-              if(d < bestDist){ bestDist = d; bestTarget = e; }
-            }
-            if(G.isPvp){
-              const o = efOwner===G.player?G.player2:G.player;
-              if(o && !o.dead){
-                const d = (o.x-sw.x)*(o.x-sw.x) + (o.y-sw.y)*(o.y-sw.y);
-                if(d < bestDist){ bestTarget = o; }
+            /* ★ 集火模式：如果有focusTarget且还活着，锁定追踪 */
+            if(sw.focusTarget && sw.focusTarget.alive){
+              sw.target.x = lerp(sw.target.x, sw.focusTarget.x, dt*8);
+              sw.target.y = lerp(sw.target.y, sw.focusTarget.y, dt*8);
+            } else {
+              let bestDist = Infinity, bestTarget = null;
+              for(const e of G.enemies){
+                if(!e.alive || sw.hitSet.has(e)) continue;
+                const d = (e.x-sw.x)*(e.x-sw.x) + (e.y-sw.y)*(e.y-sw.y);
+                if(d < bestDist){ bestDist = d; bestTarget = e; }
               }
-            }
-            if(bestTarget){
-              sw.target.x = lerp(sw.target.x, bestTarget.x, dt*5);
-              sw.target.y = lerp(sw.target.y, bestTarget.y, dt*5);
+              if(G.isPvp){
+                const o = efOwner===G.player?G.player2:G.player;
+                if(o && !o.dead){
+                  const d = (o.x-sw.x)*(o.x-sw.x) + (o.y-sw.y)*(o.y-sw.y);
+                  if(d < bestDist){ bestTarget = o; }
+                }
+              }
+              if(bestTarget){
+                sw.target.x = lerp(sw.target.x, bestTarget.x, dt*5);
+                sw.target.y = lerp(sw.target.y, bestTarget.y, dt*5);
+              }
             }
           } else if(!efOwner.isPlayer && kk < 0.9){
             const t = G.player;
