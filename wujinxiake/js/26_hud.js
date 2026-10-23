@@ -73,6 +73,14 @@ function drawTownBtnIcon(kind, cx, cy, color){
     ctx.moveTo(6, 9); ctx.quadraticCurveTo(1, 4, 6, -1);
     ctx.quadraticCurveTo(11, 4, 6, 9);
     ctx.closePath(); ctx.fill();
+  } else if(kind === 'auction'){
+    /* 交易行：天平 + 金币 */
+    ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(0, 8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-11, -6); ctx.lineTo(11, -6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-8, 10); ctx.lineTo(8, 10); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-9, -1, 4.2, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(9, -1, 4.2, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -10, 2.2, 0, TAU); ctx.fill();
   }
   ctx.restore();
 }
@@ -82,13 +90,24 @@ function drawTownSideButtons(){
     { id:'inventory',     key:'I', label:'背包', color:'#5b9cff' },
     { id:'skillMenu',     key:'U', label:'技能', color:'#ffc860' },
     { id:'characterInfo', key:'C', label:'角色', color:'#5be08a' },
-    { id:'questMenu',     key:'Q', label:'任务', color:'#ffd166' }
+    { id:'questMenu',     key:'Q', label:'任务', color:'#ffd166' },
+    { id:'auction',       key:'T', label:'交易行', color:'#c39bff' }
   ];
-  const S = 52, x = 84, y0 = 158, gap = 62;   /* x=84：给左边的 ESC 键留出独立一条，避免压住图标 */
+  /* ★ 电脑端：贴着触控「跳跃 ↑」键的右侧排成一横排（06_touch.js 算好锚点）
+     没有锚点（手机 / 触控未启用）就退回左侧竖排 */
+  const anchor = window.__hudIconAnchor;
+  const horiz = !!(anchor && anchor.x > 0);
+  const S = 52;
+  const x0 = horiz ? Math.round(anchor.x) : 84;
+  const y0 = horiz ? Math.round(anchor.y - S / 2) : 158;
+  const step = horiz ? S + 10 : 62;
+
   townSideBtnRegions = [];
   const mx = MOUSE.in ? MOUSE.x : -9999, my = MOUSE.in ? MOUSE.y : -9999;
   for(let i = 0; i < items.length; i++){
-    const it = items[i], y = y0 + i * gap;
+    const it = items[i];
+    const x = horiz ? x0 + i * step : x0;
+    const y = horiz ? y0 : y0 + i * step;
     const hover = mx >= x && mx <= x + S && my >= y && my <= y + S;
     const bg = ctx.createLinearGradient(x, y, x, y + S);
     bg.addColorStop(0, hover ? 'rgba(44,64,90,0.96)' : 'rgba(12,18,28,0.86)');
@@ -106,11 +125,17 @@ function drawTownSideButtons(){
     ctx.font = 'bold 9px "Microsoft YaHei"';
     ctx.fillStyle = hexA(it.color, 0.95);
     ctx.fillText(it.key, x + 9.5, y + S - 5);
-    /* 名称 */
-    ctx.textAlign = 'left';
-    ctx.font = '11px "Microsoft YaHei"';
+    /* 名称：竖排写在右边，横排写在下面 */
     ctx.fillStyle = hover ? '#ffffff' : 'rgba(180,196,212,0.85)';
-    ctx.fillText(it.label, x + S + 6, y + S/2 + 3);
+    ctx.font = '11px "Microsoft YaHei"';
+    if(horiz){
+      ctx.textAlign = 'center';
+      ctx.fillText(it.label, x + S / 2, y + S + 13);
+      ctx.textAlign = 'left';
+    } else {
+      ctx.textAlign = 'left';
+      ctx.fillText(it.label, x + S + 6, y + S/2 + 3);
+    }
     townSideBtnRegions.push({ id: it.id, x: x, y: y, w: S, h: S });
   }
 }
