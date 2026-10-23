@@ -47,6 +47,114 @@ function loopBody(now){
     ctx.save();
     drawSky(); drawFarScenery(); drawGround();
     if(G){
+      const camX = G.camera ? G.camera.x : 0;
+      ctx.save(); ctx.translate(-camX, 0);
+      /* ★ 深渊Boss房：渲染地面掉落物 */
+      if(G.drops && G.drops.length > 0 && !G.isPvp){
+        for(const d of G.drops){
+          const bobY = Math.sin(d.bobPhase) * 5;
+          const drawX = d.x, drawY = d.y - 20 + bobY;
+          const alpha = d.life < 3 ? (Math.sin(d.life * 10) > 0 ? 1 : 0.3) : 1;
+          ctx.globalAlpha = alpha;
+          if(d.type === 'equip'){
+            const eq = d.equip;
+            const tierIdx = ['common','advanced','rare','epic','legend','mythic'].indexOf(eq.tier);
+            const tcol = eq.tierColor || '#ffffff';
+            const gt = G.t;
+            /* 地面光斑 */
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const rg = ctx.createRadialGradient(drawX, drawY + 7, 1, drawX, drawY + 7, 36);
+            rg.addColorStop(0, hexA(tcol, 0.55));
+            rg.addColorStop(1, hexA(tcol, 0));
+            ctx.fillStyle = rg;
+            ctx.beginPath(); ctx.ellipse(drawX, drawY + 7, 36, 12, 0, 0, TAU); ctx.fill();
+            /* 品阶光柱（稀有以上） */
+            if(tierIdx >= 2){
+              const isMythic = eq.tier === 'mythic';
+              const ph = isMythic ? 180 : (72 + tierIdx * 24);
+              const pulse = isMythic ? (0.50 + Math.sin(gt * 6 + d.bobPhase) * 0.15) : (0.26 + Math.sin(gt * 4 + d.bobPhase) * 0.10);
+              const pg = ctx.createLinearGradient(drawX, drawY - ph, drawX, drawY + 7);
+              pg.addColorStop(0, hexA(tcol, 0));
+              pg.addColorStop(0.3, hexA(tcol, pulse * 0.6));
+              pg.addColorStop(0.6, hexA(tcol, pulse));
+              pg.addColorStop(1, hexA(tcol, isMythic ? 0.85 : 0.52));
+              ctx.fillStyle = pg;
+              const pillarW = isMythic ? 28 : 15;
+              ctx.beginPath();
+              ctx.moveTo(drawX - pillarW * 0.35, drawY + 7);
+              ctx.lineTo(drawX - pillarW, drawY - ph);
+              ctx.lineTo(drawX + pillarW, drawY - ph);
+              ctx.lineTo(drawX + pillarW * 0.35, drawY + 7);
+              ctx.closePath(); ctx.fill();
+              if(isMythic){
+                const glowW = 60;
+                const sideGlow = ctx.createLinearGradient(drawX - glowW, drawY, drawX + glowW, drawY);
+                sideGlow.addColorStop(0, hexA(tcol, 0));
+                sideGlow.addColorStop(0.5, hexA(tcol, 0.18));
+                sideGlow.addColorStop(1, hexA(tcol, 0));
+                ctx.fillStyle = sideGlow;
+                ctx.fillRect(drawX - glowW, drawY - ph, glowW * 2, ph + 7);
+              }
+              const dustCount = isMythic ? 8 : 3;
+              for(let k = 0; k < dustCount; k++){
+                const u = ((gt * (isMythic ? 0.8 : 0.55) + k * (1 / dustCount)) % 1);
+                const dustSize = isMythic ? 3.2 : 1.9;
+                const dustAlpha = (1 - u) * (isMythic ? 0.95 : 0.75);
+                ctx.fillStyle = hexA(tcol, dustAlpha);
+                ctx.beginPath();
+                const dustX = drawX + Math.sin(u * 9 + k * 2) * (isMythic ? 18 : 9);
+                ctx.arc(dustX, drawY + 4 - u * ph, dustSize, 0, TAU);
+                ctx.fill();
+              }
+              if(isMythic){
+                const ringR = 22 + Math.sin(gt * 3) * 6;
+                ctx.strokeStyle = hexA(tcol, 0.6);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.ellipse(drawX, drawY - ph + 10, ringR, ringR * 0.35, 0, 0, TAU);
+                ctx.stroke();
+              }
+            }
+            ctx.restore();
+            /* 图标底框 */
+            ctx.globalAlpha = alpha;
+            const bgG = ctx.createLinearGradient(drawX, drawY - 16, drawX, drawY + 16);
+            bgG.addColorStop(0, hexA(tcol, 0.30));
+            bgG.addColorStop(1, 'rgba(6,8,14,0.92)');
+            ctx.fillStyle = bgG;
+            ctx.beginPath(); ctx.roundRect(drawX - 16, drawY - 16, 32, 32, 4); ctx.fill();
+            ctx.strokeStyle = hexA(tcol, 0.9); ctx.lineWidth = 1.4;
+            ctx.beginPath(); ctx.roundRect(drawX - 15.5, drawY - 15.5, 31, 31, 4); ctx.stroke();
+            /* 装备图标 */
+            drawEquipIcon(eq.slot, eq.weaponType, drawX - 12, drawY - 12, 24);
+            /* 名称 */
+            const label = eq.name || '';
+            ctx.font = 'bold 10px "Microsoft YaHei"';
+            ctx.textAlign = 'center';
+            ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+            ctx.strokeText(label, drawX, drawY - 21);
+            ctx.fillStyle = tcol;
+            ctx.fillText(label, drawX, drawY - 21);
+          } else if(d.type === 'gold'){
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath(); ctx.arc(drawX, drawY, 8, 0, TAU); ctx.fill();
+            ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 11px "Microsoft YaHei"';
+            ctx.textAlign = 'center';
+            ctx.fillText(`+${d.amount||10}`, drawX, drawY - 12);
+          } else if(d.type === 'material'){
+            ctx.fillStyle = '#96c8ff';
+            ctx.beginPath(); ctx.arc(drawX, drawY, 6, 0, TAU); ctx.fill();
+            ctx.strokeStyle = '#5a8abf'; ctx.lineWidth = 1.5; ctx.stroke();
+          } else if(d.type === 'prop'){
+            ctx.fillStyle = '#50f0be';
+            ctx.beginPath(); ctx.arc(drawX, drawY, 7, 0, TAU); ctx.fill();
+            ctx.strokeStyle = '#2ab08a'; ctx.lineWidth = 1.5; ctx.stroke();
+          }
+        }
+      }
       if(G.player && !G.player.dead){
         const sw = Math.max(5, 35-G.player.h*0.1);
         drawShadow(G.player.x, G.player.y, sw, Math.max(0, 0.4-G.player.h*0.001));
@@ -59,6 +167,7 @@ function loopBody(now){
       }
       drawables.sort((a,b)=>a.y-b.y);
       for(const d of drawables) d.fn();
+      ctx.restore();
     }
     ctx.restore();
     // 再绘制半透明结算界面

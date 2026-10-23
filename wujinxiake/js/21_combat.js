@@ -391,14 +391,16 @@ function update(dt){
 
       /* ★ 深渊Boss房间装备：跳过自动吸附，只允许手动近距离拾取 */
       if(isAbyssBossRoom && d.type === 'equip'){
+        /* 结算界面也允许拾取 */
+        const canPickInStageClear = (gameState === 'stageClear');
         /* 只有玩家非常接近（< 40像素）才拾取 */
-        if(canPick && dist < 40){
+        if((canPick || canPickInStageClear) && dist < 40){
           pickupDrop(d);
           G.drops.splice(i, 1);
           continue;
         }
-        /* 过期消失 */
-        if(d.life <= 0){
+        /* 过期消失（结算界面不过期） */
+        if(d.life <= 0 && gameState !== 'stageClear'){
           G.drops.splice(i, 1);
         }
         continue;

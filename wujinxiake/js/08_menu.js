@@ -269,7 +269,25 @@ function handleCanvasClick(cx, cy){
         if(G) G.skillDamageStats = {};
         startLevel(G.levelIdx);
       } else if(!r.flipCard && r.flipCard !== 0){
-        // 返回城镇（非翻牌按钮）：回到进本前的位置，不乱传送
+        // 返回城镇（非翻牌按钮）：检查是否有高价值物品未拾取
+        const hasValuableDrops = G && G.drops && G.drops.some(d => {
+          if(d.type !== 'equip' || !d.equip) return false;
+          const tierIdx = ['common','advanced','rare','epic','legend','mythic'].indexOf(d.equip.tier);
+          return tierIdx >= 4; // legend(4) or mythic(5)
+        });
+        if(hasValuableDrops && !G.returnWarningShown){
+          // 显示警告提示
+          G.returnWarningShown = true;
+          if(typeof spawnText === 'function'){
+            spawnText(G.player.x, G.player.y - 80, 120, '地面有高价值装备未拾取！', '#ff6a5a', 18);
+            spawnText(G.player.x, G.player.y - 50, 120, '再次点击确认返回', '#ffd166', 14);
+          }
+          // 3秒后重置警告状态
+          setTimeout(() => { if(G) G.returnWarningShown = false; }, 3000);
+          return;
+        }
+        G.returnWarningShown = false;
+        // 回到进本前的位置，不乱传送
         gameState = 'town';
         /* ★ 清除Boss伤害统计 */
         if(G) G.skillDamageStats = {};
