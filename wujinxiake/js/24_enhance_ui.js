@@ -275,7 +275,7 @@ function drawCharacterInfo(){
   ctx.fillStyle = 'rgba(255,207,107,0.95)';
   ctx.fillText('战力 ' + totalPower(p), VW/2, panelY + 92);
 
-  /* ★ 飞行道具（独立第 8 槽，右上角一行，不挤占属性区） */
+  /* ★ 飞行道具（独立第 8 槽，右上角：模型 + 名称 + 属性，不挤占属性区） */
   {
     const mo = p.equipment && p.equipment.mount;
     ctx.textAlign = 'right';
@@ -287,6 +287,19 @@ function drawCharacterInfo(){
       ctx.fillStyle = '#7fd7ff';
       ctx.fillText('移速 +' + ((mo.dnf && mo.dnf.moveSpd) || 0) + '%　回避 +' + ((mo.dnf && mo.dnf.dodge) || 0) + '%',
                    panelX + panelW - 34, panelY + 86);
+      /* ★ 真模型预览：就画在文字左边，跟着时间动 */
+      if(window.MOUNT && MOUNT.drawIcon){
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const mgx = panelX + panelW - 262, mgy = panelY + 66;
+        const rg = ctx.createRadialGradient(mgx, mgy, 2, mgx, mgy, 44);
+        rg.addColorStop(0, hexA(mo.tierColor || '#8fa8bc', 0.30));
+        rg.addColorStop(1, hexA(mo.tierColor || '#8fa8bc', 0));
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.arc(mgx, mgy, 44, 0, TAU); ctx.fill();
+        ctx.restore();
+        MOUNT.drawIcon(ctx, panelX + panelW - 262, panelY + 60, 62, mo.model || 'board', performance.now()/1000);
+      }
     } else {
       ctx.fillStyle = 'rgba(160,170,190,.7)';
       ctx.fillText('飞行道具 · 未装备', panelX + panelW - 34, panelY + 70);
@@ -416,10 +429,15 @@ function drawCharacterInfo(){
 }
 
 function initTown(){
-  if(!townPlayer){
-    /* ★ 从中央主城出生（主城广场西侧） */
-    const spawnDef = TOWN_DEFS_BY_KEY.center || TOWN_DEFS[0];
-    townPlayer = { x:spawnDef.spawn.x, y:spawnDef.spawn.y, facing:1, moveSpeed:260, walkPhase:0, state:'idle' };
+  /* ★ 固定出生点：不管上次存在哪儿，所有角色都从中央主城「引灯亭」旁
+       （引灯人·阿箬脚下）进城。存档只保证数据对，不记位置。 */
+  {
+    const sp = (window.CloudSave && window.CloudSave.fixedSpawn)
+      ? window.CloudSave.fixedSpawn()
+      : ((TOWN_DEFS_BY_KEY && TOWN_DEFS_BY_KEY.center) || TOWN_DEFS[0]).spawn;
+    townPlayer = { x: sp.x, y: sp.y, facing: 1, moveSpeed: 260, walkPhase: 0, state: 'idle' };
+    /* 出城/切镇用：把当前镇标记为主城，避免地图错位 */
+    try{ if(sp.townKey && typeof setTownKey === 'function') setTownKey(sp.townKey); }catch(e){}
   }
   townCam.x = clamp(townPlayer.x - VW/2, 0, Math.max(0, TOWN_W - VW));
   townCam.y = clamp(townPlayer.y - VH/2, 0, Math.max(0, TOWN_H - VH));
@@ -974,7 +992,7 @@ function drawSkillMenu(){
   ctx.fillStyle = '#9fe6ff'; ctx.font = '14px "Microsoft YaHei"';
   ctx.fillText('角色 Lv.' + p.level + '   ｜   剩余技能点 ' + remain + ' SP   ｜   已投入 ' + spent + ' SP   ｜   累计获得 ' + (remain + spent) + ' SP', VW/2, 72);
   ctx.fillStyle = '#6f8b9e'; ctx.font = '12px "Microsoft YaHei"';
-  ctx.fillText('每升 1 级获得 ' + SP_PER_LEVEL + ' SP · 各技能学习等级 / 最高等级 / 每级SP消耗不同 · 技能等级每+1，伤害+6%', VW/2, 96);
+  ctx.fillText('每升 1 级获得 ' + SP_PER_LEVEL + ' SP · 技能可升到的等级受角色等级限制（基础技每 2 级 +1，高阶技每 3 级 +1）· 技能等级每+1，伤害+6%', VW/2, 96);
 
   skillMenuClickRegions = [];
 
@@ -994,8 +1012,11 @@ function drawSkillMenu(){
     const isLocked = !!sk.locked;
     const levelTooLow = (p.level || 1) < unlockLv;
     const isMax = curLv >= maxLv;
+    /* ★ 受角色等级限制：当前最多只能点到 lvCap */
+    const lvCap = skillLvCap(p, sk);
+    const lvCapped = !levelTooLow && curLv >= lvCap && lvCap < maxLv;
     const cost = skillSpCost(sk, Math.max(1, curLv));
-    const clickable = !isLocked && !levelTooLow && !isMax;
+    const clickable = !isLocked && !levelTooLow && !isMax && !lvCapped;
     const dead = isLocked || levelTooLow;
 
     /* 卡片 */
@@ -1048,17 +1069,24 @@ function drawSkillMenu(){
 
     /* 规则标签 */
     ctx.fillStyle = '#7f97ab'; ctx.font = '11px "Microsoft YaHei"';
-    ctx.fillText('学习 Lv.' + unlockLv + '   ·   最高 Lv.' + maxLv + '   ·   每级 ' + (sk.spCost||3) + ' SP起', x+84, y+51);
+    ctx.fillText('学习 Lv.' + unlockLv + '   ·   最高 Lv.' + maxLv + '   ·   每级 ' + (sk.spCost||3) + ' SP起' +
+                 (isLocked || levelTooLow ? '' : '   ·   当前可升 Lv.' + lvCap), x+84, y+51);
 
     /* 等级 */
     ctx.fillStyle = isMax ? '#ffd700' : '#9fe6ff';
     ctx.font = 'bold 13px "Microsoft YaHei"';
     ctx.fillText('Lv.' + curLv + ' / ' + maxLv, x+84, y+74);
 
-    /* 进度条 */
+    /* 进度条：底色画满 maxLv，亮色画到「当前可升上限」，再用实色画到已学等级 */
     const barX = x+170, barW = cardW-170-124, barY = y+66, barH = 8;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.beginPath(); ctx.roundRect(barX,barY,barW,barH,4); ctx.fill();
+    if(!dead){
+      /* 角色等级允许的上限（灰色） */
+      const capR = maxLv > 0 ? clamp(lvCap/maxLv, 0, 1) : 0;
+      ctx.fillStyle = 'rgba(120,140,160,0.55)';
+      ctx.beginPath(); ctx.roundRect(barX,barY,Math.max(2,barW*capR),barH,4); ctx.fill();
+    }
     const lvR = maxLv > 0 ? clamp(curLv/maxLv, 0, 1) : 0;
     const barGrad = ctx.createLinearGradient(barX,0,barX+barW,0);
     barGrad.addColorStop(0,'#9fe6ff'); barGrad.addColorStop(1,'#ffd700');
@@ -1089,6 +1117,8 @@ function drawSkillMenu(){
     if(isLocked){ btnText='未开放'; btnSub='设计中'; btnColor='#3a424e'; textColor='#7c8794'; }
     else if(levelTooLow){ btnText='等级不足'; btnSub='需Lv.'+unlockLv; btnColor='#3a424e'; textColor='#7c8794'; }
     else if(isMax){ btnText='已满级'; btnSub='Lv.'+maxLv; btnColor='#4a4330'; textColor='#c9b878'; }
+    /* ★ 技能还能升，但角色等级不够 —— DNF 里最常见的「卡等级」 */
+    else if(lvCapped){ btnText='角色等级不足'; btnSub='需 Lv.'+skillNextLvNeed(p, sk); btnColor='#3f3a52'; textColor='#a99ec0'; }
     else if(curLv < 1){ btnText='学习'; btnSub=cost+' SP'; btnColor='#3f7fd0'; textColor='#eaf6ff'; }
     else if(remain < cost){ btnText='点数不足'; btnSub='需'+cost+' SP'; btnColor='#4a3540'; textColor='#c08a9a'; }
 
