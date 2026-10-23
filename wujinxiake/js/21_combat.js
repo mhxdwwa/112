@@ -194,11 +194,18 @@ function pickupDrop(d){
       }
       break;
     case 'prop':
-      // 属性道具：放入背包，可在背包中使用
+      /* 药水（回血瓶 / 回蓝瓶）：按 id 入药水袋 */
       const prop = d.prop;
-      if(!p.props) p.props = {};
-      p.props[prop.id] = (p.props[prop.id] || 0) + 1;
-      spawnText(d.x, d.y-30, 60, '获得: '+prop.name, '#2ee6a8', 18);
+      if(window.POTION && prop && prop.id){
+        if(!p.potions) p.potions = {};
+        p.potions[prop.id] = (p.potions[prop.id] || 0) + 1;
+        const pm = potionMeta(prop.id);
+        spawnText(d.x, d.y-30, 60, '获得: '+pm.name, pm.color, 18);
+      } else {
+        if(!p.props) p.props = {};
+        p.props[prop.id] = (p.props[prop.id] || 0) + 1;
+        spawnText(d.x, d.y-30, 60, '获得: '+prop.name, '#2ee6a8', 18);
+      }
       break;
     case 'material':
       p.materials[d.material.id] = (p.materials[d.material.id]||0) + 1;
@@ -591,8 +598,13 @@ function update(dt){
                 if(!p.materials) p.materials = {};
                 p.materials[drop.material] = (p.materials[drop.material] || 0) + 1;
               } else if(drop.type === 'prop' && drop.prop){
-                if(!p.props) p.props = {};
-                p.props[drop.prop.id] = (p.props[drop.prop.id] || 0) + 1;
+                if(window.POTION && drop.prop.id){
+                  if(!p.potions) p.potions = {};
+                  p.potions[drop.prop.id] = (p.potions[drop.prop.id] || 0) + 1;
+                } else {
+                  if(!p.props) p.props = {};
+                  p.props[drop.prop.id] = (p.props[drop.prop.id] || 0) + 1;
+                }
               }
             }
             G.drops = [];
