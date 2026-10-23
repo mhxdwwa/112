@@ -1,0 +1,89 @@
+/* ===== 无尽侠客 · 交易行面板 ===== */
+#ahPanel{
+  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%) scale(.97);
+  z-index:9500; width:min(560px, calc(100vw - 24px)); max-height:min(78vh, 640px);
+  display:flex; flex-direction:column; overflow:hidden;
+  border-radius:14px;
+  background:linear-gradient(180deg, rgba(22,28,40,.98), rgba(10,14,22,.99));
+  border:1px solid rgba(201,154,78,.42);
+  box-shadow:0 24px 60px rgba(0,0,0,.66), inset 0 1px 0 rgba(255,255,255,.06);
+  font-family:"Microsoft YaHei", system-ui, sans-serif; color:#d8e4ef;
+  opacity:0; visibility:hidden; pointer-events:none; transition:.18s ease;
+}
+#ahPanel.open{opacity:1; visibility:visible; pointer-events:auto; transform:translate(-50%,-50%) scale(1);}
+
+#ahPanel .ah-head{
+  display:flex; align-items:center; gap:10px; padding:12px 14px;
+  border-bottom:1px solid rgba(201,154,78,.2);
+  background:linear-gradient(180deg, rgba(201,154,78,.16), rgba(201,154,78,0));
+}
+#ahPanel .ah-head b{font-size:15px; letter-spacing:.08em; color:#ffe1a6;}
+#ahPanel .ah-head span{font-size:12px; color:#ffd166;}
+#ahPanel .ah-head button{
+  margin-left:auto; width:26px; height:26px; border-radius:7px; cursor:pointer;
+  background:rgba(140,40,40,.85); border:1px solid rgba(255,120,120,.5); color:#ffd9d9;
+  font-size:14px; line-height:1; padding:0;
+}
+
+#ahPanel .ah-tabs{display:flex; gap:8px; padding:10px 14px 0;}
+#ahPanel .ah-tabs button{
+  flex:1; height:32px; border-radius:9px 9px 0 0; cursor:pointer;
+  font-size:12.5px; font-family:inherit; color:#9fb3c6;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-bottom:0;
+}
+#ahPanel .ah-tabs button.on{
+  color:#ffe1a6; background:rgba(201,154,78,.18); border-color:rgba(201,154,78,.45);
+}
+
+#ahPanel .ah-body{flex:1; min-height:0; overflow-y:auto; padding:10px 14px;}
+#ahList, #ahSell{display:block;}
+
+.ah-row{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:8px 10px; margin-bottom:6px; border-radius:9px;
+  background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.05);
+}
+.ah-row.pick{cursor:pointer;}
+.ah-row.pick.on{border-color:rgba(201,154,78,.7); background:rgba(201,154,78,.14);}
+.ah-row.pick.off{opacity:.45;}
+.ah-name{flex:1 1 200px; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.ah-name em{font-style:normal; font-weight:400; font-size:11px; color:#8fa5ba; margin-left:4px;}
+.ah-meta{font-size:11px; color:#7d92a6;}
+.ah-price{font-size:12.5px; color:#ffd166; white-space:nowrap;}
+
+.ah-btn{
+  height:28px; padding:0 12px; border-radius:8px; cursor:pointer; font-size:12px;
+  font-family:inherit; white-space:nowrap;
+  background:linear-gradient(180deg, rgba(201,154,78,.34), rgba(201,154,78,.15));
+  border:1px solid rgba(201,154,78,.5); color:#ffe1a6;
+}
+.ah-btn:hover{filter:brightness(1.12);}
+.ah-btn:active{transform:translateY(1px);}
+.ah-btn.ghost{background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.14); color:#c6d6e4;}
+.ah-btn[disabled]{opacity:.6; cursor:default;}
+
+.ah-empty{padding:22px 8px; text-align:center; font-size:12px; color:#7d92a6; line-height:1.7;}
+
+.ah-sell-head{font-size:11.5px; color:#8fa5ba; margin-bottom:8px;}
+.ah-sell-list{max-height:210px; overflow-y:auto; margin-bottom:10px;}
+.ah-sell-bar{
+  display:flex; align-items:center; gap:8px; padding-top:10px;
+  border-top:1px solid rgba(255,255,255,.07); font-size:12px; color:#9fb3c6;
+}
+.ah-sell-bar input{
+  flex:1; height:30px; padding:0 10px; border-radius:8px; font-family:inherit; font-size:12px;
+  background:rgba(0,0,0,.35); color:#e6edf5; border:1px solid rgba(255,255,255,.12); outline:none;
+}
+.ah-sell-bar input:focus{border-color:rgba(201,154,78,.6);}
+.ah-sell-tip{margin-top:8px; font-size:11px; color:#8fa5ba;}
+
+#ahPanel .ah-foot{
+  padding:9px 14px; border-top:1px solid rgba(255,255,255,.06);
+  font-size:11px; color:#6f8496; line-height:1.6;
+}
+
+@media (max-width:520px){
+  #ahPanel{width:calc(100vw - 16px); max-height:82vh;}
+  .ah-name{flex:1 1 120px;}
+  .ah-price{font-size:12px;}
+}
