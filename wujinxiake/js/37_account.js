@@ -53,6 +53,8 @@ function update(){
   if(loginBtn) loginBtn.classList.toggle('hidden', i.logged);
   if(saveBtn) saveBtn.classList.toggle('hidden', !i.logged);
   if(switchBtn) switchBtn.classList.toggle('hidden', !i.logged);
+  const qrBtn = $('accQR');
+  if(qrBtn) qrBtn.classList.toggle('hidden', !i.logged);
   if(charsBtn) charsBtn.classList.toggle('hidden', !(window.CHARS && window.CHARS.count() > 0));
 }
 
