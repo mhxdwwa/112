@@ -50,22 +50,22 @@
 .p1-area .skill-btn.attack-btn{left:124px;bottom:6px;}
 .p1-area .skill-btn.jump-btn{left:196px;bottom:24px;}
 .p1-area .skill-btn.glide-btn{left:196px;bottom:80px;}
-.p1-area .skill-btn.skill1{left:198px;bottom:142px;}
-.p1-area .skill-btn.skill2{left:138px;bottom:122px;}
-.p1-area .skill-btn.skill3{left:78px;bottom:132px;}
-.p1-area .skill-btn.skill4{left:24px;bottom:116px;}
-.p1-area .skill-btn.skill5{left:84px;bottom:184px;}
-.p1-area .skill-btn.skill6{left:148px;bottom:200px;}
+.p1-area .skill-btn.skill1{left:220px;bottom:136px;}
+.p1-area .skill-btn.skill2{left:140px;bottom:118px;}
+.p1-area .skill-btn.skill3{left:78px;bottom:128px;}
+.p1-area .skill-btn.skill4{left:24px;bottom:112px;}
+.p1-area .skill-btn.skill5{left:78px;bottom:190px;}
+.p1-area .skill-btn.skill6{left:142px;bottom:206px;}
 /* P2 镜像坐标 */
 .p2-area .skill-btn.attack-btn{right:124px;bottom:6px;left:auto;}
 .p2-area .skill-btn.jump-btn{right:196px;bottom:24px;left:auto;}
 .p2-area .skill-btn.glide-btn{right:196px;bottom:80px;left:auto;}
-.p2-area .skill-btn.skill1{right:198px;bottom:142px;left:auto;}
-.p2-area .skill-btn.skill2{right:138px;bottom:122px;left:auto;}
-.p2-area .skill-btn.skill3{right:78px;bottom:132px;left:auto;}
-.p2-area .skill-btn.skill4{right:24px;bottom:116px;left:auto;}
-.p2-area .skill-btn.skill5{right:84px;bottom:184px;left:auto;}
-.p2-area .skill-btn.skill6{right:148px;bottom:200px;left:auto;}
+.p2-area .skill-btn.skill1{right:220px;bottom:136px;left:auto;}
+.p2-area .skill-btn.skill2{right:140px;bottom:118px;left:auto;}
+.p2-area .skill-btn.skill3{right:78px;bottom:128px;left:auto;}
+.p2-area .skill-btn.skill4{right:24px;bottom:112px;left:auto;}
+.p2-area .skill-btn.skill5{right:78px;bottom:190px;left:auto;}
+.p2-area .skill-btn.skill6{right:142px;bottom:206px;left:auto;}
 
 /* ---------- ② 手机浏览器：摇杆贴左下，8 键贴右下 ----------
    左手拇指管摇杆，右手拇指管按键，横屏握持最顺手。
