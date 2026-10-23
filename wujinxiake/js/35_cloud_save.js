@@ -99,6 +99,14 @@ function apply(data){
     const k = PERSIST[i];
     if(data.p[k] !== undefined) G.player[k] = data.p[k];
   }
+  /* ★ 老存档迁移：已学技能但未解锁的，自动解锁 */
+  if(G.player.skillLevels && G.player.skillsUnlocked){
+    for(let i = 0; i < G.player.skillLevels.length; i++){
+      if(G.player.skillLevels[i] > 0 && !G.player.skillsUnlocked[i]){
+        G.player.skillsUnlocked[i] = true;
+      }
+    }
+  }
   /* 有存档 = 序章早就看过了：别重播，也顺便让「听完留音」这一步判定通过 */
   if(!G.player.prologueSeen) G.player.prologueSeen = true;
   /* ★ 老存档：没有重生丸字段的补发 3 枚（用光了会是 0，不会被重置） */
@@ -127,6 +135,8 @@ function apply(data){
     if(typeof initTown === 'function') initTown();
     gameState = 'town';
     if(typeof startBGM === 'function') startBGM();
+    /* ★ 加载存档后刷新技能栏UI */
+    if(typeof refreshSkillLockUI === 'function') refreshSkillLockUI();
   }catch(e){ console.warn('[save] 进入城镇失败', e); }
   armed = true;      /* ★ 已经真正进角色了，之后才允许写盘 */
   return true;

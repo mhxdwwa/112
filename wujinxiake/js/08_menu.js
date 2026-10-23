@@ -515,6 +515,8 @@ function handleCanvasClick(cx, cy){
             p.skillsUnlocked[i] = true;
             skillMenuMsgShow('「' + sk.name + '」提升至 Lv.' + p.skillLevels[i] + '（消耗 ' + cost + ' SP）');
             playSound('skillCast');
+            /* ★ 立即刷新技能栏UI */
+            if(typeof refreshSkillLockUI === 'function') refreshSkillLockUI();
           }
         }
       }
