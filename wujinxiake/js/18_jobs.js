@@ -5,7 +5,7 @@ const CHARACTERS = [
     id:'fighter', name:'格斗家', title:'手套宗师', weaponIdx:3, weaponType:'fist',
     desc:'拳套近身，迅捷无双，近战爆发型',
     pal:{skin:'#f0d9b8', cloth:'#4a2a5f', cloth2:'#2e1a3e', belt:'#ffcc33', hat:'#2a1a3e', pants:'#2e1a3e'},
-    hp:10000, mp:80, atk:8, spd:280, crit:5,
+    hp:5000, mp:80, atk:8, spd:280, crit:5,
     color:'#ffcc33',
     skillDesc:['冲拳', '升龙拳', '连环腿']
   },
@@ -13,7 +13,7 @@ const CHARACTERS = [
     id:'swordsman', name:'剑士', title:'宝剑宗师', weaponIdx:0, weaponType:'sword',
     desc:'宝剑精通，攻守兼备，近战均衡型',
     pal:{skin:'#f0d9b8', cloth:'#1e3a5f', cloth2:'#122438', belt:'#ffd166', hat:'#0d1b2e', pants:'#122438'},
-    hp:10000, mp:70, atk:10, spd:250, crit:3,
+    hp:5000, mp:70, atk:10, spd:250, crit:3,
     color:'#9fe6ff',
     skillDesc:['拔刀斩', '月华斩', '翔空斩']
   },
@@ -21,7 +21,7 @@ const CHARACTERS = [
     id:'blademaster', name:'剑客', title:'大刀达人', weaponIdx:1, weaponType:'blade',
     desc:'大刀刚猛，一击必杀，高攻击型',
     pal:{skin:'#d8b48a', cloth:'#5f1e1e', cloth2:'#381212', belt:'#ffd166', hat:'#2e0d0d', pants:'#381212'},
-    hp:10000, mp:60, atk:14, spd:220, crit:2,
+    hp:5000, mp:60, atk:14, spd:220, crit:2,
     color:'#ff8a4a',
     skillDesc:['连斩', '烈焰斩', '瞬影斩']
   },
@@ -29,7 +29,7 @@ const CHARACTERS = [
     id:'spearman', name:'枪手', title:'长枪之王', weaponIdx:2, weaponType:'spear',
     desc:'长枪突进，范围攻击，中距离压制型',
     pal:{skin:'#e8c8a0', cloth:'#2a4a2a', cloth2:'#1a3a1a', belt:'#ffd96a', hat:'#1a2e1a', pants:'#1a3a1a'},
-    hp:10000, mp:70, atk:11, spd:240, crit:4,
+    hp:5000, mp:70, atk:11, spd:240, crit:4,
     color:'#ffd96a',
     skillDesc:['突刺', '旋风枪', '龙击炮', '百鸟朝凤枪', '暴雨梨花枪', '蓝银霸王枪']
   },
@@ -37,7 +37,7 @@ const CHARACTERS = [
     id:'alchemist', name:'炼药师', title:'百草行者', weaponIdx:4, weaponType:'herb',
     desc:'药草随身，毒愈两全，持续消耗型',
     pal:{skin:'#f0d9b8', cloth:'#2a4a2a', cloth2:'#16301a', belt:'#7ed957', hat:'#1e3a20', pants:'#16301a'},
-    hp:10000, mp:95, atk:9, spd:258, crit:4,
+    hp:5000, mp:95, atk:9, spd:258, crit:4,
     color:'#7ed957',
     skillDesc:['青囊一掷', '百草缠身', '生死符', '九花玉露', '千蛛万毒手', '神农百草']
   },
@@ -45,7 +45,7 @@ const CHARACTERS = [
     id:'mountaineer', name:'撼山者', title:'开山力士', weaponIdx:5, weaponType:'axe',
     desc:'巨斧开山，一击撼岳，超高爆发型',
     pal:{skin:'#d8b48a', cloth:'#5a3a1a', cloth2:'#3a2408', belt:'#ffb04a', hat:'#2e1e0a', pants:'#3a2408'},
-    hp:10000, mp:55, atk:14, spd:205, crit:2,
+    hp:5000, mp:55, atk:14, spd:205, crit:2,
     color:'#ffb04a',
     skillDesc:['劈山式', '三板斧', '旋风斧', '力劈华山', '刑天舞干戚', '盘古开天']
   },
@@ -53,7 +53,7 @@ const CHARACTERS = [
     id:'talismanist', name:'符咒师', title:'黄符道人', weaponIdx:6, weaponType:'talisman',
     desc:'符纸引雷，远程控场，爆发控场型',
     pal:{skin:'#e8c8a0', cloth:'#3a3a5a', cloth2:'#20203a', belt:'#ffe066', hat:'#1a1a2e', pants:'#20203a'},
-    hp:10000, mp:100, atk:11, spd:262, crit:5,
+    hp:5000, mp:100, atk:11, spd:262, crit:5,
     color:'#ffe066',
     skillDesc:['定身符', '五雷符', '万符朝宗', '神剑御雷真诀', '急急如律令', '万鬼符阵']
   },
@@ -61,7 +61,7 @@ const CHARACTERS = [
     id:'danmaster', name:'丹道师', title:'炉火真君', weaponIdx:7, weaponType:'cauldron',
     desc:'药鼎炼火，攻守自如，均衡破坏型',
     pal:{skin:'#f0d9b8', cloth:'#6a2a1a', cloth2:'#3a1208', belt:'#ff7a4a', hat:'#2e1208', pants:'#3a1208'},
-    hp:10000, mp:88, atk:12, spd:230, crit:3,
+    hp:5000, mp:88, atk:12, spd:230, crit:3,
     color:'#ff7a4a',
     skillDesc:['丹火', '鼎镇压', '三昧真火', '九转金丹', '九龙神火罩', '八卦炉·炼天']
   }

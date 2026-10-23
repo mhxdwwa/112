@@ -510,6 +510,9 @@ function handleCanvasClick(cx, cy){
           } else {
             p.skillPoints -= cost;
             p.skillLevels[i] = curLv + 1;
+            /* ★ 学习技能时自动解锁 */
+            if(!p.skillsUnlocked) p.skillsUnlocked = [true, true, false, false, false, false];
+            p.skillsUnlocked[i] = true;
             skillMenuMsgShow('「' + sk.name + '」提升至 Lv.' + p.skillLevels[i] + '（消耗 ' + cost + ' SP）');
             playSound('skillCast');
           }
