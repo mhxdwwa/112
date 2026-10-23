@@ -232,122 +232,123 @@ function drawAmplifyTab(p, fx, fy, fw, fh){
   ctx.fillText('增幅 +10 起武器出现粉色光效；增幅石由分解装备获得', fx + fw/2, fy + 390);
 }
 
-/* ★ 角色属性界面（DNF风格 - 双栏布局） */
+/* ★ 角色属性界面（DNF风格 - 100%还原） */
 function drawCharacterInfo(){
   if(!G || !G.player) return;
   const p = G.player;
 
-  // 半透明背景
-  ctx.fillStyle = 'rgba(0,0,0,0.88)';
+  // 全屏半透明遮罩
+  ctx.fillStyle = 'rgba(0,0,0,0.9)';
   ctx.fillRect(0, 0, VW, VH);
 
-  // 主面板 - DNF风格双栏布局
-  const panelW = 900, panelH = 620;
+  // 主面板尺寸：900x600，DNF标准比例
+  const panelW = 900, panelH = 600;
   const panelX = (VW - panelW) / 2, panelY = (VH - panelH) / 2;
 
-  // 面板背景渐变
+  // 面板背景：深灰蓝渐变
   const pg = ctx.createLinearGradient(panelX, panelY, panelX, panelY+panelH);
-  pg.addColorStop(0,'#1a1f35'); pg.addColorStop(0.5,'#0f1428'); pg.addColorStop(1,'#0a0d1a');
+  pg.addColorStop(0,'#1a1a2e');
+  pg.addColorStop(1,'#0f0f1a');
   ctx.fillStyle = pg;
-  ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelH, 10); ctx.fill();
+  ctx.fillRect(panelX, panelY, panelW, panelH);
 
-  // DNF金色边框（双层）
-  ctx.strokeStyle = '#c9a84c';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelH, 10); ctx.stroke();
-  ctx.strokeStyle = 'rgba(201,168,76,0.3)';
+  // 外框：金色双层边框
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = 'rgba(255,215,0,0.3)';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(panelX+5, panelY+5, panelW-10, panelH-10, 8); ctx.stroke();
+  ctx.strokeRect(panelX+3, panelY+3, panelW-6, panelH-6);
 
-  // 标题栏
-  ctx.fillStyle = 'rgba(201,168,76,0.15)';
-  ctx.fillRect(panelX, panelY, panelW, 45);
+  // 顶部标题栏背景
+  ctx.fillStyle = 'rgba(255,215,0,0.08)';
+  ctx.fillRect(panelX+3, panelY+3, panelW-6, 40);
+
+  // 标题"个人信息"
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 20px "Microsoft YaHei"';
+  ctx.font = 'bold 22px "Microsoft YaHei"';
   ctx.fillText('个 人 信 息', VW/2, panelY + 28);
 
-  // 分隔线
-  const midX = panelX + panelW * 0.45;
-  ctx.strokeStyle = 'rgba(201,168,76,0.4)';
+  // 左右分栏：左35%，右65%
+  const leftW = panelW * 0.35;
+  const rightW = panelW * 0.65;
+  const leftX = panelX + 15;
+  const rightX = panelX + leftW + 15;
+  const contentY = panelY + 50;
+
+  // 垂直分割线
+  ctx.strokeStyle = 'rgba(204,204,204,0.3)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(midX, panelY + 50);
-  ctx.lineTo(midX, panelY + panelH - 60);
+  ctx.moveTo(panelX + leftW + 5, contentY);
+  ctx.lineTo(panelX + leftW + 5, panelY + panelH - 55);
   ctx.stroke();
 
-  // === 左侧：角色信息 + 装备栏 ===
-  const leftX = panelX + 20;
-  const leftW = midX - panelX - 30;
-  let ly = panelY + 55;
+  // ========== 左侧面板 ==========
+  let ly = contentY;
 
   // 角色名和职业
-  const weaponIdx = p.weaponIdx || 0;
-  const jobTitle = JOB_TITLE[weaponIdx] || '未知职业';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 16px "Microsoft YaHei"';
   ctx.fillText(p.name || '角色', leftX, ly + 18);
-  
-  ctx.fillStyle = '#9fe6ff';
-  ctx.font = 'bold 14px "Microsoft YaHei"';
-  ctx.fillText('Lv.' + p.level + ' ' + jobTitle, leftX, ly + 40);
+
+  const weaponIdx = p.weaponIdx || 0;
+  const jobTitle = JOB_TITLE[weaponIdx] || '未知职业';
+  ctx.fillStyle = '#cccccc';
+  ctx.font = '14px "Microsoft YaHei"';
+  ctx.fillText('Lv.' + p.level + ' ' + jobTitle, leftX, ly + 38);
+
+  ly += 50;
 
   // 经验条
   const expNeed = getExpNeed(p.level);
   const expPct = Math.min(1, (p.exp||0) / expNeed);
-  const expBarW = leftW - 10;
-  const expBarX = leftX + 5;
-  const expBarY = ly + 50;
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(expBarX, expBarY, expBarW, 8);
-  const expGrad = ctx.createLinearGradient(expBarX, expBarY, expBarX + expBarW * expPct, expBarY);
-  expGrad.addColorStop(0, '#2ecc71');
-  expGrad.addColorStop(1, '#27ae60');
-  ctx.fillStyle = expGrad;
-  ctx.fillRect(expBarX, expBarY, expBarW * expPct, 8);
-  ctx.strokeStyle = '#555';
+  const expBarW = leftW - 30;
+  const expBarX = leftX;
+  const expBarY = ly;
+
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(expBarX, expBarY, expBarW, 10);
+  ctx.fillStyle = '#4CAF50';
+  ctx.fillRect(expBarX, expBarY, expBarW * expPct, 10);
+  ctx.strokeStyle = '#333';
   ctx.lineWidth = 1;
-  ctx.strokeRect(expBarX, expBarY, expBarW, 8);
-  ctx.fillStyle = '#aaa';
-  ctx.font = '10px "Microsoft YaHei"';
-  ctx.textAlign = 'center';
-  ctx.fillText('EXP ' + (p.exp||0) + ' / ' + expNeed, leftX + leftW/2, expBarY + 20);
+  ctx.strokeRect(expBarX, expBarY, expBarW, 10);
 
-  ly = expBarY + 30;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '11px "Microsoft YaHei"';
+  ctx.fillText('EXP ' + (p.exp||0) + ' / ' + expNeed, expBarX + expBarW, expBarY + 22);
 
-  // 装备栏 (3x4 grid)
+  ly += 35;
+
+  // 装备栏：3x3网格，每格60x60
   const eqSlots = [
     {slot:'head', name:'头盔'}, {slot:'necklace', name:'项链'}, {slot:'armor', name:'上衣'},
     {slot:'pants', name:'下装'}, {slot:'belt', name:'腰带'}, {slot:'shoes', name:'鞋子'},
-    {slot:'bracer', name:'手镯'}, {slot:'ring', name:'戒指'}, {slot:'earring', name:'耳环'},
-    {slot:'weapon', name:'武器'}, {slot:'mount', name:'坐骑'}, {slot:'pet', name:'宠物'}
+    {slot:'bracer', name:'手镯'}, {slot:'ring', name:'戒指'}, {slot:'weapon', name:'武器'}
   ];
-  
-  const eqCellSize = 42;
-  const eqGap = 6;
-  const eqCols = 3;
-  const eqStartX = leftX + 10;
+
+  const eqCellSize = 58;
+  const eqGap = 5;
+  const eqStartX = leftX;
   const eqStartY = ly;
 
-  ctx.fillStyle = 'rgba(201,168,76,0.08)';
-  ctx.fillRect(eqStartX - 5, eqStartY - 5, leftW - 10, 4 * (eqCellSize + eqGap) + 10);
-
   for(let i = 0; i < eqSlots.length; i++){
-    const col = i % eqCols;
-    const row = Math.floor(i / eqCols);
+    const col = i % 3;
+    const row = Math.floor(i / 3);
     const cx = eqStartX + col * (eqCellSize + eqGap);
     const cy = eqStartY + row * (eqCellSize + eqGap);
     const slot = eqSlots[i].slot;
     const eq = p.equipment[slot];
 
-    // 装备格子背景
-    ctx.fillStyle = eq ? 'rgba(30,40,60,0.8)' : 'rgba(20,25,40,0.6)';
-    ctx.beginPath();
-    ctx.roundRect(cx, cy, eqCellSize, eqCellSize, 4);
-    ctx.fill();
+    // 格子背景
+    ctx.fillStyle = eq ? '#1e2840' : '#141928';
+    ctx.fillRect(cx, cy, eqCellSize, eqCellSize);
 
-    // 边框
+    // 边框：有装备用彩色，无装备用灰色
     if(eq){
       ctx.strokeStyle = eq.tierColor || '#666';
       ctx.lineWidth = 2;
@@ -355,192 +356,183 @@ function drawCharacterInfo(){
       ctx.strokeStyle = 'rgba(100,120,150,0.3)';
       ctx.lineWidth = 1;
     }
-    ctx.stroke();
+    ctx.strokeRect(cx, cy, eqCellSize, eqCellSize);
 
-    // 装备图标或空槽位
+    // 装备图标
     if(eq){
       ctx.save();
       ctx.globalAlpha = 0.95;
-      drawEquipIcon(eq.slot, eq.weaponType, cx + 4, cy + 4, eqCellSize - 8);
+      drawEquipIcon(eq.slot, eq.weaponType, cx + 6, cy + 6, eqCellSize - 12);
       ctx.restore();
-      
-      // 强化等级
+
+      // 强化等级（右下角黄色）
       if(eq.enhance > 0){
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(cx + 2, cy + eqCellSize - 14, 20, 12);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(cx + 2, cy + eqCellSize - 16, 24, 14);
         ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 9px "Microsoft YaHei"';
+        ctx.font = 'bold 11px "Microsoft YaHei"';
         ctx.textAlign = 'left';
         ctx.fillText('+' + eq.enhance, cx + 4, cy + eqCellSize - 5);
       }
     } else {
-      // 空槽位图标
-      ctx.globalAlpha = 0.2;
-      drawEquipIcon(slot, 'sword', cx + 8, cy + 8, eqCellSize - 16);
+      // 空槽位：半透明图标
+      ctx.globalAlpha = 0.15;
+      drawEquipIcon(slot, 'sword', cx + 12, cy + 12, eqCellSize - 24);
       ctx.globalAlpha = 1;
     }
   }
 
-  ly = eqStartY + 4 * (eqCellSize + eqGap) + 15;
+  ly = eqStartY + 3 * (eqCellSize + eqGap) + 15;
 
-  // HP/MP 条
-  ctx.textAlign = 'left';
+  // HP/MP条：高度20px
   const hpPct = (p.hp || 0) / (p.maxHp || 1);
   const mpPct = (p.mp || 0) / (p.maxMp || 1);
-  const barHeight = 18;
-  
-  // HP
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(leftX, ly, leftW, barHeight);
-  const hpGrad = ctx.createLinearGradient(leftX, ly, leftX + leftW * hpPct, ly);
-  hpGrad.addColorStop(0, '#ff4444');
-  hpGrad.addColorStop(1, '#cc2222');
-  ctx.fillStyle = hpGrad;
-  ctx.fillRect(leftX, ly, leftW * hpPct, barHeight);
-  ctx.strokeStyle = '#880000';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(leftX, ly, leftW, barHeight);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 11px "Microsoft YaHei"';
-  ctx.textAlign = 'center';
-  ctx.fillText('HP ' + Math.ceil(p.hp) + ' / ' + p.maxHp, leftX + leftW/2, ly + 13);
-  
-  ly += barHeight + 6;
-  
-  // MP
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(leftX, ly, leftW, barHeight);
-  const mpGrad = ctx.createLinearGradient(leftX, ly, leftX + leftW * mpPct, ly);
-  mpGrad.addColorStop(0, '#4488ff');
-  mpGrad.addColorStop(1, '#2266cc');
-  ctx.fillStyle = mpGrad;
-  ctx.fillRect(leftX, ly, leftW * mpPct, barHeight);
-  ctx.strokeStyle = '#004488';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(leftX, ly, leftW, barHeight);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 11px "Microsoft YaHei"';
-  ctx.textAlign = 'center';
-  ctx.fillText('MP ' + Math.ceil(p.mp) + ' / ' + p.maxMp, leftX + leftW/2, ly + 13);
+  const barW = leftW - 30;
 
-  // === 右侧：详细属性 ===
-  const rightX = midX + 15;
-  const rightW = panelX + panelW - midX - 25;
-  let ry = panelY + 55;
-
-  // 战斗力值
-  ctx.fillStyle = 'rgba(201,168,76,0.12)';
-  ctx.fillRect(rightX, ry, rightW, 60);
-  ctx.strokeStyle = 'rgba(201,168,76,0.5)';
+  // HP条
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(leftX, ly, barW, 20);
+  ctx.fillStyle = '#F44336';
+  ctx.fillRect(leftX, ly, barW * hpPct, 20);
+  ctx.strokeStyle = '#8B0000';
   ctx.lineWidth = 1;
-  ctx.strokeRect(rightX, ry, rightW, 60);
-  
+  ctx.strokeRect(leftX, ly, barW, 20);
+
   ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 13px "Microsoft YaHei"';
+  ctx.fillText('HP ' + Math.ceil(p.hp) + ' / ' + p.maxHp, leftX + barW/2, ly + 14);
+
+  ly += 22;
+
+  // MP条
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(leftX, ly, barW, 20);
+  ctx.fillStyle = '#2196F3';
+  ctx.fillRect(leftX, ly, barW * mpPct, 20);
+  ctx.strokeStyle = '#00008B';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(leftX, ly, barW, 20);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 13px "Microsoft YaHei"';
+  ctx.fillText('MP ' + Math.ceil(p.mp) + ' / ' + p.maxMp, leftX + barW/2, ly + 14);
+
+  // ========== 右侧面板 ==========
+  let ry = contentY;
+
+  // 战斗力值显示区
+  ctx.fillStyle = 'rgba(255,215,0,0.05)';
+  ctx.fillRect(rightX, ry, rightW - 30, 70);
+  ctx.strokeStyle = 'rgba(255,215,0,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(rightX, ry, rightW - 30, 70);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '15px "Microsoft YaHei"';
+  ctx.fillText('我的战斗力值', rightX + (rightW-30)/2, ry + 20);
+
   ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 14px "Microsoft YaHei"';
-  ctx.fillText('我的战斗力值', rightX + rightW/2, ry + 18);
-  
-  ctx.fillStyle = '#ffcc33';
-  ctx.font = 'bold 28px "Microsoft YaHei"';
-  ctx.fillText(totalPower(p).toLocaleString(), rightX + rightW/2, ry + 48);
-  
-  ry += 70;
+  ctx.font = 'bold 42px "Microsoft YaHei"';
+  ctx.fillText(totalPower(p).toLocaleString(), rightX + (rightW-30)/2, ry + 58);
 
-  // 属性分区函数
-  function drawStatSection(title, y, height){
-    ctx.fillStyle = 'rgba(201,168,76,0.1)';
-    ctx.fillRect(rightX, y, rightW, height);
-    ctx.strokeStyle = 'rgba(201,168,76,0.4)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(rightX, y, rightW, height);
-    
+  ry += 80;
+
+  // 属性行绘制函数
+  function drawStatLine(icon, label, value, color, y){
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffd700';
-    ctx.font = 'bold 12px "Microsoft YaHei"';
-    ctx.fillText(title, rightX + 10, y + 16);
-    return y + 22;
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '13px "Microsoft YaHei"';
+    ctx.fillText(icon, rightX + 5, y);
+    ctx.fillText(label, rightX + 25, y);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = color;
+    ctx.font = 'bold 13px "Microsoft YaHei"';
+    ctx.fillText(value, rightX + rightW - 35, y);
   }
 
-  function drawStatRow(label, value, color, y, icon){
+  // 分区标题函数
+  function drawSectionTitle(title, y){
+    ctx.fillStyle = 'rgba(255,215,0,0.08)';
+    ctx.fillRect(rightX, y, rightW - 30, 22);
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#aaa';
-    ctx.font = '12px "Microsoft YaHei"';
-    ctx.fillText(icon || '•', rightX + 12, y);
-    ctx.fillText(label, rightX + 28, y);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = color || '#fff';
+    ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 13px "Microsoft YaHei"';
-    ctx.fillText(value, rightX + rightW - 12, y);
+    ctx.fillText(title, rightX + 8, y + 15);
+    return y + 26;
   }
 
   const num = (v) => Math.round(v || 0).toLocaleString();
   const pct = (v) => (Math.round((v || 0) * 10) / 10) + '%';
 
   // 四维属性
-  ry = drawStatSection('◆ 四维属性', ry, 90);
-  drawStatRow('力量', num(p.statStr), '#ff7676', ry, '⚔');
-  drawStatRow('智力', num(p.statInt), '#b18bff', ry + 18, '✦');
-  drawStatRow('体力', num(p.statVit), '#5ee08a', ry + 36, '♥');
-  drawStatRow('精神', num(p.statSpr), '#6ab7ff', ry + 54, '✧');
-  ry += 72;
+  ry = drawSectionTitle('⚡ 四维属性', ry);
+  drawStatLine('✕', '力量', num(p.statStr), '#F44336', ry); ry += 18;
+  drawStatLine('◆', '智力', num(p.statInt), '#9C27B0', ry); ry += 18;
+  drawStatLine('♥', '体力', num(p.statVit), '#4CAF50', ry); ry += 18;
+  drawStatLine('◇', '精神', num(p.statSpr), '#2196F3', ry); ry += 22;
 
   // 攻击属性
   const w = WEAPONS[weaponIdx];
   const realAtk = Math.round(p.atk * w.atkMul);
   const critPct = Math.round((p.critBonus || 0) * 100);
-  
-  ry = drawStatSection('◆ 攻击属性', ry, 108);
-  drawStatRow('物理攻击', num(p.statPatk), '#ff9a6b', ry, '🗡');
-  drawStatRow('魔法攻击', num(p.statMatk), '#7fb8ff', ry + 18, '✧');
-  drawStatRow('独立攻击', num(realAtk), '#ffcc66', ry + 36, '⚡');
-  drawStatRow('物理暴击', critPct + '%', '#ff7bc0', ry + 54, '💥');
-  drawStatRow('攻击速度', '+' + pct(p.statAtkSpd), '#ffd166', ry + 72, '⏱');
-  drawStatRow('暴击伤害', '+' + num(p.statCritDmg) + '%', '#ff6b6b', ry + 90, '✦');
-  ry += 90;
+
+  ry = drawSectionTitle('⚔ 攻击属性', ry);
+  drawStatLine('\\', '物理攻击', num(p.statPatk), '#ffffff', ry); ry += 18;
+  drawStatLine('◇', '魔法攻击', num(p.statMatk), '#ffffff', ry); ry += 18;
+  drawStatLine('⚡', '独立攻击', num(realAtk), '#ffffff', ry); ry += 18;
+  drawStatLine('*', '物理暴击', critPct + '%', '#E91E63', ry); ry += 18;
+  drawStatLine('⊕', '攻击速度', '+' + pct(p.statAtkSpd), '#4CAF50', ry); ry += 18;
+  drawStatLine('—', '暴击伤害', '+' + num(p.statCritDmg) + '%', '#4CAF50', ry); ry += 22;
 
   // 防御属性
   const defVal = Math.round(p.def || 0);
   const spdVal = Math.round(p.moveSpeed || 0);
-  
-  ry = drawStatSection('◆ 防御属性', ry, 90);
-  drawStatRow('物理防御', num(defVal), '#8fd2ff', ry, '🛡');
-  drawStatRow('魔法防御', num(p.statMdef), '#8fd2ff', ry + 18, '✧');
-  drawStatRow('命中率', '+' + pct(p.statHit), '#ffd166', ry + 36, '⊕');
-  drawStatRow('回避率', '+' + pct(p.statDodge), '#5ee08a', ry + 54, '◇');
-  drawStatRow('移动速度', num(spdVal), '#88ddff', ry + 72, '➤');
-  ry += 72;
+
+  ry = drawSectionTitle('🛡 防御属性', ry);
+  drawStatLine('○', '物理防御', num(defVal), '#ffffff', ry); ry += 18;
+  drawStatLine('◇', '魔法防御', num(p.statMdef), '#ffffff', ry); ry += 18;
+  drawStatLine('⊕', '命中率', '+' + pct(p.statHit), '#4CAF50', ry); ry += 18;
+  drawStatLine('○', '回避率', '+' + pct(p.statDodge), '#4CAF50', ry); ry += 18;
+  drawStatLine('➤', '移动速度', num(spdVal), '#00BCD4', ry); ry += 22;
 
   // 词条加成
-  ry = drawStatSection('◆ 词条加成', ry, 90);
-  drawStatRow('伤害增加', '+' + num(p.statDmgBonus) + '%', '#ff8f5c', ry, '⚔');
-  drawStatRow('附加伤害', '+' + num(p.statAddDmg) + '%', '#c98bff', ry + 18, '✦');
-  drawStatRow('穿透', num(p.pierce), '#9fe6ff', ry + 36, '➤');
-  drawStatRow('冷却缩减', '+' + num(p.cdReducePct) + '%', '#7fd4ff', ry + 54, '⏱');
-  drawStatRow('吸血', '+' + pct((p.lifesteal || 0) * 100), '#ff6b9d', ry + 72, '♥');
-  ry += 72;
+  ry = drawSectionTitle('📜 词条加成', ry);
+  drawStatLine('', '伤害增加', '+' + num(p.statDmgBonus) + '%', '#4CAF50', ry); ry += 18;
+  drawStatLine('◆', '附加伤害', '+' + num(p.statAddDmg) + '%', '#4CAF50', ry); ry += 18;
+  drawStatLine('➤', '穿透', num(p.pierce), '#ffffff', ry); ry += 18;
+  drawStatLine('⊕', '冷却缩减', '+' + num(p.cdReducePct) + '%', '#aaaaaa', ry); ry += 18;
+  drawStatLine('♥', '吸血', '+' + pct((p.lifesteal || 0) * 100), '#aaaaaa', ry); ry += 22;
 
-  // 其他信息
-  ctx.fillStyle = 'rgba(201,168,76,0.08)';
-  ctx.fillRect(rightX, ry, rightW, 40);
+  // 金币和击杀
+  ctx.fillStyle = 'rgba(255,215,0,0.05)';
+  ctx.fillRect(rightX, ry, rightW - 30, 36);
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = '11px "Microsoft YaHei"';
-  ctx.fillText('💰 金币: ' + (p.gold || 0).toLocaleString(), rightX + 10, ry + 16);
-  ctx.fillText('💀 击杀: ' + (G.totalKills || 0), rightX + 10, ry + 32);
+  ctx.fillStyle = '#FFC107';
+  ctx.font = '12px "Microsoft YaHei"';
+  ctx.fillText('💰 金币: ' + (p.gold || 0).toLocaleString(), rightX + 8, ry + 15);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('💀 击杀: ' + (G.totalKills || 0), rightX + 8, ry + 30);
 
-  // 返回按钮
-  const btnY = panelY + panelH - 50;
-  const btnW = 180, btnH = 36;
+  // 返回按钮：底部居中
+  const btnW = 200, btnH = 40;
   const btnX = VW/2 - btnW/2;
+  const btnY = panelY + panelH - 50;
+
   const bg = ctx.createLinearGradient(0, btnY, 0, btnY+btnH);
-  bg.addColorStop(0,'#c9a84c'); bg.addColorStop(1,'#8a6a2c');
+  bg.addColorStop(0, '#FFC107');
+  bg.addColorStop(1, '#FFA000');
   ctx.fillStyle = bg;
-  ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 6); ctx.fill();
-  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.roundRect(btnX, btnY, btnW, btnH, 6);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 15px "Microsoft YaHei"';
   ctx.textAlign = 'center';
-  ctx.fillText('返回 (C)', VW/2, btnY + 23);
+  ctx.fillText('返回 (C)', VW/2, btnY + 25);
 
   // 注册点击区域
   if(!G.charInfoClickRegions) G.charInfoClickRegions = [];
