@@ -578,13 +578,14 @@ function unsealCost(eq){
 function eqTradeable(eq){
   if(!eq) return false;
   if(eq.tier === 'mythic') return false;
-  if(eq.sealed === false) return false;
+  /* 「开封后不可交易」只对紫 / 粉 / 橙生效，白蓝没有封装概念 */
+  if(eq.sealed === false && equipTierIndex(eq.tier) >= 2) return false;
   return true;
 }
 function eqTradeReason(eq){
   if(!eq) return '';
   if(eq.tier === 'mythic') return '史诗装备不可交易';
-  if(eq.sealed === false) return '已开封，不能上架';
+  if(eq.sealed === false && equipTierIndex(eq.tier) >= 2) return '已开封，不能上架';
   return '';
 }
 
