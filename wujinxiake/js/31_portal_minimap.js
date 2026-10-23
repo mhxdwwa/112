@@ -729,8 +729,8 @@ function drawBossHealthBar(){
 
 function drawUI(){
   if(!G || !G.player) return;
-  /* ★ 主线任务追踪 HUD（左上） */
-  drawQuestTracker(18, 14);
+  /* ★ 主线任务追踪 HUD（左上）—— 放在小地图下方，避免重叠 */
+  drawQuestTracker(18, 80);
   if(!G.isPvp){
     const lvlIdx = G.levelIdx || 0;
     const lvl = getLevelConfig(lvlIdx);
