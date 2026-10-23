@@ -141,7 +141,6 @@
   }
 
   function buildDeskButton() {
-    if (isPhone()) return;
     var lg = $('lgBtn');
     if (!lg || $('authQR')) return;
     var btn = document.createElement('button');
@@ -286,7 +285,6 @@
   }
 
   function buildPhoneButton() {
-    if (!isPhone()) return;
     var acc = $('accSwitch');
     if (!acc || $('accQR')) return;
     var btn = document.createElement('button');
