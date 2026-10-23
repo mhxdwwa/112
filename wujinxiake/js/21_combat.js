@@ -459,11 +459,33 @@ function update(dt){
               equip.tier = EQUIP_TIERS[betterTierIdx].id;
               equip.tierName = EQUIP_TIERS[betterTierIdx].name;
               equip.tierColor = EQUIP_TIERS[betterTierIdx].color;
+              /* 品阶被抬高后同步「未开封」状态 */
+              equip.sealed = (betterTierIdx >= 2 && betterTierIdx <= 4);
+              equip.tradeable = (betterTierIdx < 5);
             }
             
             rewardEquips.push(equip);
             if(!p.inventory) p.inventory = [];
             p.inventory.push(equip);
+          }
+
+          /* ★ 深渊保底：通关必给一件传说（未开封，可交易） */
+          {
+            const _lc = (typeof getLevelConfig === 'function') ? getLevelConfig(G.levelIdx) : null;
+            if(_lc && _lc.isAbyss){
+              const slot = slots[Math.floor(Math.random() * slots.length)];
+              const eq = generateEquipment(slot, dropLevelIdx(G.levelIdx), 3);
+              const li = EQUIP_TIERS.length - 2;      /* legend */
+              eq.tier = EQUIP_TIERS[li].id;
+              eq.tierName = EQUIP_TIERS[li].name;
+              eq.tierColor = EQUIP_TIERS[li].color;
+              eq.sealed = true;
+              eq.tradeable = true;
+              rewardEquips.push(eq);
+              if(!p.inventory) p.inventory = [];
+              p.inventory.push(eq);
+              if(typeof announceDrop === 'function') announceDrop(eq);
+            }
           }
           
           // 生成奖励材料
@@ -484,63 +506,56 @@ function update(dt){
           
           // 生成3张翻牌奖励
           const cards = [];
+          function mkCardEquip(tierIdx){
+            const slot = slots[Math.floor(Math.random() * slots.length)];
+            const eq = generateEquipment(slot, dropLevelIdx(G.levelIdx), 0);
+            const t = EQUIP_TIERS[tierIdx];
+            eq.tier = t.id; eq.tierName = t.name; eq.tierColor = t.color;
+            eq.baseAtk = eq.slot === 'weapon' ? Math.round(10 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseAtk;
+            eq.baseHp = (eq.slot === 'head' || eq.slot === 'armor') ? Math.round(30 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseHp;
+            eq.baseDef = eq.slot === 'armor' ? Math.round(5 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseDef;
+            eq.baseSpd = eq.slot === 'shoes' ? Math.round(10 * t.baseMul * (1 + eq.level * 0.08) * eq.gradeMul) : eq.baseSpd;
+            eq.baseCrit = (eq.slot === 'accessory' || eq.slot === 'necklace' || eq.slot === 'ring' || eq.slot === 'bracer') ? Math.round(3 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseCrit;
+            /* 未开封规则与野外掉落一致 */
+            if(tierIdx >= 2 && tierIdx <= 4) eq.sealed = true;
+            if(tierIdx >= 5) eq.sealed = false;
+            eq.tradeable = (tierIdx < 5);
+            return eq;
+          }
+
+          /* ★ 粉装（神器）改成「约 15 局才有 1 局」：
+             整局只掷一次骰子，中了才在随机一张卡里放粉装，
+             其它卡最高只到紫装 —— 不再是每局三张卡里必出一张粉 */
+          const EPIC_RUN_CHANCE = 0.065;
+          const epicRun = Math.random() < EPIC_RUN_CHANCE;
+          const epicAt = Math.floor(Math.random() * 3);
+
           for(let i = 0; i < 3; i++){
-            /* ★ 博弈设计：第 1 张卡是「保底」，第 2、3 张强制更高品阶——
-               让玩家翻到的卡大概率不如另外两张，制造「好可惜」的落差感 */
-            let roll;
-            if(i === 0){
-              roll = Math.random();
-            } else {
-              /* 另外两张：至少紫装，一半概率直接给神器 */
-              roll = Math.random() < 0.5 ? 0.15 : 0.01;
-            }
             let card;
-            if(roll < 0.03){
-              // 3% 概率：粉阶(神器)装备
-              const slot = slots[Math.floor(Math.random() * slots.length)];
-              const equip = generateEquipment(slot, dropLevelIdx(G.levelIdx), 2);
-              equip.tier = 'epic'; equip.tierName = '神器'; equip.tierColor = '#e91e63';
-              const tierInfo = EQUIP_TIERS[3];
-              equip.baseAtk = equip.slot === 'weapon' ? Math.round(10 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseAtk;
-              equip.baseHp = (equip.slot === 'head' || equip.slot === 'armor') ? Math.round(30 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseHp;
-              equip.baseDef = equip.slot === 'armor' ? Math.round(5 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseDef;
-              equip.baseSpd = equip.slot === 'shoes' ? Math.round(10 * tierInfo.baseMul * (1 + equip.level * 0.08) * equip.gradeMul) : equip.baseSpd;
-              equip.baseCrit = (equip.slot === 'accessory' || equip.slot === 'necklace' || equip.slot === 'ring' || equip.slot === 'bracer') ? Math.round(3 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseCrit;
-              card = { type:'equip', equip: equip, label: equip.name, sublabel: `神器 Lv.${equip.level}`, color: '#e91e63' };
-            } else if(roll < 0.20){
-              // 17% 概率：紫阶(稀有)装备
-              const slot = slots[Math.floor(Math.random() * slots.length)];
-              const equip = generateEquipment(slot, dropLevelIdx(G.levelIdx), 1);
-              equip.tier = 'rare'; equip.tierName = '稀有'; equip.tierColor = '#9b59b6';
-              const tierInfo = EQUIP_TIERS[2];
-              equip.baseAtk = equip.slot === 'weapon' ? Math.round(10 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseAtk;
-              equip.baseHp = (equip.slot === 'head' || equip.slot === 'armor') ? Math.round(30 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseHp;
-              equip.baseDef = equip.slot === 'armor' ? Math.round(5 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseDef;
-              equip.baseSpd = equip.slot === 'shoes' ? Math.round(10 * tierInfo.baseMul * (1 + equip.level * 0.08) * equip.gradeMul) : equip.baseSpd;
-              equip.baseCrit = (equip.slot === 'accessory' || equip.slot === 'necklace' || equip.slot === 'ring' || equip.slot === 'bracer') ? Math.round(3 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseCrit;
-              card = { type:'equip', equip: equip, label: equip.name, sublabel: `稀有 Lv.${equip.level}`, color: '#9b59b6' };
-            } else if(roll < 0.50){
-              // 30% 概率：蓝阶(高级)装备
-              const slot = slots[Math.floor(Math.random() * slots.length)];
-              const equip = generateEquipment(slot, dropLevelIdx(G.levelIdx), 0);
-              equip.tier = 'advanced'; equip.tierName = '高级'; equip.tierColor = '#3498db';
-              const tierInfo = EQUIP_TIERS[1];
-              equip.baseAtk = equip.slot === 'weapon' ? Math.round(10 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseAtk;
-              equip.baseHp = (equip.slot === 'head' || equip.slot === 'armor') ? Math.round(30 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseHp;
-              equip.baseDef = equip.slot === 'armor' ? Math.round(5 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseDef;
-              equip.baseSpd = equip.slot === 'shoes' ? Math.round(10 * tierInfo.baseMul * (1 + equip.level * 0.08) * equip.gradeMul) : equip.baseSpd;
-              equip.baseCrit = (equip.slot === 'accessory' || equip.slot === 'necklace' || equip.slot === 'ring' || equip.slot === 'bracer') ? Math.round(3 * tierInfo.baseMul * (1 + equip.level * 0.1) * equip.gradeMul) : equip.baseCrit;
-              card = { type:'equip', equip: equip, label: equip.name, sublabel: `高级 Lv.${equip.level}`, color: '#3498db' };
-            } else if(roll < 0.75){
-              // 25% 概率：白阶(普通)装备
-              const slot = slots[Math.floor(Math.random() * slots.length)];
-              const equip = generateEquipment(slot, dropLevelIdx(G.levelIdx), 0);
-              equip.tier = 'common'; equip.tierName = '普通'; equip.tierColor = '#ffffff';
-              card = { type:'equip', equip: equip, label: equip.name, sublabel: `普通 Lv.${equip.level}`, color: '#aaaaaa' };
+            if(epicRun && i === epicAt){
+              const equip = mkCardEquip(3);
+              card = { type:'equip', equip: equip, label: equip.name, sublabel: '神器 Lv.' + equip.level + ' · 未开封', color: '#e91e63' };
+              cards.push(card);
+              continue;
+            }
+            /* 第 1 张卡是保底（偏白蓝），第 2、3 张稍微好一点（偏蓝紫）——
+               保留「翻到的可能不如旁边那张」的落差感，但不再强行塞粉装 */
+            const roll = Math.random();
+            const rareCut  = (i === 0) ? 0.10 : 0.26;
+            const advCut   = (i === 0) ? 0.45 : 0.62;
+            const commonCut= (i === 0) ? 0.78 : 0.90;
+            if(roll < rareCut){
+              const equip = mkCardEquip(2);
+              card = { type:'equip', equip: equip, label: equip.name, sublabel: '稀有 Lv.' + equip.level + ' · 未开封', color: '#9b59b6' };
+            } else if(roll < advCut){
+              const equip = mkCardEquip(1);
+              card = { type:'equip', equip: equip, label: equip.name, sublabel: '高级 Lv.' + equip.level, color: '#3498db' };
+            } else if(roll < commonCut){
+              const equip = mkCardEquip(0);
+              card = { type:'equip', equip: equip, label: equip.name, sublabel: '普通 Lv.' + equip.level, color: '#aaaaaa' };
             } else {
-              // 25% 概率：金币
               const goldAmt = Math.round((50 + G.levelIdx * 30) * (0.8 + Math.random() * 0.4));
-              card = { type:'gold', amount: goldAmt, label: `${goldAmt} 金币`, sublabel: '金币奖励', color: '#ffd700' };
+              card = { type:'gold', amount: goldAmt, label: goldAmt + ' 金币', sublabel: '金币奖励', color: '#ffd700' };
             }
             cards.push(card);
           }
