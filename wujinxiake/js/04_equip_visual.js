@@ -94,7 +94,15 @@ function equipLookParts(p){
   return out;
 }
 
+/* ============================================================
+   ★ 穿戴外观已关闭（2026-10-23 需求）
+     头 / 衣 / 鞋 / 饰品 一律不再往角色身上贴外观零件，
+     只保留「人物模型本身」；强化 / 增幅的光效改画在
+     角色手中武器的位置（见 drawPlayerWeaponAuraFront）。
+     函数保留（其它模块有调用），但直接空转。
+   ============================================================ */
 function drawEquipAppearanceBack(p, x, y, bodyPx, opts){
+  return;
   if(!p || !p.isPlayer || !p.equipment) return;
   const L = equipLookParts(p);
   const sc = bodyPx / 150;
@@ -127,6 +135,7 @@ function drawEquipAppearanceBack(p, x, y, bodyPx, opts){
 }
 
 function drawEquipAppearanceFront(p, x, y, bodyPx, opts){
+  return;
   if(!p || !p.isPlayer || !p.equipment) return;
   const L = equipLookParts(p);
   const sc = bodyPx / 150;
@@ -237,8 +246,9 @@ function drawEquipAppearanceFront(p, x, y, bodyPx, opts){
   ctx.restore();
 }
 
-/* 护甲体形辉光：沿精灵轮廓染色，品阶越高越亮、越散 */
+/* 护甲体形辉光：已关闭（不再按装备给角色染轮廓光） */
 function drawEquipBodyGlow(at, anim, prog, x, y, facing, bodyPx, part){
+  return;
   if(!at || !part || part.rank < 1) return;
   const r = part.rank;
   drawSpriteFrame(at, anim, prog, x, y, facing, bodyPx,
@@ -517,6 +527,141 @@ function drawPlayerWeaponAura(p, x, y, scale, opts){
   ctx.restore();
 }
 
+/* ★ 武器轮廓（内部按 100 长度设计：握把在 0，尖端在 100）
+   画得细一点：护手 / 血槽 / 枪缨 / 斧刃弧度 / 拳套指节都有 */
+function weaponOutlinePath(c, wtype){
+  const parts = [];
+  const add = function(fn){ parts.push(fn); };
+
+  if(wtype === 'fist'){
+    /* 龙拳：双手拳套 */
+    add(function(){
+      c.beginPath();
+      c.roundRect(-16, -13, 34, 26, 8);
+      c.roundRect(14, -15, 40, 30, 10);
+    });
+    add(function(){
+      /* 指节 */
+      c.beginPath();
+      for(let i = 0; i < 3; i++){ c.moveTo(20 + i * 11, -11); c.lineTo(20 + i * 11, 11); }
+      for(let i = 0; i < 3; i++){ c.moveTo(-11 + i * 11, -9); c.lineTo(-11 + i * 11, 9); }
+    });
+  } else if(wtype === 'blade'){
+    /* 斩马刀：单刃、外弧 */
+    add(function(){ c.beginPath(); c.roundRect(-20, -4.5, 26, 9, 3); });          /* 柄 */
+    add(function(){ c.beginPath(); c.ellipse(5, 0, 6, 9, 0, 0, TAU); });           /* 护手盘 */
+    add(function(){
+      c.beginPath();
+      c.moveTo(8, -3.5);
+      c.quadraticCurveTo(58, -22, 100, -7);
+      c.lineTo(97, 4);
+      c.quadraticCurveTo(58, -6, 8, 4.5);
+      c.closePath();
+    });
+    add(function(){ c.beginPath(); c.moveTo(14, -2); c.quadraticCurveTo(58, -15, 92, -6); });  /* 刃线 */
+  } else if(wtype === 'spear'){
+    /* 破军枪：长杆 + 枪尖 + 红缨 */
+    add(function(){ c.beginPath(); c.roundRect(-34, -2.6, 124, 5.2, 2.6); });
+    add(function(){
+      c.beginPath();
+      c.moveTo(84, -8); c.lineTo(116, 0); c.lineTo(84, 8);
+      c.quadraticCurveTo(92, 0, 84, -8);
+      c.closePath();
+    });
+    add(function(){                                   /* 红缨 */
+      c.beginPath();
+      c.ellipse(78, 0, 9, 11, 0, 0, TAU);
+      c.moveTo(74, -3); c.lineTo(60, -12);
+      c.moveTo(74, 3);  c.lineTo(60, 12);
+    });
+  } else if(wtype === 'axe'){
+    /* 开山斧：斧柄 + 弧刃 */
+    add(function(){ c.beginPath(); c.roundRect(-24, -3.2, 116, 6.4, 3); });
+    add(function(){
+      c.beginPath();
+      c.moveTo(70, -9);
+      c.quadraticCurveTo(112, -34, 110, -4);
+      c.lineTo(110, 4);
+      c.quadraticCurveTo(112, 34, 70, 9);
+      c.quadraticCurveTo(86, 0, 70, -9);
+      c.closePath();
+    });
+  } else if(wtype === 'herb'){
+    /* 百草药囊：药杖 + 葫芦 */
+    add(function(){ c.beginPath(); c.roundRect(-30, -2.6, 116, 5.2, 2.6); });
+    add(function(){ c.beginPath(); c.arc(94, -8, 9, 0, TAU); });
+    add(function(){ c.beginPath(); c.arc(102, 5, 6.5, 0, TAU); });
+    add(function(){ c.beginPath(); c.moveTo(86, -2); c.lineTo(96, -2); });
+  } else if(wtype === 'talisman'){
+    /* 黄符：符纸 + 符文 */
+    add(function(){ c.beginPath(); c.roundRect(-22, -3, 30, 6, 2); });
+    add(function(){ c.beginPath(); c.roundRect(6, -20, 42, 40, 4); });
+    add(function(){
+      c.beginPath();
+      c.moveTo(27, -14); c.lineTo(27, 14);
+      c.moveTo(17, -6);  c.lineTo(37, -6);
+      c.moveTo(17, 4);   c.lineTo(37, 4);
+    });
+  } else if(wtype === 'cauldron'){
+    /* 丹鼎：鼎身 + 三足 + 双耳 */
+    add(function(){ c.beginPath(); c.roundRect(16, -18, 52, 34, 8); });
+    add(function(){
+      c.beginPath();
+      c.moveTo(24, 16); c.lineTo(18, 30);
+      c.moveTo(60, 16); c.lineTo(66, 30);
+      c.moveTo(42, 16); c.lineTo(42, 30);
+      c.moveTo(24, -18); c.lineTo(24, -28);
+      c.moveTo(60, -18); c.lineTo(60, -28);
+    });
+  } else {
+    /* 青锋剑（默认）：剑脊 + 护手 + 剑柄 */
+    add(function(){ c.beginPath(); c.roundRect(-22, -4, 24, 8, 3); });            /* 柄 */
+    add(function(){ c.beginPath(); c.roundRect(0, -14, 6, 28, 2.5); });           /* 护手 */
+    add(function(){
+      c.beginPath();
+      c.moveTo(6, -6);
+      c.lineTo(84, -5);
+      c.lineTo(100, 0);
+      c.lineTo(84, 5);
+      c.lineTo(6, 6);
+      c.closePath();
+    });
+    add(function(){ c.beginPath(); c.moveTo(12, 0); c.lineTo(88, 0); });          /* 血槽 */
+  }
+  return parts;
+}
+
+/* 沿武器轮廓画发光：外发光 + 渐变填充 + 亮边 */
+function drawWeaponGlowShape(c, len, wtype, colFn, glow, alpha){
+  const parts = weaponOutlinePath(c, wtype);
+  const s = len / 100;
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  c.scale(s, s);
+  for(let pass = 0; pass < 2; pass++){
+    const outer = (pass === 0);
+    c.shadowColor = colFn(glow, (outer ? 0.85 : 0.35) * alpha);
+    c.shadowBlur = outer ? 15 : 5;         /* px，不受缩放影响 */
+    for(let i = 0; i < parts.length; i++){
+      parts[i]();                          /* 闭包里自带 beginPath */
+      if(outer){
+        c.fillStyle = colFn(glow, 0.30 * alpha);
+      } else {
+        const g = c.createLinearGradient(-24, 0, 100, 0);
+        g.addColorStop(0, colFn(glow, 0.85 * alpha));
+        g.addColorStop(0.45, colFn(glow, 0.62 * alpha));
+        g.addColorStop(1, colFn(glow, 0.16 * alpha));
+        c.fillStyle = g;
+      }
+      c.fill();
+      c.lineWidth = (outer ? 2.2 : 1.1);
+      c.strokeStyle = colFn(glow, (outer ? 0.35 : 0.95) * alpha);
+      c.stroke();
+    }
+  }
+  c.restore();
+}
+
 /* 前景光效：手中武器高亮、光刃、环绕火花、上升光点 */
 function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
   opts = opts || {};
@@ -594,22 +739,16 @@ function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
       ctx.beginPath(); ctx.arc(fists[i][0], fists[i][1], fr, 0, TAU); ctx.fill();
     }
   } else {
-    const len = (wtype === 'spear' ? 104 : 76) * s * (0.9 + 0.2*I);
+    /* ★ 不再画一条光带，改成「按武器真实形状的发光」：
+       剑 / 刀 / 枪 / 拳套 / 斧 / 药杖 / 黄符 / 丹鼎 各有轮廓，
+       沿轮廓外发光 + 亮边，强化出白光、增幅出粉光，两者叠加混色 */
+    const len = (wtype === 'spear' ? 118 : (wtype === 'axe' ? 96 : 86)) * s * (0.92 + 0.16 * I);
     ctx.save();
     ctx.translate(handX, handY);
     ctx.rotate(facing > 0 ? -0.16 : 0.16);
     ctx.scale(facing, 1);
-    const drawStreak = (colFn, wMul) => {
-      const lg = ctx.createLinearGradient(-6*s, 0, len, 0);
-      lg.addColorStop(0, colFn(glow, 0.95 * inten * pulse));
-      lg.addColorStop(0.35, colFn(glow, 0.65 * inten * pulse));
-      lg.addColorStop(1, colFn(glow, 0));
-      ctx.fillStyle = lg;
-      const hh = 9 * s * wMul;
-      ctx.beginPath(); ctx.roundRect(-6*s, -hh/2, len + 6*s, hh, hh/2); ctx.fill();
-    };
-    if(glow.enhOn) drawStreak(_glowWhite, 1.0);
-    if(glow.ampOn) drawStreak(_glowPink, glow.mixed ? 0.75 : 1.0);
+    if(glow.enhOn) drawWeaponGlowShape(ctx, len, wtype, _glowWhite, glow, 1.0 * inten * pulse);
+    if(glow.ampOn) drawWeaponGlowShape(ctx, len, wtype, _glowPink, glow, (glow.mixed ? 0.8 : 1.0) * inten * pulse);
     ctx.restore();
   }
 
