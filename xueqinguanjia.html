@@ -16055,11 +16055,16 @@ async function submitDisciplineRecordHt() {
 
 async function deleteDisciplineRecordHt(recordId) {
   if (!confirm('确定要撤回这条留言吗？')) return;
+  const beforeCount = disciplineData.length;
   disciplineData = disciplineData.filter(r => r.id !== recordId);
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('已撤回');
     document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
+  } else {
+    // 恢复数据
+    showToast('撤回失败，请重试', 'error');
+    location.reload();
   }
 }
 
@@ -16140,16 +16145,27 @@ async function deleteDisciplineRecord(recordId) {
   if (result.ok) {
     showToast('已撤回');
     refreshDisciplineView();
+  } else {
+    showToast('撤回失败，请重试', 'error');
+    location.reload();
   }
 }
 
 function editDisciplineRecord(recordId) {
   const record = disciplineData.find(r => r.id === recordId);
-  if (!record) return;
+  if (!record) {
+    showToast('未找到该记录', 'error');
+    return;
+  }
+  
+  // 移除已存在的编辑弹窗
+  const existingModal = document.getElementById('discEditModal');
+  if (existingModal) existingModal.remove();
   
   const modal = document.createElement('div');
   modal.className = 'timetable-edit-modal';
   modal.id = 'discEditModal';
+  modal.style.zIndex = '10000';
   modal.innerHTML = `<div class="timetable-edit-card">
     <h3>编辑留言</h3>
     <label>学生：${escapeHtml(record.studentName)}</label>
@@ -16169,7 +16185,7 @@ function editDisciplineRecord(recordId) {
     <label>第几节课</label>
     <select id="discEditPeriod">
       <option value="">-- 选择节次 --</option>
-      ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}" ${record.period===(i+1)?'selected':''}>${name}</option>`).join('')}
+      ${timetablePeriodNames.slice(0, timetablePeriods).map((name, i) => `<option value="${i+1}" ${String(record.period)===String(i+1)?'selected':''}>${name}</option>`).join('')}
     </select>
     <label>内容</label>
     <textarea id="discEditContent" style="width:100%;min-height:80px;padding:8px;border:1px solid var(--gray-200);border-radius:6px;margin-top:4px">${escapeHtml(record.content)}</textarea>
