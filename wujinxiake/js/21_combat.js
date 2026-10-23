@@ -560,6 +560,15 @@ function update(dt){
                   }
                 }
               }
+              /* ★ 品阶抬高后重算基础属性和DNF属性 */
+              const lv = equip.level || 1;
+              const gm = equip.gradeMul || 1.0;
+              equip.baseAtk = Math.round((equip.slot === 'weapon' ? 10 * betterTier.baseMul * (1 + lv * 0.05) : 0) * gm);
+              equip.baseHp = Math.round((equip.slot === 'head' || equip.slot === 'armor' ? 30 * betterTier.baseMul * (1 + lv * 0.05) : 0) * gm);
+              equip.baseDef = Math.round((equip.slot === 'armor' ? 5 * betterTier.baseMul * (1 + lv * 0.05) : 0) * gm);
+              equip.baseSpd = Math.round((equip.slot === 'shoes' ? 10 * betterTier.baseMul * (1 + lv * 0.05) : 0) * gm);
+              equip.baseCrit = Math.round((equip.slot === 'accessory' || equip.slot === 'necklace' || equip.slot === 'ring' || equip.slot === 'bracer' ? 3 * betterTier.baseMul * (1 + lv * 0.05) : 0) * gm);
+              if(typeof rollEquipDnf === 'function') rollEquipDnf(equip);
               /* 品阶被抬高后同步「未开封」状态 */
               equip.sealed = (betterTierIdx >= 2 && betterTierIdx <= 4) ? true : undefined;
               equip.tradeable = (betterTierIdx < 5);
@@ -621,11 +630,15 @@ function update(dt){
                 eq.name = prefix + '·' + ((typeof SIMPLE_EQUIP_NAMES !== 'undefined' && SIMPLE_EQUIP_NAMES[slot]) || '布衣');
               }
             }
-            eq.baseAtk = eq.slot === 'weapon' ? Math.round(10 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseAtk;
-            eq.baseHp = (eq.slot === 'head' || eq.slot === 'armor') ? Math.round(30 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseHp;
-            eq.baseDef = eq.slot === 'armor' ? Math.round(5 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseDef;
-            eq.baseSpd = eq.slot === 'shoes' ? Math.round(10 * t.baseMul * (1 + eq.level * 0.08) * eq.gradeMul) : eq.baseSpd;
-            eq.baseCrit = (eq.slot === 'accessory' || eq.slot === 'necklace' || eq.slot === 'ring' || eq.slot === 'bracer') ? Math.round(3 * t.baseMul * (1 + eq.level * 0.1) * eq.gradeMul) : eq.baseCrit;
+            /* ★ 品阶被覆盖后重算基础属性和DNF属性（使用统一的0.05系数） */
+            const lv = eq.level || 1;
+            const gm = eq.gradeMul || 1.0;
+            eq.baseAtk = eq.slot === 'weapon' ? Math.round(10 * t.baseMul * (1 + lv * 0.05) * gm) : 0;
+            eq.baseHp = (eq.slot === 'head' || eq.slot === 'armor') ? Math.round(30 * t.baseMul * (1 + lv * 0.05) * gm) : 0;
+            eq.baseDef = eq.slot === 'armor' ? Math.round(5 * t.baseMul * (1 + lv * 0.05) * gm) : 0;
+            eq.baseSpd = eq.slot === 'shoes' ? Math.round(10 * t.baseMul * (1 + lv * 0.05) * gm) : 0;
+            eq.baseCrit = (eq.slot === 'accessory' || eq.slot === 'necklace' || eq.slot === 'ring' || eq.slot === 'bracer') ? Math.round(3 * t.baseMul * (1 + lv * 0.05) * gm) : 0;
+            if(typeof rollEquipDnf === 'function') rollEquipDnf(eq);
             /* 未开封规则与野外掉落一致 */
             if(tierIdx >= 2 && tierIdx <= 4) eq.sealed = true;
             if(tierIdx >= 5) eq.sealed = false;

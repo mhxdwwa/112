@@ -137,7 +137,7 @@ function apply(data){
   G.player.props = {};
   if(!G.player.potions) G.player.potions = {};
   if(!G.player.potionCd) G.player.potionCd = { hp:0, mp:0 };
-  /* ★ 老存档迁移：更新装备品阶颜色（史诗改金色，传说改红色）+ 修复高阶装备名字 */
+  /* ★ 老存档迁移：更新装备品阶颜色（史诗改金色，传说改红色）+ 修复高阶装备名字 + 重算DNF属性 */
   try{
     /* 低阶前缀列表（用于检测名字是否用了低阶前缀） */
     const LOW_TIER_PREFIXES = ['白·','蓝·','紫·','粉·','橙·'];
@@ -148,33 +148,52 @@ function apply(data){
       }
       return false;
     }
+    /* 重新计算装备的基础属性和DNF属性 */
+    function recalcEquipStats(eq){
+      if(!eq || !eq.tier) return;
+      const tier = EQUIP_TIERS.find(function(t){ return t.id === eq.tier; });
+      if(!tier) return;
+      const lv = eq.level || 1;
+      const gm = eq.gradeMul || 1.0;
+      /* 重算基础属性 */
+      eq.baseAtk = eq.slot === 'weapon' ? Math.round(10 * tier.baseMul * (1 + lv * 0.05) * gm) : 0;
+      eq.baseHp = (eq.slot === 'head' || eq.slot === 'armor') ? Math.round(30 * tier.baseMul * (1 + lv * 0.05) * gm) : 0;
+      eq.baseDef = eq.slot === 'armor' ? Math.round(5 * tier.baseMul * (1 + lv * 0.05) * gm) : 0;
+      eq.baseSpd = eq.slot === 'shoes' ? Math.round(10 * tier.baseMul * (1 + lv * 0.05) * gm) : 0;
+      eq.baseCrit = (eq.slot === 'accessory' || eq.slot === 'necklace' || eq.slot === 'ring' || eq.slot === 'bracer') ? Math.round(3 * tier.baseMul * (1 + lv * 0.05) * gm) : 0;
+      /* 重算DNF属性和词条 */
+      if(typeof rollEquipDnf === 'function') rollEquipDnf(eq);
+    }
     /* 为高阶装备重新生成名字（从 ELITE 名池随机取一个） */
     function fixEquipName(eq){
       if(!eq || !eq.tier) return;
       const tierIdx = ['common','advanced','rare','epic','legend','mythic'].indexOf(eq.tier);
       /* 只有 epic/legend/mythic 需要修复 */
-      if(tierIdx < 3) return;
-      const tier = EQUIP_TIERS[tierIdx];
-      /* 更新颜色 */
-      eq.tierColor = tier.color;
-      /* 如果名字用了低阶前缀，从 ELITE 名池重新取一个 */
-      if(isLowTierPrefixName(eq.name)){
-        const slot = eq.slot || 'accessory';
-        let newName = '';
-        if(slot === 'weapon'){
-          const wt = eq.weaponType || 'sword';
-          const elite = (typeof ELITE_WEAPON_NAMES !== 'undefined') ? (ELITE_WEAPON_NAMES[wt] || ELITE_WEAPON_NAMES.sword) : null;
-          if(elite && elite[tier.id] && elite[tier.id].length){
-            newName = elite[tier.id][Math.floor(Math.random() * elite[tier.id].length)];
+      if(tierIdx >= 3){
+        const tier = EQUIP_TIERS[tierIdx];
+        /* 更新颜色 */
+        eq.tierColor = tier.color;
+        /* 如果名字用了低阶前缀，从 ELITE 名池重新取一个 */
+        if(isLowTierPrefixName(eq.name)){
+          const slot = eq.slot || 'accessory';
+          let newName = '';
+          if(slot === 'weapon'){
+            const wt = eq.weaponType || 'sword';
+            const elite = (typeof ELITE_WEAPON_NAMES !== 'undefined') ? (ELITE_WEAPON_NAMES[wt] || ELITE_WEAPON_NAMES.sword) : null;
+            if(elite && elite[tier.id] && elite[tier.id].length){
+              newName = elite[tier.id][Math.floor(Math.random() * elite[tier.id].length)];
+            }
+          } else {
+            const elite = (typeof ELITE_NAMES !== 'undefined') ? (ELITE_NAMES[slot] || (slot === 'accessory' ? ELITE_NAMES.ring : null)) : null;
+            if(elite && elite[tier.id] && elite[tier.id].length){
+              newName = elite[tier.id][Math.floor(Math.random() * elite[tier.id].length)];
+            }
           }
-        } else {
-          const elite = (typeof ELITE_NAMES !== 'undefined') ? (ELITE_NAMES[slot] || (slot === 'accessory' ? ELITE_NAMES.ring : null)) : null;
-          if(elite && elite[tier.id] && elite[tier.id].length){
-            newName = elite[tier.id][Math.floor(Math.random() * elite[tier.id].length)];
-          }
+          if(newName) eq.name = newName;
         }
-        if(newName) eq.name = newName;
       }
+      /* ★ 重算DNF属性（修复同品阶同等级战力差距过大的bug） */
+      recalcEquipStats(eq);
     }
     /* 更新穿戴装备 */
     if(G.player.equipment){
@@ -188,7 +207,7 @@ function apply(data){
         fixEquipName(G.player.inventory[i]);
       }
     }
-  }catch(e){ console.warn('[save] 装备颜色/名字迁移失败', e); }
+  }catch(e){ console.warn('[save] 装备属性迁移失败', e); }
 
   /* ★ 老存档迁移：按新公式重新计算基础属性（HP/MP/ATK成长优化） */
   try{

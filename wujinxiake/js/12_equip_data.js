@@ -497,13 +497,13 @@ function generateEquipment(slot, levelIdx, diffBonus){
   // 装备品级（最下/下/中/上/最上），影响属性倍率
   const gradeRoll = Math.random();
   let gradeIdx = 2, gradeMul = 1.0;
-  /* ★ 品级倍率收窄（0.85~1.15 → 0.94~1.06），确保同等级下品阶越高战力一定越高 */
+  /* ★ 品级倍率拉开差距（0.85~1.20），让品级有实际意义 */
   const GRADES = [
-    { name: '最下级', mul: 0.94 },
-    { name: '下级', mul: 0.97 },
+    { name: '最下级', mul: 0.85 },
+    { name: '下级', mul: 0.92 },
     { name: '中级', mul: 1.0 },
-    { name: '上级', mul: 1.03 },
-    { name: '最上级', mul: 1.06 }
+    { name: '上级', mul: 1.10 },
+    { name: '最上级', mul: 1.20 }
   ];
   if(gradeRoll < 0.15) gradeIdx = 0;
   else if(gradeRoll < 0.35) gradeIdx = 1;
