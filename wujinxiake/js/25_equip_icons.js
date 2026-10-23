@@ -353,7 +353,7 @@ function drawInventory(){
     ctx.fillText('战力 ' + totalPower(p), eqX + eqPanelW - 12, eqY + 22);
     ctx.textAlign = 'left';
 
-    const slotNames = { weapon:'武器', head:'头', armor:'衣', shoes:'鞋', necklace:'链', ring:'戒', bracer:'腕' };
+    const slotNames = { weapon:'武器', head:'头', armor:'衣', shoes:'鞋', necklace:'链', ring:'戒', bracer:'腕', mount:'飞' };
     /* 列优先的 DNF 站位：左列 武器/上衣/项链/戒指，右列 头/鞋/腕/(空) */
     const eqGrid = [
       ['weapon', 'head'],
