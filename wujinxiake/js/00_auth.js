@@ -277,9 +277,17 @@ function start(){
   window.SB.auth.getSession().then(function(res){
     var s = res && res.data && res.data.session;
     if(s && s.user && !wantReg){
-      adopt(s.user);
-      window.Boot.auth();
-      return;
+      /* ★ 安全检查：只允许在本游戏注册过的账号自动登录
+         注册时 user_metadata.game = 'wujinxiake'，没有这个标记的
+         说明是从同域其他站点（如班级宠物）带过来的 session */
+      var meta = s.user.user_metadata || {};
+      if(meta.game === 'wujinxiake'){
+        adopt(s.user);
+        window.Boot.auth();
+        return;
+      }
+      /* 不是本游戏的账号：清掉这个 session，让用户重新注册/登录 */
+      try{ window.SB.auth.signOut(); }catch(e){}
     }
     /* 要换账号：先把旧会话清掉，免得又自动登回去 */
     if(s && wantReg){
@@ -301,7 +309,14 @@ function start(){
       console.warn('[auth] 登录状态已失效');
     }
     if(evt === 'SIGNED_IN' && session && session.user && !state.user){
-      adopt(session.user);
+      /* ★ 同样检查：只接受本游戏注册的账号 */
+      var meta = session.user.user_metadata || {};
+      if(meta.game === 'wujinxiake'){
+        adopt(session.user);
+      } else {
+        /* 不是本游戏的账号，退出 */
+        try{ window.SB.auth.signOut(); }catch(e){}
+      }
     }
   });
 }

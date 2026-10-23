@@ -123,6 +123,14 @@
       if (!pl.access_token) throw new Error('票据不完整');
       const res = await window.SB.auth.setSession({ access_token: pl.access_token, refresh_token: pl.refresh_token });
       if (res && res.error) throw res.error;
+      /* ★ 安全检查：确认是本游戏注册的账号 */
+      var sess = res && res.data && res.data.session;
+      var meta = (sess && sess.user && sess.user.user_metadata) || {};
+      if (meta.game !== 'wujinxiake') {
+        setStatus('❌ 这个账号不是在本游戏注册的，请先在游戏网站注册账号', '#ff8f6e');
+        try { window.SB.auth.signOut(); } catch (e) {}
+        return;
+      }
       await new Promise(function (r) { setTimeout(r, 400); });
       if (window.AUTH && window.AUTH.loggedIn && window.Boot) {
         window.Boot.auth();
