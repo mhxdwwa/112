@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>无尽侠客 · 2.5D 横版格斗</title>
+<link rel="stylesheet" href="css/base.css?v=18" />
+<link rel="stylesheet" href="css/touch.css?v=18" />
+<link rel="stylesheet" href="css/toast.css?v=18" />
+<link rel="stylesheet" href="css/auth.css?v=18" />
+<link rel="stylesheet" href="css/online.css?v=18" />
+<link rel="stylesheet" href="css/account.css?v=18" />
+<link rel="stylesheet" href="css/chars.css?v=18" />
+<link rel="stylesheet" href="css/auction.css?v=18" />
+<link rel="stylesheet" href="css/revive.css?v=18" />
+<link rel="stylesheet" href="css/qr.css?v=18" />
+<style>
+/* 载入界面：内联样式，保证首帧就有效果（不等外部 CSS） */
+#bootOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 34%,#12233a 0%,#080b12 62%,#05070b 100%);
+  transition:opacity .45s ease;font-family:"Microsoft YaHei",system-ui,sans-serif;}
+#bootOverlay.boot-hide{opacity:0;pointer-events:none;}
+.boot-box{width:min(78vw,420px);text-align:center;color:#cfe6f5;padding:0 8px;}
+.boot-title{font-size:34px;font-weight:700;letter-spacing:6px;color:#9fe6ff;
+  text-shadow:0 0 18px rgba(120,220,255,.55);margin-bottom:8px;}
+.boot-sub{font-size:12px;color:#7f93a8;letter-spacing:3px;margin-bottom:26px;}
+.boot-track{height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+#bootBar{display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,#3ec9ff,#7af0c8);box-shadow:0 0 12px rgba(80,220,255,.65);
+  transition:width .25s ease;}
+.boot-info{display:flex;justify-content:space-between;align-items:center;margin-top:12px;
+  font-size:12px;color:#7f93a8;gap:10px;}
+.boot-info b{color:#9fe6ff;font-weight:600;font-variant-numeric:tabular-nums;}
+#bootSkip{margin-left:8px;padding:4px 10px;border-radius:99px;border:1px solid rgba(120,220,255,.45);
+  background:transparent;color:#9fe6ff;font-size:12px;cursor:pointer;font-family:inherit;}
+</style>
+</head>
+<body>
+<!-- 载入界面：核心图片准备好后再进入游戏 -->
+<div id="bootOverlay">
+  <div class="boot-box">
+    <div class="boot-title">无尽侠客</div>
+    <div class="boot-sub">2.5D 横版武侠格斗</div>
+    <div class="boot-track"><i id="bootBar"></i></div>
+    <div class="boot-info"><span id="bootTip">正在加载游戏资源…</span><b id="bootPct">0%</b></div>
+  </div>
+</div>
+<canvas id="c"></canvas>
+<div id="uiToast"></div>
+
+<!-- 账号界面：登录 / 注册。资源在它后面偷偷加载，登录完直接进游戏 -->
+<div id="authLayer">
+  <div class="auth-wrap">
+    <div class="auth-brand">
+      <div class="auth-logo">无尽侠客</div>
+      <div class="auth-slogan">WU JIN XIA KE</div>
+      <div class="auth-divider"></div>
+      <ul class="auth-points">
+        <li>登录后自动云端存档，换设备继续玩</li>
+        <li>和朋友一起组队闯荡江湖</li>
+        <li>八大门派，各有所长</li>
+      </ul>
+    </div>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-tab="login">登录</button>
+        <button type="button" class="auth-tab" data-tab="reg">注册</button>
+      </div>
+      <div class="auth-hint">第一次玩请点「注册」：邮箱 + 用户名 + 密码，注册完直接进游戏；已有账号在「登录」页输入用户名和密码。</div>
+
+      <form class="auth-form" id="formLogin" autocomplete="on">
+        <label for="lgUser">用户名</label>
+        <input id="lgUser" type="text" placeholder="你的用户名" autocomplete="username" maxlength="16" />
+        <label for="lgPass">密码</label>
+        <input id="lgPass" type="password" placeholder="密码" autocomplete="current-password" maxlength="64" />
+        <button type="submit" class="auth-submit" id="lgBtn">进入江湖</button>
+      </form>
+
+      <form class="auth-form hidden" id="formReg" autocomplete="on">
+        <label for="rgMail">邮箱</label>
+        <input id="rgMail" type="email" placeholder="用于找回账号" autocomplete="email" maxlength="80" />
+        <label for="rgUser">用户名</label>
+        <input id="rgUser" type="text" placeholder="2-16 位，中文/字母/数字" autocomplete="username" maxlength="16" />
+        <label for="rgPass">密码</label>
+        <input id="rgPass" type="password" placeholder="至少 6 位" autocomplete="new-password" maxlength="64" />
+        <label for="rgPass2">确认密码</label>
+        <input id="rgPass2" type="password" placeholder="再输一次" autocomplete="new-password" maxlength="64" />
+        <button type="submit" class="auth-submit" id="rgBtn">注册并进入</button>
+      </form>
+
+      <div class="auth-msg" id="authMsg"></div>
+      <div class="auth-foot">
+        <span id="authLoadTip">资源加载中…</span>
+        <button type="button" class="auth-link" id="authOffline">游客试玩（不存档云端）</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="touch-controls" id="touchControls">
+  <div class="p1-area">
+    <div class="player-label" style="color:#5ee7ff;">P1</div>
+    <div class="joystick-container" id="joystick1">
+      <div class="joystick-base"></div>
+      <div class="joystick-stick" id="stick1"></div>
+    </div>
+    <!-- 2 行 × 4 列：上排技能 3–6，下排 普攻 / 跳跃 / 技能 1–2（直接作为网格子项，不套行容器） -->
+    <div class="action-pad">
+      <div class="skill-btn skill3" data-player="1" data-action="skill3" id="p1skill3"></div>
+      <div class="skill-btn skill4" data-player="1" data-action="skill4" id="p1skill4"><span class="slot-num">4</span></div>
+      <div class="skill-btn skill5" data-player="1" data-action="skill5" id="p1skill5"><span class="slot-num">5</span></div>
+      <div class="skill-btn skill6" data-player="1" data-action="skill6" id="p1skill6"><span class="slot-num">6</span></div>
+      <div class="skill-btn attack-btn" data-player="1" data-action="attack">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
+      </div>
+      <div class="skill-btn jump-btn" data-player="1" data-action="jump">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </div>
+      <div class="skill-btn skill1" data-player="1" data-action="skill1" id="p1skill1"></div>
+      <div class="skill-btn skill2" data-player="1" data-action="skill2" id="p1skill2"></div>
+    </div>
+  </div>
+  <div class="p2-area" id="p2Controls" style="display:none;">
+    <div class="player-label" style="color:#ff6a5a;">P2</div>
+    <div class="joystick-container" id="joystick2">
+      <div class="joystick-base"></div>
+      <div class="joystick-stick" id="stick2"></div>
+    </div>
+    <div class="action-pad">
+      <div class="skill-btn skill3" data-player="2" data-action="skill3" id="p2skill3"></div>
+      <div class="skill-btn skill4" data-player="2" data-action="skill4" id="p2skill4"><span class="slot-num">4</span></div>
+      <div class="skill-btn skill5" data-player="2" data-action="skill5" id="p2skill5"><span class="slot-num">5</span></div>
+      <div class="skill-btn skill6" data-player="2" data-action="skill6" id="p2skill6"><span class="slot-num">6</span></div>
+      <div class="skill-btn attack-btn" data-player="2" data-action="attack">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 7.5l3.5-3.5 4 4-3.5 3.5M7 17l-4 4M11 21l-4 4"/></svg>
+      </div>
+      <div class="skill-btn jump-btn" data-player="2" data-action="jump">
+        <svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </div>
+      <div class="skill-btn skill1" data-player="2" data-action="skill1" id="p2skill1"></div>
+      <div class="skill-btn skill2" data-player="2" data-action="skill2" id="p2skill2"></div>
+    </div>
+  </div>
+</div>
+<!-- 触屏 ESC：左侧正中间（手机 / 触屏电脑） -->
+<button id="btnEsc" type="button">ESC</button>
+
+<!-- 联机入口与面板 -->
+<button id="btnOnline" type="button"><span><i>◈</i>联机</span></button>
+<!-- 账号 / 存档状态：点开看「我是谁、进度存在哪」 -->
+<button id="btnAccount" type="button"><i></i><span id="accName">游客</span></button>
+<div id="accountPanel">
+  <div class="acc-head"><b>账号与存档</b><button id="accClose" type="button">×</button></div>
+  <div class="acc-body">
+    <div class="acc-row"><span>当前身份</span><b id="accWho">游客（未登录）</b></div>
+    <div class="acc-row"><span>存档位置</span><b id="accWhere" class="warn">仅本机（浏览器）</b></div>
+    <div class="acc-row"><span>最近保存</span><b id="accWhen">尚未保存</b></div>
+    <div class="acc-tip" id="accTip">游客进度只存在这台浏览器（localStorage），换设备、清缓存或换浏览器都会丢。注册后才有云端存档。</div>
+    <div class="acc-acts">
+      <button id="accLogin" class="primary" type="button">注册 / 登录</button>
+      <button id="accSave" class="ghost hidden" type="button">立即存档</button>
+      <button id="accChars" class="ghost hidden" type="button">切换角色</button>
+      <button id="accSwitch" class="ghost hidden" type="button">退出 / 换账号</button>
+    </div>
+    <div class="acc-ver">版本 v18 · 2026-10-23</div>
+  </div>
+</div>
+<!-- 选择角色面板：单人冒险 → 开始 → 已有角色 / 创建新角色 -->
+<div id="charPanel">
+  <div class="cp-box">
+    <div class="cp-head"><b>选择角色</b><button id="cpClose" type="button">×</button></div>
+    <div class="cp-list" id="cpList"></div>
+    <div class="cp-acts"><button id="cpNew" type="button">＋ 创建新角色</button></div>
+  </div>
+</div>
+<!-- 重生丸：死亡时询问是否复活 -->
+<div id="reviveBox">
+  <div class="rv-box">
+    <div class="rv-title">你倒下了</div>
+    <div class="rv-sub">还剩 <b id="rvCount">3</b> 枚重生丸，使用可以原地满血复活。</div>
+    <div class="rv-acts">
+      <button id="rvUse" type="button">使用重生丸 · 满血复活</button>
+      <button id="rvGiveUp" type="button">放弃 · 返回城镇</button>
+    </div>
+  </div>
+</div>
+<!-- 交易行：传说及以下装备上架 / 购买 -->
+<div id="ahPanel">
+  <div class="ah-head"><b>交易行</b><span id="ahGold">金币 0</span><button id="ahClose" type="button">×</button></div>
+  <div class="ah-tabs">
+    <button type="button" data-tab="buy" class="on">全部商品</button>
+    <button type="button" data-tab="sell">我要上架</button>
+  </div>
+  <div class="ah-body">
+    <div id="ahList"></div>
+    <div id="ahSell" style="display:none;"></div>
+  </div>
+  <div class="ah-foot">传说及以下装备可上架（普通 / 高级 / 稀有 / 神器 / 传说），史诗不可上架；紫以上装备开封后不能再上架。购买后直接进背包，卖出的金币会在你打开交易行时自动到账。</div>
+</div>
+<!-- 城镇点击其他玩家：资料卡（装备 / 属性 / 邀请切磋） -->
+<div id="opCard"></div>
+<div id="onlinePanel">
+  <div class="op-head">
+    <b>联机大厅</b>
+    <span id="opState">连接中…</span>
+    <button id="opClose" type="button">×</button>
+  </div>
+  <div class="op-body">
+    <div class="op-me">我：<b id="opName">—</b></div>
+    <div class="op-sec">
+      <div class="op-label">在线玩家 <span id="opCount">0</span></div>
+      <div class="op-list" id="opPlayers"></div>
+    </div>
+    <div class="op-sec">
+      <div class="op-label">频道</div>
+      <div class="op-room">
+        <div>公共频道 <b>全服唯一</b></div>
+        <div class="op-note">所有玩家都在同一个频道里——进城镇就能看见别人，点一下对方可以查看他的装备属性和等级，还能邀请切磋。</div>
+      </div>
+    </div>
+    <div class="op-sec">
+      <div class="op-label">频道聊天</div>
+      <div class="op-chat" id="opChat"></div>
+      <div class="op-row">
+        <input id="opMsg" maxlength="60" placeholder="说点什么…" />
+        <button id="opSend" type="button">发送</button>
+      </div>
+    </div>
+    <div class="op-account">
+      <span>账号：<b id="opAccount">游客</b></span>
+      <button id="opLogout" type="button">切换账号</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/supabase.js?v=18"></script>
+<script src="js/vendor/qrcode.min.js?v=18"></script>
+<script src="js/vendor/jsqr.min.js?v=18"></script>
+<script src="js/00_auth.js?v=18"></script>
+<script src="js/00_loader.js?v=18"></script>
+<script src="js/01_core.js?v=18"></script>
+<script src="js/02_char_atlases.js?v=18"></script>
+<script src="js/03_monster_atlases.js?v=18"></script>
+<script src="js/04_equip_visual.js?v=18"></script>
+<script src="js/05_audio.js?v=18"></script>
+<script src="js/06_touch.js?v=18"></script>
+<script src="js/07_skill_icons.js?v=18"></script>
+<script src="js/08_menu.js?v=18"></script>
+<script src="js/09_world.js?v=18"></script>
+<script src="js/10_skill_growth.js?v=18"></script>
+<script src="js/11_levels.js?v=18"></script>
+<script src="js/12_equip_data.js?v=18"></script>
+<script src="js/43_mount.js?v=18"></script>
+<script src="js/13_drops.js?v=18"></script>
+<script src="js/14_town_data.js?v=18"></script>
+<script src="js/15_quests.js?v=18"></script>
+<script src="js/16_abyss.js?v=18"></script>
+<script src="js/17_escmenu.js?v=18"></script>
+<script src="js/18_jobs.js?v=18"></script>
+<script src="js/19_skills.js?v=18"></script>
+<script src="js/20_boss_skills.js?v=18"></script>
+<script src="js/21_combat.js?v=18"></script>
+<script src="js/22_player.js?v=18"></script>
+<script src="js/23_town_sys.js?v=18"></script>
+<script src="js/24_enhance_ui.js?v=18"></script>
+<script src="js/25_equip_icons.js?v=18"></script>
+<script src="js/26_hud.js?v=18"></script>
+<script src="js/27_level_select.js?v=18"></script>
+<script src="js/28_shop.js?v=18"></script>
+<script src="js/29_render_world.js?v=18"></script>
+<script src="js/30_rooms.js?v=18"></script>
+<script src="js/31_portal_minimap.js?v=18"></script>
+<script src="js/32_naming.js?v=18"></script>
+<script src="js/33_main_loop.js?v=18"></script>
+<script src="js/34_dev_debug.js?v=18"></script>
+<script src="js/35_cloud_save.js?v=18"></script>
+<script src="js/36_online.js?v=18"></script>
+<script src="js/39_relay.js?v=18"></script>
+<script src="js/37_account.js?v=18"></script>
+<script src="js/38_chars.js?v=18"></script>
+<script src="js/40_auction.js?v=18"></script>
+<script src="js/41_revive.js?v=18"></script>
+<script src="js/42_mobile_bar.js?v=18"></script>
+<script src="js/44_potion.js?v=18"></script>
+<script src="js/45_qrlogin.js?v=18"></script>
+</body>
+</html>
