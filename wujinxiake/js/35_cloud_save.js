@@ -137,9 +137,29 @@ function apply(data){
   G.player.props = {};
   if(!G.player.potions) G.player.potions = {};
   if(!G.player.potionCd) G.player.potionCd = { hp:0, mp:0 };
-  /* 老存档缺字段时补齐 */
+  /* ★ 老存档迁移：按新公式重新计算基础属性（HP/MP/ATK成长优化） */
   try{
     if(typeof ensureBaseStat === 'function') ensureBaseStat(G.player);
+    const bs = G.player.baseStat;
+    if(bs && typeof getLevelGrowth === 'function'){
+      /* 找到角色初始值 */
+      const pLv = G.player.level || 1;
+      const char = (typeof CHARACTERS !== 'undefined') ? CHARACTERS.find(function(c){ return c.id === G.player.charId; }) : null;
+      const startHp = char ? char.hp : 5000;
+      const startMp = char ? char.mp : 80;
+      const startAtk = char ? char.atk : 10;
+      /* 重新从1级累加成长 */
+      let totalHp = startHp, totalMp = startMp;
+      for(let lv = 2; lv <= pLv; lv++){
+        const g = getLevelGrowth(lv);
+        totalHp += g.hp;
+        totalMp += g.mp;
+      }
+      bs.maxHp = totalHp;
+      bs.maxMp = totalMp;
+      /* ATK: 初始值 × 1.08^(level-1)（沿用升级时的倍率逻辑） */
+      bs.atk = Math.round(startAtk * Math.pow(1.08, pLv - 1));
+    }
     if(typeof recalcPlayerStats === 'function') recalcPlayerStats();
   }catch(e){ console.warn('[save] 属性重算失败', e); }
 
