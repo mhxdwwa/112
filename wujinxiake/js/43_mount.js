@@ -292,6 +292,27 @@
     return eq;
   }
 
+  /* ---------- 小图标：给背包 / 装备栏用（画真正的模型，不是通用图标） ---------- */
+  function drawIcon(c, cx, cy, size, model, t){
+    if(!c) return;
+    var m = visualModel(model || 'board');
+    var sc, baseY;
+    if(m === 'wing' || m === 'flame' || m === 'star'){
+      sc = size / 200;                 /* 双翼横向跨度约 190*sc */
+      baseY = cy + size * 0.42;
+    } else if(m === 'windfire'){
+      sc = size / 92;                  /* 两只火轮跨度约 82*sc */
+      baseY = cy + size * 0.32;
+    } else if(m === 'hover'){
+      sc = size / 100;
+      baseY = cy + size * 0.30;
+    } else {
+      sc = size / 104;                 /* 板身 76*sc */
+      baseY = cy + size * 0.28;
+    }
+    draw(c, cx, baseY, sc, m, t || (performance.now() / 1000), false, 1);
+  }
+
   window.MOUNT = {
     SLOT: SLOT,
     TIERS: TIERS,
@@ -306,6 +327,8 @@
     draw: function(c, x, y, sc, model, t, moving, facing){
       draw(c, x, y, sc, visualModel(model), t, moving, facing);
     },
+    /* 小图标（背包 / 装备栏 / 详情卡）：画真实模型 */
+    drawIcon: drawIcon,
     /* 角色是否踩着道具（决定用站姿还是跑姿） */
     riding: function(p){ return !!off(p); }
   };
