@@ -107,6 +107,25 @@ function apply(data){
       }
     }
   }
+  /* ★ 老存档迁移：补发遗漏的技能点
+     根据角色等级计算应获得的SP总量，与实际持有+已投入对比，差额补发 */
+  try{
+    const pLv = G.player.level || 1;
+    const expectedTotal = SP_START + (pLv - 1) * SP_PER_LEVEL;
+    let actualSpent = 0;
+    const w = (typeof WEAPONS !== 'undefined') ? WEAPONS[G.player.weaponIdx] : null;
+    if(w && w.skills && G.player.skillLevels){
+      for(let i = 0; i < w.skills.length; i++){
+        const lv = G.player.skillLevels[i] || 0;
+        if(lv > 0 && typeof skillSpent === 'function') actualSpent += skillSpent(w.skills[i], lv);
+      }
+    }
+    const actualTotal = (G.player.skillPoints || 0) + actualSpent;
+    if(actualTotal < expectedTotal){
+      const missing = expectedTotal - actualTotal;
+      G.player.skillPoints = (G.player.skillPoints || 0) + missing;
+    }
+  }catch(e){ console.warn('[save] SP迁移计算失败', e); }
   /* 有存档 = 序章早就看过了：别重播，也顺便让「听完留音」这一步判定通过 */
   if(!G.player.prologueSeen) G.player.prologueSeen = true;
   /* ★ 老存档：没有重生丸字段的补发 3 枚（用光了会是 0，不会被重置） */
