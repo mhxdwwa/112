@@ -1561,7 +1561,7 @@ function castFistEightExtremes(){
       addEffect('fistArc', bx, p.y, 0.26, {facing:p.facing, color:last?'#ffffff':'#ffcc33', scale:last?2.2:1.15, ring:last});
       addEffect('punchWave', bx, by, 0.3, {facing:p.facing, color:'#ffcc33', len:last?260:150});
       addEffect('hitRing', bx, p.y, 0.3, {color:'#ffcc33', r:last?150:70});
-      meleeHitRect(p, bx + p.facing*30, p.y, 200, 200, A*(last?58:11), {kb:last?520:90, launch:last});
+      meleeHitRect(p, bx + p.facing*30, p.y, 200, 200, A*(last?120:25), {kb:last?520:90, launch:last});
       skBurst(bx, by, '#ffcc33', last?40:12, {angle:p.facing>0?0:Math.PI, spread:0.7, spMin:160, spMax:last?760:440, grav:320});
       skShake(last?22:5, last?0.34:0.03, '#ffcc33');
       if(last){
@@ -1600,7 +1600,7 @@ function castFistGreatPalm(){
     /* 巨掌拍落 */
     addEffect('palmPrint', tx(), gy(), 1.5, {color:'#ffd700', scale:1.0});
     addEffect('skyPillar', tx(), gy(), 1.0, {height:640, color:'#ffd700'});
-    meleeAoe(p, tx(), gy(), 320, A*130, {kb:560, launch:true});
+    meleeAoe(p, tx(), gy(), 320, A*280, {kb:560, launch:true});
     addEffect('explosion', tx(), gy(), 0.9, {color:'#ffd700', r:330});
     addEffect('hitRing', tx(), gy(), 0.95, {color:'#fff6c0', r:350});
     skBurst(tx(), gy(), '#ffd700', 50, {spMin:220, spMax:860, grav:440});
@@ -1611,14 +1611,14 @@ function castFistGreatPalm(){
     const crush = setInterval(()=>{
       if(!G || gameState !== 'playing'){ clearInterval(crush); return; }
       t++;
-      meleeAoe(p, tx(), gy(), 260, A*14, {kb:60});
+      meleeAoe(p, tx(), gy(), 260, A*32, {kb:60});
       addEffect('hitRing', tx(), gy(), 0.45, {color:'#ffd700', r:240});
       addEffect('goldenPillar', tx() + rand(-120,120), gy(), 0.35, {color:'#ffd700'});
       skShake(6, 0.04, '#ffd700');
       if(t >= 6){
         clearInterval(crush);
         addEffect('explosion', tx(), gy(), 0.75, {color:'#fff6c0', r:300});
-        meleeAoe(p, tx(), gy(), 300, A*45, {kb:340});
+        meleeAoe(p, tx(), gy(), 300, A*100, {kb:340});
       }
     }, 220);
   });
@@ -1653,7 +1653,7 @@ function castFistQiOrigin(){
         playSound('skillCast');
         addEffect('explosion', bx, by - 30, 0.6, {color:'#7dffd4', r:170});
         addEffect('hitRing', bx, by, 0.5, {color:'#d8fff2', r:130});
-        meleeAoe(p, bx, by, 175, A*22, {kb:220, launch:false});
+        meleeAoe(p, bx, by, 175, A*48, {kb:220, launch:false});
         skBurst(bx, by - 30, '#7dffd4', 22, {spMin:160, spMax:620, grav:200});
         skShake(10, 0.1, '#7dffd4');
       });
@@ -1665,8 +1665,8 @@ function castFistQiOrigin(){
       addEffect('skyPillar', p.x, p.y, 1.5, {height:860, color:'#7dffd4'});
       addEffect('dharmaWheel', p.x, p.y, 1.4, {color:'#ffffff', r:280});
       addEffect('skyCrack', p.x, 70, 1.2, {width:380, color:'#7dffd4'});
-      meleeAoe(p, p.x, p.y, 420, A*200, {kb:660, launch:true});
-      meleeAoe(p, p.x, p.y, 600, A*50, {kb:280});
+      meleeAoe(p, p.x, p.y, 420, A*450, {kb:660, launch:true});
+      meleeAoe(p, p.x, p.y, 600, A*120, {kb:280});
       addEffect('explosion', p.x, p.y, 1.0, {color:'#7dffd4', r:380});
       skBurst(p.x, p.y - 60, '#7dffd4', 60, {spMin:240, spMax:920, grav:120});
       skRingBurst(p.x, p.y, 250, '#d8fff2', 14);
