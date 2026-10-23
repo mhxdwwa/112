@@ -175,3 +175,20 @@
   font-size:9px; letter-spacing:0; color:#9fb3c6;
 }
 #mTownBtns.hz .mtb em{display:none;}
+
+/* ★ 技能点提醒：红色感叹号角标 */
+.sp-badge{
+  position:absolute; top:-4px; right:-4px;
+  width:16px; height:16px; border-radius:50%;
+  background:#ff3333; color:#fff;
+  font-size:12px; font-weight:bold; font-style:normal;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid #fff;
+  box-shadow:0 2px 6px rgba(255,50,50,0.6);
+  animation:sp-pulse 1.2s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes sp-pulse{
+  0%,100%{transform:scale(1); opacity:1;}
+  50%{transform:scale(1.15); opacity:0.85;}
+}

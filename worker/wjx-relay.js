@@ -10,13 +10,16 @@
        POST /api/wjx-relay/auction/add       → { ok, id }    body:{item,price,seller,sellerName}
        POST /api/wjx-relay/auction/buy       → { ok, item }  body:{id,buyer,buyerName}
        POST /api/wjx-relay/auction/cancel    → { ok, item }  body:{id,seller}
+       POST /api/wjx-relay/auction/history   → { ok, history:[...] }  body:{uid}
 
    部署路由：wscls.cn/api/wjx-relay*
 */
 const ROOM = 'world';
 const AK = 'a:';                 /* 交易行存储前缀 */
+const HK = 'h:';                 /* 交易记录前缀 */
 const MAX_LIST = 400;            /* 最多同时挂多少件，防滥用 */
 const MAX_PRICE = 100000000;     /* 单件最高价 */
+const MAX_HISTORY = 50;          /* 每个用户最多保留多少条交易记录 */
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), {
@@ -60,6 +63,8 @@ export class Room {
     if (path.endsWith('/auction/add')) return this.auctionAdd(request);
     if (path.endsWith('/auction/buy')) return this.auctionBuy(request);
     if (path.endsWith('/auction/cancel')) return this.auctionCancel(request);
+    if (path.endsWith('/auction/history')) return this.auctionHistory(request);
+    if (path.endsWith('/auction/claim')) return this.auctionClaim(request);
 
     /* ---------- WebSocket 位置中继 ---------- */
     if ((request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') {
@@ -126,7 +131,77 @@ export class Room {
     }
     /* Durable Object 单线程 + 输入闸门：get 与 delete 之间不会插入其它请求，天然防重复购买 */
     await this.state.storage.delete(key);
+    
+    /* ★ 记录交易历史：给卖家和买家各存一条 */
+    const historyRec = {
+      id: id,
+      item: rec.item,
+      price: rec.price,
+      seller: rec.seller,
+      sellerName: rec.sellerName,
+      buyer: String(b.buyer || ''),
+      buyerName: String(b.buyerName || '侠客').slice(0, 24),
+      at: Date.now(),
+      type: 'sold'
+    };
+    /* 卖家记录 */
+    if (rec.seller) {
+      await this.addToHistory(rec.seller, { ...historyRec, role: 'seller' });
+    }
+    /* 买家记录 */
+    if (b.buyer) {
+      await this.addToHistory(b.buyer, { ...historyRec, role: 'buyer' });
+    }
+    
+    /* ★ 同时把钱存到账本里，等卖家来领 */
+    const claimKey = 'c:' + rec.seller;
+    const existing = await this.state.storage.get(claimKey) || { gold: 0, sales: [] };
+    existing.gold += rec.price;
+    existing.sales.push({ name: rec.item.name, price: rec.price, buyerName: b.buyerName, at: Date.now() });
+    await this.state.storage.put(claimKey, existing);
+    
     return json({ ok: true, item: rec.item, price: rec.price, seller: rec.seller, sellerName: rec.sellerName });
+  }
+
+  /* ★ 添加交易记录到用户历史 */
+  async addToHistory(uid, rec) {
+    const hKey = HK + uid;
+    const list = await this.state.storage.get(hKey) || [];
+    list.unshift(rec);
+    /* 只保留最近的 MAX_HISTORY 条 */
+    if (list.length > MAX_HISTORY) list.length = MAX_HISTORY;
+    await this.state.storage.put(hKey, list);
+  }
+
+  /* ★ 获取交易历史 */
+  async auctionHistory(request) {
+    let b;
+    try { b = await request.json(); } catch (e) { return json({ ok: false, reason: 'bad-json' }, 400); }
+    const uid = String((b && b.uid) || '');
+    if (!uid) return json({ ok: false, reason: 'no-uid' }, 400);
+    const hKey = HK + uid;
+    const list = await this.state.storage.get(hKey) || [];
+    return json({ ok: true, history: list });
+  }
+
+  /* ★ 卖家领取卖出的金币 */
+  async auctionClaim(request) {
+    let b;
+    try { b = await request.json(); } catch (e) { return json({ ok: false, reason: 'bad-json' }, 400); }
+    const sellers = (b && b.sellers) || [];
+    if (!sellers.length) return json({ ok: true, gold: 0 });
+    let totalGold = 0;
+    let allSales = [];
+    for (const uid of sellers) {
+      const claimKey = 'c:' + uid;
+      const rec = await this.state.storage.get(claimKey);
+      if (rec && rec.gold > 0) {
+        totalGold += rec.gold;
+        allSales = allSales.concat(rec.sales || []);
+        await this.state.storage.delete(claimKey);
+      }
+    }
+    return json({ ok: true, gold: totalGold, sales: allSales });
   }
 
   async auctionCancel(request) {

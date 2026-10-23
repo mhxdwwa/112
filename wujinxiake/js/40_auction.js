@@ -38,6 +38,8 @@
   let listings = [];
   let sellPick = -1;
   let loading = false;
+  let history = [];
+  let historyLoaded = false;
 
   function apiBase() {
     const host = location.hostname;
@@ -115,6 +117,7 @@
     setTab('buy');
     refresh();
     claim();          /* ★ 打开就顺手把「卖出去的钱」领回来 */
+    loadHistory();    /* ★ 预加载交易历史 */
   }
   function close() { const el = $('ahPanel'); if (el) el.classList.remove('open'); }
 
@@ -123,10 +126,12 @@
     document.querySelectorAll('#ahPanel .ah-tabs button').forEach(function (b) {
       b.classList.toggle('on', b.dataset.tab === t);
     });
-    const buy = $('ahList'), sell = $('ahSell');
+    const buy = $('ahList'), sell = $('ahSell'), hist = $('ahHistory');
     if (buy) buy.style.display = t === 'buy' ? '' : 'none';
     if (sell) sell.style.display = t === 'sell' ? '' : 'none';
+    if (hist) hist.style.display = t === 'history' ? '' : 'none';
     if (t === 'sell') renderSell();
+    if (t === 'history') loadHistory();
   }
 
   function refresh() {
@@ -185,6 +190,54 @@
         else cancel(b.dataset.id);
       });
     });
+  }
+
+  /* ★ 加载交易历史 */
+  function loadHistory() {
+    const uid = myUid();
+    if (!uid) return;
+    fetch(apiBase() + '/history', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ uid: uid })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok) {
+        history = d.history || [];
+        historyLoaded = true;
+        renderHistory();
+      }
+    }).catch(function () {});
+  }
+
+  /* ★ 渲染交易历史 */
+  function renderHistory() {
+    const box = $('ahHistory');
+    if (!box) return;
+    if (!history.length) {
+      box.innerHTML = '<div class="ah-empty">暂无交易记录</div>';
+      return;
+    }
+    box.innerHTML = history.map(function (h) {
+      const eq = h.item || {};
+      const color = isMat(eq) ? ((MAT_META[eq.matId] || {}).color || '#cfd8e3') : (TIER_COLOR[eq.tier] || '#dfe6ee');
+      const isSell = h.role === 'seller';
+      const action = isSell ? '卖出' : '买入';
+      const actionColor = isSell ? '#5ee08a' : '#7fb8ff';
+      const other = isSell ? (h.buyerName || '侠客') : (h.sellerName || '侠客');
+      const time = new Date(h.at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return '' +
+        '<div class="ah-row hist">' +
+          '<div class="ah-name" style="color:' + color + '">' + esc(itemLabel(eq)) +
+            '<em>· ' + esc(SLOT_CN[eq.slot] || eq.slot) + (eq.level ? ' · Lv.' + (eq.level | 0) : '') + '</em>' +
+          '</div>' +
+          '<div class="ah-meta"><span style="color:' + actionColor + '">' + action + '</span> ' +
+            (isSell ? '给' : '自') + ' <b>' + esc(other) + '</b> · ' + time +
+          '</div>' +
+          '<div class="ah-price" style="color:' + (isSell ? '#5ee08a' : '#ff9a7a') + '">' +
+            (isSell ? '+' : '-') + (h.price | 0).toLocaleString('zh-CN') + ' 金币' +
+          '</div>' +
+        '</div>';
+    }).join('');
   }
 
   function matCount(p, id) {

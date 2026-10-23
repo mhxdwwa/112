@@ -36,7 +36,18 @@
 }
 
 #ahPanel .ah-body{flex:1; min-height:0; overflow-y:auto; padding:10px 14px;}
-#ahList, #ahSell{display:block;}
+#ahList, #ahSell, #ahHistory{display:block;}
+
+/* ★ 交易记录样式 */
+.ah-row.hist{
+  flex-direction:column; align-items:flex-start; gap:4px;
+}
+.ah-row.hist .ah-meta{
+  font-size:10.5px;
+}
+.ah-row.hist .ah-meta b{
+  color:#c6d6e4; font-weight:500;
+}
 
 .ah-row{
   display:flex; align-items:center; gap:8px; flex-wrap:wrap;

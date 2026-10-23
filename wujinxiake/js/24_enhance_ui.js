@@ -241,8 +241,8 @@ function drawCharacterInfo(){
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
   ctx.fillRect(0, 0, VW, VH);
 
-  // 主面板
-  const panelW = 560, panelH = 644;
+  // 主面板 - 更紧凑的设计
+  const panelW = 540, panelH = 580;
   const panelX = (VW - panelW) / 2, panelY = (VH - panelH) / 2;
 
   // 面板背景渐变
@@ -262,44 +262,135 @@ function drawCharacterInfo(){
   // 标题
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 26px "Microsoft YaHei"';
-  ctx.fillText('角 色 信 息', VW/2, panelY + 40);
+  ctx.font = 'bold 22px "Microsoft YaHei"';
+  ctx.fillText('角 色 信 息', VW/2, panelY + 32);
 
-  // 职业和等级
+  // 职业和等级 - 紧凑布局
   const weaponIdx = p.weaponIdx || 0;
   ctx.fillStyle = '#9fe6ff';
-  ctx.font = 'bold 17px "Microsoft YaHei"';
-  ctx.fillText(`${JOB_TITLE[weaponIdx] || '未知职业'}   Lv.${p.level}`, VW/2, panelY + 72);
-  /* ★ 总战力（装备养成的直观反馈） */
-  ctx.font = '13px "Microsoft YaHei"';
-  ctx.fillStyle = 'rgba(255,207,107,0.95)';
-  ctx.fillText('战力 ' + totalPower(p), VW/2, panelY + 92);
+  ctx.font = 'bold 15px "Microsoft YaHei"';
+  ctx.fillText((JOB_TITLE[weaponIdx] || '未知职业') + '   Lv.' + p.level + '   战力 ' + totalPower(p), VW/2, panelY + 56);
 
-  /* ★ 飞行道具（独立第 8 槽，右上角：模型 + 名称 + 属性，不挤占属性区） */
+  // 经验条 - 更紧凑
+  const expNeed = getExpNeed(p.level);
+  const expPct = Math.min(1, (p.exp||0) / expNeed);
+  const barW = panelW - 80, barX = panelX + 40, barY = panelY + 68;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(barX, barY, barW, 6);
+  ctx.fillStyle = '#2ecc71';
+  ctx.fillRect(barX, barY, barW * expPct, 6);
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barW, 6);
+  ctx.fillStyle = '#aaa';
+  ctx.font = '10px "Microsoft YaHei"';
+  ctx.textAlign = 'center';
+  ctx.fillText('EXP ' + (p.exp||0) + ' / ' + expNeed, VW/2, barY + 16);
+
+  // === 分区绘制函数 ===
+  function drawSection(title, y) {
+    ctx.fillStyle = 'rgba(201,168,76,0.12)';
+    ctx.fillRect(panelX + 16, y, panelW - 32, 22);
+    ctx.strokeStyle = 'rgba(201,168,76,0.6)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(panelX + 16, y, panelW - 32, 22);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 12px "Microsoft YaHei"';
+    ctx.fillText(title, panelX + 24, y + 15);
+    return y + 26;
+  }
+
+  function drawRow2(l1, v1, c1, l2, v2, c2, y){
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#aaa'; ctx.font = '12px "Microsoft YaHei"';
+    ctx.fillText(l1, panelX + 28, y);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = c1 || '#fff'; ctx.font = 'bold 12px "Microsoft YaHei"';
+    ctx.fillText(v1, panelX + 110, y);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#aaa'; ctx.font = '12px "Microsoft YaHei"';
+    ctx.fillText(l2, panelX + panelW/2 + 8, y);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = c2 || '#fff'; ctx.font = 'bold 12px "Microsoft YaHei"';
+    ctx.fillText(v2, panelX + panelW/2 + 90, y);
+  }
+  const num = (v) => Math.round(v || 0);
+  const pct = (v) => (Math.round((v || 0) * 10) / 10) + '%';
+
+  let ay = panelY + 92;
+
+  /* ◆ 基础属性 */
+  ay = drawSection('◆ 基础属性', ay);
+  drawRow2('生命值', Math.ceil(p.hp) + ' / ' + p.maxHp, '#ff8a8a',
+           '内力值', Math.ceil(p.mp) + ' / ' + p.maxMp, '#7fb8ff', ay); ay += 18;
+  drawRow2('金币', (p.gold || 0).toLocaleString(), '#ffd700',
+           '击杀', G.totalKills || 0, '#ccc', ay); ay += 18;
+
+  /* ◆ 四维（DNF 面板核心） */
+  ay = drawSection('◆ 四维属性', ay);
+  drawRow2('力量', num(p.statStr), '#ff7676', '智力', num(p.statInt), '#b18bff', ay); ay += 18;
+  drawRow2('体力', num(p.statVit), '#5ee08a', '精神', num(p.statSpr), '#6ab7ff', ay); ay += 18;
+
+  /* ◆ 攻击属性 */
+  ay = drawSection('◆ 攻击属性', ay);
+  const w = WEAPONS[weaponIdx];
+  const realAtk = Math.round(p.atk * w.atkMul);
+  const critPct = Math.round((p.critBonus || 0) * 100);
+  drawRow2('物攻', num(p.statPatk), '#ff9a6b', '魔攻', num(p.statMatk), '#7fb8ff', ay); ay += 18;
+  drawRow2('攻击', realAtk, '#ffcc66', '暴击', critPct + '%', '#ff7bc0', ay); ay += 18;
+  drawRow2('暴伤', '+' + num(p.statCritDmg) + '%', '#ff6b6b', '攻速', '+' + pct(p.statAtkSpd), '#ffd166', ay); ay += 18;
+
+  /* ◆ 防御属性 */
+  ay = drawSection('◆ 防御属性', ay);
+  const defVal = Math.round(p.def || 0);
+  const spdVal = Math.round(p.moveSpeed || 0);
+  drawRow2('物防', defVal, '#8fd2ff', '魔防', num(p.statMdef), '#8fd2ff', ay); ay += 18;
+  drawRow2('命中', '+' + pct(p.statHit), '#ffd166', '回避', '+' + pct(p.statDodge), '#5ee08a', ay); ay += 18;
+  drawRow2('移速', spdVal, '#88ddff', '加成', '+' + pct(p.statMoveSpd), '#5ee08a', ay); ay += 18;
+
+  /* ◆ 词条加成 */
+  ay = drawSection('◆ 词条加成', ay);
+  drawRow2('伤害', '+' + num(p.statDmgBonus) + '%', '#ff8f5c', '附加', '+' + num(p.statAddDmg) + '%', '#c98bff', ay); ay += 18;
+  drawRow2('穿透', num(p.pierce), '#9fe6ff', '冷却', '+' + num(p.cdReducePct) + '%', '#7fd4ff', ay); ay += 18;
+  const el = [p.statFire, p.statIce, p.statLight, p.statDark];
+  const elBest = Math.max.apply(null, el.map(x => num(x)));
+  drawRow2('属性', elBest > 0 ? ('+' + elBest) : '无', '#ffe066',
+           '吸血', '+' + pct((p.lifesteal || 0) * 100), '#ff6b9d', ay); ay += 18;
+
+  /* ◆ 飞行道具 - 放在最后，紧凑显示 */
   {
     const mo = p.equipment && p.equipment.mount;
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 12px "Microsoft YaHei"';
     if(mo){
+      ctx.fillStyle = 'rgba(201,168,76,0.08)';
+      ctx.fillRect(panelX + 16, ay, panelW - 32, 20);
+      ctx.textAlign = 'left';
       ctx.fillStyle = mo.tierColor || '#fff';
-      ctx.fillText('飞行道具 · ' + mo.name + '（' + (mo.tierName || '') + '）', panelX + panelW - 34, panelY + 70);
       ctx.font = '11px "Microsoft YaHei"';
-      ctx.fillStyle = '#7fd7ff';
-      ctx.fillText('移速 +' + ((mo.dnf && mo.dnf.moveSpd) || 0) + '%　回避 +' + ((mo.dnf && mo.dnf.dodge) || 0) + '%',
-                   panelX + panelW - 34, panelY + 86);
-      /* ★ 真模型预览：就画在文字左边，跟着时间动 */
-      if(window.MOUNT && MOUNT.drawIcon){
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const mgx = panelX + panelW - 262, mgy = panelY + 66;
-        const rg = ctx.createRadialGradient(mgx, mgy, 2, mgx, mgy, 44);
-        rg.addColorStop(0, hexA(mo.tierColor || '#8fa8bc', 0.30));
-        rg.addColorStop(1, hexA(mo.tierColor || '#8fa8bc', 0));
-        ctx.fillStyle = rg;
-        ctx.beginPath(); ctx.arc(mgx, mgy, 44, 0, TAU); ctx.fill();
-        ctx.restore();
-        MOUNT.drawIcon(ctx, panelX + panelW - 262, panelY + 60, 62, mo.model || 'board', performance.now()/1000);
-      }
+      ctx.fillText('✈ ' + mo.name + '(' + (mo.tierName || '') + ')  移速+' + ((mo.dnf && mo.dnf.moveSpd) || 0) + '%  回避+' + ((mo.dnf && mo.dnf.dodge) || 0) + '%', panelX + 24, ay + 14);
+      ay += 22;
+    }
+  }
+
+  // 返回按钮
+  const btnY = panelY + panelH - 48;
+  const btnW = 160, btnH = 34;
+  const btnX = VW/2 - btnW/2;
+  const bg = ctx.createLinearGradient(0, btnY, 0, btnY+btnH);
+  bg.addColorStop(0,'#c9a84c'); bg.addColorStop(1,'#8a6a2c');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 6); ctx.fill();
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px "Microsoft YaHei"';
+  ctx.textAlign = 'center';
+  ctx.fillText('返回 (C)', VW/2, btnY + 22);
+
+  // 注册点击区域
+  if(!G.charInfoClickRegions) G.charInfoClickRegions = [];
+  G.charInfoClickRegions = [
+    { x: btnX, y: btnY, w: btnW, h: btnH, action: 'back' }
+  ];
+}
     } else {
       ctx.fillStyle = 'rgba(160,170,190,.7)';
       ctx.fillText('飞行道具 · 未装备', panelX + panelW - 34, panelY + 70);

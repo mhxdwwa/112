@@ -109,6 +109,9 @@ function drawTownSideButtons(){
   const y0 = horiz ? Math.round(anchor.y - S / 2) : 158;
   const step = horiz ? S + 10 : 62;
 
+  /* ★ 检查是否有未使用的技能点 */
+  const hasSkillPoints = G && G.player && (G.player.skillPoints || 0) > 0;
+
   townSideBtnRegions = [];
   const mx = MOUSE.in ? MOUSE.x : -9999, my = MOUSE.in ? MOUSE.y : -9999;
   for(let i = 0; i < items.length; i++){
@@ -142,6 +145,24 @@ function drawTownSideButtons(){
     } else {
       ctx.textAlign = 'left';
       ctx.fillText(it.label, x + S + 6, y + S/2 + 3);
+    }
+    /* ★ 技能按钮：有未使用技能点时显示红色感叹号 */
+    if(it.id === 'skillMenu' && hasSkillPoints){
+      const pulse = 0.7 + 0.3 * Math.sin(performance.now() * 0.005);
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      /* 红色圆圈 */
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath(); ctx.arc(x + S - 6, y + 6, 9, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      /* 白色感叹号 */
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px "Microsoft YaHei"';
+      ctx.textAlign = 'center';
+      ctx.fillText('!', x + S - 6, y + 10);
+      ctx.restore();
     }
     townSideBtnRegions.push({ id: it.id, x: x, y: y, w: S, h: S });
   }

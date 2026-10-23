@@ -63,6 +63,15 @@ function buildWikiList(){
       for(let wi = 0; wi < WEAPONS.length; wi++){
         wikiItems.push({ eq: wikiGenItem('weapon', ti, lv, 0, wi), wtIdx: wi });
       }
+    } else if(wikiSlot === 'mount'){
+      /* 飞行道具：按品阶展示，每个品阶一件 */
+      if(window.MOUNT && MOUNT.TIERS){
+        const mt = MOUNT.TIERS[ti];
+        if(mt){
+          const eq = MOUNT.make(mt.id, mt.lv);
+          wikiItems.push({ eq: eq, isMount: true });
+        }
+      }
     } else {
       for(let k = 0; k < 2; k++){
         wikiItems.push({ eq: wikiGenItem(wikiSlot, ti, lv, k, -1) });
@@ -203,7 +212,7 @@ function drawEquipWiki(){
   const railX = px + 20, railY = py + 80, railW = 128;
   ctx.fillStyle = '#ffd166'; ctx.font = 'bold 13px "Microsoft YaHei"';
   ctx.fillText('部位分类', railX, railY - 8);
-  const slotTabs = ['weapon','head','armor','shoes','necklace','ring','bracer'];
+  const slotTabs = ['weapon','head','armor','shoes','necklace','ring','bracer','mount'];
   for(let i = 0; i < slotTabs.length; i++){
     const s = slotTabs[i];
     const ty = railY + i * 40;
@@ -291,7 +300,11 @@ function drawEquipWiki(){
     ctx.beginPath(); ctx.roundRect(listX + 8.5, ry + 0.5, listW - 21, rowH - 7, 6); ctx.stroke();
     /* 图标 */
     ctx.save(); ctx.globalAlpha = 0.96;
-    drawEquipIcon(eq.slot, eq.weaponType, listX + 16, ry + 5, rowH - 16);
+    if(it.isMount && window.MOUNT && MOUNT.drawIcon){
+      MOUNT.drawIcon(ctx, listX + 40, ry + rowH/2, rowH - 12, eq.model || 'board', performance.now()/1000);
+    } else {
+      drawEquipIcon(eq.slot, eq.weaponType, listX + 16, ry + 5, rowH - 16);
+    }
     ctx.restore();
     /* 名字与信息 */
     ctx.fillStyle = rc;

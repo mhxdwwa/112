@@ -135,6 +135,21 @@
     build();
     place();
     bar.classList.add('on');
+    /* ★ 技能按钮：有未使用技能点时显示红色感叹号 */
+    var hasSP = false;
+    try{ hasSP = G && G.player && (G.player.skillPoints || 0) > 0; }catch(e){}
+    var skillBtn = bar.querySelector('[data-id="skillMenu"]');
+    if(skillBtn){
+      var badge = skillBtn.querySelector('.sp-badge');
+      if(hasSP && !badge){
+        badge = document.createElement('span');
+        badge.className = 'sp-badge';
+        badge.textContent = '!';
+        skillBtn.appendChild(badge);
+      } else if(!hasSP && badge){
+        badge.remove();
+      }
+    }
   }
   window.syncMobileBar = function(){ try{ syncMobileBar(); }catch(e){} };
 
