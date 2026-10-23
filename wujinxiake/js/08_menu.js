@@ -419,27 +419,29 @@ function handleCanvasClick(cx, cy){
     if(r && r.id === 'back') gameState = questReturnState || 'town';
     else if(r && r.id === 'view'){ questViewIdx = r.idx; }
     else if(r && r.id === 'skip'){
-      /* ★ DNF式跳过任务：直接完成前置任务并领取奖励 */
-      const skipIdx = r.idx;
+      /* ★ DNF式跳过任务：直接完成当前及之前的所有可跳过任务 */
       const pq = G && G.player;
       const qq = pq ? questOf(pq) : null;
-      if(qq && skipIdx < qq.idx && canSkipQuest(pq, skipIdx)){
-        const cq2 = MAIN_QUESTS[skipIdx];
-        if(cq2 && qq.done.indexOf(cq2.id) < 0){
-          const rew = cq2.reward || {};
+      if(qq){
+        /* 先检查目标任务是否可跳过 */
+        const skipIdx = r.idx;
+        if(skipIdx <= qq.idx && canSkipQuest(pq, skipIdx)){
+          const skipped = skipAllEligibleQuests(pq);
+          const nq = MAIN_QUESTS[qq.idx];
           const parts = [];
-          if(rew.exp) parts.push('经验 ' + rew.exp);
-          if(rew.gold) parts.push('金币 ' + rew.gold);
-          if(rew.sp) parts.push('技能点 ' + rew.sp);
-          if(rew.equip) parts.push('装备 ×' + rew.equip);
+          if(skipped > 0){
+            parts.push('跳过 ' + skipped + ' 个任务');
+          }
           showDialogue([
-            '「你的实力已经远超这个任务的要求，直接完成！」',
-            '『获得任务奖励：' + (parts.join(' · ') || '无') + '』'
+            '「你的实力已经远超这些任务的要求，直接完成！」',
+            '『' + (parts.join(' · ') || '任务已更新') + '』'
           ], function(){
-            qq.done.push(cq2.id);
-            try { grantQuestReward(pq, cq2); } catch(e){}
-            questToastMsg('跳过任务 · ' + cq2.chapter + '「' + cq2.title + '」',
-              '奖励已发放：' + (parts.join(' · ') || '无'), '#ffb43c');
+            if(nq){
+              questToastMsg('当前任务 · ' + nq.chapter + '「' + nq.title + '」',
+                nq.brief || '跟着金色箭头继续冒险', '#9fe6ff');
+            } else {
+              questToastMsg('所有任务已完成', '你已成为传说中的守灯人！', '#ffd700');
+            }
           });
         }
       }

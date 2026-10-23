@@ -333,15 +333,41 @@ function questUnlockLevel(idx){
 
 /* ★ 检查任务是否可以跳过（玩家等级已达到该任务所在章节的解锁等级） */
 function canSkipQuest(p, idx){
-  if(!p || idx < 0) return false;
+  if(!p || idx < 0 || idx >= MAIN_QUESTS.length) return false;
   const q = questOf(p);
   if(!q) return false;
-  /* 只能跳过当前任务之前的任务 */
-  if(idx >= q.idx) return false;
+  /* 不能跳过当前任务之后的任务（后面的还没轮到） */
+  if(idx > q.idx) return false;
   /* 已经完成的不能跳过 */
   if(q.done.indexOf(MAIN_QUESTS[idx].id) >= 0) return false;
   /* 玩家等级达到该任务的解锁等级 */
   const unlockLv = questUnlockLevel(idx);
   return (p.level || 1) >= unlockLv;
+}
+
+/* ★ DNF式批量跳过：跳过从当前任务往前、所有满足条件的任务，返回跳过的数量 */
+function skipAllEligibleQuests(p){
+  const q = questOf(p);
+  if(!q) return 0;
+  let skipped = 0;
+  /* 从当前任务往前，逐个检查并跳过 */
+  for(let i = q.idx; i >= 0; i--){
+    if(q.done.indexOf(MAIN_QUESTS[i].id) >= 0) continue;
+    const unlockLv = questUnlockLevel(i);
+    if((p.level || 1) >= unlockLv){
+      const cq = MAIN_QUESTS[i];
+      q.done.push(cq.id);
+      try{ grantQuestReward(p, cq); }catch(e){}
+      skipped++;
+    }
+  }
+  /* 跳过之后，把当前任务索引推进到最远已完成的位置 */
+  while(q.idx < MAIN_QUESTS.length && q.done.indexOf(MAIN_QUESTS[q.idx].id) >= 0){
+    q.idx++;
+    q.step = 0;
+    q.readyTurnIn = false;
+    q.killsBase = undefined;
+  }
+  return skipped;
 }
 

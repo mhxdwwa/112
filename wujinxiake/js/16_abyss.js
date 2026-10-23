@@ -112,14 +112,14 @@ function updateQuests(dt){
     if(q.readyTurnIn) return;
     const st = cq.steps[q.step];
     if(!st){
-      /* 步骤越界（旧存档卡在“任务完成”状态）：补完整章并自愈 */
-      if(q.done.indexOf(cq.id) < 0) q.done.push(cq.id);
-      try { grantQuestReward(p, cq); } catch(e){ if(window.__dbgErr !== undefined) window.__dbgErr++; }
-      const nx = MAIN_QUESTS[q.idx + 1];
-      questToastMsg('任务完成 · ' + cq.chapter + '「' + cq.title + '」',
-        (nx ? '已接取新任务：' + nx.chapter + '「' + nx.title + '」 — 跟着金色箭头走' : cq.outro || ''), '#ffd166');
-      q.idx++; q.step = 0; setKillBase();
-      continue;
+      /* ★ 步骤越界（旧存档 / 数据异常）：不自动发奖，设为待交付状态
+         避免每次加载都重复发放经验导致升级 */
+      if(!q.readyTurnIn){
+        q.readyTurnIn = true;
+        questToastMsg('任务目标完成 · ' + cq.title,
+          '按 Q 打开任务面板，点击「交付任务」按钮领取奖励', '#ffd166');
+      }
+      return;
     }
     if(!questStepDone(p, st)) return;
     /* 当前步骤完成 */

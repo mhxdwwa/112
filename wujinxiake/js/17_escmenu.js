@@ -753,22 +753,23 @@ function drawQuestMenu(){
     const done = q && q.done.indexOf(mq.id) >= 0;
     const cur = q && q.idx === i;
     const locked = questLocked(q, i);
-    const canSkip = !locked && !done && !cur && canSkipQuest(p, i);
+    const canSkip = !locked && !done && canSkipQuest(p, i);
+    const curSkip = cur && canSkip; /* 当前任务也可跳过（DNF式） */
     const sel = viewIdx0 === i;
     const y = rowTop(i);
     if(y + rowH < listY || y > listY + listH) continue;
-    ctx.fillStyle = sel ? 'rgba(60,120,170,0.35)' : (done ? 'rgba(40,80,60,0.22)' : (cur ? 'rgba(255,209,102,0.10)' : (canSkip ? 'rgba(255,180,60,0.15)' : 'rgba(255,255,255,0.03)')));
+    ctx.fillStyle = sel ? 'rgba(60,120,170,0.35)' : (done ? 'rgba(40,80,60,0.22)' : (curSkip ? 'rgba(255,180,60,0.18)' : (cur ? 'rgba(255,209,102,0.10)' : (canSkip ? 'rgba(255,180,60,0.15)' : 'rgba(255,255,255,0.03)'))));
     ctx.beginPath(); ctx.roundRect(listX, y, listW, rowH - 8, 6); ctx.fill();
-    ctx.strokeStyle = sel ? '#7dd8ff' : (done ? 'rgba(94,224,138,0.5)' : (cur ? 'rgba(255,209,102,0.65)' : (canSkip ? 'rgba(255,180,60,0.6)' : 'rgba(120,130,140,0.25)')));
+    ctx.strokeStyle = sel ? '#7dd8ff' : (done ? 'rgba(94,224,138,0.5)' : (curSkip ? 'rgba(255,180,60,0.7)' : (cur ? 'rgba(255,209,102,0.65)' : (canSkip ? 'rgba(255,180,60,0.6)' : 'rgba(120,130,140,0.25)'))));
     ctx.lineWidth = sel || cur || canSkip ? 2 : 1;
     ctx.beginPath(); ctx.roundRect(listX, y, listW, rowH - 8, 6); ctx.stroke();
     ctx.textAlign = 'left';
-    const mark = done ? '✦ ' : (cur ? '▶ ' : (locked ? '🔒 ' : (canSkip ? '⚡ ' : '· ')));
-    ctx.fillStyle = done ? '#5ee08a' : (cur ? '#ffd166' : (locked ? '#5a6a78' : (canSkip ? '#ffb43c' : '#a9bccd')));
+    const mark = done ? '✦ ' : (curSkip ? '⚡▶ ' : (cur ? '▶ ' : (locked ? '🔒 ' : (canSkip ? '⚡ ' : '· '))));
+    ctx.fillStyle = done ? '#5ee08a' : (curSkip ? '#ffb43c' : (cur ? '#ffd166' : (locked ? '#5a6a78' : (canSkip ? '#ffb43c' : '#a9bccd'))));
     ctx.font = 'bold 13px "Microsoft YaHei"';
     ctx.fillText(mark + mq.chapter + '「' + mq.title + '」', listX + 12, y + 17);
-    ctx.fillStyle = locked ? '#4a5a68' : (canSkip ? '#ffb43c' : '#67788a'); ctx.font = '10px "Microsoft YaHei"';
-    ctx.fillText(done ? '已完成' : (cur ? '进行中' : (locked ? '🔒 未解锁' : (canSkip ? '⚡ 可跳过' : '待开启'))), listX + 12, y + 31);
+    ctx.fillStyle = locked ? '#4a5a68' : ((canSkip || curSkip) ? '#ffb43c' : '#67788a'); ctx.font = '10px "Microsoft YaHei"';
+    ctx.fillText(done ? '已完成' : (curSkip ? '⚡ 可跳过 · 等级已达标' : (cur ? '进行中' : (locked ? '🔒 未解锁' : (canSkip ? '⚡ 可跳过' : '待开启')))), listX + 12, y + 31);
     questClickRegions.push({ id:'view', idx:i, x:listX, y:y, w:listW, h:rowH - 8 });
   }
   ctx.restore();
@@ -806,9 +807,9 @@ function drawQuestMenu(){
     ctx.fillText(cq.chapter + '「' + cq.title + '」', rx + 18, ry + 32);
     /* 状态徽标 */
     ctx.font = '11px "Microsoft YaHei"';
-    const canSkipView = !lockedView && !isCur && cq && canSkipQuest(p, viewI);
-    const stTxt = lockedView ? '🔒 未解锁 · 先完成前面的任务' : (isCur ? (q.readyTurnIn ? '✔ 可交付 · 点击「交付任务」按钮' : '● 进行中') : (q && q.done.indexOf(cq.id) >= 0 ? '✔ 已完成' : (canSkipView ? '⚡ 可跳过 · 等级已达标' : '待开启')));
-    ctx.fillStyle = lockedView ? '#8a6a5a' : (isCur ? '#7dd8ff' : (canSkipView ? '#ffb43c' : '#67788a'));
+    const canSkipView = !lockedView && cq && canSkipQuest(p, viewI);
+    const stTxt = lockedView ? '🔒 未解锁 · 先完成前面的任务' : (isCur ? (canSkipView ? '⚡ 可跳过 · 等级已达标' : (q.readyTurnIn ? '✔ 可交付 · 点击「交付任务」按钮' : '● 进行中')) : (q && q.done.indexOf(cq.id) >= 0 ? '✔ 已完成' : (canSkipView ? '⚡ 可跳过 · 等级已达标' : '待开启')));
+    ctx.fillStyle = lockedView ? '#8a6a5a' : ((isCur && canSkipView) ? '#ffb43c' : (isCur ? '#7dd8ff' : (canSkipView ? '#ffb43c' : '#67788a')));
     ctx.textAlign = 'right';
     ctx.fillText(stTxt, rx + rw - 18, ry + 30);
     ctx.textAlign = 'left';
@@ -899,8 +900,8 @@ function drawQuestMenu(){
     questClickRegions.push({ id:'turnIn', x:turnInX, y:btnY, w:btnW, h:btnH });
   }
   
-  /* ★ DNF式跳过按钮：当前任务之前的任务，且玩家等级已达到解锁等级 */
-  const canSkip = !isCur && cq && !lockedView && canSkipQuest(p, viewI);
+  /* ★ DNF式跳过按钮：当前任务及之前的任务，玩家等级已达到解锁等级即可跳过 */
+  const canSkip = cq && !lockedView && canSkipQuest(p, viewI);
   if(canSkip){
     const skipW = 120, skipX = rx + rw - skipW - 10;
     ctx.fillStyle = 'rgba(255,180,60,0.85)';
