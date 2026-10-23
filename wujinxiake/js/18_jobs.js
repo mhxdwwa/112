@@ -167,6 +167,8 @@ function startSingleWithChar(charIdx){
   sp.materials.chaos_stone = 3;
   sp.gold = 800;
   sp.amplifyStones = { amplify_stone_common: 6 };
+  /* ★ 开局送一组新手药水（回血瓶 / 回蓝瓶） */
+  if(window.POTION){ POTION.starter(sp); }
   recalcPlayerStats();
   sp.hp = sp.maxHp;
   sp.mp = sp.maxMp;
