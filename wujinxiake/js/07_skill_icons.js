@@ -137,6 +137,53 @@ function updateSkillIcons(num, weaponIdx){
   refreshSkillLockUI();
 }
 
+/* ★ 计算技能当前等级的总伤害 */
+function calcSkillDamage(p, skillIdx){
+  if(!p || !p.equipment) return 0;
+  const w = WEAPONS[p.weaponIdx];
+  if(!w || !w.skills[skillIdx]) return 0;
+  const sk = w.skills[skillIdx];
+  const lv = (p.skillLevels && p.skillLevels[skillIdx]) || 1;
+  const power = sk.power || 1.0;
+  /* 基础攻击力 × 武器倍率 × 技能等级加成 × 技能威力系数 */
+  let atkVal = p.atk * (w.atkMul || 1.0);
+  atkVal *= (1 + (lv - 1) * SKILL_DMG_PER_LV);
+  /* 魔法系职业：智力转化为技能伤害加成 */
+  if(p.skillIntBonus) atkVal *= (1 + p.skillIntBonus);
+  return Math.round(atkVal * power);
+}
+
+/* ★ 更新技能按钮上的伤害数值显示 */
+function updateSkillDamageDisplay(){
+  if(!G) return;
+  const pairs = [[1, G.player], [2, G.player2]];
+  for(const [num, p] of pairs){
+    const prefix = num === 1 ? 'p1' : 'p2';
+    for(let i = 0; i < 6; i++){
+      const el = document.getElementById(prefix + 'skill' + (i + 1));
+      if(!el) continue;
+      /* 移除旧的伤害显示元素 */
+      const oldDmg = el.querySelector('.skill-dmg');
+      if(oldDmg) oldDmg.remove();
+      /* 检查技能是否已解锁 */
+      let locked = false;
+      if(p && !p.pvpAllSkills && !G.isPvp){
+        locked = !(p.skillsUnlocked && p.skillsUnlocked[i]);
+      }
+      if(locked) continue;
+      /* 计算伤害并添加显示 */
+      const dmg = calcSkillDamage(p, i);
+      if(dmg > 0){
+        const dmgEl = document.createElement('span');
+        dmgEl.className = 'skill-dmg';
+        dmgEl.textContent = dmg >= 10000 ? (dmg/1000).toFixed(1)+'k' : dmg;
+        el.appendChild(dmgEl);
+      }
+    }
+  }
+}
+window.updateSkillDamageDisplay = updateSkillDamageDisplay;
+
 /* ★ 技能栏锁定态：未领悟的招式直接隐藏，学会后再出现（方向/普攻/跳跃不受影响） */
 function refreshSkillLockUI(){
   if(!G) return;
@@ -150,7 +197,7 @@ function refreshSkillLockUI(){
       if(p && !p.pvpAllSkills && !G.isPvp){
         locked = !(p.skillsUnlocked && p.skillsUnlocked[i]);
       }
-      /* 隐藏而非灰显：未学习的技能不占视觉，学会后淡入 */
+      /* 隐藏而非灰显：未学习的技能不占视觉，学会后再出现 */
       el.style.visibility = locked ? 'hidden' : 'visible';
       el.style.opacity = locked ? '0' : '';
       el.style.pointerEvents = locked ? 'none' : 'auto';
@@ -159,6 +206,8 @@ function refreshSkillLockUI(){
       el.classList.toggle('slot-hidden', locked);
     }
   }
+  /* 更新伤害数值显示 */
+  updateSkillDamageDisplay();
 }
 window.refreshSkillLockUI = refreshSkillLockUI;
 

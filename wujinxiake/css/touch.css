@@ -24,6 +24,8 @@
 .skill-btn:active{transform:scale(0.85);opacity:0.8;}
 .skill-btn.on-cd{filter:grayscale(0.8) brightness(0.5);opacity:0.6;cursor:not-allowed;pointer-events:none;}
 .skill-btn .cd-overlay{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.8);pointer-events:none;}
+/* ★ 技能伤害数值显示 */
+.skill-btn .skill-dmg{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:bold;color:#ffd700;text-shadow:0 1px 2px rgba(0,0,0,0.9),0 0 4px rgba(255,215,0,0.5);pointer-events:none;white-space:nowrap;line-height:1;}
 .skill-btn .slot-num{font-size:17px;opacity:.85;pointer-events:none;}
 .skill-btn.attack-btn{width:70px;height:70px;background:radial-gradient(circle at 30% 30%, rgba(255,120,80,0.8), rgba(200,60,30,0.6));border:3px solid rgba(255,150,100,0.8);font-size:26px;}
 .skill-btn.skill1{width:52px;height:52px;background:radial-gradient(circle at 30% 30%, rgba(100,200,255,0.7), rgba(50,150,220,0.5));border:3px solid rgba(100,200,255,0.8);}

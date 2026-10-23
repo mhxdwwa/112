@@ -352,6 +352,8 @@ function recalcPlayerStats(){
   p.critBonus = Math.min(p.critBonus, STAT_CAPS.maxCrit / 100);
   if(p.hp > p.maxHp) p.hp = p.maxHp;
   if(p.mp > p.maxMp) p.mp = p.maxMp;
+  /* ★ 更新技能按钮伤害数值显示 */
+  if(typeof updateSkillDamageDisplay === 'function') updateSkillDamageDisplay();
 }
 
 function update(dt){
