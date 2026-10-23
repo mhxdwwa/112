@@ -86,6 +86,13 @@ function drawTownBtnIcon(kind, cx, cy, color){
 }
 
 function drawTownSideButtons(){
+  /* ★ 手机端：画布只是中间一条横带，摇杆在画布外面，canvas 画图标对不上，
+     改由 #mTownBtns（js/42_mobile_bar.js）用 DOM 按钮画在摇杆右边 */
+  const _tc = document.getElementById('touchControls');
+  if(_tc && _tc.classList.contains('mobile')){
+    townSideBtnRegions = [];
+    return;
+  }
   const items = [
     { id:'inventory',     key:'I', label:'背包', color:'#5b9cff' },
     { id:'skillMenu',     key:'U', label:'技能', color:'#ffc860' },
