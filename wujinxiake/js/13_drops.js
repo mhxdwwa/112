@@ -137,6 +137,14 @@ function rollEnemyDrops(enemy, levelIdx){
     drops.push({ type:'equip', equip: _dropEq });
     announceDrop(_dropEq);            /* ★ 传说 / 史诗全屏公告 */
   }
+
+  /* ★ 飞行道具：精英 / BOSS / 深渊才掉，品阶按掉落等级封顶 */
+  if(window.MOUNT){
+    const _mo = MOUNT.rollDrop(dropLevelIdx(levelIdx), {
+      isBoss: isBoss, isElite: isElite, abyss: !!(lvlConfig && lvlConfig.isAbyss)
+    });
+    if(_mo){ drops.push({ type:'equip', equip: _mo }); announceDrop(_mo); }
+  }
   
   // 属性道具掉落
   const propCount = isBoss ? 2 + Math.floor(Math.random()*2) + diffBonus : (Math.random() < table.propRate ? 1 : 0);
