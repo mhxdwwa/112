@@ -134,6 +134,8 @@ function apply(data){
   try{
     if(typeof initTown === 'function') initTown();
     gameState = 'town';
+    /* ★ 已有角色不需要命名，关闭命名输入框 */
+    if(typeof nameInputActive !== 'undefined') nameInputActive = false;
     if(typeof startBGM === 'function') startBGM();
     /* ★ 加载存档后刷新技能栏UI */
     if(typeof refreshSkillLockUI === 'function') refreshSkillLockUI();
