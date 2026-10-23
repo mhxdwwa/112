@@ -5,7 +5,7 @@ const EQUIP_TIERS = [
   { id:'rare', name:'稀有', color:'#9b59b6', baseMul:1.7, extraStats:2, dropRate:0.10 },
   { id:'epic', name:'神器', color:'#e91e63', baseMul:2.2, extraStats:3, dropRate:0.04 },
   { id:'legend', name:'传说', color:'#e67e22', baseMul:2.8, extraStats:4, dropRate:0.009 },
-  { id:'mythic', name:'史诗', color:'#f39c12', baseMul:3.5, extraStats:5, dropRate:0.001 }
+  { id:'mythic', name:'史诗', color:'#ff3030', baseMul:3.5, extraStats:5, dropRate:0.001 }
 ];
 
 /* 7 个装备槽：武器 / 头部 / 上衣 / 鞋子 / 项链 / 戒指 / 护腕 */

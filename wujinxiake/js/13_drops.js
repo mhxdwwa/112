@@ -73,7 +73,7 @@ const AMPLIFY_STONES = {
   rare:    { id:'amplify_stone_rare',     name:'稀有增幅石', color:'#9b59b6', tier:2 },
   epic:    { id:'amplify_stone_epic',     name:'神器增幅石', color:'#e91e63', tier:3 },
   legend:  { id:'amplify_stone_legend',   name:'传说增幅石', color:'#e67e22', tier:4 },
-  mythic:  { id:'amplify_stone_mythic',   name:'史诗增幅石', color:'#f39c12', tier:5 }
+  mythic:  { id:'amplify_stone_mythic',   name:'史诗增幅石', color:'#ff3030', tier:5 }
 };
 
 /* ============================================================

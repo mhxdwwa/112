@@ -20,7 +20,7 @@
     { id:'rare',     name:'稀有', color:'#9b59b6', model:'hover',    label:'御风滑板', lv:30, moveSpd:8,  dodge:3   },
     { id:'epic',     name:'神器', color:'#e91e63', model:'wing',     label:'青鸾之翼', lv:45, moveSpd:10, dodge:4   },
     { id:'legend',   name:'传说', color:'#e67e22', model:'flame',    label:'炽焰双翼', lv:60, moveSpd:12, dodge:5   },
-    { id:'mythic',   name:'史诗', color:'#f39c12', model:'star',     label:'星陨神翼', lv:80, moveSpd:15, dodge:6.5 }
+    { id:'mythic',   name:'史诗', color:'#ff3030', model:'star',     label:'星陨神翼', lv:60, moveSpd:14, dodge:6 }
   ];
 
   /* 道具池：同品阶可有多个命名道具，掉落时随机选一个 */
@@ -37,7 +37,7 @@
       { name:'筋斗云',   model:'goldencloud', lv:50 }
     ],
     mythic:   [
-      { name:'星陨神翼', model:'star',        lv:80 },
+      { name:'星陨神翼', model:'star',        lv:60 },
       { name:'九天莲座', model:'lotusthrone', lv:60 },
       { name:'瑶琴仙槎', model:'guqin',       lv:60 }
     ]
