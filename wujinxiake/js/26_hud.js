@@ -190,14 +190,57 @@ function questGuideTarget(){
   const cq = MAIN_QUESTS[q.idx];
   if(!cq) return null;
   const st = cq.steps[q.step];
-  /* 所有任务都指向传送使（地图入口），玩家可直接在任务面板交付 */
-  let id = 'gate_east';
-  /* 深渊前置任务：qa2 通关子夜鬼门 → 指向深渊传送使·玄冥 */
+  if(!st) return null;
+  
+  /* 深渊前置任务：qa1/qa2 → 指向深渊传送使·玄冥 */
   if(cq.id === 'qa2' || cq.id === 'qa1') return NPCS.find(n => n.id === 'porter') || null;
-  /* 根据任务索引指向对应的传送使 */
-  if(q.idx < 11) id = 'gate_east';        /* 第一~三章 → 青鸾（q0~q10，关卡索引 0~6） */
-  else if(q.idx < 18) id = 'gate_south';  /* 第四~五章 → 朱明（q11~q17，关卡索引 7~12） */
-  else id = 'gate_west';                  /* 第六章+ → 白泽（q18+，关卡索引 13~23） */
+  
+  /* 根据任务步骤类型决定指向 */
+  let targetId = null;
+  
+  if(st.type === 'story'){
+    /* story 类型：指向守门人（北境·玄冥镇） */
+    targetId = 'gatekeeper';
+  } else if(st.type === 'enhance'){
+    /* enhance 类型：指向铁匠（中央主城） */
+    targetId = 'blacksmith';
+  } else if(st.type === 'clear' || st.type === 'kills'){
+    /* clear/kills 类型：根据关卡索引指向对应传送使 */
+    let levelIdx = -1;
+    if(st.type === 'clear'){
+      levelIdx = st.level;
+    } else if(st.type === 'kills'){
+      /* kills 类型：从任务描述或上下文推断关卡 */
+      /* 根据任务索引推断 */
+      if(q.idx <= 3 || q.idx === 3) levelIdx = 0;       /* 乱石岗 */
+      else if(q.idx <= 6) levelIdx = 2;                  /* 野狼谷 */
+      else if(q.idx <= 8 || q.idx === 10) levelIdx = 4;  /* 阴兵道 */
+      else if(q.idx <= 12) levelIdx = 7;                 /* 妖魔岭 */
+      else if(q.idx <= 14) levelIdx = 7;                 /* 妖魔岭 */
+      else if(q.idx <= 17) levelIdx = 10;                /* 万兽谷 */
+      else if(q.idx <= 20) levelIdx = 13;                /* 幽冥殿 */
+    }
+    
+    /* 根据关卡索引决定传送使 */
+    if(levelIdx >= 0 && levelIdx <= 6){
+      targetId = 'gate_east';      /* 青鸾 */
+    } else if(levelIdx >= 7 && levelIdx <= 12){
+      targetId = 'gate_south';     /* 朱明 */
+    } else if(levelIdx >= 13){
+      targetId = 'gate_west';      /* 白泽 */
+    }
+  }
+  
+  /* 如果找到了目标 NPC，返回它 */
+  if(targetId){
+    return NPCS.find(n => n.id === targetId) || null;
+  }
+  
+  /* 默认：根据任务索引指向传送使（兜底） */
+  let id = 'gate_east';
+  if(q.idx < 11) id = 'gate_east';
+  else if(q.idx < 18) id = 'gate_south';
+  else id = 'gate_west';
   return NPCS.find(n => n.id === id) || null;
 }
 function drawQuestGuideArrow(){

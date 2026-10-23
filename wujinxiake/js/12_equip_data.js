@@ -68,7 +68,8 @@ function rollEquipDnf(eq){
   const w = DNF_STAT_BASE[slot] || DNF_STAT_BASE.accessory;
   const tier = EQUIP_TIERS.find(t => t.id === eq.tier) || EQUIP_TIERS[0];
   const lv = eq.level || 1;
-  const s = (1 + lv * 0.085) * tier.baseMul * (eq.gradeMul || 1);
+  /* ★ 降低等级成长系数（0.085→0.05），让品阶差异更明显 */
+  const s = (1 + lv * 0.05) * tier.baseMul * (eq.gradeMul || 1);
   const R = (v) => Math.round(v);
   const One = (v) => Math.round(v * 10) / 10;
   const d = {
@@ -107,7 +108,8 @@ function rollEquipDnf(eq){
 function rollEquipAffixes(eq){
   const tier = EQUIP_TIERS.find(t => t.id === (eq && eq.tier)) || EQUIP_TIERS[0];
   const lv = (eq && eq.level) || 1;
-  const s = (1 + lv * 0.085) * tier.baseMul * ((eq && eq.gradeMul) || 1);
+  /* ★ 降低等级成长系数（0.085→0.05），让品阶差异更明显 */
+  const s = (1 + lv * 0.05) * tier.baseMul * ((eq && eq.gradeMul) || 1);
   const count = tier.extraStats || 0;
   const pool = DNF_AFFIX_POOL.slice();
   const out = [];

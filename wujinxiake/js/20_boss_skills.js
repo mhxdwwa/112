@@ -405,7 +405,7 @@ function boss_dragon_breath(){
   setTimeout(()=>{
     if(!G||gameState!=='playing'||!e.alive)return;
     playSound('explosion');
-    G.projectiles.push({kind:'flameWave',x:e.x+e.facing*60,y:e.y-20,h:60,vx:e.facing*700,vy:0,life:1.5,w:200,hh:150,dmg:e.atk*2.0,pierce:99,hitSet:new Set(),color:'#44ddff',facing:e.facing,owner:e,trail:true});
+    G.projectiles.push({kind:'flameWave',x:e.x+e.facing*60,y:e.y-20,h:60,vx:e.facing*700,vy:0,life:1.5,w:200,hh:150,dmg:e.atk*1.2,pierce:99,hitSet:new Set(),color:'#44ddff',facing:e.facing,owner:e,trail:true});
     for(let i=0;i<25;i++){
       setTimeout(()=>{
         if(!G||gameState!=='playing')return;
@@ -428,7 +428,7 @@ function boss_dragon_tornado(){
         const pa=a+i*(TAU/8);
         spawnParticles(cx+Math.cos(pa)*r,cy-40+Math.sin(pa)*r*0.3,3,{color:i%2?'#22ccaa':'#44eecc',angle:pa+Math.PI/2,spread:0.4,spMin:40,spMax:120,lifeMin:0.3,lifeMax:0.6,sizeMin:3,sizeMax:7,grav:-80});
       }
-      _bDmgAoe(cx+Math.cos(a)*r,cy,80,e.atk*1.0,{kb:150});
+      _bDmgAoe(cx+Math.cos(a)*r,cy,80,e.atk*0.6,{kb:150});
       addEffect('hitRing',cx+Math.cos(a)*r,cy,0.2,{color:'#22ccaa',r:50});
     },400+t*150);
   }
@@ -446,7 +446,7 @@ function boss_dragon_thunder(){
       playSound('thunder');
       setTimeout(()=>{
         if(!G||gameState!=='playing')return;
-        _bDmgAoe(tx,ty,100,e.atk*2.5,{kb:200,launch:true});
+        _bDmgAoe(tx,ty,100,e.atk*1.5,{kb:200,launch:true});
         addEffect('explosion',tx,ty,0.5,{r:100,color:'#ffff44'});
         for(let j=0;j<15;j++) spawnParticles(tx+rand(-40,40),ty-rand(0,30),4,{color:j%2?'#ffff44':'#fff',angle:-Math.PI/2,spread:1.5,spMin:80,spMax:300,lifeMin:0.3,lifeMax:0.6,sizeMin:3,sizeMax:7,grav:500});
         G.shake=Math.max(G.shake,12);
@@ -469,7 +469,7 @@ function boss_demon_flame(){
   setTimeout(()=>{
     if(!G||gameState!=='playing'||!e.alive)return;
     playSound('explosion');
-    G.projectiles.push({kind:'qiBomb',x:e.x+e.facing*50,y:e.y-30,h:55,vx:e.facing*500,vy:0,life:2.5,w:120,hh:100,dmg:e.atk*2.5,pierce:3,hitSet:new Set(),color:'#cc44ff',facing:e.facing,owner:e});
+    G.projectiles.push({kind:'qiBomb',x:e.x+e.facing*50,y:e.y-30,h:55,vx:e.facing*500,vy:0,life:2.5,w:120,hh:100,dmg:e.atk*1.5,pierce:3,hitSet:new Set(),color:'#cc44ff',facing:e.facing,owner:e});
     for(let i=0;i<20;i++) spawnParticles(e.x+e.facing*50,e.y-30,5,{color:['#cc44ff','#8800cc','#ff66ff'][i%3],angle:e.facing>0?0:Math.PI,spread:0.8,spMin:80,spMax:300,lifeMin:0.3,lifeMax:0.6,sizeMin:3,sizeMax:8,grav:100});
   },350);
 }
@@ -484,7 +484,7 @@ function boss_demon_shadow(){
     e.x=tx-e.facing*60;
     playSound('bladeSwing');
     addEffect('slashArc',e.x+e.facing*50,e.y,0.4,{facing:e.facing,color:'#aa00ff',size:3.0,typeStr:'blade'});
-    _bDmgAoe(e.x+e.facing*50,e.y,100,e.atk*3.0,{kb:200,launch:true});
+    _bDmgAoe(e.x+e.facing*50,e.y,100,e.atk*1.8,{kb:200,launch:true});
     for(let i=0;i<20;i++) spawnParticles(e.x+e.facing*rand(20,80),e.y-rand(10,80),4,{color:i%2?'#aa00ff':'#6600aa',angle:e.facing>0?0:Math.PI,spread:0.8,spMin:80,spMax:250,lifeMin:0.2,lifeMax:0.5,sizeMin:3,sizeMax:7,grav:300});
     G.shake=Math.max(G.shake,12);
   },300);
@@ -505,10 +505,10 @@ function boss_demon_burst(){
       if(!G||gameState!=='playing')return;
       addEffect('hitRing',e.x,e.y,0.5,{color:r%2?'#ff00ff':'#cc00cc',r:60+r*40});
     },r*60);
-    _bDmgAoe(e.x,e.y,200,e.atk*2.5,{kb:300,launch:true});
+    _bDmgAoe(e.x,e.y,200,e.atk*1.5,{kb:300,launch:true});
     for(let i=0;i<16;i++){
       const a=i*(TAU/16);
-      G.projectiles.push({kind:'qiBomb',x:e.x+Math.cos(a)*30,y:e.y-40+Math.sin(a)*10,h:40,vx:Math.cos(a)*400,vy:Math.sin(a)*150,life:1.0,w:60,hh:50,dmg:e.atk*1.0,pierce:1,hitSet:new Set(),color:'#cc44ff',facing:Math.cos(a)>0?1:-1,owner:e});
+      G.projectiles.push({kind:'qiBomb',x:e.x+Math.cos(a)*30,y:e.y-40+Math.sin(a)*10,h:40,vx:Math.cos(a)*400,vy:Math.sin(a)*150,life:1.0,w:60,hh:50,dmg:e.atk*0.6,pierce:1,hitSet:new Set(),color:'#cc44ff',facing:Math.cos(a)>0?1:-1,owner:e});
     }
     G.shake=Math.max(G.shake,20);
   },600);
@@ -530,7 +530,7 @@ function boss_thunder_hammer(){
     if(!G||gameState!=='playing'||!e.alive)return;
     playSound('thunder'); playSound('explosion');
     addEffect('lightning',tx,-50,0.6,{endX:tx,endY:e.y,color:'#ffffff',width:10});
-    _bDmgAoe(tx,e.y,140,e.atk*3.5,{kb:300,launch:true});
+    _bDmgAoe(tx,e.y,140,e.atk*2.0,{kb:300,launch:true});
     for(let r=0;r<4;r++) setTimeout(()=>{
       if(!G||gameState!=='playing')return;
       addEffect('hitRing',tx,e.y,0.4,{color:r%2?'#ffff00':'#fff',r:50+r*35});
@@ -553,7 +553,7 @@ function boss_thunder_chain(){
       const ty=i%2===0?py:prevY+rand(-40,40);
       addEffect('lightning',prevX,prevY,0.4,{endX:tx,endY:ty,color:'#88ddff',width:4});
       playSound('thunder');
-      _bDmgAoe(tx,ty,80,e.atk*1.2,{kb:100});
+      _bDmgAoe(tx,ty,80,e.atk*0.7,{kb:100});
       addEffect('hitRing',tx,ty,0.2,{color:'#88ddff',r:40});
       for(let j=0;j<8;j++) spawnParticles(tx+rand(-20,20),ty+rand(-20,20),3,{color:j%2?'#88ddff':'#fff',angle:-Math.PI/2,spread:1,spMin:60,spMax:200,lifeMin:0.2,lifeMax:0.4,sizeMin:2,sizeMax:5,grav:400});
       prevX=tx; prevY=ty;
@@ -572,7 +572,7 @@ function boss_thunder_domain(){
       const tx=cx+rand(-200,200), ty=cy+rand(-40,40);
       addEffect('lightning',tx+rand(-20,20),-50,0.4,{endX:tx,endY:ty,color:t%2?'#ffdd00':'#ffff88',width:4});
       playSound('thunder');
-      _bDmgAoe(tx,ty,90,e.atk*1.5,{kb:120});
+      _bDmgAoe(tx,ty,90,e.atk*0.9,{kb:120});
       addEffect('explosion',tx,ty,0.3,{r:60,color:'#ffdd00'});
       for(let i=0;i<10;i++) spawnParticles(tx+rand(-30,30),ty-rand(0,20),3,{color:i%2?'#ffdd00':'#fff',angle:-Math.PI/2,spread:1.2,spMin:60,spMax:200,lifeMin:0.2,lifeMax:0.5,sizeMin:2,sizeMax:6,grav:500});
     },400+t*300);
@@ -591,7 +591,7 @@ function boss_dark_wave(){
     for(let i=0;i<3;i++){
       setTimeout(()=>{
         if(!G||gameState!=='playing'||!e.alive)return;
-        G.projectiles.push({kind:'flameWave',x:e.x+e.facing*(60+i*40),y:e.y-20,h:60,vx:e.facing*(500+i*100),vy:0,life:2.0,w:180,hh:130,dmg:e.atk*1.5,pierce:99,hitSet:new Set(),color:i===0?'#ff0044':i===1?'#cc0033':'#880022',facing:e.facing,owner:e,trail:true});
+        G.projectiles.push({kind:'flameWave',x:e.x+e.facing*(60+i*40),y:e.y-20,h:60,vx:e.facing*(500+i*100),vy:0,life:2.0,w:180,hh:130,dmg:e.atk*0.9,pierce:99,hitSet:new Set(),color:i===0?'#ff0044':i===1?'#cc0033':'#880022',facing:e.facing,owner:e,trail:true});
         addEffect('slashArc',e.x+e.facing*(60+i*40),e.y-20,0.3,{facing:e.facing,color:'#ff0044',size:2.5,typeStr:'blade'});
       },i*200);
     }
@@ -614,10 +614,10 @@ function boss_dark_summon(){
       if(!G||gameState!=='playing')return;
       addEffect('hitRing',e.x,e.y,0.6,{color:r%2?'#ff0044':'#aa0022',r:60+r*45});
     },r*70);
-    _bDmgAoe(e.x,e.y,250,e.atk*3.0,{kb:350,launch:true});
+    _bDmgAoe(e.x,e.y,250,e.atk*1.8,{kb:350,launch:true});
     for(let i=0;i<12;i++){
       const a=i*(TAU/12);
-      G.projectiles.push({kind:'qiBomb',x:e.x+Math.cos(a)*40,y:e.y-40+Math.sin(a)*15,h:45,vx:Math.cos(a)*350,vy:Math.sin(a)*120,life:1.5,w:70,hh:55,dmg:e.atk*1.2,pierce:2,hitSet:new Set(),color:'#ff0044',facing:Math.cos(a)>0?1:-1,owner:e});
+      G.projectiles.push({kind:'qiBomb',x:e.x+Math.cos(a)*40,y:e.y-40+Math.sin(a)*15,h:45,vx:Math.cos(a)*350,vy:Math.sin(a)*120,life:1.5,w:70,hh:55,dmg:e.atk*0.7,pierce:2,hitSet:new Set(),color:'#ff0044',facing:Math.cos(a)>0?1:-1,owner:e});
     }
     G.shake=Math.max(G.shake,25); G.flash=0.4; G.hitFlashColor='#ff0044';
   },700);
@@ -638,7 +638,7 @@ function boss_dark_slash(){
     const slashX=e.x+e.facing*200;
     addEffect('slashArc',slashX,e.y,0.6,{facing:e.facing,color:'#ff0000',size:5.0,typeStr:'blade'});
     addEffect('slashArc',slashX,e.y,0.5,{facing:e.facing,color:'#ff4444',size:4.0,typeStr:'blade'});
-    G.projectiles.push({kind:'flameWave',x:e.x+e.facing*80,y:e.y-20,h:70,vx:e.facing*900,vy:0,life:1.5,w:300,hh:200,dmg:e.atk*4.0,pierce:99,hitSet:new Set(),color:'#ff0000',facing:e.facing,owner:e,trail:true});
+    G.projectiles.push({kind:'flameWave',x:e.x+e.facing*80,y:e.y-20,h:70,vx:e.facing*900,vy:0,life:1.5,w:300,hh:200,dmg:e.atk*2.4,pierce:99,hitSet:new Set(),color:'#ff0000',facing:e.facing,owner:e,trail:true});
     for(let i=0;i<15;i++){
       setTimeout(()=>{
         if(!G||gameState!=='playing')return;
@@ -859,7 +859,7 @@ function boss_phoenix_dive(){
       if(!G||gameState!=='playing'||!e.alive)return;
       playSound('explosion');
       addEffect('explosion',tx,ty,0.5,{r:110,color:'#ff4422'});
-      _bDmgAoe(tx,ty,140,e.atk*3.2,{kb:280,launch:true});
+      _bDmgAoe(tx,ty,140,e.atk*1.8,{kb:280,launch:true});
       for(let i=0;i<24;i++) spawnParticles(tx+rand(-70,70),ty-rand(0,40),4,{color:i%2?'#ff4422':'#ffdd44',angle:-Math.PI/2,spread:1.6,spMin:120,spMax:420,lifeMin:0.3,lifeMax:0.7,sizeMin:3,sizeMax:9,grav:600});
       G.shake=Math.max(G.shake,18);
     },8*35+40);
@@ -874,7 +874,7 @@ function boss_phoenix_feather(){
   for(let i=0;i<N;i++) setTimeout(()=>{
     if(!G||gameState!=='playing'||!e.alive)return;
     const a=-Math.PI*0.85 + (i/(N-1))*Math.PI*0.7;
-    G.projectiles.push({kind:'feather',x:e.x,y:e.y-70-Math.max(0,e.h||0),h:70+(e.h||0),vx:Math.cos(a)*380*e.facing,vy:Math.sin(a)*380,life:2.0,w:40,hh:40,dmg:e.atk*1.3,pierce:0,hitSet:new Set(),color:'#ffaa22',facing:e.facing,owner:e,enemy:true,trail:true,rot:a});
+    G.projectiles.push({kind:'feather',x:e.x,y:e.y-70-Math.max(0,e.h||0),h:70+(e.h||0),vx:Math.cos(a)*380*e.facing,vy:Math.sin(a)*380,life:2.0,w:40,hh:40,dmg:e.atk*0.8,pierce:0,hitSet:new Set(),color:'#ffaa22',facing:e.facing,owner:e,enemy:true,trail:true,rot:a});
     playSound('arrow');
   },330+i*45);
 }
@@ -900,7 +900,7 @@ function boss_phoenix_rebirth(){
       if(!G||gameState!=='playing'||!e.alive)return;
       const r=120+ring*90;
       addEffect('hitRing',cx,cy,0.45,{color:'#ffcc00',r:r});
-      _bDmgAoe(cx,cy,r*1.1,e.atk*1.4,{kb:200});
+      _bDmgAoe(cx,cy,r*1.1,e.atk*0.8,{kb:200});
       G.shake=Math.max(G.shake,10+ring*4);
     },ring*200);
   },700);
