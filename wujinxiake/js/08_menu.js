@@ -265,10 +265,14 @@ function handleCanvasClick(cx, cy){
       } else if(r.action === 'continueQuest'){
         // ★ 继续任务：不返回城镇，直接重新进入当前地图
         stageClearData = null;
+        /* ★ 清除Boss伤害统计（新一场战斗重新开始） */
+        if(G) G.skillDamageStats = {};
         startLevel(G.levelIdx);
       } else if(!r.flipCard && r.flipCard !== 0){
         // 返回城镇（非翻牌按钮）：回到进本前的位置，不乱传送
         gameState = 'town';
+        /* ★ 清除Boss伤害统计 */
+        if(G) G.skillDamageStats = {};
         if(townPlayer){
           townCam.x = clamp(townPlayer.x - VW/2, 0, Math.max(0, TOWN_W - VW));
           townCam.y = clamp(townPlayer.y - VH/2, 0, Math.max(0, TOWN_H - VH));
@@ -591,7 +595,7 @@ function startLevel(levelIdx){
       levelIdx:0, waveIdx:0, waveState:'idle', waveTimer:0, waveNum:0,
       combo:0, comboTimer:0, shake:0, hitstop:0, flash:0, hitFlashColor:'#fff',
       totalKills:0, bannerText:'', bannerTimer:0, currentIsBoss:false,
-      camera:{x:0,y:0}, worldWidth:ROOM_WIDTH, traps:[], drops:[], clearedLevels:[] };
+      camera:{x:0,y:0}, worldWidth:ROOM_WIDTH, traps:[], drops:[], clearedLevels:[], skillDamageStats:{} };
   }
   if(G.isPvp || !G.player) restoreSingleGIfNeeded();
   if(!G.camera) G.camera = { x:0, y:0 };
@@ -602,6 +606,8 @@ function startLevel(levelIdx){
   if(!Array.isArray(G.texts)) G.texts = [];
   if(!Array.isArray(G.drops)) G.drops = [];
   if(!Array.isArray(G.traps)) G.traps = [];
+  /* ★ 清除Boss伤害统计（新关卡开始） */
+  G.skillDamageStats = {};
   if(!G.player){ gameState = 'town'; return; }
   G.levelIdx = levelIdx;
   G.waveIdx = 0;

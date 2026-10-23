@@ -148,7 +148,7 @@ function startSingleWithChar(charIdx){
     levelIdx:0, waveIdx:0, waveState:'idle', waveTimer:0, waveNum:0,
     combo:0, comboTimer:0, shake:0, hitstop:0, flash:0, hitFlashColor:'#fff', totalKills:0, bannerText:'', bannerTimer:0,
     currentIsBoss:false, camera:{x:0,y:0}, worldWidth:999999, traps:[], selectedChar:charIdx,
-    drops: [], clearedLevels: [] };
+    drops: [], clearedLevels: [], skillDamageStats: {} };
   // 先进入命名界面，命名完成后再进城镇
   gameState = 'nameInput';
   nameInputActive = true;
@@ -512,6 +512,14 @@ function damagePvpPlayer(target,dmg,src,opt){
 function damageEnemy(e,dmg,src,opt){
   opt = opt||{};
   if(!e.alive) return;
+  /* ★ Boss伤害统计：追踪每个技能对Boss的伤害 */
+  if(e.def && e.def.boss && src && src.isPlayer && G && G.skillDamageStats){
+    const skillIdx = (typeof currentSkillIdx !== 'undefined') ? currentSkillIdx : -1;
+    const key = skillIdx >= 0 ? 'skill' + skillIdx : 'attack';
+    if(!G.skillDamageStats[key]) G.skillDamageStats[key] = { total: 0, count: 0 };
+    G.skillDamageStats[key].total += dmg;
+    G.skillDamageStats[key].count += 1;
+  }
   /* ★ 敌人格挡机制 */
   let blocked = false;
   if(e.blocking && e.blocking > 0){

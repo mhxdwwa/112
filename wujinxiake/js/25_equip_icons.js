@@ -913,6 +913,59 @@ function drawStageClear(){
     ctx.font = 'bold 24px "Microsoft YaHei"';
     ctx.fillText(`评价: ${stageClearData.rating}`, panelX + panelW/2, y);
     
+    /* ★ Boss技能伤害统计面板（仅Boss关卡显示） */
+    if(stageClearData.skillDamageStats && Object.keys(stageClearData.skillDamageStats).length > 0){
+      const stats = stageClearData.skillDamageStats;
+      const statsPanelW = 280, statsPanelH = 200;
+      const statsPanelX = 40, statsPanelY = panelY + panelH + 20;
+      ctx.fillStyle = 'rgba(20,20,40,0.85)';
+      ctx.beginPath();
+      ctx.roundRect(statsPanelX, statsPanelY, statsPanelW, statsPanelH, 10);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,106,74,0.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#ff6a4a';
+      ctx.font = 'bold 15px "Microsoft YaHei"';
+      ctx.fillText('Boss战 · 技能伤害统计', statsPanelX + 15, statsPanelY + 25);
+      
+      /* 获取技能名称 */
+      const p = G.player;
+      const w = p ? WEAPONS[p.weaponIdx] : null;
+      const skillNames = [];
+      if(w && w.skills){
+        for(let i = 0; i < w.skills.length; i++){
+          skillNames.push(w.skills[i].name || ('技能' + (i+1)));
+        }
+      }
+      
+      /* 计算总伤害用于排序 */
+      const entries = [];
+      for(const key in stats){
+        const s = stats[key];
+        if(s.count > 0){
+          const avg = Math.round(s.total / s.count);
+          const name = key === 'attack' ? '普攻' : (skillNames[parseInt(key.replace('skill',''))] || key);
+          entries.push({ name, avg, total: s.total, count: s.count });
+        }
+      }
+      entries.sort((a,b) => b.avg - a.avg);
+      
+      let sy = statsPanelY + 50;
+      for(const entry of entries){
+        ctx.fillStyle = '#fff';
+        ctx.font = '13px "Microsoft YaHei"';
+        ctx.fillText(entry.name, statsPanelX + 20, sy);
+        ctx.fillStyle = '#ffd700';
+        ctx.textAlign = 'right';
+        ctx.fillText(`平均: ${entry.avg}`, statsPanelX + statsPanelW - 20, sy);
+        ctx.textAlign = 'left';
+        sy += 22;
+      }
+    }
+    
     // 右侧：3张翻牌
     const cardW = 150, cardH = 200, cardGap = 20;
     const totalCardW = cardW * 3 + cardGap * 2;

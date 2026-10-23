@@ -640,7 +640,8 @@ function update(dt){
             rewardMats: rewardMats,
             cards: cards,
             cardsFlipped: [false, false, false],
-            allCardsFlipped: false
+            allCardsFlipped: false,
+            skillDamageStats: G.skillDamageStats ? JSON.parse(JSON.stringify(G.skillDamageStats)) : null
           };
           
           // 重置掉落统计
