@@ -256,6 +256,10 @@ function handleCanvasClick(cx, cy){
             osc.start(t); osc.stop(t + 0.2);
           }
         }
+      } else if(r.action === 'continueQuest'){
+        // ★ 继续任务：不返回城镇，直接重新进入当前地图
+        stageClearData = null;
+        startLevel(G.levelIdx);
       } else if(!r.flipCard && r.flipCard !== 0){
         // 返回城镇（非翻牌按钮）：回到进本前的位置，不乱传送
         gameState = 'town';

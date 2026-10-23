@@ -1020,20 +1020,69 @@ function drawStageClear(){
     }
   }
   
-  // 返回城镇按钮（全部翻开后才显示）
+  // 返回城镇 / 继续任务 按钮（全部翻开后才显示）
   const showReturn = !stageClearData || !stageClearData.cards || stageClearData.allCardsFlipped;
   if(showReturn){
-    const btnW = 200, btnH = 44;
-    const btnX = VW/2 - btnW/2, btnY = VH - 70;
-    ctx.fillStyle = 'rgba(255,209,102,0.8)';
-    ctx.beginPath();
-    ctx.roundRect(btnX, btnY, btnW, btnH, 8);
-    ctx.fill();
-    ctx.fillStyle = '#333';
-    ctx.font = 'bold 18px "Microsoft YaHei"';
-    ctx.textAlign = 'center';
-    ctx.fillText('返回城镇', VW/2, btnY + 28);
-    stageClearClickRegions.push({ x: btnX, y: btnY, w: btnW, h: btnH });
+    /* ★ 判断当前任务是否还需要在当前地图继续（击杀数 / 通关） */
+    let needContinue = false;
+    if(G && G.player && typeof currentQuest === 'function'){
+      const cq = currentQuest(G.player);
+      if(cq && cq.steps){
+        const q = questOf(G.player);
+        const step = cq.steps[q.step] || cq.steps[0];
+        if(step){
+          if(step.type === 'kills' && !questStepDone(G.player, step)){
+            needContinue = true; // 击杀任务未完成
+          } else if(step.type === 'clear' && step.level === (stageClearData ? stageClearData.levelIdx : G.levelIdx)){
+            // 通关任务：刚通关的地图就是任务目标，但可能还需要刷击杀
+            needContinue = false;
+          }
+        }
+      }
+    }
+
+    const btnW = 180, btnH = 44, btnGap = 16;
+    if(needContinue){
+      /* 两个按钮并排：继续任务 + 返回城镇 */
+      const totalW = btnW * 2 + btnGap;
+      const startX = VW/2 - totalW/2;
+      const btnY = VH - 70;
+
+      /* 继续任务按钮 */
+      ctx.fillStyle = 'rgba(100,220,140,0.85)';
+      ctx.beginPath();
+      ctx.roundRect(startX, btnY, btnW, btnH, 8);
+      ctx.fill();
+      ctx.fillStyle = '#1a3a2a';
+      ctx.font = 'bold 17px "Microsoft YaHei"';
+      ctx.textAlign = 'center';
+      ctx.fillText('继续任务', startX + btnW/2, btnY + 28);
+      stageClearClickRegions.push({ x: startX, y: btnY, w: btnW, h: btnH, action: 'continueQuest' });
+
+      /* 返回城镇按钮 */
+      const btn2X = startX + btnW + btnGap;
+      ctx.fillStyle = 'rgba(255,209,102,0.8)';
+      ctx.beginPath();
+      ctx.roundRect(btn2X, btnY, btnW, btnH, 8);
+      ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 17px "Microsoft YaHei"';
+      ctx.textAlign = 'center';
+      ctx.fillText('返回城镇', btn2X + btnW/2, btnY + 28);
+      stageClearClickRegions.push({ x: btn2X, y: btnY, w: btnW, h: btnH });
+    } else {
+      /* 只有一个返回城镇按钮 */
+      const btnX = VW/2 - btnW/2, btnY = VH - 70;
+      ctx.fillStyle = 'rgba(255,209,102,0.8)';
+      ctx.beginPath();
+      ctx.roundRect(btnX, btnY, btnW, btnH, 8);
+      ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 18px "Microsoft YaHei"';
+      ctx.textAlign = 'center';
+      ctx.fillText('返回城镇', VW/2, btnY + 28);
+      stageClearClickRegions.push({ x: btnX, y: btnY, w: btnW, h: btnH });
+    }
   } else {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
@@ -1056,7 +1105,7 @@ function drawDungeonSelect(){
   ctx.fillText('想进地下城？去找城里的四方传送使', VW/2, 140);
   ctx.fillStyle = '#8fa4b8';
   ctx.font = '14px "Microsoft YaHei"';
-  ctx.fillText('东 · 青鸾（1~20）｜南 · 朱明（21~40）｜西 · 白泽（41~60）｜传送阵 · 玄冥（深渊）', VW/2, 168);
+  ctx.fillText('东 · 青鸾（1~22）｜南 · 朱明（22~41）｜西 · 白泽（41~60）｜传送阵 · 玄冥（深渊）', VW/2, 168);
 
   dungeonSelectClickRegions = [];
 

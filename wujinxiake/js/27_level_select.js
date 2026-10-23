@@ -27,7 +27,7 @@ function drawLevelSelect(){
       : _ac >= 1 ? '深渊传送使·玄冥 —— 已开启「子夜鬼门」，通关后解锁其余四境'
       : '深渊传送使·玄冥 —— 🔒 完成前置任务「深渊的邀请」（50 级后自动接取）方可开启深渊';
   } else if(levelSelectFilter){
-    const GNAMES = { 0:'传送使·青鸾 —— 初阶 1~20 级地图', 3:'传送使·朱明 —— 进阶 21~40 级地图', 5:'传送使·白泽 —— 高阶 41~60 级地图' };
+    const GNAMES = { 0:'传送使·青鸾 —— 初阶 1~22 级地图', 7:'传送使·朱明 —— 进阶 22~41 级地图', 13:'传送使·白泽 —— 高阶 41~60 级地图' };
     filterSub = GNAMES[levelSelectFilter.from] || '传送使 · 专区地图';
   }
   ctx.fillStyle = '#6f8b9e';

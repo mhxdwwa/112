@@ -93,7 +93,7 @@ const TOWN_DEFS = [
       { suf:'码头', sub:'去往深海的船在这里补给' }
     ],
     npcs:[
-      { id:'gate_east', name:'传送使·青鸾', x:1500, y:900, type:'gate', gate:{from:0,to:2}, desc:'传送 1~20 级地图' },
+      { id:'gate_east', name:'传送使·青鸾', x:1500, y:900, type:'gate', gate:{from:0,to:6}, desc:'传送 1~22 级地图' },
       { id:'grocer', name:'杂货商·钱二', x:600, y:620, type:'shop', desc:'杂货铺子',
         home:{ x:600, y:580, w:230, h:140, kind:'shop', name:'杂货铺', color:'#4a4438', roof:'#3d3830', accent:'#ffd166' } },
       { id:'wanderer', name:'游方·说书人', x:2500, y:620, type:'lore', desc:'听一段墟界旧事',
@@ -120,7 +120,7 @@ const TOWN_DEFS = [
       { suf:'灰渡', sub:'火山灰落进河里，水都带着暖意' }
     ],
     npcs:[
-      { id:'gate_south', name:'传送使·朱明', x:1500, y:900, type:'gate', gate:{from:3,to:4}, desc:'传送 21~40 级地图' },
+      { id:'gate_south', name:'传送使·朱明', x:1500, y:900, type:'gate', gate:{from:7,to:12}, desc:'传送 22~41 级地图' },
       { id:'stash', name:'仓管·老陈', x:600, y:1300, type:'stash', desc:'整理行囊',
         home:{ x:600, y:1260, w:250, h:150, kind:'house', name:'聚宝仓', color:'#4a4238', roof:'#3d3630', accent:'#e0c98a' } },
       { id:'recycler', name:'分解师·铜锁', x:2400, y:1560, type:'decompose', desc:'装备分解',
@@ -147,7 +147,7 @@ const TOWN_DEFS = [
       { suf:'林渡', sub:'林深处的渡口，船夫是个哑巴' }
     ],
     npcs:[
-      { id:'gate_west', name:'传送使·白泽', x:1500, y:900, type:'gate', gate:{from:5,to:11}, desc:'传送 41~60 级地图' },
+      { id:'gate_west', name:'传送使·白泽', x:1500, y:900, type:'gate', gate:{from:13,to:23}, desc:'传送 41~60 级地图' },
       { id:'reforger', name:'洗练师·墨七', x:700, y:1620, type:'reforge', desc:'词条洗练',
         home:{ x:700, y:1580, w:250, h:150, kind:'shop', name:'洗练坊', color:'#403a4e', roof:'#363248', accent:'#b18bff' } },
       { id:'teaminer', name:'茶博士·温娘', x:2300, y:560, type:'heal', desc:'讨碗热茶回血',
