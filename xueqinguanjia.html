@@ -15490,6 +15490,7 @@ async function loadDisciplineData() {
 
 async function saveDisciplineData() {
   // 使用与座位表相同的保存模式（set_all）
+  console.log('[Discipline] Saving', disciplineData.length, 'records');
   const result = await xqApi('config', {
     action: 'set_all',
     configs: {
@@ -15497,6 +15498,7 @@ async function saveDisciplineData() {
     },
     teacherName: xqCurrentUser?.teacherName || ''
   });
+  console.log('[Discipline] Save result:', result);
   return result;
 }
 
@@ -16047,6 +16049,8 @@ async function submitDisciplineRecordHt() {
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('留言已提交');
+    // 重新加载数据确保一致性
+    await loadDisciplineData();
     document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
   } else {
     showToast('提交失败: ' + result.error, 'error');
@@ -16055,16 +16059,19 @@ async function submitDisciplineRecordHt() {
 
 async function deleteDisciplineRecordHt(recordId) {
   if (!confirm('确定要撤回这条留言吗？')) return;
-  const beforeCount = disciplineData.length;
+  // 先重新加载最新数据，确保和后端同步
+  await loadDisciplineData();
   disciplineData = disciplineData.filter(r => r.id !== recordId);
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('已撤回');
+    // 重新加载确认保存成功
+    await loadDisciplineData();
     document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
   } else {
-    // 恢复数据
     showToast('撤回失败，请重试', 'error');
-    location.reload();
+    await loadDisciplineData();
+    document.getElementById('discHtContent').innerHTML = renderHtWriteTab();
   }
 }
 
@@ -16132,6 +16139,8 @@ async function submitDisciplineRecord() {
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('留言已提交');
+    // 重新加载数据确保一致性
+    await loadDisciplineData();
     document.getElementById('discContent').innerHTML = renderTeacherDiscipline();
   } else {
     showToast('提交失败: ' + result.error, 'error');
@@ -16140,21 +16149,29 @@ async function submitDisciplineRecord() {
 
 async function deleteDisciplineRecord(recordId) {
   if (!confirm('确定要撤回这条留言吗？')) return;
+  // 先重新加载最新数据，确保和后端同步
+  await loadDisciplineData();
   disciplineData = disciplineData.filter(r => r.id !== recordId);
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('已撤回');
+    // 重新加载确认保存成功
+    await loadDisciplineData();
     refreshDisciplineView();
   } else {
     showToast('撤回失败，请重试', 'error');
-    location.reload();
+    await loadDisciplineData();
+    refreshDisciplineView();
   }
 }
 
-function editDisciplineRecord(recordId) {
+async function editDisciplineRecord(recordId) {
+  // 先重新加载最新数据，确保和后端同步
+  await loadDisciplineData();
   const record = disciplineData.find(r => r.id === recordId);
   if (!record) {
-    showToast('未找到该记录', 'error');
+    console.error('[Discipline] Record not found:', recordId, 'Available IDs:', disciplineData.map(r => r.id));
+    showToast('未找到该记录，请刷新页面重试', 'error');
     return;
   }
   
@@ -16200,7 +16217,10 @@ function editDisciplineRecord(recordId) {
 
 async function saveDisciplineEdit(recordId) {
   const record = disciplineData.find(r => r.id === recordId);
-  if (!record) return;
+  if (!record) {
+    showToast('记录未找到', 'error');
+    return;
+  }
   
   record.type = document.getElementById('discEditType').value;
   record.subject = document.getElementById('discEditSubject').value.trim();
@@ -16216,9 +16236,13 @@ async function saveDisciplineEdit(recordId) {
   const result = await saveDisciplineData();
   if (result.ok) {
     showToast('已更新');
+    // 重新加载数据确保一致性
+    await loadDisciplineData();
     refreshDisciplineView();
   } else {
     showToast('保存失败: ' + result.error, 'error');
+    await loadDisciplineData();
+    refreshDisciplineView();
   }
 }
 
