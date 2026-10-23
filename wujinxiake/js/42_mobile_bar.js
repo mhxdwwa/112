@@ -78,15 +78,34 @@
     var r = joy.getBoundingClientRect();
     if(!r || r.width < 24){ bar.classList.remove('on'); return; }
 
-    /* 按钮尺寸跟着摇杆走：摇杆的 44% 左右，保证和摇杆一样「厚实」 */
-    var size = Math.round(Math.max(38, Math.min(50, r.width * 0.45)));
-    /* 竖屏放得下，横屏（高度只有 390 左右）要按可用高度压缩，5 个一排不能顶到天上 */
-    var gap = 7, avail = (window.innerHeight || 640) - (window.innerHeight - r.bottom) - 24;
-    var fit = Math.floor((avail - gap * 4) / 5);
-    if(fit > 0 && fit < size) size = Math.max(30, fit);
+    var portrait = (window.innerHeight || 0) >= (window.innerWidth || 0);
+    var size, gap = 6;
+    if(portrait){
+      /* 竖屏：横着排一排，放在「摇杆正上方」——
+         摇杆右边到右下角攻击键之间只有 180px 左右，横排放不下 5 个 */
+      var room = (window.innerWidth || 360) - 16;
+      size = Math.round(Math.max(36, Math.min(50, (room - gap * 4) / 5)));
+    } else {
+      size = Math.round(Math.max(38, Math.min(50, r.width * 0.45)));
+      /* 横屏（高度只有 390 左右）竖排，要按可用高度压缩 */
+      var avail = (window.innerHeight || 640) - (window.innerHeight - r.bottom) - 24;
+      var fit = Math.floor((avail - gap * 4) / 5);
+      if(fit > 0 && fit < size) size = Math.max(30, fit);
+    }
+    if(bar.classList.contains('hz') !== portrait){
+      bar.classList.toggle('hz', portrait);
+    }
     bar.style.setProperty('--s', size + 'px');
     var bottom = Math.round(window.innerHeight - r.bottom);
     var left = Math.round(r.right + 10);
+    if(portrait){
+      /* 横排：贴着摇杆上沿（留 26px 给 P1 标签），字在图标下面 */
+      bar.style.setProperty('--gap', gap + 'px');
+      bar.style.setProperty('--s', size + 'px');
+      bar.style.left = Math.max(8, Math.round(r.left)) + 'px';
+      bar.style.bottom = Math.round(window.innerHeight - r.top + 24) + 'px';
+      return;
+    }
     var colH = size * ITEMS.length + 7 * (ITEMS.length - 1);
 
     /* 横屏时「任务追踪」就贴在摇杆上方，会和竖排图标叠在一起：
