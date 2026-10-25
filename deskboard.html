@@ -1792,17 +1792,6 @@ function onXqgjMessage(e) {
   const d = e && e.data;
   if (!d || d.type !== 'db-xqgj-data') return;
   xqgjData = (d.payload) || {};
-  // 作息时间默认取自「学勤管家」的课程表时间设定：
-  // 只要用户没有手工改过作息（bellSource !== 'manual'），就以其为准。
-  if (inXqgj && xqgjData.schedule && cfg.bellSource !== 'manual') {
-    const nb = buildBellFromSchedule(xqgjData.schedule, xqgjData.periodNames);
-    if (nb && nb.length) {
-      cfg.bell = nb;
-      cfg.bellSource = 'xqgj';
-      markDirty();
-      toast('已从学勤管家获取作息时间');
-    }
-  }
   if (tab === 'timetable' || tab === 'students' || tab === 'duty') render();
 }
 
