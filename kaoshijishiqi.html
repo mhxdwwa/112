@@ -1056,6 +1056,15 @@
            String(d.getMinutes()).padStart(2,'0');
   }
 
+  /* 把 "9:5" / " 14:00 " 之类的输入规整成 <input type=time> 认的 "HH:MM" */
+  function padTimeStr(v){
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(v == null ? '' : v).trim());
+    if(!m) return '';
+    const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+    const mi = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+    return String(h).padStart(2,'0') + ':' + String(mi).padStart(2,'0');
+  }
+
   function calcMinutes(startStr, endStr){
     const s = timeToMs(startStr);
     let   e = timeToMs(endStr);
@@ -1642,6 +1651,20 @@
      ============================================================ */
   function init(){
     setSchool(loadSchool());
+
+    /* 「班级桌面管理 → 考试模式」里点发布后，电脑端会带上设计好的设置打开本页：
+       ?school=学校&subject=科目&start=HH:MM&end=HH:MM，打开即按这套时间倒计时 */
+    try{
+      const qp = new URLSearchParams(location.search);
+      const pSchool  = (qp.get('school')  || '').trim();
+      const pSubject = (qp.get('subject') || '').trim();
+      const pStart   = padTimeStr(qp.get('start'));
+      const pEnd     = padTimeStr(qp.get('end'));
+      if(pSchool)  setSchool(pSchool);
+      if(pSubject){ state.subject = pSubject; els.subject.textContent = pSubject; }
+      if(pStart)   els.startPicker.value = pStart;
+      if(pEnd)     els.endPicker.value   = pEnd;
+    }catch(err){ /* ignore */ }
 
     let s = timeToMs(els.startPicker.value);
     let e = timeToMs(els.endPicker.value);
