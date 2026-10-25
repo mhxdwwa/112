@@ -1668,6 +1668,24 @@
   syncNetworkTime();
   setInterval(syncNetworkTime, 30 * 60 * 1000);
 
+  /* ---- 供「班级桌面管理 → 考试模式」读取当前设置（发布到电脑桌面用） ---- */
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || d.type !== 'ksjsq-get-settings') return;
+    try {
+      var payload = {
+        school:  state.school  || '',
+        subject: state.subject || '',
+        start:   msToTime(state.startMs),
+        end:     msToTime(state.endMs)
+      };
+      if (e.source && e.source.postMessage) {
+        e.source.postMessage({ type: 'ksjsq-settings', payload: payload }, '*');
+      } else {
+        window.parent.postMessage({ type: 'ksjsq-settings', payload: payload }, '*');
+      }
+    } catch (err) { /* ignore */ }
+  });
 })();
 </script>
 </body>
