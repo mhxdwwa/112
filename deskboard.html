@@ -2835,7 +2835,7 @@ const TABS = {
           <b>${esc(moduleName(id))}</b>
           ${String(id).indexOf('cm:') === 0 ? '<span class="modtag">自定义</span>' : ''}
           <span class="grow"></span>
-          <label class="chk"><input type="checkbox" data-b="appearance.moduleHidden.${esc(id)}"${!(a.moduleHidden || {})[id] ? ' checked' : ''}> 显示</label>
+          <label class="chk"><input type="checkbox" data-b="appearance.moduleHidden.${esc(id)}" data-invert="1"${!(a.moduleHidden || {})[id] ? ' checked' : ''}> 显示</label>
           <button class="mv" data-act="mod-move" data-id="${esc(id)}" data-dir="-1"${idx === 0 ? ' disabled' : ''} title="上移">↑</button>
           <button class="mv" data-act="mod-move" data-id="${esc(id)}" data-dir="1"${idx === arr.length - 1 ? ' disabled' : ''} title="下移">↓</button>
         </div>`).join('');
@@ -3515,6 +3515,7 @@ function onInput(e) {
   let v = el.value;
   if (el.dataset.arr) v = String(el.value).split(/[、,，;；\s]+/).filter(Boolean);
   if (el.type === 'checkbox') v = el.checked;
+  if (el.dataset.invert) v = !v;          // 勾选框字面与字段相反（如「显示」绑定 moduleHidden）
   if (el.dataset.num) v = Number(el.value);
 
   if (el.dataset.bool && el.tagName === 'SELECT') v = el.value === '1';
