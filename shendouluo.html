@@ -32,7 +32,7 @@
 <button id="importBtn" style="padding:14px 50px;margin:6px;font-size:min(3vw,24px);cursor:pointer;background:linear-gradient(180deg,#2a0000,#1a0000);color:#fff;border:2px solid #c00;font-family:'Courier New',monospace;letter-spacing:4px" onclick="document.getElementById('imageUpload').click()">导入题目</button>
 <button id="startBtn" disabled>▶ 开始游戏</button>
 <div class="info">先导入题目图片 · WASD/方向键移动 · 自动射击 · P键暂停</div>
-<div style="position:absolute;bottom:12px;right:16px;color:#ffff00;font-size:14px;font-family:'Courier New',monospace;letter-spacing:2px;text-shadow:0 0 8px rgba(255,255,0,0.4)">制作者：九圩中学吴胜闯老师</div>
+<div style="position:absolute;bottom:12px;right:16px;color:#ffff00;font-size:14px;font-family:'Courier New',monospace;letter-spacing:2px;text-shadow:0 0 8px rgba(255,255,0,0.4)">© 神话大战 开发者：吴胜闯</div>
 </div>
 <div id="charSelect">
 <h2>选择角色</h2>
@@ -1103,7 +1103,7 @@ if(gameState==='gameover') {ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,0,W,
 if(gameState==='paused') {ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';ctx.font=`bold ${Math.min(W*0.06,60)}px "Courier New"`;ctx.textAlign='center';ctx.fillText('已暂停',W/2,H/2);ctx.textAlign='left';}
 ctx.fillStyle='rgba(0,0,0,0.015)';for(let i=0;i<H;i+=4) {ctx.fillRect(0,i,W,1);}
 const vGrad=ctx.createRadialGradient(W/2,H/2,W*0.35,W/2,H/2,W*0.75);vGrad.addColorStop(0,'transparent');vGrad.addColorStop(1,'rgba(0,0,0,0.2)');ctx.fillStyle=vGrad;ctx.fillRect(0,0,W,H);
-ctx.fillStyle='#ffff00';ctx.font='16px "Courier New"';ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('制作者：九圩中学吴胜闯老师',W - 10,H - 10);ctx.textAlign='left';ctx.textBaseline='alphabetic';}
+ctx.fillStyle='#ffff00';ctx.font='16px "Courier New"';ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('© 神话大战 开发者：吴胜闯',W - 10,H - 10);ctx.textAlign='left';ctx.textBaseline='alphabetic';}
 document.addEventListener('keydown',e=> {const key=e.key.toLowerCase();keys[key]=true;if(e.key===' ') keys['space']=true;if(gameState==='playing'||gameState==='gameover') {if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key)) e.preventDefault();}
 if(e.key==='Enter'&&gameState==='gameover') {returnToMenu();}
 if((e.key==='p'||e.key==='P')&&(gameState==='playing'||gameState==='paused')) {gameState=gameState==='playing'?'paused':'playing';if(gameState==='paused') pauseBGM();else resumeBGM();updatePauseBtn();}});function updatePauseBtn(){const pb=document.getElementById('pauseBtn');if(pb) pb.textContent=gameState==='paused'?'开始':'暂停';}
