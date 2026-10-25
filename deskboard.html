@@ -215,6 +215,14 @@ table.tt tr:last-child td { border-bottom: 0; }
 .cell .r2 { display: flex; gap: 3px; }
 .cell .r2 input { flex: 1; min-width: 0; }
 .cell input.s { font-weight: 600; }
+.cell .time-row { display: flex; align-items: center; gap: 2px; font-size: 10px; color: var(--ink-3); }
+.cell .time-input { 
+  width: 45px; padding: 2px 4px; font-size: 10px; 
+  border: 1px solid transparent; border-radius: 3px;
+  background: transparent; text-align: center;
+}
+.cell .time-input:hover { border-color: var(--line); background: #fff; }
+.cell .time-input:focus { background: #fff; border-color: var(--accent); }
 table.tt col.is-weekend { background: #fcfbf8; }
 
 /* 成员标签 */
@@ -1866,15 +1874,21 @@ const TABS = {
           if (!hasPeriod) {
             return `<td><div class="cell empty-cell"></div></td>`;
           }
-          // Show only course name in each cell; empty course = blank cell
+          // Show course name and time in each cell
           return `<td>
             <div class="cell">
-              <input class="s" data-day="${d.k}" data-p="${period.p}" data-f="s" value="${esc(c.s || '')}" placeholder="留空表示没课">
+              <input class="s" data-day="${d.k}" data-p="${period.p}" data-f="s" value="${esc(c.s || '')}" placeholder="课程">
+              <div class="time-row">
+                <input class="time-input" data-day="${d.k}" data-p="${period.p}" data-f="start" value="${esc(c.start || '')}" placeholder="开始">
+                <span>-</span>
+                <input class="time-input" data-day="${d.k}" data-p="${period.p}" data-f="end" value="${esc(c.end || '')}" placeholder="结束">
+              </div>
             </div>
           </td>`;
         }).join('');
+        const timeStr = period.start && period.end ? `${period.start}-${period.end}` : '';
         return `<tr>
-          <td class="pc"><div class="pcell"><b>${esc(period.name)}</b></div></td>
+          <td class="pc"><div class="pcell"><b>${esc(period.name)}</b><span style="font-size:10px;color:var(--ink-3)">${esc(timeStr)}</span></div></td>
           ${cells}
         </tr>`;
       }).join('');
@@ -1882,9 +1896,10 @@ const TABS = {
       return `
       <div class="card">
         <h2>课程表</h2>
-        <p class="hint">点格子填写课程名称，留空表示没课，桌面看板上对应时段显示空白</p>
+        <p class="hint">点格子填写课程名称和时间，留空表示没课，桌面看板上对应时段显示空白</p>
         <div class="row-inline" style="margin-bottom:10px;gap:15px;flex-wrap:wrap">
           <label class="chk"><input type="checkbox" id="chkWeekend"${showWeekend ? ' checked' : ''}> 显示周末</label>
+          <button class="btn ghost" data-act="edit-period-names">节次名称</button>
         </div>
         <div class="tt-wrap">
           <table class="tt">
@@ -2273,6 +2288,86 @@ function bindEvents() {
     if (!b) return;
     const act = b.dataset.act;
     const i = b.dataset.i !== undefined ? Number(b.dataset.i) : -1;
+
+    if (act === 'edit-period-names') {
+      // Get current periods from timetable
+      const allPeriods = new Map();
+      for (const d of DAYS) {
+        const arr = (cfg.timetable || {})[d.k] || [];
+        for (const period of arr) {
+          if (!allPeriods.has(period.p)) {
+            allPeriods.set(period.p, {
+              p: period.p,
+              name: period.name || '',
+              start: period.start || '',
+              end: period.end || ''
+            });
+          }
+        }
+      }
+      const periods = Array.from(allPeriods.values()).sort((a, b) => a.p - b.p);
+      
+      // Create a simple modal to edit period names
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+      modal.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:24px;max-width:600px;max-height:80vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+          <h3 style="margin:0 0 16px 0;font-size:16px;">节次名称与时间</h3>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${periods.map(p => `
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span style="width:60px;font-size:12px;color:#666;">第${p.p}节</span>
+                <input type="text" data-p="${p.p}" data-f="name" value="${esc(p.name)}" placeholder="名称" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <input type="time" data-p="${p.p}" data-f="start" value="${esc(p.start)}" style="width:100px;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <span>-</span>
+                <input type="time" data-p="${p.p}" data-f="end" value="${esc(p.end)}" style="width:100px;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+              </div>
+            `).join('')}
+          </div>
+          <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
+            <button id="cancelPeriodNames" style="padding:8px 16px;border:1px solid #ddd;background:#fff;border-radius:6px;cursor:pointer;">取消</button>
+            <button id="savePeriodNames" style="padding:8px 16px;border:none;background:#4a90e2;color:#fff;border-radius:6px;cursor:pointer;">保存</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      // Handle cancel
+      modal.querySelector('#cancelPeriodNames').addEventListener('click', () => modal.remove());
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+      
+      // Handle save
+      modal.querySelector('#savePeriodNames').addEventListener('click', () => {
+        const inputs = modal.querySelectorAll('input[data-p]');
+        const updates = new Map();
+        inputs.forEach(input => {
+          const p = input.dataset.p;
+          const f = input.dataset.f;
+          if (!updates.has(p)) updates.set(p, {});
+          updates.get(p)[f] = input.value;
+        });
+        
+        // Update all days with the new period names/times
+        for (const d of DAYS) {
+          const arr = (cfg.timetable || {})[d.k] || [];
+          for (const period of arr) {
+            const update = updates.get(String(period.p));
+            if (update) {
+              if (update.name) period.name = update.name;
+              if (update.start) period.start = update.start;
+              if (update.end) period.end = update.end;
+            }
+          }
+        }
+        
+        markDirty();
+        render();
+        modal.remove();
+        toast('节次名称与时间已更新');
+      });
+      
+      return;
+    }
 
     if (act === 'group-add') {
       (cfg.dutyGroups = cfg.dutyGroups || []).push({ name: '新组', members: [] });
