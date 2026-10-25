@@ -1603,10 +1603,31 @@ function buildTimetableFromClass(classTimetable, className) {
 function importBellFromXqgj() {
   if (!xqgjData) { toast('正在读取学勤管家数据…'); return; }
   const bell = buildBellFromSchedule(xqgjData.schedule, xqgjData.periodNames);
-  if (!bell.length) { toast('学勤管家没有作息数据'); return; }
+  if (!bell.length) {
+    // 作息取自「我的课程表」里每节课的时间设置；没设置过就取不到
+    toast(xqgjData.scheduleConfigured === false
+      ? '学勤管家里还没有设置每节课的时间，无法获取作息'
+      : '没有取到作息数据');
+    return;
+  }
   cfg.bell = bell;
+  cfg.bellSource = 'xqgj';
   markDirty(); render();
-  toast('已从学勤管家导入作息时间');
+  toast('已从学勤管家获取作息时间');
+}
+
+function importDutyFromXqgj() {
+  if (!xqgjData) { toast('正在读取学勤管家数据…'); return; }
+  const list = xqgjData.dutyGroups || [];
+  if (!list.length) {
+    toast(xqgjData.dutyClass
+      ? ('学勤管家「' + xqgjData.dutyClass + '」还没有设置值日分组')
+      : '学勤管家还没有设置值日分组');
+    return;
+  }
+  cfg.dutyGroups = list.map((g) => ({ name: g.name || '', members: (g.members || []).slice() }));
+  markDirty(); render();
+  toast('已导入 ' + cfg.dutyGroups.length + ' 个值日分组');
 }
 
 function importStudentsFromXqgj(cls) {
@@ -1645,7 +1666,7 @@ function onXqgjMessage(e) {
       toast('已从学勤管家获取作息时间');
     }
   }
-  if (tab === 'bell' || tab === 'timetable' || tab === 'students') render();
+  if (tab === 'bell' || tab === 'timetable' || tab === 'students' || tab === 'duty') render();
 }
 
 /* ==========================================================================
@@ -1804,6 +1825,12 @@ const TABS = {
 
       const total = (cfg.dutyGroups || []).length;
       return `
+      ${inXqgj ? `
+      <div class="card">
+        <h2>从学勤管家获取值日分组</h2>
+        <p class="hint">把学勤管家「值日安排」里已经分好的组同步过来（覆盖当前分组）。如果该班级在学勤管家里还没设置值日分组，这里会取不到。</p>
+        <button class="btn" data-act="xq-duty">从学勤管家获取值日分组</button>
+      </div>` : ''}
       <div class="card">
         <h2>轮换分组</h2>
         <p class="hint">从「值日轮换起始日」开始，每天按顺序轮到下一组，循环往复。共 ${total} 组。</p>
@@ -2012,10 +2039,10 @@ const TABS = {
       <div class="card">
         <h2>使用提示</h2>
         <div class="kv">
-          <b>打开控制台</b><span>托盘图标右键 →「打开网页控制台」，或把这个网址存成浏览器书签</span>
+          <b>打开控制台</b><span>双击托盘图标打开，或把这个网址存成浏览器书签</span>
           <b>立即生效</b><span>改完点「保存并应用」或按 Ctrl + S，桌面看板同步刷新</span>
-          <b>退出程序</b><span>托盘图标右键 → 退出 DeskBoard</span>
-          <b>开机自启</b><span>默认已开启，托盘里可以关掉</span>
+          <b>连接码</b><span>右键托盘图标 →「教室连接码」可一键复制</span>
+          <b>开机自启</b><span>默认已开启</span>
         </div>
         <div class="row-inline" style="margin-top:14px">
           <button class="btn ghost" data-act="quit">退出程序</button>
@@ -2291,6 +2318,7 @@ function bindEvents() {
       importStudentsFromXqgj(sel ? sel.value : cfg.className);
       return;
     }
+    if (act === 'xq-duty') { importDutyFromXqgj(); return; }
     if (act === 'stu-add') {
       (cfg.students = cfg.students || []).push({ name: '', gender: '' });
       markDirty(); render(); return;
