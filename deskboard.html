@@ -1845,36 +1845,42 @@ const TABS = {
     render() {
       const days = showWeekend ? DAYS : DAYS.slice(0, 5);
       
-      // Get all periods from all days to find the maximum
-      const allPeriods = new Map();
-      for (const d of days) {
-        const arr = (cfg.timetable || {})[d.k] || [];
-        for (const period of arr) {
-          if (!allPeriods.has(period.p)) {
-            allPeriods.set(period.p, {
-              p: period.p,
-              name: period.name || '',
-              start: period.start || '',
-              end: period.end || ''
-            });
+      // Default period names
+      const DEFAULT_NAMES = ['早读', '第一节', '第二节', '第三节', '第四节', '第五节', '第六节', '第七节', '第八节', '晚自习1', '晚自习2', '第十一节'];
+      
+      // Get period count from settings or default to 12
+      const periodCount = cfg.periodCount || 12;
+      
+      // Build period list based on periodCount
+      const periods = [];
+      for (let i = 0; i < periodCount; i++) {
+        const p = i + 1;
+        // Try to get period info from existing data
+        let name = DEFAULT_NAMES[i] || `第${p}节`;
+        let start = '';
+        let end = '';
+        
+        // Look for this period in any day's data
+        for (const d of DAYS) {
+          const arr = (cfg.timetable || {})[d.k] || [];
+          const period = arr.find((x) => Number(x.p) === p);
+          if (period) {
+            if (period.name) name = period.name;
+            if (period.start) start = period.start;
+            if (period.end) end = period.end;
+            break;
           }
         }
+        
+        periods.push({ p, name, start, end });
       }
-      
-      // Sort periods by p (period number)
-      const periods = Array.from(allPeriods.values()).sort((a, b) => a.p - b.p);
 
       const head = days.map((d) => `<th>${d.n}</th>`).join('');
       const body = periods.map((period) => {
         const cells = days.map((d) => {
           const arr = (cfg.timetable || {})[d.k] || [];
           const c = arr.find((x) => Number(x.p) === Number(period.p)) || {};
-          // Only show inputs if this period exists for this day
-          const hasPeriod = arr.some((x) => Number(x.p) === Number(period.p));
-          if (!hasPeriod) {
-            return `<td><div class="cell empty-cell"></div></td>`;
-          }
-          // Show course name and time in each cell
+          // Show course name and time in each cell (even if empty)
           return `<td>
             <div class="cell">
               <input class="s" data-day="${d.k}" data-p="${period.p}" data-f="s" value="${esc(c.s || '')}" placeholder="课程">
@@ -1899,6 +1905,9 @@ const TABS = {
         <p class="hint">点格子填写课程名称和时间，留空表示没课，桌面看板上对应时段显示空白</p>
         <div class="row-inline" style="margin-bottom:10px;gap:15px;flex-wrap:wrap">
           <label class="chk"><input type="checkbox" id="chkWeekend"${showWeekend ? ' checked' : ''}> 显示周末</label>
+          <label>节数：<select id="periodCount" style="width:60px">
+            ${[7,8,9,10,11,12,13,14].map(n => `<option value="${n}"${periodCount===n?' selected':''}>${n}节</option>`).join('')}
+          </select></label>
           <button class="btn ghost" data-act="edit-period-names">节次名称</button>
         </div>
         <div class="tt-wrap">
@@ -2201,6 +2210,13 @@ function render() {
   const cw = $('chkWeekend');
   if (cw) cw.addEventListener('change', (e) => { showWeekend = e.target.checked; render(); });
 
+  const pc = $('periodCount');
+  if (pc) pc.addEventListener('change', (e) => { 
+    cfg.periodCount = parseInt(e.target.value, 10); 
+    markDirty();
+    render(); 
+  });
+
   mountPreview();
 }
 
@@ -2290,22 +2306,32 @@ function bindEvents() {
     const i = b.dataset.i !== undefined ? Number(b.dataset.i) : -1;
 
     if (act === 'edit-period-names') {
-      // Get current periods from timetable
-      const allPeriods = new Map();
-      for (const d of DAYS) {
-        const arr = (cfg.timetable || {})[d.k] || [];
-        for (const period of arr) {
-          if (!allPeriods.has(period.p)) {
-            allPeriods.set(period.p, {
-              p: period.p,
-              name: period.name || '',
-              start: period.start || '',
-              end: period.end || ''
-            });
+      // Default period names
+      const DEFAULT_NAMES = ['早读', '第一节', '第二节', '第三节', '第四节', '第五节', '第六节', '第七节', '第八节', '晚自习1', '晚自习2', '第十一节'];
+      const periodCount = cfg.periodCount || 12;
+      
+      // Build period list based on periodCount
+      const periods = [];
+      for (let i = 0; i < periodCount; i++) {
+        const p = i + 1;
+        let name = DEFAULT_NAMES[i] || `第${p}节`;
+        let start = '';
+        let end = '';
+        
+        // Look for this period in any day's data
+        for (const d of DAYS) {
+          const arr = (cfg.timetable || {})[d.k] || [];
+          const period = arr.find((x) => Number(x.p) === p);
+          if (period) {
+            if (period.name) name = period.name;
+            if (period.start) start = period.start;
+            if (period.end) end = period.end;
+            break;
           }
         }
+        
+        periods.push({ p, name, start, end });
       }
-      const periods = Array.from(allPeriods.values()).sort((a, b) => a.p - b.p);
       
       // Create a simple modal to edit period names
       const modal = document.createElement('div');
@@ -2313,6 +2339,7 @@ function bindEvents() {
       modal.innerHTML = `
         <div style="background:#fff;border-radius:12px;padding:24px;max-width:600px;max-height:80vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
           <h3 style="margin:0 0 16px 0;font-size:16px;">节次名称与时间</h3>
+          <p style="margin:0 0 12px 0;font-size:12px;color:#666;">修改节次名称和时间，会应用到所有天</p>
           <div style="display:flex;flex-direction:column;gap:8px;">
             ${periods.map(p => `
               <div style="display:flex;gap:8px;align-items:center;">
@@ -2349,7 +2376,10 @@ function bindEvents() {
         
         // Update all days with the new period names/times
         for (const d of DAYS) {
-          const arr = (cfg.timetable || {})[d.k] || [];
+          cfg.timetable = cfg.timetable || {};
+          const arr = cfg.timetable[d.k] || (cfg.timetable[d.k] = []);
+          
+          // Update existing periods
           for (const period of arr) {
             const update = updates.get(String(period.p));
             if (update) {
@@ -2358,6 +2388,26 @@ function bindEvents() {
               if (update.end) period.end = update.end;
             }
           }
+          
+          // Create new periods if they don't exist
+          updates.forEach((update, pStr) => {
+            const p = Number(pStr);
+            const exists = arr.some((x) => Number(x.p) === p);
+            if (!exists) {
+              arr.push({
+                p: p,
+                name: update.name || '',
+                start: update.start || '',
+                end: update.end || '',
+                s: '',
+                t: '',
+                r: ''
+              });
+            }
+          });
+          
+          // Sort by period number
+          arr.sort((a, b) => a.p - b.p);
         }
         
         markDirty();
@@ -2506,7 +2556,25 @@ function onInput(e) {
     const arr = cfg.timetable[day] || (cfg.timetable[day] = []);
     let item = arr.find((c) => Number(c.p) === p);
     if (!item) {
-      item = { p, s: '', t: '', r: '' };
+      // Get default name and time from periodCount settings
+      const DEFAULT_NAMES = ['早读', '第一节', '第二节', '第三节', '第四节', '第五节', '第六节', '第七节', '第八节', '晚自习1', '晚自习2', '第十一节'];
+      const defaultName = DEFAULT_NAMES[p - 1] || `第${p}节`;
+      
+      // Try to get default time from another day
+      let defaultStart = '';
+      let defaultEnd = '';
+      for (const d of DAYS) {
+        if (d.k === day) continue;
+        const otherArr = cfg.timetable[d.k] || [];
+        const otherPeriod = otherArr.find((x) => Number(x.p) === p);
+        if (otherPeriod) {
+          if (otherPeriod.start) defaultStart = otherPeriod.start;
+          if (otherPeriod.end) defaultEnd = otherPeriod.end;
+          break;
+        }
+      }
+      
+      item = { p, name: defaultName, start: defaultStart, end: defaultEnd, s: '', t: '', r: '' };
       arr.push(item);
       arr.sort((a, b2) => a.p - b2.p);
     }
