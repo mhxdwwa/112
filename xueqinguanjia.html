@@ -608,6 +608,20 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 /* === 班级桌面管理（内嵌 DeskBoard 控制台，不跳转页面） === */
+/* 页面级内嵌：控制台作为普通功能页渲染进内容区 */
+.db-page { width: 100%; }
+.db-page-frame {
+  width: 100%;
+  height: calc(100vh - 132px);
+  min-height: 560px;
+  border: 0; border-radius: 12px;
+  background: #fff; display: block;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.08);
+}
+@media (max-width: 760px) {
+  .db-page-frame { height: calc(100vh - 108px); min-height: 480px; border-radius: 0; }
+}
+
 .db-console-overlay {
   position: fixed; inset: 0; z-index: 2600;
   background: rgba(15,23,42,0.55); backdrop-filter: blur(4px);
@@ -641,9 +655,18 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .db-console-head .db-close:hover { background: var(--gray-100); color: var(--gray-600); }
 .db-console-frame { flex: 1 1 auto; width: 100%; border: 0; display: block; background: #f7f5f1; }
-@media (max-width: 640px) {
-  .db-console-box { width: 100vw; height: 100vh; border-radius: 0; }
+@media (max-width: 760px) {
+  /* 手机上让浮层占满整屏，并兼容移动端浏览器地址栏（dvh） */
+  .db-console-box {
+    width: 100vw; height: 100vh; height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .db-console-head { padding: 0 10px 0 14px; gap: 8px; flex: 0 0 50px; height: 50px; }
+  .db-console-head .db-t { font-size: 15px; }
   .db-console-head .db-s { display: none; }
+  .db-console-head .db-close { width: 40px; height: 40px; }
+  .db-console-frame { background: #f7f5f1; }
 }
 
 /* === FORM === */
@@ -4186,7 +4209,7 @@ function buildSidebar() {
       <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
       <span>考试计时器</span>
     </div>`;
-    html += `<div class="sidebar-item" id="navDeskboard" onclick="openDeskboardConsole()">
+    html += `<div class="sidebar-item" id="navDeskboard" data-page="deskboard" onclick="navigate('deskboard')">
       <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
       <span>班级桌面管理</span>
     </div>`;
@@ -4268,6 +4291,42 @@ function closeDeskboardConsole() {
   dbConsolePrevActive = null;
 }
 
+/* ---- 班级桌面管理：页面级内嵌，与其它功能页（如成绩管理）一致 ---- */
+function dbReadConsoleTemplate() {
+  try {
+    const tplEl = document.getElementById('dbConsoleTpl');
+    if (!tplEl) return '';
+    const b64 = (tplEl.textContent || '').replace(/\s+/g, '');
+    if (!b64) return '';
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(buf);
+  } catch (e) { return ''; }
+}
+
+// 页面渲染器：内容区里放一个整页 iframe（控制台整页内联在本文件，用 srcdoc 注入）
+function renderDeskboardConsole() {
+  return `<div class="db-page">
+    <iframe class="db-page-frame" id="dbPageFrame" title="班级桌面管理" allow="autoplay; fullscreen"></iframe>
+  </div>`;
+}
+
+function mountDeskboardConsole() {
+  const fr = document.getElementById('dbPageFrame');
+  if (!fr) return;
+  const tpl = dbReadConsoleTemplate();
+  if (tpl) {
+    fr.removeAttribute('src');
+    fr.srcdoc = tpl;
+  } else {
+    // 兜底：模板为空时退回独立文件
+    let src = 'deskboard.html';
+    try { src = new URL('deskboard.html', location.href).href; } catch (e) { /* ignore */ }
+    fr.src = src;
+  }
+}
+
 // Esc 关闭（焦点在本页时）；焦点在 iframe 里时由控制台页面 postMessage 回来
 document.addEventListener('keydown', function (e) {
   if (e.key !== 'Escape' && e.key !== 'Esc') return;
@@ -4278,8 +4337,106 @@ document.addEventListener('keydown', function (e) {
   }
 }, true);
 
+/* 给内嵌控制台用的值日分组：把学勤管家「值日安排」里的分组摊平成
+   [{name, members:[姓名]}]。没设置过值日就返回空数组（控制台据此提示拿不到）。 */
+function dbCurrentClassName() {
+  try {
+    const u = (typeof xqCurrentUser !== 'undefined' && xqCurrentUser) ? xqCurrentUser : {};
+    const arr = u.headteacherClasses || u.classes || u.allClasses || [];
+    if (arr && arr.length) return arr[0];
+  } catch (e) { /* ignore */ }
+  if (typeof cfg !== 'undefined' && cfg && cfg.className) return cfg.className;
+  return (typeof dutyCurrentClass !== 'undefined') ? dutyCurrentClass : '';
+}
+
+/* 作息时间取自「我的课程表」里每节课的时间设置（classTimetableData._schedule）。
+   教师没设置过就返回 false —— 控制台据此提示取不到时间，而不是拿默认值糊弄。 */
+function dbScheduleConfigured() {
+  try {
+    return !!(typeof classTimetableData !== 'undefined' && classTimetableData
+      && classTimetableData._schedule && typeof classTimetableData._schedule === 'object'
+      && Object.keys(classTimetableData._schedule).length > 0);
+  } catch (e) { return false; }
+}
+
+function dbBuildDutyGroups() {
+  try {
+    const cls = dbCurrentClassName();
+    if (!cls || typeof dutyData === 'undefined' || !dutyData) return [];
+    const dd = dutyData[cls];
+    if (!dd || !dd.groups) return [];
+    const students = (typeof STUDENTS !== 'undefined' && STUDENTS[cls]) ? STUDENTS[cls] : [];
+    const out = [];
+    Object.keys(dd.groups || {}).forEach(function (catKey) {
+      const catName = (dd.categories && dd.categories[Number(catKey)]) ? dd.categories[Number(catKey)] : '';
+      const gs = dd.groups[catKey] || [];
+      gs.forEach(function (g, gi) {
+        const members = (g && g.students ? g.students : []).map(function (sid) {
+          const s = students.find(function (st) { return st.id === sid; });
+          return s ? s.name : '';
+        }).filter(Boolean);
+        const nm = (g && g.name) ? g.name
+          : ((catName ? catName + '·' : '') + '第' + (gi + 1) + '组');
+        out.push({ name: nm, members: members });
+      });
+    });
+    return out;
+  } catch (e) { return []; }
+}
+
 window.addEventListener('message', function (e) {
-  if (e && e.data && e.data.type === 'db-console-close') closeDeskboardConsole();
+  const d = e && e.data;
+  if (!d) return;
+
+  if (d.type === 'db-console-close') {
+    // 现在是页面级内嵌：返回就是回学勤管家首页；老浮层路径保留兼容
+    if (typeof currentPage !== 'undefined' && currentPage === 'deskboard' && typeof navigate === 'function') {
+      navigate('overview');
+    } else {
+      closeDeskboardConsole();
+    }
+    return;
+  }
+
+  // 内嵌的「班级桌面管理」控制台请求学勤管家数据（学生 / 课程表 / 作息 / 值日）
+  if (d.type === 'db-xqgj-request-data') {
+    const target = e.source;
+    if (!target || !target.postMessage) return;
+    function respondXqgj() {
+      try {
+        const payload = {
+          students: (typeof STUDENTS !== 'undefined') ? STUDENTS : {},
+          classTimetable: (typeof classTimetableData !== 'undefined') ? classTimetableData : {},
+          // 作息 = 我的课程表里「每节课的时间设置」；教师没设置过就是空
+          schedule: dbScheduleConfigured()
+            ? ((typeof timetableSchedule !== 'undefined') ? timetableSchedule : {})
+            : {},
+          scheduleConfigured: dbScheduleConfigured(),
+          periodNames: (typeof timetablePeriodNames !== 'undefined') ? timetablePeriodNames : [],
+          currentUser: (typeof xqCurrentUser !== 'undefined') ? xqCurrentUser : null,
+          dutyGroups: dbBuildDutyGroups(),
+          dutyClass: dbCurrentClassName()
+        };
+        target.postMessage({ type: 'db-xqgj-data', payload: payload }, '*');
+      } catch (err) { /* ignore */ }
+    }
+    // 课程表/值日可能还没从云端拉回来：为空时先拉一次再回传，避免控制台拿到空数据
+    const jobs = [];
+    if (typeof classTimetableData !== 'undefined' && classTimetableData
+        && Object.keys(classTimetableData).filter((k) => !k.startsWith('_')).length === 0
+        && typeof loadTimetableData === 'function') {
+      jobs.push(loadTimetableData().catch(function () {}));
+    }
+    if ((typeof dutyData === 'undefined' || !dutyData || Object.keys(dutyData).length === 0)
+        && typeof loadDutyData === 'function') {
+      jobs.push(loadDutyData().catch(function () {}));
+    }
+    if (jobs.length) {
+      Promise.all(jobs).then(respondXqgj).catch(respondXqgj);
+    } else {
+      respondXqgj();
+    }
+  }
 });
 
 function getPendingLeaveCount() {
@@ -4343,6 +4500,7 @@ function navigate(pageId) {
     'timetable': '课程表',
     'discipline': '纪律留言',
     'duty-roster': '值日安排',
+    'deskboard': '班级桌面管理',
   };
   document.getElementById('headerTitle').textContent = titles[pageId] || '';
   document.getElementById('headerBreadcrumb').textContent = `首页 / ${titles[pageId] || ''}`;
@@ -4401,6 +4559,7 @@ function renderPage(pageId) {
     'repair-records': renderRepairRecords,
     'data-collection': renderDataCollection,
     'data-fill': renderDataFill,
+    'deskboard': renderDeskboardConsole,
   };
   if (renderers[pageId]) {
     content.innerHTML = renderers[pageId]();
@@ -4422,6 +4581,10 @@ function renderPage(pageId) {
       loadTimetableData().then(() => {
         content.innerHTML = renderTeachClasses();
       });
+    }
+    // 班级桌面管理：把控制台当成一个普通页面渲染进内容区（不再是浮层弹窗）
+    if (pageId === 'deskboard') {
+      mountDeskboardConsole();
     }
     // 进入座位表页面时加载纪律数据（用于快速添加留言）
     if (pageId === 'seating' || pageId === 'class-seating' || pageId === 'my-class') {
