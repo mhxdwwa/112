@@ -2521,19 +2521,35 @@ function onXqgjMessage(e) {
   const d = e && e.data;
   if (!d || d.type !== 'db-xqgj-data') return;
   xqgjData = (d.payload) || {};
+  applyXqgjData();
+}
+
+/* 把学勤管家推来的作息落到配置上。
+   配置是异步取的，加载完成前 cfg 还是 null，而父页面这时可能已经在反复推消息，
+   所以必须先判空 —— 否则每次推送都会抛 TypeError（bellSource of null）。
+   加载完成后由 boot() 再补调一次，保证这条消息不会被丢掉。 */
+function applyXqgjData(silent) {
+  if (!cfg || !xqgjData) return;
+  let changed = false;
   // 作息时间默认取自「学勤管家」的课程表时间设定（按天分日）：
   // 只要用户没有手工改过作息（bellSource !== 'manual'），就以其为准。
   if (inXqgj && xqgjData.schedule && cfg.bellSource !== 'manual') {
     const r = buildBellFromSchedule(xqgjData.schedule, xqgjData.periodNames);
     if (r && r.bell.length) {
-      cfg.bell = r.bell;
-      cfg.dayTimes = r.dayTimes;
-      cfg.bellSource = 'xqgj';
-      markDirty();
-      toast('已从学勤管家获取作息时间');
+      // 学勤管家会反复推同一份数据，只有真的变了才提示 / 标记未保存，
+      // 否则每来一条消息就弹一次 toast、亮一次「保存」按钮，非常吵。
+      const same = JSON.stringify(r.bell) === JSON.stringify(cfg.bell || []);
+      if (!same) {
+        cfg.bell = r.bell;
+        cfg.dayTimes = r.dayTimes;
+        cfg.bellSource = 'xqgj';
+        changed = true;
+        markDirty();
+        if (!silent) toast('已从学勤管家获取作息时间');
+      }
     }
   }
-  if (tab === 'bell' || tab === 'timetable' || tab === 'duty') render();
+  if (changed && (tab === 'bell' || tab === 'timetable' || tab === 'duty')) render();
 }
 
 /* ==========================================================================
@@ -3711,6 +3727,7 @@ async function bootInner() {
   bindEvents();
   render();
   clearDirty();
+  applyXqgjData(true);   // 配置就绪：补处理加载期间父页面推来的作息数据
 
   // 桌面端（托盘操作）改了配置 → 非脏状态下自动同步到界面
   window.deskboard.onUpdate((c) => {
