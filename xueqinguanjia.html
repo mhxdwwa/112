@@ -1038,6 +1038,63 @@ tbody tr:last-child td { border-bottom: none; }
   .login-card { width: 90vw; max-width: 400px; padding: 32px 24px; }
 }
 
+/* ========================================
+   MOBILE 体验补强（2026-10-27）
+   目标：手机浏览器看着自然、点按舒服
+   ======================================== */
+@media (max-width: 768px) {
+  /* 点击时的灰色闪块去掉，手感接近原生 App */
+  * { -webkit-tap-highlight-color: transparent; }
+
+  /* 顶部栏：版权信息手机上隐藏，把位置留给页面标题 */
+  .header-copyright { display: none !important; }
+  .header { height: 50px; padding: 0 10px; }
+  .header-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 输入控件 16px：避免 iOS Safari 聚焦输入框时整页自动放大 */
+  .form-input, .form-select, .form-textarea,
+  input[type="text"], input[type="password"], input[type="number"],
+  input[type="date"], input[type="time"], select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* 点按目标：按钮与下拉保持可舒适点按的高度 */
+  .toolbar-btn { min-height: 38px; white-space: nowrap; }
+  .toolbar-select, .form-select, select.toolbar-select { min-height: 40px; }
+
+  /* 课程表工具栏：标题独占一行，控件一行放不下就横向滑动，文字不再被折断 */
+  .teacher-tt-section .tt-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .teacher-tt-section .tt-header h3 { white-space: nowrap; }
+  .teacher-tt-section .tt-header > div {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .teacher-tt-section .tt-header .toolbar-btn,
+  .teacher-tt-section .tt-header .toolbar-select,
+  .teacher-tt-section .tt-header label { flex: 0 0 auto; }
+  .teacher-tt-section .tt-header .toolbar-select { width: auto !important; min-width: 78px; padding-right: 22px; }
+
+  /* 横向滚动条变细，滚动区域不显得笨重 */
+  .table-wrap::-webkit-scrollbar,
+  .teacher-tt-section .tt-header > div::-webkit-scrollbar { height: 4px; }
+  .table-wrap::-webkit-scrollbar-thumb,
+  .teacher-tt-section .tt-header > div::-webkit-scrollbar-thumb {
+    background: rgba(100,116,139,0.35); border-radius: 4px;
+  }
+
+  /* 全面屏底部手势条不遮挡内容 */
+  .content { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .sidebar { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* 手机上弹窗贴边留 10px，键盘弹出时不易顶出屏幕 */
+  .modal-content { width: calc(100vw - 20px) !important; max-width: calc(100vw - 20px) !important; margin: 4vh auto; }
+}
+
 /* === 座位表移动端专用布局 === */
 @media (max-width: 768px) {
   /* 座位表主容器改为垂直布局 */
