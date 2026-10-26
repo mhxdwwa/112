@@ -14653,7 +14653,7 @@ let timetableSchedule = {
   // 周六默认（可自定义）
   '6': [],
   // 周日默认（晚自习）：18:40 起三节，对齐到「第八节 / 晚自习1 / 晚自习2」三行
-  '7': [{},{},{},{},{},{},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'}]
+  '7': [{},{},{},{},{},{},{},{start:'18:40',end:'19:20'},{start:'19:30',end:'20:10'},{start:'20:20',end:'21:00'}]
 };
 
 // 获取指定天指定节次的时间
@@ -14670,7 +14670,7 @@ function getPeriodTime(weekday, period) {
    数据里可能存的是第 6/7/8 节（历史数据），这里把「显示的第几行」映射成「数据里的第几节」：
    · 已对齐（第一条就是第八节）→ 原样返回（幂等，重复执行不会再变）
    · 没对齐 → 整体上移到第八节起
-   返回 0 表示这一行周日不该有内容，避免同一个时间在两行重复出现。 */
+    返回 0 表示这一行周日不该有内容，避免同一个时间在两行重复出现。 */
 function sunSrcPeriod(displayP) {
   const sun = timetableSchedule['7'] || [];
   const filled = [];
@@ -14683,8 +14683,8 @@ function sunSrcPeriod(displayP) {
 
 /* 渲染前直接把周日的作息和课程都摆到「第八节」起。
    只靠在渲染时偏移不够（保存到云端的数据还是错的），这里连数据一起修正：
-   ① timetableSchedule['7'] 重排到第 8 节起  ② 课程单元格 key 跟着 6/7/8→8/9/10
-   幂等：已经对齐就直接返回，重复调用不会越挪越远。 */
+    ① timetableSchedule['7'] 重排到第 8 节起  ② 课程单元格 key 跟着 7/8/9→8/9/10
+    幂等：已经对齐就直接返回，重复调用不会越挪越远。 */
 function ensureSundayAligned() {
   const sun = timetableSchedule['7'];
   if (!Array.isArray(sun)) return;
