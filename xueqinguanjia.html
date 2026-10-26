@@ -2025,6 +2025,9 @@ async function xqLoadAllConfig() {
 
 // 保存配置到服务器（仅管理员 吴胜闯 可操作）
 async function xqSaveConfigToServer(configKey, configData) {
+  // 保存前留一份旧值（内容没变则不会产生快照）
+  try { await xqSnapshotBeforeWrite({ [configKey]: configData }); } catch (e) {}
+
   const result = await xqApi('config', {
     action: 'set',
     configKey: configKey,
@@ -2064,6 +2067,9 @@ async function xqSaveAllConfigToServer() {
     classGradeMap: Object.keys(configs.classGradeMap).length
   });
   
+  // 保存前留一份旧值（整批一起存成一份快照，内容没变则不会产生）
+  try { await xqSnapshotBeforeWrite(configs); } catch (e) {}
+
   const result = await xqApi('config', {
     action: 'set_all',
     configs: configs,
@@ -2096,6 +2102,9 @@ async function xqSaveStudentsToServer(className) {
   console.log('[XQ] Saving students to server for class:', className, 'Student count:', students.length, 
               'User:', xqCurrentUser.teacherName, 'User classes:', userClasses);
   
+  // 保存前留一份旧名单（人数或内容没变则不会产生快照）
+  try { await xqSnapshotBeforeWrite({ ['students_' + className]: { students: students } }); } catch (e) {}
+
   const result = await xqApi('import', {
     action: 'students',
     teacherId: xqCurrentUser.teacherId,
@@ -2112,6 +2121,404 @@ async function xqSaveStudentsToServer(className) {
   }
   
   return result;
+}
+
+/* ============================================================
+   数据恢复点（保存前自动快照）
+   ------------------------------------------------------------
+   规则：每次往云端写之前，先把「云端现在的旧值」和「即将写入的新值」
+   比对一次；内容真的变了，才把旧值留一份，没变就什么都不做。
+   每块数据只保留最近 3 份。快照以 snap_ 前缀存进现有 config 表，
+   不新建数据库表、不改现有数据结构、不动任何已有函数的行为。
+   快照失败一律静默跳过，绝不阻塞正常保存。
+   ============================================================ */
+var SNAP_PREFIX = 'snap_';
+var SNAP_KEEP = 3;
+var SNAP_SKIP_KEYS = ['credentials'];   // 密码哈希不进快照
+var SNAP_CACHE_MS = 8000;
+var snapCache = null;
+var snapInFlight = null;
+
+function snapEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function snapWho() {
+  return (xqCurrentUser && xqCurrentUser.teacherName) || '';
+}
+
+function snapB64(u8) {
+  var s = '', step = 0x8000;
+  for (var i = 0; i < u8.length; i += step) {
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + step));
+  }
+  return btoa(s);
+}
+
+function snapUnb64(str) {
+  var bin = atob(str), u8 = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+
+async function snapPack(obj) {
+  var json = JSON.stringify(obj);
+  try {
+    if (typeof CompressionStream === 'function') {
+      var cs = new CompressionStream('gzip');
+      var w = cs.writable.getWriter();
+      w.write(new TextEncoder().encode(json));
+      w.close();
+      var buf = await new Response(cs.readable).arrayBuffer();
+      return { gz: true, data: snapB64(new Uint8Array(buf)) };
+    }
+  } catch (e) {
+    console.warn('[SNAP] 压缩失败，改存原文:', e);
+  }
+  return { gz: false, data: json };
+}
+
+async function snapUnpack(rec) {
+  if (!rec || typeof rec.data !== 'string') return null;
+  if (!rec.gz) {
+    try { return JSON.parse(rec.data); } catch (e) { return null; }
+  }
+  try {
+    var ds = new DecompressionStream('gzip');
+    var w = ds.writable.getWriter();
+    w.write(snapUnb64(rec.data));
+    w.close();
+    var txt = await new Response(ds.readable).text();
+    return JSON.parse(txt);
+  } catch (e) {
+    console.warn('[SNAP] 解压失败:', e);
+    return null;
+  }
+}
+
+function snapHash(str) {
+  var h = 0x811c9dc5;
+  for (var i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return ('0000000' + h.toString(16)).slice(-8);
+}
+
+function snapCell(cfg, key) {
+  var c = cfg && cfg[key];
+  return c && c.data !== undefined ? c.data : undefined;
+}
+
+async function snapFetchConfig() {
+  if (snapCache && Date.now() - snapCache.at < SNAP_CACHE_MS) return snapCache.config;
+  if (snapInFlight) return snapInFlight;
+  snapInFlight = (async function () {
+    var cfg = null;
+    try {
+      var r = await xqApi('config', { action: 'get' });
+      if (r && r.ok && r.config) cfg = r.config;
+    } catch (e) {
+      console.warn('[SNAP] 读取云端配置失败:', e);
+    }
+    snapInFlight = null;
+    if (cfg) snapCache = { at: Date.now(), config: cfg };
+    return cfg;
+  })();
+  return snapInFlight;
+}
+
+function snapLabelOf(key) {
+  var fixed = {
+    classes: '班级列表', teaching: '任课分配', roles: '账号角色',
+    setupTeaching: '任课设置', setupClasses: '班级设置', setupRoles: '角色设置',
+    classGradeMap: '年级归属', class_timetable: '班级课表',
+    personal_timetable: '个人课表', duty: '值日安排', repair: '报修记录',
+    discipline: '纪律记录', collection: '收集数据'
+  };
+  if (fixed[key]) return fixed[key];
+  var m = key.match(/^(students|seating|cadres)_(.+)$/);
+  if (m) {
+    var t = { students: '学生名单', seating: '座位表', cadres: '班干部' }[m[1]];
+    return m[2] + ' ' + t;
+  }
+  return key;
+}
+
+function snapLabelOfMany(keys) {
+  if (!keys || !keys.length) return '未知数据';
+  if (keys.length === 1) return snapLabelOf(keys[0]);
+  var cls = keys.map(function (k) {
+    var m = k.match(/^students_(.+)$/);
+    return m ? m[1] : null;
+  });
+  if (cls.every(Boolean)) return cls.length + ' 个班的学生名单（' + cls.join('、') + '）';
+  return keys.length + ' 项设置';
+}
+
+function snapTime(ts) {
+  var d = new Date(ts), p = function (n) { return n < 10 ? '0' + n : '' + n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function snapCanRestore(keys) {
+  if (typeof isXqAdmin === 'function' && isXqAdmin()) return true;
+  var mine = (xqCurrentUser && (xqCurrentUser.classes || xqCurrentUser.headteacherClasses)) || [];
+  return (keys || []).every(function (k) {
+    var m = String(k).match(/^(students|seating|cadres)_(.+)$/);
+    return !!m && mine.indexOf(m[2]) >= 0;
+  });
+}
+
+function snapPrunePlan(cfg, newKey, newKeys) {
+  var all = [];
+  for (var k in (cfg || {})) {
+    if (k.indexOf(SNAP_PREFIX) !== 0) continue;
+    if (k === newKey) continue;   // 新增项统一在下面补一次，避免同一份被算两次
+    var d = cfg[k] && cfg[k].data;
+    if (!d || !Array.isArray(d.keys)) continue;
+    all.push({ k: k, ts: d.ts || 0, keys: d.keys });
+  }
+  all.push({ k: newKey, ts: Date.now(), keys: newKeys });
+
+  var byKey = {};
+  all.forEach(function (s) {
+    s.keys.forEach(function (k) { (byKey[k] = byKey[k] || []).push(s); });
+  });
+  var del = {};
+  Object.keys(byKey).forEach(function (k) {
+    byKey[k].sort(function (a, b) {
+      if (b.ts !== a.ts) return b.ts - a.ts;
+      return a.k < b.k ? 1 : -1;
+    });
+    byKey[k].slice(SNAP_KEEP).forEach(function (s) {
+      if (s.k !== newKey) del[s.k] = 1;
+    });
+  });
+  return Object.keys(del);
+}
+
+async function snapStore(map, cfgForPrune, note) {
+  var keys = Object.keys(map || {});
+  if (!keys.length) return null;
+
+  var packed = await snapPack(map);
+  var fp = snapHash(keys.slice().sort().join('|') + '#' + packed.data);
+  var ts = Date.now();
+  var newKey = SNAP_PREFIX + ts + '_' + Math.random().toString(36).slice(2, 6);
+  var rec = {
+    ts: ts, v: 1, by: snapWho(), keys: keys,
+    label: snapLabelOfMany(keys), fp: fp, gz: packed.gz,
+    data: packed.data, note: note || ''
+  };
+
+  var r = await xqApi('config', {
+    action: 'set', configKey: newKey, configData: rec, teacherName: snapWho()
+  });
+  if (!r || !r.ok) {
+    console.warn('[SNAP] 快照写入失败');
+    return null;
+  }
+
+  var plan = snapPrunePlan(cfgForPrune, newKey, keys);
+  for (var i = 0; i < plan.length; i++) {
+    try {
+      await xqApi('config', { action: 'delete', configKey: plan[i], teacherName: snapWho() });
+    } catch (e) { /* 清理失败不影响主流程 */ }
+  }
+  snapCache = null;
+  return newKey;
+}
+
+async function xqSnapshotBeforeWrite(writes) {
+  try {
+    if (!xqCurrentUser || !writes) return { ok: true, saved: 0 };
+    var keys = Object.keys(writes).filter(function (k) {
+      return k && SNAP_SKIP_KEYS.indexOf(k) < 0;
+    });
+    if (!keys.length) return { ok: true, saved: 0 };
+
+    var cfg = await snapFetchConfig();
+    if (!cfg) return { ok: true, saved: 0, reason: 'no-config' };
+
+    var changed = {};
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var oldVal = snapCell(cfg, k);
+      if (oldVal === undefined) continue;
+      var oldStr, newStr;
+      try {
+        oldStr = JSON.stringify(oldVal);
+        newStr = JSON.stringify(writes[k]);
+      } catch (e) { continue; }
+      if (oldStr === newStr) continue;
+      changed[k] = oldVal;
+    }
+    var ck = Object.keys(changed);
+    if (!ck.length) return { ok: true, saved: 0, reason: 'unchanged' };
+
+    var packedProbe = await snapPack(changed);
+    var fp = snapHash(ck.slice().sort().join('|') + '#' + packedProbe.data);
+    for (var sk in cfg) {
+      if (sk.indexOf(SNAP_PREFIX) !== 0) continue;
+      var d = cfg[sk] && cfg[sk].data;
+      if (d && d.fp === fp) return { ok: true, saved: 0, reason: 'duplicate' };
+    }
+
+    var made = await snapStore(changed, cfg, 'save');
+    return { ok: !!made, saved: made ? 1 : 0, key: made };
+  } catch (e) {
+    console.warn('[SNAP] 快照流程异常（已忽略，不影响保存）:', e);
+    return { ok: false };
+  }
+}
+
+async function snapApplyOne(srcKey, data) {
+  if (srcKey.indexOf('students_') === 0) {
+    var cls = srcKey.slice('students_'.length);
+    var arr = data && Array.isArray(data.students) ? data.students : null;
+    if (!arr) return { ok: false, error: '恢复点里没有学生名单' };
+    var uc = xqCurrentUser.classes || xqCurrentUser.allClasses || [];
+    if (!uc.length && xqCurrentUser.headteacherClasses) uc = xqCurrentUser.headteacherClasses;
+    return await xqApi('import', {
+      action: 'students',
+      teacherId: xqCurrentUser.teacherId,
+      teacherName: xqCurrentUser.teacherName,
+      teacherClasses: uc,
+      className: cls,
+      students: arr
+    });
+  }
+  return await xqApi('config', {
+    action: 'set', configKey: srcKey, configData: data, teacherName: snapWho()
+  });
+}
+
+async function openSnapPanel() {
+  showModal('数据恢复',
+    '<div style="padding:18px 4px;color:#64748b;font-size:13px">正在读取恢复点…</div>',
+    '<button class="toolbar-btn ghost" onclick="hideModal()">关闭</button>', true);
+
+  var list = [];
+  try {
+    var r = await xqApi('config', { action: 'get' });
+    if (r && r.ok && r.config) {
+      Object.keys(r.config).forEach(function (k) {
+        if (k.indexOf(SNAP_PREFIX) !== 0) return;
+        var d = r.config[k] && r.config[k].data;
+        if (d && d.ts && Array.isArray(d.keys)) list.push({ key: k, rec: d });
+      });
+    }
+  } catch (e) {
+    console.warn('[SNAP] 读取恢复点列表失败:', e);
+  }
+  list.sort(function (a, b) { return b.rec.ts - a.rec.ts; });
+
+  var body = document.getElementById('modalBody');
+  if (!body) return;
+
+  if (!list.length) {
+    body.innerHTML = '<div style="padding:14px 4px;color:#64748b;font-size:13px;line-height:1.9">'
+      + '还没有恢复点。<br>恢复点在「修改后保存」时自动生成：只要新内容和云端不一样，保存前就会把旧数据留一份。</div>';
+    return;
+  }
+
+  var rows = list.map(function (it) {
+    var d = it.rec;
+    var can = snapCanRestore(d.keys);
+    var size = d.data ? Math.max(1, Math.round(d.data.length / 1024)) + 'KB' : '';
+    var meta = snapTime(d.ts) + (d.by ? ' · ' + snapEsc(d.by) : '') + (size ? ' · ' + size : '')
+      + (d.note === 'restore' ? ' · 恢复前自动留存' : '');
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid #e2e8f0">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:13px;color:#1e293b;font-weight:500">' + snapEsc(snapLabelOfMany(d.keys)) + '</div>'
+      + '<div style="font-size:12px;color:#94a3b8;margin-top:3px">' + meta + '</div>'
+      + '</div>'
+      + (can
+        ? '<button class="toolbar-btn ghost" onclick="snapRestore(\'' + it.key + '\')">恢复</button>'
+        : '<span style="font-size:12px;color:#cbd5e1">仅管理员</span>')
+      + '</div>';
+  }).join('');
+
+  body.innerHTML = '<div style="font-size:12px;color:#64748b;line-height:1.8;margin-bottom:4px">'
+    + '每块数据保留最近 ' + SNAP_KEEP + ' 份。恢复只会改动上面写明的那部分内容，不会碰其他数据。</div>'
+    + rows;
+}
+
+async function snapRestore(snapKey) {
+  if (!xqCurrentUser) { showToast('请先登录', 'error'); return; }
+  var cfg = null;
+  try {
+    var r = await xqApi('config', { action: 'get' });
+    if (r && r.ok && r.config) cfg = r.config;
+  } catch (e) { /* ignore */ }
+  var rec = cfg && cfg[snapKey] && cfg[snapKey].data;
+  if (!rec) { showToast('这个恢复点已经不存在了', 'error'); return; }
+  if (!snapCanRestore(rec.keys)) { showToast('你没有权限恢复这块数据', 'error'); return; }
+
+  showModal('确认恢复',
+    '<div style="font-size:13px;line-height:1.95;color:#334155">'
+    + '将把 <b style="color:#1e293b">' + snapEsc(snapLabelOfMany(rec.keys)) + '</b> 恢复到 '
+    + '<b style="color:#1e293b">' + snapTime(rec.ts) + '</b> 的版本。<br>'
+    + '云端现在的内容会被替换掉，但恢复前会自动再留一份，随时可以退回来。'
+    + '</div>',
+    '<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>'
+    + '<button class="toolbar-btn primary" style="margin-left:8px" onclick="snapRestoreDo(\'' + snapKey + '\')">确认恢复</button>');
+}
+
+async function snapRestoreDo(snapKey) {
+  hideModal();
+  if (!xqCurrentUser) { showToast('请先登录', 'error'); return; }
+
+  var cfg = null;
+  try {
+    var r = await xqApi('config', { action: 'get' });
+    if (r && r.ok && r.config) cfg = r.config;
+  } catch (e) { /* ignore */ }
+  var rec = cfg && cfg[snapKey] && cfg[snapKey].data;
+  if (!rec) { showToast('这个恢复点已经不存在了', 'error'); return; }
+  if (!snapCanRestore(rec.keys)) { showToast('你没有权限恢复这块数据', 'error'); return; }
+
+  var old = await snapUnpack(rec);
+  if (!old) { showToast('恢复点内容读不出来（可能已损坏）', 'error'); return; }
+
+  showToast('正在恢复，请不要关闭页面…', 'warning');
+
+  var before = {};
+  rec.keys.forEach(function (k) {
+    var v = snapCell(cfg, k);
+    if (v !== undefined) before[k] = v;
+  });
+  if (Object.keys(before).length) {
+    try { await snapStore(before, cfg, 'restore'); } catch (e) { /* 回退点失败不阻塞恢复 */ }
+  }
+
+  var done = 0, failed = [];
+  for (var i = 0; i < rec.keys.length; i++) {
+    var k = rec.keys[i];
+    if (old[k] === undefined) continue;
+    try {
+      var res = await snapApplyOne(k, old[k]);
+      if (res && res.ok) done++; else failed.push(snapLabelOf(k));
+    } catch (e) {
+      failed.push(snapLabelOf(k));
+    }
+  }
+
+  snapCache = null;
+  if (!done) {
+    showToast('恢复失败，云端没有改动', 'error');
+    return;
+  }
+  if (failed.length) {
+    showToast('已恢复 ' + done + ' 项，' + failed.join('、') + ' 失败', 'warning');
+  } else {
+    showToast('已恢复，页面即将刷新', 'success');
+  }
+  setTimeout(function () { location.reload(); }, 1600);
 }
 
 // 批量添加记录到服务器
@@ -4209,6 +4616,10 @@ function buildSidebar() {
     html += `<div class="sidebar-section">`;
     html += `<div class="sidebar-section-title">工具</div>`;
     // 「考试计时器」菜单入口已按需求隐藏（页面本身还在，需要时可恢复这一段）
+    html += `<div class="sidebar-item" data-page="snap" onclick="openSnapPanel()">
+      <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3.2-6.9"/><polyline points="3 3 3 9 9 9"/><polyline points="12 7.5 12 12 15.5 14"/></svg></span>
+      <span>数据恢复</span>
+    </div>`;
     html += `<div class="sidebar-item" id="navDeskboard" data-page="deskboard" onclick="navigate('deskboard')">
       <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
       <span>班级桌面管理</span>
