@@ -14633,64 +14633,59 @@ function closeXqQrScanner() {
 // ============================================================
 // 班级课程表：班主任编辑自己班级的课程表
 // 全局默认课程表模板（所有班级打开时如果没有数据，自动用此模板）
+const DEFAULT_TIMETABLE_VERSION = 2;  // 每次更新模板时递增，强制覆盖云端旧数据
 const DEFAULT_TIMETABLE_TEMPLATE = {
   // 周一
-  '1-2': {subject:'语文',teacher:'',room:''},
+  '1-1': {subject:'语文',teacher:'',room:''},
+  '1-2': {subject:'数学',teacher:'',room:''},
   '1-3': {subject:'英语',teacher:'',room:''},
-  '1-4': {subject:'美术',teacher:'',room:''},
-  '1-5': {subject:'数学',teacher:'',room:''},
-  '1-6': {subject:'地理',teacher:'',room:''},
-  '1-7': {subject:'自习',teacher:'',room:''},
-  '1-8': {subject:'班会',teacher:'',room:''},
+  '1-4': {subject:'物理',teacher:'',room:''},
+  '1-5': {subject:'化学',teacher:'',room:''},
+  '1-6': {subject:'语文',teacher:'',room:''},
+  '1-7': {subject:'体育',teacher:'',room:''},
+  '1-8': {subject:'生物',teacher:'',room:''},
   '1-9': {subject:'自习',teacher:'',room:''},
-  '1-10': {subject:'生物',teacher:'',room:''},
-  '1-11': {subject:'地理',teacher:'',room:''},
   // 周二
-  '2-1': {subject:'数学',teacher:'',room:''},
-  '2-2': {subject:'英语',teacher:'',room:''},
-  '2-3': {subject:'物理',teacher:'',room:''},
-  '2-4': {subject:'音乐',teacher:'',room:''},
-  '2-5': {subject:'数学',teacher:'',room:''},
-  '2-6': {subject:'语文',teacher:'',room:''},
-  '2-7': {subject:'语文',teacher:'',room:''},
-  '2-8': {subject:'道法',teacher:'',room:''},
-  '2-9': {subject:'自习',teacher:'',room:''},
-  '2-10': {subject:'数学',teacher:'',room:''},
-  '2-11': {subject:'数学',teacher:'',room:''},
+  '2-1': {subject:'英语',teacher:'',room:''},
+  '2-2': {subject:'语文',teacher:'',room:''},
+  '2-3': {subject:'数学',teacher:'',room:''},
+  '2-4': {subject:'化学',teacher:'',room:''},
+  '2-5': {subject:'物理',teacher:'',room:''},
+  '2-6': {subject:'英语',teacher:'',room:''},
+  '2-7': {subject:'历史',teacher:'',room:''},
+  '2-8': {subject:'体育',teacher:'',room:''},
+  '2-9': {subject:'班团活动',teacher:'',room:''},
   // 周三
-  '3-1': {subject:'物理',teacher:'',room:''},
-  '3-2': {subject:'语文',teacher:'',room:''},
-  '3-3': {subject:'数学',teacher:'',room:''},
-  '3-4': {subject:'生物',teacher:'',room:''},
-  '3-5': {subject:'英语',teacher:'',room:''},
-  '3-6': {subject:'历史',teacher:'',room:''},
-  '3-7': {subject:'地理',teacher:'',room:''},
-  '3-8': {subject:'体育',teacher:'',room:''},
+  '3-1': {subject:'语文',teacher:'',room:''},
+  '3-2': {subject:'英语',teacher:'',room:''},
+  '3-3': {subject:'物理',teacher:'',room:''},
+  '3-4': {subject:'数学',teacher:'',room:''},
+  '3-5': {subject:'生物',teacher:'',room:''},
+  '3-6': {subject:'数学',teacher:'',room:''},
+  '3-7': {subject:'化学',teacher:'',room:''},
+  '3-8': {subject:'地理',teacher:'',room:''},
   '3-9': {subject:'自习',teacher:'',room:''},
-  '3-10': {subject:'历史',teacher:'',room:''},
-  '3-11': {subject:'物理',teacher:'',room:''},
   // 周四
-  '4-1': {subject:'历史',teacher:'',room:''},
-  '4-2': {subject:'道法',teacher:'',room:''},
+  '4-1': {subject:'英语',teacher:'',room:''},
+  '4-2': {subject:'化学',teacher:'',room:''},
   '4-3': {subject:'语文',teacher:'',room:''},
   '4-4': {subject:'生物',teacher:'',room:''},
-  '4-5': {subject:'英语',teacher:'',room:''},
-  '4-6': {subject:'信息',teacher:'',room:''},
-  '4-7': {subject:'物理',teacher:'',room:''},
-  '4-8': {subject:'数学',teacher:'',room:''},
+  '4-5': {subject:'数学',teacher:'',room:''},
+  '4-6': {subject:'物理',teacher:'',room:''},
+  '4-7': {subject:'英语',teacher:'',room:''},
+  '4-8': {subject:'信息',teacher:'',room:''},
   '4-9': {subject:'自习',teacher:'',room:''},
   // 周五
-  '5-1': {subject:'生物',teacher:'',room:''},
-  '5-2': {subject:'物理',teacher:'',room:''},
+  '5-1': {subject:'语文',teacher:'',room:''},
+  '5-2': {subject:'数学',teacher:'',room:''},
   '5-3': {subject:'英语',teacher:'',room:''},
-  '5-4': {subject:'语文',teacher:'',room:''},
-  '5-5': {subject:'数学',teacher:'',room:''},
-  '5-6': {subject:'历史',teacher:'',room:''},
-  '5-7': {subject:'体育',teacher:'',room:''},
+  '5-4': {subject:'政治',teacher:'',room:''},
+  '5-5': {subject:'物理',teacher:'',room:''},
   // 周六 - 无课
   // 周日
-  '7-10': {subject:'英语',teacher:'',room:''},
-  '7-11': {subject:'英语',teacher:'',room:''}
+  '7-9': {subject:'数学',teacher:'',room:''},
+  '7-10': {subject:'数学',teacher:'',room:''},
+  '7-11': {subject:'数学',teacher:'',room:''}
 };
 let classTimetableData = {};  // { 'className': { '1-1': {subject, teacher, room}, ... } }
 // 个人课程表：教师自己编辑的课程段（存储在班级课程表中，但标记为个人编辑）
@@ -14861,6 +14856,23 @@ async function loadTimetableData() {
         rawCT = {};
       }
       classTimetableData = rawCT;
+      // 检查模板版本，如果云端数据版本低于当前模板，强制用新模板覆盖所有班级
+      if (!classTimetableData._templateVersion || classTimetableData._templateVersion < DEFAULT_TIMETABLE_VERSION) {
+        Object.keys(classTimetableData).forEach((cls) => {
+          if (cls.charAt(0) === '_') return;  // 跳过 _schedule, _periodNames 等元数据
+          // 用新模板覆盖该班级的课程数据
+          Object.keys(classTimetableData[cls]).forEach((key) => {
+            if (key.charAt(0) !== '_' && /^\d+-\d+$/.test(key)) {
+              delete classTimetableData[cls][key];
+            }
+          });
+          Object.assign(classTimetableData[cls], JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_TEMPLATE)));
+        });
+        classTimetableData._templateVersion = DEFAULT_TIMETABLE_VERSION;
+        // 立即保存到云端，覆盖旧数据
+        saveClassTimetableData();
+        console.log('[ClassTimetable] Applied new template v' + DEFAULT_TIMETABLE_VERSION + ' to all classes');
+      }
       console.log('[ClassTimetable] Loaded data for', Object.keys(classTimetableData).length, 'classes');
       // 加载节次名称
       if (classTimetableData._periodNames && Array.isArray(classTimetableData._periodNames)) {
