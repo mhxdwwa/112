@@ -2468,7 +2468,20 @@ async function importDutyFile(ti, file) {
   }
   markDirty();
   render();
-  toast('已导入 ' + t.groups.length + ' 组名单，点「保存并应用」生效');
+  // 导入后做一次体检：模板里没填的行会保留原样，人数明显偏少的组要提醒一下，
+  // 否则"写着 5 个人、看板上只有 2 个"这种情况很难自己发现。
+  const total = t.groups.length;
+  const thin = t.groups.filter((g) => {
+    const n = t.mode === 'dorm'
+      ? (g.subs || []).reduce((a, s) => a + (s.members || []).length, 0)
+      : (g.members || []).length;
+    return n > 0 && n <= 2;
+  }).length;
+  if (thin && total > 1) {
+    toast('已导入 ' + total + ' 组，但其中 ' + thin + ' 组只有 1~2 人，可能没填全，请检查');
+  } else {
+    toast('已导入 ' + total + ' 组名单，点「保存并应用」生效');
+  }
 }
 
 /* 新建一个值日类型；预设类型会带几个空的分组骨架 */
@@ -3249,6 +3262,7 @@ const TABS = {
             <button class="add-row ghost" data-act="group-add-many" data-ti="${ti}" data-n="${isDorm ? 1 : 5}">+ 一次加 ${isDorm ? '1' : '5'} 组</button>
             <button class="add-row ghost" data-act="duty-tpl" data-ti="${ti}" title="下载 Excel 模板，填好后再上传">Excel 模板</button>
             <button class="add-row ghost" data-act="duty-imp" data-ti="${ti}" title="上传填好的 Excel / CSV，一次导入全部名单">上传名单</button>
+            <button class="add-row ghost" data-act="duty-clear" data-ti="${ti}" title="清空这一类的全部分组（方便重新导入）">清空分组</button>
           </div>
           <p class="hint" style="margin:6px 0 0">「Excel 模板」下载后按列填好，再点「上传名单」即可一键导入 —— ${isDorm ? '三列：宿舍 / 内部小组 / 这一组的人' : '两列：组名 / 成员（顿号分隔）'}。上传会<b>替换</b>这一类现有的分组。</p>
           ${!isFixed ? `
@@ -3776,6 +3790,17 @@ function bindEvents() {
         catch (e) { toast('读取失败：' + (e && e.message ? e.message : e)); }
       };
       inp.click();
+      return;
+    }
+    if (act === 'duty-clear') {
+      const ti2 = Number(b.dataset.ti) || 0;
+      const t2 = (cfg.dutyTypes || [])[ti2];
+      if (!t2) return;
+      if (!window.confirm('清空「' + (t2.name || '值日') + '」的全部 ' + (t2.groups || []).length
+        + ' 组？清空后可以用「上传名单」重新导入。')) return;
+      t2.groups = [];
+      markDirty(); render();
+      toast('已清空，可以重新上传名单');
       return;
     }
     if (act === 'sub-add') {
