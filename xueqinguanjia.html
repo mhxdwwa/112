@@ -12394,222 +12394,177 @@ function stopColResize(e) {
 // Keep old editSeating as alias
 function editSeating() { enterSeatingEdit(); }
 
-/* ----- Export Seating Chart as Word ----- */
-function printSeating() {
-  const cls = currentViewClass || getHeadteacherClass();
-  if (!cls || !STUDENTS[cls]) {
-    showToast('暂无班级数据', 'warning');
-    return;
-  }
-  
-  const sts = STUDENTS[cls];
-  const cols = seatingCols;
-  const totalRows = seatingRows > 0 ? seatingRows : Math.ceil(sts.length / cols);
-  const totalSlots = totalRows * cols;
-  
-  // Build seat slots array
-  let seatSlots = [];
-  for (let i = 0; i < totalSlots; i++) {
-    const studentId = seatLayout[cls] && seatLayout[cls][i];
-    if (studentId) {
-      const student = sts.find(s => s.id === studentId);
-      seatSlots.push(student || null);
-    } else {
-      seatSlots.push(null);
-    }
-  }
-  
-  // Calculate group boundaries (same as screen)
-  const groupBoundaries = [];
-  const groupSizes = [];
-  if (colGroups.length > 0) {
-    let cumCol = 0;
-    for (const groupSize of colGroups) {
-      cumCol += groupSize;
-      groupSizes.push(groupSize);
-      if (cumCol < cols) groupBoundaries.push(cumCol - 1);
-    }
-  }
-  const gapSet = new Set(groupBoundaries);
-  const numGaps = gapSet.size;
-  
-  // === Column width calculation ===
-  // A4 portrait: 11906 DXA, margins 1440 top/bottom, 1800 left/right
-  // Content width = 11906 - 1800 - 1800 = 8306 DXA
-  // Use same table width as reference template
+/* ============================================================
+   座位表导出 Word
+   ------------------------------------------------------------
+   网站上的座位表是「一个个独立座位卡片」拼出来的：
+   · 每两列之间有一道间距 colGaps[i]（默认 10px，可拖动调整）
+   · 列分组（如每 4 列一组）的边界处至少 20px，形成过道
+   · 每两行之间有 rowGap（8px）
+   所以导出的 Word 也必须长这样，否则就是一整块实心表格，看不出分组。
+
+   做法：把网格拆成「座位列 + 空白间隔列」交替的表格，
+   空白列的边框全部设为 nil（无框），视觉上就是分离开的座位区。
+   表格布局必须是 fixed —— autofit 会让 Word 按内容重算列宽，
+   空白的间隔列会被压成 0 宽，间隔就消失了（这是之前失效的根本原因）。
+
+   计算部分抽成 buildSeatingDocXml()，不碰 DOM，方便单测。
+   ============================================================ */
+function buildSeatingDocXml(o) {
+  const cols = Math.max(1, o.cols | 0);
+  const rows = Math.max(1, o.rows | 0);
+  const names = o.names || [];
+  const colGaps = o.colGaps || [];
+  const colGroups = o.colGroups || [];
+  const rowGapPx = o.rowGap == null ? 8 : o.rowGap;
+
+  // A4 竖版：11906 - 左右边距 1800*2 = 8306 dxa
   const TABLE_W = 8306;
-  const GAP_W = 480; // ~8.5mm visible gap between groups
-  const totalGapW = numGaps * GAP_W;
-  const seatColW = Math.floor((TABLE_W - totalGapW) / cols);
-  
-  // Build actual column widths array (seat + gap alternating)
-  const colWidths = [];
-  for (let c = 0; c < cols; c++) {
-    colWidths.push(seatColW);
-    if (gapSet.has(c)) colWidths.push(GAP_W);
-  }
-  const totalTableCols = colWidths.length;
-  // Fix rounding on last column
-  const usedW = colWidths.reduce((a, b) => a + b, 0);
-  colWidths[colWidths.length - 1] += TABLE_W - usedW;
-  
-  // Build gridCol XML
-  let gridColsXml = '';
-  for (const w of colWidths) {
-    gridColsXml += '<w:gridCol w:w="' + w + '"/>';
-  }
-  
-  // Font settings
+  const PX2DXA = 15;      // 96dpi 下 1px = 15 twips
+  const MIN_SEAT = 820;   // 座位格最小宽度，再窄姓名就折行
+  const MIN_GAP = 40;     // 间隔列最窄值，避免退化成贴边
+  const ROW_H = 1274;     // 座位行高
   const FONT = '\u4eff\u5b8b_GB2312';
-  const SZ = '32'; // 三号 = 16pt
-  
-  // Border XML for data cells (single black border)
-  const dataBorderXml = '<w:tcBorders>' +
+  const SZ = '32';        // 三号 16pt
+
+  // 1) 每一处列间距（与网站一致：组边界处至少 20px）
+  const boundary = new Set();
+  if (colGroups.length > 0) {
+    let cum = 0;
+    for (const gs of colGroups) { cum += gs; if (cum < cols) boundary.add(cum - 1); }
+  }
+  const gapPx = [];
+  for (let i = 0; i < cols - 1; i++) {
+    const base = Number(colGaps[i]) || 10;
+    gapPx.push(boundary.has(i) ? Math.max(base, 20) : base);
+  }
+
+  // 2) px → dxa；空间不够就等比压缩，保证座位格不小于 MIN_SEAT
+  let gapW = gapPx.map((p) => Math.round(p * PX2DXA));
+  const sumGap = () => gapW.reduce((a, b) => a + b, 0);
+  const budget = TABLE_W - cols * MIN_SEAT;
+  if (sumGap() > budget && sumGap() > 0) {
+    const f = Math.max(0, budget) / sumGap();
+    gapW = gapW.map((w) => Math.max(MIN_GAP, Math.round(w * f)));
+  }
+  let seatW = Math.floor((TABLE_W - sumGap()) / cols);
+  if (seatW < 300) seatW = 300;
+  const rowGapDxa = Math.max(60, Math.round(rowGapPx * PX2DXA));
+
+  // 3) 网格：座位列 + 间隔列交替
+  const grid = [];
+  for (let c = 0; c < cols; c++) {
+    grid.push(seatW);
+    if (c < gapW.length) grid.push(gapW[c]);
+  }
+  const totalCols = grid.length;
+  // 取整误差补到最后一列，保证总宽正好等于页宽
+  const used = grid.reduce((a, b) => a + b, 0);
+  grid[grid.length - 1] += TABLE_W - used;
+
+  // 4) XML 片段
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+  const rPr = (sz) => '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT +
+    '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/><w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/></w:rPr>';
+
+  const boxBorder = '<w:tcBorders>' +
     '<w:top w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
     '<w:left w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
     '<w:bottom w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
-    '<w:right w:val="single" w:color="000000" w:sz="4" w:space="0"/>' +
-    '</w:tcBorders>';
-  
-  // Border XML for gap cells (NO borders - creates visible white space)
-  const gapBorderXml = '<w:tcBorders>' +
-    '<w:top w:val="nil"/>' +
-    '<w:left w:val="nil"/>' +
-    '<w:bottom w:val="nil"/>' +
-    '<w:right w:val="nil"/>' +
-    '</w:tcBorders>';
-  
-  // Table properties
+    '<w:right w:val="single" w:color="000000" w:sz="4" w:space="0"/></w:tcBorders>';
+  const noBorder = '<w:tcBorders>' +
+    '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders>';
+
+  // 座位行用 atLeast（姓名长了一行也不会被裁），间隔行用 exact（高度精确、不留空）
+  const trPr = (h, rule) => '<w:trPr><w:cantSplit/><w:trHeight w:val="' + h + '" w:hRule="' + (rule || 'atLeast') + '"/>' +
+    '<w:jc w:val="center"/></w:trPr>';
+
+  // 座位格：有框、居中、三号字
+  const seatCell = (txt, w) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>' + boxBorder +
+    '<w:vAlign w:val="center"/></w:tcPr>' +
+    '<w:p><w:pPr><w:jc w:val="center"/><w:textAlignment w:val="center"/>' + rPr(SZ) + '</w:pPr>' +
+    '<w:r>' + rPr(SZ) + '<w:t xml:space="preserve">' + esc(txt) + '</w:t></w:r></w:p></w:tc>';
+
+  // 空白格：无框、行高由外部控制（用来做列间隔 / 行间隔）
+  const blankCell = (w, span) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>' +
+    (span > 1 ? '<w:gridSpan w:val="' + span + '"/>' : '') + noBorder + '</w:tcPr>' +
+    '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>' +
+    '<w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
+
+  // 组标签格（“第 N 组”）
+  const labelCell = (txt, w, span) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>' +
+    '<w:gridSpan w:val="' + span + '"/>' + boxBorder + '<w:vAlign w:val="center"/></w:tcPr>' +
+    '<w:p><w:pPr><w:jc w:val="center"/>' + rPr(SZ) + '</w:pPr>' +
+    '<w:r>' + rPr(SZ) + '<w:t>' + esc(txt) + '</w:t></w:r></w:p></w:tc>';
+
+  // 5) 行
+  let rowsXml = '';
+
+  // 5.1 数据行：座位 + 间隔交替；行与行之间插一条空白行做行间距
+  for (let r = 0; r < rows; r++) {
+    let cells = '';
+    for (let c = 0; c < cols; c++) {
+      const nm = names[r * cols + c] || '';
+      cells += seatCell(nm, seatW);
+      if (c < gapW.length) cells += blankCell(gapW[c], 1);
+    }
+    rowsXml += '<w:tr>' + trPr(ROW_H) + cells + '</w:tr>';
+    // 行间距（最后一行后面不加，免得表格底部多一截空白）
+    if (r < rows - 1 && rowGapDxa > 0) {
+      rowsXml += '<w:tr>' + trPr(rowGapDxa, 'exact') + blankCell(TABLE_W, totalCols) + '</w:tr>';
+    }
+  }
+
+  // 5.2 组标签行：只有「分组正好铺满所有列」时才画，否则宁可不画也不出错
+  const groupSum = colGroups.reduce((a, b) => a + b, 0);
+  if (colGroups.length > 0 && groupSum === cols) {
+    let cells = '';
+    let gridCol = 0;
+    let seatCol = 0;
+    for (let g = 0; g < colGroups.length; g++) {
+      const gs = colGroups[g];
+      const span = 2 * gs - 1;                    // 组内座位列 + 组内间隔列
+      let w = 0;
+      for (let k = 0; k < span; k++) w += grid[gridCol + k];
+      cells += labelCell('\u7b2c ' + (g + 1) + ' \u7ec4', w, span);
+      gridCol += span;
+      seatCol += gs;
+      if (g < colGroups.length - 1) {              // 组与组之间的过道
+        cells += blankCell(gapW[seatCol - 1] || MIN_GAP, 1);
+        gridCol += 1;
+      }
+    }
+    rowsXml += '<w:tr>' + trPr(1000) + cells + '</w:tr>';
+  }
+
+  // 5.3 讲台（横跨整表）
+  rowsXml += '<w:tr>' + trPr(1680) +
+    '<w:tc><w:tcPr><w:tcW w:w="' + TABLE_W + '" w:type="dxa"/>' +
+    '<w:gridSpan w:val="' + totalCols + '"/>' + boxBorder + '<w:vAlign w:val="center"/></w:tcPr>' +
+    '<w:p><w:pPr><w:jc w:val="center"/>' + rPr('84') + '</w:pPr>' +
+    '<w:r>' + rPr('84') + '<w:t>\u8bb2     \u53f0</w:t></w:r></w:p></w:tc></w:tr>';
+
+  // 6) 表格属性：fixed 布局 + 表格级边框全 nil（框线由单元格自己画）
   const tblPr = '<w:tblPr>' +
-    '<w:tblStyle w:val="3"/>' +
     '<w:tblW w:w="' + TABLE_W + '" w:type="dxa"/>' +
     '<w:jc w:val="center"/>' +
     '<w:tblBorders>' +
-    '<w:top w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:left w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:bottom w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:right w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:insideH w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:insideV w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '</w:tblBorders>' +
-    '<w:tblLayout w:type="autofit"/>' +
-    '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>' +
-    '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>' +
+    '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>' +
+    '<w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders>' +
+    '<w:tblLayout w:type="fixed"/>' +
+    '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="72" w:type="dxa"/>' +
+    '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="72" w:type="dxa"/></w:tblCellMar>' +
     '</w:tblPr>';
-  
-  const tblPrEx = '<w:tblPrEx>' +
-    '<w:tblBorders>' +
-    '<w:top w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:left w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:bottom w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:right w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:insideH w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '<w:insideV w:val="single" w:color="auto" w:sz="4" w:space="0"/>' +
-    '</w:tblBorders>' +
-    '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>' +
-    '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>' +
-    '</w:tblPrEx>';
-  
-  // Seat cell XML
-  function seatCell(name, width) {
-    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/>' +
-      dataBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
-      '<w:p><w:pPr><w:jc w:val="center"/><w:textAlignment w:val="center"/>' +
-      '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr></w:pPr>' +
-      '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr>' +
-      '<w:t>' + (name || '') + '</w:t></w:r></w:p></w:tc>';
-  }
-  
-  // Gap cell XML (no borders, vMerge for spanning rows)
-  function gapCell(width, isFirstRow) {
-    const vm = isFirstRow ? '<w:vMerge w:val="restart"/>' : '<w:vMerge w:val="continue"/>';
-    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/>' +
-      vm + gapBorderXml + '</w:tcPr>' +
-      '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
-  }
-  
-  // Empty gap cell for label row (no vMerge)
-  function emptyGapCell(width) {
-    return '<w:tc><w:tcPr><w:tcW w:w="' + width + '" w:type="dxa"/>' +
-      gapBorderXml + '</w:tcPr>' +
-      '<w:p><w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr></w:p></w:tc>';
-  }
-  
-  // Build data rows
-  let rowsXml = '';
-  for (let row = 0; row < totalRows; row++) {
-    let rowCells = '';
-    let colIdx = 0;
-    for (let c = 0; c < cols; c++) {
-      const i = row * cols + c;
-      const s = seatSlots[i];
-      const name = s ? s.name : '';
-      rowCells += seatCell(name, colWidths[colIdx]);
-      colIdx++;
-      if (gapSet.has(c)) {
-        rowCells += gapCell(colWidths[colIdx], row === 0);
-        colIdx++;
-      }
-    }
-    rowsXml += '<w:tr>' + tblPrEx +
-      '<w:trPr><w:trHeight w:val="1274" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
-      rowCells + '</w:tr>';
-  }
-  
-  // Build group label row
-  let labelCells = '';
-  let colIdx = 0;
-  let groupStart = 0;
-  for (let g = 0; g < groupSizes.length; g++) {
-    const gSize = groupSizes[g];
-    // Sum widths for this group's columns
-    let groupWidth = 0;
-    for (let c = 0; c < gSize; c++) {
-      groupWidth += colWidths[colIdx];
-      colIdx++;
-    }
-    // Group label cell spanning group columns
-    labelCells += '<w:tc><w:tcPr><w:tcW w:w="' + groupWidth + '" w:type="dxa"/>' +
-      '<w:gridSpan w:val="' + gSize + '"/>' +
-      dataBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
-      '<w:p><w:pPr><w:jc w:val="center"/>' +
-      '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr></w:pPr>' +
-      '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-      '<w:sz w:val="' + SZ + '"/><w:szCs w:val="' + SZ + '"/></w:rPr>' +
-      '<w:t>\u7b2c ' + (g + 1) + ' \u7ec4</w:t></w:r></w:p></w:tc>';
-    
-    // Gap after group (except last)
-    if (g < groupSizes.length - 1) {
-      labelCells += emptyGapCell(colWidths[colIdx]);
-      colIdx++;
-    }
-  }
-  rowsXml += '<w:tr>' + tblPrEx +
-    '<w:trPr><w:trHeight w:val="1000" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
-    labelCells + '</w:tr>';
-  
-  // Podium row (merged across all columns)
-  let podiumWidth = colWidths.reduce((a, b) => a + b, 0);
-  let podiumRow = '<w:tr>' + tblPrEx +
-    '<w:trPr><w:trHeight w:val="1680" w:hRule="atLeast"/><w:jc w:val="center"/></w:trPr>' +
-    '<w:tc><w:tcPr><w:tcW w:w="' + podiumWidth + '" w:type="dxa"/>' +
-    '<w:gridSpan w:val="' + totalTableCols + '"/>' +
-    dataBorderXml + '<w:vAlign w:val="center"/></w:tcPr>' +
-    '<w:p><w:pPr><w:jc w:val="center"/>' +
-    '<w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-    '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr></w:pPr>' +
-    '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:ascii="' + FONT + '" w:hAnsi="' + FONT + '" w:eastAsia="' + FONT + '" w:cs="' + FONT + '"/>' +
-    '<w:sz w:val="84"/><w:szCs w:val="84"/></w:rPr>' +
-    '<w:t>\u8bb2     \u53f0</w:t></w:r></w:p></w:tc></w:tr>';
-  
-  // Full table XML
-  const tableXml = '<w:tbl>' + tblPr + '<w:tblGrid>' + gridColsXml + '</w:tblGrid>' + rowsXml + podiumRow + '</w:tbl>';
-  
-  // Assemble full document XML
-  const docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+
+  let gridColsXml = '';
+  for (const w of grid) gridColsXml += '<w:gridCol w:w="' + w + '"/>';
+
+  const tableXml = '<w:tbl>' + tblPr + '<w:tblGrid>' + gridColsXml + '</w:tblGrid>' + rowsXml + '</w:tbl>';
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
     'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
     'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
@@ -12632,28 +12587,56 @@ function printSeating() {
     '<w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800" w:header="851" w:footer="992" w:gutter="0"/>' +
     '</w:sectPr>' +
     '</w:body></w:document>';
-  
-  // Build content_types and rels
+}
+
+function printSeating() {
+  const cls = currentViewClass || getHeadteacherClass();
+  if (!cls || !STUDENTS[cls]) {
+    showToast('暂无班级数据', 'warning');
+    return;
+  }
+
+  const sts = STUDENTS[cls];
+  const cols = seatingCols;
+  const totalRows = seatingRows > 0 ? seatingRows : Math.ceil(sts.length / cols);
+  const totalSlots = totalRows * cols;
+
+  // 每个座位对应的学生姓名（空位留空）
+  const names = [];
+  for (let i = 0; i < totalSlots; i++) {
+    const sid = seatLayout[cls] && seatLayout[cls][i];
+    const stu = sid ? sts.find((s) => s.id === sid) : null;
+    names.push(stu ? stu.name : '');
+  }
+
+  const docXml = buildSeatingDocXml({
+    cols: cols,
+    rows: totalRows,
+    names: names,
+    colGaps: colGaps,
+    colGroups: colGroups,
+    rowGap: rowGap
+  });
+
   const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
     '<Default Extension="xml" ContentType="application/xml"/>' +
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
     '</Types>';
-  
+
   const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
     '</Relationships>';
-  
-  // Create ZIP file
+
   const zip = new JSZip();
   zip.file('[Content_Types].xml', contentTypes);
   zip.file('_rels/.rels', rels);
   zip.file('word/document.xml', docXml);
-  
+
   zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
-    .then(function(blob) {
+    .then(function (blob) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
