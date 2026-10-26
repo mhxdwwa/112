@@ -14633,7 +14633,7 @@ function closeXqQrScanner() {
 // ============================================================
 // 班级课程表：班主任编辑自己班级的课程表
 // 全局默认课程表模板（所有班级打开时如果没有数据，自动用此模板）
-const DEFAULT_TIMETABLE_VERSION = 5;  // 每次更新模板时递增，强制覆盖云端旧数据
+const DEFAULT_TIMETABLE_VERSION = 6;  // 每次更新模板时递增，强制覆盖云端旧数据
 const DEFAULT_TIMETABLE_TEMPLATE = {
   // 周一
   '1-2': {subject:'语文',teacher:'',room:''},
@@ -14863,28 +14863,16 @@ async function loadTimetableData() {
         rawCT = {};
       }
       classTimetableData = rawCT;
-      // 检查模板版本，如果云端数据版本低于当前模板，强制用新模板覆盖所有班级
-      if (!classTimetableData._templateVersion || classTimetableData._templateVersion < DEFAULT_TIMETABLE_VERSION) {
-        // 为所有已存在的班级用新模板覆盖
+      // 检查模板版本，如果版本不同则重置所有班级数据
+      if (classTimetableData._templateVersion !== DEFAULT_TIMETABLE_VERSION) {
         Object.keys(classTimetableData).forEach((cls) => {
-          if (cls.charAt(0) === '_') return;  // 跳过 _schedule, _periodNames 等元数据
-          // 用新模板覆盖该班级的课程数据
+          if (cls.charAt(0) === '_') return;
           Object.keys(classTimetableData[cls]).forEach((key) => {
-            if (key.charAt(0) !== '_' && /^\d+-\d+$/.test(key)) {
-              delete classTimetableData[cls][key];
-            }
+            if (/^\d+-\d+$/.test(key)) delete classTimetableData[cls][key];
           });
-          Object.assign(classTimetableData[cls], JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_TEMPLATE)));
         });
-        // 如果云端没有任何班级数据，创建一个默认的 253 班
-        const hasAnyClass = Object.keys(classTimetableData).some(cls => cls.charAt(0) !== '_');
-        if (!hasAnyClass) {
-          classTimetableData['253班'] = JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_TEMPLATE));
-        }
         classTimetableData._templateVersion = DEFAULT_TIMETABLE_VERSION;
-        // 立即保存到云端，覆盖旧数据
         saveClassTimetableData();
-        console.log('[ClassTimetable] Applied new template v' + DEFAULT_TIMETABLE_VERSION + ' to all classes');
       }
       console.log('[ClassTimetable] Loaded data for', Object.keys(classTimetableData).length, 'classes');
       // 加载节次名称
@@ -15036,9 +15024,11 @@ async function migrateTimetableData() {
 }
 
 function getTimetableForClass(className) {
-  // 如果该班级没有数据，使用默认模板
-  if (!classTimetableData[className] || Object.keys(classTimetableData[className]).length === 0) {
+  // 如果该班级没有课程数据，使用默认模板并保存到云端
+  if (!classTimetableData[className] || !Object.keys(classTimetableData[className]).some(k => /^\d+-\d+$/.test(k))) {
     classTimetableData[className] = JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_TEMPLATE));
+    // 保存到云端，让数据持久化
+    if (typeof saveClassTimetableData === 'function') saveClassTimetableData();
   }
   return classTimetableData[className];
 }
