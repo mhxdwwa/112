@@ -153,11 +153,13 @@ async function main() {
     } catch (e) { /* skip if not exists */ }
   }
   console.log('  ✓ HTML files: copied');
-  // 站点图标：HTML 里引用的是根目录 favicon.ico，必须一起进 dist，否则线上 404
-  try {
-    copyFileSync(resolve(__dirname, 'favicon.ico'), join(DIST, 'favicon.ico'));
-    console.log('  ✓ favicon.ico: copied');
-  } catch (e) { /* 没有这个文件就跳过 */ }
+  // 站点图标：HTML 引用的 favicon.ico / icon-32.png / icon-180.png 必须一起进 dist，否则线上 404
+  for (const ic of ['favicon.ico', 'icon-32.png', 'icon-180.png']) {
+    try {
+      copyFileSync(resolve(__dirname, ic), join(DIST, ic));
+      console.log('  ✓ ' + ic + ': copied');
+    } catch (e) { /* 没有这个文件就跳过 */ }
+  }
 
   // Copy image directories
   for (const dir of ['战斗兽宠文件夹', '战斗机器人', 'images', 'audio', 'jiangyaoji-audio', 'jiangyaoji-images', 'mengdaxia-audio', 'shendouluo-images', 'zhandouluo-images', 'zhenjiadasheng-images', 'zhenjiadasheng-audio', 'home-cards']) {
