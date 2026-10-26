@@ -1046,10 +1046,20 @@ tbody tr:last-child td { border-bottom: none; }
   /* 点击时的灰色闪块去掉，手感接近原生 App */
   * { -webkit-tap-highlight-color: transparent; }
 
-  /* 顶部栏：版权信息手机上隐藏，把位置留给页面标题 */
-  .header-copyright { display: none !important; }
+  /* 顶部栏：保留版权署名，字号收紧两行竖排，给页面标题让位 */
   .header { height: 50px; padding: 0 10px; }
-  .header-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-copyright {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 0 0 auto;
+    font-size: 9.5px;
+    line-height: 1.25;
+    margin-left: 2px;
+    padding-left: 6px;
+  }
+  .header-copyright span { margin-right: 0; white-space: nowrap; }
+  .header-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* 输入控件 16px：避免 iOS Safari 聚焦输入框时整页自动放大 */
   .form-input, .form-select, .form-textarea,
