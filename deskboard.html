@@ -1408,6 +1408,10 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
     + '.rmitem span{margin-left:auto;font-family:ui-monospace,Consolas,monospace;color:#8b939b;font-size:12.5px}'
     + '.rmitem i{font-style:normal;width:7px;height:7px;border-radius:50%;background:#cfd6dd}'
     + '.rmitem i.on{background:#3ba06a}'
+    + '.rmitem .rmdel{margin-left:8px;flex:0 0 auto;width:20px;height:20px;display:grid;place-items:center;'
+    + 'border:0;border-radius:6px;background:transparent;color:#a8b0b8;font-size:15px;line-height:1;'
+    + 'cursor:pointer;padding:0;transition:.15s}'
+    + '.rmitem .rmdel:hover{background:#fde8e8;color:#d2453f}'
     + '#rmpill{position:fixed;left:16px;bottom:16px;z-index:9998;display:flex;align-items:center;gap:9px;'
     + 'padding:9px 14px;border-radius:999px;background:#fff;box-shadow:0 6px 20px rgba(0,0,0,.14);cursor:pointer;'
     + 'font:13px/1 system-ui,"Microsoft YaHei",sans-serif;color:#333}'
@@ -1626,13 +1630,31 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
         return '<div class="rmitem" data-code="' + esc(r.code) + '">'
           + '<i class="' + (r.code === code && state === 'online' ? 'on' : '') + '"></i>'
           + '<b>' + esc(r.name || ('教室 ' + r.code)) + '</b>'
-          + '<span>' + esc(r.code) + '</span></div>';
+          + '<span>' + esc(r.code) + '</span>'
+          + '<button class="rmdel" type="button" data-del="' + esc(r.code) + '" title="删除这条记录">×</button>'
+          + '</div>';
       })
       .join('');
     Array.prototype.forEach.call(box.querySelectorAll('.rmitem'), function (el) {
       el.addEventListener('click', function () {
         $('#rmcode').value = el.getAttribute('data-code');
         go();
+      });
+    });
+    // 每条记录右侧的 × ：只删掉这条记录，不触发连接
+    Array.prototype.forEach.call(box.querySelectorAll('.rmdel'), function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var c = btn.getAttribute('data-del');
+        rooms = rooms.filter(function (x) { return x.code !== c; });
+        saveRooms();
+        if (!rooms.length) {
+          var l = $('#rmlist');
+          if (l) l.hidden = true;
+          box.innerHTML = '';
+        } else {
+          renderRooms();
+        }
       });
     });
   }
