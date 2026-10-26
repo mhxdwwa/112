@@ -14684,6 +14684,47 @@ function sunSrcPeriod(displayP) {
   return (k >= 0 && k < filled.length) ? filled[k] : 0;
 }
 
+/* 渲染前直接把周日的作息和课程都摆到「第八节」起。
+   只靠在渲染时偏移不够（保存到云端的数据还是错的），这里连数据一起修正：
+   ① timetableSchedule['7'] 重排到第 8 节起  ② 课程单元格 key 跟着 6/7/8→8/9/10
+   幂等：已经对齐就直接返回，重复调用不会越挪越远。 */
+function ensureSundayAligned() {
+  const sun = timetableSchedule['7'];
+  if (!Array.isArray(sun)) return;
+  const filled = [];
+  sun.forEach((s, i) => { if (s && s.start && s.end) filled.push({ p: i + 1, start: s.start, end: s.end }); });
+  if (!filled.length) return;
+  const TARGET = 8;                            // 第八节
+  if (filled[0].p === TARGET) return;          // 已对齐
+  const arr = [];
+  for (let i = 0; i < TARGET - 1; i++) arr.push({});
+  filled.forEach(x => arr.push({ start: x.start, end: x.end }));
+  timetableSchedule['7'] = arr;
+
+  const map = {};
+  filled.forEach((x, k) => { map[x.p] = TARGET + k; });
+  const migrate = (tt) => {
+    if (!tt || typeof tt !== 'object') return;
+    const move = {};
+    Object.keys(map).forEach((from) => {
+      const v = tt['7-' + from];
+      if (v && map[from] !== Number(from)) move['7-' + map[from]] = v;
+    });
+    if (!Object.keys(move).length) return;
+    Object.keys(map).forEach((from) => { delete tt['7-' + from]; });   // 先清旧再写新，避免互覆盖
+    Object.assign(tt, move);
+  };
+  Object.keys(classTimetableData || {}).forEach((c) => {
+    if (c.charAt(0) !== '_') migrate(classTimetableData[c]);
+  });
+  Object.keys(personalTimetableData || {}).forEach((t) => {
+    if (t.charAt(0) === '_') return;
+    const by = personalTimetableData[t];
+    if (by && typeof by === 'object') Object.keys(by).forEach((c) => migrate(by[c]));
+  });
+  console.log('[SundayAlign] 周日晚自习已对齐到「第八节」', filled.map(x => x.p).join(',') + ' → 8,9,10');
+}
+
 // 获取当前正在上的课（返回 {weekday, period} 或 null）
 function getCurrentClass() {
   const now = new Date();
@@ -15206,6 +15247,7 @@ function copyScheduleDay(fromDay, toDay) {
 }
 
 function renderTimetableGrid(className) {
+  ensureSundayAligned();   // 渲染前先把周日摆到第八节（幂等）
   const tt = getTimetableForClass(className);
   const user = xqCurrentUser || {};
   // Headteacher can only edit their own class, leader/admin can edit all
@@ -15288,6 +15330,7 @@ function renderTimetableGrid(className) {
 }
 
 function renderTeacherTimetable() {
+  ensureSundayAligned();   // 渲染前先把周日摆到第八节（幂等）
   const user = xqCurrentUser || {};
   const teacherName = user.teacherName;
   const tt = getTimetableForTeacher(teacherName);
@@ -15357,6 +15400,7 @@ function renderTeacherTimetable() {
 }
 
 function renderEditableTeacherTimetable() {
+  ensureSundayAligned();   // 渲染前先把周日摆到第八节（幂等）
   const user = xqCurrentUser || {};
   const teacherName = user.teacherName;
   const tt = getTimetableForTeacher(teacherName);
