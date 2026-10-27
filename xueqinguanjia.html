@@ -1101,6 +1101,10 @@ tbody tr:last-child td { border-bottom: none; }
   .content { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   .sidebar { padding-bottom: env(safe-area-inset-bottom); }
 
+  /* 软件下载：手机上说明占满一行，按钮/状态另起一行靠右，避免和说明文字挤在一行 */
+  .xq-dl-row > div:first-child { flex: 1 1 100% !important; }
+  .xq-dl-row > a, .xq-dl-row > span { margin-left: auto; }
+
   /* 手机上弹窗贴边留 10px，键盘弹出时不易顶出屏幕 */
   .modal-content { width: calc(100vw - 20px) !important; max-width: calc(100vw - 20px) !important; margin: 4vh auto; }
 }
@@ -1973,6 +1977,10 @@ async function xqLoadAllConfig() {
         classGradeMap = result.config.classGradeMap.data;
         saveClassGradeMap();
         console.log('[XQ] Loaded class grade map, entries:', Object.keys(classGradeMap).length);
+      }
+      // 软件下载地址（管理员在「软件下载」页里维护）
+      if (result.config.download_links && result.config.download_links.data) {
+        xqDownloadConf = result.config.download_links.data;
       }
       // 加载凭证（credentials）
       if (result.config.credentials && result.config.credentials.data) {
@@ -4691,6 +4699,10 @@ function buildSidebar() {
       <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
       <span>班级桌面管理</span>
     </div>`;
+    html += `<div class="sidebar-item" data-page="download" onclick="navigate('download')">
+      <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+      <span>软件下载</span>
+    </div>`;
     html += `</div>`;
   }
   
@@ -4788,6 +4800,133 @@ function renderDeskboardConsole() {
   return `<div class="db-page">
     <iframe class="db-page-frame" id="dbPageFrame" title="班级桌面管理" allow="autoplay; fullscreen"></iframe>
   </div>`;
+}
+
+/* ============================================================
+   软件下载（入口在侧边栏「工具」组）
+   三类：班级桌面（电脑安装包）/ 学勤管家 电脑版 / 学勤管家 安卓版
+   下载地址存在云端 config 表（download_links），管理员在页面上点
+   「修改下载地址」就能换，换包不必改代码、也不用重新发布网页。
+   ============================================================ */
+var XQ_DL_KEY = 'download_links';
+var XQ_DL_DEFAULT = {
+  version: '1.2.22',
+  items: [
+    { id: 'deskboard', name: '班级桌面（电脑安装包）', desc: '教室大屏看板程序。装好后在「班级桌面管理」里用连接码远程修改看板内容', url: '' },
+    { id: 'xqgj-pc', name: '学勤管家 电脑版', desc: 'Windows 安装包，自动创建桌面和开始菜单图标', url: '' },
+    { id: 'xqgj-apk', name: '学勤管家 安卓版', desc: '安卓手机 / 平板安装包（APK），安装时允许「安装未知应用」即可', url: '' }
+  ]
+};
+var xqDownloadConf = null;   // 云端读回后放这里
+
+function xqDownloadConfGet() {
+  var c = xqDownloadConf;
+  if (!c || !Array.isArray(c.items) || !c.items.length) return JSON.parse(JSON.stringify(XQ_DL_DEFAULT));
+  var map = {};
+  c.items.forEach(function (it) { if (it && it.id) map[it.id] = it; });
+  var out = { version: c.version || XQ_DL_DEFAULT.version, items: [] };
+  XQ_DL_DEFAULT.items.forEach(function (d) {
+    var s = map[d.id] || {};
+    out.items.push({ id: d.id, name: s.name || d.name, desc: s.desc || d.desc, url: s.url || '' });
+  });
+  return out;
+}
+
+// 登录时没拿到就补拉一次，拿到后自动刷新当前页
+async function xqDownloadLoad() {
+  if (xqDownloadConf) return;
+  try {
+    var r = await xqApi('config', { action: 'get' });
+    var d = (r && r.ok && r.config && r.config[XQ_DL_KEY]) ? r.config[XQ_DL_KEY].data : null;
+    if (d && Array.isArray(d.items)) {
+      xqDownloadConf = d;
+      if (typeof currentPage !== 'undefined' && currentPage === 'download') {
+        var box = document.getElementById('content');
+        if (box) box.innerHTML = renderDownloadPage();
+      }
+    }
+  } catch (e) { /* 忽略：用默认结构，显示「未设置地址」 */ }
+}
+
+function xqDlRow(it, isLast) {
+  var url = (it && it.url) ? String(it.url) : '';
+  var right = url
+    ? '<a class="toolbar-btn primary" style="text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">下载</a>'
+    : '<span style="font-size:12px;color:var(--gray-400);white-space:nowrap">未设置地址</span>';
+  return '<div class="xq-dl-row" style="display:flex;align-items:center;gap:12px;padding:14px 0;flex-wrap:wrap'
+      + (isLast ? '' : ';border-bottom:1px solid var(--gray-100)') + '">'
+    + '<div style="flex:1 1 180px;min-width:0">'
+    + '<div style="font-size:14px;font-weight:500;color:var(--gray-800)">' + escapeHtml(it.name) + '</div>'
+    + '<div style="font-size:12px;color:var(--gray-500);margin-top:3px;line-height:1.6">' + escapeHtml(it.desc) + '</div>'
+    + '</div>' + right + '</div>';
+}
+
+function renderDownloadPage() {
+  var conf = xqDownloadConfGet();
+  var rows = conf.items.map(function (it, i) {
+    return xqDlRow(it, i === conf.items.length - 1);
+  }).join('');
+  var adminBtn = (typeof isXqAdmin === 'function' && isXqAdmin())
+    ? '<button class="toolbar-btn" onclick="xqDownloadEdit()" style="white-space:nowrap">修改下载地址</button>'
+    : '';
+  var versionTip = conf.version
+    ? '当前版本 <b style="color:var(--gray-700)">v' + escapeHtml(conf.version) + '</b>。'
+    : '';
+  return '<div style="font-size:12.5px;color:var(--gray-500);line-height:1.8;margin:0 0 14px">'
+      + '网页版已是最新，无需下载；需要桌面图标或手机端，选下面一项。'
+      + versionTip
+      + '</div>'
+    + '<div class="card">'
+    + '<div class="card-header"><span class="card-title">下载学勤管家</span>' + adminBtn + '</div>'
+    + '<div class="card-body">' + rows + '</div>'
+    + '</div>';
+}
+
+// 管理员：编辑三类下载地址（存云端，所有老师下次打开看到的即新地址）
+function xqDownloadEdit() {
+  if (typeof isXqAdmin === 'function' && !isXqAdmin()) { showToast('只有管理员可以修改下载地址', 'error'); return; }
+  var conf = xqDownloadConfGet();
+  var fields = conf.items.map(function (it, i) {
+    return '<div class="form-group" style="margin-bottom:14px">'
+      + '<label style="display:block;font-size:13px;color:var(--gray-700);margin-bottom:6px">' + escapeHtml(it.name) + '</label>'
+      + '<input class="form-input" id="dlUrl' + i + '" type="text" value="' + escapeHtml(it.url) + '" placeholder="粘贴网盘分享链接，例如 https://pan.baidu.com/s/xxxx">'
+      + '</div>';
+  }).join('');
+  var body = '<div style="font-size:12.5px;color:var(--gray-500);line-height:1.7;margin-bottom:16px">'
+      + '把三个软件包的下载链接粘进来。网盘分享页地址就可以（老师点开后按网盘提示下载）；留空的项在下载页显示「未设置地址」。</div>'
+    + '<div class="form-group" style="margin-bottom:14px">'
+      + '<label style="display:block;font-size:13px;color:var(--gray-700);margin-bottom:6px">版本号（显示在下载页顶部）</label>'
+      + '<input class="form-input" id="dlVer" type="text" value="' + escapeHtml(conf.version) + '" placeholder="例如 1.2.22">'
+      + '</div>'
+    + fields;
+  var footer = '<button class="toolbar-btn" onclick="hideModal()">取消</button>'
+    + '<button class="toolbar-btn primary" onclick="xqDownloadSave()">保存</button>';
+  showModal('修改下载地址', body, footer);
+}
+
+async function xqDownloadSave() {
+  if (typeof isXqAdmin === 'function' && !isXqAdmin()) { showToast('只有管理员可以修改下载地址', 'error'); return; }
+  var conf = xqDownloadConfGet();
+  var verEl = document.getElementById('dlVer');
+  conf.version = ((verEl && verEl.value) ? verEl.value.trim() : '') || conf.version;
+  conf.items.forEach(function (it, i) {
+    var el = document.getElementById('dlUrl' + i);
+    if (el) it.url = (el.value || '').trim();
+  });
+  var bad = conf.items.filter(function (it) { return it.url && !/^https?:\/\//i.test(it.url); })[0];
+  if (bad) { showToast('「' + bad.name + '」的链接要以 http:// 或 https:// 开头', 'error'); return; }
+  try {
+    var r = await xqSaveConfigToServer(XQ_DL_KEY, conf);
+    if (r && r.ok === false) { showToast('保存失败，请重试', 'error'); return; }
+    xqDownloadConf = conf;
+    hideModal();
+    showToast('下载地址已更新');
+    if (typeof currentPage !== 'undefined' && currentPage === 'download') {
+      document.getElementById('content').innerHTML = renderDownloadPage();
+    }
+  } catch (e) {
+    showToast('保存失败：' + (e.message || '网络问题'), 'error');
+  }
 }
 
 function mountDeskboardConsole() {
@@ -5014,6 +5153,7 @@ function navigate(pageId) {
     'discipline': '纪律留言',
     'duty-roster': '值日安排',
     'deskboard': '班级桌面管理',
+    'download': '软件下载',
   };
   document.getElementById('headerTitle').textContent = titles[pageId] || '';
   document.getElementById('headerBreadcrumb').textContent = `首页 / ${titles[pageId] || ''}`;
@@ -5073,6 +5213,7 @@ function renderPage(pageId) {
     'data-collection': renderDataCollection,
     'data-fill': renderDataFill,
     'deskboard': renderDeskboardConsole,
+    'download': renderDownloadPage,
   };
   if (renderers[pageId]) {
     content.innerHTML = renderers[pageId]();
@@ -5098,6 +5239,10 @@ function renderPage(pageId) {
     // 班级桌面管理：把控制台当成一个普通页面渲染进内容区（不再是浮层弹窗）
     if (pageId === 'deskboard') {
       mountDeskboardConsole();
+    }
+    // 软件下载：地址存云端，登录时没拿到就补拉一次（拿到后自动重渲染）
+    if (pageId === 'download') {
+      xqDownloadLoad();
     }
     // 进入座位表页面时加载纪律数据（用于快速添加留言）
     if (pageId === 'seating' || pageId === 'class-seating' || pageId === 'my-class') {
