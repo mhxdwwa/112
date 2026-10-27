@@ -31,6 +31,15 @@ function isHashedPassword(str) {
 
 // 使用 db 作为变量名，避免和 window.supabase 冲突
 var db;
+
+/* 扫码票据接口：走网站自己的 /api/qr（教室 / 校园网络也能用，不再依赖浏览器直连 Supabase） */
+function qrTicket(path, body) {
+  return fetch('/api/qr/' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body || {})
+  }).then(function (r) { return r.json(); });
+}
 (function initSupabase() {
   try {
     if (window.supabase && window.supabase.createClient) {
@@ -427,67 +436,17 @@ async function generateQRCode() {
   qrStatus.style.color = '#d4a017';
   _qrVerified = false;
 
-  if (!db) {
-    qrStatus.textContent = '❌ 数据库未连接，请刷新页面';
-    qrStatus.style.color = '#e74c3c';
-    return;
-  }
-
-  // 先检查表是否存在
-  var tableCheck = await db
-    .from('qr_login_tokens')
-    .select('id')
-    .limit(1);
-  
-  if (tableCheck.error) {
-    console.error('[扫码登录] 表检查失败:', tableCheck.error.message);
-    if (tableCheck.error.message && tableCheck.error.message.indexOf('does not exist') !== -1) {
-      qrStatus.innerHTML = '❌ 扫码功能未启用<br><span style="font-size:11px;color:#888;line-height:1.6;">需要在Supabase中创建qr_login_tokens表<br>请联系管理员执行建表SQL</span>';
-      qrStatus.style.color = '#e74c3c';
-      return;
-    }
-    qrStatus.textContent = '❌ 数据库错误: ' + tableCheck.error.message;
-    qrStatus.style.color = '#e74c3c';
-    return;
-  }
-
   try {
-    // 生成随机token
-    _qrToken = 'qr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 16);
-    var expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-    // 存储token到Supabase
-    var insertResult = await db
-      .from('qr_login_tokens')
-      .insert([{
-        token: _qrToken,
-        email: '',
-        status: 'pending',
-        expires_at: expiresAt
-      }]);
-
-    if (insertResult.error) {
-      console.error('[扫码登录] 插入token失败:', insertResult.error.message);
-      qrStatus.innerHTML = '❌ 生成二维码失败<br><span style="font-size:11px;color:#888;">' + insertResult.error.message + '</span>';
+    // 票据由网站自己的接口生成（/api/qr）：教室 / 校园网络也能用，不依赖浏览器直连 Supabase
+    var newRes = await qrTicket('new', {});
+    if (!newRes || !newRes.ok || !newRes.token) {
+      console.error('[扫码登录] 生成票据失败:', (newRes && newRes.reason) || 'no token');
+      qrStatus.innerHTML = '❌ 生成二维码失败<br><span style="font-size:11px;color:#888;">连不上服务器，请稍后再试</span>';
       qrStatus.style.color = '#e74c3c';
       return;
     }
-
-    // 验证插入成功（用 .limit(1) 代替 .single()，避免多行时报错）
-    var verifyInsert = await db
-      .from('qr_login_tokens')
-      .select('token, status')
-      .eq('token', _qrToken)
-      .limit(1);
-    
-    if (verifyInsert.error || !verifyInsert.data || verifyInsert.data.length === 0) {
-      console.error('[扫码登录] 插入验证失败:', verifyInsert.error ? verifyInsert.error.message : 'no data');
-      qrStatus.innerHTML = '❌ 二维码写入失败，请刷新重试';
-      qrStatus.style.color = '#e74c3c';
-      return;
-    }
-
-    console.log('[扫码登录] Token已创建并验证:', _qrToken.substring(0, 20) + '...');
+    _qrToken = newRes.token;
+    console.log('[扫码登录] 票据已创建:', _qrToken);
 
     // 生成二维码URL
     var baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
@@ -517,7 +476,7 @@ async function generateQRCode() {
   }
 }
 
-// === 双通道检测：Realtime实时推送 + 轮询备份 ===
+// === 轮询检测票据状态 ===
 function startQRDetection() {
   if (!_qrToken) return;
   stopQRDetection();
@@ -525,46 +484,14 @@ function startQRDetection() {
   
   updateQRWaitingStatus();
   
-  // 通道1：Supabase Realtime 实时推送（监听 UPDATE + INSERT 两种事件）
-  // INSERT 事件用于处理手机端 DELETE+INSERT 降级策略
-  try {
-    _qrRealtimeChannel = db
-      .channel('qr_' + _qrToken)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'qr_login_tokens',
-        filter: 'token=eq.' + _qrToken
-      }, function(payload) {
-        console.log('[扫码登录] Realtime收到UPDATE:', payload.new);
-        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
-          onQRVerified(payload.new.email);
-        }
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'qr_login_tokens',
-        filter: 'token=eq.' + _qrToken
-      }, function(payload) {
-        console.log('[扫码登录] Realtime收到INSERT:', payload.new);
-        if (payload.new && payload.new.status === 'verified' && payload.new.email) {
-          onQRVerified(payload.new.email);
-        }
-      })
-      .subscribe(function(status) {
-        console.log('[扫码登录] Realtime订阅状态:', status);
-      });
-  } catch(e) {
-    console.warn('[扫码登录] Realtime初始化失败:', e.message);
-  }
+  // 票据接口是轮询式的（没有 Realtime 推送），1.5 秒查一次足够快
   
   // 通道2：轮询备份（每1.5秒一次）
   _qrPollTimer = setInterval(pollQRStatus, 1500);
   // 立即执行一次
   pollQRStatus();
   
-  console.log('[扫码登录] 开始检测（Realtime UPDATE+INSERT + 轮询），token:', _qrToken.substring(0, 20) + '...');
+  console.log('[扫码登录] 开始轮询票据，token:', _qrToken.substring(0, 20) + '...');
 }
 
 function updateQRWaitingStatus() {
@@ -589,57 +516,41 @@ function updatePollInfo(statusText) {
 
 // 轮询检测
 async function pollQRStatus() {
-  if (_qrVerified || !_qrToken || !db) return;
-  
+  if (_qrVerified || !_qrToken) return;
   _qrPollCount++;
-  
   try {
-    // 使用 .limit(1) 代替 .single()，更健壮（single在无结果时报错）
-    var result = await db
-      .from('qr_login_tokens')
-      .select('status, email, expires_at')
-      .eq('token', _qrToken)
-      .limit(1);
-
-    if (result.error) {
-      console.warn('[扫码登录] 轮询#' + _qrPollCount + ' 查询失败:', result.error.message);
-      updatePollInfo('查询失败: ' + result.error.message.substring(0, 30));
+    var r = await qrTicket('get', { token: _qrToken });
+    if (!r || !r.ok) {
+      updatePollInfo('查询失败');
       return;
     }
-
-    if (!result.data || result.data.length === 0) {
-      // token行不存在（可能被DELETE了但INSERT还没到）
-      updatePollInfo('等待数据写入...');
-      return;
-    }
-
-    var data = result.data[0];
-    
-    // 每5次轮询打印一次状态（避免日志太多）
     if (_qrPollCount % 5 === 1) {
-      console.log('[扫码登录] 轮询#' + _qrPollCount + ' status=' + data.status + ' email=' + (data.email || '无'));
+      console.log('[扫码登录] 轮询#' + _qrPollCount + ' status=' + r.status);
     }
-    
-    updatePollInfo('轮询#' + _qrPollCount + ' | status=' + data.status + (data.email ? ' | ' + data.email.substring(0, 10) + '...' : ''));
-
-    // 检查过期
-    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+    if (r.status === 'pending') {
+      updatePollInfo('轮询#' + _qrPollCount + ' | 等待手机确认');
+      return;
+    }
+    if (r.status === 'expired' || r.status === 'gone') {
       stopQRDetection();
       var qrStatus = document.getElementById('qrStatus');
       if (qrStatus) {
-        qrStatus.textContent = '❌ 二维码已过期，请点击刷新';
+        qrStatus.textContent = (r.status === 'expired')
+          ? '❌ 二维码已过期，请点击刷新'
+          : '❌ 二维码已失效，请点击刷新';
         qrStatus.style.color = '#e74c3c';
       }
       return;
     }
-
-    // 检查是否已验证
-    if (data.status === 'verified' && data.email) {
-      console.log('[扫码登录] 轮询检测到verified! email=' + data.email);
-      onQRVerified(data.email);
+    if (r.status === 'verified') {
+      var email = (r.payload && r.payload.email) || r.email || '';
+      if (email) {
+        console.log('[扫码登录] 轮询检测到 verified:', email);
+        onQRVerified(email);
+      }
+      return;
     }
-
-  } catch(e) {
+  } catch (e) {
     console.warn('[扫码登录] 轮询#' + _qrPollCount + ' 异常:', e.message);
     updatePollInfo('异常: ' + e.message.substring(0, 20));
   }
@@ -666,30 +577,16 @@ async function doAutoLogin(email) {
   try {
     console.log('[扫码登录] 开始查询教师账号:', email);
     
-    if (!db) {
-      throw new Error('数据库未连接');
-    }
-    
-    var teacherResult = await db
-      .from('teachers')
-      .select('*')
-      .eq('email', email)
-      .limit(1);
-
-    if (teacherResult.error) {
-      console.error('[扫码登录] 查询教师失败:', teacherResult.error.message);
-      if (teacherResult.error.message && teacherResult.error.message.indexOf('does not exist') !== -1) {
-        throw new Error('teachers表不存在');
-      }
-      throw teacherResult.error;
+    // 账号信息由服务端查询（/api/qr/login），浏览器不再直连 Supabase
+    var loginRes = await qrTicket('login', { token: _qrToken });
+    if (!loginRes || !loginRes.ok) {
+      if (loginRes && loginRes.reason === 'no_teacher') throw new Error('教师账号不存在: ' + email);
+      if (loginRes && loginRes.reason === 'not_verified') throw new Error('扫码还没确认，请重新扫码');
+      if (loginRes && loginRes.reason === 'expired') throw new Error('二维码已过期，请刷新');
+      throw new Error('查询教师账号失败');
     }
 
-    if (!teacherResult.data || teacherResult.data.length === 0) {
-      console.error('[扫码登录] 未找到教师账号:', email);
-      throw new Error('教师账号不存在: ' + email);
-    }
-
-    var teacherData = teacherResult.data[0];
+    var teacherData = loginRes.teacher;
     console.log('[扫码登录] 找到教师账号:', teacherData.id, teacherData.name || email);
 
     // 保存登录信息

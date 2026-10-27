@@ -116,8 +116,16 @@ export const onRequestPost = async ({ request, env, params }) => {
     if (!row) return jsonResponse({ ok: true, status: 'gone' });
     if (row.status === 'verified') {
       const payload = decodePayload(row.email);
-      if (!payload) return jsonResponse({ ok: true, status: 'gone' });
-      return jsonResponse({ ok: true, status: 'verified', payload });
+      // 无尽侠客这类游戏：payload 里带着 access_token（WJX1: 编码存）
+      if (payload) return jsonResponse({ ok: true, status: 'verified', payload });
+      // 主站 / 班级宠物这类：只确认了「是哪个账号」，邮箱原样存在 email 里
+      if (row.email) {
+        return jsonResponse({
+          ok: true, status: 'verified', email: row.email,
+          payload: { email: row.email }
+        });
+      }
+      return jsonResponse({ ok: true, status: 'gone' });
     }
     if (row.status === 'expired' || isExpired(row)) {
       return jsonResponse({ ok: true, status: 'expired' });
@@ -128,7 +136,8 @@ export const onRequestPost = async ({ request, env, params }) => {
   /* ---------- 手机端确认 ---------- */
   if (action === 'put') {
     const payload = body.payload || null;
-    if (!payload || !payload.access_token) {
+    // 两种用法：带 access_token（游戏扫码登录）/ 只带 email（主站账号确认）
+    if (!payload || (!payload.access_token && !payload.email)) {
       return jsonResponse({ ok: false, reason: 'bad_payload' }, 400);
     }
     const { row, err } = await findByToken(env, token);
@@ -138,13 +147,39 @@ export const onRequestPost = async ({ request, env, params }) => {
     if (row.status === 'expired' || isExpired(row)) {
       return jsonResponse({ ok: false, reason: 'expired' });
     }
+    const stored = payload.access_token ? encodePayload(payload) : String(payload.email);
     // 带 status=eq.pending 条件，避免两个手机同时确认时互相覆盖
     const upd = await sbRequest(env, 'PATCH', 'qr_login_tokens', {
       query: 'token=eq.' + encodeURIComponent(token) + '&status=eq.pending',
-      body: { email: encodePayload(payload), status: 'verified', verified_at: nowIso() }
+      body: { email: stored, status: 'verified', verified_at: nowIso() }
     });
     if (upd.error) return jsonResponse({ ok: false, reason: 'server' }, 500);
     return jsonResponse({ ok: true });
+  }
+
+  /* ---------- 电脑端用票据换登录信息（教师账号由服务端查，浏览器不直连 Supabase） ---------- */
+  if (action === 'login') {
+    const { row, err } = await findByToken(env, token);
+    if (err) return jsonResponse({ ok: false, reason: 'server' }, 500);
+    if (!row) return jsonResponse({ ok: false, reason: 'gone' });
+    if (row.status !== 'verified') return jsonResponse({ ok: false, reason: 'not_verified' });
+    if (isExpired(row)) return jsonResponse({ ok: false, reason: 'expired' });
+
+    const payload = decodePayload(row.email);
+    const email = (payload && payload.email) ? String(payload.email) : String(row.email || '');
+    if (!email) return jsonResponse({ ok: false, reason: 'no_email' });
+
+    const t = await sbRequest(env, 'GET', 'teachers', {
+      query: 'select=id,name,email&email=eq.' + encodeURIComponent(email) + '&limit=1'
+    });
+    if (t.error) return jsonResponse({ ok: false, reason: 'server' }, 500);
+    const teacher = (t.data && t.data[0]) || null;
+    if (!teacher) return jsonResponse({ ok: false, reason: 'no_teacher' });
+
+    return jsonResponse({
+      ok: true,
+      teacher: { id: teacher.id, name: teacher.name || email, email: teacher.email || email }
+    });
   }
 
   /* ---------- 用完即删 ---------- */

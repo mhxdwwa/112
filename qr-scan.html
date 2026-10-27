@@ -112,6 +112,15 @@ var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 var db;
 var qrToken = '';
 var userEmail = '';
+
+/* 扫码票据接口：走网站自己的 /api/qr，手机和电脑都不再直连 Supabase */
+function qrTicket(path, body) {
+  return fetch('/api/qr/' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body || {})
+  }).then(function (r) { return r.json(); });
+}
 var appName = 'petworld'; // 默认宠物世界
 var appTitle = '宠物世界';
 
@@ -207,42 +216,24 @@ var appTitle = '宠物世界';
     return;
   }
 
-  // 4. 检查token是否有效
+  // 4. 检查票据是否有效（走自己域名的 /api/qr，教室网络也能用）
   try {
-    console.log('[扫码] 查询token, 值="' + qrToken + '", 长度=' + qrToken.length);
-    var tokenResult = await db
-      .from('qr_login_tokens')
-      .select('*')
-      .eq('token', qrToken)
-      .limit(1);
-
-    console.log('[扫码] 查询结果:', tokenResult.error ? 'ERROR: ' + tokenResult.error.message : 'rows=' + (tokenResult.data ? tokenResult.data.length : 0));
-    if (tokenResult.data && tokenResult.data.length > 0) {
-      console.log('[扫码] 找到的行:', JSON.stringify(tokenResult.data[0]));
-    }
-
-    if (tokenResult.error) {
-      if (tokenResult.error.message && tokenResult.error.message.indexOf('does not exist') !== -1) {
-        showError('系统未配置扫码登录功能，请联系管理员');
-      } else {
-        showError('查询失败: ' + tokenResult.error.message);
-      }
+    console.log('[扫码] 查询票据 token=' + qrToken);
+    var tokenRes = await qrTicket('get', { token: qrToken });
+    if (!tokenRes || !tokenRes.ok) {
+      showError('查询失败，请稍后重试');
       return;
     }
-
-    if (!tokenResult.data || tokenResult.data.length === 0) {
-      var allRows = await db
-        .from('qr_login_tokens')
-        .select('token, status, created_at')
-        .limit(10);
-      console.log('[扫码] 表中所有记录:', allRows.error ? 'ERROR: ' + allRows.error.message : JSON.stringify(allRows.data));
-      showError('二维码已失效或不存在，请在电脑端刷新二维码<br><br><span style="font-size:11px;color:#999;">token: ' + escapeHtml(qrToken.substring(0, 30)) + '...<br>表中记录数: ' + (allRows.data ? allRows.data.length : '查询失败') + '</span>');
+    if (tokenRes.status === 'gone') {
+      showError('二维码已失效，请在电脑端刷新二维码');
       return;
     }
-
-    var tokenRow = tokenResult.data[0];
-    if (tokenRow.status !== 'pending') {
-      showError('该二维码已被使用或已过期，请在电脑端刷新二维码');
+    if (tokenRes.status === 'expired') {
+      showError('二维码已过期，请在电脑端刷新二维码');
+      return;
+    }
+    if (tokenRes.status === 'verified') {
+      showError('该二维码已被使用，请在电脑端刷新二维码');
       return;
     }
 
@@ -263,99 +254,25 @@ async function handleConfirm() {
   resultStatus.innerHTML = '<span class="spinner"></span> 正在确认登录...';
 
   try {
-    // 策略1：UPDATE（带status条件）
-    var result = await db
-      .from('qr_login_tokens')
-      .update({
-        status: 'verified',
-        email: userEmail,
-        verified_at: new Date().toISOString()
-      })
-      .eq('token', qrToken)
-      .eq('status', 'pending')
-      .select();
-
-    console.log('[扫码] UPDATE结果:', result.error ? 'ERROR: ' + result.error.message : 'rows=' + (result.data ? result.data.length : 0));
-
-    var updateOk = !result.error && result.data && result.data.length > 0;
-
-    if (!updateOk) {
-      // 策略2：不带status条件
-      console.log('[扫码] 策略1失败，尝试不带status条件的UPDATE...');
-      var result2 = await db
-        .from('qr_login_tokens')
-        .update({
-          status: 'verified',
-          email: userEmail,
-          verified_at: new Date().toISOString()
-        })
-        .eq('token', qrToken)
-        .select();
-
-      console.log('[扫码] 策略2结果:', result2.error ? 'ERROR: ' + result2.error.message : 'rows=' + (result2.data ? result2.data.length : 0));
-      updateOk = !result2.error && result2.data && result2.data.length > 0;
+    // 确认登录：走自己域名的 /api/qr（不直连 Supabase，教室网络也能用）
+    var putRes = await qrTicket('put', { token: qrToken, payload: { email: userEmail } });
+    if (!putRes || !putRes.ok) {
+      var why = (putRes && putRes.reason === 'expired') ? '二维码已过期，请在电脑端刷新二维码'
+              : (putRes && putRes.reason === 'used') ? '这个二维码已经用过了，请在电脑端刷新'
+              : (putRes && putRes.reason === 'gone') ? '二维码无效，请在电脑端重新生成'
+              : '确认失败，请重试';
+      throw new Error(why);
     }
 
-    if (!updateOk) {
-      // 策略3：DELETE + INSERT
-      console.log('[扫码] 策略2失败，尝试 DELETE + INSERT...');
-      var delResult = await db
-        .from('qr_login_tokens')
-        .delete()
-        .eq('token', qrToken);
+    resultStatus.className = 'status success';
+    resultStatus.innerHTML = '✅ 登录成功！<br><span style="font-size:12px;color:#888;">电脑端将自动进入' + appTitle + '教师账户</span>';
+    document.getElementById('statusMsg').innerHTML = '操作完成，正在返回...';
 
-      if (delResult.error) {
-        throw new Error('写入失败: ' + delResult.error.message);
-      }
-
-      var insertResult = await db
-        .from('qr_login_tokens')
-        .insert([{
-          token: qrToken,
-          email: userEmail,
-          status: 'verified',
-          verified_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
-        }])
-        .select();
-
-      console.log('[扫码] INSERT结果:', insertResult.error ? 'ERROR: ' + insertResult.error.message : 'OK');
-
-      if (insertResult.error) {
-        throw new Error('INSERT 失败: ' + insertResult.error.message);
-      }
-      updateOk = true;
-    }
-
-    if (updateOk) {
-      // 等待数据库同步
-      await new Promise(function(r) { setTimeout(r, 500); });
-
-      // 最终验证
-      var verifyResult = await db
-        .from('qr_login_tokens')
-        .select('status, email')
-        .eq('token', qrToken)
-        .limit(1);
-
-      var verifyRow = (verifyResult.data && verifyResult.data.length > 0) ? verifyResult.data[0] : null;
-
-      if (verifyRow && verifyRow.status === 'verified') {
-        resultStatus.className = 'status success';
-        resultStatus.innerHTML = '✅ 登录成功！<br><span style="font-size:12px;color:#888;">电脑端将自动进入' + appTitle + '教师账户</span>';
-      } else {
-        resultStatus.className = 'status success';
-        resultStatus.innerHTML = '✅ 登录确认已发送！<br><span style="font-size:12px;color:#888;">如电脑端无反应，请重试</span>';
-      }
-
-      document.getElementById('statusMsg').innerHTML = '操作完成，正在返回...';
-      
-      // 1.5秒后跳转回主应用
-      setTimeout(function() {
-        var mainAppUrl = appName === 'xq' ? 'xueqinguanjia.html' : 'index.html';
-        window.location.href = mainAppUrl;
-      }, 1500);
-    }
+    // 1.5 秒后跳转回主应用
+    setTimeout(function() {
+      var mainAppUrl = appName === 'xq' ? 'xueqinguanjia.html' : 'index.html';
+      window.location.href = mainAppUrl;
+    }, 1500);
 
   } catch (e) {
     console.error('[扫码] 确认登录失败:', e);
