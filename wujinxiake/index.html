@@ -6,7 +6,22 @@
    和本文件内置版本不一致就带随机参数重载一次 —— 这样即使入口 HTML
    被浏览器 / CDN 缓存成旧版，也能自己发现新版本并切过去。          */
 (function () {
-  var MY = '18';
+  /* 和 wujinxiake/version.json 的 v 保持一致：一致就不重载，
+     避免每次打开都整页重载（会重下 7MB 资源，老机器直接卡死）。 */
+  var MY = '37';
+  /* 重载时必须带上的参数：扫码票据、性能模式、来源应用 —— 以前重载会把它们全冲掉，
+     导致手机扫码后取不到 token（提示二维码无效）、?perf=low 也失效。 */
+  function keepParams() {
+    var keep = [];
+    try {
+      var src = new URLSearchParams(location.search);
+      ['qr', 'perf', 'app', 'token'].forEach(function (k) {
+        var v = src.get(k);
+        if (v) keep.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+      });
+    } catch (e) {}
+    return keep.length ? '&' + keep.join('&') : '';
+  }
   function addQ() { var n = 0; try { n = +(sessionStorage.getItem('wjx_q') || 0); } catch (e) {} if (n >= 2) return false; try { sessionStorage.setItem('wjx_q', n + 1); } catch (e) {} return true; }
   try {
     var x = new XMLHttpRequest();
@@ -15,7 +30,7 @@
       try {
         var d = JSON.parse(x.responseText);
         if (d && d.v && String(d.v) !== MY && addQ()) {
-          location.replace(location.pathname + '?r=' + d.v + '.' + Date.now());
+          location.replace(location.pathname + '?r=' + d.v + '.' + Date.now() + keepParams());
         }
       } catch (e) {}
     };
