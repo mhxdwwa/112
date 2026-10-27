@@ -151,7 +151,12 @@
     /* 兜底：刷新一次，会话已经写进 localStorage，会自动登录 */
     setStatus('正在进入…', '#7af0c8');
     setTimeout(function () {
-      try { history.replaceState(null, '', location.pathname); } catch (e) {}
+      try {
+        var _sp = new URLSearchParams(location.search);
+        _sp.delete('qr');
+        var _qs = _sp.toString();
+        history.replaceState(null, '', location.pathname + (_qs ? '?' + _qs : ''));
+      } catch (e) {}
       location.replace(location.pathname + '?t=' + Date.now());
     }, 500);
   }
@@ -323,7 +328,12 @@
       if (m) {
         tk = m[1];
         sessionStorage.setItem('wjx_pending_qr', tk);
-        try { history.replaceState(null, '', location.pathname); } catch (e) {}
+        try {
+        var _sp = new URLSearchParams(location.search);
+        _sp.delete('qr');
+        var _qs = _sp.toString();
+        history.replaceState(null, '', location.pathname + (_qs ? '?' + _qs : ''));
+      } catch (e) {}
       } else {
         tk = sessionStorage.getItem('wjx_pending_qr') || '';
       }
