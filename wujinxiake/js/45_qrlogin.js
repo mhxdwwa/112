@@ -9,9 +9,11 @@
 (function () {
   'use strict';
 
+  /* 票据接口改用自己域名的 /api/qr（Pages Function）：
+     教室 / 校园网络常常连不上第三方服务，走同域名最稳，网站能打开接口就能通。 */
   var QR_BASE = (location.hostname && location.hostname !== '127.0.0.1' && location.hostname !== 'localhost')
-    ? (location.origin + '/api/wjx-relay/qr')
-    : 'https://wscls.cn/api/wjx-relay/qr';
+    ? (location.origin + '/api/qr')
+    : 'https://wscls.cn/api/qr';
   var SCAN_URL = 'https://wscls.cn/wujinxiake/?qr=';
 
   function $(id) { return document.getElementById(id); }
