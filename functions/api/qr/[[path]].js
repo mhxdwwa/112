@@ -170,7 +170,7 @@ export const onRequestPost = async ({ request, env, params }) => {
     if (!email) return jsonResponse({ ok: false, reason: 'no_email' });
 
     const t = await sbRequest(env, 'GET', 'teachers', {
-      query: 'select=id,name,email&email=eq.' + encodeURIComponent(email) + '&limit=1'
+      query: 'select=id,email&email=eq.' + encodeURIComponent(email) + '&limit=1'
     });
     if (t.error) return jsonResponse({ ok: false, reason: 'server' }, 500);
     const teacher = (t.data && t.data[0]) || null;
@@ -178,7 +178,7 @@ export const onRequestPost = async ({ request, env, params }) => {
 
     return jsonResponse({
       ok: true,
-      teacher: { id: teacher.id, name: teacher.name || email, email: teacher.email || email }
+      teacher: { id: teacher.id, name: teacher.email || email, email: teacher.email || email }
     });
   }
 
