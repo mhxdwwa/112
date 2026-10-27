@@ -18,8 +18,21 @@ function updateCanvasSize(){
   cvs.style.width = '100vw';
   cvs.style.height = '100vh';
 }
-/* ★ 高清渲染：按设备像素比放大画布，逻辑坐标不变（解决画面发糊） */
-const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+/* ★ 高清渲染：按设备像素比放大画布，逻辑坐标不变（解决画面发糊）
+   低端设备（CPU 核心少 / 内存小）自动降一档到 0.75：特效、玩法、布局全不变，
+   只是少画像素，放技能时明显更流畅；好设备完全不受影响（仍是原来的 1~2 倍）。
+   也可手动指定：网址加 ?perf=low 强制流畅模式，?perf=high 强制原画质。 */
+const DPR = (function () {
+  var base = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  var q = '';
+  try { q = String((new URLSearchParams(location.search).get('perf') || '')).toLowerCase(); } catch (e) {}
+  if (q === 'high') return base;
+  if (q === 'low') return 0.75;
+  var cores = navigator.hardwareConcurrency || 8;
+  var mem = navigator.deviceMemory || 8;
+  if (cores <= 4 || mem <= 4) return 0.75;
+  return base;
+})();
 updateCanvasSize();
 window.addEventListener('resize', updateCanvasSize);
 
