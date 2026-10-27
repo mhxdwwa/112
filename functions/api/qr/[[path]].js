@@ -10,7 +10,7 @@
  * 所以票据的读写都经这里中转，由 Cloudflare（服务器侧）去连 Supabase，手机和教室都不直连国外。
  *
  * 票据存在现有的 qr_login_tokens 表里（不新建表）：
- *   token       本接口生成的票据（wjx_ 前缀，与主站 qr_ 前缀区分）
+ *   token       本接口生成的票据（wjx 前缀 + 纯字母数字，与主站 qr_ 前缀区分）
  *   email       本接口把 payload（含 access_token）序列化后存这里，带 WJX1: 标记；
  *               主站扫码是按 token 精确查询的，不会读到本接口写入的记录
  *   status      pending / verified / expired
@@ -19,7 +19,9 @@
 import { jsonResponse, handleOptions, checkEnv, sbRequest } from '../../_utils.js';
 
 const TTL_MS = 5 * 60 * 1000;
-const TOKEN_PREFIX = 'wjx_';
+/* 票据只允许字母数字：手机端是用 /[?&]qr=([A-Za-z0-9]+)/ 从网址里取票的，
+   带下划线会被截断（曾经因此报「二维码无效」），所以前缀和随机段都不带符号。 */
+const TOKEN_PREFIX = 'wjx';
 const PAYLOAD_MARK = 'WJX1:';
 
 function nowIso() {
@@ -30,7 +32,7 @@ function makeToken() {
   const rnd = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
     : Math.random().toString(36).slice(2, 18);
-  return TOKEN_PREFIX + Date.now().toString(36) + '_' + rnd;
+  return TOKEN_PREFIX + Date.now().toString(36) + rnd;
 }
 
 function encodePayload(p) {

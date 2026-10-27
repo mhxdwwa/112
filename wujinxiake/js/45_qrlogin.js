@@ -252,7 +252,7 @@
 
   function tokenFromUrl(u) {
     try {
-      var m = String(u).match(/[?&]qr=([A-Za-z0-9]+)/);
+      var m = String(u).match(/[?&]qr=([A-Za-z0-9_-]+)/);
       return m ? m[1] : '';
     } catch (e) { return ''; }
   }
@@ -319,7 +319,7 @@
   function bootPending() {
     var tk = '';
     try {
-      var m = location.search.match(/[?&]qr=([A-Za-z0-9]+)/);
+      var m = location.search.match(/[?&]qr=([A-Za-z0-9_-]+)/);
       if (m) {
         tk = m[1];
         sessionStorage.setItem('wjx_pending_qr', tk);
