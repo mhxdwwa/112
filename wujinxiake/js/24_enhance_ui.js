@@ -588,8 +588,16 @@ function updateTown(dt){
   } else {
     townPlayer.state = 'idle';
   }
-  townPlayer.x = clamp(townPlayer.x, 60, TOWN_W - 60);
-  townPlayer.y = clamp(townPlayer.y, 200, TOWN_H - 70);
+  /* ★ 悬浮岛：只能在当前这座岛内活动，岛外即云海（步行过不去，只能走传送门） */
+  const _isl = townIslandOf(townPlayer.x, townPlayer.y);
+  if(_isl){
+    townPlayer.x = clamp(townPlayer.x, _isl.x0, _isl.x1);
+    townPlayer.y = clamp(townPlayer.y, _isl.y0, _isl.y1);
+  } else {
+    /* 兜底：坐标跑到云海上（异常/存档错位）→ 送回中央主城出生点 */
+    const _cd = TOWN_DEFS_BY_KEY.center;
+    if(_cd && _cd.spawn){ townPlayer.x = _cd.spawn.x; townPlayer.y = _cd.spawn.y; }
+  }
 
   /* ★ 建筑碰撞：进入建筑占地矩形时沿最浅轴推出（不能穿墙） */
   for(const b of TOWN_BUILDINGS){

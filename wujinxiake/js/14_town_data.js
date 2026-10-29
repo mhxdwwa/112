@@ -1042,3 +1042,161 @@ function triggerNpc(npc){
   }
 }
 
+
+/* ============================================================
+   ★ 悬浮岛改造（4.0）
+   原「一整块大地图」拆成 5 座漂浮在云海上的岛：
+     · 每座岛在所属区域内缩进 ISLAND_INSET，四角大圆角 + 边缘起伏
+     · 岛外一律是云海（岛下方无尽的云与雾）
+     · 岛与岛之间无法步行连通，只能走四缘的传送门
+     · 出生点仍在中央主城（TOWN_DEFS.center.spawn）
+   ============================================================ */
+const ISLAND_INSET = 170;    /* 岛缘相对区域边界内缩（让相邻岛之间露出云海） */
+const ISLAND_R     = 420;    /* 四角圆角半径，越大越像浮岛 */
+
+/* 岛形路径：圆角矩形 + 四边中点轻微外扩（避免看起来像方块） */
+function addIslandPath(c, def, inset, r){
+  inset = inset === undefined ? ISLAND_INSET : inset;
+  r = r || ISLAND_R;
+  const x = def.ox + inset, y = def.oy + inset;
+  const w = TOWN_ZONE_W - inset * 2, h = TOWN_ZONE_H - inset * 2;
+  const rr = Math.min(r, w * 0.45, h * 0.45);
+  const bump = Math.min(46, w * 0.02);      /* 边中点的外扩量 */
+  c.beginPath();
+  c.moveTo(x + rr, y);
+  /* 上边：中点略微上凸 */
+  c.quadraticCurveTo(x + w * 0.5, y - bump, x + w - rr, y);
+  c.quadraticCurveTo(x + w, y, x + w, y + rr);
+  /* 右边 */
+  c.quadraticCurveTo(x + w + bump, y + h * 0.5, x + w, y + h - rr);
+  c.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  /* 下边 */
+  c.quadraticCurveTo(x + w * 0.5, y + h + bump, x + rr, y + h);
+  c.quadraticCurveTo(x, y + h, x, y + h - rr);
+  /* 左边 */
+  c.quadraticCurveTo(x - bump, y + h * 0.5, x, y + rr);
+  c.quadraticCurveTo(x, y, x + rr, y);
+  c.closePath();
+}
+
+/* 云海：填满相机可见范围（地面高度以下），是所有岛之外的“底” */
+function drawTownCloudSea(camX, camY){
+  const t = (typeof G !== 'undefined' && G) ? G.t : performance.now() * 0.001;
+  /* 只填「屏幕地平线以下」：camY + HORIZON 正好对应屏幕上的地平线位置，
+     这样天空与远景剪影不会被云海盖住 */
+  const screenHorizon = GY_BOTTOM - 100;
+  const topY = camY + screenHorizon - 16;
+  const botY = camY + VH + 160;
+  /* 1. 底色：由天际的暖紫过渡到深处的冷蓝，越往下越暗（无尽感） */
+  const g = ctx.createLinearGradient(0, topY, 0, botY);
+  g.addColorStop(0,    'rgba(150,130,190,0.55)');
+  g.addColorStop(0.28, 'rgba(122,116,170,0.72)');
+  g.addColorStop(0.65, 'rgba(86,92,146,0.90)');
+  g.addColorStop(1,    'rgba(52,58,104,1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(camX - 40, topY, VW + 80, botY - topY);
+
+  /* 2. 云团：多层错位椭圆，缓慢漂移，形成翻涌的云海 */
+  const layer = [
+    { n: 26, sp: 9,  ry: 0.30, col: 'rgba(232,236,255,0.30)', rw: 210, rh: 46 },
+    { n: 18, sp: 16, ry: 0.55, col: 'rgba(210,220,250,0.24)', rw: 300, rh: 60 },
+    { n: 12, sp: 26, ry: 0.80, col: 'rgba(180,196,236,0.18)', rw: 420, rh: 82 }
+  ];
+  for(let L = 0; L < layer.length; L++){
+    const cf = layer[L];
+    for(let i = 0; i < cf.n; i++){
+      const seed = i * 7.31 + L * 41.7;
+      const drift = (t * cf.sp + seed * 37) % (VW + 900);
+      const cx = camX - 450 + drift;
+      const cy = topY + (botY - topY) * cf.ry + Math.sin(t * 0.25 + seed) * 26 + hash01(seed) * 150;
+      const rw = cf.rw * (0.7 + hash01(seed + 3) * 0.7);
+      const rh = cf.rh * (0.7 + hash01(seed + 9) * 0.6);
+      ctx.fillStyle = cf.col;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rw, rh, 0, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  /* 3. 深处迷雾：向下逐渐加浓，遮住“世界尽头”的硬边 */
+  const mist = ctx.createLinearGradient(0, topY + (botY - topY) * 0.45, 0, botY);
+  mist.addColorStop(0, 'rgba(120,124,170,0)');
+  mist.addColorStop(1, 'rgba(96,102,150,0.85)');
+  ctx.fillStyle = mist;
+  ctx.fillRect(camX - 40, topY + (botY - topY) * 0.45, VW + 80, (botY - topY) * 0.55);
+}
+
+/* 岛缘：土层剖面（岛的“厚度”）+ 边缘云气，营造悬空感 */
+function drawIslandEdges(t){
+  t = t || 0;
+  for(const def of TOWN_DEFS){
+    /* 1. 厚度：同形状向下逐层偏移填充，越靠下越暗（模拟斜视角看到的岛壁） */
+    for(let k = 5; k >= 1; k--){
+      const depth = k * 9;
+      ctx.save();
+      ctx.translate(0, depth);
+      addIslandPath(ctx, def, ISLAND_INSET, ISLAND_R);
+      const a = 0.10 + 0.12 * (1 - k / 5);
+      ctx.fillStyle = 'rgba(46,44,64,' + a.toFixed(3) + ')';
+      ctx.fill();
+      ctx.restore();
+    }
+    /* 2. 岛缘石线：一圈暗边，界定岛的轮廓 */
+    addIslandPath(ctx, def, ISLAND_INSET, ISLAND_R);
+    ctx.strokeStyle = 'rgba(58,54,76,0.85)';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    /* 3. 岛缘云气：沿轮廓撒云絮，缓慢明灭 */
+    const x0 = def.ox + ISLAND_INSET, y0 = def.oy + ISLAND_INSET;
+    const w = TOWN_ZONE_W - ISLAND_INSET * 2, h = TOWN_ZONE_H - ISLAND_INSET * 2;
+    for(let i = 0; i < 26; i++){
+      const sd = i * 3.77 + def.ox * 0.013;
+      const side = i % 4;
+      let cx, cy;
+      if(side === 0){ cx = x0 + hash01(sd) * w; cy = y0 - 6 + Math.sin(t * 0.6 + sd) * 8; }
+      else if(side === 1){ cx = x0 + w + 6 + Math.sin(t * 0.5 + sd) * 8; cy = y0 + hash01(sd) * h; }
+      else if(side === 2){ cx = x0 + hash01(sd) * w; cy = y0 + h + 6 + Math.sin(t * 0.6 + sd) * 8; }
+      else { cx = x0 - 6 + Math.sin(t * 0.5 + sd) * 8; cy = y0 + hash01(sd) * h; }
+      const pr = 0.55 + 0.45 * Math.sin(t * 1.2 + sd * 2);
+      ctx.fillStyle = 'rgba(226,232,255,' + (0.10 + 0.10 * pr).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 44 + pr * 26, 16 + pr * 10, 0, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+/* 玩家所在岛：返回 {def, x0,y0,w,h}，用于移动限制 */
+function townIslandOf(x, y){
+  for(const def of TOWN_DEFS){
+    const x0 = def.ox, y0 = def.oy;
+    if(x >= x0 - 300 && x < x0 + TOWN_ZONE_W + 300 && y >= y0 - 300 && y < y0 + TOWN_ZONE_H + 300){
+      return { def: def,
+        x0: def.ox + ISLAND_INSET + 26, y0: def.oy + ISLAND_INSET + 26,
+        x1: def.ox + TOWN_ZONE_W - ISLAND_INSET - 26, y1: def.oy + TOWN_ZONE_H - ISLAND_INSET - 26 };
+    }
+  }
+  return null;
+}
+
+/* 前景云雾（屏幕层）：贴着屏幕下缘飘过，让整座城始终像浮在云上 */
+function drawTownForeClouds(t){
+  t = t || 0;
+  const baseY = GY_BOTTOM + 30;          /* 屏幕下缘附近 */
+  for(let L = 0; L < 3; L++){
+    const sp = 12 + L * 9;
+    const alpha = 0.10 + L * 0.035;
+    const rw = 260 + L * 90, rh = 34 + L * 12;
+    const yOff = L * 26;
+    for(let i = 0; i < 7; i++){
+      const seed = i * 11.3 + L * 53.1;
+      const drift = (t * sp + seed * 41) % (VW + 700);
+      const cx = -350 + drift;
+      const cy = baseY - yOff + Math.sin(t * 0.4 + seed) * 7;
+      ctx.fillStyle = 'rgba(236,240,255,' + alpha.toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rw, rh, 0, 0, TAU);
+      ctx.fill();
+    }
+  }
+}

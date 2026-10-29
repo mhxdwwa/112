@@ -677,8 +677,17 @@ function drawTown(){
   ctx.save();
   ctx.translate(-Math.round(townCam.x), -Math.round(townCam.y));
 
-  /* ★ 地面分层：草地基色 → 坊区地块 → 泥土地（自然、有材质感） */
+  /* ★ 悬浮岛：岛外皆云海 —— 先铺云，再把地面裁剪到岛形内 */
+  drawTownCloudSea(townCam.x, townCam.y);
+
   const t = G ? G.t : performance.now() * 0.001;
+
+  /* ★ 裁剪到 5 座岛的并集：岛外一滴地面都不留，露出下方云海 */
+  ctx.save();
+  for(const _isDef of TOWN_DEFS) addIslandPath(ctx, _isDef, ISLAND_INSET, ISLAND_R);
+  ctx.clip();
+
+  /* ★ 地面分层：草地基色 → 坊区地块 → 泥土地（自然、有材质感） */
   drawTownGround(t);
 
   /* 街道：先画所有横街，再画竖街（竖街压在上面形成路口）；每条街只在本镇范围内 */
@@ -792,16 +801,13 @@ function drawTown(){
   /* ★ 每镇中央广场（街道之后绘制，压在路口上面） */
   drawTownPlaza();
 
-  /* 城镇边界：每镇一圈矮墙（区分镇内与荒野） */
-  ctx.fillStyle = '#26263a';
-  for(const def of TOWN_DEFS){
-    const zx = def.ox, zy = def.oy;
-    const top = Math.max(TOWN_GROUND_TOP, zy + 40);
-    ctx.fillRect(zx, top, TOWN_ZONE_W, 10);
-    ctx.fillRect(zx, zy + TOWN_ZONE_H - 14, TOWN_ZONE_W, 14);
-    ctx.fillRect(zx, top, 12, zy + TOWN_ZONE_H - 14 - top);
-    ctx.fillRect(zx + TOWN_ZONE_W - 12, top, 12, zy + TOWN_ZONE_H - 14 - top);
-  }
+  /* ★ 结束岛形裁剪：之后的岛缘与建筑不再被裁 */
+  ctx.restore();
+
+  /* ★ 岛缘：土层剖面 + 云气，让岛看起来悬在云上 */
+  drawIslandEdges(t);
+
+  /* （原来的方形矮墙已取消：岛的轮廓由 drawIslandEdges 的石线与云气表现） */
 
   /* 建筑 + NPC + 玩家按「脚底 y」排序绘制（2.5D 前后遮挡） */
   const camCx = townCam.x + VW/2, camCy = townCam.y + VH/2;
@@ -823,6 +829,9 @@ function drawTown(){
 
   ctx.restore();
   /* ══════════ 世界层结束 ══════════ */
+
+  /* ★ 前景云雾：贴着屏幕下缘飘过，强化“浮在云上”的感觉 */
+  drawTownForeClouds(t);
 
   /* ★ 天际飞鸟：雁群掠过天空（屏幕层） */
   drawTownBirds(t);
