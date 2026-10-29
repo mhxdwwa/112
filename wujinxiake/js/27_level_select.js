@@ -205,6 +205,19 @@ function drawLevelSelect(){
     }
   }
 
+  /* ★ 组队刷图提示：队伍里超过 1 人时，选关会把全队一起带进去 */
+  try{
+    const ti = (window.ONLINE && window.ONLINE.teamInfo) ? window.ONLINE.teamInfo() : null;
+    if(ti && ti.inTeam && ti.members.length > 1){
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7fe0b0';
+      ctx.font = 'bold 13px "Microsoft YaHei"';
+      ctx.fillText('组队中 ' + ti.members.length + '/' + ti.max + ' 人 · ' +
+        (ti.isLead ? '选关即带全队一起进入 · 掉落各自随机，只能捡自己那份' : '等队长选关，会自动带你进图'),
+        VW/2, VH - 18);
+    }
+  }catch(e){}
+
   /* 返回按钮（左上角，DNF 惯例，把底部空间全部留给关卡） */
   const bw = 96, bh = 34, bx2 = 24, by2 = 22;
   ctx.fillStyle = 'rgba(40,52,66,0.9)';
