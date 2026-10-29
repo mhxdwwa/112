@@ -1167,17 +1167,29 @@ function drawIslandEdges(t){
   }
 }
 
-/* 玩家所在岛：返回 {def, x0,y0,w,h}，用于移动限制 */
+/* 玩家所在岛：返回椭圆参数 {cx,cy,rx,ry}
+   岛是椭圆形的，所以边界也用椭圆判定 —— 否则玩家会走到四角被裁掉的“云”上，
+   而且北/南传送门正好在椭圆边缘，矩形限制会让玩家够不到门。 */
 function townIslandOf(x, y){
   for(const def of TOWN_DEFS){
-    const x0 = def.ox, y0 = def.oy;
-    if(x >= x0 - 300 && x < x0 + TOWN_ZONE_W + 300 && y >= y0 - 300 && y < y0 + TOWN_ZONE_H + 300){
-      return { def: def,
-        x0: def.ox + ISLAND_INSET + 300, y0: def.oy + ISLAND_INSET + 240,
-        x1: def.ox + TOWN_ZONE_W - ISLAND_INSET - 300, y1: def.oy + TOWN_ZONE_H - ISLAND_INSET - 240 };
+    if(x >= def.ox - 300 && x < def.ox + TOWN_ZONE_W + 300 &&
+       y >= def.oy - 300 && y < def.oy + TOWN_ZONE_H + 300){
+      const rx = (TOWN_ZONE_W - ISLAND_INSET * 2) / 2 - 40;
+      const ry = (TOWN_ZONE_H - ISLAND_INSET * 2) / 2 - 40;
+      return { def: def, cx: def.ox + TOWN_ZONE_W / 2, cy: def.oy + TOWN_ZONE_H / 2, rx: rx, ry: ry };
     }
   }
   return null;
+}
+
+/* 把坐标夹进椭圆内（超出则沿半径方向缩回） */
+function clampToIsland(isl, px, py){
+  if(!isl) return { x: px, y: py };
+  const ndx = (px - isl.cx) / isl.rx, ndy = (py - isl.cy) / isl.ry;
+  const d = Math.sqrt(ndx * ndx + ndy * ndy);
+  if(d <= 1) return { x: px, y: py };
+  const k = 0.995 / d;
+  return { x: isl.cx + ndx * k * isl.rx, y: isl.cy + ndy * k * isl.ry };
 }
 
 /* 前景云雾（屏幕层）：贴着屏幕下缘飘过，让整座城始终像浮在云上 */

@@ -591,8 +591,8 @@ function updateTown(dt){
   /* ★ 悬浮岛：只能在当前这座岛内活动，岛外即云海（步行过不去，只能走传送门） */
   const _isl = townIslandOf(townPlayer.x, townPlayer.y);
   if(_isl){
-    townPlayer.x = clamp(townPlayer.x, _isl.x0, _isl.x1);
-    townPlayer.y = clamp(townPlayer.y, _isl.y0, _isl.y1);
+    const _c = clampToIsland(_isl, townPlayer.x, townPlayer.y);
+    townPlayer.x = _c.x; townPlayer.y = _c.y;
   } else {
     /* 兜底：坐标跑到云海上（异常/存档错位）→ 送回中央主城出生点 */
     const _cd = TOWN_DEFS_BY_KEY.center;
