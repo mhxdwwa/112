@@ -381,6 +381,8 @@ function update(dt){
     /* ★ 深渊模式Boss房间：装备不自动拾取，需要手动捡取 */
     const lvlCfg = G.currentLvlCfg;
     const isAbyssBossRoom = lvlCfg && lvlCfg.isAbyss && G.currentIsBoss;
+    /* ★ 通关结算期间：掉落物一律留在地上等玩家走过去捡，不再自动飞过来 */
+    const settleManual = (gameState === 'stageClear');
     for(let i = G.drops.length - 1; i >= 0; i--){
       const d = G.drops[i];
       d.life -= dt;
@@ -389,21 +391,23 @@ function update(dt){
       let dx = d.x - p.x, dy = d.y - p.y;
       let dist = Math.sqrt(dx*dx + dy*dy);
 
-      /* ★ 深渊Boss房间装备：跳过自动吸附，只允许手动近距离拾取 */
-      if(isAbyssBossRoom && d.type === 'equip'){
-        /* 结算界面也允许拾取 */
-        const canPickInStageClear = (gameState === 'stageClear');
-        /* 只有玩家非常接近（< 40像素）才拾取 */
-        if((canPick || canPickInStageClear) && dist < 40){
+      /* ★ 深渊Boss房间装备 / 通关结算：跳过自动吸附，只认「走过去」拾取 */
+      if(settleManual || (isAbyssBossRoom && d.type === 'equip')){
+        /* 物理照常走完（结算瞬间可能还在空中），但落地后不会自己飞走 */
+        d.vy += 800 * dt;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        if(d.y > GY_BOTTOM - 10){
+          d.y = GY_BOTTOM - 10;
+          d.vy *= -0.4;
+          d.vx *= 0.7;
+          if(Math.abs(d.vy) < 30){ d.vy = 0; d.vx *= 0.4; }
+        }
+        if(canPick && dist < 48){
           pickupDrop(d);
           G.drops.splice(i, 1);
-          continue;
         }
-        /* 过期消失（结算界面不过期） */
-        if(d.life <= 0 && gameState !== 'stageClear'){
-          G.drops.splice(i, 1);
-        }
-        continue;
+        continue;   /* 结算界面不过期，慢慢捡 */
       }
 
       if(d.magnet && canPick){
@@ -703,32 +707,11 @@ function update(dt){
           p.droppedEquipmentCount = 0;
           p.droppedMaterialCount = 0;
           
-          // ★ 自动拾取所有掉落物
-          if(G.drops && G.drops.length > 0){
-            for(const drop of G.drops){
-              if(drop.type === 'gold'){
-                p.gold = (p.gold || 0) + (drop.value || 10);
-              } else if(drop.type === 'equip' && drop.equip){
-                if(!p.inventory) p.inventory = [];
-                if(p.inventory.length < BAG_CAPACITY){
-                  p.inventory.push(drop.equip);
-                }
-                /* 背包已满则丢弃该装备 */
-              } else if(drop.type === 'material' && drop.material){
-                if(!p.materials) p.materials = {};
-                p.materials[drop.material] = (p.materials[drop.material] || 0) + 1;
-              } else if(drop.type === 'prop' && drop.prop){
-                if(window.POTION && drop.prop.id){
-                  if(!p.potions) p.potions = {};
-                  p.potions[drop.prop.id] = (p.potions[drop.prop.id] || 0) + 1;
-                } else {
-                  if(!p.props) p.props = {};
-                  p.props[drop.prop.id] = (p.props[drop.prop.id] || 0) + 1;
-                }
-              }
-            }
-            G.drops = [];
-          }
+          /* ★ 通关结算不再「自动扫走地面掉落」：
+             装备 / 金币 / 材料 / 药水全部留在地上，结算界面里看得见、
+             可以走过去拾取；点「返回城镇」时若还有高价值装备会先警告。
+             以前这一段是静默全收，背包一满还会把装备直接丢掉。 */
+          stageClearData.groundDropCount = (G.drops ? G.drops.length : 0);
           
           gameState = 'stageClear';
           return;
