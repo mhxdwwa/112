@@ -533,6 +533,12 @@ function drawProjectile(pr){
     ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(1.5,1.5); drawWeapon('blade',0,0,0);
     ctx.restore(); return;
   }
+  if(pr.kind === 'realFist' || pr.kind === 'realAxe' || pr.kind === 'realCauldron'){
+    const s2 = pr.scale || 1.4;
+    ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(s2,s2);
+    drawWeapon(pr.kind === 'realFist' ? 'fist' : (pr.kind === 'realAxe' ? 'axe' : 'cauldron'), 0, 0, 0);
+    ctx.restore(); return;
+  }
   if(pr.kind === 'realSpear'){
     const s = pr.scale||1.0;
     ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(s,s); drawWeapon('spear',0,0,0);

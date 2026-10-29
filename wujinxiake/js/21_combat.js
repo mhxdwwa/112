@@ -1389,6 +1389,8 @@ function update(dt){
       G.projectiles.splice(i,1); continue;
     }
     if(!pr.enemy && !pr.landed && !pr.isFireOrb){
+      /* 纯视觉飞行体（fxWeaponVolley 生成）：只负责好看，不判定命中、不结算伤害 */
+      if(pr.noHit) continue;
       let removed = false;
       const projSrc = pr.owner || p;
       if(projSrc.isPlayer){

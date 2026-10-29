@@ -435,20 +435,38 @@ function makePvpPlayerWithChar(num, char, bal){
 }
 
 function spawnParticles(x,y,n,o){
-  /* 粒子预算：以前硬上限是 3000 个，48 个技能轮着放时整屏都是发光点，浏览器直接跪。
-     现在按设备给总上限，低端机再缩减单次生成量 —— 画面仍有碎屑飞溅，但不再糊成一团光。 */
-  const CAP = (typeof PERF_LOW !== 'undefined' && PERF_LOW) ? 420 : 900;
-  if(G.particles.length >= CAP) return;
+  if(G.particles.length > 3000) return;
   o = o||{};
-  let cnt = n;
-  if(typeof PERF_LOW !== 'undefined' && PERF_LOW) cnt = Math.max(1, Math.round(n * 0.4));
-  for(let i=0;i<cnt;i++){
+  for(let i=0;i<n;i++){
     const a = o.angle!==undefined ? o.angle + rand(-(o.spread||0.9),(o.spread||0.9)) : rand(0,TAU);
     const sp = rand(o.spMin||80, o.spMax||450);
     const life = rand(o.lifeMin||0.2, o.lifeMax||0.6);
     G.particles.push({ x, y, h:o.h||0, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, vh:o.vh!==undefined?o.vh:rand(-100,300), life, maxLife:life, size:rand(o.sizeMin||2,o.sizeMax||6), color:o.color||'#fff', grav:o.grav!==undefined?o.grav:800, isBlood:o.isBlood||false });
   }
 }
+/* 纯视觉武器齐射：让武器模型真的飞出去（像万剑齐发那样），不参与命中判定。
+   伤害仍由技能自己结算，这里只负责"看得见武器在飞"，用来替代漫天光点。 */
+function fxWeaponVolley(owner, x, y, tx, ty, kind, count, opt){
+  opt = opt || {};
+  if(!G || !G.projectiles) return;
+  const n = Math.max(1, Math.min(count || 6, 24));
+  const speed = opt.speed || 1100;
+  const spread = opt.spread !== undefined ? opt.spread : 0.42;
+  const baseA = Math.atan2(ty - y, tx - x);
+  const dist = Math.max(60, Math.hypot(tx - x, ty - y));
+  for(let i=0;i<n;i++){
+    const a = baseA + rand(-spread, spread);
+    G.projectiles.push({
+      kind, x: x + rand(-8,8), y: y + rand(-8,8), h: opt.h !== undefined ? opt.h : 58,
+      vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.35,
+      life: Math.min(1.8, dist / speed + 0.18),
+      w: opt.w || 70, hh: opt.hh || 50, dmg: 0, pierce: 1, hitSet: new Set(),
+      color: opt.color || '#bcd0d8', facing: Math.cos(a) >= 0 ? 1 : -1,
+      rot: a, owner: owner, scale: opt.scale || 1.4, noHit: true
+    });
+  }
+}
+
 function addEffect(type,x,y,dur,extra){ G.effects.push(Object.assign({type,x,y,t:0,dur}, extra||{})); }
 function spawnText(x,y,h,text,color,size){ G.texts.push({x:x+rand(-20,20),y,h,text,color:color||'#fff',size:size||22,t:0,dur:0.8,vx:rand(-40,40),vy:-80}); }
 function playerAtk(){ const p = currentSkillCaster || G.player; return p.atk * WEAPONS[p.weaponIdx].atkMul; }
