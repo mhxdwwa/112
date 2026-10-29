@@ -465,13 +465,15 @@ function loopBody(now){
 
     for(const pr of G.projectiles) drawProjectile(pr);
 
-    ctx.globalCompositeOperation = 'lighter';
+    /* 粒子不再用「加法发光」叠加：以前一屏几十上百个发光点叠在一起会爆白，
+       既刺眼又极耗填充率（低端机放技能就掉帧）。
+       改成普通混合后画面像飞溅的碎屑 / 剑气残渣，层次还在，但不炸眼。 */
     for(const pt of G.particles){
-      ctx.globalAlpha = pt.life/pt.maxLife;
+      ctx.globalAlpha = (pt.life/pt.maxLife) * 0.85;
       ctx.fillStyle = pt.color;
       ctx.beginPath(); ctx.arc(pt.x, pt.y-pt.h, pt.size*(pt.life/pt.maxLife+0.5), 0, TAU); ctx.fill();
     }
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
 
     drawEffects(dt);
     drawEntityHealthBars();

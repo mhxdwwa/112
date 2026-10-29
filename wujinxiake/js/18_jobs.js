@@ -435,9 +435,14 @@ function makePvpPlayerWithChar(num, char, bal){
 }
 
 function spawnParticles(x,y,n,o){
-  if(G.particles.length > 3000) return;
+  /* 粒子预算：以前硬上限是 3000 个，48 个技能轮着放时整屏都是发光点，浏览器直接跪。
+     现在按设备给总上限，低端机再缩减单次生成量 —— 画面仍有碎屑飞溅，但不再糊成一团光。 */
+  const CAP = (typeof PERF_LOW !== 'undefined' && PERF_LOW) ? 420 : 900;
+  if(G.particles.length >= CAP) return;
   o = o||{};
-  for(let i=0;i<n;i++){
+  let cnt = n;
+  if(typeof PERF_LOW !== 'undefined' && PERF_LOW) cnt = Math.max(1, Math.round(n * 0.4));
+  for(let i=0;i<cnt;i++){
     const a = o.angle!==undefined ? o.angle + rand(-(o.spread||0.9),(o.spread||0.9)) : rand(0,TAU);
     const sp = rand(o.spMin||80, o.spMax||450);
     const life = rand(o.lifeMin||0.2, o.lifeMax||0.6);
