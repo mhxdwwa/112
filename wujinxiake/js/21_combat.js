@@ -1384,14 +1384,29 @@ function update(dt){
        —— 只改水平分量，保留原有的抛物线/透视手感；纯视觉体不参与 */
     if(!pr.enemy && !pr.noHit && pr.dmg > 0 && pr.owner && pr.owner.isPlayer){
       const tg2 = getSkillTarget(pr.owner, true);
-      if(tg2 && skAlive(tg2) && Math.abs(pr.vx) > 1){
-        const wantSign = (tg2.x >= pr.x) ? 1 : -1;
-        const wantVX = Math.abs(pr.vx) * wantSign;
-        const k = Math.min(1, 7.5 * rawDt);        // 平滑转向，避免瞬间折返
-        pr.vx += (wantVX - pr.vx) * k;
-        if(pr.kind && String(pr.kind).indexOf('real') === 0){
-          pr.rot = Math.atan2(pr.vy * 2.2, pr.vx);
-          pr.facing = pr.vx >= 0 ? 1 : -1;
+      if(tg2 && skAlive(tg2)){
+        const dx2 = tg2.x - pr.x;
+        if(Math.abs(pr.vx) > 1){
+          /* 水平飞行型（剑气、飞镖等）：平滑转向目标 */
+          const wantSign = (tg2.x >= pr.x) ? 1 : -1;
+          const wantVX = Math.abs(pr.vx) * wantSign;
+          pr.vx += (wantVX - pr.vx) * Math.min(1, 7.5 * rawDt);
+          if(pr.kind && String(pr.kind).indexOf('real') === 0){
+            pr.rot = Math.atan2(pr.vy * 2.2, pr.vx);
+            pr.facing = pr.vx >= 0 ? 1 : -1;
+          }
+        } else if(Math.abs(dx2) > 4 && Math.abs(pr.vy) > 1){
+          /* ★ 垂直下落型（剑来/剑二十三/万剑归宗这类“从天而降”的剑）：
+             原来 vx=0 被上面的条件跳过，导致剑只会在原地垂直插下。
+             现在给一个横向修正速度，让剑斜着追向敌人当前位置。 */
+          const maxLat = Math.min(Math.abs(pr.vy) * 0.65, 720);
+          const wantVX = (dx2 > 0 ? 1 : -1) * Math.min(maxLat, Math.abs(dx2) * 7 + 110);
+          pr.vx += (wantVX - pr.vx) * Math.min(1, 10 * rawDt);
+          const kn = String(pr.kind || '');
+          if(kn.indexOf('glowWeapon') === 0 || kn.indexOf('real') === 0 || kn.indexOf('sword') >= 0){
+            pr.rot = Math.atan2(pr.vy, pr.vx);       /* 剑身跟着倾斜，斜扎下去 */
+            pr.facing = pr.vx >= 0 ? 1 : -1;
+          }
         }
       }
     }

@@ -1745,8 +1745,21 @@ function skSpot(p, tg, meleeR, maxRange){
     const tx = tg.x;
     p.facing = tx >= p.x ? 1 : -1;
     const dx = Math.abs(tx - p.x);
+    /* 近战距离内：打身前固定点（保留近战手感，本来就不该追） */
     if(dx <= R) return { x: p.x + p.facing * R, y: tg.y, far:false };
     if(maxRange && dx > maxRange) return { x: p.x + p.facing * maxRange, y: tg.y, far:true, clipped:true };
+    /* ★ 远程落点也用“活坐标”：技能延迟落地时会读到目标当前位置。
+       目标没了则回落到最后一帧坐标。 */
+    const ref = tg.ref;
+    if(ref){
+      let sx = tx, sy = tg.y, live = true;
+      const o = { far:true, ref:ref };
+      Object.defineProperty(o, 'x', { configurable:true,
+        get(){ return (live && skAlive(ref)) ? ref.x : sx; }, set(v){ live = false; sx = v; } });
+      Object.defineProperty(o, 'y', { configurable:true,
+        get(){ return (live && skAlive(ref)) ? ref.y : sy; }, set(v){ live = false; sy = v; } });
+      return o;
+    }
     return { x: tx, y: tg.y, far:true };
   }
   return { x: p.x + p.facing * R, y: p.y, far:false };
