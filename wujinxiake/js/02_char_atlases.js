@@ -20,10 +20,10 @@ const CHAR_ATLASES = {
     cellW:365, cellH:414, cols:6, rows:6,
     feetX:149, groundY:328, bodyH:230.0, bodyWorld:100,
     anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[20,21,22,23]}, skill:{frames:[24,25,26,27]}, jump:{frames:[28,29]}, dodge:{frames:[30,31]}, hurt:{frames:[32]}, death:{frames:[33,34]}, victory:{frames:[35]} } },
-  herb: { url:'assets/chars/herb_atlas.webp', ready:false, img:new Image(),  /* 炼药师（新版模型） */
+  herb: { url:'assets/chars/herb_atlas.webp', ready:false, img:new Image(),  /* 炼药师（32帧动作版：待机4/走路8/攻击8/技能8/跳跃4） */
     cellW:256, cellH:256, cols:8, rows:8,
-    feetX:74.3, groundY:218.7, bodyH:215.0, bodyWorld:112,
-    anims:{ idle:{frames:[0,1,2,3,4,5,6,7]}, run:{frames:[8,9,10,11,12,13,14,15,16,17,18,19]}, atk1:{frames:[20,21,22,23,24,25]}, atk2:{frames:[26,27,28,29,30,31]}, atk3:{frames:[32,33,34,35,36,37,38]}, skill:{frames:[39,40,41,42,43,44,45,46]}, jump:{frames:[47,48,49]}, dodge:{frames:[50,51,52]}, hurt:{frames:[53]}, death:{frames:[54,55,56,57]}, victory:{frames:[58,59]} } },
+    feetX:128, groundY:250, bodyH:240.0, bodyWorld:112,
+    anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[16,17,18,19]}, skill:{frames:[20,21,22,23,24,25,26,27]}, jump:{frames:[28,29,30,31]}, dodge:{frames:[28,29,30]}, hurt:{frames:[31]}, death:{frames:[30,31]}, victory:{frames:[0]} } },
   axe: { url:'assets/chars/mountaineer_atlas.webp', ready:false, img:new Image(),  /* 撼山者 */
     cellW:256, cellH:256, cols:8, rows:8,
     feetX:105.6, groundY:214.0, bodyH:215.0, bodyWorld:124, faceLeft:true,
