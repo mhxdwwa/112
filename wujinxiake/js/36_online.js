@@ -11,7 +11,11 @@
 const CHANNEL_NAME = 'wjx:world';
 /* 不进房间时，所有在城镇的人共用这个公共频道 —— 这就是「同一频道看到多人」 */
 const LOBBY = 'LOBBY';
-function myRoom(){ return roomCode || LOBBY; }
+function myRoom(){
+  /* ★ 组队刷图时进「队伍房间」：副本里只看得见队友，城镇里其他人不会跟进来 */
+  if(inCoopLevel() && teamLead) return 'T' + teamLead;
+  return roomCode || LOBBY;
+}
 const SEND_MS  = 300;      /* 位置广播间隔（有移动时）。原 110ms → 300ms，省 ~2.7 倍消息，远端靠插值保持顺滑 */
 const IDLE_MS  = 4000;     /* 原地不动时的保活广播（原来不动也在 9 次/秒地发，极耗额度） */
 const DROP_MS  = 9000;     /* 这么久没消息就当掉线 */
@@ -86,6 +90,15 @@ function connect(){
   ch.on('broadcast', { event: 'pkinfo_d' }, function(m){ if(relayOk()) return; handlePkInfoD(m.payload); });
   /* ★ 组队治疗：同房间队友的治疗技能会把回血广播过来 */
   ch.on('broadcast', { event: 'heal' }, function(m){ if(relayOk()) return; onHeal(m.payload); });
+  /* ★ 组队刷图 */
+  ch.on('broadcast', { event: 'tinv' },  function(m){ if(relayOk()) return; handleTeamInvite(m.payload); });
+  ch.on('broadcast', { event: 'trsp' },  function(m){ if(relayOk()) return; handleTeamResp(m.payload); });
+  ch.on('broadcast', { event: 'tsync' }, function(m){ if(relayOk()) return; handleTeamSync(m.payload); });
+  ch.on('broadcast', { event: 'tquit' }, function(m){ if(relayOk()) return; handleTeamQuit(m.payload); });
+  ch.on('broadcast', { event: 'tlead' }, function(m){ if(relayOk()) return; handleTeamLead(m.payload); });
+  ch.on('broadcast', { event: 'tkick' }, function(m){ if(relayOk()) return; handleTeamKick(m.payload); });
+  ch.on('broadcast', { event: 'tgo' },   function(m){ if(relayOk()) return; handleTeamGo(m.payload); });
+  ch.on('broadcast', { event: 'hit' },   function(m){ if(relayOk()) return; onHit(m.payload); });
   ch.on('broadcast', { event: 'bye' },  function(m){
     const p = m.payload || {};
     if(p.id) remotes.delete(p.id);
@@ -234,8 +247,317 @@ function wireRelay(){
   RELAY.on('pkinfo',   function(p){ handlePkInfo(p); });
   RELAY.on('pkinfo_d', function(p){ handlePkInfoD(p); });
   RELAY.on('heal', function(p){ onHeal(p); });
+  RELAY.on('tinv',  function(p){ handleTeamInvite(p); });
+  RELAY.on('trsp',  function(p){ handleTeamResp(p); });
+  RELAY.on('tsync', function(p){ handleTeamSync(p); });
+  RELAY.on('tquit', function(p){ handleTeamQuit(p); });
+  RELAY.on('tlead', function(p){ handleTeamLead(p); });
+  RELAY.on('tkick', function(p){ handleTeamKick(p); });
+  RELAY.on('tgo',   function(p){ handleTeamGo(p); });
+  RELAY.on('hit',   function(p){ onHit(p); });
   /* 中继刚连上时补发一次位置，免得别人看不到站着的你 */
   if(othersOnline()){ lastPosSig = ''; try{ sendPos(); }catch(e){} }
+}
+
+/* ---------- 组队刷图（最多 4 人，各自掉各自捡） ----------
+   设计：没有主机，每个人本地跑自己的战斗实例。
+   · 队长选关 → 广播 tgo，全队一起 startLevel
+   · 副本里互相广播坐标，同屏看得见队友
+   · 伤害用「敌人编号 ekey」广播同步，谁打死算谁的 ——
+     每个客户端各自击杀、各自按自己的概率生成掉落，天然互不影响 */
+const TEAM_MAX = 4;
+let teamLead = '';          /* 队长 uid；空 = 没队伍 */
+let teamMembers = [];       /* [{id,name,lv,job}]，含队长自己 */
+let coopLv = -1;            /* 组队进的关卡号；-1 = 不在组队副本里 */
+
+function inTeam(){ return !!teamLead; }
+function isLead(){ return !!teamLead && teamLead === uid; }
+function inCoopLevel(){
+  if(coopLv < 0 || !inTeam()) return false;
+  if(typeof gameState === 'undefined') return false;
+  return gameState === 'playing' || gameState === 'stageClear' || gameState === 'paused';
+}
+
+/* 邀请别人组队 */
+function inviteTeam(id){
+  if(!id) return;
+  if(!relayOk() && (!ch || !joined)){ chatLine('', '还没连上服务器，稍后再试', true); return; }
+  const r = remotes.get(id);
+  if(!r){ chatLine('', '对方已离开城镇', true); hideCard(); return; }
+  if(inTeam() && !isLead()){ chatLine('', '只有队长能邀请人', true); return; }
+  if(inTeam() && teamMembers.length >= TEAM_MAX){ chatLine('', '队伍已满（最多 ' + TEAM_MAX + ' 人）', true); return; }
+  rtSend('tinv', { id: uid, n: myName, to: id, lv: myLv, job: myCharIdx() });
+  chatLine('', '已向 ' + (r.name || '对方') + ' 发出组队邀请，等回应…', true);
+  hideCard();
+}
+
+function handleTeamInvite(p){
+  p = p || {};
+  if(!p.id || p.id === uid) return;
+  if(p.to && p.to !== uid) return;
+  if(inTeam()){
+    rtSend('trsp', { id: uid, n: myName, to: p.id, ok: false, busy: 1 });
+    chatLine('', '你已经在一个队伍里了（先点「离开队伍」再加入）', true);
+    return;
+  }
+  if(typeof gameState !== 'undefined' && gameState !== 'town'){
+    rtSend('trsp', { id: uid, n: myName, to: p.id, ok: false, busy: 2 });
+    chatLine('', '只能在城镇里组队（先把当前这张图打完）', true);
+    return;
+  }
+  const yes = confirm((p.n || '有人') + ' 邀请你组队刷图\n\n最多 4 人，一起进同一张图打怪；\n掉落各自随机、只能捡自己那份。\n\n要加入吗？');
+  if(!yes){
+    rtSend('trsp', { id: uid, n: myName, to: p.id, ok: false });
+    chatLine('', '你拒绝了 ' + (p.n || '对方') + ' 的组队邀请', true);
+    return;
+  }
+  teamLead = p.id;
+  teamMembers = [{ id: uid, name: myName, lv: myLv, job: myCharIdx() }];
+  rtSend('trsp', { id: uid, n: myName, to: p.id, ok: true, lv: myLv, job: myCharIdx() });
+  chatLine('', '已加入 ' + (p.n || '对方') + ' 的队伍，等队长选关', true);
+  renderTeam(); track();
+}
+
+function handleTeamResp(p){
+  p = p || {};
+  if(p.to !== uid) return;
+  if(!p.ok){
+    chatLine('', (p.n || '对方') + (p.busy === 2 ? ' 还在副本里' : (p.busy ? ' 已在别的队伍里' : ' 拒绝了组队邀请')), true);
+    return;
+  }
+  if(!teamLead){
+    teamLead = uid;
+    teamMembers = [{ id: uid, name: myName, lv: myLv, job: myCharIdx() }];
+  }
+  if(!isLead()) return;
+  if(teamMembers.some(function(m){ return m.id === p.id; })) return;
+  if(teamMembers.length >= TEAM_MAX){
+    chatLine('', '队伍已满，' + (p.n || '对方') + ' 没能加入', true);
+    broadcastTeam();
+    return;
+  }
+  teamMembers.push({ id: p.id, name: p.n || '侠客', lv: p.lv || 1, job: p.job | 0 });
+  broadcastTeam();
+  chatLine('', (p.n || '对方') + ' 加入了队伍（' + teamMembers.length + '/' + TEAM_MAX + '）', true);
+}
+
+function broadcastTeam(){
+  if(!isLead()) return;
+  rtSend('tsync', { lead: teamLead, members: teamMembers });
+  renderTeam();
+}
+
+function handleTeamSync(p){
+  p = p || {};
+  if(!p.lead || !inTeam() || p.lead !== teamLead) return;
+  teamMembers = (p.members || []).slice(0, TEAM_MAX);
+  renderTeam();
+}
+
+function leaveTeam(){
+  if(!inTeam()) return;
+  rtSend('tquit', { id: uid, n: myName, lead: teamLead });
+  teamLead = ''; teamMembers = []; coopLv = -1;
+  renderTeam(); track();
+  chatLine('', '已离开队伍', true);
+}
+
+function handleTeamQuit(p){
+  p = p || {};
+  if(!inTeam() || p.lead !== teamLead) return;
+  teamMembers = teamMembers.filter(function(m){ return m.id !== p.id; });
+  if(p.id === teamLead){
+    /* ★ DNF 式：队长走了不散队，自动把队长交给下一个还在队的成员 */
+    if(teamMembers.length){
+      teamLead = teamMembers[0].id;
+      teamMembers[0].lead = true;
+      chatLine('', (p.n || '队长') + ' 离开了，' + (teamMembers[0].name || '队友') + ' 接任队长', true);
+      if(isLead()) broadcastTeam(); else renderTeam();
+    } else {
+      teamLead = ''; teamMembers = []; coopLv = -1;
+      renderTeam(); chatLine('', '队伍已解散', true);
+    }
+    track();
+    return;
+  }
+  renderTeam();
+  if(isLead()){
+    broadcastTeam();
+    chatLine('', (p.n || '队友') + ' 离开了队伍', true);
+  }
+}
+
+/* ★ 委任队长（城镇里转让：只有当前队长能操作） */
+function appointLead(id){
+  if(!isLead() || !id || id === uid) return;
+  if(!teamMembers.some(function(m){ return m.id === id; })) return;
+  if(coopLv >= 0){ chatLine('', '副本里不能转让队长，回城镇再操作', true); return; }
+  if(!confirm('把队长交给这位队友？\n\n交出后由他来选关带全队。')) return;
+  const oldLead = teamLead;
+  rtSend('tlead', { lead: oldLead, to: id, n: myName });   /* ★ 先通知全队换队长 */
+  teamLead = id;
+  sortTeamLeadFirst();
+  renderTeam();
+  /* 等队友把新队长记下来，再补发两次名单（一次用旧队长号、一次用新队长号），
+     免得有人因为队长对不上而把名单忽略掉 */
+  setTimeout(function(){ rtSend('tsync', { lead: oldLead, members: teamMembers }); }, 120);
+  setTimeout(function(){ rtSend('tsync', { lead: id, members: teamMembers }); }, 500);
+  chatLine('', '你已把队长交给 ' + (nameOf(id) || '队友'), true);
+  track();
+}
+
+function handleTeamLead(p){
+  p = p || {};
+  if(!inTeam() || p.lead !== teamLead) return;
+  if(!p.to) return;
+  teamLead = p.to;
+  sortTeamLeadFirst();
+  renderTeam();
+  chatLine('', (nameOf(p.to) || '队友') + ' 成为新队长，由他选关', true);
+  track();
+}
+
+/* ★ 请离队伍（只有队长能踢人） */
+function kickMember(id){
+  if(!isLead() || !id || id === uid) return;
+  if(!teamMembers.some(function(m){ return m.id === id; })) return;
+  if(!confirm('把 ' + (nameOf(id) || '这位队友') + ' 请离队伍？')) return;
+  rtSend('tkick', { lead: teamLead, to: id, n: myName });
+  teamMembers = teamMembers.filter(function(m){ return m.id !== id; });
+  renderTeam();
+  setTimeout(function(){ if(isLead()) broadcastTeam(); }, 400);
+  chatLine('', '已把 ' + (nameOf(id) || '队友') + ' 请离队伍', true);
+}
+
+function handleTeamKick(p){
+  p = p || {};
+  if(!inTeam() || p.lead !== teamLead) return;
+  if(p.to !== uid) return;
+  teamLead = ''; teamMembers = []; coopLv = -1;
+  renderTeam(); track();
+  chatLine('', (p.n || '队长') + ' 把你请离了队伍', true);
+}
+
+function nameOf(id){
+  for(const m of teamMembers){ if(m.id === id) return m.name; }
+  const r = remotes.get(id);
+  return r ? r.name : '';
+}
+function sortTeamLeadFirst(){
+  if(!teamLead) return;
+  teamMembers.sort(function(a, b){
+    if(a.id === teamLead) return -1;
+    if(b.id === teamLead) return 1;
+    return 0;
+  });
+}
+
+/* 队伍面板 */
+function renderTeam(){
+  const box = $('opTeam');
+  const cnt = $('opTeamCount');
+  if(cnt) cnt.textContent = String(teamMembers.length || 0);
+  const leave = $('opTeamLeave');
+  if(leave) leave.style.display = inTeam() ? '' : 'none';
+  if(!box) return;
+  if(!inTeam() || !teamMembers.length){
+    box.innerHTML = '<div class="op-empty">还没组队 —— 在城镇里点别人，选「邀请组队」</div>';
+    return;
+  }
+  box.innerHTML = teamMembers.map(function(m){
+    const me = m.id === uid;
+    const lead = (m.id === teamLead) ? '<i>队长</i>' : '';
+    const acts = (isLead() && !me)
+      ? '<button class="op-mini" data-act="lead" data-id="' + esc(m.id) + '">委任</button>' +
+        '<button class="op-mini warn" data-act="kick" data-id="' + esc(m.id) + '">请离</button>'
+      : '';
+    return '<div class="op-player' + (me ? ' me' : '') + '">' +
+           '<span>' + esc(m.name || '侠客') + lead + '</span>' +
+           '<em>Lv.' + (m.lv || 1) + ' · ' + esc(jobName(m.job | 0)) + '</em>' + acts + '</div>';
+  }).join('');
+  /* 委任 / 请离（事件委托，列表每次重画也不用重新绑定） */
+  if(!box.__teamBound){
+    box.__teamBound = true;
+    box.addEventListener('click', function(e){
+      const b = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
+      if(!b) return;
+      const id = b.getAttribute('data-id') || '';
+      if(b.getAttribute('data-act') === 'lead') appointLead(id);
+      else kickMember(id);
+    });
+  }
+}
+
+/* ★ 组队刷图：队长选关后带全队一起进（08_menu 的选关点击会调这里） */
+function teamGo(levelIdx){
+  if(!inTeam() || !isLead()){
+    /* 队员自己进图就是单刷，不占用队伍频道（队长开图时仍会把你拉进去） */
+    return;
+  }
+  if(teamMembers.length > 1){
+    rtSend('tgo', { lead: uid, lv: levelIdx | 0, diff: (typeof G !== 'undefined' && G) ? (G.currentDifficulty || 'normal') : 'normal' });
+    chatLine('', '全队 ' + teamMembers.length + ' 人进入第 ' + ((levelIdx | 0) + 1) + ' 关，出发！', true);
+  }
+  enterCoopLevel(levelIdx | 0);
+}
+
+function handleTeamGo(p){
+  p = p || {};
+  if(!inTeam() || p.lead !== teamLead) return;
+  if(p.diff && typeof G !== 'undefined' && G) G.currentDifficulty = p.diff;
+  chatLine('', '队长带你刷第 ' + ((p.lv | 0) + 1) + ' 关，出发！', true);
+  enterCoopLevel(p.lv | 0);
+  try{ startLevel(p.lv | 0); }
+  catch(e){ console.warn('[online] 组队进图失败', e); chatLine('', '进图失败，先在城镇里试一次', true); }
+}
+
+function enterCoopLevel(lv){
+  coopLv = lv;
+  /* 副本里只留队友：城镇里其他人不再显示 */
+  const ids = {};
+  teamMembers.forEach(function(m){ ids[m.id] = 1; });
+  remotes.forEach(function(v, k){ if(!ids[k]) remotes.delete(k); });
+  lastPosSig = '';
+  track();
+  try{ sendPos(); }catch(e){}
+}
+
+/* ---------- 组队伤害同步 ---------- */
+/* 我打到怪：把「打谁、打多少」广播给队友 */
+let _lastHitAt = 0;
+function teamHit(e, dmg, isCrit){
+  if(!inCoopLevel() || !e || !e.alive) return;
+  const k = e.ekey;
+  if(!k) return;
+  /* 限流：多段伤害一秒能打十几下，别把网络打满；但「致命一击」必须发出去，
+     否则队友那边这只怪永远死不了 */
+  const lethal = (e.hp <= 0);
+  const now = Date.now();
+  if(!lethal && now - _lastHitAt < 70) return;
+  _lastHitAt = now;
+  rtSend('hit', { from: uid, k: k, dmg: Math.round(dmg) || 0, c: isCrit ? 1 : 0 });
+}
+
+/* 队友打到怪：在我自己这份战场上同步掉血，打死算我的掉落 */
+function onHit(p){
+  p = p || {};
+  if(!p.from || p.from === uid) return;
+  if(!inCoopLevel()) return;
+  if(typeof G === 'undefined' || !G || !G.enemies) return;
+  let tgt = null;
+  for(const e of G.enemies){ if(e.alive && e.ekey === p.k){ tgt = e; break; } }
+  if(!tgt) return;
+  const dmg = Math.max(1, p.dmg | 0);
+  tgt.hp -= dmg;
+  tgt.hitFlash = 0.12;
+  tgt.hurtT = Math.max(tgt.hurtT || 0, 0.12);
+  try{
+    spawnText(tgt.x, tgt.y, 100 + tgt.h, (p.c ? '暴击 ' : '') + dmg, p.c ? '#ff9a5a' : '#ffd9a0', p.c ? 30 : 20);
+    addEffect('hitRing', tgt.x, tgt.y, 0.22, { color: '#ffd9a0', r: 32 });
+  }catch(err){}
+  if(tgt.hp <= 0){
+    try{ killEnemy(tgt); }catch(err){ tgt.alive = false; tgt.deathT = 0; }
+  }
 }
 
 /* ---------- 组队治疗（两条通道共用） ---------- */
@@ -318,12 +640,16 @@ function inPlayableState(){
          gameState === 'characterInfo' || gameState === 'gameMenu' || gameState === 'questMenu';
 }
 
-/* 只在「城镇」广播位置：副本/菜单里根本看不到其他玩家，发了纯是浪费额度 */
+/* 城镇里广播位置；★ 组队刷图时副本里也要广播（队友要互相看得见） */
 function sendPos(){
   if(!ch || !joined) return;
-  if(typeof gameState === 'undefined' || gameState !== 'town') return;
-  const p = (typeof townPlayer !== 'undefined' && townPlayer) ? townPlayer
-          : (typeof G !== 'undefined' && G && G.player ? G.player : null);
+  const coop = inCoopLevel();
+  if(typeof gameState === 'undefined') return;
+  if(gameState !== 'town' && !coop) return;
+  /* 副本里用战斗里的主角；城镇里用城镇小人（别拿 townPlayer 的旧坐标当战斗坐标） */
+  const p = coop
+    ? ((typeof G !== 'undefined' && G && G.player) ? G.player : null)
+    : ((typeof townPlayer !== 'undefined' && townPlayer) ? townPlayer : null);
   if(!p) return;
 
   if(typeof G !== 'undefined' && G && G.player){
@@ -349,6 +675,8 @@ function sendPos(){
     f: p.facing >= 0 ? 1 : -1,
     s: (p.state === 'walk' || p.state === 'run') ? 'w' : 'i',
     mt: (window.MOUNT && typeof G !== 'undefined' && G.player) ? MOUNT.modelOf(G.player) : '',
+    /* ★ 组队刷图：顺带带上血量百分比，副本里队友头顶能看血条 */
+    hp: (coop && p.maxHp) ? Math.max(0, Math.min(100, Math.round(p.hp / p.maxHp * 100))) : 0,
     t: Date.now()
   });
 }
@@ -368,6 +696,7 @@ function onPos(p){
   r.lv = p.lv || r.lv;
   r.weaponIdx = (p.w === undefined || p.w === null) ? r.weaponIdx : (p.w | 0);
   if(p.mt !== undefined) r.mt = p.mt || '';
+  if(p.hp !== undefined) r.hp = p.hp | 0;   /* 0~100 血量百分比 */
   r.seen = Date.now();
 }
 
@@ -443,10 +772,13 @@ function showCard(r){
   c.innerHTML = '<div class="oc-head"><b>' + esc(r.name) + '</b>' +
     '<em>Lv.' + (r.lv || 1) + ' · ' + esc(jobName(r.weaponIdx)) + '</em></div>' +
     '<div class="oc-body" id="ocBody"><div class="oc-tip">正在读取对方的装备与属性…</div></div>' +
-    '<div class="oc-acts"><button id="ocPk" type="button">邀请切磋</button>' +
+    '<div class="oc-acts"><button id="ocTeam" type="button">邀请组队</button>' +
+    '<button id="ocPk" type="button">邀请切磋</button>' +
     '<button id="ocClose" type="button">关闭</button></div>';
   c.classList.add('open');
   var _esc = document.getElementById('btnEsc'); if(_esc) _esc.classList.add('behind');
+  const tm = $('ocTeam');
+  if(tm) tm.addEventListener('click', function(){ inviteTeam(cardTarget); });
   const pk = $('ocPk');
   if(pk) pk.addEventListener('click', function(){ invitePk(cardTarget); });
   const cl = $('ocClose');
@@ -537,6 +869,13 @@ function hookCanvasClick(){
 let _lastTick = 0;
 function collectDrawables(arr){
   if(!arr) return;
+  /* ★ 回到城镇 / 选关界面：立刻丢掉副本里队友的影子（不然会在城里残留几秒） */
+  if(coopLv >= 0 && typeof gameState !== 'undefined' &&
+     (gameState === 'town' || gameState === 'levelSelect' || gameState === 'menu')){
+    coopLv = -1;
+    remotes.clear();
+    try{ track(); }catch(e){}
+  }
   const nowMs = performance.now();
   const dt = _lastTick ? Math.min(0.1, (nowMs - _lastTick) / 1000) : 0.016;
   _lastTick = nowMs;
@@ -566,6 +905,15 @@ function drawOne(r){
   ctx.fillStyle = '#9fe6ff';
   ctx.fillText(r.name, r.x, ny);
 
+  /* ★ 组队副本里给队友加一条小血条，方便照应 */
+  if(inCoopLevel() && r.hp){
+    const bw = 46, bh = 5, bx = r.x - bw/2, by = ny + 18;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+    ctx.fillStyle = r.hp > 35 ? '#5fd98a' : '#ff6a5a';
+    ctx.fillRect(bx, by, bw * (r.hp / 100), bh);
+  }
+
   ctx.font = '10px "Microsoft YaHei"';
   ctx.lineWidth = 2.5;
   ctx.strokeText('Lv.' + r.lv, r.x, ny + 13);
@@ -591,6 +939,54 @@ function sendChat(){
   rtSend('chat', { id: uid, n: myName, m: m, r: myRoom() });
 }
 
+/* ---------- 小队面板（DNF 式：左上角列出队友名字 + 血条） ---------- */
+function drawTeamHud(){
+  if(!inTeam() || !teamMembers.length) return;
+  try{
+    if(typeof ctx === 'undefined' || !ctx) return;
+    const x = 18, y = 152, w = 158, rowH = 34;
+    const h = 24 + teamMembers.length * rowH + 4;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,12,20,0.62)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(201,168,76,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd166';
+    ctx.font = 'bold 11px "Microsoft YaHei"';
+    ctx.fillText('小队 ' + teamMembers.length + '/' + TEAM_MAX, x + 9, y + 15);
+    for(let i = 0; i < teamMembers.length; i++){
+      const m = teamMembers[i];
+      const ry = y + 22 + i * rowH;
+      const isMe = m.id === uid;
+      const rr = remotes.get(m.id);
+      let hpPct = 100;
+      if(isMe){
+        const p = (typeof G !== 'undefined' && G && G.player) ? G.player : null;
+        hpPct = (p && p.maxHp) ? Math.round(Math.max(0, p.hp) / p.maxHp * 100) : 100;
+      } else {
+        hpPct = rr ? (rr.hp || 0) : 0;
+      }
+      let nm = m.name || '侠客';
+      if(nm.length > 7) nm = nm.slice(0, 7) + '…';
+      ctx.fillStyle = isMe ? '#9fe6ff' : '#c6d6e4';
+      ctx.font = 'bold 11px "Microsoft YaHei"';
+      ctx.fillText(nm, x + 9, ry + 12);
+      if(m.id === teamLead){
+        const nw = ctx.measureText(nm).width;
+        ctx.fillStyle = '#ffd98e';
+        ctx.font = '9px "Microsoft YaHei"';
+        ctx.fillText('队长', x + 9 + nw + 5, ry + 12);
+      }
+      const bw = w - 18, bh = 6, by = ry + 17;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(x + 9, by, bw, bh);
+      ctx.fillStyle = hpPct > 35 ? '#5fd98a' : '#ff6a5a';
+      ctx.fillRect(x + 9, by, bw * Math.max(0, Math.min(100, hpPct)) / 100, bh);
+    }
+    ctx.restore();
+  }catch(e){}
+}
+
 /* ---------- 对外接口 ---------- */
 window.ONLINE = {
   collectDrawables: collectDrawables,
@@ -603,6 +999,18 @@ window.ONLINE = {
   panel: panel,
   chat: sendChat,
   healAllies: healAllies,          /* ★ 治疗技能调用：pct=回血百分比, radius=范围 */
+  /* ★ 组队刷图 */
+  teamGo: teamGo,                  /* ★ 选关时调用：有队伍就把全队一起带进去 */
+  appointLead: appointLead,        /* ★ 转让队长 */
+  kickMember: kickMember,          /* ★ 请离队员 */
+  drawTeamHud: drawTeamHud,        /* ★ 副本/城镇左上角的小队面板 */
+  teamHit: teamHit,                /* ★ 玩家伤害入口：e=敌人 dmg=伤害 isCrit=暴击 */
+  inviteTeam: inviteTeam,
+  leaveTeam: leaveTeam,
+  teamInfo: function(){
+    return { lead: teamLead, members: teamMembers.slice(), max: TEAM_MAX,
+             inTeam: inTeam(), isLead: isLead(), coop: coopLv >= 0 };
+  },
   copyCode: function(){
     if(!roomCode) return '';
     try{ navigator.clipboard.writeText(roomCode); }catch(e){}
@@ -625,6 +1033,9 @@ function boot(){
   if(code) code.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); joinRoom(code.value); } });
   const leave = $('opLeave');
   if(leave) leave.addEventListener('click', function(){ leaveRoom(); });
+  const tleave = $('opTeamLeave');
+  if(tleave) tleave.addEventListener('click', function(){ leaveTeam(); });
+  renderTeam();
   const send = $('opSend');
   if(send) send.addEventListener('click', sendChat);
   const msg = $('opMsg');
@@ -677,6 +1088,11 @@ function boot(){
   setInterval(function(){
     renderPlayers();
     renderMembers();
+    /* ★ 回到城镇就退出组队副本状态（房间切回公共频道，重新看得见城里的人） */
+    if(coopLv >= 0 && typeof gameState !== 'undefined' && (gameState === 'town' || gameState === 'levelSelect')){
+      coopLv = -1;
+      try{ remotes.clear(); lastPosSig = ''; track(); sendPos(); }catch(e){}
+    }
     if(joined && Date.now() - lastTrack > 60000) track();
   }, 5000);
 }
