@@ -185,6 +185,8 @@ function loopBody(now){
         drawables.push({ y:e.y, fn:()=>drawFighter({ x:e.x, y:e.y - breatheBob, h:e.h, facing:e.facing, scale:e.def.scale, pose:ePose, upperArmAng:eUpperArm, foreArmAng:eForeArm, backUpperArmAng:eUpperArm - 0.15, backForeArmAng:eForeArm - 0.1, weaponAng:eWeaponAng, bodyLean:eBodyLean, kneeBend:eKneeBend, legPose:0, weapon:e.def.weapon, walkPhase:e.walkPhase, pal:e.def.pal })});
       }
     }
+    /* ★ 组队刷图：副本里同样把队友画出来（按 y 排序，和怪互相遮挡） */
+    if(window.ONLINE && window.ONLINE.collectDrawables) window.ONLINE.collectDrawables(drawables);
     drawables.sort((a,b)=>a.y-b.y);
     for(const d of drawables) d.fn();
 
@@ -208,6 +210,8 @@ function loopBody(now){
 
     ctx.restore();
     if(G.player) drawUI();
+    /* ★ 组队刷图：左上角小队面板（名字 + 血条） */
+    if(window.ONLINE && window.ONLINE.drawTeamHud) window.ONLINE.drawTeamHud();
     drawBottomUI();
     /* ★ 背包容量警告（战斗中也要显示） */
     if(typeof drawBagWarning === 'function') drawBagWarning();
