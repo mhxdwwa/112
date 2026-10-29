@@ -1233,7 +1233,9 @@ function castSwordCome(){
       /* ★ 集火时剑从目标上方落下，分散时随机 */
       const ex = focusX !== null ? clamp(focusX + rand(-80, 80), WORLD_L, WORLD_R) : clamp(p.x + rand(-470, 470), WORLD_L, WORLD_R);
       const ey = focusY !== null ? clamp(focusY + rand(-30, 30), GY_TOP + 20, GY_BOTTOM) : rand(GY_TOP + 20, GY_BOTTOM);
-      G.projectiles.push({ kind:'glowWeapon', weaponType:'sword', x:ex + rand(-70,70), y:ey-400, h:1, vx:0, vy:1560, life:0.28, w:76, hh:76, dmg:A*12, pierce:2, hitSet:new Set(), color:'#cfeaff', rot:Math.PI/2, scale:1.7, owner:p });
+      G.projectiles.push({ kind:'glowWeapon', weaponType:'sword', x:ex + rand(-70,70), y:ey-400, h:1, vx:0, vy:1560, life:0.30, w:104, hh:132, dmg:A*12, pierce:2, hitSet:new Set(), color:'#cfeaff', rot:Math.PI/2, scale:1.7, owner:p });
+      /* ★ 判定加宽：剑速 1560px/s（每帧约 25px），原来 hh=76 的垂直窗口只有 ~26px，
+         高速下会整帧跳过敌人（穿模）导致“剑扎下来了却没打中”；现放宽到 132 */
       spawnParticles(ex, ey, 2, {color:'#eaf6ff', angle:-Math.PI/2, spread:1.1, spMin:70, spMax:220, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:320});
       if(k === 0 && n % 3 === 0) addEffect('hitRing', ex, ey, 0.32, {color:'#eaf6ff', r:52});
     }
@@ -1476,10 +1478,11 @@ function castSpearRainStorm(){
       if(!G || gameState !== 'playing'){ clearInterval(rain); return; }
       n++;
       for(let k=0;k<2;k++){
-        const ex = clamp(cx() + rand(-260, 260), WORLD_L, WORLD_R);
+        const ex = clamp(cx() + rand(-150, 150), WORLD_L, WORLD_R);
         const ey = rand(GY_TOP + 20, GY_BOTTOM);
-        G.projectiles.push({ kind:'glowWeapon', weaponType:'spear', x:ex + rand(-40,40), y:ey - 380, h:1,
-          vx:0, vy:1420, life:0.28, w:64, hh:64, dmg:A*8, pierce:2, hitSet:new Set(),
+        /* 落点收窄 + 判定窗口加宽：枪速 1420px/s 每帧约 23px，原来 hh=64 会穿模漏判 */
+        G.projectiles.push({ kind:'glowWeapon', weaponType:'spear', x:ex + rand(-30,30), y:ey - 380, h:1,
+          vx:0, vy:1420, life:0.30, w:96, hh:124, dmg:A*8, pierce:2, hitSet:new Set(),
           color:n%4===0?'#dbe4e8':'#bfe0ff', rot:Math.PI/2, scale:1.75, owner:p });
         spawnParticles(ex, ey, 2, {color:'#bfe0ff', angle:-Math.PI/2, spread:0.9, spMin:60, spMax:200, lifeMin:0.2, lifeMax:0.45, sizeMin:2, sizeMax:5, grav:340});
       }
