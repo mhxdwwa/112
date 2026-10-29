@@ -20,9 +20,9 @@ const CHAR_ATLASES = {
     cellW:365, cellH:414, cols:6, rows:6,
     feetX:149, groundY:328, bodyH:230.0, bodyWorld:100,
     anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[20,21,22,23]}, skill:{frames:[24,25,26,27]}, jump:{frames:[28,29]}, dodge:{frames:[30,31]}, hurt:{frames:[32]}, death:{frames:[33,34]}, victory:{frames:[35]} } },
-  herb: { url:'assets/chars/herb_atlas.webp?v=2', ready:false, img:new Image(),  /* 炼药师（32帧动作版：待机4/走路8/攻击8/技能8/跳跃4） */
+  herb: { url:'assets/chars/herb_atlas.webp?v=3', ready:false, img:new Image(),  /* 炼药师（32帧动作版：待机4/走路8/攻击8/技能8/跳跃4） */
     cellW:256, cellH:256, cols:8, rows:8,
-    feetX:128, groundY:250, bodyH:240.0, bodyWorld:112,
+    feetX:128, groundY:244, bodyH:208.0, bodyWorld:112,
     anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[16,17,18,19]}, skill:{frames:[20,21,22,23,24,25,26,27]}, jump:{frames:[28,29,30,31]}, dodge:{frames:[28,29,30]}, hurt:{frames:[31]}, death:{frames:[30,31]}, victory:{frames:[0]} } },
   axe: { url:'assets/chars/mountaineer_atlas.webp', ready:false, img:new Image(),  /* 撼山者 */
     cellW:256, cellH:256, cols:8, rows:8,
