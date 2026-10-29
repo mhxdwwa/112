@@ -4,10 +4,10 @@
    炼药师：8x8 新版图集（assets/chars/herb_atlas.webp）
 */
 const CHAR_ATLASES = {
-  sword: { url:'assets/swordsman/swordsman_atlas.webp', ready:false, img:new Image(),  /* 剑士 */
-    cellW:353, cellH:414, cols:6, rows:6,
-    feetX:178, groundY:328, bodyH:230.0, bodyWorld:110,
-    anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[20,21,22,23]}, skill:{frames:[24,25,26]}, jump:{frames:[27,28]}, dodge:{frames:[29,30]}, hurt:{frames:[31]}, death:{frames:[32,33]}, victory:{frames:[34]} } },
+  sword: { url:'assets/swordsman/swordsman_atlas.webp?v=2', ready:false, img:new Image(),  /* 剑士（32帧动作版：待机4/跑步8/劈斩8/御剑技能8/跳跃4） */
+    cellW:256, cellH:256, cols:8, rows:8,
+    feetX:128, groundY:244, bodyH:208.0, bodyWorld:110,
+    anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[16,17,18,19]}, skill:{frames:[20,21,22,23,24,25,26,27]}, jump:{frames:[28,29,30,31]}, dodge:{frames:[28,29,30]}, hurt:{frames:[31]}, death:{frames:[30,31]}, victory:{frames:[0]} } },
   blade: { url:'assets/blade/blade_atlas.webp', ready:false, img:new Image(),  /* 剑客 */
     cellW:382, cellH:414, cols:6, rows:6,
     feetX:159, groundY:328, bodyH:230.0, bodyWorld:106,
