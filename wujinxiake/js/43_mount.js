@@ -282,6 +282,8 @@
       var sSc = sc * 1.1;
       c.save();
       c.translate(0, sBob);
+      /* ★ 剑尖跟随朝向：向右走剑尖朝右，向左走整把剑镜像（原来剑尖永远朝右） */
+      c.scale(F, 1);
       /* 剑身阴影 */
       c.fillStyle = 'rgba(0,0,0,0.25)';
       c.beginPath(); c.ellipse(0, 18*sSc, 52*sSc, 5*sSc, 0, 0, Math.PI*2); c.fill();

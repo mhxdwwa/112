@@ -1380,6 +1380,21 @@ function update(dt){
         }
       }
     }
+    /* ★ 技能智能追踪：玩家方技能飞行体每帧微调水平朝向，锁定敌人当前位置
+       —— 只改水平分量，保留原有的抛物线/透视手感；纯视觉体不参与 */
+    if(!pr.enemy && !pr.noHit && pr.dmg > 0 && pr.owner && pr.owner.isPlayer){
+      const tg2 = getSkillTarget(pr.owner, true);
+      if(tg2 && skAlive(tg2) && Math.abs(pr.vx) > 1){
+        const wantSign = (tg2.x >= pr.x) ? 1 : -1;
+        const wantVX = Math.abs(pr.vx) * wantSign;
+        const k = Math.min(1, 7.5 * rawDt);        // 平滑转向，避免瞬间折返
+        pr.vx += (wantVX - pr.vx) * k;
+        if(pr.kind && String(pr.kind).indexOf('real') === 0){
+          pr.rot = Math.atan2(pr.vy * 2.2, pr.vx);
+          pr.facing = pr.vx >= 0 ? 1 : -1;
+        }
+      }
+    }
     pr.x += pr.vx * rawDt;                      // ★ 用 rawDt，投射物不被 hitstop 减速
     pr.y += pr.vy * rawDt;
     pr.life -= rawDt;

@@ -1720,8 +1720,17 @@ function skAim(p, fallback){
   const ref = getSkillTarget(p, true);
   if(ref){
     p.facing = ref.x > p.x ? 1 : -1;
-    /* 一次性快照：此后目标移动不会改变落点（可走位躲避） */
-    const o = { x: ref.x, y: ref.y, has:true, ref:ref };
+    /* ★ 智能追踪：返回“活坐标”——技能延迟执行时读到的是目标【当前】位置，
+       不再用释放瞬间的快照（老版本可被走位躲开）。
+       目标死亡/消失则回落到最后一帧坐标，避免落点乱飞。 */
+    let snapX = ref.x, snapY = ref.y, live = true;
+    const o = { has:true, ref:ref };
+    Object.defineProperty(o, 'x', { configurable:true,
+      get(){ return (live && skAlive(ref)) ? ref.x : snapX; },
+      set(v){ live = false; snapX = v; } });
+    Object.defineProperty(o, 'y', { configurable:true,
+      get(){ return (live && skAlive(ref)) ? ref.y : snapY; },
+      set(v){ live = false; snapY = v; } });
     return o;
   }
   const o2 = { x: p.x + p.facing * (fallback || 220), y: p.y, has:false };
