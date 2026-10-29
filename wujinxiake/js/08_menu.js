@@ -270,19 +270,15 @@ function handleCanvasClick(cx, cy){
         startLevel(G.levelIdx);
       } else if(!r.flipCard && r.flipCard !== 0){
         // 返回城镇（非翻牌按钮）：检查是否有高价值物品未拾取
-        const hasValuableDrops = G && G.drops && G.drops.some(d => {
-          if(d.type !== 'equip' || !d.equip) return false;
-          const tierIdx = ['common','advanced','rare','epic','legend','mythic'].indexOf(d.equip.tier);
-          return tierIdx >= 4; // legend(4) or mythic(5)
-        });
-        if(hasValuableDrops && !G.returnWarningShown){
-          // 显示警告提示
+        /* ★ 地面只要还有掉落（装备/金币/材料/药水）就先拦一次，别让通关后
+           辛苦掉的装备被静默留在地图上。再次点击才真正返回。 */
+        const dropCount = (G && G.drops) ? G.drops.length : 0;
+        if(dropCount > 0 && !G.returnWarningShown){
           G.returnWarningShown = true;
           if(typeof spawnText === 'function'){
-            spawnText(G.player.x, G.player.y - 80, 120, '地面有高价值装备未拾取！', '#ff6a5a', 18);
+            spawnText(G.player.x, G.player.y - 80, 120, `地面还有 ${dropCount} 件掉落未拾取！`, '#ff6a5a', 18);
             spawnText(G.player.x, G.player.y - 50, 120, '再次点击确认返回', '#ffd166', 14);
           }
-          // 3秒后重置警告状态
           setTimeout(() => { if(G) G.returnWarningShown = false; }, 3000);
           return;
         }
