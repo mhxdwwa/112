@@ -684,7 +684,9 @@ function drawTown(){
 
   /* ★ 裁剪到 5 座岛的并集：岛外一滴地面都不留，露出下方云海 */
   ctx.save();
-  for(const _isDef of TOWN_DEFS) addIslandPath(ctx, _isDef, ISLAND_INSET, ISLAND_R);
+  /* ★ 五个岛累积成一条路径后再 clip：一次 beginPath + 多次子路径 */
+  ctx.beginPath();
+  for(const _isDef of TOWN_DEFS) addIslandPath(ctx, _isDef, ISLAND_INSET, ISLAND_R, true);
   ctx.clip();
 
   /* ★ 地面分层：草地基色 → 坊区地块 → 泥土地（自然、有材质感） */

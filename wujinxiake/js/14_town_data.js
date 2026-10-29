@@ -1055,14 +1055,16 @@ const ISLAND_INSET = 170;    /* 岛缘相对区域边界内缩（让相邻岛之
 const ISLAND_R     = 420;    /* 四角圆角半径，越大越像浮岛 */
 
 /* 岛形路径：圆角矩形 + 四边中点轻微外扩（避免看起来像方块） */
-function addIslandPath(c, def, inset, r){
+function addIslandPath(c, def, inset, r, keepPath){
   inset = inset === undefined ? ISLAND_INSET : inset;
   r = r || ISLAND_R;
   const x = def.ox + inset, y = def.oy + inset;
   const w = TOWN_ZONE_W - inset * 2, h = TOWN_ZONE_H - inset * 2;
   const rr = Math.min(r, w * 0.45, h * 0.45);
   const bump = Math.min(46, w * 0.02);      /* 边中点的外扩量 */
-  c.beginPath();
+  /* keepPath=true 时不重置路径 —— 多个岛要累积成一条路径再 clip()，
+     否则 clip 只认最后一个岛（会裁成空区域，整个画面变黑） */
+  if(!keepPath) c.beginPath();
   c.moveTo(x + rr, y);
   /* 上边：中点略微上凸 */
   c.quadraticCurveTo(x + w * 0.5, y - bump, x + w - rr, y);
