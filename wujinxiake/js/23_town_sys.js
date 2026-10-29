@@ -70,6 +70,9 @@ function spawnWaveEnemies(){
     const eLv = (G.levelIdx || 0) + 1;
     const eDef = isBossWave ? Math.round(80 * Math.pow(1.05, eLv)) : Math.round(50 * Math.pow(1.05, eLv));
     const en = { isEnemy:true, alive:true, typeKey, def, x:ex, y:clamp(ey, GY_TOP+50, GY_BOTTOM-30), h:0, vy:0, kx:0, hp, maxHp:hp, mp:baseDef.maxMp, maxMp:baseDef.maxMp, atk, level:eLv, defense:eDef, facing:-1, radius:26*scale, scale, spdMul:spdMul, state:'idle', walkPhase:rand(0,TAU), atkCd:rand(0.8,1.6), skillCd:rand(2,4), hurtT:0, hitFlash:0, launchT:0, deathT:0, action:null };
+    /* ★ 组队刷图：给每只怪一个全队通用的编号（房间号:出场序号），
+       队友广播「我打第几只、打了多少」时靠它对上号 */
+    en.ekey = (G.waveIdx || 0) + ':' + i;
     /* ★ 精灵表按需加载 */
     ensureMonsterAtlas(typeKey);
     /* ★ 怪物词条 */
