@@ -160,3 +160,20 @@
 
 /* 资料卡打开时把 ESC 让开，避免叠在一起 */
 #btnEsc.behind{opacity:0; pointer-events:none;}
+
+/* ===== 组队刷图面板 ===== */
+#opTeam .op-player i{font-style:normal; font-size:9.5px; color:#ffd98e; background:rgba(201,154,78,.16);
+  border-radius:99px; padding:1px 6px; margin-left:5px;}
+.op-btn{margin-top:7px; width:100%; height:30px; border-radius:9px; cursor:pointer; font-size:12px;
+  font-family:inherit; border:1px solid rgba(255,154,122,.42); background:rgba(255,154,122,.12); color:#ffb9a0;}
+.op-btn:hover{filter:brightness(1.15)}
+#opCard .oc-acts #ocTeam{
+  background:linear-gradient(180deg,rgba(90,200,150,.34),rgba(90,200,150,.15));
+  border-color:rgba(90,200,150,.5); color:#c9ffe6; font-weight:600; letter-spacing:.06em;
+}
+
+/* 队伍列表里的「委任 / 请离」小按钮 */
+.op-mini{margin-left:4px; padding:2px 6px; border-radius:6px; cursor:pointer; font-size:10.5px;
+  font-family:inherit; border:1px solid rgba(255,209,102,.45); background:rgba(255,209,102,.12); color:#ffe1a6;}
+.op-mini:hover{filter:brightness(1.18)}
+.op-mini.warn{border-color:rgba(255,122,106,.45); background:rgba(255,122,106,.12); color:#ffb9a0}
