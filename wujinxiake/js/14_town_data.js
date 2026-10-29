@@ -1052,7 +1052,7 @@ function triggerNpc(npc){
      · 出生点仍在中央主城（TOWN_DEFS.center.spawn）
    ============================================================ */
 const ISLAND_INSET = 170;    /* 岛缘相对区域边界内缩（让相邻岛之间露出云海） */
-const ISLAND_R     = 420;    /* 四角圆角半径，越大越像浮岛 */
+const ISLAND_R     = 1600;   /* 圆角半径：大到接近椭圆，空隙呈弧形，像浮岛群 */
 
 /* 岛形路径：圆角矩形 + 四边中点轻微外扩（避免看起来像方块） */
 function addIslandPath(c, def, inset, r, keepPath){
@@ -1061,7 +1061,7 @@ function addIslandPath(c, def, inset, r, keepPath){
   const x = def.ox + inset, y = def.oy + inset;
   const w = TOWN_ZONE_W - inset * 2, h = TOWN_ZONE_H - inset * 2;
   const rr = Math.min(r, w * 0.45, h * 0.45);
-  const bump = Math.min(46, w * 0.02);      /* 边中点的外扩量 */
+  const bump = Math.min(120, w * 0.035);    /* 边中点的外扩量：让轮廓不那么规整 */
   /* keepPath=true 时不重置路径 —— 多个岛要累积成一条路径再 clip()，
      否则 clip 只认最后一个岛（会裁成空区域，整个画面变黑） */
   if(!keepPath) c.beginPath();
@@ -1137,15 +1137,15 @@ function drawIslandEdges(t){
       ctx.save();
       ctx.translate(0, depth);
       addIslandPath(ctx, def, ISLAND_INSET, ISLAND_R);
-      const a = 0.10 + 0.12 * (1 - k / 5);
+      const a = 0.16 + 0.26 * (1 - k / 5);
       ctx.fillStyle = 'rgba(46,44,64,' + a.toFixed(3) + ')';
       ctx.fill();
       ctx.restore();
     }
     /* 2. 岛缘石线：一圈暗边，界定岛的轮廓 */
     addIslandPath(ctx, def, ISLAND_INSET, ISLAND_R);
-    ctx.strokeStyle = 'rgba(58,54,76,0.85)';
-    ctx.lineWidth = 7;
+    ctx.strokeStyle = 'rgba(44,40,62,0.92)';
+    ctx.lineWidth = 12;
     ctx.stroke();
     /* 3. 岛缘云气：沿轮廓撒云絮，缓慢明灭 */
     const x0 = def.ox + ISLAND_INSET, y0 = def.oy + ISLAND_INSET;
@@ -1173,8 +1173,8 @@ function townIslandOf(x, y){
     const x0 = def.ox, y0 = def.oy;
     if(x >= x0 - 300 && x < x0 + TOWN_ZONE_W + 300 && y >= y0 - 300 && y < y0 + TOWN_ZONE_H + 300){
       return { def: def,
-        x0: def.ox + ISLAND_INSET + 26, y0: def.oy + ISLAND_INSET + 26,
-        x1: def.ox + TOWN_ZONE_W - ISLAND_INSET - 26, y1: def.oy + TOWN_ZONE_H - ISLAND_INSET - 26 };
+        x0: def.ox + ISLAND_INSET + 300, y0: def.oy + ISLAND_INSET + 240,
+        x1: def.ox + TOWN_ZONE_W - ISLAND_INSET - 300, y1: def.oy + TOWN_ZONE_H - ISLAND_INSET - 240 };
     }
   }
   return null;
