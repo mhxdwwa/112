@@ -188,6 +188,8 @@ function handleCanvasClick(cx, cy){
       } else if(r.difficulty){
         G.currentDifficulty = r.difficulty;
       } else if(typeof r.levelIdx === 'number'){
+        /* ★ 组队刷图：有队伍就把全队一起带进这张图（各自掉落、各自捡） */
+        try{ if(window.ONLINE && ONLINE.teamGo) ONLINE.teamGo(r.levelIdx); }catch(e){}
         startLevel(r.levelIdx);
       }
     }
