@@ -574,6 +574,9 @@ function damageEnemy(e,dmg,src,opt){
     e.hp -= addVal;
   }
   e.hp -= final; e.hitFlash = 0.12; e.hurtT = blocked ? 0.05 : 0.15;
+  /* ★ 组队刷图：把「打的是哪只、掉了多少血」同步给队友（队友那份战场同步掉血，
+     打死算各自的 —— 掉落各掉各的、互不影响） */
+  try{ if(src && src.isPlayer && window.ONLINE && ONLINE.teamHit) ONLINE.teamHit(e, final + addVal, isCrit); }catch(err){}
   /* ★ 改进8: 伤害数字差异化 - 暴击更大更醒目 */
   const dmgText = (blocked?'':(isCrit?'暴击 ':''))+final+(isCrit?'!':'');
   const dmgSize = blocked?24:(isCrit?36:22);
