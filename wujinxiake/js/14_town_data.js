@@ -1084,17 +1084,16 @@ function addIslandPath(c, def, inset, r, keepPath){
 /* 云海：填满相机可见范围（地面高度以下），是所有岛之外的“底” */
 function drawTownCloudSea(camX, camY){
   const t = (typeof G !== 'undefined' && G) ? G.t : performance.now() * 0.001;
-  /* 只填「屏幕地平线以下」：camY + HORIZON 正好对应屏幕上的地平线位置，
-     这样天空与远景剪影不会被云海盖住 */
-  const screenHorizon = GY_BOTTOM - 100;
-  const topY = camY + screenHorizon - 16;
-  const botY = camY + VH + 160;
+  /* 铺满整个可见高度：岛与岛之间的空隙在屏幕上任何位置都要看到云，
+     只铺地平线以下会在空隙上半部漏出天空底色 */
+  const topY = camY - 140;
+  const botY = camY + VH + 170;
   /* 1. 底色：由天际的暖紫过渡到深处的冷蓝，越往下越暗（无尽感） */
   const g = ctx.createLinearGradient(0, topY, 0, botY);
-  g.addColorStop(0,    'rgba(150,130,190,0.55)');
-  g.addColorStop(0.28, 'rgba(122,116,170,0.72)');
-  g.addColorStop(0.65, 'rgba(86,92,146,0.90)');
-  g.addColorStop(1,    'rgba(52,58,104,1)');
+  g.addColorStop(0,    'rgba(96,84,150,1)');      /* 顶端：接近天空的紫，衔接自然 */
+  g.addColorStop(0.30, 'rgba(124,116,176,1)');
+  g.addColorStop(0.62, 'rgba(96,104,158,1)');
+  g.addColorStop(1,    'rgba(58,64,112,1)');
   ctx.fillStyle = g;
   ctx.fillRect(camX - 40, topY, VW + 80, botY - topY);
 
@@ -1122,8 +1121,8 @@ function drawTownCloudSea(camX, camY){
 
   /* 3. 深处迷雾：向下逐渐加浓，遮住“世界尽头”的硬边 */
   const mist = ctx.createLinearGradient(0, topY + (botY - topY) * 0.45, 0, botY);
-  mist.addColorStop(0, 'rgba(120,124,170,0)');
-  mist.addColorStop(1, 'rgba(96,102,150,0.85)');
+  mist.addColorStop(0, 'rgba(130,132,180,0)');
+  mist.addColorStop(1, 'rgba(104,110,160,0.45)');
   ctx.fillStyle = mist;
   ctx.fillRect(camX - 40, topY + (botY - topY) * 0.45, VW + 80, (botY - topY) * 0.55);
 }
@@ -1184,13 +1183,13 @@ function townIslandOf(x, y){
 /* 前景云雾（屏幕层）：贴着屏幕下缘飘过，让整座城始终像浮在云上 */
 function drawTownForeClouds(t){
   t = t || 0;
-  const baseY = GY_BOTTOM + 30;          /* 屏幕下缘附近 */
+  const baseY = GY_BOTTOM + 52;         /* 屏幕最下缘 */
   for(let L = 0; L < 3; L++){
     const sp = 12 + L * 9;
-    const alpha = 0.10 + L * 0.035;
-    const rw = 260 + L * 90, rh = 34 + L * 12;
-    const yOff = L * 26;
-    for(let i = 0; i < 7; i++){
+    const alpha = 0.045 + L * 0.018;
+    const rw = 190 + L * 70, rh = 22 + L * 8;
+    const yOff = L * 18;
+    for(let i = 0; i < 4; i++){
       const seed = i * 11.3 + L * 53.1;
       const drift = (t * sp + seed * 41) % (VW + 700);
       const cx = -350 + drift;
