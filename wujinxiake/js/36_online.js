@@ -84,6 +84,8 @@ function connect(){
   ch.on('broadcast', { event: 'pkrsp' }, function(m){ if(relayOk()) return; handlePkResp(m.payload); });
   ch.on('broadcast', { event: 'pkinfo' }, function(m){ if(relayOk()) return; handlePkInfo(m.payload); });
   ch.on('broadcast', { event: 'pkinfo_d' }, function(m){ if(relayOk()) return; handlePkInfoD(m.payload); });
+  /* ★ 组队治疗：同房间队友的治疗技能会把回血广播过来 */
+  ch.on('broadcast', { event: 'heal' }, function(m){ if(relayOk()) return; onHeal(m.payload); });
   ch.on('broadcast', { event: 'bye' },  function(m){
     const p = m.payload || {};
     if(p.id) remotes.delete(p.id);
@@ -231,8 +233,48 @@ function wireRelay(){
   RELAY.on('pkrsp',    function(p){ handlePkResp(p); });
   RELAY.on('pkinfo',   function(p){ handlePkInfo(p); });
   RELAY.on('pkinfo_d', function(p){ handlePkInfoD(p); });
+  RELAY.on('heal', function(p){ onHeal(p); });
   /* 中继刚连上时补发一次位置，免得别人看不到站着的你 */
   if(othersOnline()){ lastPosSig = ''; try{ sendPos(); }catch(e){} }
+}
+
+/* ---------- 组队治疗（两条通道共用） ---------- */
+/* 施法者这边：广播“我放了一个治疗光环”，并给范围内的队友撒治疗特效 */
+function healAllies(pct, radius){
+  const me = (typeof G !== 'undefined' && G) ? G.player : null;
+  if(!me || !joined && !relayOk()) return;
+  const R = radius || 320;
+  try{
+    rtSend('heal', { from: uid, x: Math.round(me.x), y: Math.round(me.y), r: R, pct: pct || 0.2 });
+  }catch(e){}
+  /* 本地反馈：让施法者看到队友也被照顾到了 */
+  try{
+    remotes.forEach(function(r){
+      const d = Math.hypot(r.x - me.x, (r.y - me.y) * 0.5);
+      if(d > R) return;
+      try{ spawnText(r.x, r.y, 180, '受治疗', '#7ed957', 20); }catch(e){}
+      try{ addEffect('explosion', r.x, r.y, 0.5, {color:'#7ed957', r:96}); }catch(e){}
+    });
+  }catch(e){}
+}
+
+/* 接受方这边：判断自己是否在光环内，是就按自己的最大生命百分比回血 */
+function onHeal(p){
+  p = p || {};
+  if(!p.from || p.from === uid) return;
+  if(typeof gameState === 'undefined' || gameState !== 'playing') return;
+  if(typeof G === 'undefined' || !G || !G.player) return;
+  const me = G.player;
+  if(me.dead || me.hp <= 0) return;
+  const R = p.r || 320;
+  const d = Math.hypot(me.x - (p.x || 0), (me.y - (p.y || 0)) * 0.5);
+  if(d > R) return;
+  const amt = Math.round(me.maxHp * (p.pct || 0.2));
+  const heal = Math.min(me.maxHp - me.hp, amt);
+  if(heal <= 0) return;
+  me.hp += heal;
+  try{ spawnText(me.x, me.y, 200, '队友治疗 +' + heal, '#7ed957', 28); }catch(e){}
+  try{ addEffect('explosion', me.x, me.y, 0.5, {color:'#7ed957', r:120}); }catch(e){}
 }
 
 /* ---------- 切磋 / 资料卡 消息处理（两条通道共用） ---------- */
@@ -560,6 +602,7 @@ window.ONLINE = {
   leave: leaveRoom,
   panel: panel,
   chat: sendChat,
+  healAllies: healAllies,          /* ★ 治疗技能调用：pct=回血百分比, radius=范围 */
   copyCode: function(){
     if(!roomCode) return '';
     try{ navigator.clipboard.writeText(roomCode); }catch(e){}

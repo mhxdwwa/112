@@ -1986,6 +1986,8 @@ function castHerbDew(){
     meleeAoe(p, p.x, p.y, 220, A * 45, {kb:260, launch:true});
     p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.22);
     p.mp = Math.min(p.maxMp, p.mp + 30);
+    /* ★ 组队：同一治疗光环也覆盖附近队友 */
+    try{ if(window.ONLINE && ONLINE.healAllies) ONLINE.healAllies(0.22, 300); }catch(e){}
     spawnText(p.x, p.y, 190, '+' + Math.round(p.maxHp * 0.22), '#7ed957', 30);
     addEffect('explosion', p.x, p.y, 0.6, {color:'#ffe9a8', r:144});
     addEffect('emberBurst', p.x, p.y - 26, 0.7, {color:'#ffe9a8', r:240, n:20, rot:rand(0, TAU)});
@@ -2074,6 +2076,7 @@ function castHerbShennong(){
     } else {
       p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35);
       p.mp = Math.min(p.maxMp, p.mp + 50);
+      try{ if(window.ONLINE && ONLINE.healAllies) ONLINE.healAllies(0.35, 360); }catch(e){}
       spawnText(p.x, p.y, 220, '+' + Math.round(p.maxHp * 0.35), '#7ed957', 34);
     }
     addEffect('explosion', p.x, p.y, 1.1, {color:'#b6ff8a', r:302});
@@ -2682,6 +2685,7 @@ function castCauldronPill(){
   skAt(500, ()=>{
     p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25);
     p.mp = Math.min(p.maxMp, p.mp + 40);
+    try{ if(window.ONLINE && ONLINE.healAllies) ONLINE.healAllies(0.25, 280); }catch(e){}
     p.invuln = Math.max(p.invuln || 0, 0.9);
     spawnText(p.x, p.y, 200, '+' + Math.round(p.maxHp * 0.25), '#ffd166', 32);
     meleeAoe(p, p.x, p.y, 200, A * 50, {kb:280, launch:true});
