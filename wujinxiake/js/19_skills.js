@@ -46,15 +46,15 @@ function castSwordQi(){
   spawnText(p.x, p.y, 200, '剑 开 天 门', '#9fe6ff', 38);
   p.action = {type:'swordCharge', dur:0.5, t:0};
   
-  /* 第一阶段：天空开始震颤，裂痕预兆 */
-  for(let i=0;i<10;i++){
+  /* 第一阶段：天空震颤，裂痕预兆（只留少量尘屑，不再满天光点） */
+  for(let i=0;i<6;i++){
     setTimeout(()=>{
       if(!G || gameState!=='playing') return;
       const cx = crackX() + rand(-40, 40);
       const cy = crackY() + rand(-20, 20);
-      spawnParticles(cx, cy, 3, {color:'#9fe6ff', angle:rand(0, TAU), spread:0.5, spMin:50, spMax:150, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:-100});
-      if(i%3===0) addEffect('hitRing', cx, cy, 0.3, {color:'#9fe6ff', r:15+i*2});
-    }, i*40);
+      spawnParticles(cx, cy, 2, {color:'#7f9aa8', angle:rand(0, TAU), spread:0.5, spMin:40, spMax:120, lifeMin:0.2, lifeMax:0.4, sizeMin:2, sizeMax:4, grav:-60});
+      if(i === 3) addEffect('hitRing', cx, cy, 0.3, {color:'#8fc6dd', r:16});
+    }, i*55);
   }
   
   /* 第二阶段：天空裂开 */
@@ -67,14 +67,14 @@ function castSwordQi(){
     addEffect('skyCrack', crackX()-30, crackY()+20, 1.2, {width:120, color:'#d0f0ff'});
     addEffect('skyCrack', crackX()+30, crackY()-20, 1.2, {width:120, color:'#d0f0ff'});
     
-    /* 裂痕粒子 */
-    for(let i=0;i<20;i++){
+    /* 裂痕粒子（原来 80 颗发光点，现在只留少量碎石尘屑） */
+    for(let i=0;i<8;i++){
       setTimeout(()=>{
         if(!G || gameState!=='playing') return;
         const cx = crackX() + rand(-60, 60);
         const cy = crackY() + rand(-30, 30);
-        spawnParticles(cx, cy, 4, {color:i%2===0?'#9fe6ff':'#fff', angle:Math.PI/2, spread:1.0, spMin:80, spMax:200, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:7, grav:300});
-      }, i*30);
+        spawnParticles(cx, cy, 2, {color:i%2===0?'#8fb8c8':'#c8d6dc', angle:Math.PI/2, spread:0.8, spMin:60, spMax:150, lifeMin:0.3, lifeMax:0.55, sizeMin:2, sizeMax:5, grav:320});
+      }, i*45);
     }
     
     /* 第三阶段：剑从手中飞出 */
@@ -93,15 +93,15 @@ function castSwordQi(){
         color:'#9fe6ff', weaponId:'sword'
       });
       
-      /* 剑飞行轨迹粒子 */
-      for(let i=0;i<15;i++){
+      /* 剑飞行轨迹：只在剑身后留少量气流碎屑（原来每步 3 颗发光点） */
+      for(let i=0;i<8;i++){
         setTimeout(()=>{
           if(!G || gameState!=='playing') return;
-          const progress = i/15;
+          const progress = i/8;
           const sx = handX + (crackX()-handX)*progress;
           const sy = handY + (crackY()-handY)*progress;
-          spawnParticles(sx, sy, 3, {color:i%3===0?'#fff':'#9fe6ff', angle:Math.atan2(crackY()-handY, crackX()-handX)+Math.PI, spread:0.5, spMin:50, spMax:150, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:-50});
-        }, i*35);
+          spawnParticles(sx, sy, 1, {color:'#93b6c4', angle:Math.atan2(crackY()-handY, crackX()-handX)+Math.PI, spread:0.35, spMin:40, spMax:110, lifeMin:0.18, lifeMax:0.35, sizeMin:2, sizeMax:4, grav:-40});
+        }, i*45);
       }
       
       /* 第四阶段：剑到达裂痕后炸裂攻击 */
@@ -116,61 +116,61 @@ function castSwordQi(){
         /* 剑气从天空劈落攻击目标 */
         meleeAoe(p, tgt.x, tgt.y, 250, atkVal*25.0, {kb:350, launch:true});
         
-        /* 多道剑气从天而降 */
-        for(let i=0;i<8;i++){
+        /* 多道剑气从天而降：16 把实体飞剑（原来 8 道，单把伤害减半，总量不变） */
+        for(let i=0;i<16;i++){
           setTimeout(()=>{
             if(!G || gameState!=='playing') return;
-            const angle = (i/8)*TAU;
-            const dist = rand(80, 180);
+            const angle = (i/16)*TAU;
+            const dist = rand(80, 200);
             const sx = tgt.x + Math.cos(angle)*dist;
-            const sy = tgt.y - 300;
+            const sy = tgt.y - 320;
             const ex = tgt.x + Math.cos(angle)*dist*0.3;
             const ey = tgt.y;
             
-            /* 剑气投射物 */
+            /* 剑气投射物：真实剑模型飞行 */
             const dx = ex-sx, dy = ey-sy;
-            const speed = 1200;
+            const speed = 1250;
             const flightTime = Math.hypot(dx, dy)/speed;
-            G.projectiles.push({ kind:'realSword', x:sx, y:sy, h:60, vx:(dx/Math.hypot(dx,dy))*speed, vy:(dy/Math.hypot(dx,dy))*speed, life:flightTime+0.1, w:80, hh:50, dmg:atkVal*5.0, pierce:1, hitSet:new Set(), color:'#9fe6ff', facing:Math.sign(dx)||1, rot:Math.atan2(dy, dx), owner:p });
+            G.projectiles.push({ kind:'realSword', x:sx, y:sy, h:60, vx:(dx/Math.hypot(dx,dy))*speed, vy:(dy/Math.hypot(dx,dy))*speed, life:flightTime+0.1, w:80, hh:50, dmg:atkVal*2.5, pierce:1, hitSet:new Set(), color:'#9fe6ff', facing:Math.sign(dx)||1, rot:Math.atan2(dy, dx), owner:p });
             
-            /* 剑气拖尾 */
-            spawnParticles(sx, sy, 6, {color:'#9fe6ff', angle:Math.atan2(dy, dx), spread:0.4, spMin:100, spMax:250, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:7, grav:0});
-          }, i*50);
+            /* 剑身后只留一丝气流，不再拖一长串光点 */
+            spawnParticles(sx, sy, 2, {color:'#8fb8c8', angle:Math.atan2(dy, dx), spread:0.3, spMin:60, spMax:160, lifeMin:0.15, lifeMax:0.3, sizeMin:2, sizeMax:4, grav:0});
+          }, i*32);
         }
         
-        /* 地面爆炸 */
-        for(let i=0;i<12;i++){
+        /* 落地冲击：只留 5 处土石翻起（原来 12 处光爆 + 200 颗碎片） */
+        for(let i=0;i<5;i++){
           setTimeout(()=>{
             if(!G || gameState!=='playing') return;
-            const a = i*(TAU/12);
+            const a = i*(TAU/5);
             const dist = rand(50, 150);
             const ex = tgt.x + Math.cos(a)*dist;
             const ey = tgt.y + Math.sin(a)*dist*0.3;
-            addEffect('explosion', ex, ey, 0.5, {r:60, color:'#9fe6ff'});
-            addEffect('groundCrack', tgt.x, tgt.y, 1.0, {delay:i*0.03, angle:a, color:'#9fe6ff'});
-            spawnParticles(ex, ey, 8, {color:i%3===0?'#fff':i%3===1?'#9fe6ff':'#d0f0ff', angle:-Math.PI/2, spread:1.2, spMin:100, spMax:300, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:8, grav:500});
-          }, i*40);
+            addEffect('explosion', ex, ey, 0.45, {r:48, color:'#8fb8c8'});
+            addEffect('groundCrack', tgt.x, tgt.y, 1.0, {delay:i*0.04, angle:a, color:'#9fe6ff'});
+            spawnParticles(ex, ey, 2, {color:i%2===0?'#a8c4d0':'#8fa8b4', angle:-Math.PI/2, spread:1.0, spMin:80, spMax:220, lifeMin:0.3, lifeMax:0.6, sizeMin:2, sizeMax:5, grav:520});
+          }, i*55);
         }
         
-        /* 碎片飞溅 */
-        for(let i=0;i<50;i++){
+        /* 碎石飞溅：8 处，每处 2 颗（原来 50 处 × 4 颗） */
+        for(let i=0;i<8;i++){
           const a = rand(0, TAU);
-          const spd = rand(150, 500);
+          const spd = rand(150, 420);
           setTimeout(()=>{
             if(!G || gameState!=='playing') return;
-            spawnParticles(tgt.x+rand(-30,30), tgt.y-20+rand(-30,30), 4, {color:i%3===0?'#fff':i%3===1?'#9fe6ff':'#d0f0ff', angle:a, spread:1.5, spMin:spd*0.4, spMax:spd, lifeMin:0.4, lifeMax:1.0, sizeMin:3, sizeMax:10, grav:600});
-          }, i*8);
+            spawnParticles(tgt.x+rand(-30,30), tgt.y-20+rand(-30,30), 2, {color:i%2===0?'#b6c8d0':'#8fa8b4', angle:a, spread:1.2, spMin:spd*0.4, spMax:spd, lifeMin:0.4, lifeMax:0.85, sizeMin:2, sizeMax:6, grav:620});
+          }, i*22);
         }
         
-        /* 冲击波 */
-        for(let r=0;r<5;r++){
+        /* 冲击波：只留两圈 */
+        for(let r=0;r<2;r++){
           setTimeout(()=>{
             if(!G || gameState!=='playing') return;
-            addEffect('hitRing', tgt.x, tgt.y-20, 0.5, {color:r%2===0?'#9fe6ff':'#fff', r:50+r*35});
-          }, r*50);
+            addEffect('hitRing', tgt.x, tgt.y-20, 0.45, {color:'#8fc6dd', r:60+r*50});
+          }, r*70);
         }
         
-        G.shake = Math.max(G.shake, 35); G.flash = 0.5; G.hitFlashColor = '#9fe6ff'; G.hitstop = Math.max(G.hitstop, 0.2);
+        G.shake = Math.max(G.shake, 30); G.flash = 0.22; G.hitFlashColor = '#bcd8e4'; G.hitstop = Math.max(G.hitstop, 0.18);
       }, 600);
     }, 400);
   }, 400);
