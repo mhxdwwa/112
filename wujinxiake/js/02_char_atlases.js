@@ -32,10 +32,10 @@ const CHAR_ATLASES = {
     cellW:256, cellH:256, cols:8, rows:8,
     feetX:128, groundY:244, bodyH:183.0, bodyWorld:110,
     anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[16,17,18,19]}, skill:{frames:[20,21,22,23,24,25,26,27]}, jump:{frames:[28,29,30,31]}, dodge:{frames:[28,29,30]}, hurt:{frames:[31]}, death:{frames:[30,31]}, victory:{frames:[0]} } },
-  cauldron: { url:'assets/chars/danmaster_atlas.webp', ready:false, img:new Image(),  /* 丹道师 */
+  cauldron: { url:'assets/chars/danmaster_atlas.webp?v=2', ready:false, img:new Image(),  /* 丹道师（32帧动作版：待机4/跑步8/推鼎8/施法8/跳跃4，朝右） */
     cellW:256, cellH:256, cols:8, rows:8,
-    feetX:109.5, groundY:214.0, bodyH:215.0, bodyWorld:116, faceLeft:true,
-    anims:{ idle:{frames:[0,1,2,3,4,5,6,7]}, run:{frames:[8,9,10,11,12,13,14,15,16,17,18,19]}, atk1:{frames:[20,21,22,23,24,25]}, atk2:{frames:[26,27,28,29,30,31]}, atk3:{frames:[32,33,34,35,36,37,38]}, skill:{frames:[39,40,41,42,43,44,45,46]}, jump:{frames:[47,48,49]}, dodge:{frames:[50,51,52]}, hurt:{frames:[53]}, death:{frames:[54,55,56,57]}, victory:{frames:[58,59]} } },
+    feetX:128, groundY:244, bodyH:186.0, bodyWorld:116,
+    anims:{ idle:{frames:[0,1,2,3]}, run:{frames:[4,5,6,7,8,9,10,11]}, atk1:{frames:[12,13,14,15]}, atk2:{frames:[16,17,18,19]}, atk3:{frames:[16,17,18,19]}, skill:{frames:[20,21,22,23,24,25,26,27]}, jump:{frames:[28,29,30,31]}, dodge:{frames:[28,29,30]}, hurt:{frames:[31]}, death:{frames:[30,31]}, victory:{frames:[0]} } }
 };
 /* ===== 图集加载策略（首屏提速）=====
    以前：开局同时请求 8 张 2048×2048 图集（合计约 5.9MB），选人界面要等很久才出人。
