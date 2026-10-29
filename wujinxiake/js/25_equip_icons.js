@@ -859,8 +859,8 @@ function drawInventory(){
 }
 
 function drawStageClear(){
-  // 半透明背景，可以看到地图和角色
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  /* ★ 半透明背景压暗一点（0.45 → 0.34），通关后地上的装备/金币/材料才看得清 */
+  ctx.fillStyle = 'rgba(0,0,0,0.34)';
   ctx.fillRect(0, 0, VW, VH);
   
   stageClearClickRegions = [];
@@ -1179,6 +1179,18 @@ function drawStageClear(){
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '14px "Microsoft YaHei"';
     ctx.fillText('翻开所有卡牌后返回', VW/2, VH - 45);
+  }
+
+  /* ★ 地面掉落提示：通关后掉落物不再被静默收走，走过去即可拾取 */
+  if(G && G.drops && G.drops.length > 0){
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 15px "Microsoft YaHei"';
+    const hint = `地面还有 ${G.drops.length} 件掉落 · 左右走动即可拾取`;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.strokeText(hint, VW/2, VH - 92);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(hint, VW/2, VH - 92);
   }
 }
 
