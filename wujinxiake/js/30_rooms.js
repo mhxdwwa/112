@@ -1195,27 +1195,27 @@ function drawEffects(dt){
       }
     }
     else if(ef.type === 'hitRing'){
-      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (1-k)*0.8;
-      ctx.strokeStyle = ef.color; ctx.lineWidth = 8*(1-k);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = (1-k)*0.5;
+      ctx.strokeStyle = ef.color; ctx.lineWidth = Math.max(1.5, 5*(1-k));
       ctx.beginPath(); ctx.ellipse(ef.x, ef.y, ef.r*(0.5+k), ef.r*0.4*(0.5+k), 0, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
     }
     else if(ef.type === 'explosion'){
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = 'source-over';
+      /* 爆炸冲击：原来每帧两个径向渐变 + 加法发光 + 纯白内核，一屏十几个就爆白且疯狂掉帧。
+         现在改成单层渐变 + 细冲击环，视觉是「气浪炸开」，不再是一片白光。 */
       const r = ef.r*(0.15+k*0.95);
-      ctx.globalAlpha = (1-k*0.7)*0.95;
-      /* 外层大光球 */
-      const g = ctx.createRadialGradient(ef.x,ef.y-30*sc,2,ef.x,ef.y-30*sc,r*0.75);
-      g.addColorStop(0,'#fff'); g.addColorStop(0.25,'#fff'); g.addColorStop(0.5,ef.color); g.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ef.x,ef.y-30*sc,r*0.75,0,TAU); ctx.fill();
-      /* 内层高亮 */
-      ctx.globalAlpha = (1-k)*0.7;
-      const g2 = ctx.createRadialGradient(ef.x,ef.y-30*sc,1,ef.x,ef.y-30*sc,r*0.3);
-      g2.addColorStop(0,'#fff'); g2.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(ef.x,ef.y-30*sc,r*0.3,0,TAU); ctx.fill();
-      /* 扩散光环 */
-      ctx.globalAlpha = (1-k)*0.5;
-      ctx.strokeStyle = ef.color; ctx.lineWidth = Math.max(2, 12*(1-k));
-      ctx.beginPath(); ctx.arc(ef.x,ef.y-30*sc,r*0.65,0,TAU); ctx.stroke();
+      const g = ctx.createRadialGradient(ef.x,ef.y-30*sc, r*0.12, ef.x,ef.y-30*sc, r*0.8);
+      g.addColorStop(0, ef.color);
+      g.addColorStop(0.62, ef.color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = (1-k*0.8)*0.5;
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ef.x,ef.y-30*sc,r*0.8,0,TAU); ctx.fill();
+      ctx.globalAlpha = (1-k)*0.4;
+      ctx.strokeStyle = ef.color; ctx.lineWidth = Math.max(2, 6*(1-k));
+      ctx.beginPath(); ctx.arc(ef.x,ef.y-30*sc,r*0.85,0,TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
     }
     else if(ef.type === 'lotusBurst'){
       /* 七彩莲花绽放效果 */

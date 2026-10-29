@@ -194,23 +194,23 @@ function castSwordSky(){
       const sy = p.y-70+Math.sin(a)*r*0.4;
       ghostSwords.push({x:sx, y:sy, angle:a, rot:rand(-0.5,0.5)});
       addEffect('ghostSword', sx, sy, 2.0, {rot:rand(-Math.PI,Math.PI), color:'#9fe6ff', delay:i*0.03});
-      spawnParticles(sx, sy, 8, {color:i%3===0?'#fff':i%3===1?'#9fe6ff':'#d0f0ff', angle:-Math.PI/2, spread:1.0, spMin:50, spMax:150, lifeMin:0.3, lifeMax:0.6, sizeMin:3, sizeMax:7, grav:-100});
+      spawnParticles(sx, sy, 2, {color:i%2===0?'#8fb8c8':'#b6c8d0', angle:-Math.PI/2, spread:0.8, spMin:40, spMax:110, lifeMin:0.25, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:-90});
       if(i%5===0) playSound('swordSwing');
     }, i*40);
   }
   
-  /* 剑影环绕 - 15柄剑围绕角色旋转 */
+  /* 剑影环绕 - 少量气流，不再每圈撒光点 */
   setTimeout(()=>{
     if(!G || gameState!=='playing') return;
-    for(let i=0;i<15;i++){
+    for(let i=0;i<8;i++){
       setTimeout(()=>{
         if(!G || gameState!=='playing') return;
         const a = (i/23)*TAU + G.t*3;
         const r = 80+Math.sin(G.t*5+i)*20;
         const sx = p.x+Math.cos(a)*r;
         const sy = p.y-70+Math.sin(a)*r*0.4;
-        spawnParticles(sx, sy, 3, {color:'#9fe6ff', angle:a+Math.PI, spread:0.3, spMin:30, spMax:80, lifeMin:0.2, lifeMax:0.4, sizeMin:2, sizeMax:5, grav:-50});
-      }, i*20);
+        spawnParticles(sx, sy, 1, {color:'#93b6c4', angle:a+Math.PI, spread:0.25, spMin:25, spMax:65, lifeMin:0.18, lifeMax:0.3, sizeMin:2, sizeMax:4, grav:-40});
+      }, i*28);
     }
   }, 920);
   
@@ -220,66 +220,66 @@ function castSwordSky(){
     if(p.action && p.action.type==='swordCharge') p.action = null;
     playSound('explosion');
     
-    /* 发射23道剑气 */
-    for(let i=0;i<15;i++){
+    /* 剑二十三：23 把实体剑影齐射（原来 15 把；单把 5.0→3.25，总伤害不变） */
+    for(let i=0;i<23;i++){
       setTimeout(()=>{
         if(!G || gameState!=='playing') return;
-        const startA = (i/15)*TAU;
+        const startA = (i/23)*TAU;
         const startR = 80;
         const sx = p.x+Math.cos(startA)*startR;
         const sy = p.y-70+Math.sin(startA)*startR*0.4;
         const dx = lx()-sx, dy = ly()-sy;
         const dist = Math.hypot(dx, dy);
-        const speed = 1200;
+        const speed = 1250;
         const flightTime = dist/speed;
         
         /* 剑气投射物 */
-        G.projectiles.push({ kind:'realSword', x:sx, y:sy, h:65, vx:(dx/dist)*speed, vy:(dy/dist)*speed*0.3, life:flightTime+0.1, w:70, hh:50, dmg:atkVal*5.0, pierce:1, hitSet:new Set(), color:'#9fe6ff', facing:Math.sign(dx)||1, rot:Math.atan2(dy*0.3, dx), owner:p, ghost:true });
+        G.projectiles.push({ kind:'realSword', x:sx, y:sy, h:65, vx:(dx/dist)*speed, vy:(dy/dist)*speed*0.3, life:flightTime+0.1, w:70, hh:50, dmg:atkVal*3.25, pierce:1, hitSet:new Set(), color:'#9fe6ff', facing:Math.sign(dx)||1, rot:Math.atan2(dy*0.3, dx), owner:p, ghost:true });
         
-        /* 尾迹粒子 */
-        spawnParticles(sx, sy, 6, {color:i%3===0?'#fff':'#9fe6ff', angle:Math.atan2(dy, dx), spread:0.5, spMin:100, spMax:300, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:7, grav:0});
+        /* 尾迹：每把只留 2 颗碎屑 */
+        spawnParticles(sx, sy, 2, {color:'#8fb8c8', angle:Math.atan2(dy, dx), spread:0.3, spMin:70, spMax:180, lifeMin:0.15, lifeMax:0.3, sizeMin:2, sizeMax:4, grav:0});
         
-        if(i%4===0) playSound('swordSwing');
-      }, i*30);
+        if(i%6===0) playSound('swordSwing');
+      }, i*24);
     }
     
     /* 最终爆炸 */
     setTimeout(()=>{
       if(!G || gameState!=='playing') return;
       meleeAoe(p, lx(), ly(), 220, atkVal*25.0, {kb:400, launch:true});
-      addEffect('explosion', lx(), ly(), 0.8, {r:260, color:'#9fe6ff'});
+      addEffect('explosion', lx(), ly(), 0.7, {r:180, color:'#8fb8c8'});
       
-      /* 剑痕地面 */
-      for(let i=0;i<15;i++){
+      /* 剑痕地面：只留 5 道 */
+      for(let i=0;i<5;i++){
         setTimeout(()=>{
           if(!G || gameState!=='playing') return;
-          const a = (i/15)*TAU;
+          const a = (i/5)*TAU;
           const dist = rand(30, 150);
           const ex = lx()+Math.cos(a)*dist;
           const ey = ly()+Math.sin(a)*dist*0.3;
-          addEffect('groundCrack', lx(), ly(), 1.2, {delay:i*0.02, angle:a, color:'#9fe6ff'});
-        }, i*15);
+          addEffect('groundCrack', lx(), ly(), 1.2, {delay:i*0.03, angle:a, color:'#9fe6ff'});
+        }, i*30);
       }
       
-      /* 碎片飞溅 */
-      for(let i=0;i<80;i++){
+      /* 碎石飞溅：8 处 × 2 颗（原来 80 处 × 5 颗） */
+      for(let i=0;i<8;i++){
         const a = rand(0, TAU);
-        const spd = rand(150, 600);
+        const spd = rand(150, 500);
         setTimeout(()=>{
           if(!G || gameState!=='playing') return;
-          spawnParticles(lx()+rand(-40,40), ly()-20+rand(-40,40), 5, {color:i%4===0?'#fff':i%4===1?'#9fe6ff':i%4===2?'#d0f0ff':'#8ab8c8', angle:a, spread:1.8, spMin:spd*0.4, spMax:spd, lifeMin:0.4, lifeMax:1.0, sizeMin:3, sizeMax:10, grav:700});
-        }, i*5);
+          spawnParticles(lx()+rand(-40,40), ly()-20+rand(-40,40), 2, {color:i%2===0?'#b6c8d0':'#8fa8b4', angle:a, spread:1.4, spMin:spd*0.4, spMax:spd, lifeMin:0.4, lifeMax:0.9, sizeMin:2, sizeMax:6, grav:700});
+        }, i*22);
       }
       
-      /* 冲击波 */
-      for(let r=0;r<6;r++){
+      /* 冲击波：只留两圈 */
+      for(let r=0;r<2;r++){
         setTimeout(()=>{
           if(!G || gameState!=='playing') return;
-          addEffect('hitRing', lx(), ly()-20, 0.5, {color:r%2===0?'#9fe6ff':'#fff', r:50+r*35});
-        }, r*50);
+          addEffect('hitRing', lx(), ly()-20, 0.45, {color:'#8fc6dd', r:60+r*50});
+        }, r*70);
       }
       
-      G.shake = Math.max(G.shake, 40); G.flash = 0.5; G.hitFlashColor = '#9fe6ff'; G.hitstop = Math.max(G.hitstop, 0.25);
+      G.shake = Math.max(G.shake, 32); G.flash = 0.22; G.hitFlashColor = '#bcd8e4'; G.hitstop = Math.max(G.hitstop, 0.2);
       spawnText(lx(), ly(), 150, '二 十 三', '#d0f0ff', 36);
     }, 700);
   }, 1300);
@@ -299,14 +299,14 @@ function castSwordRain(){
   addEffect('swordArray', cx(), cy, 4.0, {swords, cx: cx(), cy, timer:0, owner:p, ownerAtk:atkVal});
   spawnText(p.x, p.y, 200, '万 剑 归 宗', '#9fe6ff', 40);
   addEffect('skyGlow', cx(), cy, 1.5, {color:'#9fe6ff'});
-  for(let i=0;i<20;i++){
+  for(let i=0;i<12;i++){
     setTimeout(()=>{
       if(!G || gameState!=='playing') return;
-      const frac = i/20, ex = lerp(p.x,cx(),frac), ey = lerp(p.y-60,cy,frac)-Math.sin(frac*Math.PI)*80;
-      spawnParticles(ex, ey, 3, {color:i%3===0?'#fff':'#9fe6ff', angle:-Math.PI/2, spread:0.5, spMin:30, spMax:100, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:4, grav:-100});
-    }, i*30);
+      const frac = i/12, ex = lerp(p.x,cx(),frac), ey = lerp(p.y-60,cy,frac)-Math.sin(frac*Math.PI)*70;
+      spawnParticles(ex, ey, 1, {color:i%2===0?'#a8c4d0':'#8fa8b4', angle:-Math.PI/2, spread:0.4, spMin:25, spMax:80, lifeMin:0.18, lifeMax:0.4, sizeMin:2, sizeMax:4, grav:-90});
+    }, i*40);
   }
-  G.shake = Math.max(G.shake, 18); G.flash = 0.35; G.hitFlashColor = '#9fe6ff';
+  G.shake = Math.max(G.shake, 16); G.flash = 0.18; G.hitFlashColor = '#cfe0e8';
 }
 
 function castBladeFire(){
@@ -1087,12 +1087,12 @@ function castSwordImmortal(){
   const tg = skAim(p, 280);
   spawnText(p.x, p.y, 205, '天 外 飞 仙', '#eaf6ff', 40);
   p.action = { type:'swordCharge', dur:0.42, t:0 };
-  /* 蓄力：剑意收束成一线白光 */
+  /* 蓄力：剑意收束（少量气流，不再白光外溢） */
   for(let i=0;i<16;i++){
     skAt(i*26, ()=>{
       const a = (i/16)*TAU, r = 74 - i*2.8;
       const sx = p.x + Math.cos(a)*r, sy = p.y - 62 + Math.sin(a)*r*0.5;
-      spawnParticles(sx, sy, 3, {color:i%3===0?'#ffffff':'#cfeaff', angle:Math.atan2(p.y-62-sy, p.x-sx), spread:0.3, spMin:90, spMax:230, lifeMin:0.2, lifeMax:0.45, sizeMin:2, sizeMax:5, grav:-60});
+      spawnParticles(sx, sy, 1, {color:i%2===0?'#a8c4d0':'#cfe0e8', angle:Math.atan2(p.y-62-sy, p.x-sx), spread:0.25, spMin:70, spMax:180, lifeMin:0.18, lifeMax:0.4, sizeMin:2, sizeMax:4, grav:-50});
     });
   }
   addEffect('hitRing', p.x, p.y, 0.42, {color:'#eaf6ff', r:72});
@@ -1118,12 +1118,12 @@ function castSwordImmortal(){
     addEffect('slashArc', p.x + dir*150, p.y, 0.46, {facing:dir, color:'#9fe6ff', size:3.6, typeStr:'stab'});
     /* 伤害：一条贯穿全场的直线 */
     meleeHitRect(p, p.x + dir*340, p.y, 660, 210, A*55, {kb:480, launch:true});
-    skBurst(p.x + dir*300, p.y - 70, '#eaf6ff', 44, {angle:dir>0?0:Math.PI, spread:0.5, spMin:320, spMax:980, lifeMin:0.25, lifeMax:0.62, sizeMin:3, sizeMax:10, grav:120});
+    skBurst(p.x + dir*300, p.y - 70, '#cfe0e8', 16, {angle:dir>0?0:Math.PI, spread:0.5, spMin:320, spMax:980, lifeMin:0.25, lifeMax:0.62, sizeMin:3, sizeMax:10, grav:120});
     skShake(20, 0.34, '#eaf6ff');
     G.hitstop = Math.max(G.hitstop, 0.09);
     /* 余韵：剑痕连爆 */
     skAt(200, ()=>{
-      for(let i=0;i<5;i++) addEffect('hitRing', p.x + dir*(140+i*95), p.y, 0.42+i*0.05, {color:'#eaf6ff', r:52+i*16});
+      for(let i=0;i<2;i++) addEffect('hitRing', p.x + dir*(140+i*150), p.y, 0.42+i*0.06, {color:'#cfe0e8', r:56+i*20});
       addEffect('groundCrack', p.x + dir*220, p.y, 0.9, {angle:dir>0?0:Math.PI, color:'#cfeaff'});
       addEffect('groundCrack', p.x + dir*360, p.y, 0.9, {angle:dir>0?0:Math.PI, color:'#eaf6ff'});
       meleeHitRect(p, p.x + dir*340, p.y, 660, 210, A*8, {kb:120});
@@ -1140,8 +1140,8 @@ function castSwordTruthArray(){
   spawnText(p.x, p.y, 205, '诛 仙 剑 阵', '#c4b0ff', 40);
   p.action = { type:'swordCharge', dur:0.66, t:0 };
   const CX = () => clamp(cx(), WORLD_L + 120, WORLD_R - 120);
-  addEffect('hitRing', CX(), cy(), 0.7, {color:'#c4b0ff', r:230});
-  addEffect('hitRing', CX(), cy(), 1.05, {color:'#e8e0ff', r:160});
+  addEffect('hitRing', CX(), cy(), 0.6, {color:'#9c8fc8', r:170});
+  addEffect('hitRing', CX(), cy(), 0.8, {color:'#c9c0e0', r:120});
   const dirs = [0, Math.PI/2, Math.PI, Math.PI*1.5];
   dirs.forEach((a, i)=>{
     skAt(110 + i*85, ()=>{
@@ -1164,7 +1164,7 @@ function castSwordTruthArray(){
       const a = ticks*0.85 + i*Math.PI/2;
       const sx = CX() + Math.cos(a)*175, sy = cy() + Math.sin(a)*92;
       if(i === (ticks % 4)) addEffect('slashArc', sx, sy, 0.26, {facing:Math.cos(a)>0?1:-1, color:'#b8a8e8', size:1.0, typeStr:'stab'});
-      spawnParticles(sx, sy-40, 4, {color:i%2?'#e8e0ff':'#c4b0ff', spMin:60, spMax:190, lifeMin:0.2, lifeMax:0.42, sizeMin:2, sizeMax:5, grav:220});
+      spawnParticles(sx, sy-40, 2, {color:i%2?'#c9c0e0':'#9c8fc8', spMin:50, spMax:160, lifeMin:0.18, lifeMax:0.36, sizeMin:2, sizeMax:4, grav:200});
     }
     if(ticks % 4 === 0) addEffect('hitRing', CX(), cy(), 0.4, {color:'#c4b0ff', r:195});
     if(ticks >= 16){
@@ -1172,14 +1172,14 @@ function castSwordTruthArray(){
       dirs.forEach((a, i)=>{
         skAt(i*55, ()=>{
           const sx = CX() + Math.cos(a)*175, sy = cy() + Math.sin(a)*92;
-          addEffect('explosion', sx, sy, 0.6, {color:'#c4b0ff', r:155});
+          addEffect('explosion', sx, sy, 0.55, {color:'#9c8fc8', r:110});
           addEffect('skyPillar', sx, sy, 1.25, {height:540, color:'#e8e0ff'});
         });
       });
       skAt(250, ()=>{
         if(!G || gameState !== 'playing') return;
         meleeAoe(p, CX(), cy(), 310, A*70, {kb:540, launch:true});
-        addEffect('explosion', CX(), cy(), 0.9, {color:'#c4b0ff', r:310});
+        addEffect('explosion', CX(), cy(), 0.85, {color:'#9c8fc8', r:200});
         addEffect('hitRing', CX(), cy(), 0.85, {color:'#ffffff', r:330});
         addEffect('skyCrack', CX(), cy()-230, 1.0, {width:360, color:'#c4b0ff'});
         skShake(26, 0.42, '#ddd0ff');
@@ -1243,11 +1243,11 @@ function castSwordCome(){
         addEffect('skyCrack', tx, 90, 1.3, {width:420, color:'#ffffff'});
         meleeAoe(p, tx, GY_BOTTOM - 40, 300, A*260, {kb:640, launch:true});
         meleeAoe(p, tx, GY_BOTTOM - 40, 520, A*60, {kb:220});
-        addEffect('explosion', tx, GY_BOTTOM - 40, 1.0, {color:'#eaf6ff', r:390});
-        addEffect('hitRing', tx, GY_BOTTOM - 40, 1.05, {color:'#ffffff', r:430});
+        addEffect('explosion', tx, GY_BOTTOM - 40, 0.9, {color:'#bcd8e4', r:230});
+        addEffect('hitRing', tx, GY_BOTTOM - 40, 0.8, {color:'#cfe0e8', r:280});
         skShake(34, 0.55, '#ffffff');
         G.hitstop = Math.max(G.hitstop, 0.16);
-        skBurst(tx, GY_BOTTOM - 40, '#ffffff', 62, {spMin:220, spMax:900, lifeMin:0.3, lifeMax:0.95, sizeMin:3, sizeMax:11});
+        skBurst(tx, GY_BOTTOM - 40, '#cfe0e8', 20, {spMin:200, spMax:760, lifeMin:0.28, lifeMax:0.8, sizeMin:2, sizeMax:7});
         skRingBurst(tx, GY_BOTTOM - 40, 200, '#eaf6ff', 12);
       });
     }
