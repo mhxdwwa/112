@@ -343,10 +343,8 @@ function castBladeFire(){
     if(p.action && p.action.type==='bladeCharge') p.action = null;
     playSound('bladeSwing');
     
-    /* 主刀芒 - 巨大的弧形斩击 */
-    addEffect('slashArc', slashX(), slashY(), 0.5, {facing:p.facing, color:'#ff2244', size:3.0, typeStr:'blade'});
-    addEffect('slashArc', slashX(), slashY(), 0.4, {facing:p.facing, color:'#ff4466', size:2.5, typeStr:'blade'});
-    addEffect('slashArc', slashX(), slashY(), 0.3, {facing:p.facing, color:'#ff6688', size:2.0, typeStr:'blade'});
+    /* 主刀芒 - 一道与刀气命中范围等大的弧形斩击（原来叠了三层无意义弧光） */
+    addEffect('slashArc', slashX(), slashY(), 0.5, {facing:p.facing, color:'#ff2244', size:1.9, typeStr:'blade'});
     
     /* 投射物 - 血红刀气（★ 改用格斗家刀模型 glowWeapon，避免纯光粒子，浏览器更轻松） */
     G.projectiles.push({ kind:'glowWeapon', weaponType:'blade', x:p.x+p.facing*80, y:p.y, h:50, vx:p.facing*1000, vy:0, life:0.7, w:160, hh:120, dmg:atkVal*10.0, pierce:3, hitSet:new Set(), color:'#ff2244', facing:p.facing, owner:p, trail:true, scale:1.7 });
@@ -1086,53 +1084,43 @@ function skRingBurst(cx, cy, r, color, n){
 }
 
 /* ---------- 宝剑剑士 4：天外飞仙（古龙《陆小凤传奇》· 叶孤城） ---------- */
+/* ---------- 宝剑剑士 4：天外飞仙（《陆小凤传奇》白云城主） ----------
+   ★ 完全重做：一柄仙剑自天外直贯目标（活坐标跟随），剑落即伤。
+   视觉与判定完全重合——剑身落点就是伤害中心，粒子只出现在判定半径内；
+   删掉了原来无意义的横冲直线、7 道残影与满屏弧光。 */
 function castSwordImmortal(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  /* ★ 用活坐标：白虹出手前仍会跟住移动中的目标 */
-  const tg = skAim(p, 280);
+  const tg = skAim(p, 280);             /* 活坐标：剑始终追着目标 */
   spawnText(p.x, p.y, 205, '天 外 飞 仙', '#eaf6ff', 40);
-  p.action = { type:'swordCharge', dur:0.42, t:0 };
-  /* 蓄力：剑意收束（少量气流，不再白光外溢） */
-  for(let i=0;i<16;i++){
-    skAt(i*26, ()=>{
-      const a = (i/16)*TAU, r = 74 - i*2.8;
-      const sx = p.x + Math.cos(a)*r, sy = p.y - 62 + Math.sin(a)*r*0.5;
-      spawnParticles(sx, sy, 1, {color:i%2===0?'#a8c4d0':'#cfe0e8', angle:Math.atan2(p.y-62-sy, p.x-sx), spread:0.25, spMin:70, spMax:180, lifeMin:0.18, lifeMax:0.4, sizeMin:2, sizeMax:4, grav:-50});
-    });
-  }
-  addEffect('hitRing', p.x, p.y, 0.42, {color:'#eaf6ff', r:72});
-  addEffect('hitRing', p.x, p.y, 0.56, {color:'#ffffff', r:112});
-  skAt(430, ()=>{
-    playSound('swordSwing');
+  p.action = { type:'swordCharge', dur:0.5, t:0 };
+  const CX = () => clamp(tg.x, WORLD_L + 70, WORLD_R - 70);
+  const CY = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  /* 蓄力：目标头顶天光裂开（贴判定区） */
+  skAt(80, ()=>{ addEffect('skyCrack', CX(), 80, 0.9, {width:260, color:'#eaf6ff'}); });
+  addEffect('hitRing', CX(), CY(), 0.5, {color:'#eaf6ff', r:150});
+  skAt(520, ()=>{
+    if(!G || gameState !== 'playing') return;
     if(p.action && p.action.type === 'swordCharge') p.action = null;
-    /* ★ 出手瞬间再校正一次朝向，目标跑动也能命中 */
-    const dir = tg.has ? (tg.x >= p.x ? 1 : -1) : p.facing;
-    p.facing = dir;
-    /* 七道残影拖尾 */
-    for(let i=1;i<=7;i++){
-      skAt(i*20, ()=>{
-        addEffect('afterImage', p.x + dir*i*46, p.y, 0.44, {facing:dir, weaponIdx:p.weaponIdx, anim:'skill', alpha:0.55 - i*0.06, color:'#cfeaff'});
-      });
-    }
-    /* 白虹贯空 */
-    const sx0 = p.x + dir*20, sy0 = p.y - 62;
-    addEffect('spearLine', sx0, sy0, 0.42, {endX:sx0 + dir*640, endY:sy0 - 26, color:'#ffffff', width:20});
-    addEffect('spearLine', sx0, sy0+8, 0.56, {endX:sx0 + dir*640, endY:sy0 - 18, color:'#9fe6ff', width:9});
-    addEffect('spaceCrack', p.x + dir*300, p.y - 60, 0.6, {width:460, height:120, color:'#eaf6ff'});
-    addEffect('slashArc', p.x + dir*150, p.y, 0.34, {facing:dir, color:'#ffffff', size:2.8, typeStr:'stab'});
-    addEffect('slashArc', p.x + dir*150, p.y, 0.46, {facing:dir, color:'#9fe6ff', size:3.6, typeStr:'stab'});
-    /* 伤害：一条贯穿全场的直线 */
-    meleeHitRect(p, p.x + dir*340, p.y, 660, 210, A*55, {kb:480, launch:true});
-    skBurst(p.x + dir*300, p.y - 70, '#cfe0e8', 16, {angle:dir>0?0:Math.PI, spread:0.5, spMin:320, spMax:980, lifeMin:0.25, lifeMax:0.62, sizeMin:3, sizeMax:10, grav:120});
-    skShake(20, 0.34, '#eaf6ff');
+    playSound('swordSwing');
+    /* 仙剑贯空：从天而降直插目标（剑尖朝下，正好落在判定中心） */
+    addEffect('giganticSword', CX(), CY() - 20, 0.85, {color:'#eaf6ff', scale:2.2, tipDown:true});
+    addEffect('spearLine', CX(), CY() - 620, 0.4, {endX:CX(), endY:CY() - 40, color:'#ffffff', width:16});
+    /* 落点即伤：判定半径 150 = 剑锋视觉半径 */
+    meleeAoe(p, CX(), CY(), 150, A*80, {kb:520, launch:true});
+    addEffect('explosion', CX(), CY() - 20, 0.8, {color:'#eaf6ff', r:150});
+    addEffect('hitRing', CX(), CY(), 0.6, {color:'#ffffff', r:150});
+    skBurst(CX(), CY() - 30, '#cfe0e8', 12, {angle:-Math.PI/2, spread:0.9, spMin:200, spMax:640, lifeMin:0.25, lifeMax:0.5, sizeMin:3, sizeMax:8, grav:300});
+    skShake(22, 0.32, '#eaf6ff');
     G.hitstop = Math.max(G.hitstop, 0.09);
-    /* 余韵：剑痕连爆 */
-    skAt(200, ()=>{
-      for(let i=0;i<2;i++) addEffect('hitRing', p.x + dir*(140+i*150), p.y, 0.42+i*0.06, {color:'#cfe0e8', r:56+i*20});
-      addEffect('groundCrack', p.x + dir*220, p.y, 0.9, {angle:dir>0?0:Math.PI, color:'#cfeaff'});
-      addEffect('groundCrack', p.x + dir*360, p.y, 0.9, {angle:dir>0?0:Math.PI, color:'#eaf6ff'});
-      meleeHitRect(p, p.x + dir*340, p.y, 660, 210, A*8, {kb:120});
+    /* 剑锋余势：一道与命中半径等长的剑气斩痕 + 小段二段伤害 */
+    skAt(160, ()=>{
+      if(!G || gameState !== 'playing') return;
+      const dir = CX() >= p.x ? 1 : -1;
+      p.facing = dir;
+      addEffect('slashArc', CX(), CY(), 0.3, {facing:dir, color:'#9fe6ff', size:1.75, typeStr:'stab'});
+      meleeAoe(p, CX(), CY(), 190, A*14, {kb:160});
+      addEffect('groundCrack', CX(), CY(), 0.8, {angle:dir>0?0:Math.PI, color:'#cfeaff'});
     });
   });
 }
@@ -1282,8 +1270,8 @@ function castBladeAbyss(){
       playSound('bladeSwing');
       addEffect('afterImage', p.x, p.y, 0.44, {facing:p.facing, weaponIdx:p.weaponIdx, anim:'skill', alpha:0.62, color:'#ff2a4a'});
       const sx = p.x + p.facing*92;
-      addEffect('slashArc', sx, p.y, 0.36, {facing:p.facing, color:'#ff2a4a', size:3.2, typeStr:'blade'});
-      addEffect('slashArc', sx, p.y, 0.5, {facing:p.facing, color:'#ff7a8a', size:2.3, typeStr:'blade'});
+      /* ★ 单道弧光，大小贴齐 350 宽命中矩形（原来两层 3.2/2.3 大弧纯属装饰） */
+      addEffect('slashArc', sx, p.y, 0.4, {facing:p.facing, color:'#ff2a4a', size:1.4, typeStr:'blade'});
       addEffect('spaceCrack', p.x + p.facing*150, p.y - 50, 0.5, {width:270, height:96, color:'#ff2a4a'});
       addEffect('groundCrack', p.x + p.facing*100, p.y, 0.95, {angle:p.facing>0?0:Math.PI, color:'#ff2a4a'});
       meleeHitRect(p, skFall(p, tg, 150, 900).x, p.y, 350, 200, A*MUL[i], {kb:i===2?540:190, launch:i===2});
@@ -1329,7 +1317,7 @@ function castBladeFrostSix(){
         const ox = p.x + dir*(70 + i*68);
         G.projectiles.push({ kind:'glowWeapon', weaponType:'blade', x:ox, y:p.y, h:52, vx:dir*1180, vy:0, life:0.6, w:150, hh:96,
           dmg:A*22, pierce:99, hitSet:new Set(), color:i===5?'#dbe4e8':'#8fd4ff', rot:dir>0?0:Math.PI, scale:2.2, owner:p });
-        addEffect('slashArc', ox, p.y, 0.3, {facing:dir, color:'#bfe8ff', size:2.5, typeStr:'blade'});
+        addEffect('slashArc', ox, p.y, 0.3, {facing:dir, color:'#bfe8ff', size:1.8, typeStr:'blade'});
         addEffect('hitRing', ox, p.y, 0.42, {color:'#bfe8ff', r:56});
         addEffect('groundCrack', p.x + dir*(90 + i*80), p.y, 1.1, {angle:dir>0?0:Math.PI, color:'#8fd4ff'});
         skBurst(ox, p.y-50, '#bfe8ff', 6, {angle:dir>0?0:Math.PI, spread:0.7, spMin:150, spMax:470, grav:120});
@@ -2208,13 +2196,13 @@ function castAxeThree(){
       } else if(i === 1){
         /* 剔牙：贴地横扫的弧形斧气，带一串火花 */
         addEffect('axeWave', cx, cy - 30, 0.4, {facing:p.facing, color:'#ffb04a', r:150});
-        addEffect('slashArc', cx, cy - 40, 0.35, {facing:p.facing, color:'#ffe066', size:2.6, typeStr:'blade'});
+        addEffect('slashArc', cx, cy - 40, 0.35, {facing:p.facing, color:'#ffe066', size:1.3, typeStr:'blade'});
         addEffect('emberBurst', cx, cy - 30, 0.42, {color:'#ffe066', r:120, n:16, rot:rand(0, TAU)});
         meleeHitRect(p, cx, cy, 210, 190, A * 28, {kb:230});
         skBurst(cx, cy - 40, '#ffe066', 7, {angle:p.facing > 0 ? 0 : Math.PI, spread:0.8, spMin:180, spMax:500, grav:300});
       } else {
         /* 掏耳朵：突进撩斩，掀飞对手 */
-        addEffect('slashArc', cx, cy - 60, 0.4, {facing:p.facing, color:'#ffe066', size:3.0, typeStr:'blade'});
+        addEffect('slashArc', cx, cy - 60, 0.4, {facing:p.facing, color:'#ffe066', size:1.4, typeStr:'blade'});
         addEffect('explosion', cx, cy - 20, 0.7, {color:'#ffb04a', r:144});
         addEffect('emberBurst', cx, cy - 24, 0.7, {color:'#ffb04a', r:230, n:22, rot:rand(0, TAU)});
         addEffect('shockWave', cx, cy + 2, 0.6, {facing:p.facing, r:280, color:'#ffd08a'});
@@ -2374,8 +2362,8 @@ function castTalismanBind(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 300);
-  /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realSword', 7, {color:'#b8a8e8', speed:1200}); }, 110);
+  /* 起手甩出本命符纸（★ 不再是宝剑——符咒师用符不用剑） */
+  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realTalisman', 7, {color:'#ffe066', speed:1200}); }, 110);
   skCastPose(p, 0.6, '定 身 符', '#ffe066', 34);
   skCastAura(p, 0.6, '#ffe066', 4);
   /* 符纸出手：一路旋转飞向目标，身后洒下金粉 */
