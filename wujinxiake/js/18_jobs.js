@@ -318,7 +318,7 @@ function startPvpFight(){
   updateSkillIcons(2, pvpSelect[1]);
 }
 function makePvpPlayer(num, weaponIdx, bal){
-  return { isPlayer:true, playerNum:num, x:VW*0.35, y:600, h:0, vy:0, kx:0, facing:num===1?1:-1,
+  const pl = { isPlayer:true, playerNum:num, x:VW*0.35, y:600, h:0, vy:0, kx:0, facing:num===1?1:-1,
     hp:bal.hp, maxHp:bal.hp, mp:bal.mp, maxMp:bal.mp, level:60, exp:0, expNext:80,
     atk:bal.atk, weaponIdx, state:'idle', walkPhase:0, action:null, attackBuffer:0, comboWindow:0, comboIdx:0,
     invuln:0, hitFlash:0, hurtT:0, dead:false, cds:[0,0,0,0,0,0], moveSpeed:bal.spd, launchT:0, jumpT:0, landingT:0, landingStartH:0,
@@ -326,6 +326,10 @@ function makePvpPlayer(num, weaponIdx, bal){
     backUpperArmAng:1.5, backForeArmAng:-1.5, legPose:0,
     skillLevels:[1,1,1,1,1,1], skillsUnlocked:[true,true,true,true,true,true], pvpAllSkills:true,
     dodgeT:0, dodgeCd:0, dodgeDir:0, stamina:100, maxStamina:100 };
+  /* ★ PK 也穿戴飞行道具（.ensure 会自动补发一把系统赠送的） */
+  pl.equipment = {};
+  if(window.MOUNT) MOUNT.ensure(pl);
+  return pl;
 }
 function makePlayer(){
   return { isPlayer:true, playerNum:1, x:VW*0.35, y:600, h:0, vy:0, kx:0, facing:1,
@@ -423,7 +427,7 @@ function calcDnfDamage(baseDmg, src, target){
   return Math.round(baseDmg * defReduction * lvCorrection);
 }
 function makePvpPlayerWithChar(num, char, bal){
-  return { isPlayer:true, playerNum:num, x:VW*0.35, y:600, h:0, vy:0, kx:0, facing:num===1?1:-1,
+  const pl = { isPlayer:true, playerNum:num, x:VW*0.35, y:600, h:0, vy:0, kx:0, facing:num===1?1:-1,
     hp:bal.hp, maxHp:bal.hp, mp:bal.mp, maxMp:bal.mp, level:60, exp:0, expNext:80,
     atk:bal.atk, weaponIdx:char.weaponIdx, state:'idle', walkPhase:0, action:null, attackBuffer:0, comboWindow:0, comboIdx:0,
     invuln:0, hitFlash:0, hurtT:0, dead:false, cds:[0,0,0,0,0,0], moveSpeed:bal.spd, launchT:0, jumpT:0, landingT:0, landingStartH:0,
@@ -432,6 +436,10 @@ function makePvpPlayerWithChar(num, char, bal){
     charId:char.id,
     skillLevels:[1,1,1,1,1,1], skillsUnlocked:[true,true,true,true,true,true], pvpAllSkills:true,
     dodgeT:0, dodgeCd:0, dodgeDir:0, stamina:100, maxStamina:100 };
+  /* ★ PK 也穿戴飞行道具（.ensure 会自动补发一把系统赠送的） */
+  pl.equipment = {};
+  if(window.MOUNT) MOUNT.ensure(pl);
+  return pl;
 }
 
 function spawnParticles(x,y,n,o){
