@@ -1647,55 +1647,97 @@ function castFistGreatPalm(){
   });
 }
 
-/* ---------- 格斗家 6：炁体源流（米二《一人之下》· 八奇技） ---------- */
-function castFistQiOrigin(){
+/* ---------- 格斗家 6：六道轮回拳（辰东《遮天》· 老疯子/叶凡） ---------- */
+function castSixPathsFist(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  spawnText(p.x, p.y, 220, '炁 体 源 流', '#7dffd4', 46);
-  p.action = { type:'fistMeditate', dur:1.1, t:0 };
-  /* 炁轮展开 */
-  addEffect('dharmaWheel', p.x, p.y, 2.2, {color:'#7dffd4', r:190});
-  addEffect('hitRing', p.x, p.y, 0.8, {color:'#7dffd4', r:112});
-  addEffect('hitRing', p.x, p.y, 1.1, {color:'#d8fff2', r:68});
+  spawnText(p.x, p.y, 200, '六 道 轮 回 拳', '#ff5a3c', 48);
+  p.action = { type:'fistMeditate', dur:0.55, t:0 };
+
+  /* 六道：天道(天神金光)/人道(帝王)/阿修罗道(修罗战神)/地狱道(炼狱)/饿鬼道(鬼气)/畜生道(妖气) */
+  const PATHS = [
+    { name:'天道',     col:'#ffd86b' },
+    { name:'人道',     col:'#ff8a3c' },
+    { name:'阿修罗道', col:'#ff2a4a' },
+    { name:'地狱道',   col:'#9b5cff' },
+    { name:'饿鬼道',   col:'#6bffb0' },
+    { name:'畜生道',   col:'#4ab8ff' }
+  ];
+
+  /* 六道法相：身后六尊虚影，环形排布、绕施法者缓缓轮转 */
+  for(let i=0;i<6;i++){
+    const ang = i/6*TAU - Math.PI/2;
+    addEffect('asuraAvatar', p.x + Math.cos(ang)*96, p.y - 78 + Math.sin(ang)*40, 2.4,
+      { follow:p, orbit:ang, ringR:96, rotSpeed:0.7, color:PATHS[i].col, label:PATHS[i].name, facing:1 });
+  }
+  /* 起手 · 六色汇聚光 */
+  addEffect('dharmaWheel', p.x, p.y, 1.6, { color:'#ff7a4a', r:150 });
+  skShake(8, 0.18, '#ff7a4a');
   for(let i=0;i<30;i++){
-    skAt(i*26, ()=>{
-      const a = (i/30)*TAU*3, r = 90 + Math.sin(i*0.6)*40;
-      spawnParticles(p.x + Math.cos(a)*r, p.y - 60 + Math.sin(a)*r*0.55, 1,
-        {color:i%3===0?'#dbe4e8':(i%3===1?'#7dffd4':'#3fd0b0'), angle:a+Math.PI/2, spread:0.4, spMin:80, spMax:260, lifeMin:0.3, lifeMax:0.7, sizeMin:2, sizeMax:6, grav:-120});
+    skAt(i*22, ()=>{
+      const a = (i/30)*TAU*3, r = 110 + Math.sin(i*0.6)*38;
+      spawnParticles(p.x + Math.cos(a)*r, p.y - 60 + Math.sin(a)*r*0.5, 1,
+        { color:PATHS[i%6].col, angle:a+Math.PI/2, spread:0.4, spMin:80, spMax:240, lifeMin:0.3, lifeMax:0.7, sizeMin:2, sizeMax:6, grav:-120 });
     });
   }
-  skAt(700, ()=>{
+
+  /* ★ 智能追踪：锁定最近敌人活坐标，全程跟随其移动 */
+  const tg = skAim(p, 240);
+
+  /* 0.55s：显化「轮回漩涡」笼罩战场，持续吞噬（每 0.25s 一记，六色轮转） */
+  skAt(560, ()=>{
     if(!G || gameState !== 'playing') return;
     if(p.action && p.action.type === 'fistMeditate') p.action = null;
-    /* 八方炁爆 */
-    for(let i=0;i<8;i++){
-      skAt(i*95, ()=>{
+    if(tg && tg.has) addEffect('samsaraVortex', tg.x, tg.y, 1.7, { ref:tg.ref, color:'#ff5a3c' });
+    for(let i=0;i<6;i++){
+      skAt(i*250, ()=>{
         if(!G || gameState !== 'playing') return;
-        const a = i/8*TAU;
-        const bx = p.x + Math.cos(a)*190, by = p.y + Math.sin(a)*80;
-        playSound('skillCast');
-        addEffect('explosion', bx, by - 30, 0.6, {color:'#7dffd4', r:122});
-        addEffect('hitRing', bx, by, 0.5, {color:'#d8fff2', r:98});
-        meleeAoe(p, bx, by, 175, A*48, {kb:220, launch:false});
-        skBurst(bx, by - 30, '#7dffd4', 8, {spMin:160, spMax:620, grav:200});
-        skShake(10, 0.1, '#7dffd4');
+        const cx = tg ? tg.x : p.x + p.facing*220;
+        const cy = tg ? tg.y : p.y;
+        meleeAoe(p, cx, cy, 150, A*15, {kb:60});
+        addEffect('hitRing', cx, cy, 0.45, { color:PATHS[i%6].col, r:96 });
+        skBurst(cx, cy - 30, PATHS[i%6].col, 8, { spMin:120, spMax:420, grav:120 });
+        skShake(6, 0.06, PATHS[i%6].col);
       });
     }
-    /* 炁柱冲天 */
-    skAt(880, ()=>{
+  });
+
+  /* 0.9s 起 · 六拳合一：六记本尊重拳依次轰在追踪点上 */
+  for(let i=0;i<6;i++){
+    skAt(900 + i*160, ()=>{
       if(!G || gameState !== 'playing') return;
-      addEffect('qiColumn', p.x, p.y, 1.8, {color:'#7dffd4'});
-      addEffect('skyPillar', p.x, p.y, 1.5, {height:860, color:'#7dffd4'});
-      addEffect('dharmaWheel', p.x, p.y, 1.4, {color:'#dbe4e8', r:280});
-      addEffect('skyCrack', p.x, 70, 1.2, {width:380, color:'#7dffd4'});
-      meleeAoe(p, p.x, p.y, 420, A*450, {kb:660, launch:true});
-      meleeAoe(p, p.x, p.y, 600, A*120, {kb:280});
-      addEffect('explosion', p.x, p.y, 1.0, {color:'#7dffd4', r:274});
-      skBurst(p.x, p.y - 60, '#7dffd4', 21, {spMin:240, spMax:920, grav:120});
-      skRingBurst(p.x, p.y, 250, '#d8fff2', 14);
-      skShake(34, 0.5, '#d8fff2');
-      G.hitstop = Math.max(G.hitstop, 0.15);
+      const cx = tg ? tg.x : p.x + p.facing*200;
+      const cy = tg ? tg.y : p.y;
+      p.facing = cx >= p.x ? 1 : -1;
+      playSound('fistPunch');
+      addEffect('fistArc', cx, cy, 0.3, { facing:p.facing, color:PATHS[i%6].col, scale:2.0 + i*0.18, ring:true });
+      addEffect('punchWave', p.x + p.facing*70, p.y, 0.3, { facing:p.facing, color:PATHS[i%6].col, len:150 });
+      addEffect('hitRing', cx, cy, 0.4, { color:PATHS[i%6].col, r:80 + i*8 });
+      meleeAoe(p, cx, cy, 165, A*24, { kb:160 + i*20 });
+      skBurst(cx, cy - 40, PATHS[i%6].col, 10, { spMin:160, spMax:560, grav:120 });
+      skShake(9 + i, 0.08, PATHS[i%6].col);
+      if(i === 5){ skShake(20, 0.3, '#ff7a4a'); G.hitstop = Math.max(G.hitstop, 0.08); }
     });
+  }
+
+  /* 1.95s · 六道归一·天帝拳：巨型金掌拍落 + 轮回黑洞爆发，万法破除（无视防御） */
+  skAt(1950, ()=>{
+    if(!G || gameState !== 'playing') return;
+    const cx = tg ? tg.x : p.x + p.facing*220;
+    const cy = tg ? tg.y : p.y;
+    playSound('explosion');
+    addEffect('palmPrint', cx, cy - 40, 0.9, { color:'#ffd86b', scale:1.4 });
+    addEffect('samsaraVortex', cx, cy, 0.9, { color:'#ff5a3c', big:true });
+    addEffect('explosion', cx, cy, 1.0, { color:'#ffce6b', r:300 });
+    addEffect('hitRing', cx, cy, 0.8, { color:'#ffd86b', r:300 });
+    addEffect('skyCrack', cx, cy - 220, 1.1, { width:420, color:'#ffd86b' });
+    /* 万法破除：无视敌人防御（opt.ignoreDef） */
+    meleeAoe(p, cx, cy, 320, A*200, { kb:640, launch:true, ignoreDef:true });
+    meleeAoe(p, cx, cy, 540, A*46, { kb:240 });
+    skBurst(cx, cy - 50, '#ffd86b', 22, { spMin:240, spMax:920, grav:120 });
+    skRingBurst(cx, cy, 260, '#ffce6b', 16);
+    skShake(36, 0.5, '#ffd86b');
+    G.hitstop = Math.max(G.hitstop, 0.14);
   });
 }
 
@@ -2796,7 +2838,7 @@ const SKILL_FUNCS = {
   sword:[castSwordQi, castSwordSky, castSwordRain, castSwordImmortal, castSwordTruthArray, castSwordCome],
   blade:[castBladeFire, castBladeArray, castBladeStorm, castBladeAbyss, castBladeFrostSix, castBladeRulerFlame],
   spear:[castSpearDragon, castSpearThrust, castSpearRain, castSpearPhoenix, castSpearRainStorm, castSpearBlueSilver],
-  fist:[castFistQi, castFistPalm, castFistRush, castFistEightExtremes, castFistGreatPalm, castFistQiOrigin],
+  fist:[castFistQi, castFistPalm, castFistRush, castFistEightExtremes, castFistGreatPalm, castSixPathsFist],
   herb:[castHerbPouch, castHerbVines, castHerbLifeDeath, castHerbDew, castHerbSpider, castHerbShennong],
   axe:[castAxeSplit, castAxeThree, castAxeWhirl, castAxeMountain, castAxeXingtian, castAxePangu],
   talisman:[castTalismanBind, castTalismanThunder, castTalismanRain, castTalismanSword, castTalismanCommand, castTalismanGhosts],
