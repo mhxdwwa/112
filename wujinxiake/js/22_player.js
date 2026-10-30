@@ -285,24 +285,30 @@ function updatePlayer(p, dt){
           if(c.type === 'push' || c.type === 'press'){ hitW = c.reach*1.2; hitH = 90; }
           meleeHitRect(p, hitCx, hitCy, hitW, hitH, playerAtk()*c.dmg, {kb:c.kb, launch:c.launch});
         }
+        /* ★ 普攻特效长度 = 实际命中前缘（命中矩形前缘 ≈ 0.6*reach + 0.5*判定宽），
+           玩家一眼就能看出攻击够不够得着 */
+        const extF = (c.type === 'thrust') ? 1.25 : (c.type === 'slam') ? 1.2
+                   : (c.type === 'cloudHands') ? 1.3 : (c.type === 'push' || c.type === 'press') ? 1.2 : 1.15;
+        const ext = extF * c.reach;
         if(w.id === 'sword'){
-          if(c.type === 'thrust') addEffect('slashArc', p.x, p.y, 0.15, {facing:p.facing, color:'#9fe6ff', size:0.8, typeStr:'stab'});
-          else if(c.type === 'upcut') addEffect('slashArc', p.x, p.y, 0.2, {facing:p.facing, color:'#9fe6ff', size:1.2, typeStr:'up'});
-          else addEffect('slashArc', p.x, p.y, 0.2, {facing:p.facing, color:'#9fe6ff', size:1.2});
+          const size = Math.max(0.6, (ext - 60) / 75);    /* slashArc 尖端恰好落在命中前缘 */
+          if(c.type === 'thrust') addEffect('slashArc', p.x, p.y, 0.15, {facing:p.facing, color:'#9fe6ff', size, typeStr:'stab'});
+          else if(c.type === 'upcut') addEffect('slashArc', p.x, p.y, 0.2, {facing:p.facing, color:'#9fe6ff', size, typeStr:'up'});
+          else addEffect('slashArc', p.x, p.y, 0.2, {facing:p.facing, color:'#9fe6ff', size});
         } else if(w.id === 'blade'){
-          addEffect('slashArc', p.x, p.y, 0.3, {facing:p.facing, color:'#ff8a4a', size:1.6, typeStr:'blade'});
+          const size = Math.max(0.7, (ext - 60) / 75);
+          addEffect('slashArc', p.x, p.y, 0.3, {facing:p.facing, color:'#ff8a4a', size, typeStr:'blade'});
           if(c.type === 'slam') G.shake = Math.max(G.shake, 18);
         } else if(w.id === 'spear'){
-          addEffect('spearLine', p.x, p.y, 0.15, {facing:p.facing, color:'#ffd96a'});
+          /* ★ 突刺光带直达命中前缘（原来没传 endX/endY，光带其实没画出来） */
+          addEffect('spearLine', p.x, p.y - 55, 0.15, {facing:p.facing, color:'#ffd96a', endX:p.x + p.facing*ext, endY:p.y - 55, width:12});
         } else if(w.id === 'fist'){
-          /* 太极拳粒子特效：显示攻击范围 */
-          const arcR = c.reach * 0.8;
+          /* 太极拳气劲弧：半径随命中前缘走，弧形本身就是范围指示（粒子已精简） */
+          const arcR = c.reach * ((c.type === 'cloudHands') ? 0.9 : ((c.type === 'push' || c.type === 'press') ? 0.8 : 0.75));
           const arcCx = p.x + p.facing*(c.reach*0.4);
           const arcCy = p.y - 50;
-          /* 弧形气劲范围指示 */
           addEffect('taiChiArc', arcCx, arcCy, 0.45, {facing:p.facing, color:'#ffcc33', radius:arcR, comboType:c.type});
-          /* 沿攻击范围散布粒子 */
-          const particleCount = c.type === 'cloudHands' ? 28 : 16;
+          const particleCount = c.type === 'cloudHands' ? 16 : 10;
           for(let i=0;i<particleCount;i++){
             const angle = p.facing>0 ? (-Math.PI*0.4 + (i/particleCount)*Math.PI*0.8) : (Math.PI*0.6 + (i/particleCount)*Math.PI*0.8);
             const dist = arcR * (0.5 + Math.random()*0.5);
@@ -313,14 +319,12 @@ function updatePlayer(p, dt){
               spawnParticles(px, py, 2, {color: i%3===0?'#fff':i%3===1?'#ffcc33':'#ff9933', angle:angle+p.facing*0.5, spread:0.6, spMin:40, spMax:120, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:200});
             }, i*8);
           }
-          /* 中心气劲爆发 */
-          spawnParticles(arcCx, arcCy, 10, {color:'#ffcc33', angle:p.facing>0?0:Math.PI, spread:0.8, spMin:80, spMax:200, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:6, grav:100});
+          spawnParticles(arcCx, arcCy, 6, {color:'#ffcc33', angle:p.facing>0?0:Math.PI, spread:0.8, spMin:80, spMax:200, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:6, grav:100});
           if(c.type === 'cloudHands'){
-            /* 云手终结技：更大范围粒子爆发 */
-            for(let i=0;i<20;i++){
-              const a = i*(TAU/20);
+            for(let i=0;i<12;i++){
+              const a = i*(TAU/12);
               const r = arcR*0.7;
-              spawnParticles(arcCx+Math.cos(a)*r, arcCy+Math.sin(a)*r*0.5, 4, {color:i%4===0?'#fff':i%4===1?'#ffcc33':i%4===2?'#ff9933':'#ffdd66', angle:a, spread:0.5, spMin:60, spMax:180, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:7, grav:0});
+              spawnParticles(arcCx+Math.cos(a)*r, arcCy+Math.sin(a)*r*0.5, 3, {color:i%4===0?'#fff':i%4===1?'#ffcc33':i%4===2?'#ff9933':'#ffdd66', angle:a, spread:0.5, spMin:60, spMax:180, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:7, grav:0});
             }
             G.shake = Math.max(G.shake, 15);
           }
@@ -336,12 +340,13 @@ function updatePlayer(p, dt){
               spMin:60, spMax:210, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:6, grav:220});
           }
         } else if(w.id === 'axe'){
-          /* ★ 撼山者：斧气劈地，碎石飞溅 + 震屏 */
+          /* ★ 撼山者：斧气弧贴齐命中距离，碎石精简 */
+          const size = Math.max(0.7, (ext - 60) / 75);
+          addEffect('slashArc', p.x, p.y, 0.3, {facing:p.facing, color:'#ffb04a', size, typeStr:'blade'});
           const hx = p.x + p.facing * (c.reach * 0.55), hy = p.y - 54;
-          addEffect('slashArc', hx, hy, 0.3, {facing:p.facing, color:'#ffb04a', size:1.9, typeStr:'blade'});
           addEffect('emberBurst', hx, hy, 0.36, {color:'#ffb04a', r:88, n:11, rot:rand(0, TAU)});
           addEffect('groundCrack', hx, p.y + 4, 0.5, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffb04a'});
-          for(let i = 0; i < 16; i++){
+          for(let i = 0; i < 10; i++){
             const ang = p.facing > 0 ? (-0.7 + Math.random() * 1.4) : (Math.PI - 0.7 + Math.random() * 1.4);
             spawnParticles(hx, hy, 1, {color:i % 4 === 0 ? '#c9a06a' : (i % 2 ? '#ffb04a' : '#ffd08a'), angle:ang, spread:0.6,
               spMin:100, spMax:300, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:7, grav:420});
