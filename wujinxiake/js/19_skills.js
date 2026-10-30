@@ -1656,19 +1656,19 @@ function castSixPathsFist(){
 
   /* 六道：天道(天神金光)/人道(帝王)/阿修罗道(修罗战神)/地狱道(炼狱)/饿鬼道(鬼气)/畜生道(妖气) */
   const PATHS = [
-    { name:'天道',     col:'#ffd86b' },
-    { name:'人道',     col:'#ff8a3c' },
-    { name:'阿修罗道', col:'#ff2a4a' },
-    { name:'地狱道',   col:'#9b5cff' },
-    { name:'饿鬼道',   col:'#6bffb0' },
-    { name:'畜生道',   col:'#4ab8ff' }
+    { name:'天道',     col:'#ffd86b', anim:'skill', ft:0.0 },
+    { name:'人道',     col:'#ff8a3c', anim:'atk1',  ft:0.5 },
+    { name:'阿修罗道', col:'#ff2a4a', anim:'atk2',  ft:0.5 },
+    { name:'地狱道',   col:'#9b5cff', anim:'atk3',  ft:0.5 },
+    { name:'饿鬼道',   col:'#6bffb0', anim:'skill', ft:0.5 },
+    { name:'畜生道',   col:'#4ab8ff', anim:'atk1',  ft:0.0 }
   ];
 
-  /* 六道法相：身后六尊虚影，环形排布、绕施法者缓缓轮转 */
+  /* 六道法相：身后六尊「角色本体光影」分身，环形排布、绕施法者缓缓轮转（各持不同出拳姿态） */
   for(let i=0;i<6;i++){
     const ang = i/6*TAU - Math.PI/2;
     addEffect('asuraAvatar', p.x + Math.cos(ang)*96, p.y - 78 + Math.sin(ang)*40, 2.4,
-      { follow:p, orbit:ang, ringR:96, rotSpeed:0.7, color:PATHS[i].col, label:PATHS[i].name, facing:1 });
+      { follow:p, orbit:ang, ringR:96, rotSpeed:0.7, spriteKey:'fist', anim:PATHS[i].anim, frameT:PATHS[i].ft, ghostH:88, color:PATHS[i].col, label:PATHS[i].name, facing:1 });
   }
   /* 起手 · 六色汇聚光 */
   addEffect('dharmaWheel', p.x, p.y, 1.6, { color:'#ff7a4a', r:150 });
