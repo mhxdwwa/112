@@ -1724,36 +1724,96 @@ function drawEffects(dt){
       }
     }
     else if(ef.type === 'asuraAvatar'){
-      /* 修罗虚影 */
+      /* 修罗/六道法相虚影：六道轮回拳调用时作「六道法相」，带道名标签 */
+      /* ★ 可跟随施法者盘旋：ef.follow 为玩家引用时，按 ef.orbit 角度绕其旋转 */
+      if(ef.follow && ef.follow.alive !== false && !ef.follow.dead){
+        const sp = ef.rotSpeed || 0.5;
+        const a = (ef.orbit || 0) + ef.t * sp;
+        const R = ef.ringR || 96;
+        ef.x = ef.follow.x + Math.cos(a) * R;
+        ef.y = (ef.follow.y - 78) + Math.sin(a) * R * 0.42;
+      }
       const ak = ef.t/ef.dur;
       const alpha = ak<0.2 ? ak/0.2 : (1-ak)/0.8;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = clamp(alpha,0,1)*0.6;
       const facing = ef.facing || 1;
-      ctx.translate(ef.x-facing*40, ef.y-80);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = clamp(alpha,0,1)*0.62;
+      /* 身形（带缓慢自旋 + 出拳摆动） */
+      ctx.save();
+      ctx.translate(ef.x - facing*40, ef.y - 80);
+      ctx.rotate((ef.spin || 0) * ef.t);
       ctx.scale(facing*2.5, 2.5);
-      /* 修罗身形 */
       ctx.fillStyle = ef.color || '#ff2244';
       ctx.shadowColor = ef.color || '#ff2244';
       ctx.shadowBlur = 30;
       /* 身体 */
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 20, 35, 0, 0, TAU);
-      ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, 0, 20, 35, 0, 0, TAU); ctx.fill();
       /* 头部 */
-      ctx.beginPath();
-      ctx.arc(0, -40, 12, 0, TAU);
-      ctx.fill();
-      /* 手臂 */
+      ctx.beginPath(); ctx.arc(0, -40, 12, 0, TAU); ctx.fill();
+      /* 手臂（出拳姿态，随时间挥动） */
+      const swing = Math.sin(ef.t*8 + (ef.orbit||0)) * 10;
       ctx.lineWidth = 6;
       ctx.strokeStyle = ef.color || '#ff2244';
       ctx.beginPath();
-      ctx.moveTo(-15, -10);
-      ctx.lineTo(-35, 10);
-      ctx.moveTo(15, -10);
-      ctx.lineTo(35, 10);
+      ctx.moveTo(-15, -10); ctx.lineTo(-35 - swing, 18);
+      ctx.moveTo(15, -10);  ctx.lineTo(35 + swing, 18);
       ctx.stroke();
       ctx.shadowBlur = 0;
+      ctx.restore();
+      /* 道名标签（保持直立，不被自旋影响） */
+      if(ef.label){
+        ctx.globalAlpha = clamp(alpha,0,1)*0.92;
+        ctx.fillStyle = ef.color || '#fff';
+        ctx.font = 'bold 16px "Microsoft YaHei"';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(ef.label, ef.x, ef.y - 200);
+        ctx.globalAlpha = 1;
+      }
+    }
+    else if(ef.type === 'samsaraVortex'){
+      /* 轮回漩涡：六道轮回拳核心异象 —— 身前显化轮回黑洞，六色法轮旋绕，
+         可锁定敌人（ef.ref）实时跟随，把战场笼罩进轮回领域 */
+      if(ef.ref && ef.ref.alive){ ef.x = ef.ref.x; ef.y = ef.ref.y; }
+      const vk = ef.t/ef.dur;
+      const va = vk < 0.2 ? vk/0.2 : (1-vk)/0.8;
+      const R = (ef.big ? 230 : 150) * (0.7 + vk*0.5);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = clamp(va,0,1);
+      ctx.translate(ef.x, ef.y - 30);
+      /* 黑暗漩涡核心 */
+      const cg = ctx.createRadialGradient(0,0,2,0,0,R);
+      cg.addColorStop(0, 'rgba(8,0,18,0.95)');
+      cg.addColorStop(0.42, '#3a0a2a');
+      cg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(0,0,R,0,TAU); ctx.fill();
+      /* 六色螺旋臂（对应六道） */
+      const cols = ['#ffd86b','#ff8a3c','#ff2a4a','#9b5cff','#6bffb0','#4ab8ff'];
+      ctx.lineWidth = 5;
+      for(let c=0;c<6;c++){
+        ctx.strokeStyle = cols[c];
+        ctx.globalAlpha = clamp(va,0,1)*0.85;
+        ctx.beginPath();
+        for(let s=0;s<=40;s++){
+          const tt = s/40;
+          const a = ef.t*4 + c*(TAU/6) + tt*3.2;
+          const rr = R*(1-tt);
+          const px = Math.cos(a)*rr, py = Math.sin(a)*rr*0.7;
+          if(s===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+        }
+        ctx.stroke();
+      }
+      /* 外环 */
+      ctx.globalAlpha = clamp(va,0,1)*0.7;
+      ctx.strokeStyle = ef.color || '#ff5a3c'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0,0,R,0,TAU); ctx.stroke();
+      /* 中央六道星点（六色，对应六道） */
+      ctx.globalAlpha = clamp(va,0,1);
+      for(let c=0;c<6;c++){
+        const a = ef.t*1.5 + c*(TAU/6);
+        ctx.fillStyle = cols[c];
+        ctx.beginPath(); ctx.arc(Math.cos(a)*R*0.18, Math.sin(a)*R*0.18*0.7, 4, 0, TAU); ctx.fill();
+      }
     }
     else if(ef.type === 'spaceCrack'){
       /* 空间裂痕 */
