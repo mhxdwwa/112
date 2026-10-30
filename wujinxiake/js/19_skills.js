@@ -334,8 +334,8 @@ function castBladeFire(){
     }, i*18);
   }
   
-  /* 修罗幻影 - 背后浮现修罗虚影 */
-  addEffect('asuraAvatar', p.x, p.y, 0.8, {facing:p.facing, color:'#ff2244'});
+  /* 修罗幻影 - 背后浮现修罗虚影（★ 用刀客本体光影，替代几何体） */
+  addEffect('asuraAvatar', p.x - p.facing*42, p.y, 0.8, {facing:p.facing, color:'#ff2244', spriteKey:'blade', anim:'skill', ghostH:126});
   
   /* 挥斩阶段：巨大血红刀芒 */
   setTimeout(()=>{
@@ -1374,8 +1374,8 @@ function castBladeRulerFlame(){
     if(!G || gameState !== 'playing') return;
     if(p.action && p.action.type === 'bladeCharge') p.action = null;
     playSound('bladeSwing');
-    /* 巨尺落下 */
-    addEffect('giganticWeapon', tx(), gy(), 1.15, {weaponType:'blade', color:'#ff8a20', scale:5.2, rot:-0.28});
+    /* 巨尺落下（★ f=施法者朝向：刀柄在自己头顶一侧，刀尖劈向敌人） */
+    addEffect('giganticWeapon', tx(), gy(), 1.15, {weaponType:'blade', color:'#ff8a20', scale:5.2, rot:0.62, f:p.facing});
     addEffect('skyPillar', tx(), gy(), 1.25, {height:780, color:'#ff8a20'});
     meleeAoe(p, tx(), gy(), 265, A*180, {kb:640, launch:true});
     addEffect('explosion', tx(), gy(), 0.9, {color:'#ff8a20', r:345});
@@ -1532,7 +1532,7 @@ function castSpearBlueSilver(){
     if(p.action && p.action.type === 'spearCharge') p.action = null;
     playSound('spearThrust');
     /* 霸王枪自天而降，钉入大地 */
-    addEffect('giganticWeapon', tx(), gy(), 1.15, {weaponType:'spear', color:'#8fe8ff', scale:5.4, rot:0});
+    addEffect('giganticWeapon', tx(), gy(), 1.15, {weaponType:'spear', color:'#8fe8ff', scale:5.4, rot:0, f:p.facing});
     addEffect('skyPillar', tx(), gy(), 1.3, {height:820, color:'#8fe8ff'});
     addEffect('hitRing', tx(), gy(), 1.0, {color:'#dbe4e8', r:340});
     meleeAoe(p, tx(), gy(), 240, A*170, {kb:600, launch:true});
@@ -2157,7 +2157,7 @@ function castAxeSplit(){
     /* ★ 智能落点：近处打身前，远处技能直接飞到敌人脚下 */
     const s = skStrike(p, tg, 100, 560, '#ffb04a');
     const cx = clamp(s.x, WORLD_L + 60, WORLD_R - 60), cy = s.y;
-    addEffect('giganticWeapon', cx, cy - 30, 0.45, {weapon:'axe', color:'#ffe9a8', scale:1.9, angle:0.55 * p.facing});
+    addEffect('giganticWeapon', cx, cy - 30, 0.45, {weaponType:'axe', color:'#ffe9a8', scale:1.9, rot:0.55, f:p.facing});
     skAt(90, ()=>{
       addEffect('emberBurst', cx, cy - 20, 0.5, {color:'#ffb04a', r:150, n:18, rot:rand(0, TAU)});
       addEffect('explosion', cx, cy - 10, 0.55, {color:'#ffd08a', r:94});
@@ -2198,7 +2198,7 @@ function castAxeThree(){
         spread:1.1, spMin:140, spMax:460, lifeMin:0.25, lifeMax:0.6, sizeMin:3, sizeMax:8, grav:380});
       if(i === 0){
         /* 劈脑门：巨斧虚影自上而下，落地窜石刺 */
-        addEffect('giganticWeapon', cx, cy - 40, 0.4, {weapon:'axe', color:'#ffe9a8', scale:2.1, angle:0.5 * p.facing});
+        addEffect('giganticWeapon', cx, cy - 40, 0.4, {weaponType:'axe', color:'#ffe9a8', scale:2.1, rot:0.5, f:p.facing});
         skAt(80, ()=>{
           addEffect('rockSpike', cx, cy + 2, 0.5, {facing:p.facing, n:3, reach:150, h:88, w:26, color:'#c9a06a'});
           addEffect('emberBurst', cx, cy - 16, 0.45, {color:'#ffd08a', r:130, n:14, rot:rand(0, TAU)});
@@ -2302,7 +2302,8 @@ function castAxeXingtian(){
   const tg = skAim(p, 200);
   skCastPose(p, 1.4, '刑 天 舞 干 戚', '#ff8a4a', 42);
   skCastAura(p, 1.4, '#ff8a4a', 4);
-  addEffect('asuraAvatar', p.x, p.y, 1.5, {color:'#ff8a4a', scale:1.5});
+  /* ★ 刑天法相：用撼山者本体光影（替代几何体），朝向随施法者 */
+  addEffect('asuraAvatar', p.x, p.y, 1.5, {facing:p.facing, color:'#ff8a4a', spriteKey:'axe', anim:'skill', ghostH:140});
   for(let i = 0; i < 8; i++){
     skAt(i * 120, ()=>{
       const dir = i % 2 === 0 ? 1 : -1;
@@ -2346,7 +2347,7 @@ function castAxePangu(){
   skAt(900, ()=>{
     const s = skStrike(p, tg, 160, 640, '#ffe9a8');
     const cx = clamp(s.x, WORLD_L + 80, WORLD_R - 80), cy = s.y;
-    addEffect('giganticWeapon', cx, cy - 40, 1.2, {weapon:'axe', color:'#ffe9a8', scale:3.2, angle:0.2 * p.facing});
+    addEffect('giganticWeapon', cx, cy - 40, 1.2, {weaponType:'axe', color:'#ffe9a8', scale:3.2, rot:0.2, f:p.facing});
     addEffect('spaceCrack', cx, cy - 80, 1.2, {width:900, height:420, color:'#ffe9a8'});
     addEffect('meteorFall', cx, cy, 1.0, {n:7, gap:118, size:38, from:760, color:'#ffb04a', color2:'#ffe9a8'});
     addEffect('emberBurst', cx, cy - 30, 1.0, {color:'#ffe9a8', r:340, n:26, rot:rand(0, TAU)});
