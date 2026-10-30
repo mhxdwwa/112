@@ -282,9 +282,22 @@ function drawFighterSprite(p, scaleMul){
     ctx.translate(-p.x, -py - bob);
   }
 
-  /* ★ 飞行道具画在脚下（先画，角色盖在上面 = 站在上面） */
+  /* ★ 飞行道具画在脚下（先画，角色盖在上面 = 站在上面）。
+     刷图/PK 里放大 1.3 倍保证存在感；移动时在身后拖一道光痕。
+     角色动作动画照常播放（attack/skill 姿态都显示在飞行道具上）。 */
   if(mount && window.MOUNT){
-    MOUNT.draw(ctx, p.x, py + 2 * sc, bodyPx / 150, mount.model, (G ? G.t : 0), moving, facing);
+    MOUNT.draw(ctx, p.x, py + 2 * sc, bodyPx / 150 * 1.3, mount.model, (G ? G.t : 0), moving, facing);
+    if(moving){
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const trY = py + 2 * sc;
+      const tg2 = ctx.createLinearGradient(p.x - facing*30, trY, p.x - facing*130, trY);
+      tg2.addColorStop(0, 'rgba(185,225,255,0.4)');
+      tg2.addColorStop(1, 'rgba(185,225,255,0)');
+      ctx.fillStyle = tg2;
+      ctx.beginPath(); ctx.ellipse(p.x - facing*80, trY, 58, 8, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
   }
 
   /* ★ 套装光环（脚下法阵，先于角色绘制） */
@@ -547,15 +560,15 @@ function weaponOutlinePath(c, wtype){
       for(let i = 0; i < 3; i++){ c.moveTo(-11 + i * 11, -9); c.lineTo(-11 + i * 11, 9); }
     });
   } else if(wtype === 'blade'){
-    /* 斩马刀：单刃、外弧 */
-    add(function(){ c.beginPath(); c.roundRect(-20, -4.5, 26, 9, 3); });          /* 柄 */
-    add(function(){ c.beginPath(); c.ellipse(5, 0, 6, 9, 0, 0, TAU); });           /* 护手盘 */
+    /* ★ 长柄朴刀（与新 drawWeapon 刀型一致）：长杆 + 鎏金护手 + 弧形单刃 */
+    add(function(){ c.beginPath(); c.roundRect(-62, -4.2, 78, 8.4, 3); });         /* 长杆 */
+    add(function(){ c.beginPath(); c.ellipse(15, 0, 6, 10, 0, 0, TAU); });         /* 鎏金护手盘 */
     add(function(){
       c.beginPath();
-      c.moveTo(8, -3.5);
-      c.quadraticCurveTo(58, -22, 100, -7);
-      c.lineTo(97, 4);
-      c.quadraticCurveTo(58, -6, 8, 4.5);
+      c.moveTo(19, -4);
+      c.quadraticCurveTo(62, -17, 102, -5);
+      c.lineTo(99, 5);
+      c.quadraticCurveTo(60, 8, 19, 4.5);
       c.closePath();
     });
     add(function(){ c.beginPath(); c.moveTo(14, -2); c.quadraticCurveTo(58, -15, 92, -6); });  /* 刃线 */
