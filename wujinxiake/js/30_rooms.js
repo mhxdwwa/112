@@ -547,6 +547,40 @@ function drawWeapon(type, wx, wy, ang){
     ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(40,-2); ctx.lineTo(55,-22); ctx.lineTo(65,0); ctx.lineTo(55,22); ctx.lineTo(40,2); ctx.closePath(); ctx.fill();
   } else if(type === 'dual'){
     ctx.fillStyle = metal; ctx.fillRect(10,-2,50,4); ctx.fillRect(10,-20,50,4);
+  } else if(type === 'fist'){
+    /* ★ 拳套（太极拳锋）：护腕 + 拳锋，拳劲齐射用 */
+    ctx.fillStyle = '#3a3f4d'; ctx.fillRect(-14,-9,12,18);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(-4,-9,3.5,18);
+    ctx.fillStyle = '#e8c9a0';
+    ctx.beginPath(); ctx.ellipse(9,0,13,10.5,0,0,TAU); ctx.fill();
+    ctx.fillStyle = '#d4b896';
+    for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.arc(17,k*5,2.4,0,TAU); ctx.fill(); }
+  } else if(type === 'cauldron'){
+    /* ★ 三足青铜鼎（丹道师本命法宝）：鼎身+双耳+三足+炉火 */
+    ctx.fillStyle = '#46543a';
+    ctx.fillRect(-16,-23,5,11); ctx.fillRect(11,-23,5,11);            /* 双耳 */
+    ctx.beginPath(); ctx.ellipse(0,-5,22,14,0,0,TAU); ctx.fill();     /* 鼎身 */
+    ctx.fillStyle = '#6e825c';
+    ctx.beginPath(); ctx.ellipse(0,-11,21,6,0,0,TAU); ctx.fill();     /* 口沿 */
+    ctx.fillStyle = '#46543a';
+    ctx.beginPath(); ctx.moveTo(-15,5); ctx.lineTo(-9,5); ctx.lineTo(-12,21); ctx.lineTo(-17,21); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(15,5); ctx.lineTo(9,5); ctx.lineTo(12,21); ctx.lineTo(17,21); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-2,5); ctx.lineTo(2,5); ctx.lineTo(1,23); ctx.lineTo(-5,23); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#8a9a76'; ctx.lineWidth = 1.4;                  /* 云雷纹 */
+    ctx.beginPath(); ctx.moveTo(-14,-5); ctx.lineTo(14,-5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,140,60,0.9)';                            /* 炉火 */
+    ctx.beginPath(); ctx.moveTo(-6,-15); ctx.quadraticCurveTo(0,-31,6,-15); ctx.quadraticCurveTo(0,-19,-6,-15); ctx.fill();
+  } else if(type === 'talisman'){
+    /* ★ 黄符（符咒师本命）：符纸+朱砂符文+符尾飘带 */
+    ctx.fillStyle = '#ffe066'; ctx.fillRect(-7,-24,14,48);
+    ctx.strokeStyle = '#b08a00'; ctx.lineWidth = 1.5; ctx.strokeRect(-7,-24,14,48);
+    ctx.strokeStyle = '#c0252b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(0,14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-4,-8); ctx.lineTo(4,-8); ctx.moveTo(-4,0); ctx.lineTo(4,0); ctx.moveTo(-4,8); ctx.lineTo(4,8); ctx.stroke();
+    ctx.fillStyle = '#c0252b'; ctx.beginPath(); ctx.arc(0,-19,1.8,0,TAU); ctx.fill();
+    ctx.strokeStyle = '#e84a4a'; ctx.lineWidth = 1.6;                  /* 符尾 */
+    ctx.beginPath(); ctx.moveTo(-5,24); ctx.quadraticCurveTo(0,32,4,26); ctx.stroke();
   }
   ctx.restore();
 }
@@ -565,6 +599,17 @@ function drawProjectile(pr){
     ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(px,py,50*sc,0,TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
     ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(1.5,1.5); drawWeapon('blade',0,0,0);
+    ctx.restore(); return;
+  }
+  if(pr.kind === 'realTalisman'){
+    /* 符咒师齐射：黄符模型 + 金色灵光 */
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(px,py,2,px,py,34*sc);
+    glow.addColorStop(0,'rgba(255,224,102,0.45)'); glow.addColorStop(1,'rgba(255,224,102,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(px,py,34*sc,0,TAU); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(1.6,1.6);
+    drawWeapon('talisman',0,0,0);
     ctx.restore(); return;
   }
   if(pr.kind === 'realFist' || pr.kind === 'realAxe' || pr.kind === 'realCauldron'){
@@ -635,10 +680,10 @@ function drawProjectile(pr){
     ctx.globalAlpha = 1;
 
     if(sub === 'herb'){
-      /* 炼药师：一株散发绿色灵气的小草 */
-      const rr = pr.w * 1.05 * sc;
+      /* 炼药师：一株带灵气的小草（光球缩小，草是主视觉） */
+      const rr = pr.w * 0.72 * sc;
       const gg = ctx.createRadialGradient(px, py, 1, px, py, rr);
-      gg.addColorStop(0, 'rgba(220,255,180,0.9)'); gg.addColorStop(0.4, glow); gg.addColorStop(0.8, col); gg.addColorStop(1, 'rgba(0,0,0,0)');
+      gg.addColorStop(0, 'rgba(220,255,180,0.55)'); gg.addColorStop(0.55, glow); gg.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(px, py, rr, 0, TAU); ctx.fill();
       ctx.save(); ctx.translate(px, py);
       ctx.lineCap = 'round';
@@ -648,32 +693,27 @@ function drawProjectile(pr){
       for(let b=-1;b<=1;b++){ ctx.beginPath(); ctx.moveTo(b*2.5, 6); ctx.quadraticCurveTo(b*6 + dir*3, -2, b*7 + dir*5, -12); ctx.stroke(); }
       ctx.restore();
     } else if(sub === 'talisman'){
-      /* 符咒师：一枚较小的黄符纸（缓慢旋转，带朱砂符文） */
-      const rr = pr.w * 0.95 * sc;
-      const gg = ctx.createRadialGradient(px, py, 1, px, py, rr);
-      gg.addColorStop(0, 'rgba(255,255,230,0.85)'); gg.addColorStop(0.5, glow); gg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(px, py, rr, 0, TAU); ctx.fill();
-      ctx.save(); ctx.translate(px, py); ctx.rotate(G ? G.t * 7 : 0);
-      const tw = 8, th = 13;
-      ctx.fillStyle = '#ffe066'; ctx.strokeStyle = '#b08a00'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.rect(-tw/2, -th/2, tw, th); ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = '#c0252b'; ctx.lineWidth = 1.1;
-      ctx.beginPath(); ctx.moveTo(0, -th/2+3); ctx.lineTo(0, th/2-3); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-2.5, -2); ctx.lineTo(2.5, -2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-2.5, 3); ctx.lineTo(2.5, 3); ctx.stroke();
-      ctx.fillStyle = '#c0252b'; ctx.beginPath(); ctx.arc(0, -th/2+2.5, 1.4, 0, TAU); ctx.fill();
+      /* ★ 符咒师：真正的黄符纸模型（朱砂符文+符尾），只留薄薄一层灵光，不再是光绘假模型 */
+      ctx.globalCompositeOperation = 'source-over';
+      const gg = ctx.createRadialGradient(px, py, 1, px, py, pr.w * 0.62 * sc);
+      gg.addColorStop(0, 'rgba(255,242,168,0.4)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(px, py, pr.w * 0.62 * sc, 0, TAU); ctx.fill();
+      ctx.save(); ctx.translate(px, py);
+      ctx.rotate(pr.rot || (G ? G.t * 9 : 0));
+      ctx.scale(1.5, 1.5);
+      drawWeapon('talisman', 0, 0, 0);
       ctx.restore();
     } else if(sub === 'cauldron'){
-      /* 丹道师：一枚发光的仙丹 */
-      const rr = pr.w * 1.0 * sc;
-      const gg = ctx.createRadialGradient(px, py, 1, px, py, rr*1.6);
-      gg.addColorStop(0, 'rgba(255,255,240,0.9)'); gg.addColorStop(0.35, glow); gg.addColorStop(0.7, col); gg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(px, py, rr*1.6, 0, TAU); ctx.fill();
-      const pg = ctx.createRadialGradient(px - rr*0.3, py - rr*0.3, 1, px, py, rr);
-      pg.addColorStop(0, '#fffbe8'); pg.addColorStop(0.45, core); pg.addColorStop(0.8, col); pg.addColorStop(1, '#e89a2a');
-      ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(px, py, rr*0.7, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.beginPath(); ctx.arc(px - rr*0.3, py - rr*0.32, rr*0.18, 0, TAU); ctx.fill();
+      /* ★ 丹道师：本命鼎飞出去砸人（三足青铜鼎模型+炉火灵光），不再是光绘仙丹 */
+      ctx.globalCompositeOperation = 'source-over';
+      const fg = ctx.createRadialGradient(px, py, 1, px, py, pr.w * 0.7 * sc);
+      fg.addColorStop(0, 'rgba(255,150,70,0.38)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(px, py, pr.w * 0.7 * sc, 0, TAU); ctx.fill();
+      ctx.save(); ctx.translate(px, py);
+      ctx.rotate(pr.rot || 0);
+      ctx.scale(0.52, 0.52);
+      drawWeapon('cauldron', 0, 0, 0);
+      ctx.restore();
     } else {
       /* 兜底：绿弹 */
       const rr = pr.w * 0.9 * sc;
