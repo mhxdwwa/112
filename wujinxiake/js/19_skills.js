@@ -348,11 +348,11 @@ function castBladeFire(){
     addEffect('slashArc', slashX(), slashY(), 0.4, {facing:p.facing, color:'#ff4466', size:2.5, typeStr:'blade'});
     addEffect('slashArc', slashX(), slashY(), 0.3, {facing:p.facing, color:'#ff6688', size:2.0, typeStr:'blade'});
     
-    /* 投射物 - 血红刀气 */
-    G.projectiles.push({ kind:'flameWave', x:p.x+p.facing*80, y:p.y, h:50, vx:p.facing*1000, vy:0, life:0.7, w:160, hh:120, dmg:atkVal*10.0, pierce:3, hitSet:new Set(), color:'#ff2244', facing:p.facing, owner:p, trail:true });
-    
-    /* 血雾爆发 */
-    for(let i=0;i<40;i++){
+    /* 投射物 - 血红刀气（★ 改用格斗家刀模型 glowWeapon，避免纯光粒子，浏览器更轻松） */
+    G.projectiles.push({ kind:'glowWeapon', weaponType:'blade', x:p.x+p.facing*80, y:p.y, h:50, vx:p.facing*1000, vy:0, life:0.7, w:160, hh:120, dmg:atkVal*10.0, pierce:3, hitSet:new Set(), color:'#ff2244', facing:p.facing, owner:p, trail:true, scale:1.7 });
+
+    /* 血雾（★ 已从 40 颗压到 16 颗，刀模型本身已承担视觉） */
+    for(let i=0;i<16;i++){
       const angle = p.facing>0?rand(-0.8,0.8):rand(Math.PI-0.8,Math.PI+0.8);
       const dist = rand(40, 200);
       setTimeout(()=>{
