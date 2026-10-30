@@ -759,6 +759,42 @@ function drawProjectile(pr){
   ctx.restore();
 }
 
+/* ============================================================
+   角色本体光影（drawCharGhost）
+   用真实职业精灵帧绘制半透明发光的「分身/法相」，替代丑陋的几何体。
+   直接基于 CHAR_ATLASES 取帧 drawImage，自包含、不依赖外部 drawSpriteFrame。
+   atKey: 职业键('fist'/'sword'/...)；anim: 动画名；frameT: 帧进度 0~1；
+   x,y: 脚底世界坐标；facing: 1/-1；bodyWorld: 世界身高像素；
+   tint: 染色(可为 null)；alpha: 总透明度。返回是否绘制成功。
+   ============================================================ */
+function drawCharGhost(atKey, anim, frameT, x, y, facing, bodyWorld, tint, alpha){
+  const at = CHAR_ATLASES[atKey];
+  const draw = at && charAtlasDrawable(at);
+  if(!draw) return false;
+  const anims = draw.anims || {};
+  const frames = (anims[anim] && anims[anim].frames) || [0];
+  let fi = frames[Math.floor((frameT || 0) * (frames.length - 1) + 0.5)];
+  if(fi == null || fi < 0) fi = frames[0] || 0;
+  const cols = draw.cols, rows = draw.rows, cw = draw.cellW, ch = draw.cellH;
+  const sx = (fi % cols) * cw;
+  const sy = Math.floor(fi / cols) * ch;
+  const sc = (bodyWorld || draw.bodyWorld) / draw.bodyH;
+  const dw = cw * sc, dh = ch * sc;
+  const dx = x - draw.feetX * sc;
+  const dy = y - draw.groundY * sc;
+  ctx.save();
+  ctx.globalAlpha = clamp(alpha, 0, 1);
+  if(facing < 0){ ctx.translate(x, 0); ctx.scale(-1, 1); ctx.translate(-x, 0); }
+  if(tint){
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.shadowColor = tint; ctx.shadowBlur = 24;
+  }
+  ctx.drawImage(draw.img, sx, sy, cw, ch, dx, dy, dw, dh);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+  return true;
+}
+
 function drawEffects(dt){
   for(const ef of G.effects){
     const k = ef.t/ef.dur;
@@ -1735,31 +1771,42 @@ function drawEffects(dt){
       }
       const ak = ef.t/ef.dur;
       const alpha = ak<0.2 ? ak/0.2 : (1-ak)/0.8;
-      const facing = ef.facing || 1;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = clamp(alpha,0,1)*0.62;
-      /* 身形（带缓慢自旋 + 出拳摆动） */
-      ctx.save();
-      ctx.translate(ef.x - facing*40, ef.y - 80);
-      ctx.rotate((ef.spin || 0) * ef.t);
-      ctx.scale(facing*2.5, 2.5);
-      ctx.fillStyle = ef.color || '#ff2244';
-      ctx.shadowColor = ef.color || '#ff2244';
-      ctx.shadowBlur = 30;
-      /* 身体 */
-      ctx.beginPath(); ctx.ellipse(0, 0, 20, 35, 0, 0, TAU); ctx.fill();
-      /* 头部 */
-      ctx.beginPath(); ctx.arc(0, -40, 12, 0, TAU); ctx.fill();
-      /* 手臂（出拳姿态，随时间挥动） */
-      const swing = Math.sin(ef.t*8 + (ef.orbit||0)) * 10;
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = ef.color || '#ff2244';
-      ctx.beginPath();
-      ctx.moveTo(-15, -10); ctx.lineTo(-35 - swing, 18);
-      ctx.moveTo(15, -10);  ctx.lineTo(35 + swing, 18);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.restore();
+      const facing = ef.facing || ((ef.follow && ef.x < ef.follow.x) ? 1 : -1);
+      if(ef.spriteKey){
+        /* ★ 角色本体光影：用真实职业精灵帧绘制六道法相（不再是丑陋几何体） */
+        const gA = clamp(alpha,0,1);
+        if(gA > 0.02){
+          const anim = ef.anim || 'skill';
+          const ft = (ef.frameT != null) ? ef.frameT : ((ef.t * 0.5) % 1);
+          const gh = ef.ghostH || 86;
+          /* 1) 清晰本体光影（朝向施法者，半透明） */
+          drawCharGhost(ef.spriteKey, anim, ft, ef.x, ef.y, facing, gh, null, gA * 0.92);
+          /* 2) 六道辉光：同色 lighter 笼罩，强化「道」的色彩区分 */
+          if(ef.color) drawCharGhost(ef.spriteKey, anim, ft, ef.x, ef.y, facing, gh, ef.color, gA * 0.42);
+        }
+      } else {
+        /* 原几何体（兼容其它技能的虚影调用） */
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = clamp(alpha,0,1)*0.62;
+        ctx.save();
+        ctx.translate(ef.x - facing*40, ef.y - 80);
+        ctx.rotate((ef.spin || 0) * ef.t);
+        ctx.scale(facing*2.5, 2.5);
+        ctx.fillStyle = ef.color || '#ff2244';
+        ctx.shadowColor = ef.color || '#ff2244';
+        ctx.shadowBlur = 30;
+        ctx.beginPath(); ctx.ellipse(0, 0, 20, 35, 0, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, -40, 12, 0, TAU); ctx.fill();
+        const swing = Math.sin(ef.t*8 + (ef.orbit||0)) * 10;
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = ef.color || '#ff2244';
+        ctx.beginPath();
+        ctx.moveTo(-15, -10); ctx.lineTo(-35 - swing, 18);
+        ctx.moveTo(15, -10);  ctx.lineTo(35 + swing, 18);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
       /* 道名标签（保持直立，不被自旋影响） */
       if(ef.label){
         ctx.globalAlpha = clamp(alpha,0,1)*0.92;
