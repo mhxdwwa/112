@@ -1410,7 +1410,7 @@ function fireBasicProjectile(p, c){
   }
   const pr = {
     kind:'spellShot', subKind:w.id,
-    x:sx, y:sy, vx, vy,
+    x:sx, y:sy, h:40, vx, vy,   /* ★ h 只抬视觉高度：法术弹从手臂高度平飞，不贴地 */
     life:1.15, w:cfg.w, hh:cfg.hh,
     dmg:atkVal, pierce:cfg.pierce, hitSet:new Set(),
     color:cfg.color, glow:cfg.glow, core:cfg.core, rot:0, owner:p, trail:true,
