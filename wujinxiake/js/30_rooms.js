@@ -432,8 +432,27 @@ function drawWeaponWithHands(type, wx, wy, ang, skinColor, bWx, bWy, frontArmAng
     ctx.fillStyle = skinColor;
     ctx.beginPath(); ctx.ellipse(1, 0, 5, 4.5, 0.1, 0, TAU); ctx.fill();
   } else if(type === 'blade'){
-    ctx.fillStyle = '#4a2a10'; ctx.fillRect(-18,-3,40,6);
-    ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(27,-4); ctx.lineTo(45,-7); ctx.lineTo(70,-10); ctx.lineTo(95,-7); ctx.lineTo(108,-2); ctx.lineTo(100,3); ctx.lineTo(75,6); ctx.lineTo(50,5); ctx.lineTo(27,4); ctx.closePath(); ctx.fill();
+    /* ★ 长柄朴刀（贴合刀客立绘手中刀）：藏青长杆 + 鎏金护手/柄尾 + 红缨 + 弧形暗钢单刃 */
+    ctx.fillStyle = '#232a3d'; ctx.fillRect(-58,-2.6,72,5.2);
+    ctx.fillStyle = '#3a4a6b'; ctx.fillRect(-58,-1,72,1.6);
+    /* 鎏金柄尾 + 红缨 */
+    ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.roundRect(-62,-4,7,8,2.5); ctx.fill();
+    ctx.fillStyle = '#c0252b';
+    ctx.beginPath(); ctx.moveTo(-58,-2); ctx.quadraticCurveTo(-70,2,-64,10); ctx.quadraticCurveTo(-58,4,-55,2); ctx.closePath(); ctx.fill();
+    /* 鎏金护手盘 */
+    ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.ellipse(15,0,5,9.5,0,0,TAU); ctx.fill();
+    ctx.fillStyle = '#e8cf6e'; ctx.beginPath(); ctx.ellipse(15,0,2.6,6.5,0,0,TAU); ctx.fill();
+    /* 刀身：弧形单刃，暗钢色 */
+    ctx.fillStyle = '#3c4356';
+    ctx.beginPath();
+    ctx.moveTo(19,-3.2);
+    ctx.quadraticCurveTo(62,-16,102,-4.5);
+    ctx.quadraticCurveTo(104,-1,100,2.2);
+    ctx.quadraticCurveTo(60,7,19,4.2);
+    ctx.closePath(); ctx.fill();
+    /* 刃口高光 */
+    ctx.strokeStyle = '#aebdd2'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(20,3.4); ctx.quadraticCurveTo(60,6.2,99,1.6); ctx.stroke();
     /* 前手 - 握刀柄 */
     ctx.fillStyle = skinColor;
     ctx.beginPath(); ctx.ellipse(-4, 0, 6, 5, 0, 0, TAU); ctx.fill();
@@ -503,8 +522,23 @@ function drawWeapon(type, wx, wy, ang){
     ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(19,-2.5); ctx.lineTo(85,-1.5); ctx.lineTo(95,0); ctx.lineTo(85,1.5); ctx.lineTo(19,2.5); ctx.closePath(); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(19,-0.5,70,1);
   } else if(type === 'blade'){
-    ctx.fillStyle = '#4a2a10'; ctx.fillRect(-18,-3,40,6);
-    ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(27,-4); ctx.lineTo(45,-7); ctx.lineTo(70,-10); ctx.lineTo(95,-7); ctx.lineTo(108,-2); ctx.lineTo(100,3); ctx.lineTo(75,6); ctx.lineTo(50,5); ctx.lineTo(27,4); ctx.closePath(); ctx.fill();
+    /* ★ 长柄朴刀（与刀客立绘手中刀同款）：藏青长杆+鎏金护手+红缨+弧形暗钢刃 */
+    ctx.fillStyle = '#232a3d'; ctx.fillRect(-58,-2.6,72,5.2);
+    ctx.fillStyle = '#3a4a6b'; ctx.fillRect(-58,-1,72,1.6);
+    ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.roundRect(-62,-4,7,8,2.5); ctx.fill();
+    ctx.fillStyle = '#c0252b';
+    ctx.beginPath(); ctx.moveTo(-58,-2); ctx.quadraticCurveTo(-70,2,-64,10); ctx.quadraticCurveTo(-58,4,-55,2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c9a227'; ctx.beginPath(); ctx.ellipse(15,0,5,9.5,0,0,TAU); ctx.fill();
+    ctx.fillStyle = '#e8cf6e'; ctx.beginPath(); ctx.ellipse(15,0,2.6,6.5,0,0,TAU); ctx.fill();
+    ctx.fillStyle = '#3c4356';
+    ctx.beginPath();
+    ctx.moveTo(19,-3.2);
+    ctx.quadraticCurveTo(62,-16,102,-4.5);
+    ctx.quadraticCurveTo(104,-1,100,2.2);
+    ctx.quadraticCurveTo(60,7,19,4.2);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#aebdd2'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(20,3.4); ctx.quadraticCurveTo(60,6.2,99,1.6); ctx.stroke();
   } else if(type === 'spear'){
     ctx.fillStyle = wood; ctx.fillRect(-10,-1.5,95,3);
     ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(78,0); ctx.lineTo(100,-4); ctx.lineTo(105,0); ctx.lineTo(100,4); ctx.closePath(); ctx.fill();
@@ -2213,6 +2247,8 @@ function drawEffects(dt){
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = clamp(gwA,0,1) * 0.95;
       ctx.translate(ef.x, ef.y - gwFall);
+      /* ★ 朝向镜像：f=-1 时刀尖/枪尖翻向左侧敌人（ef.f 由技能按施法者朝向传入） */
+      ctx.scale(ef.f || 1, 1);
       ctx.rotate(ef.rot || 0);
       ctx.shadowColor = gwCol; ctx.shadowBlur = 40;
       ctx.scale(gwS, gwS);
