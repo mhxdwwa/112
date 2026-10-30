@@ -552,8 +552,9 @@ function damageEnemy(e,dmg,src,opt){
     playSound('impact');
     addEffect('hitRing', e.x, e.y, 0.3, {color:'#88ccff', r:50});
   }
-  /* ★ DNF式伤害计算：玩家攻击敌人时应用防御减伤+等级修正 */
-  if(src && src.isPlayer && !blocked){
+  /* ★ DNF式伤害计算：玩家攻击敌人时应用防御减伤+等级修正。
+     opt.ignoreDef（六道轮回拳·万法破除）可无视防御，直接造成满额伤害 */
+  if(src && src.isPlayer && !blocked && !opt.ignoreDef){
     dmg = calcDnfDamage(dmg, src, e);
   }
   /* ★ DNF 词条：伤害增加 + 属性强化 */
