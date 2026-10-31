@@ -432,7 +432,7 @@ function dropLevelIdx(mapIdx){
   return Math.random() < 0.5 ? base : next;
 }
 
-function generateEquipment(slot, levelIdx, diffBonus){
+function generateEquipment(slot, levelIdx, diffBonus, minTier, minGrade){
   // 根据难度调整品阶概率
   // diffBonus: 普通=0, 困难=1, 地狱=2
   const diff = diffBonus || 0;
@@ -465,6 +465,10 @@ function generateEquipment(slot, levelIdx, diffBonus){
   for(let i = 0; i < rates.length; i++){
     cumRate += rates[i];
     if(tierRoll <= cumRate){ tierIdx = i; break; }
+  }
+  /* ★ BOSS 保底品阶：掷点之后不低于 minTier（粉色/紫色保底） */
+  if(minTier !== undefined && minTier !== null && minTier > tierIdx){
+    tierIdx = Math.min(minTier, EQUIP_TIERS.length - 1);
   }
   const tier = EQUIP_TIERS[tierIdx];
   /* ★ 命名规则（DNF 式简洁谱系）：
@@ -510,6 +514,10 @@ function generateEquipment(slot, levelIdx, diffBonus){
   else if(gradeRoll < 0.65) gradeIdx = 2;
   else if(gradeRoll < 0.88) gradeIdx = 3;
   else gradeIdx = 4;
+  /* ★ BOSS 保底品级：不低于 minGrade（3=上级 4=最上级），好东西才配得上打 boss */
+  if(minGrade !== undefined && minGrade !== null && minGrade > gradeIdx){
+    gradeIdx = Math.min(minGrade, 4);
+  }
   gradeMul = GRADES[gradeIdx].mul;
   
   const equip = {
