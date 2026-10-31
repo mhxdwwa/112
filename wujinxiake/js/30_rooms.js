@@ -405,6 +405,37 @@ function drawFighter(o){
   }
   ctx.restore();
 }
+/* ★ 撼山者手中战斧（对齐立绘）：深褐长柄 + 铜箍缠绳 + 双月牙乌钢斧刃 + 中脊尖刺
+   握点在原点，斧刃朝 +X（正向）；技能/投射物/巨兵虚影全用它，保证“都是手里这把斧” */
+function drawAxeShape(){
+  ctx.fillStyle = '#4a3220'; ctx.fillRect(-52, -3.2, 112, 6.4);              /* 长柄 */
+  ctx.fillStyle = '#6d4a2b'; ctx.fillRect(-52, -2.2, 112, 1.5);
+  ctx.fillStyle = '#c9a227'; ctx.fillRect(-57, -4.8, 6.5, 9.6);              /* 柄尾铜箍 */
+  ctx.fillStyle = '#2f2115';
+  for(let i=0;i<4;i++) ctx.fillRect(-33 + i*10, -3.2, 4, 6.4);               /* 握把缠绳 */
+  ctx.fillStyle = '#2b3038';
+  ctx.beginPath(); ctx.roundRect(44, -9, 18, 18, 3); ctx.fill();             /* 斧头基座 */
+  /* 上下双月牙刃 */
+  ctx.fillStyle = '#4a5460';
+  ctx.beginPath();
+  ctx.moveTo(52, -8);
+  ctx.quadraticCurveTo(66, -40, 97, -31);
+  ctx.quadraticCurveTo(76, -20, 62, -6);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(52, 8);
+  ctx.quadraticCurveTo(66, 40, 97, 31);
+  ctx.quadraticCurveTo(76, 20, 62, 6);
+  ctx.closePath(); ctx.fill();
+  /* 刃口高光 */
+  ctx.strokeStyle = '#95a2b3'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(56, -9); ctx.quadraticCurveTo(68, -36, 95, -30); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(56, 9);  ctx.quadraticCurveTo(68, 36, 95, 30);  ctx.stroke();
+  /* 中脊尖刺 */
+  ctx.fillStyle = '#8d99a8';
+  ctx.beginPath(); ctx.moveTo(58, -2.6); ctx.lineTo(87, 0); ctx.lineTo(58, 2.6); ctx.closePath(); ctx.fill();
+}
+
 function drawWeaponWithHands(type, wx, wy, ang, skinColor, bWx, bWy, frontArmAngle){
   if(!type){
     /* 空手：画两个拳头 */
@@ -481,8 +512,8 @@ function drawWeaponWithHands(type, wx, wy, ang, skinColor, bWx, bWy, frontArmAng
     ctx.beginPath(); ctx.moveTo(-4,-4.5); ctx.lineTo(-4,-6); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-2,-4); ctx.lineTo(-2,-5.5); ctx.stroke();
   } else if(type === 'axe'){
-    ctx.fillStyle = wood; ctx.fillRect(0,-2,55,4);
-    ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(40,-2); ctx.lineTo(55,-22); ctx.lineTo(65,0); ctx.lineTo(55,22); ctx.lineTo(40,2); ctx.closePath(); ctx.fill();
+    /* ★ 手中战斧（与立绘同款） */
+    drawAxeShape();
     /* 前手 */
     ctx.fillStyle = skinColor;
     ctx.beginPath(); ctx.ellipse(10, 0, 6, 5, 0, 0, TAU); ctx.fill();
@@ -543,8 +574,8 @@ function drawWeapon(type, wx, wy, ang){
     ctx.fillStyle = wood; ctx.fillRect(-10,-1.5,95,3);
     ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(78,0); ctx.lineTo(100,-4); ctx.lineTo(105,0); ctx.lineTo(100,4); ctx.closePath(); ctx.fill();
   } else if(type === 'axe'){
-    ctx.fillStyle = wood; ctx.fillRect(0,-2,55,4);
-    ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(40,-2); ctx.lineTo(55,-22); ctx.lineTo(65,0); ctx.lineTo(55,22); ctx.lineTo(40,2); ctx.closePath(); ctx.fill();
+    /* ★ 手中战斧（与立绘同款） */
+    drawAxeShape();
   } else if(type === 'dual'){
     ctx.fillStyle = metal; ctx.fillRect(10,-2,50,4); ctx.fillRect(10,-20,50,4);
   } else if(type === 'fist'){
@@ -2115,7 +2146,9 @@ function drawEffects(dt){
       const aiK = 1 - k;
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = clamp(aiK * (ef.alpha || 0.5), 0, 1);
-      const aiAt = CHAR_ATLASES[['sword','blade','spear','fist'][ef.weaponIdx || 0]];
+      /* ★ 残影按职业取图集（补上斧/符/丹，斧系瞬影才有本体拖影） */
+      const AI_KEYS = ['sword','blade','spear','fist','herb','axe','talisman','cauldron'];
+      const aiAt = CHAR_ATLASES[ef.spriteKey || AI_KEYS[ef.weaponIdx || 0]];
       let drew = false;
       if(aiAt && aiAt.ready && aiAt.img && aiAt.img.naturalWidth){
         const aiBody = aiAt.bodyWorld * sc;
@@ -2380,6 +2413,48 @@ function drawEffects(dt){
         ctx.stroke();
       }
       ctx.shadowBlur = 0;
+    }
+    else if(ef.type === 'axeSwing'){
+      /* ★ 挥斧：用「手中这把斧」绕握点抡出一道弧（真模型 + 弧光残影）
+         ef.a0/a1 = 起止角度（弧度），ef.scale = 尺寸，ef.facing = 朝向 */
+      const swK = clamp(ef.t / ef.dur, 0, 1);
+      const ease = 1 - Math.pow(1 - swK, 2.4);        /* 起手慢、落斧快 */
+      const a0 = ef.a0 !== undefined ? ef.a0 : -2.1;
+      const a1 = ef.a1 !== undefined ? ef.a1 : 0.62;
+      const cur = a0 + (a1 - a0) * ease;
+      const f = ef.facing || 1;
+      const S = ef.scale || 1.6;
+      const fade = swK > 0.9 ? (1 - swK) / 0.1 : (0.55 + 0.45 * swK);
+      const hx = ef.x, hy = ef.y - 74;
+      ctx.save();
+      ctx.translate(hx, hy);
+      ctx.scale(f, 1);
+      /* 斧刃扫过的扇形残影 */
+      const tail = Math.min(1.15, Math.abs(a1 - a0) * 0.55);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = clamp(fade, 0, 1) * 0.42;
+      ctx.strokeStyle = ef.color || '#ffb04a';
+      ctx.lineWidth = 20 * S * 0.42;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(0, 0, 62 * S, Math.min(cur - tail, cur), Math.max(cur - tail, cur));
+      ctx.stroke();
+      ctx.globalAlpha = clamp(fade, 0, 1) * 0.75;
+      ctx.strokeStyle = '#ffe6bb';
+      ctx.lineWidth = 4 * S * 0.42;
+      ctx.beginPath();
+      ctx.arc(0, 0, 74 * S, Math.min(cur - tail * 0.7, cur), Math.max(cur - tail * 0.7, cur));
+      ctx.stroke();
+      /* 斧本体 */
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = clamp(fade, 0, 1);
+      ctx.rotate(cur);
+      ctx.scale(S, S);
+      ctx.shadowColor = ef.color || '#ffb04a';
+      ctx.shadowBlur = _fxBlur(12);
+      drawAxeShape();
+      ctx.shadowBlur = 0;
+      ctx.restore();
     }
     else if(ef.type === 'axeOrbit'){
       /* ★ 旋风斧：多柄斧影绕身旋转（真斧模型，不再用粒子代替） */
