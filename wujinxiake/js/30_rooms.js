@@ -595,6 +595,40 @@ function drawWeapon(type, wx, wy, ang){
   }
   ctx.restore();
 }
+/* ★ 火莲绘制（供特效与飞行投射物共用）：多层花瓣的莲花模型
+   外6青蓝叶 + 中6橙红瓣 + 内5赤金瓣 + 金蕊，俯视 0.78 压缩贴合 2.5D */
+function drawFireLotusAt(x, y, rot, scale, alpha, spinT){
+  const S = scale || 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate((rot || 0) + (spinT || 0));
+  ctx.scale(S, S * 0.78);
+  ctx.globalAlpha = clamp(alpha === undefined ? 1 : alpha, 0, 1);
+  ctx.globalCompositeOperation = 'lighter';
+  const petal = (ang, len, wid, c1, c2) => {
+    ctx.save(); ctx.rotate(ang);
+    const g = ctx.createLinearGradient(0, 0, 0, -len);
+    g.addColorStop(0, c1); g.addColorStop(1, c2);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(wid, -len * 0.45, 0, -len);
+    ctx.quadraticCurveTo(-wid, -len * 0.45, 0, 0);
+    ctx.fill();
+    ctx.restore();
+  };
+  for(let i = 0; i < 6; i++) petal((i / 6) * TAU, 46, 22, 'rgba(28,175,150,0.85)', 'rgba(130,255,225,0.95)');
+  for(let i = 0; i < 6; i++) petal((i / 6) * TAU + 0.35, 36, 17, 'rgba(200,42,10,0.9)', 'rgba(255,152,42,0.95)');
+  for(let i = 0; i < 5; i++) petal((i / 5) * TAU + 0.8, 24, 12, 'rgba(255,92,20,0.95)', 'rgba(255,242,150,1)');
+  const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, 16);
+  cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.45, '#ffe066'); cg.addColorStop(1, 'rgba(255,140,0,0)');
+  ctx.fillStyle = cg;
+  ctx.beginPath(); ctx.arc(0, 0, 16, 0, TAU); ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 function drawProjectile(pr){
   const sc = depthScale(pr.y);
   const px = pr.x, py = pr.y - (pr.h||0)*sc;
@@ -622,6 +656,17 @@ function drawProjectile(pr){
     ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(1.0,1.0);
     drawWeapon('talisman',0,0,0);
     ctx.restore(); return;
+  }
+  if(pr.kind === 'fireLotusProj'){
+    /* ★ 佛怒火莲：飞出去的莲花本体（同一套花瓣模型） */
+    const ls = pr.scale || 1.1;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const lg = ctx.createRadialGradient(px, py, 2, px, py, 56 * ls * sc);
+    lg.addColorStop(0, 'rgba(255,190,90,0.35)'); lg.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(px, py, 56 * ls * sc, 0, TAU); ctx.fill();
+    ctx.restore();
+    drawFireLotusAt(px, py, pr.rot || 0, ls, 1, (G ? G.t * 5 : 0));
   }
   if(pr.kind === 'realPill'){
     /* ★ 金丹：实心金丹模型（圆润丹药+丹纹+高光），不再是光绘光球 */
@@ -2335,6 +2380,43 @@ function drawEffects(dt){
         ctx.stroke();
       }
       ctx.shadowBlur = 0;
+    }
+    else if(ef.type === 'lightBloom'){
+      /* ★ 光爆：亮核 + 放射光线 + 扩散环（替代成片粒子炸裂，省性能也更像“炸开”） */
+      const bk = ef.t / ef.dur;
+      const ba = bk < 0.12 ? bk/0.12 : (1 - bk)/0.88;
+      const col = ef.color || '#ffd166';
+      const R = (ef.r || 120) * (0.45 + 0.55 * Math.min(1, bk * 2.2));
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = clamp(ba, 0, 1);
+      const cg = ctx.createRadialGradient(ef.x, ef.y, 1, ef.x, ef.y, R * 0.55);
+      cg.addColorStop(0, 'rgba(255,255,255,0.95)');
+      cg.addColorStop(0.35, col);
+      cg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(ef.x, ef.y, R * 0.55, 0, TAU); ctx.fill();
+      const nRays = ef.rays || 16;
+      for(let i = 0; i < nRays; i++){
+        const a2 = (i / nRays) * TAU + (ef.rot || 0) + bk * 0.5;
+        const len = R * (0.75 + (i % 3) * 0.28) * (0.6 + 0.4 * Math.min(1, bk * 3));
+        ctx.globalAlpha = clamp(ba, 0, 1) * (i % 2 ? 0.7 : 0.45);
+        ctx.strokeStyle = i % 2 ? '#ffffff' : col;
+        ctx.lineWidth = (i % 2 ? 5 : 2.5) * (1 - bk * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(ef.x + Math.cos(a2) * R * 0.18, ef.y + Math.sin(a2) * R * 0.14);
+        ctx.lineTo(ef.x + Math.cos(a2) * len, ef.y + Math.sin(a2) * len * 0.75);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = clamp(ba, 0, 1) * 0.75;
+      ctx.strokeStyle = col; ctx.lineWidth = 5 * (1 - bk * 0.6);
+      ctx.beginPath(); ctx.ellipse(ef.x, ef.y, R * 1.05, R * 0.72, 0, 0, TAU); ctx.stroke();
+    }
+    else if(ef.type === 'fireLotus'){
+      /* ★ 佛怒火莲：绽放中的莲花本体 */
+      const lk = ef.t / ef.dur;
+      const bloom = Math.min(1, lk / (ef.bloomDur || 0.3));
+      const fade = lk > 0.82 ? (1 - lk) / 0.18 : 1;
+      drawFireLotusAt(ef.x, ef.y, ef.rot || 0, (ef.scale || 1) * (0.55 + 0.45 * bloom), fade, (ef.spin || 0.7) * ef.t);
     }
     else if(ef.type === 'swordStake'){
       /* ★ 插地剑桩（诛仙剑阵）：手中剑自天而降、剑尖插入地面，留在地上围成剑阵 */
