@@ -3381,7 +3381,7 @@ const TABS = {
         <p class="hint">学校与班级名显示在最上方，学期开始日期用来计算「第 N 周」。</p>
         <div class="grid2">
           ${field('学校名称', 'school', cfg.school, { ph: '例如：九圩中学' })}
-          ${field('班级名称', 'className', cfg.className, { ph: '例如：25班' })}
+          ${field('班级名称', 'className', cfg.className, { ph: '例如：25班 / 258班', hint: '班级名可以随便写，几位数都行（如 258班）；看板顶部原样显示' })}
           ${field('学期开始日期', 'semesterStart', cfg.semesterStart, { type: 'date', hint: '用于计算第几周，填开学那一周的周一' })}
           ${field('值日轮换起始日', 'dutyStartDate', cfg.dutyStartDate, { type: 'date', hint: '从这天起，按组顺序每天轮换' })}
         </div>
