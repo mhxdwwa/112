@@ -442,10 +442,19 @@ function makePvpPlayerWithChar(num, char, bal){
   return pl;
 }
 
+/* ★ 全局特效预算（由 33_main_loop 的自适应画质治理器动态调整） */
+if(!window.PFX) window.PFX = { cap:560, scale:1, slow:0, shadow:1, avg:0.016, acc:0 };
+
 function spawnParticles(x,y,n,o){
-  if(G.particles.length > 3000) return;
+  const PFX = window.PFX;
+  const cur = G.particles.length;
+  /* ★ 硬预算：到量就不再生成（旧上限 3000 会让一次连招直接把整台机器压垮） */
+  if(cur >= PFX.cap) return;
   o = o||{};
-  for(let i=0;i<n;i++){
+  let cnt = n;
+  if(PFX.scale < 1) cnt = Math.max(1, Math.round(n * PFX.scale));      /* 掉帧时按比例少喷 */
+  if(cur > PFX.cap * 0.7) cnt = Math.max(1, Math.round(cnt * 0.5));    /* 接近上限再砍一半 */
+  for(let i=0;i<cnt;i++){
     const a = o.angle!==undefined ? o.angle + rand(-(o.spread||0.9),(o.spread||0.9)) : rand(0,TAU);
     const sp = rand(o.spMin||80, o.spMax||450);
     const life = rand(o.lifeMin||0.2, o.lifeMax||0.6);
@@ -475,8 +484,24 @@ function fxWeaponVolley(owner, x, y, tx, ty, kind, count, opt){
   }
 }
 
-function addEffect(type,x,y,dur,extra){ G.effects.push(Object.assign({type,x,y,t:0,dur}, extra||{})); }
-function spawnText(x,y,h,text,color,size){ G.texts.push({x:x+rand(-20,20),y,h,text,color:color||'#fff',size:size||22,t:0,dur:0.8,vx:rand(-40,40),vy:-80}); }
+/* ★ 特效数量上限：装饰类特效（纯光斑/弧光/裂痕）在超预算时直接丢弃，
+   关键特效（巨兵/剑阵/爆炸）则挤掉最老的一个。
+   以前没有上限，连放两个技能能堆出上百个带 shadowBlur 的大特效 → 每帧几十次高斯模糊，必卡。 */
+const FX_DECOR = { hitRing:1, slashArc:1, emberBurst:1, shockWave:1, groundCrack:1, skyCrack:1, skyGlow:1, afterImage:1, talisman:1, groundFire:1 };
+function addEffect(type,x,y,dur,extra){
+  const PFX = window.PFX || (window.PFX = { cap:560, scale:1, slow:0, shadow:1 });
+  const maxFx = PFX.slow ? 36 : 78;
+  if(G.effects.length >= maxFx){
+    if(FX_DECOR[type]) return;              /* 装饰类：直接不生成 */
+    G.effects.shift();                      /* 关键类：挤掉最老的特效 */
+  }
+  G.effects.push(Object.assign({type,x,y,t:0,dur}, extra||{}));
+}
+function spawnText(x,y,h,text,color,size){
+  /* ★ 飘字上限：每帧 strokeText+fillText 很贵，堆太多会拖慢（尤其连招数字） */
+  if(G.texts.length > 36) G.texts.shift();
+  G.texts.push({x:x+rand(-20,20),y,h,text,color:color||'#fff',size:size||22,t:0,dur:0.8,vx:rand(-40,40),vy:-80});
+}
 function playerAtk(){ const p = currentSkillCaster || G.player; return p.atk * WEAPONS[p.weaponIdx].atkMul; }
 function getAtk(src){ const p = src || currentSkillCaster || G.player; const w = WEAPONS[p.weaponIdx]; return p.atk * (w ? w.atkMul : 1.0); }
 
