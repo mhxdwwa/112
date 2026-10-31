@@ -445,6 +445,18 @@ function makePvpPlayerWithChar(num, char, bal){
 /* ★ 全局特效预算（由 33_main_loop 的自适应画质治理器动态调整） */
 if(!window.PFX) window.PFX = { cap:560, scale:1, slow:0, shadow:1, avg:0.016, acc:0 };
 
+/* ★ 顿帧（hitstop）限流器：
+   以前每次伤害都直接 Math.max(G.hitstop, 0.03~0.15)，而顿帧期间 dt 只有 10%，
+   多段粒子/持续技能每 60~100ms 刷一次顿帧 → 游戏长期以十分之一速度跑，
+   表现就是「被多段攻击打中时角色走不动、像卡住」。
+   现在：①顿帧有 0.22s 冷却，连续多段不会一直叠；②单次上限 0.08s；③总时长再兜底收敛。 */
+function fxHitstop(v){
+  if(!G) return;
+  const now = performance.now();
+  if(G._hsUntil && now < G._hsUntil) return;        /* 冷却中：这一次顿帧忽略 */
+  G.hitstop = Math.min(Math.max(G.hitstop, v || 0.05), 0.08);
+  G._hsUntil = now + 220;
+}
 function spawnParticles(x,y,n,o){
   const PFX = window.PFX;
   const cur = G.particles.length;
@@ -562,7 +574,7 @@ function damagePvpPlayer(target,dmg,src,opt){
   if(opt.launch){ target.launchT=0.4; target.vy=-400; target.h=Math.max(target.h,1); }
   spawnParticles(target.x, target.y-target.h-50, isCrit?20:12, {color:isCrit?'#ff1111':'#aa0000', spMin:100, spMax:isCrit?400:250, lifeMin:0.3, lifeMax:0.7, sizeMin:2, sizeMax:5, grav:1500, vh:rand(50,200), isBlood:true});
   addEffect('hitRing', target.x, target.y, 0.25, {color:isCrit?'#ffb066':'#fff', r:40});
-  G.shake = Math.max(G.shake, isCrit?10:5); G.hitstop = Math.max(G.hitstop, isCrit?0.06:0.03);
+  G.shake = Math.max(G.shake, isCrit?10:5); fxHitstop(isCrit?0.06:0.03);
   G.flash = Math.max(G.flash, isCrit?0.15:0.06); G.hitFlashColor = '#fff';
 }
 function damageEnemy(e,dmg,src,opt){
@@ -625,7 +637,7 @@ function damageEnemy(e,dmg,src,opt){
     spawnParticles(e.x, e.y-e.h-50, 8, {color:'#fff', spMin:100, spMax:400, lifeMin:0.1, lifeMax:0.3, sizeMin:1, sizeMax:3, grav:600});
     addEffect('hitRing', e.x, e.y, 0.25, {color:isCrit?'#ffb066':'#fff', r:40});
     addEffect('bloodStain', e.x+rand(-10,10), e.y+rand(-5,5), 3.0, {size:rand(15,30)});
-    G.shake = Math.max(G.shake, isCrit?12:6); G.hitstop = Math.max(G.hitstop, isCrit?0.08:0.035);
+    G.shake = Math.max(G.shake, isCrit?12:6); fxHitstop(isCrit?0.08:0.035);
     G.flash = Math.max(G.flash, isCrit?0.2:0.08); G.hitFlashColor = '#fff';
   }
   /* ★ Roguelike: 生命汲取 */
@@ -648,7 +660,7 @@ function killEnemy(e){
   }
   spawnParticles(e.x, e.y-50, 40, {color:'#cc0000', spMin:150, spMax:600, lifeMin:0.4, lifeMax:1.2, sizeMin:3, sizeMax:8, grav:1500, vh:rand(100,300), isBlood:true});
   addEffect('bloodStain', e.x, e.y, 5.0, {size:rand(30,60)});
-  G.shake = Math.max(G.shake, e.def.boss?24:8); G.hitstop = Math.max(G.hitstop, e.def.boss?0.15:0.05);
+  G.shake = Math.max(G.shake, e.def.boss?24:8); fxHitstop(e.def.boss?0.15:0.05);
   const p = G.player;
   G.combo += 1; G.comboTimer = 2.0 * (p.comboExtMul || 1); G.totalKills++;
   /* ★ 主线任务：击杀计数 */
@@ -693,7 +705,7 @@ function killEnemy(e){
         prop: drop.prop,
         material: drop.material,
         gold: drop.amount,
-        life: 15.0,
+        life: (e.def && e.def.boss) ? 900 : 25,   /* ★ BOSS 掉落长时间不消失，打完一定要能捡到 */
         bobPhase: rand(0, TAU),
         age: 0, magnet: false, magnetSpd: 0, magnetT: 0
       });
@@ -715,7 +727,7 @@ function damagePlayer(dmg){
     spawnText(p.x, p.y, 150, '格挡！', '#ffd700', 32);
     spawnParticles(p.x, p.y-60, 25, {color:'#ffd700', spMin:100, spMax:350, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:7, grav:-100});
     addEffect('hitRing', p.x, p.y, 0.4, {color:'#ffd700', r:60});
-    G.shake = Math.max(G.shake, 12); G.flash = 0.2; G.hitFlashColor = '#ffd700'; G.hitstop = Math.max(G.hitstop, 0.1);
+    G.shake = Math.max(G.shake, 12); G.flash = 0.2; G.hitFlashColor = '#ffd700'; fxHitstop(0.1);
     /* 格挡后反击：短暂无敌并回复少量生命 */
     p.invuln = 0.8;
     p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.05));
