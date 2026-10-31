@@ -1389,7 +1389,20 @@ function update(dt){
       const tg2 = getSkillTarget(pr.owner, true);
       if(tg2 && skAlive(tg2)){
         const dx2 = tg2.x - pr.x;
-        if(Math.abs(pr.vx) > 1){
+        if(pr.aimTip){
+          /* ★ 剑尖始终对准敌人（剑来这类「万剑刺落」）：
+             朝向由「剑 → 目标」的方向决定，速度也沿这条线，
+             这样剑看起来是“刺”进敌人，而不是歪着横漂。 */
+          const r2 = (pr.aimRef && skAlive(pr.aimRef)) ? pr.aimRef : tg2;
+          const tAng = Math.atan2((r2.y - 8) - pr.y, r2.x - pr.x);
+          pr.rot = tAng;
+          pr.facing = (r2.x >= pr.x) ? 1 : -1;
+          const spd0 = Math.max(600, Math.hypot(pr.vx, pr.vy));
+          const wvx = Math.cos(tAng) * spd0, wvy = Math.sin(tAng) * spd0;
+          const k0 = Math.min(1, 9 * rawDt);
+          pr.vx += (wvx - pr.vx) * k0;
+          pr.vy += (wvy - pr.vy) * k0;
+        } else if(Math.abs(pr.vx) > 1){
           /* 水平飞行型（剑气、飞镖等）：平滑转向目标 */
           const wantSign = (tg2.x >= pr.x) ? 1 : -1;
           const wantVX = Math.abs(pr.vx) * wantSign;
