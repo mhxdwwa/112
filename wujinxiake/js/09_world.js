@@ -23,7 +23,7 @@ const WEAPONS = [
     combo:[ {type:'chop',dmg:1.1,reach:110,windup:0.10,strike:0.08,recover:0.15,kb:180,sound:'bladeSwing'},{type:'sweep',dmg:1.2,reach:120,windup:0.10,strike:0.08,recover:0.15,kb:220,sound:'bladeSwing'},{type:'upcut',dmg:1.3,reach:115,windup:0.12,strike:0.08,recover:0.18,kb:260,sound:'bladeSwing'},{type:'chop',dmg:1.5,reach:130,windup:0.15,strike:0.10,recover:0.20,kb:350,sound:'bladeSwing'},{type:'slam',dmg:3.2,reach:150,windup:0.20,strike:0.10,recover:0.40,kb:600,launch:true,sound:'bladeSwing'} ],
     skills:[
       {name:'修罗斩',key:'1',cost:14,cd:3.0,unlock:1,plannedUnlock:1,maxLv:20,spCost:3,spStep:1,power:1.0,src:'基础刀技',desc:'修罗一刀，向前方斩出炽烈刀气'},
-      {name:'五龙御天刀',key:'2',cost:25,cd:6.0,unlock:1,plannedUnlock:1,maxLv:15,spCost:5,spStep:1,power:1.5,src:'基础刀技',desc:'五条刀龙腾空，轮番轰击敌阵'},
+      {name:'五龙御天刀',key:'2',cost:25,cd:6.0,unlock:1,plannedUnlock:1,maxLv:15,spCost:5,spStep:1,power:1.5,src:'基础刀技',desc:'五柄本命刀腾空，依次俯冲劈落'},
       {name:'血刃风暴',key:'3',cost:40,cd:14.5,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:2.8,src:'基础刀技',desc:'化身血色风暴，持续撕裂周围一切'},
       {name:'阿鼻道三刀',key:'4',cost:28,cd:10.0,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.5,src:'《天下第一》· 归海一刀',desc:'一刀断魂，二刀绝命，三刀直堕阿鼻地狱'},
       {name:'傲寒六诀',key:'5',cost:48,cd:17.0,unlock:22,plannedUnlock:22,maxLv:12,spCost:14,spStep:2,power:9.0,src:'《风云》· 聂风',desc:'六诀连斩，刀意冰封——寒彻天地'},
@@ -37,14 +37,14 @@ const WEAPONS = [
       {name:'万枪归宗',key:'3',cost:40,cd:13.5,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:2.7,src:'基础枪技',desc:'万枪自天而降，覆盖整片战场'},
       {name:'百鸟朝凤枪',key:'4',cost:26,cd:9.5,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.0,src:'三国 · 童渊传赵云',desc:'枪尖化百鸟，朝凤而鸣——百鸟绕身，一枪穿心'},
       {name:'暴雨梨花枪',key:'5',cost:46,cd:16.0,unlock:22,plannedUnlock:22,maxLv:12,spCost:14,spStep:2,power:8.0,src:'杨家枪法 · 《说唐》',desc:'枪影如暴雨梨花，密不透风，无处可避'},
-      {name:'蓝银霸王枪',key:'6',cost:72,cd:27.0,unlock:30,plannedUnlock:30,maxLv:10,spCost:18,spStep:2,power:17.0,src:'唐家三少《斗罗大陆》',desc:'蓝银化枪，霸王降世——一枪镇山河'}
+      {name:'蓝银霸王枪',key:'6',cost:72,cd:27.0,unlock:30,plannedUnlock:30,maxLv:10,spCost:18,spStep:2,power:17.0,src:'唐家三少《斗罗大陆》',desc:'蓝银草缠身定敌，霸王枪自天而降贯穿，蓝银之力三环爆发'}
     ] },
   { id:'fist', name:'龙拳', color:'#ffcc33', atkMul:0.95, dmgType:'phys',
     combo:[ {type:'wardOff',dmg:0.8,reach:115,windup:0.12,strike:0.05,recover:0.07,kb:100,sound:'fistPunch'},{type:'rollback',dmg:0.8,reach:110,windup:0.11,strike:0.05,recover:0.06,kb:110,sound:'fistPunch'},{type:'press',dmg:1.0,reach:120,windup:0.13,strike:0.06,recover:0.08,kb:150,sound:'fistPunch'},{type:'push',dmg:1.3,reach:125,windup:0.15,strike:0.07,recover:0.10,kb:220,sound:'fistPunch'},{type:'cloudHands',dmg:2.4,reach:135,windup:0.20,strike:0.10,recover:0.18,kb:400,launch:true,sound:'fistPunch'} ],
     skills:[
       {name:'真气弹',key:'1',cost:12,cd:2.0,unlock:1,plannedUnlock:1,maxLv:20,spCost:3,spStep:1,power:1.0,src:'基础拳技',desc:'凝聚真气轰出，快速灵活的基础技能'},
       {name:'九霄御雷诀',key:'2',cost:22,cd:5.0,unlock:1,plannedUnlock:1,maxLv:15,spCost:5,spStep:1,power:1.5,src:'基础拳技',desc:'引九霄天雷贯穿目标，附带麻痹'},
-      {name:'佛怒火莲',key:'3',cost:36,cd:12.0,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:2.9,src:'天蚕土豆《斗破苍穹》',desc:'凝聚怒莲引爆，大范围持续燃烧'},
+      {name:'佛怒火莲',key:'3',cost:36,cd:12.0,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:2.9,src:'天蚕土豆《斗破苍穹》',desc:'掌心凝莲，火莲飞出砸敌，命中绽放成花，留下火海'},
       {name:'八极崩',key:'4',cost:25,cd:9.0,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.4,src:'天蚕土豆《斗破苍穹》· 萧炎',desc:'八段暗劲层层叠加，最后一崩山石俱裂'},
       {name:'大天造化掌',key:'5',cost:50,cd:18.0,unlock:22,plannedUnlock:22,maxLv:12,spCost:14,spStep:2,power:9.5,src:'《斗破苍穹》· 天阶斗技',desc:'一掌造化，覆压天地——掌落之处皆成焦土'},
       {name:'炁体源流',key:'6',cost:80,cd:30.0,unlock:30,plannedUnlock:30,maxLv:10,spCost:18,spStep:2,power:19.0,src:'米二《一人之下》· 八奇技',desc:'炁之极致，万法之源——炁柱冲天，荡尽群敌'}
