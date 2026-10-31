@@ -1119,7 +1119,8 @@ function castSwordImmortal(){
       color:'#bfe0ff', owner:p });
     addEffect('slashArc', sx + p.facing*40, sy, 0.18, {facing:p.facing, color:'#bfe0ff', size:0.9, typeStr:'stab'});
 
-    /* ③ 雷落 + 雷链传导：从落点开始，向最近的其他敌人逐跳跳电 */
+    /* ③ 雷落 + 雷链：★ 雷击总段数固定为 5 段（首段落雷 + 4 段续击）
+       有别的敌人 → 雷电在怪之间跳；场上只有一个敌人 → 4 段续击全部劈在它身上 */
     skAt(150, ()=>{
       if(!G || gameState !== 'playing') return;
       let nodeX = CX(), nodeY = CY();
@@ -1127,34 +1128,64 @@ function castSwordImmortal(){
       addEffect('explosion', nodeX, nodeY - 20, 0.5, {color:'#bfe0ff', r:120});
       addEffect('hitRing', nodeX, nodeY, 0.45, {color:'#eaf6ff', r:120});
       meleeAoe(p, nodeX, nodeY, 120, A*15, {kb:180});
-      /* 已被雷击过的目标不再重复纳入雷链 */
+      /* 首段已命中的目标记下来，优先跳向「没被电过」的敌人 */
       const hitSet = new Set();
       for(const e of G.enemies){
         if(e.alive && Math.abs(e.x - nodeX) < 120 && Math.abs(e.y - nodeY) < 80) hitSet.add(e);
       }
-      let dmgMul = 1;
+      /* 先算好 4 段续击的落点（优先新目标，没有就重复劈当前目标） */
+      const chainPath = [];
+      let cx2 = nodeX, cy2 = nodeY, dmgMul = 1;
       for(let hop = 0; hop < 4; hop++){
-        dmgMul *= 0.82;                      /* 每跳衰减，首跳最痛 */
+        dmgMul *= 0.82;                     /* 每段衰减，首段最痛 */
         let best = null, bd = Infinity;
         for(const e of G.enemies){
           if(!e.alive || hitSet.has(e)) continue;
-          const d = Math.hypot(e.x - nodeX, e.y - nodeY);
+          const d = Math.hypot(e.x - cx2, e.y - cy2);
           if(d < 300 && d < bd){ bd = d; best = e; }
         }
+        let repeat = false;
+        if(!best){
+          /* ★ 没有可跳的新目标：雷回到当前目标继续劈，保证总段数不变 */
+          for(const e of G.enemies){
+            if(!e.alive) continue;
+            const d = Math.hypot(e.x - cx2, e.y - cy2);
+            if(d < 360 && d < bd){ bd = d; best = e; }
+          }
+          repeat = !!best;
+        }
         if(!best) break;
-        const nx = best.x, ny = best.y;
-        addEffect('chainBolt', nodeX, nodeY - 40, 0.3, {endX:nx, endY:ny - 40, color:'#eaf6ff'});
-        addEffect('hitRing', nx, ny, 0.3, {color:'#bfe0ff', r:64});
-        meleeAoe(p, nx, ny, 96, A*15*dmgMul, {kb:120});
-        hitSet.add(best);
-        nodeX = nx; nodeY = ny;
+        chainPath.push({ tgt:best, mul:dmgMul, repeat:repeat, fromX:cx2, fromY:cy2 });
+        if(!repeat) hitSet.add(best);
+        cx2 = best.x; cy2 = best.y;
       }
-      /* ④ 收雷：最后一个被电到的位置雷爆 */
-      skAt(160, ()=>{
+      /* 按 90ms 一节依次落雷，雷链/续劈各有对应表现 */
+      chainPath.forEach((nd, i)=>{
+        skAt(90 * (i + 1), ()=>{
+          if(!G || gameState !== 'playing') return;
+          const tx = (nd.tgt && nd.tgt.alive) ? nd.tgt.x : nd.fromX;   /* 用实时位置，目标跑不掉 */
+          const ty = (nd.tgt && nd.tgt.alive) ? nd.tgt.y : nd.fromY;
+          if(nd.repeat){
+            /* 同一目标续劈：竖直落雷 */
+            addEffect('lightning', tx, ty, 0.34, {color:'#eaf6ff', scale:0.9, fromY:-300});
+            addEffect('hitRing', tx, ty, 0.3, {color:'#bfe0ff', r:52});
+          } else {
+            /* 换目标：两道闪电之间的雷链 */
+            addEffect('chainBolt', nd.fromX, nd.fromY - 40, 0.3, {endX:tx, endY:ty - 40, color:'#eaf6ff'});
+            addEffect('hitRing', tx, ty, 0.3, {color:'#bfe0ff', r:64});
+          }
+          meleeAoe(p, tx, ty, 96, A*15*nd.mul, {kb:120});
+        });
+      });
+      /* ④ 收雷：最后一段落点雷爆 */
+      const lastN = chainPath.length ? chainPath[chainPath.length - 1] : null;
+      skAt(90 * chainPath.length + 170, ()=>{
         if(!G || gameState !== 'playing') return;
-        addEffect('explosion', nodeX, nodeY - 20, 0.6, {color:'#eaf6ff', r:150});
-        addEffect('hitRing', nodeX, nodeY, 0.5, {color:'#ffffff', r:150});
-        meleeAoe(p, nodeX, nodeY, 150, A*20, {kb:380, launch:true});
+        const lx = (lastN && lastN.tgt && lastN.tgt.alive) ? lastN.tgt.x : nodeX;
+        const ly = (lastN && lastN.tgt && lastN.tgt.alive) ? lastN.tgt.y : nodeY;
+        addEffect('explosion', lx, ly - 20, 0.6, {color:'#eaf6ff', r:150});
+        addEffect('hitRing', lx, ly, 0.5, {color:'#ffffff', r:150});
+        meleeAoe(p, lx, ly, 150, A*20, {kb:380, launch:true});
         skShake(16, 0.22, '#eaf6ff');
         fxHitstop(0.06);
         if(p.action && p.action.type === 'swordCharge') p.action = null;
