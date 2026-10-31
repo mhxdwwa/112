@@ -2075,23 +2075,67 @@ function castHerbShennong(){
 
 /* ---------------- 撼山者 ---------------- */
 /* 1 劈山式（重做）：抡斧砸地 → 裂地波沿地面推进，远处自动劈过去 */
+/* ============================================================
+   ★ 撼山者（斧）专用：瞬影贴身 + 手中这把斧挥击
+   斧系是纯近战职业：以前的技能虽然把伤害算在敌人身上，
+   但人还站在原地远远地“隔空砸”，看着就是打不到。
+   现在放技能先「瞬影」闪到敌人身侧，再用手里的斧头抡过去，
+   伤害同时绑敌人活坐标，斧落人倒。 */
+function axeBlinkTo(p, tg, dist){
+  if(!tg || !tg.has || !tg.ref) return false;
+  const ref = tg.ref;
+  if(!skAlive(ref)) return false;
+  const D = dist || 92;
+  const side = (p.x <= ref.x) ? -1 : 1;            /* 从哪边来就站哪边，不穿身 */
+  const bx = clamp(ref.x + side * D, WORLD_L + 56, WORLD_R - 56);
+  const by = clamp(ref.y, GY_TOP + 20, GY_BOTTOM);
+  if(Math.abs(bx - p.x) < 34 && Math.abs(by - p.y) < 10) return false;   /* 已经贴脸 */
+  /* 瞬身残影（撼山者本体） */
+  for(let i = 1; i <= 3; i++){
+    addEffect('afterImage', p.x + (bx - p.x) * i / 4, p.y + (by - p.y) * i / 4, 0.26,
+      {facing:p.facing, weaponIdx:p.weaponIdx, spriteKey:'axe', anim:'run',
+       alpha:0.5 - i * 0.09, color:'#ffb04a'});
+  }
+  addEffect('lightBloom', p.x, p.y - 70, 0.3, {r:80, rays:10, color:'#ffb04a'});
+  p.x = bx; p.y = by; p.h = 0; p.vy = 0; p.kx = 0; p.launchT = 0;
+  p.facing = (ref.x >= p.x) ? 1 : -1;
+  addEffect('lightBloom', p.x, p.y - 66, 0.38, {r:110, rays:12, color:'#ffd08a'});
+  addEffect('hitRing', p.x, p.y, 0.28, {color:'#ffd08a', r:70});
+  return true;
+}
+/* 在施法者身前抡出「手中这把斧」：a0/a1 是起止角度 */
+function axeSwingFx(p, scale, dur, a0, a1, color){
+  const fc = p.facing || 1;
+  addEffect('axeSwing', p.x + fc * 16, p.y, dur || 0.4,
+    {facing:fc, scale:scale || 1.7, color:color || '#ffb04a',
+     a0:(a0 === undefined ? -2.1 : a0), a1:(a1 === undefined ? 0.62 : a1)});
+}
+
+/* 1 劈山式 */
 function castAxeSplit(){
-  /* 一斧开山（《宝莲灯》沉香劈华山）：举斧过顶，一斧竖劈而下，山石俱裂。
-     ★ 全程只有「你的斧」这一个模型：举起 → 巨斧竖劈 → 落地裂山 */
+  /* 劈山式：瞬影贴脸 → 举斧过顶 → 一斧竖劈，斧刃砸在敌人身上 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 180);
-  const tx = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
+  const tx = () => clamp(tg.x, WORLD_L + 50, WORLD_R - 50);
   const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
   spawnText(p.x, p.y, 205, '劈 山 式', '#ffb04a', 42);
-  p.action = { type:'storm', dur:0.55, t:0 };
-  addEffect('lightBloom', p.x + p.facing * 30, p.y - 96, 0.4, {r:80, rays:10, color:'#ffb04a'});
+  p.action = { type:'storm', dur:0.6, t:0 };
 
-  skAt(520, ()=>{
+  /* ① 瞬影贴身 */
+  skAt(70, ()=>{ if(!G || gameState !== 'playing') return; axeBlinkTo(p, tg, 88); });
+  /* ② 举斧过顶（手中斧） */
+  skAt(250, ()=>{
+    if(!G || gameState !== 'playing') return;
+    p.facing = tx() >= p.x ? 1 : -1;
+    axeSwingFx(p, 1.3, 0.2, -2.65, -2.1);
+  });
+  /* ③ 落斧：判定就在敌人脚下 */
+  skAt(540, ()=>{
     if(!G || gameState !== 'playing') return;
     playSound('bladeSwing');
-    /* 巨斧竖劈：斧刃朝下（rot 90°），自头顶劈到地面 */
-    addEffect('giganticWeapon', tx(), ty(), 0.7, {weaponType:'axe', color:'#ffb04a', scale:3.6, rot:Math.PI/2, f:p.facing});
+    p.facing = tx() >= p.x ? 1 : -1;
+    axeSwingFx(p, 2.0, 0.34, -2.15, 0.75);
     addEffect('groundCrack', tx(), ty(), 1.0, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffb04a'});
     addEffect('hitRing', tx(), ty(), 0.5, {color:'#ffd08a', r:150});
     meleeAoe(p, tx(), ty(), 170, A*70, {kb:520, launch:true});
@@ -2100,43 +2144,40 @@ function castAxeSplit(){
   });
 }
 
-/* 2 三板斧（重做）：三斧三种表现，斧斧追踪、斧斧带爆点 */
+/* 2 三板斧 */
 function castAxeThree(){
   /* 三板斧（《隋唐演义》程咬金）：劈脑门 → 鬼剔牙 → 掏耳朵。
-     ★ 三斧都是本体斧飞出，一斧比一斧狠，第四斧没有了 */
+     ★ 三斧全是「手中这把斧」连着抡，一斧比一斧狠，第四斧没有了 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 200);
-  const tx = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
+  const tx = () => clamp(tg.x, WORLD_L + 50, WORLD_R - 50);
   const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
   spawnText(p.x, p.y, 205, '三 板 斧', '#ffb04a', 40);
-  p.action = { type:'storm', dur:0.9, t:0 };
+  p.action = { type:'storm', dur:0.95, t:0 };
+  skAt(60, ()=>{ if(!G || gameState !== 'playing') return; axeBlinkTo(p, tg, 86); });
+
   const NAME = ['劈 脑 门', '鬼 剔 牙', '掏 耳 朵'];
   const DMG  = [24, 28, 46];
+  const A0   = [-2.6, -1.45, -0.55];
+  const A1   = [-0.35, 0.15, 0.6];
   for(let i = 0; i < 3; i++){
-    skAt(260 + i * 230, ()=>{
+    skAt(300 + i * 230, ()=>{
       if(!G || gameState !== 'playing') return;
       if(i === 0 && p.action && p.action.type === 'storm') p.action = null;
       playSound('bladeSwing');
-      spawnText(p.x, p.y - 120, 120, NAME[i], '#ffd08a', 26);
-      /* 斧本体飞出：三斧分别朝上/横/斜下三路劈向目标 */
-      const sx = p.x + p.facing * 44, sy = p.y - 70;
-      const offsetY = (i === 0 ? -40 : (i === 1 ? 0 : 24));
-      const ang = Math.atan2((ty() + offsetY) - sy, tx() - sx);
-      const spd = 1250;
-      G.projectiles.push({
-        kind:'realAxe', x:sx, y:sy, h:1,
-        vx:Math.cos(ang) * spd, vy:Math.sin(ang) * spd,
-        life:0.55, w:120, hh:90, dmg:A*DMG[i], pierce:1,
-        hitSet:new Set(), rot:ang, scale:1.8, color:'#ffb04a', owner:p
-      });
-      addEffect('slashArc', tx(), ty(), 0.24, {facing:p.facing, color:'#ffb04a', size:1.1 + i*0.25, typeStr:'blade'});
+      p.facing = tx() >= p.x ? 1 : -1;
+      spawnText(p.x, p.y - 130, 120, NAME[i], '#ffd08a', 26);
+      /* 三斧：自上而下 / 横撩 / 斜下勾，都是手里那把斧 */
+      axeSwingFx(p, 1.8 + i * 0.18, 0.28, A0[i], A1[i]);
+      addEffect('slashArc', tx(), ty(), 0.22, {facing:p.facing, color:'#ffb04a', size:1.0 + i * 0.25, typeStr:'blade'});
       if(i === 2){
         addEffect('lightBloom', tx(), ty() - 26, 0.55, {r:190, rays:18, color:'#ffb04a'});
-        meleeAoe(p, tx(), ty(), 180, A*30, {kb:480, launch:true});
+        meleeAoe(p, tx(), ty(), 180, A*DMG[i], {kb:480, launch:true});
         skShake(18, 0.24, '#ffb04a');
         fxHitstop(0.07);
       } else {
+        meleeAoe(p, tx(), ty(), 150, A*DMG[i], {kb:160});
         skShake(8, 0.03, '#ffb04a');
       }
     });
@@ -2145,50 +2186,58 @@ function castAxeThree(){
 
 /* 3 旋风斧 */
 function castAxeWhirl(){
-  /* 旋风斧（《水浒》李逵双斧旋风）：原地旋身，斧影绕身成环，越转越猛。
-     ★ 用"斧模型绕身旋转"表现，不再靠一圈粒子 */
+  /* 旋风斧（《水浒》李逵）：瞬影冲进怪堆，原地旋身，手中斧绕着身子连抡成环 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
+  const tg = skAim(p, 220);
   spawnText(p.x, p.y, 205, '旋 风 斧', '#ffb04a', 40);
   p.action = { type:'storm', dur:1.35, t:0 };
-  /* 斧影环绕（真斧模型，转两圈） */
-  addEffect('axeOrbit', p.x, p.y, 1.35, {r:118, n:4, spin:8.5, color:'#ffb04a'});
-  addEffect('axeOrbit', p.x, p.y, 1.1, {r:74, n:3, spin:-11, color:'#ffd08a'});
+  /* ① 瞬影进场（贴着敌人再转，才转得到人） */
+  skAt(60, ()=>{
+    if(!G || gameState !== 'playing') return;
+    axeBlinkTo(p, tg, 96);
+    /* 斧影环绕（真斧模型，内外两圈反向） */
+    addEffect('axeOrbit', p.x, p.y, 1.3, {r:118, n:4, spin:8.5, color:'#ffb04a', follow:p});
+    addEffect('axeOrbit', p.x, p.y, 1.1, {r:74, n:3, spin:-11, color:'#ffd08a', follow:p});
+  });
   let tick = 0;
   const tm = setInterval(()=>{
     if(!G || gameState !== 'playing'){ clearInterval(tm); return; }
     tick++;
     if(tick % 2 === 0){
-      /* 旋斩判定：随斧影半径走 */
+      /* 旋斩：斧在脚下抡一圈，判定=斧影半径（始终朝着敌人，不左右乱翻） */
+      p.facing = (tg.x >= p.x) ? 1 : -1;
+      axeSwingFx(p, 1.6, 0.22, -2.5, 0.7);
       meleeAoe(p, p.x, p.y, 150, A*16, {kb:160});
-      addEffect('slashArc', p.x + p.facing * 40, p.y - 40, 0.2, {facing:p.facing, color:'#ffb04a', size:1.3, typeStr:'blade'});
       skShake(5, 0.02, '#ffb04a');
     }
     if(tick >= 10){
       clearInterval(tm);
       addEffect('lightBloom', p.x, p.y - 40, 0.5, {r:200, rays:16, color:'#ffb04a'});
+      axeSwingFx(p, 2.2, 0.3, -2.1, 1.0);
       meleeAoe(p, p.x, p.y, 200, A*40, {kb:420, launch:true});
       skShake(14, 0.2, '#ffb04a');
     }
   }, 130);
 }
 
-/* 4 力劈华山 */
+/* 4 巨灵劈山 */
 function castAxeMountain(){
-  /* 巨灵劈山（《西游记》巨灵神）：双手抡斧横扫，一斧扫平一整排。
-     ★ 横向巨斧 + 宽幅判定，视觉与命中同宽 */
+  /* 巨灵劈山（《西游记》巨灵神）：瞬影贴脸，双手抡斧横扫，一斧扫平一整排 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 220);
   const tx = () => clamp(tg.x, WORLD_L + 90, WORLD_R - 90);
   const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
   spawnText(p.x, p.y, 205, '巨 灵 劈 山', '#ffb04a', 42);
-  p.action = { type:'storm', dur:0.7, t:0 };
+  p.action = { type:'storm', dur:0.75, t:0 };
+  skAt(60, ()=>{ if(!G || gameState !== 'playing') return; axeBlinkTo(p, tg, 104); });
   skAt(660, ()=>{
     if(!G || gameState !== 'playing') return;
     playSound('bladeSwing');
-    /* 巨斧横抡：斧身横置（小角度），扫过一整条线 */
-    addEffect('giganticWeapon', tx(), ty(), 0.6, {weaponType:'axe', color:'#ffb04a', scale:4.0, rot:0.18 * p.facing, f:p.facing});
+    p.facing = tx() >= p.x ? 1 : -1;
+    /* 巨斧横抡：手中斧放大抡过一整条线 */
+    axeSwingFx(p, 2.9, 0.34, -1.6, 0.45);
     addEffect('shockWave', tx(), ty() + 2, 0.55, {facing:p.facing, r:300, color:'#ffd08a'});
     addEffect('lightBloom', tx(), ty() - 30, 0.5, {r:200, rays:14, color:'#ffb04a'});
     /* 横扫判定：与斧影同宽 */
@@ -2201,8 +2250,7 @@ function castAxeMountain(){
 
 /* 5 刑天舞干戚 */
 function castAxeXingtian(){
-  /* 刑天舞干戚（《山海经》）：无头亦舞干戚 —— 战神法相浮现，斧影连斩不止。
-     ★ 法相用撼山者本体光影，斧斩是本体斧的连段，不铺粒子 */
+  /* 刑天舞干戚（《山海经》）：无头亦舞干戚 —— 战神法相缠身，手中斧连斩不止 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 200);
@@ -2210,24 +2258,27 @@ function castAxeXingtian(){
   const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
   spawnText(p.x, p.y, 210, '刑 天 舞 干 戚', '#ff8a4a', 44);
   p.action = { type:'storm', dur:1.5, t:0 };
-  /* 刑天法相（本体光影） */
-  addEffect('asuraAvatar', p.x, p.y, 1.5, {facing:p.facing, color:'#ff8a4a', spriteKey:'axe', anim:'skill', ghostH:140});
-  /* 八段斧斩：斧影连挥左右交替 */
+  /* ① 瞬影贴身 + 刑天法相（本体光影，跟着人走） */
+  skAt(70, ()=>{
+    if(!G || gameState !== 'playing') return;
+    axeBlinkTo(p, tg, 92);
+    addEffect('asuraAvatar', p.x, p.y, 1.5, {facing:p.facing, color:'#ff8a4a', spriteKey:'axe', anim:'skill', ghostH:140, follow:p});
+  });
+  /* ② 八段斧斩：手中斧左右交替连挥 */
   for(let i = 0; i < 8; i++){
-    skAt(300 + i * 150, ()=>{
+    skAt(320 + i * 150, ()=>{
       if(!G || gameState !== 'playing') return;
       if(i === 0 && p.action && p.action.type === 'storm') p.action = null;
       p.facing = tx() >= p.x ? 1 : -1;
       playSound('bladeSwing');
-      const dir = i % 2 === 0 ? 1 : -1;
-      /* 一斧劈在目标两侧，交替错开 */
-      const bx = tx() + dir * 40;
-      addEffect('slashArc', bx, ty(), 0.26, {facing:dir, color:'#ff8a4a', size:1.5, typeStr:'blade'});
-      meleeAoe(p, bx, ty(), 130, A*14, {kb:120});
+      const up = i % 2 === 0;
+      axeSwingFx(p, 1.75, 0.24, up ? -2.4 : -0.9, up ? 0.5 : 1.1, '#ff8a4a');
+      meleeAoe(p, tx(), ty(), 150, A*14, {kb:120});
       skShake(6, 0.03, '#ff8a4a');
       if(i === 7){
         addEffect('lightBloom', tx(), ty() - 30, 0.6, {r:220, rays:20, color:'#ff8a4a'});
-        meleeAoe(p, tx(), ty(), 200, A*60, {kb:520, launch:true});
+        axeSwingFx(p, 2.4, 0.32, -2.2, 0.95, '#ff8a4a');
+        meleeAoe(p, tx(), ty(), 210, A*60, {kb:520, launch:true});
         skShake(20, 0.28, '#ff8a4a');
         fxHitstop(0.08);
       }
@@ -2237,8 +2288,7 @@ function castAxeXingtian(){
 
 /* 6 盘古开天 */
 function castAxePangu(){
-  /* 盘古开天·混沌初判（《三五历纪》）：一斧劈开天地，清浊自此判。
-     ★ 巨斧自天而降竖劈到底，天地裂开、万物震荡 */
+  /* 盘古开天·混沌初判（《三五历纪》）：瞬影立于敌前，一斧劈开天地，清浊自此判 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 240);
@@ -2246,18 +2296,25 @@ function castAxePangu(){
   const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
   spawnText(p.x, p.y, 220, '盘 古 开 天', '#ffe9a8', 52);
   p.action = { type:'storm', dur:1.4, t:0 };
-  skCastAura(p, 1.2, '#ffe9a8', 3);
-  /* 天地初开：天裂 + 混沌光核 */
+  /* ① 瞬影逼近 + 举斧蓄势 */
+  skAt(60, ()=>{ if(!G || gameState !== 'playing') return; axeBlinkTo(p, tg, 112); });
   addEffect('skyCrack', tx(), 70, 1.2, {width:420, color:'#ffe9a8'});
   addEffect('lightBloom', tx(), 120, 0.8, {r:170, rays:16, color:'#ffe9a8'});
   skShake(14, 0.3, '#ffe9a8');
+  skAt(700, ()=>{
+    if(!G || gameState !== 'playing') return;
+    p.facing = tx() >= p.x ? 1 : -1;
+    axeSwingFx(p, 1.5, 0.24, -2.85, -2.35, '#ffe9a8');
+  });
 
   skAt(1000, ()=>{
     if(!G || gameState !== 'playing') return;
     if(p.action && p.action.type === 'storm') p.action = null;
     playSound('explosion');
-    /* 开天巨斧：竖劈入地（斧刃朝下） */
-    addEffect('giganticWeapon', tx(), ty(), 1.0, {weaponType:'axe', color:'#ffe9a8', scale:5.4, rot:Math.PI/2, f:p.facing});
+    p.facing = tx() >= p.x ? 1 : -1;
+    /* 开天巨斧：手中斧放大成开天斧，竖劈入地 */
+    axeSwingFx(p, 3.4, 0.42, -2.35, 0.95, '#ffe9a8');
+    addEffect('giganticWeapon', tx(), ty(), 0.9, {weaponType:'axe', color:'#ffe9a8', scale:5.0, rot:Math.PI/2, f:p.facing});
     addEffect('skyPillar', tx(), ty(), 1.3, {height:900, color:'#ffe9a8'});
     addEffect('groundCrack', tx(), ty(), 1.2, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffe9a8'});
     addEffect('lightBloom', tx(), ty() - 30, 0.8, {r:280, rays:24, color:'#ffe9a8'});
@@ -2266,7 +2323,7 @@ function castAxePangu(){
     meleeAoe(p, tx(), ty(), 460, A*60, {kb:260});
     skShake(34, 0.5, '#ffe9a8');
     fxHitstop(0.14);
-    /* 天地余震：两道扩散光爆 */
+    /* 天地余震 */
     for(let i = 0; i < 2; i++){
       skAt(180 + i * 200, ()=>{
         if(!G || gameState !== 'playing') return;
