@@ -14,6 +14,25 @@ function loopBody(now){
   if(window.__dbgFreeze){ requestAnimationFrame(loop); return; }
   const dt = Math.min((now-lastTime)/1000, 0.05);
   lastTime = now;
+  /* ★ 自适应画质治理器：按真实帧时长动态收放粒子/特效预算。
+     以前粒子上限写死 3000，两三个技能同时开就能喷满并让整台机器卡住；
+     现在持续掉帧就把预算砍到很低，帧率恢复后再慢慢放开。 */
+  if(window.PFX){
+    const P = window.PFX;
+    P.avg = (P.avg === undefined) ? dt : (P.avg * 0.9 + dt * 0.1);
+    P.acc = (P.acc || 0) + dt;
+    if(P.acc > 0.25){
+      P.acc = 0;
+      const fps = 1 / Math.max(0.001, P.avg);
+      if(fps < 34){                      /* 严重掉帧：进入低画质 */
+        P.slow = 1; P.cap = 200; P.scale = 0.45; P.shadow = 0.35;
+      } else if(fps < 48){               /* 有点卡：中等画质 */
+        P.slow = 0; P.cap = 340; P.scale = 0.7; P.shadow = 0.7;
+      } else if(fps > 56){               /* 流畅：恢复高画质 */
+        P.slow = 0; P.cap = 560; P.scale = 1; P.shadow = 1;
+      }
+    }
+  }
   if((gameState === 'playing' || gameState === 'stageClear') && !(typeof G !== 'undefined' && G && G.awaitRevive)) update(dt);
   if(gameState === 'town') updateTown(dt);
   /* ★ 剧情对话与任务进度推进（任何状态下都保持生命） */
@@ -192,13 +211,34 @@ function loopBody(now){
 
     for(const pr of G.projectiles) drawProjectile(pr);
 
-    /* 粒子不再用「加法发光」叠加：以前一屏几十上百个发光点叠在一起会爆白，
-       既刺眼又极耗填充率（低端机放技能就掉帧）。
-       改成普通混合后画面像飞溅的碎屑 / 剑气残渣，层次还在，但不炸眼。 */
-    for(const pt of G.particles){
-      ctx.globalAlpha = (pt.life/pt.maxLife) * 0.85;
-      ctx.fillStyle = pt.color;
-      ctx.beginPath(); ctx.arc(pt.x, pt.y-pt.h, pt.size*(pt.life/pt.maxLife+0.5), 0, TAU); ctx.fill();
+    /* ★ 粒子批量绘制（性能关键）：
+       旧写法每颗粒子一次 beginPath+arc+fill，几百颗就是几百次绘制调用，放两个技能直接卡死。
+       现在按颜色分组、同色合并成一条路径一次 fill，绘制调用从「粒子数」降到「颜色数」；
+       同时剔除屏幕外与快要消散的碎屑。 */
+    const _pL = camX - 60, _pR = camX + VW + 60;
+    const _byColor = {};
+    for(let pi = 0; pi < G.particles.length; pi++){
+      const pt = G.particles[pi];
+      const ppx = pt.x, ppy = pt.y - pt.h;
+      if(ppx < _pL || ppx > _pR) continue;
+      const lifeK = pt.life / pt.maxLife;
+      if(lifeK < 0.12) continue;
+      const rr = pt.size * (lifeK + 0.5);
+      let bucket = _byColor[pt.color];
+      if(!bucket){ bucket = _byColor[pt.color] = []; }
+      bucket.push(ppx, ppy, rr);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 0.82;
+    for(const pcol in _byColor){
+      const arr = _byColor[pcol];
+      ctx.fillStyle = pcol;
+      ctx.beginPath();
+      for(let i = 0; i < arr.length; i += 3){
+        ctx.moveTo(arr[i] + arr[i+2], arr[i+1]);
+        ctx.arc(arr[i], arr[i+1], arr[i+2], 0, TAU);
+      }
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
 
