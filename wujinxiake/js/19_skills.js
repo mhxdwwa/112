@@ -2262,7 +2262,7 @@ function castAxeXingtian(){
   skAt(70, ()=>{
     if(!G || gameState !== 'playing') return;
     axeBlinkTo(p, tg, 92);
-    addEffect('asuraAvatar', p.x, p.y, 1.5, {facing:p.facing, color:'#ff8a4a', spriteKey:'axe', anim:'skill', ghostH:140, follow:p});
+    addEffect('asuraAvatar', p.x, p.y, 1.5, {facing:p.facing, color:'#ff8a4a', spriteKey:'axe', anim:'skill', ghostH:140, follow:p, ringR:0, rotSpeed:0});
   });
   /* ② 八段斧斩：手中斧左右交替连挥 */
   for(let i = 0; i < 8; i++){
