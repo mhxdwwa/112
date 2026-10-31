@@ -1198,58 +1198,57 @@ function castSwordImmortal(){
 function castSwordTruthArray(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tgt = skAim(p, 170);            /* 活坐标 */
-  const cx = () => tgt.x, cy = () => tgt.y;
-  spawnText(p.x, p.y, 205, '诛 仙 剑 阵', '#c4b0ff', 40);
-  p.action = { type:'swordCharge', dur:0.66, t:0 };
-  const CX = () => clamp(cx(), WORLD_L + 120, WORLD_R - 120);
-  addEffect('hitRing', CX(), cy(), 0.6, {color:'#9c8fc8', r:170});
-  addEffect('hitRing', CX(), cy(), 0.8, {color:'#c9c0e0', r:120});
-  const dirs = [0, Math.PI/2, Math.PI, Math.PI*1.5];
-  dirs.forEach((a, i)=>{
-    skAt(110 + i*85, ()=>{
-      const sx = CX() + Math.cos(a)*175, sy = cy() + Math.sin(a)*92;
-      addEffect('skyPillar', sx, sy, 1.15, {height:430, color:'#c4b0ff'});
-      addEffect('hitRing', sx, sy, 0.5, {color:'#e8e0ff', r:74});
-      skBurst(sx, sy, '#c4b0ff', 7, {grav:-140, spMin:60, spMax:210});
+  const tg = skAim(p, 240);                  /* 活坐标：剑阵中心全程跟着目标 */
+  skCastPose(p, 2.4, '诛 仙 剑 阵', '#c4b0ff', 46);
+  skCastAura(p, 2.4, '#c4b0ff', 3);
+  const cxF = () => clamp(tg.x, WORLD_L + 200, WORLD_R - 200);
+  const cyF = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  const GAP = 92;                            /* 四剑横向间距，把敌人夹在阵中 */
+  const spots = [-GAP*3, -GAP, GAP, GAP*3];
+
+  /* ① 四柄本命剑自天而降，剑尖插入地面（手中剑模型） */
+  spots.forEach((off, i)=>{
+    skAt(120 + i * 95, ()=>{
+      if(!G || gameState !== 'playing') return;
+      playSound('swordSwing');
+      addEffect('swordStake', cxF() + off, cyF(), 2.5, {color:'#c4b0ff', scale:1.65, fallDur:0.3, fromH:660});
+      meleeAoe(p, cxF() + off, cyF(), 88, A*6, {kb:80});
+      addEffect('hitRing', cxF() + off, cyF(), 0.4, {color:'#e8e0ff', r:70});
+      skShake(6, 0.04, '#c4b0ff');
     });
   });
-  /* 四剑显形，环绕绞杀 */
-  const blades = [];
-  for(let i=0;i<4;i++) blades.push({ angle:i*Math.PI/2, rad:175 });
-  addEffect('bladeOrbit', CX(), cy(), 2.5, {blades:blades, color:'#c4b0ff', scale:2.2});
-  let ticks = 0;
-  const timer = setInterval(()=>{
-    if(!G || gameState !== 'playing'){ clearInterval(timer); return; }
-    ticks++;
-    meleeAoe(p, CX(), cy(), 225, A*9, {kb:60});
-    for(let i=0;i<4;i++){
-      const a = ticks*0.85 + i*Math.PI/2;
-      const sx = CX() + Math.cos(a)*175, sy = cy() + Math.sin(a)*92;
-      if(i === (ticks % 4)) addEffect('slashArc', sx, sy, 0.26, {facing:Math.cos(a)>0?1:-1, color:'#b8a8e8', size:1.0, typeStr:'stab'});
-    }
-    if(ticks % 4 === 0) addEffect('hitRing', CX(), cy(), 0.4, {color:'#c4b0ff', r:195});
-    if(ticks >= 16){
-      clearInterval(timer);
-      dirs.forEach((a, i)=>{
-        skAt(i*55, ()=>{
-          const sx = CX() + Math.cos(a)*175, sy = cy() + Math.sin(a)*92;
-          addEffect('explosion', sx, sy, 0.55, {color:'#9c8fc8', r:110});
-          addEffect('skyPillar', sx, sy, 1.25, {height:540, color:'#e8e0ff'});
+
+  /* ② 剑阵激活：地面剑气在四剑之间横向贯穿扫射 */
+  skAt(720, ()=>{
+    if(!G || gameState !== 'playing') return;
+    let wave = 0;
+    const timer = setInterval(()=>{
+      if(!G || gameState !== 'playing'){ clearInterval(timer); return; }
+      wave++;
+      const zL = cxF() - GAP*3.6, zR = cxF() + GAP*3.6;
+      const zx = (zL + zR) / 2, zw = zR - zL;
+      /* ★ 剑气横扫：整条阵线一次判定 —— 视觉与命中范围完全一致 */
+      meleeHitRect(p, zx, cyF(), zw, 190, A*12, {kb:120});
+      addEffect('spearLine', zL, cyF() - 46, 0.26, {endX:zR, endY:cyF() - 46, color:'#e8e0ff', width:14});
+      addEffect('spearLine', zR, cyF() - 28, 0.26, {endX:zL, endY:cyF() - 28, color:'#c4b0ff', width:10});
+      addEffect('hitRing', zx, cyF(), 0.32, {color:'#d0c8ff', r:180});
+      skShake(7, 0.03, '#c4b0ff');
+      if(wave >= 6){
+        clearInterval(timer);
+        /* ③ 收阵：四剑齐鸣，阵心爆发 */
+        skAt(150, ()=>{
+          if(!G || gameState !== 'playing') return;
+          meleeAoe(p, zx, cyF(), 320, A*60, {kb:520, launch:true});
+          addEffect('explosion', zx, cyF() - 20, 0.9, {color:'#c4b0ff', r:260});
+          addEffect('hitRing', zx, cyF(), 0.8, {color:'#ffffff', r:300});
+          spots.forEach(off=> addEffect('skyPillar', cxF() + off, cyF(), 0.7, {height:520, color:'#e8e0ff'}));
+          skShake(26, 0.4, '#c4b0ff');
+          fxHitstop(0.08);
         });
-      });
-      skAt(250, ()=>{
-        if(!G || gameState !== 'playing') return;
-        meleeAoe(p, CX(), cy(), 310, A*70, {kb:540, launch:true});
-        addEffect('explosion', CX(), cy(), 0.85, {color:'#9c8fc8', r:200});
-        addEffect('hitRing', CX(), cy(), 0.85, {color:'#ffffff', r:330});
-        addEffect('skyCrack', CX(), cy()-230, 1.0, {width:360, color:'#c4b0ff'});
-        skShake(26, 0.42, '#ddd0ff');
-        fxHitstop(0.1);
-      });
-    }
-  }, 160);
-  skShake(10, 0.18, '#c4b0ff');
+      }
+    }, 200);
+    skShake(10, 0.12, '#c4b0ff');
+  });
 }
 
 /* ---------- 宝剑剑士 6：剑来（烽火戏诸侯《剑来》） ---------- */
@@ -1395,13 +1394,16 @@ function castBladeFrostSix(){
     /* 第六诀 · 冰爆 */
     skAt(700, ()=>{
       if(!G || gameState !== 'playing') return;
-      const tx = clamp(skFall(p, tg0, 290, 900).x, WORLD_L, WORLD_R);
-      addEffect('explosion', tx, p.y-40, 0.8, {color:'#bfe8ff', r:191});
-      addEffect('hitRing', tx, p.y, 0.78, {color:'#dbe4e8', r:214});
-      addEffect('spearLine', p.x + dir*40, p.y-60, 0.5, {endX:tx + dir*170, endY:p.y-60, color:'#bfe8ff', width:28});
-      meleeAoe(p, tx, p.y, 295, A*70, {kb:470, launch:true});
-      skBurst(tx, p.y-40, '#dff4ff', 16, {spMin:200, spMax:770, grav:160});
-      addEffect('skyCrack', tx, p.y-260, 0.9, {width:240, color:'#bfe8ff'});
+      /* ★ 落点用目标的活坐标（含 Y）：以前固定用 p.y 判定，怪在别的纵深就砸空了 */
+      const _fall = skFall(p, tg0, 290, 900);
+      const tx = clamp(_fall.x, WORLD_L, WORLD_R);
+      const ty = clamp(_fall.y, GY_TOP + 20, GY_BOTTOM);
+      addEffect('explosion', tx, ty-40, 0.8, {color:'#bfe8ff', r:191});
+      addEffect('hitRing', tx, ty, 0.78, {color:'#dbe4e8', r:214});
+      addEffect('spearLine', p.x + dir*40, p.y-60, 0.5, {endX:tx + dir*170, endY:ty-60, color:'#bfe8ff', width:28});
+      meleeAoe(p, tx, ty, 295, A*70, {kb:470, launch:true});
+      skBurst(tx, ty-40, '#dff4ff', 16, {spMin:200, spMax:770, grav:160});
+      addEffect('skyCrack', tx, ty-260, 0.9, {width:240, color:'#bfe8ff'});
       skShake(22, 0.3, '#dff4ff');
       fxHitstop(0.08);
     });
@@ -1846,8 +1848,26 @@ function skSpot(p, tg, meleeR, maxRange){
     const tx = tg.x;
     p.facing = tx >= p.x ? 1 : -1;
     const dx = Math.abs(tx - p.x);
-    /* 近战距离内：打身前固定点（保留近战手感，本来就不该追） */
-    if(dx <= R) return { x: p.x + p.facing * R, y: tg.y, far:false };
+    /* ★ 近战落点也「跟人」：以前这里返回 p.x + facing*R 的固定快照，
+       敌人一走动技能就砸在原来那块地板上（这就是「打身前地板」的根源）。
+       现在近身也绑定目标活坐标：落点=目标当前位置（最多不超过近战半径，至少身前 46px）。 */
+    if(dx <= R){
+      const ref = tg.ref;
+      if(ref){
+        const near = { far:false, ref:ref };
+        Object.defineProperty(near, 'x', { configurable:true, get(){
+          if(!skAlive(ref)) return p.x + p.facing * R;
+          const d = ref.x - p.x;
+          const dir = d >= 0 ? 1 : -1;
+          return p.x + dir * Math.min(R, Math.max(46, Math.abs(d)));
+        }, set(v){} });
+        Object.defineProperty(near, 'y', { configurable:true, get(){
+          return skAlive(ref) ? ref.y : tg.y;
+        }, set(v){} });
+        return near;
+      }
+      return { x: p.x + p.facing * R, y: tg.y, far:false };
+    }
     if(maxRange && dx > maxRange) return { x: p.x + p.facing * maxRange, y: tg.y, far:true, clipped:true };
     /* ★ 远程落点也用“活坐标”：技能延迟落地时会读到目标当前位置。
        目标没了则回落到最后一帧坐标。 */
@@ -2105,8 +2125,8 @@ function castHerbSpider(){
   const tg = skAim(p, 260);
   skCastPose(p, 1.0, '千 蛛 万 毒', '#b388ff', 40);
   skCastAura(p, 1.0, '#b388ff', 4);
-  const cx = clamp(tg.x, WORLD_L + 80, WORLD_R - 80);
-  addEffect('hitRing', cx, tg.y, 1.0, {color:'#b388ff', r:128});
+  const _cx = () => clamp(tg.x, WORLD_L + 80, WORLD_R - 80);
+  addEffect('hitRing', _cx(), tg.y, 1.0, {color:'#b388ff', r:128});
   /* ★ 毒蛛自地底成群爬出，扑向目标 */
   addEffect('spiderSwarm', p.x, p.y, 1.0, {facing:p.facing, n:7, reach:300, size:17, color:'#b388ff', color2:'#7ed957'});
   addEffect('spiderSwarm', p.x + p.facing * 120, p.y, 0.9, {facing:p.facing, n:6, reach:240, size:14, color:'#7ed957', color2:'#b388ff'});
@@ -2614,31 +2634,31 @@ function castTalismanGhosts(){
   const tg = skAim(p, 200);
   skCastPose(p, 1.9, '九 幽 黄 泉', '#b388ff', 46);
   skCastAura(p, 1.9, '#b388ff', 4);
-  const cx = clamp(tg.x, WORLD_L + 200, WORLD_R - 200);
-  addEffect('dharmaWheel', cx, tg.y, 2.0, {color:'#b388ff', r:300});
-  addEffect('skyGlow', cx, tg.y, 1.8, {color:'#6a3a9a', r:340});
+  const _cx = () => clamp(tg.x, WORLD_L + 200, WORLD_R - 200);
+  addEffect('dharmaWheel', _cx(), tg.y, 2.0, {color:'#b388ff', r:300});
+  addEffect('skyGlow', _cx(), tg.y, 1.8, {color:'#6a3a9a', r:340});
   /* ★ 九幽符阵铺开：双层逆向旋转 */
-  addEffect('runeCircle', cx, tg.y, 1.9, {color:'#b388ff', color2:'#d0a8ff', r:320, n:12, speed:1.5});
-  addEffect('runeCircle', cx, tg.y, 1.9, {color:'#6a3a9a', color2:'#cdd8e8', r:210, n:8, speed:-2.6, rot:1.2});
+  addEffect('runeCircle', _cx(), tg.y, 1.9, {color:'#b388ff', color2:'#d0a8ff', r:320, n:12, speed:1.5});
+  addEffect('runeCircle', _cx(), tg.y, 1.9, {color:'#6a3a9a', color2:'#cdd8e8', r:210, n:8, speed:-2.6, rot:1.2});
   /* 符阵：外圈符纸旋转 */
   for(let i = 0; i < 12; i++){
     skAt(i * 90, ()=>{
       const a = i / 12 * TAU;
-      addEffect('talisman', cx + Math.cos(a) * 240, tg.y + Math.sin(a) * 90, 0.8, {color:'#d0a8ff', n:1, r:0, rise:20, rot:a});
-      skBurst(cx + Math.cos(a) * 200, tg.y + Math.sin(a) * 80, '#b388ff', 3, {grav:-60});
+      addEffect('talisman', _cx() + Math.cos(a) * 240, tg.y + Math.sin(a) * 90, 0.8, {color:'#d0a8ff', n:1, r:0, rise:20, rot:a});
+      skBurst(_cx() + Math.cos(a) * 200, tg.y + Math.sin(a) * 80, '#b388ff', 3, {grav:-60});
     });
   }
   /* 鬼手分三批破土 */
   for(let wave = 0; wave < 3; wave++){
     skAt(500 + wave * 380, ()=>{
-      addEffect('ghostHand', cx, tg.y + 18, 0.9, {color:'#cdd8e8', n:5, gap:56});
-      addEffect('emberBurst', cx, tg.y - 26, 0.7, {color:'#b388ff', r:220, n:18, rot:rand(0, TAU)});
+      addEffect('ghostHand', _cx(), tg.y + 18, 0.9, {color:'#cdd8e8', n:5, gap:56});
+      addEffect('emberBurst', _cx(), tg.y - 26, 0.7, {color:'#b388ff', r:220, n:18, rot:rand(0, TAU)});
       /* 鬼气翻涌 */
-      spawnParticles(cx, tg.y - 20, 8, {color:wave % 2 ? '#b388ff' : '#cdd8e8', angle:-Math.PI / 2, spread:1.2,
+      spawnParticles(_cx(), tg.y - 20, 8, {color:wave % 2 ? '#b388ff' : '#cdd8e8', angle:-Math.PI / 2, spread:1.2,
         spMin:70, spMax:280, lifeMin:0.35, lifeMax:0.85, sizeMin:3, sizeMax:8, grav:-90});
-      meleeAoe(p, cx, tg.y, 210, A * 42, {kb:120});
+      meleeAoe(p, _cx(), tg.y, 210, A * 42, {kb:120});
       for(const e of G.enemies){
-        if(e.alive && Math.abs(e.x - cx) < 240 && Math.abs(e.y - tg.y) < 80){
+        if(e.alive && Math.abs(e.x - _cx()) < 240 && Math.abs(e.y - tg.y) < 80){
           e.rootT = Math.max(e.rootT || 0, 1.2);
         }
       }
@@ -2647,10 +2667,10 @@ function castTalismanGhosts(){
     });
   }
   skAt(1750, ()=>{
-    meleeAoe(p, cx, tg.y, 330, A * 190, {kb:460, launch:true});
-    addEffect('explosion', cx, tg.y, 1.1, {color:'#b388ff', r:259});
-    addEffect('skyCrack', cx, 80, 1.2, {width:420, color:'#b388ff'});
-    skBurst(cx, tg.y - 60, '#b388ff', 18, {spMin:200, spMax:760, grav:60});
+    meleeAoe(p, _cx(), tg.y, 330, A * 190, {kb:460, launch:true});
+    addEffect('explosion', _cx(), tg.y, 1.1, {color:'#b388ff', r:259});
+    addEffect('skyCrack', _cx(), 80, 1.2, {width:420, color:'#b388ff'});
+    skBurst(_cx(), tg.y - 60, '#b388ff', 18, {spMin:200, spMax:760, grav:60});
     skShake(30, 0.45, '#b388ff');
     fxHitstop(0.12);
   });
@@ -2817,18 +2837,18 @@ function castCauldronDragons(){
   const tg = skAim(p, 240);
   skCastPose(p, 1.6, '九 丹 神 火 罩', '#ff5a2a', 44);
   skCastAura(p, 1.6, '#ff5a2a', 4);
-  const cx = clamp(tg.x, WORLD_L + 160, WORLD_R - 160);
-  addEffect('dharmaWheel', cx, tg.y, 1.8, {color:'#ff5a2a', r:250});
+  const _cx = () => clamp(tg.x, WORLD_L + 160, WORLD_R - 160);
+  addEffect('dharmaWheel', _cx(), tg.y, 1.8, {color:'#ff5a2a', r:250});
   /* ★ 九枚真火金丹绕罩盘旋 */
-  addEffect('pillOrbit', cx, tg.y, 1.6, {color:'#ff5a2a', color2:'#ffd166', n:9, r:240, h:120, size:14, speed:2.6});
+  addEffect('pillOrbit', _cx(), tg.y, 1.6, {color:'#ff5a2a', color2:'#ffd166', n:9, r:240, h:120, size:14, speed:2.6});
   for(let i = 0; i < 9; i++){
     skAt(220 + i * 120, ()=>{
       if(!G || gameState !== 'playing') return;
       const a = i / 9 * TAU;
-      const sx = cx + Math.cos(a) * 240, sy = tg.y + Math.sin(a) * 100;
+      const sx = _cx() + Math.cos(a) * 240, sy = tg.y + Math.sin(a) * 100;
       /* ★ 金丹依次射入罩心，落地炸开一小团真火 */
       G.projectiles.push({ kind:'realPill', x:sx, y:sy - 60, h:1,
-        vx:(cx - sx) * 0.9, vy:(tg.y - sy) * 0.9, life:0.6, w:85, hh:70,
+        vx:(_cx() - sx) * 0.9, vy:(tg.y - sy) * 0.9, life:0.6, w:85, hh:70,
         dmg:A*12, pierce:99, hitSet:new Set(), rot:0, scale:1.5,
         color:'#ff5a2a', owner:p, noHoming:true, noHit:true });
       meleeAoe(p, sx, tg.y, 80, A * 12, {kb:60});
@@ -2837,14 +2857,14 @@ function castCauldronDragons(){
     });
   }
   skAt(1450, ()=>{
-    meleeAoe(p, cx, tg.y, 280, A * 90, {kb:320, launch:true});
+    meleeAoe(p, _cx(), tg.y, 280, A * 90, {kb:320, launch:true});
     /* ★ 罩成：本命鼎倒扣落下，罩住敌阵 */
-    addEffect('cauldron', cx, tg.y, 1.1, {color:'#ff5a2a', scale:3.4});
-    addEffect('explosion', cx, tg.y, 1.0, {color:'#ff5a2a', r:230});
-    addEffect('skyPillar', cx, tg.y, 1.0, {height:800, color:'#ff5a2a'});
-    addEffect('emberBurst', cx, tg.y - 30, 1.1, {color:'#ff5a2a', r:380, n:14, rot:rand(0, TAU)});
-    addEffect('shockWave', cx, tg.y + 2, 0.9, {facing:p.facing, r:480, color:'#ff7a4a'});
-    skBurst(cx, tg.y - 50, '#ff7a4a', 8, {spMin:180, spMax:700, grav:120});
+    addEffect('cauldron', _cx(), tg.y, 1.1, {color:'#ff5a2a', scale:3.4});
+    addEffect('explosion', _cx(), tg.y, 1.0, {color:'#ff5a2a', r:230});
+    addEffect('skyPillar', _cx(), tg.y, 1.0, {height:800, color:'#ff5a2a'});
+    addEffect('emberBurst', _cx(), tg.y - 30, 1.1, {color:'#ff5a2a', r:380, n:14, rot:rand(0, TAU)});
+    addEffect('shockWave', _cx(), tg.y + 2, 0.9, {facing:p.facing, r:480, color:'#ff7a4a'});
+    skBurst(_cx(), tg.y - 50, '#ff7a4a', 8, {spMin:180, spMax:700, grav:120});
     skShake(26, 0.4, '#ff7a4a');
   });
 }
@@ -2856,21 +2876,21 @@ function castCauldronBagua(){
   const tg = skAim(p, 200);
   skCastPose(p, 2.2, '炼 天 煮 海', '#ffd166', 50);
   skCastAura(p, 2.2, '#ffd166', 4);
-  const cx = clamp(tg.x, WORLD_L + 120, WORLD_R - 120);
-  addEffect('skyCrack', cx, 60, 1.6, {width:600, color:'#ffd166'});
-  addEffect('dharmaWheel', cx, tg.y, 2.4, {color:'#ff7a4a', r:340});
+  const _cx = () => clamp(tg.x, WORLD_L + 120, WORLD_R - 120);
+  addEffect('skyCrack', _cx(), 60, 1.6, {width:600, color:'#ffd166'});
+  addEffect('dharmaWheel', _cx(), tg.y, 2.4, {color:'#ff7a4a', r:340});
   /* ★ 以天地为炉：八卦丹丸绕炉旋转 */
-  addEffect('pillOrbit', cx, tg.y, 1.8, {color:'#ffd166', color2:'#ff5a2a', n:8, r:230, h:150, size:16, speed:1.8});
-  addEffect('pillOrbit', cx, tg.y, 1.8, {color:'#ff5a2a', color2:'#fff6c8', n:8, r:150, h:90, size:12, speed:-2.6});
+  addEffect('pillOrbit', _cx(), tg.y, 1.8, {color:'#ffd166', color2:'#ff5a2a', n:8, r:230, h:150, size:16, speed:1.8});
+  addEffect('pillOrbit', _cx(), tg.y, 1.8, {color:'#ff5a2a', color2:'#fff6c8', n:8, r:150, h:90, size:12, speed:-2.6});
   /* 炉盖自天而降 */
   skAt(700, ()=>{
-    addEffect('cauldron', cx, tg.y, 1.6, {color:'#ffd166', scale:3.0});
-    addEffect('explosion', cx, tg.y, 1.2, {color:'#ff7a4a', r:259});
+    addEffect('cauldron', _cx(), tg.y, 1.6, {color:'#ffd166', scale:3.0});
+    addEffect('explosion', _cx(), tg.y, 1.2, {color:'#ff7a4a', r:259});
     /* ★ 炉盖砸落：金红丹火向四面喷发（精简） */
-    addEffect('emberBurst', cx, tg.y - 30, 1.2, {color:'#ff7a4a', r:420, n:16, rot:rand(0, TAU)});
-    addEffect('shockWave', cx, tg.y + 2, 1.0, {facing:p.facing, r:520, color:'#ffd166'});
-    skRingBurst(cx, tg.y, 260, '#ffd166', 12);
-    meleeAoe(p, cx, tg.y, 330, A * 120, {kb:420, launch:true});
+    addEffect('emberBurst', _cx(), tg.y - 30, 1.2, {color:'#ff7a4a', r:420, n:16, rot:rand(0, TAU)});
+    addEffect('shockWave', _cx(), tg.y + 2, 1.0, {facing:p.facing, r:520, color:'#ffd166'});
+    skRingBurst(_cx(), tg.y, 260, '#ffd166', 12);
+    meleeAoe(p, _cx(), tg.y, 330, A * 120, {kb:420, launch:true});
     skShake(30, 0.5, '#ffd166');
     playSound('explosion');
     fxHitstop(0.14);
@@ -2878,19 +2898,19 @@ function castCauldronBagua(){
   /* 炉火九转（丹道师以鼎炼丹：金丹绕炉轮转，不再借用火龙） */
   for(let t = 0; t < 4; t++){
     skAt(1100 + t * 300, ()=>{
-      addEffect('skyPillar', cx + rand(-160, 160), tg.y, 0.5, {height:700, color:'#ff5a2a'});
-      addEffect('groundFire', cx + rand(-180, 180), tg.y, 0.7, {color:'#ff7a4a'});
-      addEffect('pillOrbit', cx, tg.y, 0.6, {color:t % 2 ? '#ffd166' : '#ff5a2a', color2:'#fff6c8', n:6, r:120 + t*40, h:110, size:12, speed:3.2});
-      spawnParticles(cx + rand(-140, 140), tg.y - 40, 8, {color:t % 2 ? '#ff7a4a' : '#ffd166', angle:-Math.PI / 2, spread:1.0,
+      addEffect('skyPillar', _cx() + rand(-160, 160), tg.y, 0.5, {height:700, color:'#ff5a2a'});
+      addEffect('groundFire', _cx() + rand(-180, 180), tg.y, 0.7, {color:'#ff7a4a'});
+      addEffect('pillOrbit', _cx(), tg.y, 0.6, {color:t % 2 ? '#ffd166' : '#ff5a2a', color2:'#fff6c8', n:6, r:120 + t*40, h:110, size:12, speed:3.2});
+      spawnParticles(_cx() + rand(-140, 140), tg.y - 40, 8, {color:t % 2 ? '#ff7a4a' : '#ffd166', angle:-Math.PI / 2, spread:1.0,
         spMin:110, spMax:380, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:8, grav:-100});
-      meleeAoe(p, cx, tg.y, 360, A * 30, {kb:120});
-      skBurst(cx, tg.y - 80, '#ffd166', 5, {grav:-40, spMin:100, spMax:340});
+      meleeAoe(p, _cx(), tg.y, 360, A * 30, {kb:120});
+      skBurst(_cx(), tg.y - 80, '#ffd166', 5, {grav:-40, spMin:100, spMax:340});
       skShake(14, 0.1, '#ff7a4a');
     });
   }
   skAt(2400, ()=>{
-    meleeAoe(p, cx, tg.y, 460, A * 90, {kb:300});
-    addEffect('explosion', cx, tg.y, 1.0, {color:'#ffe9a8', r:331});
+    meleeAoe(p, _cx(), tg.y, 460, A * 90, {kb:300});
+    addEffect('explosion', _cx(), tg.y, 1.0, {color:'#ffe9a8', r:331});
     skShake(24, 0.3, '#ffe9a8');
   });
 }
