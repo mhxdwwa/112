@@ -723,7 +723,15 @@ function update(dt){
     }
   }
 
-  if(!p.dead) updatePlayer(p, dt);
+  /* ★ 玩家更新加保护：技能状态里的任何异常都不允许把「移动」一起带走
+     （以前 update 里一旦抛错，整个逻辑帧中断，表现就是角色被卡住动不了） */
+  if(!p.dead){
+    try{ updatePlayer(p, dt); }
+    catch(err){
+      p.action = null;
+      if(!window.__updErrShown){ window.__updErrShown = 1; console.error('[updatePlayer] 已接管异常：', err); }
+    }
+  }
 
   if(G.isPvp && G.player2 && !G.player2.dead){
     updatePlayer(G.player2, dt);
@@ -1030,6 +1038,14 @@ function update(dt){
   const projLeftLimit  = G.isPvp ? -300 : (camX - 800);
   const projRightLimit = G.isPvp ? (VW + 300) : (camX + VW + 800);
   
+  /* ★ 投射物上限：纯视觉齐射（noHit）堆太多时先清掉最老的，
+     避免连放技能后几十上百把带光晕的武器同时绘制把帧率压死 */
+  if(G.projectiles.length > 110){
+    for(let i = 0; i < G.projectiles.length && G.projectiles.length > 92; i++){
+      if(G.projectiles[i].noHit){ G.projectiles.splice(i,1); i--; }
+    }
+  }
+
   for(let i=G.projectiles.length-1; i>=0; i--){
     if(gameState === 'stageClear') break; // 通关结算时投射物冻结
     const pr = G.projectiles[i];
