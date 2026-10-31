@@ -1291,10 +1291,24 @@ function castSwordCome(){
       focusY = bestE.y;
     }
     for(let k=0;k<2;k++){
-      /* ★ 集火时剑从目标上方落下，分散时随机 */
-      const ex = focusX !== null ? clamp(focusX + rand(-80, 80), WORLD_L, WORLD_R) : clamp(p.x + rand(-470, 470), WORLD_L, WORLD_R);
-      const ey = focusY !== null ? clamp(focusY + rand(-30, 30), GY_TOP + 20, GY_BOTTOM) : rand(GY_TOP + 20, GY_BOTTOM);
-      G.projectiles.push({ kind:'glowWeapon', weaponType:'sword', x:ex + rand(-70,70), y:ey-400, h:1, vx:0, vy:1560, life:0.30, w:104, hh:132, dmg:A*12, pierce:2, hitSet:new Set(), color:'#cfeaff', rot:Math.PI/2, scale:1.7, owner:p });
+      /* ★ 每一柄剑都从「敌人的正上方」生成、剑尖对准敌人刺下去
+         （以前是满天随机洒，剑身还只按飞行方向歪斜，看起来根本不在刺人） */
+      let ex, ey, aimRef = null;
+      if(alive.length){
+        const e2 = alive[(Math.random() * alive.length) | 0];
+        aimRef = e2;
+        ex = clamp(e2.x + rand(-55, 55), WORLD_L, WORLD_R);
+        ey = clamp(e2.y + rand(-14, 14), GY_TOP + 20, GY_BOTTOM);
+      } else {
+        ex = clamp(p.x + p.facing * rand(120, 380), WORLD_L, WORLD_R);
+        ey = rand(GY_TOP + 60, GY_BOTTOM);
+      }
+      const sx2 = ex + rand(-36, 36), sy2 = ey - 430;
+      const aimA = Math.atan2(ey - sy2, ex - sx2);       /* 剑尖 → 敌人 */
+      const spd2 = 1560;
+      G.projectiles.push({ kind:'glowWeapon', weaponType:'sword', x:sx2, y:sy2, h:1,
+        vx:Math.cos(aimA)*spd2, vy:Math.sin(aimA)*spd2, life:0.36, w:104, hh:150,
+        dmg:A*12, pierce:2, hitSet:new Set(), color:'#cfeaff', rot:aimA, scale:1.7, owner:p, aimTip:true, aimRef:aimRef });
       /* ★ 判定加宽：剑速 1560px/s（每帧约 25px），原来 hh=76 的垂直窗口只有 ~26px，
          高速下会整帧跳过敌人（穿模）导致“剑扎下来了却没打中”；现放宽到 132 */
       spawnParticles(ex, ey, 2, {color:'#eaf6ff', angle:-Math.PI/2, spread:1.1, spMin:70, spMax:220, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:320});
