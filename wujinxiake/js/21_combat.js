@@ -359,6 +359,8 @@ function recalcPlayerStats(){
 function update(dt){
   if(!G || (gameState !== 'playing' && gameState !== 'stageClear')) return;
   const rawDt = dt;                              // ★ 修复B：保存原始 dt，投射物不受 hitstop 减速
+  /* ★ 顿帧总时长硬上限 0.08s：多段攻击再密集，也不会把游戏长期压成十分之一速 */
+  if(G.hitstop > 0.08) G.hitstop = 0.08;
   if(G.hitstop > 0){ G.hitstop -= dt; dt *= 0.1; }
   G.t += dt; G.shake *= Math.pow(0.0015, dt); G.flash *= Math.pow(0.001, dt);
   if(G.comboTimer > 0){ G.comboTimer -= dt; if(G.comboTimer <= 0) G.combo = 0; }
@@ -724,9 +726,11 @@ function update(dt){
   }
 
   /* ★ 玩家更新加保护：技能状态里的任何异常都不允许把「移动」一起带走
-     （以前 update 里一旦抛错，整个逻辑帧中断，表现就是角色被卡住动不了） */
+     （以前 update 里一旦抛错，整个逻辑帧中断，表现就是角色被卡住动不了）
+     ★ 同时用 rawDt：顿帧只做打击感表现，玩家移动/动作不再被减速
+     —— 这就是「被多段攻击打中就走不动」的主因 */
   if(!p.dead){
-    try{ updatePlayer(p, dt); }
+    try{ updatePlayer(p, rawDt); }
     catch(err){
       p.action = null;
       if(!window.__updErrShown){ window.__updErrShown = 1; console.error('[updatePlayer] 已接管异常：', err); }
@@ -1174,7 +1178,7 @@ function update(dt){
           G.shake = Math.max(G.shake, 12+pr.explodeCount*8);
           G.flash = Math.max(G.flash, 0.15+pr.explodeCount*0.1);
           G.hitFlashColor = orbColor;
-          G.hitstop = Math.max(G.hitstop, 0.1+pr.explodeCount*0.05);
+          fxHitstop(0.1+pr.explodeCount*0.05);
           
           /* 第三次爆炸：莲花绽放 */
           if(pr.explodeCount === 2){
@@ -1218,7 +1222,7 @@ function update(dt){
               G.shake = Math.max(G.shake, 30);
               G.flash = 0.4;
               G.hitFlashColor = orbColor;
-              G.hitstop = Math.max(G.hitstop, 0.2);
+              fxHitstop(0.2);
             }, 100);
           }
           
