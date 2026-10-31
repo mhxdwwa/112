@@ -1083,53 +1083,84 @@ function skRingBurst(cx, cy, r, color, n){
   }
 }
 
-/* ---------- 宝剑剑士 4：夺命十三剑（古龙《三少爷的剑》燕十三） ----------
-   ★ 重做：十三剑一气呵成，一剑快过一剑，每一剑都是「手中这柄剑」实体飞出刺击；
-   第十三剑「夺命」收尾（巨剑贯体+击飞），剑到即伤，视觉与判定重合，不堆光粒。 */
+/* ---------- 宝剑剑士 4：天雷剑诀（《仙剑奇侠传》蜀山御雷） ----------
+   ★ 特色：以剑引雷、雷随剑走 —— 天雷先劈在剑尖上，把剑掷出后落点即雷击点，
+     雷电再从落点沿附近敌人**连锁传导（雷链）**，每跳衰减，最后一节点雷爆收尾。
+   与其余五招彻底区分：不落剑雨(万剑归宗)、不起剑阵(诛仙剑阵)、不是万剑齐发(剑来)、
+   不走残剑(剑二十三)、也不是一道剑气冲天(剑开天门)——本招的核心是「电」的传导。 */
 function castSwordImmortal(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 300);              /* 活坐标：十三剑全程追着目标 */
-  p.action = { type:'swordCharge', dur:0.5, t:0 };
-  skCastAura(p, 0.45, '#eaf6ff', 3);
-  spawnText(p.x, p.y, 208, '夺 命 十 三 剑', '#eaf6ff', 42);
-  addEffect('hitRing', p.x, p.y, 0.4, {color:'#eaf6ff', r:70});
-  let tms = 400;
-  for(let i = 0; i < 13; i++){
-    tms += Math.max(46, 96 - i * 5);     /* 一剑快过一剑 */
-    skAt(tms, ()=>{
+  const tg = skAim(p, 280);                 /* 活坐标：剑与雷都追着目标 */
+  p.action = { type:'swordCharge', dur:0.6, t:0 };
+  spawnText(p.x, p.y, 208, '天 雷 剑 诀', '#bfe0ff', 44);
+  skCastAura(p, 0.6, '#bfe0ff', 3);
+
+  const CX = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
+  const CY = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+
+  /* ① 引雷入剑：一道天雷从天上劈在举起的剑尖上 */
+  addEffect('lightning', p.x + p.facing*30, p.y - 60, 0.5, {color:'#eaf6ff', scale:1.1, fromY:-320});
+  addEffect('hitRing', p.x + p.facing*30, p.y - 60, 0.4, {color:'#bfe0ff', r:80});
+
+  skAt(420, ()=>{
+    if(!G || gameState !== 'playing') return;
+    playSound('thunder');
+    /* ② 掷剑引雷：本命剑带电飞出（用手中这柄剑的模型），落点即雷击点 */
+    const sx = p.x + p.facing*46, sy = p.y - 58;
+    const dy = (CY() - 24) - sy;
+    const ang = Math.atan2(dy, CX() - sx);
+    const dist = Math.max(60, Math.hypot(CX() - sx, dy));
+    const spd = 1700;
+    G.projectiles.push({ kind:'realSword', x:sx, y:sy, h:1,
+      vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+      life: Math.min(0.7, dist/spd + 0.06), w:120, hh:90,
+      dmg:A*30, pierce:1, hitSet:new Set(), rot:ang, scale:1.6,
+      color:'#bfe0ff', owner:p });
+    addEffect('slashArc', sx + p.facing*40, sy, 0.18, {facing:p.facing, color:'#bfe0ff', size:0.9, typeStr:'stab'});
+
+    /* ③ 雷落 + 雷链传导：从落点开始，向最近的其他敌人逐跳跳电 */
+    skAt(150, ()=>{
       if(!G || gameState !== 'playing') return;
-      const isLast = (i === 12);
-      const dir = tg.x >= p.x ? 1 : -1;
-      p.facing = dir;
-      playSound('swordSwing');
-      /* ★ 每一剑都是本命剑实体飞出，直线贯向目标当前位置 */
-      const sx = p.x + dir * 46, sy = p.y - 58;
-      const ang = Math.atan2((tg.y - 24) - sy, tg.x - sx);
-      const spd = 1500 + i * 45;
-      G.projectiles.push({
-        kind:'realSword', x:sx, y:sy, h:1,
-        vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
-        life: Math.min(0.62, Math.hypot(tg.x - sx, tg.y - sy)/spd + 0.06),
-        w: isLast ? 150 : 96, hh: isLast ? 120 : 70,
-        dmg: isLast ? A*40 : A*5, pierce: isLast ? 99 : 1,
-        hitSet:new Set(), rot:ang, scale: isLast ? 2.6 : 1.15,
-        color:'#eaf6ff', owner:p
-      });
-      /* 剑出的一线剑痕（只留一道，不做粒子堆） */
-      addEffect('slashArc', sx + dir*40, sy, 0.18, {facing:dir, color:'#cfeaff', size:0.9, typeStr:'stab'});
-      if(isLast){
-        /* 第十三剑·夺命：白虹贯体 */
-        addEffect('spearLine', sx, sy, 0.3, {endX:tg.x, endY:sy, color:'#ffffff', width:16});
-        addEffect('explosion', tg.x, tg.y - 20, 0.6, {color:'#eaf6ff', r:130});
-        addEffect('hitRing', tg.x, tg.y, 0.5, {color:'#ffffff', r:130});
-        meleeAoe(p, tg.x, tg.y, 150, A*10, {kb:420, launch:true});
-        skShake(18, 0.26, '#eaf6ff');
-        fxHitstop(0.07);
-        if(p.action && p.action.type === 'swordCharge') p.action = null;
+      let nodeX = CX(), nodeY = CY();
+      addEffect('lightning', nodeX, nodeY, 0.55, {color:'#eaf6ff', scale:1.4, fromY:-360});
+      addEffect('explosion', nodeX, nodeY - 20, 0.5, {color:'#bfe0ff', r:120});
+      addEffect('hitRing', nodeX, nodeY, 0.45, {color:'#eaf6ff', r:120});
+      meleeAoe(p, nodeX, nodeY, 120, A*15, {kb:180});
+      /* 已被雷击过的目标不再重复纳入雷链 */
+      const hitSet = new Set();
+      for(const e of G.enemies){
+        if(e.alive && Math.abs(e.x - nodeX) < 120 && Math.abs(e.y - nodeY) < 80) hitSet.add(e);
       }
+      let dmgMul = 1;
+      for(let hop = 0; hop < 4; hop++){
+        dmgMul *= 0.82;                      /* 每跳衰减，首跳最痛 */
+        let best = null, bd = Infinity;
+        for(const e of G.enemies){
+          if(!e.alive || hitSet.has(e)) continue;
+          const d = Math.hypot(e.x - nodeX, e.y - nodeY);
+          if(d < 300 && d < bd){ bd = d; best = e; }
+        }
+        if(!best) break;
+        const nx = best.x, ny = best.y;
+        addEffect('chainBolt', nodeX, nodeY - 40, 0.3, {endX:nx, endY:ny - 40, color:'#eaf6ff'});
+        addEffect('hitRing', nx, ny, 0.3, {color:'#bfe0ff', r:64});
+        meleeAoe(p, nx, ny, 96, A*15*dmgMul, {kb:120});
+        hitSet.add(best);
+        nodeX = nx; nodeY = ny;
+      }
+      /* ④ 收雷：最后一个被电到的位置雷爆 */
+      skAt(160, ()=>{
+        if(!G || gameState !== 'playing') return;
+        addEffect('explosion', nodeX, nodeY - 20, 0.6, {color:'#eaf6ff', r:150});
+        addEffect('hitRing', nodeX, nodeY, 0.5, {color:'#ffffff', r:150});
+        meleeAoe(p, nodeX, nodeY, 150, A*20, {kb:380, launch:true});
+        skShake(16, 0.22, '#eaf6ff');
+        fxHitstop(0.06);
+        if(p.action && p.action.type === 'swordCharge') p.action = null;
+      });
     });
-  }
+  });
 }
 
 /* ---------- 宝剑剑士 5：诛仙剑阵（萧鼎《诛仙》） ---------- */
