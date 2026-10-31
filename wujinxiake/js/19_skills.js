@@ -170,7 +170,7 @@ function castSwordQi(){
           }, r*70);
         }
         
-        G.shake = Math.max(G.shake, 30); G.flash = 0.22; G.hitFlashColor = '#bcd8e4'; G.hitstop = Math.max(G.hitstop, 0.18);
+        G.shake = Math.max(G.shake, 30); G.flash = 0.22; G.hitFlashColor = '#bcd8e4'; fxHitstop(0.18);
       }, 600);
     }, 400);
   }, 400);
@@ -279,7 +279,7 @@ function castSwordSky(){
         }, r*70);
       }
       
-      G.shake = Math.max(G.shake, 32); G.flash = 0.22; G.hitFlashColor = '#bcd8e4'; G.hitstop = Math.max(G.hitstop, 0.2);
+      G.shake = Math.max(G.shake, 32); G.flash = 0.22; G.hitFlashColor = '#bcd8e4'; fxHitstop(0.2);
       spawnText(lx(), ly(), 150, '二 十 三', '#d0f0ff', 36);
     }, 700);
   }, 1300);
@@ -377,7 +377,7 @@ function castBladeFire(){
       }, r*50);
     }
     
-    G.shake = Math.max(G.shake, 22); G.flash = 0.22; G.hitFlashColor = '#ff2244'; G.hitstop = Math.max(G.hitstop, 0.1);
+    G.shake = Math.max(G.shake, 22); G.flash = 0.22; G.hitFlashColor = '#ff2244'; fxHitstop(0.1);
   }, 500);
 }
 function castBladeArray(){
@@ -510,7 +510,7 @@ function castBladeArray(){
         }, r*55);
       }
       
-      G.shake = Math.max(G.shake, 35); G.flash = 0.22; G.hitFlashColor = '#ff8a4a'; G.hitstop = Math.max(G.hitstop, 0.2);
+      G.shake = Math.max(G.shake, 35); G.flash = 0.22; G.hitFlashColor = '#ff8a4a'; fxHitstop(0.2);
       spawnText(cx(), cy(), 150, '五 龙 破', '#ffaa00', 34);
     }, 500);
   }, 1000);
@@ -645,7 +645,7 @@ function castSpearThrust(){
       }, i*10);
     }
     
-    G.shake = Math.max(G.shake, 18); G.flash = 0.22; G.hitFlashColor = '#ffd96a'; G.hitstop = Math.max(G.hitstop, 0.1);
+    G.shake = Math.max(G.shake, 18); G.flash = 0.22; G.hitFlashColor = '#ffd96a'; fxHitstop(0.1);
   }, 1500);
 }
 function castSpearDragon(){
@@ -728,7 +728,7 @@ function castSpearDragon(){
       }, i*8);
     }
     
-    G.shake = Math.max(G.shake, 45); G.flash = 0.22; G.hitFlashColor = '#ff4400'; G.hitstop = Math.max(G.hitstop, 0.25);
+    G.shake = Math.max(G.shake, 45); G.flash = 0.22; G.hitFlashColor = '#ff4400'; fxHitstop(0.25);
   }, 1000);
 }
 function castSpearRain(){
@@ -833,7 +833,7 @@ function castFistQi(){
       }, i*40);
     }
     
-    G.shake = Math.max(G.shake, 25); G.flash = 0.22; G.hitFlashColor = '#ffe066'; G.hitstop = Math.max(G.hitstop, 0.12);
+    G.shake = Math.max(G.shake, 25); G.flash = 0.22; G.hitFlashColor = '#ffe066'; fxHitstop(0.12);
   }, 500);
 }
 function castFistRush(){
@@ -1053,7 +1053,7 @@ function castFistPalm(){
     }
     
     /* 屏幕震动和闪光 */
-    G.shake = Math.max(G.shake, 50); G.flash = 0.22; G.hitFlashColor = '#88ccff'; G.hitstop = Math.max(G.hitstop, 0.3);
+    G.shake = Math.max(G.shake, 50); G.flash = 0.22; G.hitFlashColor = '#88ccff'; fxHitstop(0.3);
     
     /* 文字特效 */
     spawnText(targetX(), targetY(), 250, '雷 霆 万 钧', '#88ccff', 52);
@@ -1083,46 +1083,53 @@ function skRingBurst(cx, cy, r, color, n){
   }
 }
 
-/* ---------- 宝剑剑士 4：天外飞仙（古龙《陆小凤传奇》· 叶孤城） ---------- */
-/* ---------- 宝剑剑士 4：天外飞仙（《陆小凤传奇》白云城主） ----------
-   ★ 完全重做：一柄仙剑自天外直贯目标（活坐标跟随），剑落即伤。
-   视觉与判定完全重合——剑身落点就是伤害中心，粒子只出现在判定半径内；
-   删掉了原来无意义的横冲直线、7 道残影与满屏弧光。 */
+/* ---------- 宝剑剑士 4：夺命十三剑（古龙《三少爷的剑》燕十三） ----------
+   ★ 重做：十三剑一气呵成，一剑快过一剑，每一剑都是「手中这柄剑」实体飞出刺击；
+   第十三剑「夺命」收尾（巨剑贯体+击飞），剑到即伤，视觉与判定重合，不堆光粒。 */
 function castSwordImmortal(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 280);             /* 活坐标：剑始终追着目标 */
-  spawnText(p.x, p.y, 205, '天 外 飞 仙', '#eaf6ff', 40);
+  const tg = skAim(p, 300);              /* 活坐标：十三剑全程追着目标 */
   p.action = { type:'swordCharge', dur:0.5, t:0 };
-  const CX = () => clamp(tg.x, WORLD_L + 70, WORLD_R - 70);
-  const CY = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
-  /* 蓄力：目标头顶天光裂开（贴判定区） */
-  skAt(80, ()=>{ addEffect('skyCrack', CX(), 80, 0.9, {width:260, color:'#eaf6ff'}); });
-  addEffect('hitRing', CX(), CY(), 0.5, {color:'#eaf6ff', r:150});
-  skAt(520, ()=>{
-    if(!G || gameState !== 'playing') return;
-    if(p.action && p.action.type === 'swordCharge') p.action = null;
-    playSound('swordSwing');
-    /* 仙剑贯空：从天而降直插目标（剑尖朝下，正好落在判定中心） */
-    addEffect('giganticSword', CX(), CY() - 20, 0.85, {color:'#eaf6ff', scale:2.2, tipDown:true});
-    addEffect('spearLine', CX(), CY() - 620, 0.4, {endX:CX(), endY:CY() - 40, color:'#ffffff', width:16});
-    /* 落点即伤：判定半径 150 = 剑锋视觉半径 */
-    meleeAoe(p, CX(), CY(), 150, A*80, {kb:520, launch:true});
-    addEffect('explosion', CX(), CY() - 20, 0.8, {color:'#eaf6ff', r:150});
-    addEffect('hitRing', CX(), CY(), 0.6, {color:'#ffffff', r:150});
-    skBurst(CX(), CY() - 30, '#cfe0e8', 12, {angle:-Math.PI/2, spread:0.9, spMin:200, spMax:640, lifeMin:0.25, lifeMax:0.5, sizeMin:3, sizeMax:8, grav:300});
-    skShake(22, 0.32, '#eaf6ff');
-    G.hitstop = Math.max(G.hitstop, 0.09);
-    /* 剑锋余势：一道与命中半径等长的剑气斩痕 + 小段二段伤害 */
-    skAt(160, ()=>{
+  skCastAura(p, 0.45, '#eaf6ff', 3);
+  spawnText(p.x, p.y, 208, '夺 命 十 三 剑', '#eaf6ff', 42);
+  addEffect('hitRing', p.x, p.y, 0.4, {color:'#eaf6ff', r:70});
+  let tms = 400;
+  for(let i = 0; i < 13; i++){
+    tms += Math.max(46, 96 - i * 5);     /* 一剑快过一剑 */
+    skAt(tms, ()=>{
       if(!G || gameState !== 'playing') return;
-      const dir = CX() >= p.x ? 1 : -1;
+      const isLast = (i === 12);
+      const dir = tg.x >= p.x ? 1 : -1;
       p.facing = dir;
-      addEffect('slashArc', CX(), CY(), 0.3, {facing:dir, color:'#9fe6ff', size:1.75, typeStr:'stab'});
-      meleeAoe(p, CX(), CY(), 190, A*14, {kb:160});
-      addEffect('groundCrack', CX(), CY(), 0.8, {angle:dir>0?0:Math.PI, color:'#cfeaff'});
+      playSound('swordSwing');
+      /* ★ 每一剑都是本命剑实体飞出，直线贯向目标当前位置 */
+      const sx = p.x + dir * 46, sy = p.y - 58;
+      const ang = Math.atan2((tg.y - 24) - sy, tg.x - sx);
+      const spd = 1500 + i * 45;
+      G.projectiles.push({
+        kind:'realSword', x:sx, y:sy, h:1,
+        vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+        life: Math.min(0.62, Math.hypot(tg.x - sx, tg.y - sy)/spd + 0.06),
+        w: isLast ? 150 : 96, hh: isLast ? 120 : 70,
+        dmg: isLast ? A*40 : A*5, pierce: isLast ? 99 : 1,
+        hitSet:new Set(), rot:ang, scale: isLast ? 2.6 : 1.15,
+        color:'#eaf6ff', owner:p
+      });
+      /* 剑出的一线剑痕（只留一道，不做粒子堆） */
+      addEffect('slashArc', sx + dir*40, sy, 0.18, {facing:dir, color:'#cfeaff', size:0.9, typeStr:'stab'});
+      if(isLast){
+        /* 第十三剑·夺命：白虹贯体 */
+        addEffect('spearLine', sx, sy, 0.3, {endX:tg.x, endY:sy, color:'#ffffff', width:16});
+        addEffect('explosion', tg.x, tg.y - 20, 0.6, {color:'#eaf6ff', r:130});
+        addEffect('hitRing', tg.x, tg.y, 0.5, {color:'#ffffff', r:130});
+        meleeAoe(p, tg.x, tg.y, 150, A*10, {kb:420, launch:true});
+        skShake(18, 0.26, '#eaf6ff');
+        fxHitstop(0.07);
+        if(p.action && p.action.type === 'swordCharge') p.action = null;
+      }
     });
-  });
+  }
 }
 
 /* ---------- 宝剑剑士 5：诛仙剑阵（萧鼎《诛仙》） ---------- */
@@ -1176,7 +1183,7 @@ function castSwordTruthArray(){
         addEffect('hitRing', CX(), cy(), 0.85, {color:'#ffffff', r:330});
         addEffect('skyCrack', CX(), cy()-230, 1.0, {width:360, color:'#c4b0ff'});
         skShake(26, 0.42, '#ddd0ff');
-        G.hitstop = Math.max(G.hitstop, 0.1);
+        fxHitstop(0.1);
       });
     }
   }, 160);
@@ -1241,7 +1248,7 @@ function castSwordCome(){
         addEffect('explosion', tx, GY_BOTTOM - 40, 0.9, {color:'#bcd8e4', r:230});
         addEffect('hitRing', tx, GY_BOTTOM - 40, 0.8, {color:'#cfe0e8', r:280});
         skShake(34, 0.55, '#ffffff');
-        G.hitstop = Math.max(G.hitstop, 0.16);
+        fxHitstop(0.16);
         skBurst(tx, GY_BOTTOM - 40, '#cfe0e8', 20, {spMin:200, spMax:760, lifeMin:0.28, lifeMax:0.8, sizeMin:2, sizeMax:7});
         skRingBurst(tx, GY_BOTTOM - 40, 200, '#eaf6ff', 12);
       });
@@ -1279,7 +1286,7 @@ function castBladeAbyss(){
       skShake(9 + i*6, 0.1 + i*0.1, '#ff2a4a');
       if(i === 2){
         skShake(24, 0.36, '#ff4a5a');
-        G.hitstop = Math.max(G.hitstop, 0.1);
+        fxHitstop(0.1);
         for(let k=0;k<3;k++){
           skAt(k*70, ()=> addEffect('explosion', p.x + p.facing*150, p.y - 40, 0.55, {color:'#ff2a4a', r:97 + k*55}));
         }
@@ -1334,7 +1341,7 @@ function castBladeFrostSix(){
       skBurst(tx, p.y-40, '#dff4ff', 16, {spMin:200, spMax:770, grav:160});
       addEffect('skyCrack', tx, p.y-260, 0.9, {width:240, color:'#bfe8ff'});
       skShake(22, 0.3, '#dff4ff');
-      G.hitstop = Math.max(G.hitstop, 0.08);
+      fxHitstop(0.08);
     });
   });
 }
@@ -1368,7 +1375,7 @@ function castBladeRulerFlame(){
     addEffect('explosion', tx(), gy(), 0.9, {color:'#ff8a20', r:345});
     addEffect('hitRing', tx(), gy(), 0.9, {color:'#fff2c0', r:365});
     skShake(30, 0.48, '#ffb040');
-    G.hitstop = Math.max(G.hitstop, 0.14);
+    fxHitstop(0.14);
     skBurst(tx(), gy(), '#ff8a20', 18, {spMin:220, spMax:880, grav:520});
     skRingBurst(tx(), gy(), 170, '#ffcc60', 10);
     /* 火焰裂谷持续灼烧 */
@@ -1488,7 +1495,7 @@ function castSpearRainStorm(){
           meleeAoe(p, cx(), gy(), 350, A*75, {kb:480, launch:true});
           skBurst(cx(), gy(), '#dff0ff', 19, {spMin:220, spMax:820, grav:400});
           skShake(24, 0.34, '#dff0ff');
-          G.hitstop = Math.max(G.hitstop, 0.09);
+          fxHitstop(0.09);
         });
       }
     }, 60);
@@ -1525,7 +1532,7 @@ function castSpearBlueSilver(){
     meleeAoe(p, tx(), gy(), 240, A*170, {kb:600, launch:true});
     skBurst(tx(), gy(), '#8fe8ff', 18, {spMin:240, spMax:900, grav:460});
     skShake(30, 0.48, '#8fe8ff');
-    G.hitstop = Math.max(G.hitstop, 0.14);
+    fxHitstop(0.14);
     /* 三段冲击波 */
     for(let s=0;s<3;s++){
       skAt(130 + s*150, ()=>{
@@ -1578,7 +1585,7 @@ function castFistEightExtremes(){
         addEffect('explosion', bx + p.facing*60, by, 0.6, {color:'#ffcc33', r:166});
         addEffect('groundCrack', p.x + p.facing*120, p.y, 0.95, {angle:p.facing>0?0:Math.PI, color:'#ffcc33'});
         addEffect('groundCrack', p.x + p.facing*200, p.y, 0.95, {angle:p.facing>0?0:Math.PI, color:'#ffe680'});
-        G.hitstop = Math.max(G.hitstop, 0.08);
+        fxHitstop(0.08);
       }
     });
   }
@@ -1615,7 +1622,7 @@ function castFistGreatPalm(){
     addEffect('hitRing', tx(), gy(), 0.95, {color:'#fff6c0', r:350});
     skBurst(tx(), gy(), '#ffd700', 18, {spMin:220, spMax:860, grav:440});
     skShake(28, 0.46, '#ffd700');
-    G.hitstop = Math.max(G.hitstop, 0.13);
+    fxHitstop(0.13);
     /* 掌印残留 · 持续碾压 */
     let t = 0;
     const crush = setInterval(()=>{
@@ -1703,7 +1710,7 @@ function castSixPathsFist(){
       meleeAoe(p, cx, cy, 165, A*24, { kb:160 + i*20 });
       skBurst(cx, cy - 40, PATHS[i%6].col, 10, { spMin:160, spMax:560, grav:120 });
       skShake(9 + i, 0.08, PATHS[i%6].col);
-      if(i === 5){ skShake(20, 0.3, '#ff7a4a'); G.hitstop = Math.max(G.hitstop, 0.08); }
+      if(i === 5){ skShake(20, 0.3, '#ff7a4a'); fxHitstop(0.08); }
     });
   }
 
@@ -1724,7 +1731,7 @@ function castSixPathsFist(){
     skBurst(cx, cy - 50, '#ffd86b', 22, { spMin:240, spMax:920, grav:120 });
     skRingBurst(cx, cy, 260, '#ffce6b', 16);
     skShake(36, 0.5, '#ffd86b');
-    G.hitstop = Math.max(G.hitstop, 0.14);
+    fxHitstop(0.14);
   });
 }
 
@@ -2116,7 +2123,7 @@ function castHerbShennong(){
     addEffect('shockWave', p.x, p.y + 2, 1.0, {facing:p.facing, r:560, color:'#d8ff9a'});
     skRingBurst(p.x, p.y, 220, '#d8ff9a', 16);
     skShake(30, 0.4, '#b6ff8a');
-    G.hitstop = Math.max(G.hitstop, 0.12);
+    fxHitstop(0.12);
   });
 }
 
@@ -2207,7 +2214,7 @@ function castAxeThree(){
         addEffect('shockWave', cx, cy + 2, 0.6, {facing:p.facing, r:280, color:'#ffd08a'});
         meleeHitRect(p, cx, cy, 260, 220, A * 34, {kb:340, launch:true});
         skBurst(cx, cy - 40, '#ffb04a', 11, {spMin:200, spMax:640, grav:340});
-        G.hitstop = Math.max(G.hitstop, 0.09);
+        fxHitstop(0.09);
       }
       skShake(9 + i * 4, i === 2 ? 0.14 : 0.04, '#ffb04a');
     });
@@ -2276,7 +2283,7 @@ function castAxeMountain(){
           spMin:180, spMax:520, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:9, grav:560});
       });
     }
-    G.hitstop = Math.max(G.hitstop, 0.1);
+    fxHitstop(0.1);
     playSound('explosion');
   });
 }
@@ -2344,7 +2351,7 @@ function castAxePangu(){
     skRingBurst(cx, cy, 260, '#ffd08a', 18);
     skShake(34, 0.55, '#ffe9a8');
     playSound('explosion');
-    G.hitstop = Math.max(G.hitstop, 0.16);
+    fxHitstop(0.16);
     skAt(320, ()=>{
       const s2 = skSpot(p, tg, 260, 700);
       const cx2 = clamp(s2.x, WORLD_L + 80, WORLD_R - 80);
@@ -2494,7 +2501,7 @@ function castTalismanSword(){
     skBurst(cx, cy - 60, '#b6cbd6', 15, {grav:120, spMin:200, spMax:640});
     skRingBurst(cx, cy, 180, '#cddde4', 18);
     skShake(24, 0.34, '#b6cbd6');
-    G.hitstop = Math.max(G.hitstop, 0.1);
+    fxHitstop(0.1);
     playSound('explosion');
   });
 }
@@ -2583,7 +2590,7 @@ function castTalismanGhosts(){
     addEffect('skyCrack', cx, 80, 1.2, {width:420, color:'#b388ff'});
     skBurst(cx, tg.y - 60, '#b388ff', 18, {spMin:200, spMax:760, grav:60});
     skShake(30, 0.45, '#b388ff');
-    G.hitstop = Math.max(G.hitstop, 0.12);
+    fxHitstop(0.12);
   });
 }
 
@@ -2804,7 +2811,7 @@ function castCauldronBagua(){
     meleeAoe(p, cx, tg.y, 330, A * 120, {kb:420, launch:true});
     skShake(30, 0.5, '#ffd166');
     playSound('explosion');
-    G.hitstop = Math.max(G.hitstop, 0.14);
+    fxHitstop(0.14);
   });
   /* 炉火九转（丹道师以鼎炼丹：金丹绕炉轮转，不再借用火龙） */
   for(let t = 0; t < 4; t++){
