@@ -2310,6 +2310,32 @@ function drawEffects(dt){
       ctx.fillRect(-15, 48, 30, 86);
       ctx.shadowBlur = 0;
     }
+    else if(ef.type === 'chainBolt'){
+      /* ★ 雷链（天雷剑诀专属）：两点之间拉出锯齿雷光，逐帧抖动 = 电弧跳跃感 */
+      const ck = ef.t/ef.dur;
+      const ca = ck < 0.15 ? ck/0.15 : (1-ck)/0.85;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = clamp(ca, 0, 1);
+      ctx.shadowColor = ef.color || '#eaf6ff';
+      ctx.shadowBlur = _fxBlur(16);
+      ctx.lineCap = 'round';
+      const bx1 = ef.x, by1 = ef.y, bx2 = ef.endX, by2 = ef.endY;
+      const segs = 7;
+      for(let pass = 0; pass < 2; pass++){
+        ctx.lineWidth = pass === 0 ? 9 * (1 - ck*0.4) : 3;
+        ctx.strokeStyle = pass === 0 ? (ef.color || '#eaf6ff') : '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(bx1, by1);
+        for(let s = 1; s < segs; s++){
+          const t2 = s / segs;
+          const jitter = (pass === 0 ? 16 : 8) * (1 - ck);
+          ctx.lineTo(bx1 + (bx2-bx1)*t2 + rand(-jitter, jitter), by1 + (by2-by1)*t2 + rand(-jitter, jitter));
+        }
+        ctx.lineTo(bx2, by2);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    }
     else if(ef.type === 'giganticWeapon'){
       /* 巨兵虚影：从天而降的重型武器（巨尺 / 霸王枪） */
       const gwK = ef.t/ef.dur;
