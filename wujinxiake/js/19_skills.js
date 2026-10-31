@@ -317,7 +317,7 @@ function castBladeFire(){
   /* ★ 智能锁定目标位置 */
   const tgt = skAim(p, 150);            /* 活坐标 */
   /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tgt.x, tgt.y, 'realBlade', 8, {color:'#c96a3a', speed:1200}); }, 110);
+  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tgt.x, tgt.y, 'realBlade', 8, {color:'#c96a3a', speed:1200, dmg:atkVal*4}); }, 110);
   const slashX = () => tgt.x, slashY = () => tgt.y;
   spawnText(p.x, p.y, 200, '修 罗 斩', '#ff2244', 40);
   p.action = {type:'bladeCharge', dur:0.5, t:0};
@@ -581,7 +581,7 @@ function castSpearThrust(){
   /* ★ 智能锁定目标方向 */
   const tgt = skAim(p, 300);            /* 活坐标：全程跟随 */
   /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tgt.x, tgt.y, 'realSpear', 7, {color:'#9fc4d8', speed:1250}); }, 110);
+  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tgt.x, tgt.y, 'realSpear', 7, {color:'#9fc4d8', speed:1250, dmg:atkVal*4}); }, 110);
   p.facing = tgt.x > p.x ? 1 : -1;
   spawnText(p.x, p.y, 200, '混 元 十 三 枪', '#ffd96a', 36);
   p.action = {type:'spearThrust', dur:1.3, t:0};
@@ -771,7 +771,7 @@ function castFistQi(){
   /* ★ 智能锁定目标方向 */
   const tgt = skAim(p, 250);            /* 活坐标：全程跟随 */
   /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tgt.x, tgt.y, 'realFist', 9, {color:'#d8c48a', speed:1150}); }, 110);
+  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tgt.x, tgt.y, 'realFist', 9, {color:'#d8c48a', speed:1150, dmg:atkVal*3}); }, 110);
   p.facing = tgt.x > p.x ? 1 : -1;
   spawnText(p.x, p.y, 180, '真 气 弹', '#ffcc33', 34);
   p.action = {type:'fistCharge', dur:0.5, t:0};
@@ -2236,7 +2236,7 @@ function castAxeSplit(){
   const A = skillAtkVal(p);
   const tg = skAim(p, 200);
   /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realAxe', 6, {color:'#c0a07a', speed:1100}); }, 110);
+  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realAxe', 6, {color:'#c0a07a', speed:1100, dmg:atkVal*5}); }, 110);
   skCastPose(p, 0.5, '劈 山 式', '#ffb04a', 34);
   skCastAura(p, 0.5, '#ffb04a', 4);
   for(let i = 0; i < 10; i++){
@@ -2471,7 +2471,7 @@ function castTalismanBind(){
   const A = skillAtkVal(p);
   const tg = skAim(p, 300);
   /* 起手甩出本命符纸（★ 不再是宝剑——符咒师用符不用剑） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realTalisman', 7, {color:'#ffe066', speed:1200}); }, 110);
+  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realTalisman', 7, {color:'#ffe066', speed:1200, dmg:atkVal*3}); }, 110);
   skCastPose(p, 0.6, '定 身 符', '#ffe066', 34);
   skCastAura(p, 0.6, '#ffe066', 4);
   /* 符纸出手：一路旋转飞向目标，身后洒下金粉 */
@@ -2703,7 +2703,7 @@ function castCauldronFire(){
   const A = skillAtkVal(p);
   const tg = skAim(p, 180);
   /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realCauldron', 5, {color:'#c8b090', speed:1050}); }, 110);
+  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realCauldron', 5, {color:'#c8b090', speed:1050, dmg:atkVal*6}); }, 110);
   skCastPose(p, 0.5, '丹 火', '#ff7a4a', 34);
   skCastAura(p, 0.5, '#ff7a4a', 4);
   /* 炉口蓄火（精简） */
