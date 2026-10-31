@@ -2381,6 +2381,29 @@ function drawEffects(dt){
       }
       ctx.shadowBlur = 0;
     }
+    else if(ef.type === 'axeOrbit'){
+      /* ★ 旋风斧：多柄斧影绕身旋转（真斧模型，不再用粒子代替） */
+      const ok = ef.t / ef.dur;
+      const oa = ok < 0.12 ? ok/0.12 : (1-ok)/0.88;
+      const R = ef.r || 120;
+      const nAxe = ef.n || 4;
+      const spinA = (ef.spin || 7) * ef.t;
+      ctx.globalAlpha = clamp(oa, 0, 1);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.shadowColor = ef.color || '#ffb04a'; ctx.shadowBlur = _fxBlur(14);
+      for(let i = 0; i < nAxe; i++){
+        const a = spinA + (i / nAxe) * TAU;
+        const ax2 = ef.x + Math.cos(a) * R;
+        const ay2 = ef.y + Math.sin(a) * R * 0.42 - 46;
+        ctx.save();
+        ctx.translate(ax2, ay2);
+        ctx.rotate(a + Math.PI / 2);
+        ctx.scale(1.05, 1.05);
+        drawWeapon('axe', 0, 0, 0);
+        ctx.restore();
+      }
+      ctx.shadowBlur = 0;
+    }
     else if(ef.type === 'lightBloom'){
       /* ★ 光爆：亮核 + 放射光线 + 扩散环（替代成片粒子炸裂，省性能也更像“炸开”） */
       const bk = ef.t / ef.dur;
