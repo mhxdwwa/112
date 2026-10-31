@@ -161,51 +161,73 @@ function rollEnemyDrops(enemy, levelIdx){
   const dropType = isBoss ? 'boss' : (isElite ? 'elite' : 'normal');
   const drops = [];
   const table = DROP_TABLE[dropType];
-  
+
   // 根据难度调整掉率（G.difficulty: normal=1, hard=2, hell=3）
   const diffMul = G && G.difficulty ? G.difficulty : 1;
   const diffBonus = diffMul - 1; // 普通=0, 困难=1, 地狱=2
-  
+
   // ★ 深渊模式掉率加成
   const lvlConfig = G ? getLevelConfig(G.levelIdx || 0) : null;
   const abyssBonus = (lvlConfig && lvlConfig.isAbyss) ? (lvlConfig.abyssDropBonus || 2) : 0;
-  
-  // 金币
-  drops.push({ type:'gold', amount: (table.gold + Math.round(levelIdx * 5)) * diffMul });
-  
-  // 装备掉落（难度越高掉率越高，深渊模式额外加成）
-  const equipRate = Math.min(1.0, table.equipRate + diffBonus * 0.15 + abyssBonus * 0.1);
-  if(Math.random() < equipRate){
+  const dLv = dropLevelIdx(levelIdx);
+
+  /* ★ 金币：BOSS 才是大头（以前 boss 只给 200+5*关，收益还不如几只小怪） */
+  const goldBase = isBoss ? (900 + levelIdx * 40) : (table.gold + Math.round(levelIdx * 5));
+  const goldAmt = Math.round(goldBase * diffMul * (isBoss ? (1 + abyssBonus * 0.4) : 1));
+  drops.push({ type:'gold', amount: goldAmt });
+
+  /* ★ 装备：数量与品阶按「小怪 < 精英 < BOSS」拉开差距
+       - 小怪：低概率、且吃不到深渊品阶加成（免得小兵掉高质量装备）
+       - 精英：必掉 1~2 件
+       - BOSS：必掉 3~5 件，品阶额外 +2 档，并带保底（普通紫装 / 深渊粉装） */
+  let eqCount = 0, tierBonus = diffBonus, minTier = 0, minGrade = 0;
+  if(isBoss){
+    eqCount = 3 + (Math.random() < 0.5 ? 1 : 0) + (abyssBonus ? 1 : 0);
+    tierBonus = diffBonus + 2 + abyssBonus;
+    minTier  = abyssBonus ? 3 : 2;      /* 深渊 boss 粉色保底，普通 boss 紫色保底 */
+    minGrade = 3;                       /* 至少上级品级 */
+  } else if(isElite){
+    eqCount = 1 + (Math.random() < 0.35 ? 1 : 0);
+    tierBonus = diffBonus + 1;
+    minGrade = 2;
+  } else {
+    eqCount = Math.random() < Math.min(1.0, table.equipRate) ? 1 : 0;
+    tierBonus = diffBonus;              /* ★ 小怪不再享用深渊品阶加成 */
+  }
+  for(let i = 0; i < eqCount; i++){
     const slot = EQUIP_SLOTS[Math.floor(Math.random() * EQUIP_SLOTS.length)];
-    // ★ 深渊模式：提高史诗装备掉率
-    const abyssDiffBonus = diffBonus + abyssBonus;
-    const _dropEq = generateEquipment(slot, dropLevelIdx(levelIdx), abyssDiffBonus);
+    const _dropEq = generateEquipment(slot, dLv, tierBonus, minTier, minGrade);
     drops.push({ type:'equip', equip: _dropEq });
-    announceDrop(_dropEq);            /* ★ 传说 / 史诗全屏公告 */
+    announceDrop(_dropEq);              /* ★ 传说 / 史诗全屏公告 */
   }
 
-  /* ★ 飞行道具：精英 / BOSS / 深渊才掉，品阶按掉落等级封顶 */
+  /* ★ 飞行道具：BOSS 概率大幅提高（深渊 boss 基本必掉） */
   if(window.MOUNT){
-    const _mo = MOUNT.rollDrop(dropLevelIdx(levelIdx), {
-      isBoss: isBoss, isElite: isElite, abyss: !!(lvlConfig && lvlConfig.isAbyss)
+    const _mo = MOUNT.rollDrop(dLv, {
+      isBoss: isBoss, isElite: isElite, abyss: !!(lvlConfig && lvlConfig.isAbyss),
+      rateMul: isBoss ? (3 + abyssBonus) : 1
     });
     if(_mo){ drops.push({ type:'equip', equip: _mo }); announceDrop(_mo); }
   }
-  
-  /* ★ 药水：按地图等级掉对应档位的回血瓶 / 回蓝瓶 */
-  const potCount = isBoss ? 2 + Math.floor(Math.random()*3) + diffBonus : (Math.random() < table.propRate ? 1 : 0);
+
+  /* ★ 药水：BOSS 一次给足 */
+  const potCount = isBoss ? (5 + Math.floor(Math.random()*4) + diffBonus * 2)
+                 : (Math.random() < table.propRate ? 1 : 0);
   for(let i = 0; i < potCount; i++){
-    drops.push({ type:'prop', prop: { id: rollPotion(dropLevelIdx(levelIdx)).id } });
+    drops.push({ type:'prop', prop: { id: rollPotion(dLv).id } });
   }
-  
+
   // 强化材料掉落（只从三种强化石里抽）
-  const matCount = isBoss ? 5 + Math.floor(Math.random()*6) + diffBonus * 3 : (Math.random() < table.materialRate ? 1 : 0);
+  const matCount = isBoss ? (12 + Math.floor(Math.random()*8) + diffBonus * 4)
+                 : (Math.random() < table.materialRate ? 1 : 0);
   for(let i = 0; i < matCount; i++){
     const mat = DROP_MATERIALS[Math.floor(Math.random() * 3)];
     drops.push({ type:'material', material: mat });
   }
-  /* ★ 混沌魔石：洗练材料，Boss 必掉，小怪小概率 */
-  if(isBoss || Math.random() < 0.09 + diffBonus * 0.05){
+  /* ★ 混沌魔石：BOSS 一次掉 2~4 个，小怪小概率 */
+  const chaosN = isBoss ? (2 + Math.floor(Math.random()*3) + Math.floor(diffBonus/2))
+               : (Math.random() < 0.09 + diffBonus * 0.05 ? 1 : 0);
+  for(let i = 0; i < chaosN; i++){
     drops.push({ type:'material', material:{ id:'chaos_stone', name:'混沌魔石', desc:'用于洗练装备随机词条' } });
   }
 
