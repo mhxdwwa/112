@@ -349,14 +349,15 @@ function castBladeFire(){
     /* 投射物 - 血红刀气（★ 改用格斗家刀模型 glowWeapon，避免纯光粒子，浏览器更轻松） */
     G.projectiles.push({ kind:'glowWeapon', weaponType:'blade', x:p.x+p.facing*80, y:p.y, h:50, vx:p.facing*1000, vy:0, life:0.7, w:160, hh:120, dmg:atkVal*10.0, pierce:3, hitSet:new Set(), color:'#ff2244', facing:p.facing, owner:p, trail:true, scale:1.7 });
 
-    /* 血雾（★ 已从 40 颗压到 16 颗，刀模型本身已承担视觉） */
-    for(let i=0;i<16;i++){
+    /* ★ 血雾改成「血红光爆 + 少量细血丝」，不再是成片大光球 */
+    addEffect('lightBloom', p.x + p.facing * 90, p.y - 66, 0.42, {r:150, rays:16, color:'#ff2244'});
+    addEffect('lightBloom', p.x + p.facing * 170, p.y - 60, 0.5, {r:110, rays:12, color:'#cc0033'});
+    for(let i=0;i<6;i++){
       const angle = p.facing>0?rand(-0.8,0.8):rand(Math.PI-0.8,Math.PI+0.8);
-      const dist = rand(40, 200);
       setTimeout(()=>{
         if(!G || gameState!=='playing') return;
-        spawnParticles(p.x+p.facing*rand(50,200), p.y-rand(10,120), 4, {color:['#ff2244','#cc0033','#ff4466','#880022'][i%4], angle, spread:1.0, spMin:100, spMax:400, lifeMin:0.3, lifeMax:0.8, sizeMin:4, sizeMax:10, grav:300});
-      }, i*10);
+        spawnParticles(p.x+p.facing*rand(60,190), p.y-rand(20,110), 1, {color:i%2?'#ff2244':'#880022', angle, spread:0.6, spMin:120, spMax:320, lifeMin:0.25, lifeMax:0.5, sizeMin:2, sizeMax:4, grav:300});
+      }, i*12);
     }
     
     /* 地面裂痕 - 刀气入地 */
@@ -550,13 +551,14 @@ function castSpearThrust(){
     const burstY = p.y;
     addEffect('explosion', burstX, burstY, 0.6, {r:144, color:'#ffd96a'});
     
-    for(let i=0;i<40;i++){
-      const a = rand(0, TAU);
-      const spd = rand(100, 400);
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        spawnParticles(burstX+rand(-30,30), burstY-20+rand(-30,30), 4, {color:i%3===0?'#dbe4e8':i%3===1?'#ffd96a':'#ffaa30', angle:a, spread:1.5, spMin:spd*0.4, spMax:spd, lifeMin:0.3, lifeMax:0.8, sizeMin:3, sizeMax:9, grav:500});
-      }, i*10);
+    /* ★ 混元炸开：光核 + 放射枪痕 + 环形光爆（不再是一圈大光球） */
+    skBloom(burstX, burstY - 24, 250, '#ffd96a', 24, 0.6);
+    skBloom(burstX, burstY - 18, 150, '#fff2c0', 16, 0.45);
+    skBloomRing(burstX, burstY, 130, 8, '#ffaa30', 70);
+    for(let i=0;i<8;i++){
+      const a = i / 8 * TAU;
+      addEffect('slashArc', burstX + Math.cos(a) * 92, burstY + Math.sin(a) * 40, 0.22,
+        {facing:Math.cos(a) >= 0 ? 1 : -1, color:'#ffd96a', size:0.85, typeStr:'stab'});
     }
     
     G.shake = Math.max(G.shake, 18); G.flash = 0.22; G.hitFlashColor = '#ffd96a'; fxHitstop(0.1);
@@ -694,10 +696,13 @@ function castFistQi(){
     G.projectiles.push({ kind:'qiBomb', x:p.x+p.facing*50, y:p.y, h:65, vx:p.facing*900, vy:0, life:1.8, w:150, hh:120, dmg:atkVal*7.5, pierce:8, hitSet:new Set(), color:'#ffcc33', facing:p.facing, owner:p });
     
     /* 爆炸冲击波 */
-    for(let i=0;i<50;i++){
-      const a = p.facing>0?Math.PI+rand(-1.2,1.2):rand(-1.2,1.2);
-      const speed = rand(300, 900);
-      spawnParticles(p.x+p.facing*40, p.y-60, 2, {color:['#ff3300','#ff6600','#ffcc33','#ffe066','#dbe4e8'][i%5], angle:a, spread:0.8, spMin:speed*0.5, spMax:speed, lifeMin:0.3, lifeMax:0.8, sizeMin:5, sizeMax:14, grav:150});
+    /* ★ 拳劲炸开：光核 + 放射气劲（不再是满屏大光球） */
+    skBloom(p.x + p.facing * 52, p.y - 62, 260, '#ffcc33', 24, 0.58);
+    skBloom(p.x + p.facing * 52, p.y - 58, 150, '#ffe066', 16, 0.44);
+    for(let i=0;i<10;i++){
+      const a = i / 10 * TAU;
+      addEffect('hitRing', p.x + p.facing*50 + Math.cos(a)*70, p.y - 60 + Math.sin(a)*30, 0.3,
+        {color:'#ffcc33', r:46});
     }
     
     /* 环形冲击 */
@@ -705,8 +710,7 @@ function castFistQi(){
       const a = i*(TAU/24);
       setTimeout(()=>{
         if(!G || gameState!=='playing') return;
-        addEffect('hitRing', p.x+p.facing*50+Math.cos(a)*30, p.y-60+Math.sin(a)*20, 0.4, {color:i%2===0?'#ffcc33':'#ff6600', r:40+i*2});
-        spawnParticles(p.x+p.facing*50+Math.cos(a)*30, p.y-60+Math.sin(a)*20, 2, {color:'#dbe4e8', angle:a, spread:0.5, spMin:200, spMax:500, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:8, grav:0});
+        addEffect('hitRing', p.x+p.facing*50+Math.cos(a)*30, p.y-60+Math.sin(a)*20, 0.4, {color:i%2===0?'#ffcc33':'#ff6600', r:40+i*2});   /* 只要环，不要光球 */
       }, i*15);
     }
     
@@ -716,7 +720,7 @@ function castFistQi(){
         if(!G || gameState!=='playing') return;
         const fx = skFall(p, tgt, 60+i*40, 900).x;
         addEffect('groundFire', fx, p.y, 1.2, {size:50+i*8});
-        spawnParticles(fx, p.y-10, 3, {color:['#ff3300','#ff6600','#ffcc33'][i%3], angle:-Math.PI/2, spread:1.5, spMin:150, spMax:400, lifeMin:0.4, lifeMax:0.9, sizeMin:4, sizeMax:10, grav:-200});
+        skBloom(fx, p.y - 14, 70, '#ffaa30', 8, 0.36);
       }, i*40);
     }
     
@@ -821,70 +825,54 @@ function castFistPalm(){
     });
   }
   
-  /* 主雷击 - 多道闪电劈下 */
+  /* 主雷击：多重天雷落下，雷核炸开（★ 不用光球粒子，改用光核+雷线+冲击环） */
   setTimeout(()=>{
     if(!G || gameState!=='playing') return;
     if(p.action && p.action.type==='fistMeditate') p.action = null;
     playSound('thunder');
-    
-    /* 第一道主闪电 */
-    addEffect('lightning', targetX(), -50, 0.5, {endX:targetX(), endY:targetY(), color:'#dbe4e8', width:8});
-    addEffect('lightning', targetX()-50, -50, 0.4, {endX:targetX()-30, endY:targetY(), color:'#aaddff', width:5});
-    addEffect('lightning', targetX()+50, -50, 0.4, {endX:targetX()+30, endY:targetY(), color:'#aaddff', width:5});
-    
-    /* 范围伤害 */
-    meleeAoe(p, targetX(), targetY(), 350, atkVal*12.5, {kb:500, launch:true});
-    
-    /* 爆炸光效 */
-    addEffect('explosion', targetX(), targetY(), 0.8, {r:300, color:'#88ccff'});
-    addEffect('explosion', targetX(), targetY(), 0.6, {r:200, color:'#dbe4e8'});
-    
-    /* 电弧扩散 */
+
+    /* ① 三道主雷自天劈落 */
+    addEffect('lightning', targetX(), -50, 0.5, {endX:targetX(), endY:targetY(), color:'#dbe4e8', width:9});
+    addEffect('lightning', targetX()-54, -50, 0.42, {endX:targetX()-28, endY:targetY(), color:'#aaddff', width:5});
+    addEffect('lightning', targetX()+54, -50, 0.42, {endX:targetX()+28, endY:targetY(), color:'#aaddff', width:5});
+
+    /* ② 雷核炸开：光核 + 放射光线（就是参考图那种爆炸） */
+    skBloom(targetX(), targetY()-26, 300, '#88ccff', 26, 0.62);
+    skBloom(targetX(), targetY()-18, 180, '#eaf6ff', 18, 0.48);
+
+    /* ③ 雷蛇向四面炸开（纯线条，不撒粒子） */
     for(let i=0;i<12;i++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        const a = i*(TAU/12), dist = rand(100, 250);
-        const ex = targetX()+Math.cos(a)*dist, ey = targetY()+Math.sin(a)*dist*0.4;
-        addEffect('lightning', targetX(), targetY(), 0.3, {endX:ex, endY:ey, color:'#88ccff', width:3});
-        spawnParticles(ex, ey, 3, {color:'#aaddff', angle:-Math.PI/2, spread:1.5, spMin:100, spMax:400, lifeMin:0.3, lifeMax:0.8, sizeMin:4, sizeMax:10, grav:400});
-      }, i*40);
+      const a = i*(TAU/12) + rand(-0.12, 0.12);
+      const dist = rand(150, 300);
+      const ex = targetX()+Math.cos(a)*dist, ey = targetY()+Math.sin(a)*dist*0.42;
+      addEffect('lightning', targetX(), targetY()-30, 0.32, {endX:ex, endY:ey, color:i%2?'#88ccff':'#dbe4e8', width:4});
+      addEffect('hitRing', ex, ey, 0.3, {color:'#aaddff', r:44});
     }
-    
-    /* 雷电粒子爆发 */
-    for(let i=0;i<100;i++){
-      const a = i*(TAU/100);
-      const spd = rand(400, 1200);
+
+    /* ④ 地面冲击：四圈扩散环 */
+    for(let r=0;r<4;r++){
       setTimeout(()=>{
         if(!G || gameState!=='playing') return;
-        spawnParticles(targetX()+rand(-30,30), targetY()-20+rand(-30,30), 6, {color:['#dbe4e8','#88ccff','#aaddff','#6699cc','#4477aa'][i%5], angle:a, spread:1.8, spMin:spd*0.4, spMax:spd, lifeMin:0.4, lifeMax:1.2, sizeMin:4, sizeMax:14, grav:600});
-      }, i*5);
-    }
-    
-    /* 多重冲击波 */
-    for(let r=0;r<6;r++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        addEffect('hitRing', targetX(), targetY()-20, 0.5, {color:r%3===0?'#dbe4e8':r%3===1?'#88ccff':'#aaddff', r:50+r*35});
+        addEffect('hitRing', targetX(), targetY()-16, 0.5, {color:['#eaf6ff','#88ccff','#aaddff','#6699cc'][r], r:60+r*46});
       }, r*70);
     }
-    
-    /* 持续电弧 - 地面电击 */
-    for(let i=0;i<20;i++){
+
+    /* ⑤ 范围伤害 */
+    meleeAoe(p, targetX(), targetY(), 350, atkVal*12.5, {kb:500, launch:true});
+
+    /* ⑥ 地面残留电弧（短时线条，无粒子） */
+    for(let i=0;i<8;i++){
       setTimeout(()=>{
         if(!G || gameState!=='playing') return;
-        const a = i*(TAU/20), dist = rand(60, 180);
-        const fx = targetX()+Math.cos(a)*dist, fy = targetY()+Math.sin(a)*dist*0.4;
-        addEffect('lightning', fx-20, fy-100, 0.4, {endX:fx, endY:fy, color:'#88ccff', width:2});
-        spawnParticles(fx, fy, 2, {color:'#aaddff', angle:-Math.PI/2, spread:1.2, spMin:150, spMax:500, lifeMin:0.3, lifeMax:0.8, sizeMin:3, sizeMax:8, grav:500});
-      }, i*50);
+        const a = i*(TAU/8)+rand(-0.2, 0.2), dist = rand(80, 200);
+        const fx = targetX()+Math.cos(a)*dist, fy = targetY()+Math.sin(a)*dist*0.42;
+        addEffect('lightning', fx-16, fy-90, 0.34, {endX:fx, endY:fy, color:'#88ccff', width:2});
+      }, i*60);
     }
-    
+
     /* 屏幕震动和闪光 */
-    G.shake = Math.max(G.shake, 50); G.flash = 0.22; G.hitFlashColor = '#88ccff'; fxHitstop(0.3);
-    
-    /* 文字特效 */
+    G.shake = Math.max(G.shake, 34); G.flash = 0.18; G.hitFlashColor = '#88ccff'; fxHitstop(0.26);
     spawnText(targetX(), targetY(), 250, '雷 霆 万 钧', '#88ccff', 52);
-    
   }, 1200);
 }
 
@@ -907,6 +895,21 @@ function skRingBurst(cx, cy, r, color, n){
   for(let i=0;i<cnt;i++){
     const a = i/cnt*TAU;
     skBurst(cx+Math.cos(a)*r, cy+Math.sin(a)*r*0.5, color, 5, {angle:a, spread:0.7, spMin:90, spMax:300});
+  }
+}
+
+/* ★ 爆开效果：统一用「光核 + 放射光线 + 冲击环」的 lightBloom
+   —— 替代以前的成片圆形光球粒子（那样像一堆泡泡，也不好看、还费性能） */
+function skBloom(x, y, r, color, rays, dur){
+  addEffect('lightBloom', x, y, dur || 0.55,
+    { r: r || 160, rays: rays || 16, color: color || '#ffd166', rot: rand(0, TAU) });
+}
+/* 环形爆点：沿圆周放 n 个小光爆（替代 skRingBurst 的一圈光球） */
+function skBloomRing(cx, cy, ringR, n, color, r){
+  const cnt = n || 8;
+  for(let i = 0; i < cnt; i++){
+    const a = i / cnt * TAU + rand(-0.12, 0.12);
+    skBloom(cx + Math.cos(a) * ringR, cy + Math.sin(a) * ringR * 0.5, r || 90, color, 10, 0.45);
   }
 }
 
@@ -1157,8 +1160,9 @@ function castSwordCome(){
         addEffect('hitRing', tx, GY_BOTTOM - 40, 0.8, {color:'#cfe0e8', r:280});
         skShake(34, 0.55, '#ffffff');
         fxHitstop(0.16);
-        skBurst(tx, GY_BOTTOM - 40, '#cfe0e8', 20, {spMin:200, spMax:760, lifeMin:0.28, lifeMax:0.8, sizeMin:2, sizeMax:7});
-        skRingBurst(tx, GY_BOTTOM - 40, 200, '#eaf6ff', 12);
+        /* ★ 爆开：光核 + 放射线 + 环形光爆（不再是一圈光球） */
+        skBloom(tx, GY_BOTTOM - 40, 210, '#cfe0e8', 20);
+        skBloomRing(tx, GY_BOTTOM - 40, 180, 8, '#eaf6ff', 70);
       });
     }
   }, 55);
@@ -1189,7 +1193,7 @@ function castBladeAbyss(){
       addEffect('spaceCrack', p.x + p.facing*150, p.y - 50, 0.5, {width:270, height:96, color:'#ff2a4a'});
       addEffect('groundCrack', p.x + p.facing*100, p.y, 0.95, {angle:p.facing>0?0:Math.PI, color:'#ff2a4a'});
       meleeHitRect(p, skFall(p, tg, 150, 900).x, p.y, 350, 200, A*MUL[i], {kb:i===2?540:190, launch:i===2});
-      skBurst(sx, p.y-60, '#ff2a4a', 9, {angle:p.facing>0?0:Math.PI, spread:0.65, spMin:180, spMax:640});
+      skBloom(sx, p.y - 60, 120, '#ff2a4a', 14, 0.45);
       addEffect('hitRing', sx, p.y, 0.42, {color:'#ff2a4a', r:69+i*34});
       skShake(9 + i*6, 0.1 + i*0.1, '#ff2a4a');
       if(i === 2){
@@ -1234,7 +1238,7 @@ function castBladeFrostSix(){
         addEffect('slashArc', ox, p.y, 0.3, {facing:dir, color:'#bfe8ff', size:1.8, typeStr:'blade'});
         addEffect('hitRing', ox, p.y, 0.42, {color:'#bfe8ff', r:56});
         addEffect('groundCrack', p.x + dir*(90 + i*80), p.y, 1.1, {angle:dir>0?0:Math.PI, color:'#8fd4ff'});
-        skBurst(ox, p.y-50, '#bfe8ff', 6, {angle:dir>0?0:Math.PI, spread:0.7, spMin:150, spMax:470, grav:120});
+        skBloom(ox, p.y - 50, 95, '#bfe8ff', 12, 0.4);
         skShake(6, 0.05, '#bfe8ff');
       });
     }
@@ -1249,7 +1253,7 @@ function castBladeFrostSix(){
       addEffect('hitRing', tx, ty, 0.78, {color:'#dbe4e8', r:214});
       addEffect('spearLine', p.x + dir*40, p.y-60, 0.5, {endX:tx + dir*170, endY:ty-60, color:'#bfe8ff', width:28});
       meleeAoe(p, tx, ty, 295, A*70, {kb:470, launch:true});
-      skBurst(tx, ty-40, '#dff4ff', 16, {spMin:200, spMax:770, grav:160});
+      skBloom(tx, ty - 40, 190, '#dff4ff', 18);
       addEffect('skyCrack', tx, ty-260, 0.9, {width:240, color:'#bfe8ff'});
       skShake(22, 0.3, '#dff4ff');
       fxHitstop(0.08);
@@ -1287,8 +1291,9 @@ function castBladeRulerFlame(){
     addEffect('hitRing', tx(), gy(), 0.9, {color:'#fff2c0', r:365});
     skShake(30, 0.48, '#ffb040');
     fxHitstop(0.14);
-    skBurst(tx(), gy(), '#ff8a20', 18, {spMin:220, spMax:880, grav:520});
-    skRingBurst(tx(), gy(), 170, '#ffcc60', 10);
+    /* ★ 巨尺落点炸开：光核 + 环形光爆 */
+    skBloom(tx(), gy(), 250, '#ff8a20', 24);
+    skBloomRing(tx(), gy(), 150, 8, '#ffcc60', 80);
     /* 火焰裂谷持续灼烧 */
     let t = 0;
     const rift = setInterval(()=>{
@@ -1404,7 +1409,7 @@ function castSpearRainStorm(){
           for(let i=0;i<5;i++) addEffect('explosion', cx() + (i-2)*90, gy(), 0.6, {color:'#bfe0ff', r:150});
           addEffect('hitRing', cx(), gy(), 0.85, {color:'#dbe4e8', r:330});
           meleeAoe(p, cx(), gy(), 350, A*75, {kb:480, launch:true});
-          skBurst(cx(), gy(), '#dff0ff', 19, {spMin:220, spMax:820, grav:400});
+          skBloom(cx(), gy(), 210, '#dff0ff', 20);
           skShake(24, 0.34, '#dff0ff');
           fxHitstop(0.09);
         });
@@ -1507,7 +1512,7 @@ function castFistEightExtremes(){
       addEffect('punchWave', bx, by, 0.3, {facing:p.facing, color:'#ffcc33', len:last?260:150});
       addEffect('hitRing', bx, p.y, 0.3, {color:'#ffcc33', r:last?150:70});
       meleeHitRect(p, bx + p.facing*30, p.y, 200, 200, A*(last?120:25), {kb:last?520:90, launch:last});
-      skBurst(bx, by, '#ffcc33', last?40:12, {angle:p.facing>0?0:Math.PI, spread:0.7, spMin:160, spMax:last?760:440, grav:320});
+      skBloom(bx, by, last ? 200 : 100, '#ffcc33', last ? 22 : 12, last ? 0.55 : 0.42);
       skShake(last?22:5, last?0.34:0.03, '#ffcc33');
       if(last){
         addEffect('explosion', bx + p.facing*60, by, 0.6, {color:'#ffcc33', r:166});
@@ -1618,7 +1623,7 @@ function castSixPathsFist(){
         const cy = tg ? tg.y : p.y;
         meleeAoe(p, cx, cy, 150, A*15, {kb:60});
         addEffect('hitRing', cx, cy, 0.45, { color:PATHS[i%6].col, r:96 });
-        skBurst(cx, cy - 30, PATHS[i%6].col, 8, { spMin:120, spMax:420, grav:120 });
+        skBloom(cx, cy - 30, 100, PATHS[i%6].col, 12, 0.45);
         skShake(6, 0.06, PATHS[i%6].col);
       });
     }
@@ -1636,7 +1641,7 @@ function castSixPathsFist(){
       addEffect('punchWave', p.x + p.facing*70, p.y, 0.3, { facing:p.facing, color:PATHS[i%6].col, len:150 });
       addEffect('hitRing', cx, cy, 0.4, { color:PATHS[i%6].col, r:80 + i*8 });
       meleeAoe(p, cx, cy, 165, A*24, { kb:160 + i*20 });
-      skBurst(cx, cy - 40, PATHS[i%6].col, 10, { spMin:160, spMax:560, grav:120 });
+      skBloom(cx, cy - 40, 125, PATHS[i%6].col, 14, 0.5);
       skShake(9 + i, 0.08, PATHS[i%6].col);
       if(i === 5){ skShake(20, 0.3, '#ff7a4a'); fxHitstop(0.08); }
     });
@@ -1657,7 +1662,7 @@ function castSixPathsFist(){
     meleeAoe(p, cx, cy, 320, A*200, { kb:640, launch:true, ignoreDef:true });
     meleeAoe(p, cx, cy, 540, A*46, { kb:240 });
     addEffect('lightBloom', cx, cy - 50, 0.7, {r:250, rays:22, color:'#ffd86b'});      /* 六道终结：光爆 */
-    skRingBurst(cx, cy, 260, '#ffce6b', 16);
+    skBloomRing(cx, cy, 230, 12, '#ffce6b', 80);
     skShake(36, 0.5, '#ffd86b');
     fxHitstop(0.14);
   });
@@ -1832,8 +1837,8 @@ function castHerbPouch(){
     addEffect('poisonCloud', tx + rand(-60, 60), tg.y, 1.1, {color:'#b6ff8a', r:62});
     addEffect('poisonCloud', tx + rand(-90, 90), tg.y, 0.9, {color:'#4aa03a', r:54});
     meleeAoe(p, tx, tg.y, 105, A * 30, {kb:80});
-    skBurst(tx, tg.y - 30, '#7ed957', 12, {grav:180});
-    skRingBurst(tx, tg.y, 150, '#b6ff8a', 12);
+    skBloom(tx, tg.y - 30, 150, '#7ed957', 16);
+    skBloomRing(tx, tg.y, 130, 8, '#b6ff8a', 60);
     skShake(7, 0.05, '#7ed957');
     /* 毒伤：3 段 */
     for(let t = 0; t < 3; t++) skAt(360 + t * 340, ()=>{
@@ -1922,7 +1927,7 @@ function castHerbLifeDeath(){
         spawnText(e.x, e.y, 150, '蚀骨', '#b388ff', 20);
       }
     }
-    skBurst(cx, cy - 40, '#b388ff', 9, {grav:80});
+    skBloom(cx, cy - 40, 130, '#b388ff', 14);
     skShake(13, 0.12, '#b388ff');
   });
 }
@@ -2067,7 +2072,7 @@ function castHerbShennong(){
     addEffect('explosion', p.x, p.y, 1.1, {color:'#b6ff8a', r:302});
     addEffect('emberBurst', p.x, p.y - 30, 1.2, {color:'#b6ff8a', r:460, n:30, rot:rand(0, TAU)});
     addEffect('shockWave', p.x, p.y + 2, 1.0, {facing:p.facing, r:560, color:'#d8ff9a'});
-    skRingBurst(p.x, p.y, 220, '#d8ff9a', 16);
+    skBloomRing(p.x, p.y, 190, 10, '#d8ff9a', 80);
     skShake(30, 0.4, '#b6ff8a');
     fxHitstop(0.12);
   });
@@ -2436,7 +2441,7 @@ function castTalismanRain(){
     addEffect('explosion', tg.x, tg.y, 0.8, {color:'#ffe066', r:202});
     addEffect('emberBurst', tg.x, tg.y - 26, 1.0, {color:'#ffe066', r:340, n:26, rot:rand(0, TAU)});
     addEffect('shockWave', tg.x, tg.y + 2, 0.8, {facing:p.facing, r:420, color:'#fff6b0'});
-    skRingBurst(tg.x, tg.y, 220, '#ffe066', 16);
+    skBloomRing(tg.x, tg.y, 190, 10, '#ffe066', 80);
     skShake(18, 0.2, '#ffe066');
   });
 }
@@ -2470,8 +2475,8 @@ function castTalismanSword(){
     addEffect('emberBurst', cx, cy - 40, 0.6, {color:'#b6cbd6', r:210, n:20, rot:rand(0, TAU)});
     addEffect('explosion', cx, cy, 0.7, {color:'#cddde4', r:122});
     meleeHitRect(p, cx, cy, 420, 260, A * 75, {kb:380, launch:true});
-    skBurst(cx, cy - 60, '#b6cbd6', 15, {grav:120, spMin:200, spMax:640});
-    skRingBurst(cx, cy, 180, '#cddde4', 18);
+    skBloom(cx, cy - 60, 190, '#b6cbd6', 18);
+    skBloomRing(cx, cy, 160, 10, '#cddde4', 70);
     skShake(24, 0.34, '#b6cbd6');
     fxHitstop(0.1);
     playSound('explosion');
@@ -2512,7 +2517,7 @@ function castTalismanCommand(){
     addEffect('explosion', cx, cy, 0.9, {color:'#ffe066', r:230});
     addEffect('emberBurst', cx, cy - 26, 1.0, {color:'#ffe066', r:380, n:26, rot:rand(0, TAU)});
     addEffect('shockWave', cx, cy + 2, 0.9, {facing:p.facing, r:460, color:'#fff6b0'});
-    skRingBurst(cx, cy, 240, '#ffe066', 16);
+    skBloomRing(cx, cy, 210, 12, '#ffe066', 80);
     skShake(24, 0.35, '#ffe066');
   });
 }
@@ -2560,7 +2565,7 @@ function castTalismanGhosts(){
     meleeAoe(p, _cx(), tg.y, 330, A * 190, {kb:460, launch:true});
     addEffect('explosion', _cx(), tg.y, 1.1, {color:'#b388ff', r:259});
     addEffect('skyCrack', _cx(), 80, 1.2, {width:420, color:'#b388ff'});
-    skBurst(_cx(), tg.y - 60, '#b388ff', 18, {spMin:200, spMax:760, grav:60});
+    skBloom(_cx(), tg.y - 60, 210, '#b388ff', 20);
     skShake(30, 0.45, '#b388ff');
     fxHitstop(0.12);
   });
