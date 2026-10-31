@@ -639,6 +639,8 @@
     var abyss = !!opts.abyss;
     var p = opts.isBoss ? 0.06 : (opts.isElite ? 0.015 : 0);
     if(abyss) p = opts.isBoss ? 0.16 : 0.03;
+    /* ★ 掉落加成倍率：BOSS 用 rateMul 抬高（深渊 boss 基本必掉） */
+    p = Math.min(0.92, p * (opts.rateMul || 1));
     if(!(Math.random() < p)) return null;
 
     var cap = capTierForLevel(level || 1);
