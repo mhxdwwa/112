@@ -1969,7 +1969,7 @@ function castHerbDew(){
       if(healed >= 1) spawnText(p.x, p.y, 190, '+' + Math.round(healed), '#7ed957', 28);
       addEffect('explosion', p.x, p.y, 0.6, {color:'#ffe9a8', r:144});
       addEffect('emberBurst', p.x, p.y - 26, 0.7, {color:'#ffe9a8', r:240, n:20, rot:rand(0, TAU)});
-      skBurst(p.x, p.y - 50, '#ffe9a8', 9, {spMin:120, spMax:420, grav:-60});
+      skBloom(p.x, p.y - 52, 140, '#ffe9a8', 14, 0.5);   /* 治疗用光爆，不用光球 */
       skShake(8, 0.08, '#ffe9a8');
       return;
     }
@@ -1982,7 +1982,7 @@ function castHerbDew(){
     addEffect('explosion', p.x, p.y, 0.6, {color:'#ffe9a8', r:144});
     addEffect('emberBurst', p.x, p.y - 26, 0.7, {color:'#ffe9a8', r:240, n:20, rot:rand(0, TAU)});
     addEffect('shockWave', p.x, p.y + 2, 0.6, {facing:p.facing, r:280, color:'#b6ff8a'});
-    skBurst(p.x, p.y - 50, '#ffe9a8', 10, {spMin:120, spMax:420, grav:-60});
+    skBloom(p.x, p.y - 52, 160, '#ffe9a8', 16, 0.55);
     skShake(9, 0.1, '#ffe9a8');
   });
 }
