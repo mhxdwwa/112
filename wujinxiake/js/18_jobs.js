@@ -326,9 +326,12 @@ function makePvpPlayer(num, weaponIdx, bal){
     backUpperArmAng:1.5, backForeArmAng:-1.5, legPose:0,
     skillLevels:[1,1,1,1,1,1], skillsUnlocked:[true,true,true,true,true,true], pvpAllSkills:true,
     dodgeT:0, dodgeCd:0, dodgeDir:0, stamina:100, maxStamina:100 };
-  /* ★ PK 也穿戴飞行道具（.ensure 会自动补发一把系统赠送的） */
+  /* ★ PK / 练习模式也穿戴飞行道具：默认给「翅膀」，更炫也好区分对手 */
   pl.equipment = {};
-  if(window.MOUNT) MOUNT.ensure(pl);
+  if(window.MOUNT){
+    MOUNT.ensure(pl);
+    if(pl.equipment && pl.equipment.mount) pl.equipment.mount.model = 'wing';
+  }
   return pl;
 }
 function makePlayer(){
@@ -436,9 +439,12 @@ function makePvpPlayerWithChar(num, char, bal){
     charId:char.id,
     skillLevels:[1,1,1,1,1,1], skillsUnlocked:[true,true,true,true,true,true], pvpAllSkills:true,
     dodgeT:0, dodgeCd:0, dodgeDir:0, stamina:100, maxStamina:100 };
-  /* ★ PK 也穿戴飞行道具（.ensure 会自动补发一把系统赠送的） */
+  /* ★ PK / 练习模式也穿戴飞行道具：默认给「翅膀」，更炫也好区分对手 */
   pl.equipment = {};
-  if(window.MOUNT) MOUNT.ensure(pl);
+  if(window.MOUNT){
+    MOUNT.ensure(pl);
+    if(pl.equipment && pl.equipment.mount) pl.equipment.mount.model = 'wing';
+  }
   return pl;
 }
 
@@ -483,15 +489,17 @@ function fxWeaponVolley(owner, x, y, tx, ty, kind, count, opt){
   const spread = opt.spread !== undefined ? opt.spread : 0.42;
   const baseA = Math.atan2(ty - y, tx - x);
   const dist = Math.max(60, Math.hypot(tx - x, ty - y));
+  /* ★ 甩出去的武器不再是「纯视觉」：只要 opt.dmg > 0，模型碰到敌人就真的掉血 */
+  const dmgV = opt.dmg || 0;
   for(let i=0;i<n;i++){
     const a = baseA + rand(-spread, spread);
     G.projectiles.push({
       kind, x: x + rand(-8,8), y: y + rand(-8,8), h: opt.h !== undefined ? opt.h : 58,
       vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.35,
       life: Math.min(1.8, dist / speed + 0.18),
-      w: opt.w || 70, hh: opt.hh || 50, dmg: 0, pierce: 1, hitSet: new Set(),
+      w: opt.w || 70, hh: opt.hh || 50, dmg: dmgV, pierce: 1, hitSet: new Set(),
       color: opt.color || '#bcd0d8', facing: Math.cos(a) >= 0 ? 1 : -1,
-      rot: a, owner: owner, scale: opt.scale || 1.4, noHit: true
+      rot: a, owner: owner, scale: opt.scale || 1.4, noHit: !(dmgV > 0)
     });
   }
 }
