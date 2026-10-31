@@ -356,6 +356,16 @@ function recalcPlayerStats(){
   if(typeof updateSkillDamageDisplay === 'function') updateSkillDamageDisplay();
 }
 
+/* ★ 持续性特效的接触伤害参数（k=玩家攻击力倍率，r=基础命中半径） */
+const FX_CONTACT = {
+  groundFire:  { r: 46, k: 1.2 },
+  poisonCloud: { r: 46, k: 1.0 },
+  flameDragon: { r: 54, k: 2.0 },
+  vine:        { r: 40, k: 0.9 },
+  swordStake:  { r: 46, k: 1.5 },
+  lotusBurst:  { r: 56, k: 1.5 },
+  rockSpike:   { r: 46, k: 1.5 }
+};
 function update(dt){
   if(!G || (gameState !== 'playing' && gameState !== 'stageClear')) return;
   const rawDt = dt;                              // ★ 修复B：保存原始 dt，投射物不受 hitstop 减速
@@ -1481,10 +1491,34 @@ function update(dt){
     const t = G.texts[i]; t.t += dt; t.h += 60*dt; t.x += t.vx*dt; t.vx *= 0.95;
     if(t.t >= t.dur) G.texts.splice(i,1);
   }
+  /* ★ 视觉碰到就受伤：以下「持续存在」的特效以前只画不结算，
+     现在按类型给接触伤害（同一只怪对同一个特效只吃一次，避免每帧狂掉血） */
   for(let i=G.effects.length-1; i>=0; i--){
     const ef = G.effects[i]; ef.t += dt;
     if(ef.t >= ef.dur){ G.effects.splice(i,1); continue; }
     if(ef.follow){ ef.x = ef.follow.x; ef.y = ef.follow.y; }
+    const CF = FX_CONTACT[ef.type];
+    if(CF && ef.t > 0.05){
+      ef._ct = (ef._ct || 0) + dt;
+      if(ef._ct >= 0.26){
+        ef._ct = 0;
+        if(!ef._hs) ef._hs = new Set();
+        const RR = CF.r + (ef.r || 0) * 0.35;
+        const hit = (ex, ey, radius) => {
+          const dx = ex - ef.x, dy = (ey - ef.y) * 2.2;
+          return dx*dx + dy*dy <= (RR + (radius||0)) * (RR + (radius||0));
+        };
+        for(const e of G.enemies){
+          if(!e.alive || ef._hs.has(e)) continue;
+          if(hit(e.x, e.y, e.radius)){
+            damageEnemy(e, playerAtk() * CF.k, G.player, {kb:0});
+            ef._hs.add(e);
+          }
+        }
+        /* 注：PK 下特效无法可靠判定归属（容易自伤），接触伤害只在刷图里生效；
+           PK 的伤害仍由技能自身判定承担 */
+      }
+    }
   }
 
   for(let i=0;i<6;i++) p.cds[i] = Math.max(0, (p.cds[i]||0)-dt);
