@@ -669,7 +669,7 @@ function drawProjectile(pr){
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(gwS,gwS);
-    ctx.shadowColor = gwCol; ctx.shadowBlur = 16;
+    ctx.shadowColor = gwCol; ctx.shadowBlur = _fxBlur(16);
     drawWeapon(pr.weaponType || 'blade',0,0,0);
     ctx.shadowBlur = 0;
     ctx.restore(); return;
@@ -884,7 +884,7 @@ function drawCharGhost(atKey, anim, frameT, x, y, facing, bodyWorld, tint, alpha
   if(facing < 0){ ctx.translate(x, 0); ctx.scale(-1, 1); ctx.translate(-x, 0); }
   if(tint){
     ctx.globalCompositeOperation = 'lighter';
-    ctx.shadowColor = tint; ctx.shadowBlur = 24;
+    ctx.shadowColor = tint; ctx.shadowBlur = _fxBlur(24);
   }
   ctx.drawImage(draw.img, sx, sy, cw, ch, dx, dy, dw, dh);
   ctx.shadowBlur = 0;
@@ -892,8 +892,18 @@ function drawCharGhost(atKey, anim, frameT, x, y, facing, bodyWorld, tint, alpha
   return true;
 }
 
+/* ★ 阴影模糊按画质缩放：低画质时统一压到 35%，大幅省下每帧的高斯模糊开销 */
+function _fxBlur(v){
+  const s = (window.PFX && window.PFX.shadow !== undefined) ? window.PFX.shadow : 1;
+  return v * s;
+}
 function drawEffects(dt){
+  /* ★ 屏外特效直接跳过绘制：大地图里技能常在视野外空转，
+     以前照样每帧画带 shadowBlur 的大特效，白烧一大半性能 */
+  const _camX = (G && G.camera) ? G.camera.x : 0;
+  const _cullL = _camX - 460, _cullR = _camX + VW + 460;
   for(const ef of G.effects){
+    if(ef.x < _cullL || ef.x > _cullR) continue;
     const k = ef.t/ef.dur;
     const sc = depthScale(ef.y);
     ctx.save();
@@ -1433,7 +1443,7 @@ function drawEffects(dt){
         ctx.globalAlpha = 1;
         ctx.save();
         ctx.translate(rx, ry); ctx.rotate(a + Math.PI/2);
-        ctx.shadowColor = boCol; ctx.shadowBlur = 26;
+        ctx.shadowColor = boCol; ctx.shadowBlur = _fxBlur(26);
         ctx.scale(boS*1.5, boS*1.5);
         drawWeapon(ef.weaponType || 'sword', 0, 0, 0);
         ctx.restore();
@@ -1649,7 +1659,7 @@ function drawEffects(dt){
       ctx.strokeStyle = ef.color || '#88ccff';
       ctx.lineWidth = width;
       ctx.shadowColor = ef.color || '#88ccff';
-      ctx.shadowBlur = 20;
+      ctx.shadowBlur = _fxBlur(20);
       ctx.beginPath();
       
       const segments = 12;
@@ -1732,7 +1742,7 @@ function drawEffects(dt){
       ctx.strokeStyle = ef.color || '#9fe6ff';
       ctx.lineWidth = 4;
       ctx.shadowColor = ef.color || '#9fe6ff';
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = _fxBlur(15);
       ctx.beginPath();
       ctx.moveTo(ef.x-w/2, ef.y);
       for(let i=1;i<8;i++){
@@ -1791,7 +1801,7 @@ function drawEffects(dt){
       
       /* 剑身发光 */
       ctx.shadowColor = ef.color || '#9fe6ff';
-      ctx.shadowBlur = 25;
+      ctx.shadowBlur = _fxBlur(25);
       
       /* 剑身 */
       ctx.fillStyle = ef.color || '#9fe6ff';
@@ -1841,7 +1851,7 @@ function drawEffects(dt){
         /* 剑身 */
         ctx.fillStyle = ef.color || '#9fe6ff';
         ctx.shadowColor = ef.color || '#9fe6ff';
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = _fxBlur(20);
         ctx.beginPath();
         ctx.moveTo(-4, -40);
         ctx.lineTo(4, -40);
@@ -1891,7 +1901,7 @@ function drawEffects(dt){
         ctx.scale(facing*2.5, 2.5);
         ctx.fillStyle = ef.color || '#ff2244';
         ctx.shadowColor = ef.color || '#ff2244';
-        ctx.shadowBlur = 30;
+        ctx.shadowBlur = _fxBlur(30);
         ctx.beginPath(); ctx.ellipse(0, 0, 20, 35, 0, 0, TAU); ctx.fill();
         ctx.beginPath(); ctx.arc(0, -40, 12, 0, TAU); ctx.fill();
         const swing = Math.sin(ef.t*8 + (ef.orbit||0)) * 10;
@@ -1976,7 +1986,7 @@ function drawEffects(dt){
       ctx.strokeStyle = ef.color || '#ff4400';
       ctx.lineWidth = 3;
       ctx.shadowColor = ef.color || '#ff4400';
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = _fxBlur(15);
       ctx.beginPath();
       for(let i=0;i<12;i++){
         const a = (i/12)*TAU;
@@ -2008,7 +2018,7 @@ function drawEffects(dt){
       ctx.strokeStyle = ef.color || '#ffcc33';
       ctx.lineWidth = 4*(1-ak*0.5);
       ctx.shadowColor = ef.color || '#ffcc33';
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = _fxBlur(15);
       ctx.beginPath();
       ctx.arc(0, 0, expandR, arcStart, arcEnd);
       ctx.stroke();
@@ -2065,7 +2075,7 @@ function drawEffects(dt){
       if(aiAt && aiAt.ready && aiAt.img && aiAt.img.naturalWidth){
         const aiBody = aiAt.bodyWorld * sc;
         ctx.shadowColor = ef.color || '#ffffff';
-        ctx.shadowBlur = 22;
+        ctx.shadowBlur = _fxBlur(22);
         drew = drawSpriteFrame(aiAt, ef.anim || 'skill', 0.5, ef.x, ef.y, ef.facing || 1, aiBody, null);
         ctx.shadowBlur = 0;
       }
@@ -2167,7 +2177,7 @@ function drawEffects(dt){
       ctx.globalAlpha = clamp(slA,0,1) * 0.95;
       ctx.strokeStyle = ef.color || '#ffffff';
       ctx.shadowColor = ef.color || '#ffffff';
-      ctx.shadowBlur = 28;
+      ctx.shadowBlur = _fxBlur(28);
       ctx.lineCap = 'round';
       ctx.lineWidth = w * (1 - slK*0.35);
       ctx.beginPath(); ctx.moveTo(ef.x, ef.y); ctx.lineTo(ef.endX, ef.endY); ctx.stroke();
@@ -2207,7 +2217,7 @@ function drawEffects(dt){
       /* 环绕气旋 */
       ctx.globalAlpha = clamp(qcA,0,1) * 0.85;
       ctx.strokeStyle = qcCol; ctx.lineWidth = 5;
-      ctx.shadowColor = qcCol; ctx.shadowBlur = 18;
+      ctx.shadowColor = qcCol; ctx.shadowBlur = _fxBlur(18);
       for(let i=0;i<7;i++){
         const yy = ef.y - 30 - i*100;
         const a = ef.t*7 + i*0.9;
@@ -2231,7 +2241,7 @@ function drawEffects(dt){
       ctx.globalAlpha = clamp(ppA,0,1) * 0.9;
       ctx.translate(ef.x, ef.y - 40*sc);
       ctx.scale(ppS, ppS);
-      ctx.shadowColor = ppCol; ctx.shadowBlur = 34;
+      ctx.shadowColor = ppCol; ctx.shadowBlur = _fxBlur(34);
       const drawPalm = (a)=>{
         ctx.save();
         ctx.rotate(a);
@@ -2275,7 +2285,7 @@ function drawEffects(dt){
       /* ★ tipDown：剑尖朝下（默认朝上）。御雷真诀等"自天而降"的剑用这个，
          翻转后再上移 780，使剑尖正好落在 ef.y */
       if(ef.tipDown){ ctx.scale(1, -1); ctx.translate(0, -780); }
-      ctx.shadowColor = gsCol; ctx.shadowBlur = 44;
+      ctx.shadowColor = gsCol; ctx.shadowBlur = _fxBlur(44);
       /* 剑身 */
       const gsg = ctx.createLinearGradient(0, -760, 0, 0);
       gsg.addColorStop(0, 'rgba(255,255,255,0)');
@@ -2313,7 +2323,7 @@ function drawEffects(dt){
       /* ★ 朝向镜像：f=-1 时刀尖/枪尖翻向左侧敌人（ef.f 由技能按施法者朝向传入） */
       ctx.scale(ef.f || 1, 1);
       ctx.rotate(ef.rot || 0);
-      ctx.shadowColor = gwCol; ctx.shadowBlur = 40;
+      ctx.shadowColor = gwCol; ctx.shadowBlur = _fxBlur(40);
       ctx.scale(gwS, gwS);
       drawWeapon(ef.weaponType || 'blade', 0, 0, 0);
       ctx.shadowBlur = 0;
