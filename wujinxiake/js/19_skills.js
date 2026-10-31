@@ -381,139 +381,53 @@ function castBladeFire(){
   }, 500);
 }
 function castBladeArray(){
-  /* 五龙御天刀：五条龙形刀气从刀身涌出，盘旋升空后俯冲攻击目标 */
+  /* 五龙御天刀（重做）：五柄本命刀腾空后依次俯冲劈下
+     ★ 有实体刀模型飞出去，就只留刀，不再叠成片光粒子 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const atkVal = skillAtkVal(p);
-  const tgt = skAim(p, 220);            /* 活坐标 */
-  const cx = () => tgt.x, cy = () => tgt.y;
+  const tgt = skAim(p, 220);                 /* 活坐标 */
+  const tx = () => clamp(tgt.x, WORLD_L + 50, WORLD_R - 50);
+  const ty = () => clamp(tgt.y, GY_TOP + 20, GY_BOTTOM);
   spawnText(p.x, p.y, 200, '五 龙 御 天 刀', '#ff8a4a', 38);
   p.action = {type:'bladeCharge', dur:0.8, t:0};
-  
-  /* 蓄力：龙形刀气从刀身凝聚 */
-  for(let i=0;i<30;i++){
-    setTimeout(()=>{
-      if(!G || gameState!=='playing') return;
-      const a = (i/30)*TAU, r = 60-i*1.2;
-      const sx = p.x+p.facing*50+Math.cos(a)*r;
-      const sy = p.y-60+Math.sin(a)*r*0.5;
-      spawnParticles(sx, sy, 2, {color:i%4===0?'#dbe4e8':i%4===1?'#ff8a4a':i%4===2?'#ffaa00':'#ff6600', angle:Math.atan2(p.y-60-sy, p.x+p.facing*50-sx), spread:0.4, spMin:60, spMax:180, lifeMin:0.3, lifeMax:0.6, sizeMin:4, sizeMax:9, grav:-80});
-    }, i*22);
-  }
-  
-  /* 七龙升空 - 七条龙形刀气盘旋上升 */
-  const dragons = [];
-  for(let d=0;d<7;d++){
-    setTimeout(()=>{
-      if(!G || gameState!=='playing') return;
+  /* 起手：刀身一亮（一个光爆，替代原来 30 帧汇聚粒子） */
+  addEffect('lightBloom', p.x + p.facing * 52, p.y - 66, 0.35, {r:70, rays:10, color:'#ff8a4a'});
+
+  const N = 5;
+  for(let d = 0; d < N; d++){
+    skAt(240 + d * 170, ()=>{
+      if(!G || gameState !== 'playing') return;
+      if(d === 0 && p.action && p.action.type === 'bladeCharge') p.action = null;
       playSound('bladeSwing');
-      const baseAngle = d*(TAU/7);
-      dragons.push({angle:baseAngle, phase:0});
-      
-      /* 龙形刀气上升轨迹 */
-      for(let i=0;i<20;i++){
-        setTimeout(()=>{
-          if(!G || gameState!=='playing') return;
-          const progress = i/20;
-          const height = progress*400;
-          const radius = 80+progress*60;
-          const angle = baseAngle+progress*TAU*2;
-          const dx = p.x+Math.cos(angle)*radius;
-          const dy = p.y-70-height;
-          
-          /* 龙身粒子 */
-          spawnParticles(dx, dy, 3, {color:d%3===0?'#ff8a4a':d%3===1?'#ffaa00':'#ff6600', angle:angle+Math.PI/2, spread:0.5, spMin:30, spMax:100, lifeMin:0.3, lifeMax:0.7, sizeMin:5, sizeMax:12, grav:-100});
-          
-          /* 龙鳞闪光 */
-          if(i%3===0) addEffect('hitRing', dx, dy, 0.3, {color:'#ff8a4a', r:20+i*2});
-          
-          /* 龙尾拖尾 */
-          spawnParticles(dx-Math.cos(angle)*20, dy+10, 2, {color:'#ffcc66', angle:-Math.PI/2, spread:0.8, spMin:20, spMax:60, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:7, grav:100});
-        }, i*30);
+      const isLast = (d === N - 1);
+      /* 刀刃从头顶斜上方俯冲劈下（本命刀模型） */
+      const sx = p.x + p.facing * (40 + d * 18);
+      const sy = p.y - 210 - d * 26;
+      const ang = Math.atan2((ty() - 26) - sy, tx() - sx);
+      const spd = 1180 + d * 60;
+      const dist = Math.max(80, Math.hypot(tx() - sx, (ty() - 26) - sy));
+      G.projectiles.push({
+        kind:'realBlade', x:sx, y:sy, h:1,
+        vx:Math.cos(ang) * spd, vy:Math.sin(ang) * spd,
+        life: Math.min(0.75, dist / spd + 0.08),
+        w: isLast ? 150 : 105, hh: isLast ? 120 : 78,
+        dmg: atkVal * (isLast ? 40 : 14), pierce: isLast ? 3 : 1,
+        hitSet:new Set(), rot:ang, scale: isLast ? 2.3 : 1.5,
+        color:'#ff8a4a', owner:p
+      });
+      /* 刀落一线刀痕（只留一道弧，不撒粒子） */
+      addEffect('slashArc', tx(), ty(), 0.26, {facing:p.facing, color:'#ff8a4a', size: isLast ? 1.8 : 1.1, typeStr:'blade'});
+      if(isLast){
+        addEffect('lightBloom', tx(), ty() - 30, 0.55, {r:170, rays:16, color:'#ff8a4a'});
+        addEffect('hitRing', tx(), ty(), 0.5, {color:'#ffd08a', r:160});
+        meleeAoe(p, tx(), ty(), 160, atkVal * 20, {kb:420, launch:true});
+        skShake(18, 0.26, '#ff8a4a');
+        fxHitstop(0.07);
+      } else {
+        skShake(7, 0.03, '#ff8a4a');
       }
-    }, d*120);
+    });
   }
-  
-  /* 七龙俯冲 - 龙形刀气从天空俯冲目标 */
-  setTimeout(()=>{
-    if(!G || gameState!=='playing') return;
-    if(p.action && p.action.type==='bladeCharge') p.action = null;
-    playSound('explosion');
-    
-    for(let d=0;d<7;d++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        const startAngle = d*(TAU/7)+G.t*3;
-        const startR = 140;
-        const startX = cx()+Math.cos(startAngle)*startR;
-        const startY = cy()-350;
-        
-        /* 龙形投射物 */
-        const dx = cx()-startX, dy = cy()-startY;
-        const dist = Math.hypot(dx, dy);
-        const speed = 1400;
-        const flightTime = dist/speed;
-        
-        G.projectiles.push({ kind:'realBlade', x:startX, y:startY, h:60, vx:(dx/dist)*speed, vy:(dy/dist)*speed, life:flightTime+0.1, w:100, hh:80, dmg:atkVal*5.0, pierce:2, hitSet:new Set(), color:'#ff8a4a', rot:Math.atan2(dy, dx), owner:p, dragon:true });
-        
-        /* 俯冲拖尾 */
-        for(let i=0;i<15;i++){
-          setTimeout(()=>{
-            if(!G || gameState!=='playing') return;
-            const progress = i/15;
-            const tx = startX+(dx/dist)*speed*flightTime*progress;
-            const ty = startY+(dy/dist)*speed*flightTime*progress;
-            spawnParticles(tx, ty, 2, {color:i%3===0?'#ff8a4a':i%3===1?'#ffaa00':'#ff6600', angle:Math.atan2(dy, dx)+Math.PI, spread:0.6, spMin:50, spMax:150, lifeMin:0.2, lifeMax:0.5, sizeMin:4, sizeMax:9, grav:200});
-          }, i*15);
-        }
-        
-        playSound('bladeSwing');
-      }, d*80);
-    }
-    
-    /* 最终爆炸 */
-    setTimeout(()=>{
-      if(!G || gameState!=='playing') return;
-      meleeAoe(p, cx(), cy(), 250, atkVal*6.0, {kb:350, launch:true});
-      addEffect('explosion', cx(), cy(), 0.8, {r:280, color:'#ff8a4a'});
-      addEffect('explosion', cx(), cy(), 0.6, {r:180, color:'#ffaa00'});
-      
-      /* 龙形地面裂痕 */
-      for(let d=0;d<5;d++){
-        const a = d*(TAU/5);
-        setTimeout(()=>{
-          if(!G || gameState!=='playing') return;
-          for(let i=0;i<8;i++){
-            const dist = 40+i*25;
-            const ex = cx()+Math.cos(a)*dist;
-            const ey = cy()+Math.sin(a)*dist*0.3;
-            addEffect('groundCrack', cx(), cy(), 1.2, {delay:i*0.03, angle:a, color:'#ff8a4a'});
-            spawnParticles(ex, ey, 2, {color:'#ff8a4a', angle:-Math.PI/2, spread:1.0, spMin:60, spMax:180, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:7, grav:500});
-          }
-        }, d*60);
-      }
-      
-      /* 碎片飞溅 */
-      for(let i=0;i<70;i++){
-        const a = rand(0, TAU);
-        const spd = rand(150, 500);
-        setTimeout(()=>{
-          if(!G || gameState!=='playing') return;
-          spawnParticles(cx()+rand(-30,30), cy()-20+rand(-30,30), 5, {color:i%4===0?'#dbe4e8':i%4===1?'#ff8a4a':i%4===2?'#ffaa00':'#ff6600', angle:a, spread:1.6, spMin:spd*0.4, spMax:spd, lifeMin:0.4, lifeMax:1.0, sizeMin:4, sizeMax:11, grav:700});
-        }, i*6);
-      }
-      
-      /* 冲击波 */
-      for(let r=0;r<5;r++){
-        setTimeout(()=>{
-          if(!G || gameState!=='playing') return;
-          addEffect('hitRing', cx(), cy()-20, 0.5, {color:r%2===0?'#ff8a4a':'#ffaa00', r:50+r*35});
-        }, r*55);
-      }
-      
-      G.shake = Math.max(G.shake, 35); G.flash = 0.22; G.hitFlashColor = '#ff8a4a'; fxHitstop(0.2);
-      spawnText(cx(), cy(), 150, '五 龙 破', '#ffaa00', 34);
-    }, 500);
-  }, 1000);
 }
 function castBladeStorm(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
@@ -851,108 +765,58 @@ function castFistRush(){
     for(const e of G.enemies){ if(!e.alive) continue; const dx = e.x-p.x; if(Math.sign(dx)!==p.facing && Math.abs(dx)>30) continue; const d=dx*dx; if(d<best){best=d;tgt=e;} }
   }
   /* ★ 前方没敌人时全向兜底锁定，避免冲拳打空 */
-  const aim = tgt ? { x:tgt.x, y:tgt.y } : skAim(p, 250);
+  const aim = skAim(p, 250);            /* ★ 活坐标：火莲飞行与绽放都追敌人实时位置 */
   spawnText(p.x, p.y, 200, '佛 怒 火 莲', '#ff6600', 38);
 
-  /* ===== 第一阶段：异火汇聚，掌心凝莲 ===== */
-  const lotusX = p.x + p.facing*60, lotusY = p.y - 70;
-  const flameColors = ['#3366ff','#ff3300','#33cc33','#ffcc00','#cc33ff','#ff6600'];
-  
-  /* 多色火焰从身体各处汇聚到掌心 */
-  for(let i=0;i<6;i++){
-    const color = flameColors[i];
-    const startAngle = i*(TAU/6);
-    const startR = 120;
-    for(let step=0;step<20;step++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        const progress = step/20;
-        const r = startR*(1-progress);
-        const angle = startAngle + progress*Math.PI*2;
-        const fx = lotusX + Math.cos(angle)*r;
-        const fy = lotusY + Math.sin(angle)*r*0.5;
-        spawnParticles(fx, fy, 2, {color:color, spMin:20, spMax:60, lifeMin:0.15, lifeMax:0.35, sizeMin:4, sizeMax:9, grav:-100});
-        if(step%4===0) addEffect('hitRing', fx, fy, 0.2, {color:color, r:12});
-      }, step*25 + i*40);
-    }
-  }
-  
-  /* 火莲成型：旋转花瓣绽放 */
-  setTimeout(()=>{
-    if(!G || gameState!=='playing') return;
+  /* ===== 佛怒火莲（重做）：掌心凝莲 → 火莲飞出 → 命中炸开成花 =====
+     核心是「莲花本体模型」，不再用成片粒子堆出花瓣。 */
+  const p2 = p;
+  const lx = () => p2.x + p2.facing * 62;
+  const ly = () => p2.y - 96;
+  p2.action = { type:'fistMeditate', dur:0.95, t:0 };
+
+  /* ① 凝莲：掌心一朵火莲生成并绽放（少量火星点缀） */
+  addEffect('fireLotus', lx(), ly(), 0.9, {scale:0.95, spin:0.9, bloomDur:0.35});
+  addEffect('lightBloom', lx(), ly(), 0.42, {r:70, rays:10, color:'#ff8a2a'});
+  spawnParticles(lx(), ly() + 30, 4, {color:'#ffb04a', angle:-Math.PI/2, spread:0.8, spMin:60, spMax:170, lifeMin:0.3, lifeMax:0.7, sizeMin:2, sizeMax:5, grav:-40});
+
+  /* ② 射出：火莲本体朝目标飞出去（同款莲花模型） */
+  skAt(720, ()=>{
+    if(!G || gameState !== 'playing') return;
+    if(p2.action && p2.action.type === 'fistMeditate') p2.action = null;
     playSound('skillCast');
-    /* 火莲核心 - 多色旋转花瓣 */
-    const petalCount = 8;
-    for(let i=0;i<petalCount;i++){
-      const angle = i*(TAU/petalCount);
-      const color = flameColors[i%flameColors.length];
-      for(let j=0;j<12;j++){
-        const petalProgress = j/12;
-        const petalR = 15 + petalProgress*35;
-        const petalAngle = angle + Math.sin(petalProgress*Math.PI)*0.4;
-        const px = lotusX + Math.cos(petalAngle)*petalR;
-        const py = lotusY + Math.sin(petalAngle)*petalR*0.5;
-        setTimeout(()=>{
-          if(!G || gameState!=='playing') return;
-          spawnParticles(px, py, 1, {color:color, spMin:10, spMax:40, lifeMin:0.3, lifeMax:0.8, sizeMin:3, sizeMax:7, grav:-50});
-        }, j*15);
+    const tx = aim.x, ty = aim.y - 46;
+    const ang = Math.atan2(ty - ly(), tx - lx());
+    const dist0 = Math.max(120, Math.hypot(tx - lx(), ty - ly()));
+    const spd = 780;
+    G.projectiles.push({
+      kind:'fireLotusProj', x:lx(), y:ly(), h:1,
+      vx:Math.cos(ang) * spd, vy:Math.sin(ang) * spd,
+      life: Math.min(1.5, dist0 / spd + 0.25),
+      w:110, hh:96, dmg:atkVal*28, pierce:1, hitSet:new Set(),
+      rot:0, scale:1.15, color:'#ff7a2a', owner:p2
+    });
+    addEffect('lightBloom', lx(), ly(), 0.3, {r:80, rays:12, color:'#ffb04a'});
+    skShake(6, 0.02, '#ff8a2a');
+
+    /* ③ 命中：在目标处绽放成巨大火莲，火海爆发 */
+    const travel = Math.min(900, Math.max(240, dist0 / spd * 1000));
+    skAt(travel, ()=>{
+      if(!G || gameState !== 'playing') return;
+      const bx = clamp(aim.x, WORLD_L + 60, WORLD_R - 60), by = clamp(aim.y, GY_TOP + 20, GY_BOTTOM);
+      playSound('explosion');
+      addEffect('fireLotus', bx, by - 34, 1.15, {scale:2.3, spin:1.4, bloomDur:0.28});
+      addEffect('lightBloom', bx, by - 30, 0.6, {r:210, rays:20, color:'#ff7a2a'});
+      addEffect('hitRing', bx, by, 0.55, {color:'#ffd08a', r:200});
+      meleeAoe(p2, bx, by, 210, atkVal*60, {kb:420, launch:true});
+      /* 余火：地面持续燃烧（贴判定区，接触会持续掉血） */
+      for(let i = 0; i < 3; i++){
+        addEffect('groundFire', bx + (i-1)*96, by, 1.5 + i*0.15, {color:'#ff7a4a'});
       }
-    }
-    addEffect('hitRing', lotusX, lotusY, 0.6, {color:'#dbe4e8', r:20});
-    addEffect('hitRing', lotusX, lotusY, 0.4, {color:'#ffcc00', r:35});
-    for(let i=0;i<30;i++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        const a = i*0.8, r = 25+Math.sin(i*0.5)*15;
-        spawnParticles(lotusX+Math.cos(a)*r, lotusY+Math.sin(a)*r*0.5, 2, {color:flameColors[i%flameColors.length], spMin:30, spMax:80, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:6, grav:-80});
-      }, i*30);
-    }
-  }, 500);
-
-  /* ===== 第二阶段：发射光球粒子，追踪并黏住敌人 ===== */
-  setTimeout(()=>{
-    if(!G || gameState!=='playing') return;
-    playSound('explosion');
-    
-    /* 发射5个光球粒子 */
-    const orbCount = 5;
-    for(let i=0;i<orbCount;i++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        const orbColor = flameColors[i%flameColors.length];
-        const orbSpeed = 600 + i*50;
-        /* ★ 朝目标方向发射：敌人在斜上方/远处也能命中 */
-        const adx = aim.x - lotusX, ady = (aim.y - 70) - (lotusY + 70);
-        const alen = Math.hypot(adx, ady) || 1;
-        const avx = (adx/alen)*orbSpeed, avy = (ady/alen)*orbSpeed;
-        
-        /* 创建光球投射物 */
-        G.projectiles.push({
-          kind:'fireOrb',
-          x:lotusX, y:lotusY+70, h:70,
-          vx:avx + rand(-40,40), vy:avy + rand(-40,40),
-          life:3.0, w:60, hh:60,
-          dmg:atkVal*2.5, pierce:99, hitSet:new Set(),
-          color:orbColor, facing:p.facing, owner:p,
-          isFireOrb:true, orbIndex:i,
-          stuckToEnemy:null, explodeTimer:0
-        });
-        
-        /* 光球发射特效 */
-        spawnParticles(lotusX, lotusY+70, 3, {color:orbColor, angle:Math.atan2(avy, avx)+rand(-0.3,0.3), spread:0.5, spMin:100, spMax:200, lifeMin:0.2, lifeMax:0.4, sizeMin:4, sizeMax:8, grav:0});
-      }, i*80);
-    }
-  }, 900);
-
-  /* ===== 第三阶段：光球黏住敌人后，3次连续爆炸 ===== */
-  /* 爆炸由光球投射物的更新逻辑触发（在updateProjectiles中） */
-  
-  /* 屏幕震动提示 */
-  setTimeout(()=>{
-    if(!G || gameState!=='playing') return;
-    G.shake = Math.max(G.shake, 15);
-  }, 1300);
-
+      skShake(20, 0.3, '#ff8a2a');
+      fxHitstop(0.08);
+    });
+  });
 }
 function castFistPalm(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
@@ -962,15 +826,9 @@ function castFistPalm(){
   spawnText(p.x, p.y, 200, '九 霄 御 雷 诀', '#88ccff', 48);
   p.action = {type:'fistMeditate', dur:1.2, t:0};
   
-  /* 天空乌云聚集 */
-  for(let i=0;i<40;i++){
-    setTimeout(()=>{
-      if(!G || gameState!=='playing') return;
-      const a = i*0.5, r = 150-i*2;
-      const cx = targetX()+Math.cos(a)*r, cy = targetY()-200+Math.sin(a)*r*0.3;
-      spawnParticles(cx, cy, 3, {color:i%3===0?'#334455':i%3===1?'#556677':'#223344', angle:Math.PI/2, spread:1.5, spMin:30, spMax:100, lifeMin:0.6, lifeMax:1.5, sizeMin:8, sizeMax:20, grav:-50});
-    }, i*25);
-  }
+  /* 天空雷云凝聚：改用光核+环，不再几十帧喷乌云粒子 */
+  addEffect('skyGlow', targetX(), 130, 1.2, {color:'#5a7aa0'});
+  addEffect('lightBloom', targetX(), targetY()-190, 0.9, {r:150, rays:12, color:'#88ccff'});
   
   /* 电弧预兆 - 从天空到目标 */
   for(let i=0;i<15;i++){
@@ -978,20 +836,16 @@ function castFistPalm(){
       if(!G || gameState!=='playing') return;
       const startX = targetX()+rand(-100,100), startY = -50;
       const endX = targetX()+rand(-30,30), endY = targetY();
-      addEffect('lightning', startX, startY, 0.3, {endX, endY, color:'#aaddff'});
-      spawnParticles(startX, startY, 2, {color:'#88ccff', angle:Math.PI/2, spread:0.5, spMin:100, spMax:300, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:8, grav:400});
+      addEffect('lightning', startX, startY, 0.3, {endX, endY, color:'#aaddff'});   /* 雷电线本身够看，不再撒粒子 */
     }, i*80);
   }
   
-  /* 能量聚集 - 雷电漩涡 */
-  for(let i=0;i<30;i++){
-    setTimeout(()=>{
+  /* 能量聚集：三次雷光脉冲（替代 30 帧粒子漩涡） */
+  for(let i=0;i<3;i++){
+    skAt(120 + i*180, ()=>{
       if(!G || gameState!=='playing') return;
-      const a = i*0.8, r = 80-i*1.5;
-      const cx = targetX()+Math.cos(a)*r, cy = targetY()-100+Math.sin(a)*r*0.4;
-      spawnParticles(cx, cy, 2, {color:i%4===0?'#dbe4e8':i%4===1?'#88ccff':i%4===2?'#aaddff':'#6699cc', angle:-Math.PI/2, spread:0.6, spMin:100, spMax:300, lifeMin:0.3, lifeMax:0.8, sizeMin:4, sizeMax:10, grav:-300});
-      if(i%3===0) addEffect('hitRing', cx, cy, 0.3, {color:'#88ccff', r:20+i*2});
-    }, i*30);
+      addEffect('lightBloom', targetX(), targetY()-100, 0.4, {r:80 + i*40, rays:12+i*4, color:'#88ccff'});
+    });
   }
   
   /* 主雷击 - 多道闪电劈下 */
@@ -1588,45 +1442,62 @@ function castSpearRainStorm(){
 
 /* ---------- 长枪枪手 6：蓝银霸王枪（唐家三少《斗罗大陆》） ---------- */
 function castSpearBlueSilver(){
+  /* 蓝银霸王枪（唐家三少《斗罗大陆》· 唐三）：蓝银草缠身 → 霸王枪贯顶 → 蓝银之力光爆
+     特色：先用蓝银藤把敌人**钉在原地**，再让巨枪从天上贯穿，最后蓝银皇之力炸开。 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 230);             /* 活坐标 */
-  const tx = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
+  const tg = skAim(p, 230);                   /* 活坐标 */
+  const tx = () => clamp(tg.x, WORLD_L + 70, WORLD_R - 70);
   const gy = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
   spawnText(p.x, p.y, 215, '蓝 银 霸 王 枪', '#8fe8ff', 42);
   p.action = { type:'spearCharge', dur:1.0, t:0 };
-  addEffect('skyCrack', tx(), 70, 1.4, {width:340, color:'#8fe8ff'});
-  addEffect('skyGlow', tx(), 120, 1.4, {color:'#8fe8ff'});
-  /* 蓝银藤蔓自地而生 */
-  for(let i=0;i<8;i++){
-    skAt(i*70, ()=>{
-      const gx = tx() + (i-3.5)*70;
-      addEffect('lightning', gx, GY_BOTTOM + 20, 0.5, {endX:gx + rand(-40,40), endY:GY_BOTTOM - rand(90, 220), color:'#4fd0c0', width:5});
-      skBurst(gx, GY_BOTTOM - 10, '#4fd0c0', 3, {angle:-Math.PI/2, spread:0.7, spMin:90, spMax:280, grav:120});
+  skCastAura(p, 1.0, '#4fd0c0', 3);
+
+  /* ① 天开一线 + 蓝银草自地而生，缠住目标 */
+  addEffect('skyCrack', tx(), 70, 1.2, {width:300, color:'#8fe8ff'});
+  for(let i = 0; i < 5; i++){
+    skAt(i * 90, ()=>{
+      if(!G || gameState !== 'playing') return;
+      const gx = tx() + (i - 2) * 62;
+      addEffect('vine', gx, gy() + 6, 1.4, {color:i % 2 ? '#4fd0c0' : '#8fe8ff', h:150 + (i % 3) * 40, n:2});
+      /* 蓝银缠身：定住目标一小段（藤蔓就是“缠人”的视觉） */
+      for(const e of G.enemies){
+        if(e.alive && Math.abs(e.x - tx()) < 120 && Math.abs(e.y - gy()) < 70){
+          e.rootT = Math.max(e.rootT || 0, 0.9);
+        }
+      }
+      meleeAoe(p, gx, gy(), 84, A * 8, {kb: 0});
+      skShake(5, 0.02, '#4fd0c0');
     });
   }
-  skAt(900, ()=>{
+
+  /* ② 霸王枪自天而降，剑尖/枪尖朝下贯穿目标 */
+  skAt(760, ()=>{
     if(!G || gameState !== 'playing') return;
     if(p.action && p.action.type === 'spearCharge') p.action = null;
     playSound('spearThrust');
-    /* 霸王枪自天而降，钉入大地 */
-    addEffect('giganticWeapon', tx(), gy(), 1.15, {weaponType:'spear', color:'#8fe8ff', scale:5.4, rot:0, f:p.facing});
-    addEffect('skyPillar', tx(), gy(), 1.3, {height:820, color:'#8fe8ff'});
-    addEffect('hitRing', tx(), gy(), 1.0, {color:'#dbe4e8', r:340});
-    meleeAoe(p, tx(), gy(), 240, A*170, {kb:600, launch:true});
-    skBurst(tx(), gy(), '#8fe8ff', 18, {spMin:240, spMax:900, grav:460});
-    skShake(30, 0.48, '#8fe8ff');
-    fxHitstop(0.14);
-    /* 三段冲击波 */
-    for(let s=0;s<3;s++){
-      skAt(130 + s*150, ()=>{
+    /* 巨枪：giganticWeapon 旋转 90° 让枪尖朝下，从天砸落 */
+    addEffect('giganticWeapon', tx(), gy(), 1.0, {weaponType:'spear', color:'#8fe8ff', scale:4.6, rot:Math.PI/2, f:1});
+    addEffect('skyPillar', tx(), gy(), 1.2, {height:820, color:'#8fe8ff'});
+    addEffect('lightBloom', tx(), gy() - 30, 0.65, {r:190, rays:18, color:'#4fd0c0'});
+    addEffect('hitRing', tx(), gy(), 0.9, {color:'#dbe4e8', r:300});
+    meleeAoe(p, tx(), gy(), 220, A*150, {kb:520, launch:true});
+    skShake(28, 0.45, '#8fe8ff');
+    fxHitstop(0.12);
+
+    /* ③ 蓝银皇之力爆发：三环扩散，每环都带蓝银光爆 */
+    for(let s2 = 0; s2 < 3; s2++){
+      skAt(150 + s2 * 160, ()=>{
         if(!G || gameState !== 'playing') return;
-        addEffect('hitRing', tx(), gy(), 0.6, {color:'#dbe4e8', r:340 + s*110});
-        addEffect('hitRing', tx(), gy(), 0.7, {color:'#4fd0c0', r:300 + s*90});
-        meleeAoe(p, tx(), gy(), 330 + s*90, A*40, {kb:260 + s*100, launch:s===2});
-        skBurst(tx(), gy(), s%2?'#dbe4e8':'#8fe8ff', 26, {spMin:180, spMax:620, grav:300});
-        skShake(14, 0.2, '#8fe8ff');
+        addEffect('lightBloom', tx(), gy() - 26, 0.42, {r:150 + s2 * 70, rays:14 + s2 * 4, color: s2 % 2 ? '#8fe8ff' : '#4fd0c0'});
+        addEffect('hitRing', tx(), gy(), 0.5, {color:'#dbe4e8', r:260 + s2 * 90});
+        meleeAoe(p, tx(), gy(), 300 + s2 * 80, A*35, {kb:220 + s2*100, launch: s2 === 2});
+        skShake(12, 0.16, '#8fe8ff');
       });
+    }
+    /* 蓝银余韵：地面残留藤蔓（接触持续掉血） */
+    for(let i = 0; i < 3; i++){
+      addEffect('vine', tx() + (i-1)*90, gy() + 6, 1.6, {color:'#4fd0c0', h:120, n:2});
     }
   });
 }
@@ -1704,7 +1575,7 @@ function castFistGreatPalm(){
     meleeAoe(p, tx(), gy(), 320, A*280, {kb:560, launch:true});
     addEffect('explosion', tx(), gy(), 0.9, {color:'#ffd700', r:330});
     addEffect('hitRing', tx(), gy(), 0.95, {color:'#fff6c0', r:350});
-    skBurst(tx(), gy(), '#ffd700', 18, {spMin:220, spMax:860, grav:440});
+    addEffect('lightBloom', tx(), gy() - 30, 0.6, {r:210, rays:18, color:'#ffd700'});   /* 光爆取代成片粒子 */
     skShake(28, 0.46, '#ffd700');
     fxHitstop(0.13);
     /* 掌印残留 · 持续碾压 */
@@ -1812,7 +1683,7 @@ function castSixPathsFist(){
     /* 万法破除：无视敌人防御（opt.ignoreDef） */
     meleeAoe(p, cx, cy, 320, A*200, { kb:640, launch:true, ignoreDef:true });
     meleeAoe(p, cx, cy, 540, A*46, { kb:240 });
-    skBurst(cx, cy - 50, '#ffd86b', 22, { spMin:240, spMax:920, grav:120 });
+    addEffect('lightBloom', cx, cy - 50, 0.7, {r:250, rays:22, color:'#ffd86b'});      /* 六道终结：光爆 */
     skRingBurst(cx, cy, 260, '#ffce6b', 16);
     skShake(36, 0.5, '#ffd86b');
     fxHitstop(0.14);
