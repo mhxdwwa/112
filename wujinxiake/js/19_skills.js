@@ -563,87 +563,60 @@ function castSpearThrust(){
   }, 1500);
 }
 function castSpearDragon(){
-  /* 灭世枪法：锁定目标，蓄力后刺出毁灭性的一枪 */
+  /* 灭世枪法（长枪 1）：枪尖凝光蓄势，一枪贯穿到底，沿途撕裂空间。
+     ★ 只有「枪」这一个模型 + 一道贯穿光，不再成片喷粒子 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const atkVal = skillAtkVal(p);
-  
-  /* ★ 智能锁定目标方向 */
-  const tgt = skAim(p, 300);            /* 活坐标：全程跟随 */
+  const tgt = skAim(p, 300);                  /* 活坐标 */
   p.facing = tgt.x > p.x ? 1 : -1;
   spawnText(p.x, p.y, 200, '灭 世 枪 法', '#ff4400', 44);
-  p.action = {type:'spearCharge', dur:1.0, t:0};
-  
-  /* 蓄力：毁灭之气汇聚 */
-  for(let i=0;i<35;i++){
-    setTimeout(()=>{
+  p.action = { type:'spearCharge', dur:1.0, t:0 };
+
+  /* 蓄势：枪尖聚起一团毁灭之光（三次脉冲，替代 35 帧汇聚粒子） */
+  for(let i = 0; i < 3; i++){
+    skAt(120 + i * 190, ()=>{
       if(!G || gameState!=='playing') return;
-      const a = (i/35)*TAU*2, r = 90-i*1.5;
-      const sx = p.x+p.facing*60+Math.cos(a)*r;
-      const sy = p.y-70+Math.sin(a)*r*0.5;
-      spawnParticles(sx, sy, 2, {color:i%4===0?'#dbe4e8':i%4===1?'#ff4400':i%4===2?'#ff6600':'#cc2200', angle:Math.atan2(p.y-70-sy, p.x+p.facing*60-sx), spread:0.5, spMin:80, spMax:220, lifeMin:0.3, lifeMax:0.7, sizeMin:4, sizeMax:10, grav:-80});
-      if(i%6===0) addEffect('hitRing', sx, sy, 0.3, {color:'#ff4400', r:18+i*2});
-    }, i*25);
+      const hx = p.x + p.facing * 62, hy = p.y - 70;
+      addEffect('lightBloom', hx, hy, 0.34, {r:50 + i * 34, rays:10 + i * 3, color:'#ff4400'});
+      addEffect('hitRing', hx, hy, 0.3, {color:'#ff6600', r:34 + i * 20});
+    });
   }
-  
-  /* 空间震颤 */
-  for(let i=0;i<8;i++){
-    setTimeout(()=>{
-      if(!G || gameState!=='playing') return;
-      G.shake = Math.max(G.shake, 8+i*2);
-      addEffect('hitRing', p.x+p.facing*60, p.y-70, 0.4, {color:'#ff4400', r:40+i*15});
-    }, i*100);
-  }
-  
+
   /* 灭世一刺 */
-  setTimeout(()=>{
+  skAt(780, ()=>{
     if(!G || gameState!=='playing') return;
-    if(p.action && p.action.type==='spearCharge') p.action = null;
+    if(p.action && p.action.type === 'spearCharge') p.action = null;
     playSound('explosion');
-    
-    /* 巨型毁灭枪气 */
-    G.projectiles.push({ kind:'realSpear', x:p.x+p.facing*60, y:p.y-10, h:70, vx:p.facing*1200, vy:0, life:1.2, w:220, hh:180, dmg:atkVal*6.0, pierce:99, hitSet:new Set(), color:'#ff4400', facing:p.facing, rot:Math.atan2(0,p.facing*1200), scale:2.5, owner:p, mieShi:true });
-    
-    /* 空间裂痕 - 枪气撕裂空间 */
-    for(let i=0;i<20;i++){
-      setTimeout(()=>{
+    const dir = tgt.x >= p.x ? 1 : -1;
+    p.facing = dir;
+    const sx = p.x + dir * 60, sy = p.y - 40;
+    /* 巨型枪气：本命枪模型，贯穿到底 */
+    G.projectiles.push({ kind:'realSpear', x:sx, y:sy, h:34, vx:dir*1200, vy:0,
+      life:1.2, w:220, hh:180, dmg:atkVal*6.0, pierce:99, hitSet:new Set(),
+      color:'#ff4400', facing:dir, rot:Math.atan2(0, dir*1200), scale:2.5, owner:p, mieShi:true });
+    /* 一道贯穿光束（视觉与枪道同轴） */
+    addEffect('spearLine', sx, sy, 0.42, {endX:sx + dir*900, endY:sy, color:'#ff6a3a', width:18});
+    addEffect('lightBloom', sx + dir*40, sy, 0.4, {r:110, rays:14, color:'#ff4400'});
+
+    /* 沿途空间裂痕（只 5 道，不再 20 道 + 每道 3 颗粒子） */
+    for(let i = 0; i < 5; i++){
+      skAt(90 + i * 90, ()=>{
         if(!G || gameState!=='playing') return;
-        const tx = skFall(p, tgt, 80+i*60, 900).x;
-        addEffect('spaceCrack', tx, p.y-40+rand(-30,30), 0.6, {width:rand(50,120), height:rand(30,60), color:'#ff4400'});
-        spawnParticles(tx, p.y-40, 3, {color:i%3===0?'#ff4400':i%3===1?'#ff6600':'#cc2200', angle:-Math.PI/2, spread:1.5, spMin:80, spMax:250, lifeMin:0.3, lifeMax:0.8, sizeMin:4, sizeMax:10, grav:400});
-      }, i*30);
+        const cx = clamp(sx + dir * (140 + i * 150), WORLD_L + 30, WORLD_R - 30);
+        addEffect('spaceCrack', cx, sy + rand(-16, 16), 0.5, {width:rand(70,130), height:rand(34,64), color:'#ff4400'});
+      });
     }
-    
-    /* 毁灭冲击波 */
-    for(let r=0;r<8;r++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        addEffect('hitRing', skFall(p, tgt, 100+r*40, 900).x, p.y-20, 0.5, {color:r%3===0?'#ff4400':r%3===1?'#ff6600':'#dbe4e8', r:60+r*30});
-      }, r*50);
-    }
-    
-    /* 地面崩裂 */
-    for(let i=0;i<15;i++){
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        const fx = skFall(p, tgt, 100+i*50, 900).x;
-        addEffect('groundCrack', fx, p.y, 1.5, {delay:i*0.04, angle:p.facing>0?0:Math.PI, color:'#ff4400'});
-        spawnParticles(fx, p.y-5, 2, {color:'#ff4400', angle:-Math.PI/2, spread:1.2, spMin:60, spMax:180, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:8, grav:500});
-      }, i*40);
-    }
-    
-    /* 毁灭粒子爆发 */
-    for(let i=0;i<80;i++){
-      const a = rand(0, TAU);
-      const spd = rand(200, 700);
-      setTimeout(()=>{
-        if(!G || gameState!=='playing') return;
-        const bx = skFall(p, tgt, rand(100,500), 900).x;
-        spawnParticles(bx, p.y-30+rand(-50,50), 5, {color:i%4===0?'#dbe4e8':i%4===1?'#ff4400':i%4===2?'#ff6600':'#cc2200', angle:a, spread:1.8, spMin:spd*0.4, spMax:spd, lifeMin:0.4, lifeMax:1.0, sizeMin:4, sizeMax:12, grav:600});
-      }, i*8);
-    }
-    
-    G.shake = Math.max(G.shake, 45); G.flash = 0.22; G.hitFlashColor = '#ff4400'; fxHitstop(0.25);
-  }, 1000);
+    /* 终点冲击：枪到之处一道光爆 */
+    skAt(320, ()=>{
+      if(!G || gameState!=='playing') return;
+      const ex = clamp(sx + dir * 620, WORLD_L + 60, WORLD_R - 60);
+      addEffect('lightBloom', ex, sy, 0.55, {r:190, rays:18, color:'#ff4400'});
+      addEffect('hitRing', ex, sy, 0.5, {color:'#ffd08a', r:180});
+      meleeAoe(p, ex, sy, 150, atkVal*20, {kb:420, launch:true});
+      skShake(22, 0.3, '#ff4400');
+      fxHitstop(0.1);
+    });
+  });
 }
 function castSpearRain(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
@@ -2103,235 +2076,204 @@ function castHerbShennong(){
 /* ---------------- 撼山者 ---------------- */
 /* 1 劈山式（重做）：抡斧砸地 → 裂地波沿地面推进，远处自动劈过去 */
 function castAxeSplit(){
-  const p = currentSkillCaster || G.player; playSound('bladeSwing');
+  /* 一斧开山（《宝莲灯》沉香劈华山）：举斧过顶，一斧竖劈而下，山石俱裂。
+     ★ 全程只有「你的斧」这一个模型：举起 → 巨斧竖劈 → 落地裂山 */
+  const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 200);
-  /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realAxe', 6, {color:'#c0a07a', speed:1100, dmg:atkVal*5}); }, 110);
-  skCastPose(p, 0.5, '劈 山 式', '#ffb04a', 34);
-  skCastAura(p, 0.5, '#ffb04a', 4);
-  for(let i = 0; i < 10; i++){
-    skAt(i * 22, ()=>{
-      const s = skSpot(p, tg, 100, 560);
-      const ax = clamp(s.x, WORLD_L + 60, WORLD_R - 60);
-      if(s.far && i < 4) skTravel(p, ax, s.y, '#ffb04a', 2);
-      /* 抡斧蓄势：斧刃拖出的火星 */
-      spawnParticles(p.x + p.facing * 40, p.y - 70 - i * 6, 2, {color:i % 2 ? '#ffe9a8' : '#ffb04a',
-        angle:p.facing > 0 ? -0.6 : Math.PI + 0.6, spread:0.9, spMin:120, spMax:340, lifeMin:0.2, lifeMax:0.45, sizeMin:2, sizeMax:6, grav:200});
-    });
-  }
-  skAt(150, ()=>{
-    /* ★ 智能落点：近处打身前，远处技能直接飞到敌人脚下 */
-    const s = skStrike(p, tg, 100, 560, '#ffb04a');
-    const cx = clamp(s.x, WORLD_L + 60, WORLD_R - 60), cy = s.y;
-    addEffect('giganticWeapon', cx, cy - 30, 0.45, {weaponType:'axe', color:'#ffe9a8', scale:1.9, rot:0.55, f:p.facing});
-    skAt(90, ()=>{
-      addEffect('emberBurst', cx, cy - 20, 0.5, {color:'#ffb04a', r:150, n:18, rot:rand(0, TAU)});
-      addEffect('explosion', cx, cy - 10, 0.55, {color:'#ffd08a', r:94});
-      addEffect('groundCrack', cx, cy + 4, 0.9, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffb04a'});
-      addEffect('rockSpike', cx, cy + 2, 0.62, {facing:p.facing, n:5, reach:250, h:82, w:24, color:'#c9a06a'});
-      addEffect('shockWave', cx, cy + 2, 0.55, {facing:p.facing, r:250, color:'#ffb04a'});
-      meleeHitRect(p, cx + p.facing * 90, cy, 300, 200, A * 30, {kb:240});
-      skBurst(cx, cy - 30, '#ffb04a', 10, {angle:p.facing > 0 ? 0 : Math.PI, spread:0.9, spMin:180, spMax:520, grav:420});
-      /* 沿裂地沟一路迸飞的碎石 */
-      for(let i = 0; i < 6; i++){
-        skAt(i * 40, ()=>{
-          const rx = clamp(cx + p.facing * i * 42, WORLD_L + 40, WORLD_R - 40);
-          spawnParticles(rx, cy, 4, {color:i % 2 ? '#c9a06a' : '#ffd08a', angle:-Math.PI / 2, spread:1.0,
-            spMin:150, spMax:430, lifeMin:0.3, lifeMax:0.65, sizeMin:3, sizeMax:8, grav:520});
-          addEffect('hitRing', rx, cy, 0.26, {color:'#ffd08a', r:34});
-        });
-      }
-      skShake(14, 0.1, '#ffb04a');
-    });
+  const tg = skAim(p, 180);
+  const tx = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 205, '劈 山 式', '#ffb04a', 42);
+  p.action = { type:'storm', dur:0.55, t:0 };
+  addEffect('lightBloom', p.x + p.facing * 30, p.y - 96, 0.4, {r:80, rays:10, color:'#ffb04a'});
+
+  skAt(520, ()=>{
+    if(!G || gameState !== 'playing') return;
+    playSound('bladeSwing');
+    /* 巨斧竖劈：斧刃朝下（rot 90°），自头顶劈到地面 */
+    addEffect('giganticWeapon', tx(), ty(), 0.7, {weaponType:'axe', color:'#ffb04a', scale:3.6, rot:Math.PI/2, f:p.facing});
+    addEffect('groundCrack', tx(), ty(), 1.0, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffb04a'});
+    addEffect('hitRing', tx(), ty(), 0.5, {color:'#ffd08a', r:150});
+    meleeAoe(p, tx(), ty(), 170, A*70, {kb:520, launch:true});
+    skShake(20, 0.28, '#ffb04a');
+    fxHitstop(0.08);
   });
 }
 
 /* 2 三板斧（重做）：三斧三种表现，斧斧追踪、斧斧带爆点 */
 function castAxeThree(){
-  const p = currentSkillCaster || G.player; playSound('bladeSwing');
+  /* 三板斧（《隋唐演义》程咬金）：劈脑门 → 鬼剔牙 → 掏耳朵。
+     ★ 三斧都是本体斧飞出，一斧比一斧狠，第四斧没有了 */
+  const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 220);
-  skCastPose(p, 0.9, '三 板 斧', '#ffd08a', 36);
-  skCastAura(p, 0.9, '#ffd08a', 4);
-  const names = ['劈脑门', '剔牙', '掏耳朵'];
+  const tg = skAim(p, 200);
+  const tx = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 205, '三 板 斧', '#ffb04a', 40);
+  p.action = { type:'storm', dur:0.9, t:0 };
+  const NAME = ['劈 脑 门', '鬼 剔 牙', '掏 耳 朵'];
+  const DMG  = [24, 28, 46];
   for(let i = 0; i < 3; i++){
-    skAt(130 + i * 230, ()=>{
-      const s = skStrike(p, tg, 110, 560, '#ffd08a');
-      const cx = clamp(s.x, WORLD_L + 60, WORLD_R - 60), cy = s.y;
-      spawnText(p.x, p.y - 30, 150 + i * 12, names[i], i === 2 ? '#ffe066' : '#ffd08a', 22);
-      /* 每一斧都带一串飞溅的火星与碎石 */
-      spawnParticles(cx, cy - 34, 6, {color:i % 2 ? '#ffd08a' : '#ffe066', angle:p.facing > 0 ? -0.5 : Math.PI + 0.5,
-        spread:1.1, spMin:140, spMax:460, lifeMin:0.25, lifeMax:0.6, sizeMin:3, sizeMax:8, grav:380});
-      if(i === 0){
-        /* 劈脑门：巨斧虚影自上而下，落地窜石刺 */
-        addEffect('giganticWeapon', cx, cy - 40, 0.4, {weaponType:'axe', color:'#ffe9a8', scale:2.1, rot:0.5, f:p.facing});
-        skAt(80, ()=>{
-          addEffect('rockSpike', cx, cy + 2, 0.5, {facing:p.facing, n:3, reach:150, h:88, w:26, color:'#c9a06a'});
-          addEffect('emberBurst', cx, cy - 16, 0.45, {color:'#ffd08a', r:130, n:14, rot:rand(0, TAU)});
-          meleeHitRect(p, cx, cy, 190, 210, A * 28, {kb:200});
-          skBurst(cx, cy - 30, '#ffd08a', 8, {spMin:160, spMax:460, grav:400});
-        });
-      } else if(i === 1){
-        /* 剔牙：贴地横扫的弧形斧气，带一串火花 */
-        addEffect('axeWave', cx, cy - 30, 0.4, {facing:p.facing, color:'#ffb04a', r:150});
-        addEffect('slashArc', cx, cy - 40, 0.35, {facing:p.facing, color:'#ffe066', size:1.3, typeStr:'blade'});
-        addEffect('emberBurst', cx, cy - 30, 0.42, {color:'#ffe066', r:120, n:16, rot:rand(0, TAU)});
-        meleeHitRect(p, cx, cy, 210, 190, A * 28, {kb:230});
-        skBurst(cx, cy - 40, '#ffe066', 7, {angle:p.facing > 0 ? 0 : Math.PI, spread:0.8, spMin:180, spMax:500, grav:300});
+    skAt(260 + i * 230, ()=>{
+      if(!G || gameState !== 'playing') return;
+      if(i === 0 && p.action && p.action.type === 'storm') p.action = null;
+      playSound('bladeSwing');
+      spawnText(p.x, p.y - 120, 120, NAME[i], '#ffd08a', 26);
+      /* 斧本体飞出：三斧分别朝上/横/斜下三路劈向目标 */
+      const sx = p.x + p.facing * 44, sy = p.y - 70;
+      const offsetY = (i === 0 ? -40 : (i === 1 ? 0 : 24));
+      const ang = Math.atan2((ty() + offsetY) - sy, tx() - sx);
+      const spd = 1250;
+      G.projectiles.push({
+        kind:'realAxe', x:sx, y:sy, h:1,
+        vx:Math.cos(ang) * spd, vy:Math.sin(ang) * spd,
+        life:0.55, w:120, hh:90, dmg:A*DMG[i], pierce:1,
+        hitSet:new Set(), rot:ang, scale:1.8, color:'#ffb04a', owner:p
+      });
+      addEffect('slashArc', tx(), ty(), 0.24, {facing:p.facing, color:'#ffb04a', size:1.1 + i*0.25, typeStr:'blade'});
+      if(i === 2){
+        addEffect('lightBloom', tx(), ty() - 26, 0.55, {r:190, rays:18, color:'#ffb04a'});
+        meleeAoe(p, tx(), ty(), 180, A*30, {kb:480, launch:true});
+        skShake(18, 0.24, '#ffb04a');
+        fxHitstop(0.07);
       } else {
-        /* 掏耳朵：突进撩斩，掀飞对手 */
-        addEffect('slashArc', cx, cy - 60, 0.4, {facing:p.facing, color:'#ffe066', size:1.4, typeStr:'blade'});
-        addEffect('explosion', cx, cy - 20, 0.7, {color:'#ffb04a', r:144});
-        addEffect('emberBurst', cx, cy - 24, 0.7, {color:'#ffb04a', r:230, n:22, rot:rand(0, TAU)});
-        addEffect('shockWave', cx, cy + 2, 0.6, {facing:p.facing, r:280, color:'#ffd08a'});
-        meleeHitRect(p, cx, cy, 260, 220, A * 34, {kb:340, launch:true});
-        skBurst(cx, cy - 40, '#ffb04a', 11, {spMin:200, spMax:640, grav:340});
-        fxHitstop(0.09);
+        skShake(8, 0.03, '#ffb04a');
       }
-      skShake(9 + i * 4, i === 2 ? 0.14 : 0.04, '#ffb04a');
     });
   }
 }
 
 /* 3 旋风斧 */
 function castAxeWhirl(){
-  const p = currentSkillCaster || G.player; playSound('bladeSwing');
+  /* 旋风斧（《水浒》李逵双斧旋风）：原地旋身，斧影绕身成环，越转越猛。
+     ★ 用"斧模型绕身旋转"表现，不再靠一圈粒子 */
+  const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  /* ★ 旋风会朝目标推进，角色随旋风一起位移，远处敌人也能卷进去 */
-  const tg = skAim(p, 160);
-  p.action = { type:'storm', dur: 1.3, t:0 };
-  spawnText(p.x, p.y, 200, '旋 风 斧', '#ffb04a', 38);
-  addEffect('stormAura', p.x, p.y, 1.3, {color:'#ffb04a', r:130});
-  for(let i = 0; i < 8; i++){
-    skAt(i * 150, ()=>{
-      const a = i / 8 * TAU;
-      const tx = clamp(skSpot(p, tg, 0, 520).x, WORLD_L + 70, WORLD_R - 70);
-      const cx = p.x + (tx - p.x) * 0.4, cy = tg.y;
-      p.x = cx;   /* 角色随旋风推进 */
-      addEffect('axeWave', cx + Math.cos(a) * 70, cy + Math.sin(a) * 20, 0.3, {facing:Math.cos(a) > 0 ? 1 : -1, color:'#ffb04a', r:90});
-      addEffect('emberBurst', cx, cy - 24, 0.35, {color:'#ffb04a', r:110, n:10, rot:rand(0, TAU)});
-      meleeAoe(p, cx, cy, 150, A * 14, {kb:120});
-      for(let j = 0; j < 8; j++){
-        const ang = a + j / 8 * TAU;
-        spawnParticles(cx + Math.cos(ang) * 90, cy - 40 + Math.sin(ang) * 34, 1, {color:'#ffd08a', angle:ang + Math.PI / 2, spread:0.3, spMin:80, spMax:220, lifeMin:0.2, lifeMax:0.45, sizeMin:3, sizeMax:6, grav:120});
-      }
-      skShake(6, 0, '#ffb04a');
-    });
-  }
+  spawnText(p.x, p.y, 205, '旋 风 斧', '#ffb04a', 40);
+  p.action = { type:'storm', dur:1.35, t:0 };
+  /* 斧影环绕（真斧模型，转两圈） */
+  addEffect('axeOrbit', p.x, p.y, 1.35, {r:118, n:4, spin:8.5, color:'#ffb04a'});
+  addEffect('axeOrbit', p.x, p.y, 1.1, {r:74, n:3, spin:-11, color:'#ffd08a'});
+  let tick = 0;
+  const tm = setInterval(()=>{
+    if(!G || gameState !== 'playing'){ clearInterval(tm); return; }
+    tick++;
+    if(tick % 2 === 0){
+      /* 旋斩判定：随斧影半径走 */
+      meleeAoe(p, p.x, p.y, 150, A*16, {kb:160});
+      addEffect('slashArc', p.x + p.facing * 40, p.y - 40, 0.2, {facing:p.facing, color:'#ffb04a', size:1.3, typeStr:'blade'});
+      skShake(5, 0.02, '#ffb04a');
+    }
+    if(tick >= 10){
+      clearInterval(tm);
+      addEffect('lightBloom', p.x, p.y - 40, 0.5, {r:200, rays:16, color:'#ffb04a'});
+      meleeAoe(p, p.x, p.y, 200, A*40, {kb:420, launch:true});
+      skShake(14, 0.2, '#ffb04a');
+    }
+  }, 130);
 }
 
 /* 4 力劈华山 */
 function castAxeMountain(){
+  /* 巨灵劈山（《西游记》巨灵神）：双手抡斧横扫，一斧扫平一整排。
+     ★ 横向巨斧 + 宽幅判定，视觉与命中同宽 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  skAim(p, 200);
-  /* ★ 力劈华山：跳劈落到目标头顶，不再固定在身前 190 */
   const tg = skAim(p, 220);
-  skCastPose(p, 1.0, '力 劈 华 山', '#ffd08a', 42);
-  skCastAura(p, 1.0, '#ffd08a', 4);
-  p.jumpT = 0.5;
-  addEffect('qiCharge', p.x, p.y, 0.5, {color:'#ffb04a', r:90});
-  /* ★ 起跳时山石已在头顶汇聚 */
-  addEffect('meteorFall', p.x + p.facing * 120, p.y, 0.5, {n:3, gap:80, size:22, from:520, color:'#ffb04a', color2:'#ffd08a'});
-  skAt(480, ()=>{
-    const s = skStrike(p, tg, 190, 620, '#ffd08a');
-    const cx = clamp(s.x, WORLD_L + 80, WORLD_R - 80), cy = s.y;
-    /* 华山被劈开，山石俱裂自天坠落 */
-    addEffect('meteorFall', cx, cy, 0.85, {n:5, gap:96, size:34, from:680, color:'#ffb04a', color2:'#ffd08a'});
-    addEffect('spaceCrack', cx, cy - 120, 0.7, {width:300, height:320, color:'#ffd08a'});
-    addEffect('rockSpike', cx, cy + 2, 0.8, {facing:p.facing, n:6, reach:300, h:96, w:26, color:'#c9a06a'});
-    addEffect('shockWave', cx, cy + 2, 0.7, {facing:p.facing, r:320, color:'#ffb04a'});
-    addEffect('groundCrack', cx, cy + 4, 1.1, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffb04a'});
-    addEffect('explosion', cx, cy, 0.9, {color:'#ffb04a', r:151});
-    addEffect('emberBurst', cx, cy - 24, 0.7, {color:'#ffd08a', r:240, n:20, rot:rand(0, TAU)});
-    meleeAoe(p, cx, cy, 210, A * 75, {kb:420, launch:true});
-    skBurst(cx, cy - 30, '#ffb04a', 14, {spMin:180, spMax:620, grav:340});
-    skShake(24, 0.3, '#ffd08a');
-    /* 裂谷沿路迸发的碎石尘浪 */
-    for(let i = 0; i < 5; i++){
-      skAt(520 + i * 55, ()=>{
-        const rx = clamp(cx + p.facing * i * 52, WORLD_L + 40, WORLD_R - 40);
-        spawnParticles(rx, cy, 4, {color:i % 2 ? '#c9a06a' : '#ffe9a8', angle:-Math.PI / 2, spread:1.1,
-          spMin:180, spMax:520, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:9, grav:560});
-      });
-    }
-    fxHitstop(0.1);
-    playSound('explosion');
+  const tx = () => clamp(tg.x, WORLD_L + 90, WORLD_R - 90);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 205, '巨 灵 劈 山', '#ffb04a', 42);
+  p.action = { type:'storm', dur:0.7, t:0 };
+  skAt(660, ()=>{
+    if(!G || gameState !== 'playing') return;
+    playSound('bladeSwing');
+    /* 巨斧横抡：斧身横置（小角度），扫过一整条线 */
+    addEffect('giganticWeapon', tx(), ty(), 0.6, {weaponType:'axe', color:'#ffb04a', scale:4.0, rot:0.18 * p.facing, f:p.facing});
+    addEffect('shockWave', tx(), ty() + 2, 0.55, {facing:p.facing, r:300, color:'#ffd08a'});
+    addEffect('lightBloom', tx(), ty() - 30, 0.5, {r:200, rays:14, color:'#ffb04a'});
+    /* 横扫判定：与斧影同宽 */
+    meleeHitRect(p, tx(), ty(), 420, 200, A*90, {kb:520, launch:true});
+    meleeHitRect(p, tx(), ty(), 560, 240, A*30, {kb:260});
+    skShake(22, 0.3, '#ffb04a');
+    fxHitstop(0.08);
   });
 }
 
 /* 5 刑天舞干戚 */
 function castAxeXingtian(){
+  /* 刑天舞干戚（《山海经》）：无头亦舞干戚 —— 战神法相浮现，斧影连斩不止。
+     ★ 法相用撼山者本体光影，斧斩是本体斧的连段，不铺粒子 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  /* ★ 以目标为战场中心左右横扫 */
   const tg = skAim(p, 200);
-  skCastPose(p, 1.4, '刑 天 舞 干 戚', '#ff8a4a', 42);
-  skCastAura(p, 1.4, '#ff8a4a', 4);
-  /* ★ 刑天法相：用撼山者本体光影（替代几何体），朝向随施法者 */
+  const tx = () => clamp(tg.x, WORLD_L + 70, WORLD_R - 70);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 210, '刑 天 舞 干 戚', '#ff8a4a', 44);
+  p.action = { type:'storm', dur:1.5, t:0 };
+  /* 刑天法相（本体光影） */
   addEffect('asuraAvatar', p.x, p.y, 1.5, {facing:p.facing, color:'#ff8a4a', spriteKey:'axe', anim:'skill', ghostH:140});
+  /* 八段斧斩：斧影连挥左右交替 */
   for(let i = 0; i < 8; i++){
-    skAt(i * 120, ()=>{
+    skAt(300 + i * 150, ()=>{
+      if(!G || gameState !== 'playing') return;
+      if(i === 0 && p.action && p.action.type === 'storm') p.action = null;
+      p.facing = tx() >= p.x ? 1 : -1;
+      playSound('bladeSwing');
       const dir = i % 2 === 0 ? 1 : -1;
-      const base = skSpot(p, tg, 0, 520).x;
-      const cx = clamp(base + dir * (80 + (i % 4) * 65), WORLD_L + 60, WORLD_R - 60);
-      const cy = tg.y;
-      addEffect('axeWave', cx, cy - (i % 3) * 20, 0.36, {facing:dir, color:'#ff8a4a', r:110 + (i % 3) * 30});
-      addEffect('emberBurst', cx, cy - 24, 0.4, {color:'#ff8a4a', r:120, n:12, rot:rand(0, TAU)});
-      meleeAoe(p, cx, cy, 120, A * 13, {kb:180, launch:i % 4 === 3});
-      skBurst(cx, cy - 50, '#ff8a4a', 5, {grav:240});
-      skShake(8, 0.04, '#ff8a4a');
+      /* 一斧劈在目标两侧，交替错开 */
+      const bx = tx() + dir * 40;
+      addEffect('slashArc', bx, ty(), 0.26, {facing:dir, color:'#ff8a4a', size:1.5, typeStr:'blade'});
+      meleeAoe(p, bx, ty(), 130, A*14, {kb:120});
+      skShake(6, 0.03, '#ff8a4a');
+      if(i === 7){
+        addEffect('lightBloom', tx(), ty() - 30, 0.6, {r:220, rays:20, color:'#ff8a4a'});
+        meleeAoe(p, tx(), ty(), 200, A*60, {kb:520, launch:true});
+        skShake(20, 0.28, '#ff8a4a');
+        fxHitstop(0.08);
+      }
     });
   }
-  skAt(1100, ()=>{
-    const cx = clamp(skSpot(p, tg, 0, 520).x, WORLD_L + 60, WORLD_R - 60), cy = tg.y;
-    meleeAoe(p, cx, cy, 320, A * 75, {kb:360, launch:true});
-    addEffect('explosion', cx, cy, 0.8, {color:'#ff8a4a', r:216});
-    addEffect('emberBurst', cx, cy - 24, 0.8, {color:'#ff8a4a', r:300, n:22, rot:rand(0, TAU)});
-    skShake(22, 0.3, '#ff8a4a');
-  });
 }
 
 /* 6 盘古开天 */
 function castAxePangu(){
+  /* 盘古开天·混沌初判（《三五历纪》）：一斧劈开天地，清浊自此判。
+     ★ 巨斧自天而降竖劈到底，天地裂开、万物震荡 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  /* ★ 天斧落在目标头上 */
   const tg = skAim(p, 240);
-  skCastPose(p, 2.0, '混 沌 初 判', '#ffe9a8', 50);
-  skCastAura(p, 2.0, '#ffe9a8', 4);
-  addEffect('skyCrack', p.x, 60, 1.6, {width:520, color:'#ffe9a8'});
-  addEffect('dharmaWheel', p.x, p.y, 2.2, {color:'#ffd08a', r:300});
-  /* ★ 混沌初判：天倾西北，陨石如雨先落 */
-  addEffect('meteorFall', p.x, p.y, 0.9, {n:4, gap:110, size:26, from:600, color:'#ffe9a8', color2:'#ffd08a'});
-  for(let i = 0; i < 16; i++){
-    skAt(i * 60, ()=>{
-      const a = i / 16 * TAU;
-      spawnParticles(p.x + Math.cos(a) * 150, p.y - 60 + Math.sin(a) * 70, 1, {color:i % 2 ? '#ffe9a8' : '#ffb04a', angle:a, spread:0.4, spMin:90, spMax:280, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:7, grav:-40});
-    });
-  }
-  skAt(900, ()=>{
-    const s = skStrike(p, tg, 160, 640, '#ffe9a8');
-    const cx = clamp(s.x, WORLD_L + 80, WORLD_R - 80), cy = s.y;
-    addEffect('giganticWeapon', cx, cy - 40, 1.2, {weaponType:'axe', color:'#ffe9a8', scale:3.2, rot:0.2, f:p.facing});
-    addEffect('spaceCrack', cx, cy - 80, 1.2, {width:900, height:420, color:'#ffe9a8'});
-    addEffect('meteorFall', cx, cy, 1.0, {n:7, gap:118, size:38, from:760, color:'#ffb04a', color2:'#ffe9a8'});
-    addEffect('emberBurst', cx, cy - 30, 1.0, {color:'#ffe9a8', r:340, n:26, rot:rand(0, TAU)});
-    addEffect('rockSpike', cx, cy + 2, 0.9, {facing:p.facing, n:7, reach:420, h:110, w:28, color:'#c9a06a'});
-    meleeAoe(p, cx, cy, 330, A * 180, {kb:560, launch:true});
-    skBurst(cx, cy - 40, '#ffe9a8', 21, {spMin:240, spMax:900, grav:120});
-    skRingBurst(cx, cy, 260, '#ffd08a', 18);
-    skShake(34, 0.55, '#ffe9a8');
+  const tx = () => clamp(tg.x, WORLD_L + 120, WORLD_R - 120);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 220, '盘 古 开 天', '#ffe9a8', 52);
+  p.action = { type:'storm', dur:1.4, t:0 };
+  skCastAura(p, 1.2, '#ffe9a8', 3);
+  /* 天地初开：天裂 + 混沌光核 */
+  addEffect('skyCrack', tx(), 70, 1.2, {width:420, color:'#ffe9a8'});
+  addEffect('lightBloom', tx(), 120, 0.8, {r:170, rays:16, color:'#ffe9a8'});
+  skShake(14, 0.3, '#ffe9a8');
+
+  skAt(1000, ()=>{
+    if(!G || gameState !== 'playing') return;
+    if(p.action && p.action.type === 'storm') p.action = null;
     playSound('explosion');
-    fxHitstop(0.16);
-    skAt(320, ()=>{
-      const s2 = skSpot(p, tg, 260, 700);
-      const cx2 = clamp(s2.x, WORLD_L + 80, WORLD_R - 80);
-      meleeAoe(p, cx2, s2.y, 420, A * 60, {kb:200});
-      addEffect('explosion', cx2, s2.y, 0.8, {color:'#ffb04a', r:259});
-      addEffect('shockWave', cx2, s2.y + 2, 0.8, {facing:p.facing, r:460, color:'#ffd08a'});
-    });
+    /* 开天巨斧：竖劈入地（斧刃朝下） */
+    addEffect('giganticWeapon', tx(), ty(), 1.0, {weaponType:'axe', color:'#ffe9a8', scale:5.4, rot:Math.PI/2, f:p.facing});
+    addEffect('skyPillar', tx(), ty(), 1.3, {height:900, color:'#ffe9a8'});
+    addEffect('groundCrack', tx(), ty(), 1.2, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffe9a8'});
+    addEffect('lightBloom', tx(), ty() - 30, 0.8, {r:280, rays:24, color:'#ffe9a8'});
+    addEffect('hitRing', tx(), ty(), 0.9, {color:'#fff6c8', r:320});
+    meleeAoe(p, tx(), ty(), 260, A*200, {kb:640, launch:true});
+    meleeAoe(p, tx(), ty(), 460, A*60, {kb:260});
+    skShake(34, 0.5, '#ffe9a8');
+    fxHitstop(0.14);
+    /* 天地余震：两道扩散光爆 */
+    for(let i = 0; i < 2; i++){
+      skAt(180 + i * 200, ()=>{
+        if(!G || gameState !== 'playing') return;
+        addEffect('lightBloom', tx(), ty() - 20, 0.45, {r:220 + i*90, rays:16, color:'#fff6c8'});
+        addEffect('shockWave', tx(), ty() + 2, 0.5, {facing:p.facing, r:340 + i*120, color:'#ffe9a8'});
+      });
+    }
   });
 }
 
@@ -2570,240 +2512,224 @@ function castTalismanGhosts(){
 /* ---------------- 丹道师 ---------------- */
 /* 1 丹火 */
 function castCauldronFire(){
+  /* 掷鼎（丹道师根本功）：本命鼎脱手旋转飞出，砸中即炸开炉火。
+     ★ 只有鼎这一个模型在飞，命中处一道光爆，不再撒火星 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 180);
-  /* 起手甩出实体武器（纯视觉，伤害仍由本技能结算） */
-  setTimeout(()=>{ if(G && gameState==='playing') fxWeaponVolley(p, p.x, p.y-60, tg.x, tg.y, 'realCauldron', 5, {color:'#c8b090', speed:1050, dmg:atkVal*6}); }, 110);
-  skCastPose(p, 0.5, '丹 火', '#ff7a4a', 34);
-  skCastAura(p, 0.5, '#ff7a4a', 4);
-  /* 炉口蓄火（精简） */
-  for(let i = 0; i < 4; i++){
-    skAt(i * 18, ()=>{
-      spawnParticles(p.x + p.facing * 34, p.y - 66, 2, {color:i % 2 ? '#ff7a4a' : '#ffd08a',
-        angle:p.facing > 0 ? -0.25 : Math.PI + 0.25, spread:0.8, spMin:140, spMax:360, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:6, grav:-40});
-    });
-  }
-  skAt(150, ()=>{
+  const tg = skAim(p, 200);
+  const tx = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 200, '掷 鼎', '#ff7a4a', 38);
+  p.action = { type:'cast', dur:0.35, t:0 };
+  skAt(180, ()=>{
     if(!G || gameState !== 'playing') return;
     playSound('skillCast');
-    /* ★ 本命鼎掷出：旋转滚向目标，鼎口喷火灼烧沿途（伤害随鼎走，不再是一地光粒子） */
-    G.projectiles.push({ kind:'realCauldron', x:p.x + p.facing*42, y:p.y, h:24, vx:p.facing*820, vy:0,
-      life:0.95, w:130, hh:95, dmg:A*30, pierce:99, hitSet:new Set(), rot:0, scale:1.2,
-      color:'#ff7a4a', owner:p, trail:true });
-    skShake(6, 0.03, '#ff7a4a');
-    /* 落点余火（少量，贴判定区） */
-    for(let i = 0; i < 3; i++){
-      skAt(520 + i * 150, ()=>{
-        if(!G || gameState !== 'playing') return;
-        const cx = clamp(tg.x + rand(-40,40), WORLD_L + 40, WORLD_R - 40);
-        addEffect('groundFire', cx, tg.y, 0.5, {color:'#ff7a4a'});
-        meleeAoe(p, cx, tg.y, 85, A * 7, {kb:40});
-      });
-    }
+    G.projectiles.push({ kind:'realCauldron', x:p.x + p.facing*46, y:p.y - 14, h:34, vx:p.facing*860, vy:0,
+      life:1.0, w:130, hh:100, dmg:A*34, pierce:99, hitSet:new Set(), rot:0, scale:1.25,
+      color:'#ff7a4a', owner:p });
+    addEffect('lightBloom', p.x + p.facing*46, p.y - 48, 0.3, {r:70, rays:10, color:'#ffb04a'});
+    skShake(5, 0.02, '#ff7a4a');
   });
+  /* 落点余火：鼎砸到的地方留三堆火（接触会持续掉血） */
+  for(let i = 0; i < 3; i++){
+    skAt(520 + i*150, ()=>{
+      if(!G || gameState !== 'playing') return;
+      const cx = clamp(tg.x + (i-1)*80, WORLD_L + 40, WORLD_R - 40);
+      addEffect('groundFire', cx, ty(), 0.6, {color:'#ff7a4a'});
+      meleeAoe(p, cx, ty(), 90, A*8, {kb:40});
+    });
+  }
 }
 
 /* 2 鼎镇压 */
 function castCauldronSlam(){
+  /* 鼎镇山河：本命鼎腾空放大，当头压落，鼎口喷出一圈炉火。
+     ★ 巨鼎下落 + 落地火环，判定与鼎口同宽 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 220);
-  skCastPose(p, 0.8, '鼎 镇 压', '#ffb04a', 38);
-  skCastAura(p, 0.8, '#ffb04a', 4);
-  addEffect('qiCharge', p.x, p.y, 0.5, {color:'#ff7a4a', r:80});
-  /* 巨鼎腾空：炉火在鼎口翻腾（精简） */
-  for(let i = 0; i < 4; i++){
-    skAt(i * 50, ()=>{
-      spawnParticles(p.x + rand(-40, 40), p.y - 70 - i * 8, 3, {color:i % 2 ? '#ff7a4a' : '#ffd08a', angle:-Math.PI / 2, spread:0.7,
-        spMin:80, spMax:240, lifeMin:0.25, lifeMax:0.6, sizeMin:3, sizeMax:7, grav:-130});
-    });
-  }
-  skAt(380, ()=>{
-    const cx = clamp(tg.x, WORLD_L + 90, WORLD_R - 90);
-    /* 鼎影自天压下 */
-    addEffect('meteorFall', cx, tg.y, 0.6, {n:1, gap:0, size:56, from:560, color:'#ff7a4a', color2:'#ffd08a'});
-    addEffect('cauldron', cx, tg.y, 0.9, {color:'#ff7a4a', scale:1.8});
-    addEffect('hitRing', cx, tg.y, 0.6, {color:'#ffd08a', r:105});
-    /* ★ 巨鼎落地：火星向四面炸开 */
-    addEffect('emberBurst', cx, tg.y - 24, 0.6, {color:'#ff7a4a', r:200, n:20, rot:rand(0, TAU)});
-    addEffect('shockWave', cx, tg.y + 2, 0.6, {facing:p.facing, r:260, color:'#ffb04a'});
-    /* 鼎底喷出的环形火浪（精简） */
-    for(let d = 0; d < 7; d++){
-      const aa = d / 7 * TAU;
-      spawnParticles(cx + Math.cos(aa) * 40, tg.y - 16 + Math.sin(aa) * 14, 2, {color:d % 2 ? '#ff7a4a' : '#ffd08a',
-        angle:aa, spread:0.25, spMin:160, spMax:420, lifeMin:0.25, lifeMax:0.6, sizeMin:3, sizeMax:7, grav:260});
-    }
-    meleeAoe(p, cx, tg.y, 140, A * 45, {kb:120});
-    for(const e of G.enemies){
-      if(e.alive && Math.abs(e.x - cx) < 150 && Math.abs(e.y - tg.y) < 70){
-        e.rootT = Math.max(e.rootT || 0, 1.2);
-      }
-    }
-    skBurst(cx, tg.y - 20, '#ff7a4a', 8, {grav:320, spMin:140, spMax:400});
-    skShake(16, 0.18, '#ff7a4a');
+  const tx = () => clamp(tg.x, WORLD_L + 90, WORLD_R - 90);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 205, '鼎 镇 山 河', '#ffb04a', 42);
+  p.action = { type:'cast', dur:0.6, t:0 };
+  /* 鼎腾空 */
+  addEffect('lightBloom', p.x, p.y - 90, 0.5, {r:90, rays:10, color:'#ffb04a'});
+
+  skAt(560, ()=>{
+    if(!G || gameState !== 'playing') return;
+    if(p.action && p.action.type === 'cast') p.action = null;
     playSound('impact');
+    /* 巨鼎砸落（鼎本体，三足朝下） */
+    addEffect('cauldron', tx(), ty(), 0.85, {color:'#ff7a4a', scale:3.2});
+    addEffect('hitRing', tx(), ty(), 0.7, {color:'#ffd08a', r:220});
+    addEffect('lightBloom', tx(), ty() - 24, 0.5, {r:190, rays:16, color:'#ff7a4a'});
+    addEffect('shockWave', tx(), ty() + 2, 0.6, {facing:p.facing, r:280, color:'#ffb04a'});
+    meleeAoe(p, tx(), ty(), 210, A*80, {kb:480, launch:true});
+    /* 鼎口喷火：四堆火围成一圈（接触持续掉血） */
+    for(let d = 0; d < 4; d++){
+      const off = (d - 1.5) * 96;
+      addEffect('groundFire', tx() + off, ty(), 1.4, {color:'#ff7a4a'});
+    }
+    skShake(24, 0.34, '#ff7a4a');
+    fxHitstop(0.08);
   });
 }
 
 /* 3 三昧金丹（真火凝丹） */
 function castCauldronSamadhi(){
+  /* 三昧金丹：三枚金丹依次飞出，命中处炸开成一朵火莲。
+     ★ 金丹 → 火莲，全是模型，不用粒子堆火 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 200);
-  skCastPose(p, 1.2, '三 昧 金 丹', '#ff5a2a', 42);
-  skCastAura(p, 1.2, '#ff5a2a', 4);
-  /* ★ 三枚真火凝成的金丹依次掷向目标（活坐标追踪），丹落火起 */
+  const tg = skAim(p, 210);
+  const tx = () => clamp(tg.x, WORLD_L + 70, WORLD_R - 70);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 205, '三 昧 金 丹', '#ff5a2a', 42);
+  p.action = { type:'cast', dur:1.0, t:0 };
+  skCastAura(p, 0.8, '#ff5a2a', 2);
+
   for(let i = 0; i < 3; i++){
-    skAt(200 + i * 200, ()=>{
+    skAt(260 + i * 300, ()=>{
       if(!G || gameState !== 'playing') return;
+      if(i === 0 && p.action && p.action.type === 'cast') p.action = null;
       playSound('skillCast');
-      G.projectiles.push({ kind:'realPill', x:p.x + p.facing*36, y:p.y - 56, h:1, vx:p.facing*760, vy:0,
-        life:1.0, w:95, hh:75, dmg:A*30, pierce:99, hitSet:new Set(), rot:0, scale:1.7,
-        color:'#ff5a2a', owner:p, trail:true });
-      /* 丹落：真火在目标脚下烧起一小片（贴判定区） */
-      skAt(560, ()=>{
+      /* 金丹出手 */
+      const sx = p.x + p.facing*38, sy = p.y - 70;
+      const ang = Math.atan2((ty() - 30) - sy, tx() - sx);
+      const spd = 900;
+      G.projectiles.push({ kind:'realPill', x:sx, y:sy, h:1,
+        vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd, life:1.0, w:90, hh:76,
+        dmg:A*26, pierce:1, hitSet:new Set(), rot:ang, scale:1.6,
+        color:'#ff5a2a', owner:p });
+      /* 到点炸开火莲 */
+      skAt(420, ()=>{
         if(!G || gameState !== 'playing') return;
-        const s = skSpot(p, tg, 120 + i * 110, 620);
-        const cx = clamp(s.x, WORLD_L + 60, WORLD_R - 60), cy = s.y;
-        addEffect('groundFire', cx, cy, 1.2, {color:'#ff5a2a'});
-        addEffect('explosion', cx, cy - 16, 0.55, {color:'#ff5a2a', r:110});
-        addEffect('hitRing', cx, cy, 0.4, {color:'#ffd08a', r:110});
-        meleeAoe(p, cx, cy, 105, A * 12, {kb:140});
+        const bx = tx(), by = ty();
+        addEffect('fireLotus', bx, by - 26, 0.8, {scale:1.5, spin:1.3, bloomDur:0.26});
+        addEffect('lightBloom', bx, by - 24, 0.42, {r:120, rays:12, color:'#ff5a2a'});
+        meleeAoe(p, bx, by, 120, A*12, {kb:140});
+        addEffect('groundFire', bx, by, 0.9, {color:'#ff7a4a'});
         skShake(8, 0.05, '#ff5a2a');
       });
-    });
-  }
-  /* 地面余火（跟着目标，精简） */
-  for(let t = 0; t < 4; t++){
-    skAt(1100 + t * 320, ()=>{
-      const base = skSpot(p, tg, 120, 620).x;
-      for(let i = 0; i < 2; i++){
-        const cx = clamp(base + p.facing * i * 110, WORLD_L + 60, WORLD_R - 60);
-        addEffect('groundFire', cx, tg.y, 0.4, {color:'#ff7a4a'});
-        meleeAoe(p, cx, tg.y, 96, A * 10, {kb:0});
-      }
     });
   }
 }
 
 /* 4 九转金丹 */
 function castCauldronPill(){
+  /* 九转金丹：九枚金丹绕身轮转后入体 —— 疗伤、回蓝、短暂无敌，并炸开护体丹光。
+     ★ 金丹绕身用 pillOrbit 模型，不用粒子描边 */
   const p = currentSkillCaster || G.player; playSound('heal');
   const A = skillAtkVal(p);
-  skCastPose(p, 1.0, '九 转 金 丹', '#ffd166', 42);
-  skCastAura(p, 1.0, '#ffd166', 4);
-  addEffect('cauldron', p.x, p.y, 1.0, {color:'#ffb04a', scale:1.2});
-  addEffect('dharmaWheel', p.x, p.y, 1.2, {color:'#ffd166', r:170});
-  /* ★ 九转金丹 = 九枚金丹绕身旋转后入体 */
+  spawnText(p.x, p.y, 210, '九 转 金 丹', '#ffd166', 44);
+  p.action = { type:'cast', dur:1.0, t:0 };
+  skCastAura(p, 0.8, '#ffd166', 2);
+  /* 丹炉虚影 + 九丹绕身（内外两圈反向转） */
+  addEffect('cauldron', p.x, p.y, 1.0, {color:'#ffb04a', scale:1.15});
   addEffect('pillOrbit', p.x, p.y, 1.0, {color:'#ffd166', color2:'#fff6c8', n:9, r:118, h:78, size:13, speed:2.6});
-  addEffect('pillOrbit', p.x, p.y, 1.0, {color:'#ff7a4a', color2:'#ffd166', n:9, r:78, h:44, size:10, speed:-3.4});
-  for(let i = 0; i < 9; i++){
-    skAt(i * 80, ()=>{
-      if(!G || gameState !== 'playing') return;
-      spawnParticles(p.x + Math.cos(i / 9 * TAU + G.t) * 70, p.y - 60 + Math.sin(i / 9 * TAU + G.t) * 30, 2, {color:i % 3 ? '#ffd166' : '#fff6c8', angle:-Math.PI/2, spread:0.4, spMin:50, spMax:160, lifeMin:0.4, lifeMax:0.9, sizeMin:3, sizeMax:6, grav:-120});
-    });
-  }
-  skAt(500, ()=>{
+  addEffect('pillOrbit', p.x, p.y, 1.0, {color:'#ff7a4a', color2:'#ffd166', n:9, r:76, h:44, size:10, speed:-3.4});
+
+  skAt(620, ()=>{
+    if(!G || gameState !== 'playing') return;
+    if(p.action && p.action.type === 'cast') p.action = null;
+    /* 九丹入体 */
     p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25);
     p.mp = Math.min(p.maxMp, p.mp + 40);
     try{ if(window.ONLINE && ONLINE.healAllies) ONLINE.healAllies(0.25, 280); }catch(e){}
     p.invuln = Math.max(p.invuln || 0, 0.9);
-    spawnText(p.x, p.y, 200, '+' + Math.round(p.maxHp * 0.25), '#ffd166', 32);
-    meleeAoe(p, p.x, p.y, 200, A * 50, {kb:280, launch:true});
-    addEffect('explosion', p.x, p.y, 0.7, {color:'#ffd166', r:166});
-    addEffect('hitRing', p.x, p.y, 0.6, {color:'#fff6c8', r:150});
-    /* ★ 金丹出炉：金色丹光炸裂（精简） */
-    addEffect('emberBurst', p.x, p.y - 26, 0.8, {color:'#ffd166', r:280, n:12, rot:rand(0, TAU)});
-    addEffect('shockWave', p.x, p.y + 2, 0.7, {facing:p.facing, r:320, color:'#fff6c8'});
-    skBurst(p.x, p.y - 50, '#ffd166', 6, {spMin:150, spMax:520, grav:-60});
+    spawnText(p.x, p.y - 40, 180, '+' + Math.round(p.maxHp * 0.25), '#ffd166', 30);
+    /* 丹成：护体丹光炸开，近身敌人被震开 */
+    addEffect('lightBloom', p.x, p.y - 40, 0.6, {r:230, rays:20, color:'#ffd166'});
+    addEffect('hitRing', p.x, p.y, 0.55, {color:'#fff6c8', r:190});
+    meleeAoe(p, p.x, p.y, 200, A*50, {kb:320, launch:true});
     skShake(12, 0.14, '#ffd166');
   });
 }
 
 /* 5 九丹神火罩（原九龙神火罩：丹道师以丹御火，不再借用飞剑/火龙） */
 function castCauldronDragons(){
+  /* 九丹神火罩：九枚金丹环罩敌阵，本命鼎倒扣成罩，罩内丹火焚烧。
+     ★ 罩子=鼎模型，九丹=pillOrbit，全程无粒子雨 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const tg = skAim(p, 240);
-  skCastPose(p, 1.6, '九 丹 神 火 罩', '#ff5a2a', 44);
-  skCastAura(p, 1.6, '#ff5a2a', 4);
-  const _cx = () => clamp(tg.x, WORLD_L + 160, WORLD_R - 160);
-  addEffect('dharmaWheel', _cx(), tg.y, 1.8, {color:'#ff5a2a', r:250});
-  /* ★ 九枚真火金丹绕罩盘旋 */
-  addEffect('pillOrbit', _cx(), tg.y, 1.6, {color:'#ff5a2a', color2:'#ffd166', n:9, r:240, h:120, size:14, speed:2.6});
-  for(let i = 0; i < 9; i++){
-    skAt(220 + i * 120, ()=>{
+  const tx = () => clamp(tg.x, WORLD_L + 170, WORLD_R - 170);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 215, '九 丹 神 火 罩', '#ff5a2a', 44);
+  p.action = { type:'cast', dur:1.6, t:0 };
+  skCastAura(p, 1.0, '#ff5a2a', 2);
+  /* 九丹环阵 */
+  addEffect('pillOrbit', tx(), ty(), 1.5, {color:'#ff5a2a', color2:'#ffd166', n:9, r:230, h:120, size:14, speed:2.8});
+  addEffect('hitRing', tx(), ty(), 0.5, {color:'#ffd08a', r:230});
+
+  /* 罩成：巨鼎倒扣 + 罩内三段焚炼 */
+  skAt(900, ()=>{
+    if(!G || gameState !== 'playing') return;
+    if(p.action && p.action.type === 'cast') p.action = null;
+    playSound('explosion');
+    addEffect('cauldron', tx(), ty(), 1.2, {color:'#ff5a2a', scale:3.4});
+    addEffect('lightBloom', tx(), ty() - 26, 0.6, {r:230, rays:20, color:'#ff5a2a'});
+    meleeAoe(p, tx(), ty(), 260, A*70, {kb:320, launch:true});
+    skShake(22, 0.34, '#ff5a2a');
+    fxHitstop(0.08);
+  });
+  /* 罩内焚烧：三波丹火（判定=罩内范围） */
+  for(let i = 0; i < 3; i++){
+    skAt(1150 + i * 260, ()=>{
       if(!G || gameState !== 'playing') return;
-      const a = i / 9 * TAU;
-      const sx = _cx() + Math.cos(a) * 240, sy = tg.y + Math.sin(a) * 100;
-      /* ★ 金丹依次射入罩心，落地炸开一小团真火 */
-      G.projectiles.push({ kind:'realPill', x:sx, y:sy - 60, h:1,
-        vx:(_cx() - sx) * 0.9, vy:(tg.y - sy) * 0.9, life:0.6, w:85, hh:70,
-        dmg:A*12, pierce:99, hitSet:new Set(), rot:0, scale:1.5,
-        color:'#ff5a2a', owner:p, noHoming:true, noHit:true });
-      meleeAoe(p, sx, tg.y, 80, A * 12, {kb:60});
-      addEffect('explosion', sx, tg.y - 16, 0.4, {color:'#ff5a2a', r:80});
-      addEffect('hitRing', sx, tg.y, 0.3, {color:'#ffd08a', r:80});
+      addEffect('lightBloom', tx(), ty() - 24, 0.4, {r:150 + i*30, rays:12 + i*4, color: i % 2 ? '#ffd166' : '#ff5a2a'});
+      meleeAoe(p, tx(), ty(), 240, A*26, {kb:80});
+      addEffect('groundFire', tx() + (i-1)*90, ty(), 0.9, {color:'#ff7a4a'});
+      skShake(9, 0.06, '#ff5a2a');
     });
   }
-  skAt(1450, ()=>{
-    meleeAoe(p, _cx(), tg.y, 280, A * 90, {kb:320, launch:true});
-    /* ★ 罩成：本命鼎倒扣落下，罩住敌阵 */
-    addEffect('cauldron', _cx(), tg.y, 1.1, {color:'#ff5a2a', scale:3.4});
-    addEffect('explosion', _cx(), tg.y, 1.0, {color:'#ff5a2a', r:230});
-    addEffect('skyPillar', _cx(), tg.y, 1.0, {height:800, color:'#ff5a2a'});
-    addEffect('emberBurst', _cx(), tg.y - 30, 1.1, {color:'#ff5a2a', r:380, n:14, rot:rand(0, TAU)});
-    addEffect('shockWave', _cx(), tg.y + 2, 0.9, {facing:p.facing, r:480, color:'#ff7a4a'});
-    skBurst(_cx(), tg.y - 50, '#ff7a4a', 8, {spMin:180, spMax:700, grav:120});
-    skShake(26, 0.4, '#ff7a4a');
-  });
 }
 
 /* 6 八卦炉·炼天 */
 function castCauldronBagua(){
+  /* 八卦炉·炼天煮海：以天地为炉 —— 八卦阵纹铺开，本命鼎倒扣，炉火冲天，金丹如雨落下。
+     ★ 鼎+金丹+阵纹，粒子只留少量 */
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 200);
-  skCastPose(p, 2.2, '炼 天 煮 海', '#ffd166', 50);
-  skCastAura(p, 2.2, '#ffd166', 4);
-  const _cx = () => clamp(tg.x, WORLD_L + 120, WORLD_R - 120);
-  addEffect('skyCrack', _cx(), 60, 1.6, {width:600, color:'#ffd166'});
-  addEffect('dharmaWheel', _cx(), tg.y, 2.4, {color:'#ff7a4a', r:340});
-  /* ★ 以天地为炉：八卦丹丸绕炉旋转 */
-  addEffect('pillOrbit', _cx(), tg.y, 1.8, {color:'#ffd166', color2:'#ff5a2a', n:8, r:230, h:150, size:16, speed:1.8});
-  addEffect('pillOrbit', _cx(), tg.y, 1.8, {color:'#ff5a2a', color2:'#fff6c8', n:8, r:150, h:90, size:12, speed:-2.6});
-  /* 炉盖自天而降 */
-  skAt(700, ()=>{
-    addEffect('cauldron', _cx(), tg.y, 1.6, {color:'#ffd166', scale:3.0});
-    addEffect('explosion', _cx(), tg.y, 1.2, {color:'#ff7a4a', r:259});
-    /* ★ 炉盖砸落：金红丹火向四面喷发（精简） */
-    addEffect('emberBurst', _cx(), tg.y - 30, 1.2, {color:'#ff7a4a', r:420, n:16, rot:rand(0, TAU)});
-    addEffect('shockWave', _cx(), tg.y + 2, 1.0, {facing:p.facing, r:520, color:'#ffd166'});
-    skRingBurst(_cx(), tg.y, 260, '#ffd166', 12);
-    meleeAoe(p, _cx(), tg.y, 330, A * 120, {kb:420, launch:true});
-    skShake(30, 0.5, '#ffd166');
-    playSound('explosion');
-    fxHitstop(0.14);
+  const tg = skAim(p, 240);
+  const tx = () => clamp(tg.x, WORLD_L + 140, WORLD_R - 140);
+  const ty = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  spawnText(p.x, p.y, 220, '炼 天 煮 海', '#ffd166', 48);
+  p.action = { type:'cast', dur:2.2, t:0 };
+  skCastAura(p, 1.4, '#ffd166', 3);
+  /* 八卦阵纹铺地 */
+  addEffect('dharmaWheel', tx(), ty(), 2.0, {color:'#ff7a4a', r:330});
+  addEffect('pillOrbit', tx(), ty(), 1.8, {color:'#ffd166', color2:'#ff5a2a', n:8, r:240, h:150, size:15, speed:1.8});
+
+  /* 炉盖落下：本命鼎倒扣 */
+  skAt(800, ()=>{
+    if(!G || gameState !== 'playing') return;
+    addEffect('cauldron', tx(), ty(), 1.4, {color:'#ffd166', scale:3.6});
+    addEffect('lightBloom', tx(), ty() - 26, 0.7, {r:260, rays:22, color:'#ff7a4a'});
+    addEffect('shockWave', tx(), ty() + 2, 0.8, {facing:p.facing, r:420, color:'#ffd166'});
+    meleeAoe(p, tx(), ty(), 300, A*110, {kb:420, launch:true});
+    skShake(28, 0.44, '#ffd166');
+    fxHitstop(0.12);
   });
-  /* 炉火九转（丹道师以鼎炼丹：金丹绕炉轮转，不再借用火龙） */
-  for(let t = 0; t < 4; t++){
-    skAt(1100 + t * 300, ()=>{
-      addEffect('skyPillar', _cx() + rand(-160, 160), tg.y, 0.5, {height:700, color:'#ff5a2a'});
-      addEffect('groundFire', _cx() + rand(-180, 180), tg.y, 0.7, {color:'#ff7a4a'});
-      addEffect('pillOrbit', _cx(), tg.y, 0.6, {color:t % 2 ? '#ffd166' : '#ff5a2a', color2:'#fff6c8', n:6, r:120 + t*40, h:110, size:12, speed:3.2});
-      spawnParticles(_cx() + rand(-140, 140), tg.y - 40, 8, {color:t % 2 ? '#ff7a4a' : '#ffd166', angle:-Math.PI / 2, spread:1.0,
-        spMin:110, spMax:380, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:8, grav:-100});
-      meleeAoe(p, _cx(), tg.y, 360, A * 30, {kb:120});
-      skBurst(_cx(), tg.y - 80, '#ffd166', 5, {grav:-40, spMin:100, spMax:340});
-      skShake(14, 0.1, '#ff7a4a');
+  /* 炉火冲天 + 金丹雨 */
+  for(let i = 0; i < 3; i++){
+    skAt(1150 + i * 380, ()=>{
+      if(!G || gameState !== 'playing') return;
+      if(i === 2 && p.action && p.action.type === 'cast') p.action = null;
+      /* 一道炉火柱 */
+      addEffect('skyPillar', tx() + (i-1)*120, ty(), 0.6, {height:760, color:'#ff5a2a'});
+      /* 金丹自炉中喷出，砸向周围 */
+      for(let k = 0; k < 3; k++){
+        const ox = (k - 1) * 130 + rand(-20, 20);
+        G.projectiles.push({ kind:'realPill', x:tx() + ox, y:ty() - 320, h:1,
+          vx:0, vy:1250, life:0.4, w:90, hh:120, dmg:A*18, pierce:1,
+          hitSet:new Set(), rot:Math.PI/2, scale:1.5, color:'#ffd166', owner:p });
+      }
+      meleeAoe(p, tx(), ty(), 300, A*26, {kb:120});
+      addEffect('groundFire', tx() + (i-1)*140, ty(), 1.0, {color:'#ff7a4a'});
+      skShake(12, 0.1, '#ff7a4a');
     });
   }
-  skAt(2400, ()=>{
-    meleeAoe(p, _cx(), tg.y, 460, A * 90, {kb:300});
-    addEffect('explosion', _cx(), tg.y, 1.0, {color:'#ffe9a8', r:331});
-    skShake(24, 0.3, '#ffe9a8');
-  });
 }
 
 const SKILL_FUNCS = {
