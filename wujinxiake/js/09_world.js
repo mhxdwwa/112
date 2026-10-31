@@ -62,10 +62,10 @@ const WEAPONS = [
   { id:'axe', name:'开山斧', color:'#ffb04a', atkMul:1.42, dmgType:'phys',
     combo:[ {type:'chop',dmg:1.20,reach:120,windup:0.12,strike:0.08,recover:0.16,kb:200,sound:'bladeSwing'},{type:'chop',dmg:1.25,reach:126,windup:0.12,strike:0.09,recover:0.17,kb:220,sound:'bladeSwing'},{type:'sweep',dmg:1.35,reach:136,windup:0.14,strike:0.09,recover:0.19,kb:260,sound:'bladeSwing'},{type:'upcut',dmg:1.50,reach:130,windup:0.15,strike:0.10,recover:0.22,kb:320,sound:'bladeSwing'},{type:'slam',dmg:3.60,reach:156,windup:0.22,strike:0.12,recover:0.40,kb:640,launch:true,sound:'bladeSwing'} ],
     skills:[
-      {name:'劈山式',key:'1',cost:14,cd:3.0,unlock:1,plannedUnlock:1,maxLv:20,spCost:3,spStep:1,power:1.05,src:'基础斧技',desc:'抡斧下劈，斧气裂地成沟'},
+      {name:'劈山式',key:'1',cost:14,cd:3.0,unlock:1,plannedUnlock:1,maxLv:20,spCost:3,spStep:1,power:1.05,src:'基础斧技',desc:'举斧过顶，一斧竖劈而下，斧刃裂地成沟'},
       {name:'三板斧',key:'2',cost:24,cd:5.6,unlock:1,plannedUnlock:1,maxLv:15,spCost:5,spStep:1,power:1.55,src:'《隋唐演义》· 程咬金',desc:'劈脑门、剔牙、掏耳朵——三斧过后再无第四斧'},
       {name:'旋风斧',key:'3',cost:38,cd:12.5,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:2.95,src:'基础斧技',desc:'原地旋身，巨斧扫出一圈斧气'},
-      {name:'力劈华山',key:'4',cost:26,cd:9.5,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.30,src:'《宝莲灯》· 沉香',desc:'一斧劈开华山，山石俱裂'},
+      {name:'巨灵劈山',key:'4',cost:26,cd:9.5,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.30,src:'《西游记》· 巨灵神',desc:'双手抡斧横抡一扫，一斧扫平一整排'},
       {name:'刑天舞干戚',key:'5',cost:48,cd:17.0,unlock:22,plannedUnlock:22,maxLv:12,spCost:14,spStep:2,power:8.8,src:'《山海经》· 刑天',desc:'无头亦舞干戚，战意不灭，越战越勇'},
       {name:'盘古开天·混沌初判',key:'6',cost:75,cd:28.0,unlock:30,plannedUnlock:30,maxLv:10,spCost:18,spStep:2,power:18.5,src:'《三五历纪》· 盘古',desc:'一斧分天地，清浊自此判——混沌初开，万物始生'}
     ] },
@@ -82,12 +82,12 @@ const WEAPONS = [
   { id:'cauldron', name:'青铜药鼎', color:'#ff7a4a', atkMul:1.18, dmgType:'magic',
     combo:[ {type:'chop',dmg:1.00,reach:118,windup:0.09,strike:0.07,recover:0.14,kb:170,sound:'bladeSwing'},{type:'sweep',dmg:1.05,reach:124,windup:0.10,strike:0.07,recover:0.15,kb:190,sound:'bladeSwing'},{type:'chop',dmg:1.15,reach:128,windup:0.11,strike:0.08,recover:0.17,kb:220,sound:'bladeSwing'},{type:'upcut',dmg:1.35,reach:132,windup:0.13,strike:0.09,recover:0.20,kb:280,sound:'bladeSwing'},{type:'slam',dmg:2.90,reach:148,windup:0.18,strike:0.11,recover:0.32,kb:520,launch:true,sound:'bladeSwing'} ],
     skills:[
-      {name:'丹火',key:'1',cost:13,cd:2.8,unlock:1,plannedUnlock:1,maxLv:20,spCost:3,spStep:1,power:1.0,src:'基础丹术',desc:'炉中丹火外放，灼烧前方一线'},
-      {name:'鼎镇压',key:'2',cost:24,cd:5.8,unlock:1,plannedUnlock:1,maxLv:15,spCost:5,spStep:1,power:1.5,src:'基础丹术',desc:'药鼎腾空放大，当头镇压而下'},
-      {name:'三昧真火',key:'3',cost:38,cd:13.0,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:3.0,src:'《西游记》· 红孩儿',desc:'三昧真火焚身，水浇不灭，越扑越旺'},
+      {name:'掷鼎',key:'1',cost:13,cd:2.8,unlock:1,plannedUnlock:1,maxLv:20,spCost:3,spStep:1,power:1.0,src:'基础丹术',desc:'本命鼎脱手飞出，砸中即炉火炸开'},
+      {name:'鼎镇山河',key:'2',cost:24,cd:5.8,unlock:1,plannedUnlock:1,maxLv:15,spCost:5,spStep:1,power:1.5,src:'基础丹术',desc:'药鼎腾空放大，当头压落，鼎口喷火成环'},
+      {name:'三昧金丹',key:'3',cost:38,cd:13.0,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:3.0,src:'《西游记》· 太上老君',desc:'三枚真火金丹依次飞出，命中炸开成一朵朵火莲'},
       {name:'九转金丹',key:'4',cost:27,cd:10.0,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.2,src:'《西游记》· 太上老君',desc:'九转金丹出炉，丹香四溢，服之伤势尽复'},
-      {name:'九龙神火罩',key:'5',cost:48,cd:17.0,unlock:22,plannedUnlock:22,maxLv:12,spCost:14,spStep:2,power:8.8,src:'《封神演义》· 太乙真人',desc:'九龙化火，罩住敌阵，烧尽一切'},
-      {name:'八卦炉·炼天煮海',key:'6',cost:76,cd:28.0,unlock:30,plannedUnlock:30,maxLv:10,spCost:18,spStep:2,power:18.5,src:'《西游记》· 太上老君',desc:'八卦炉倒扣天地，以众生为药，以天地为炉'}
+      {name:'九丹神火罩',key:'5',cost:48,cd:17.0,unlock:22,plannedUnlock:22,maxLv:12,spCost:14,spStep:2,power:8.8,src:'《封神演义》· 太乙真人',desc:'九枚金丹环罩敌阵，本命鼎倒扣成罩，罩内丹火焚尽'},
+      {name:'八卦炉·炼天煮海',key:'6',cost:76,cd:28.0,unlock:30,plannedUnlock:30,maxLv:10,spCost:18,spStep:2,power:18.5,src:'《西游记》· 太上老君',desc:'八卦阵纹铺开，本命鼎倒扣天地，炉火冲天、金丹如雨'}
     ] }
 ];
 
