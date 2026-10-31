@@ -2336,6 +2336,48 @@ function drawEffects(dt){
       }
       ctx.shadowBlur = 0;
     }
+    else if(ef.type === 'swordStake'){
+      /* ★ 插地剑桩（诛仙剑阵）：手中剑自天而降、剑尖插入地面，留在地上围成剑阵 */
+      const sf = ef.scale || 1.5;
+      const fallDur = ef.fallDur || 0.32;
+      const sk2 = Math.min(1, ef.t / fallDur);
+      const ease = 1 - Math.pow(1 - sk2, 3);
+      const fallFrom = ef.fromH || 640;
+      const yOff = -(1 - ease) * fallFrom;
+      const kk = ef.t / ef.dur;
+      const fade = kk > 0.86 ? (1 - kk) / 0.14 : 1;
+      const col = ef.color || '#c4b0ff';
+      ctx.globalAlpha = clamp(fade, 0, 1);
+      /* 下落时的剑光柱 */
+      if(sk2 < 1){
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createLinearGradient(ef.x, ef.y + yOff - 220, ef.x, ef.y + yOff);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(0.65, col);
+        g.addColorStop(1, 'rgba(255,255,255,0.9)');
+        ctx.fillStyle = g;
+        ctx.fillRect(ef.x - 7, ef.y + yOff - 220, 14, 220);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      /* 剑本体（手中剑模型，剑尖朝下：旋转 90°，原点抬到剑柄） */
+      ctx.save();
+      ctx.translate(ef.x, ef.y + yOff - 96 * sf);
+      ctx.rotate(Math.PI / 2);
+      ctx.scale(sf, sf);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.shadowColor = col; ctx.shadowBlur = _fxBlur(18);
+      drawWeapon('sword', 0, 0, 0);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      /* 落地冲击环 */
+      if(sk2 >= 1){
+        const ik = Math.min(1, (ef.t - fallDur) / 0.45);
+        ctx.globalAlpha = clamp(fade * (1 - ik), 0, 1) * 0.85;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = col; ctx.lineWidth = 4 * (1 - ik);
+        ctx.beginPath(); ctx.ellipse(ef.x, ef.y, 40 + ik * 88, 12 + ik * 26, 0, 0, TAU); ctx.stroke();
+      }
+    }
     else if(ef.type === 'giganticWeapon'){
       /* 巨兵虚影：从天而降的重型武器（巨尺 / 霸王枪） */
       const gwK = ef.t/ef.dur;
