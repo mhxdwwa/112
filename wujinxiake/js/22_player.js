@@ -14,9 +14,19 @@ function updatePlayer(p, dt){
   else if(p.landingT > 0){ p.vy = 0; }
   else if(p.h > 0 || p.vy < 0){ p.vy += 2200*dt; p.h += p.vy*dt; if(p.h<=0){ p.h=0; p.vy=0; if(p.state==='jump') p.state='idle'; } }
 
+  /* ★ 兜底：动作超过时长还没收招（例如异常被打断）就强制解除，避免角色被永久钉住 */
+  if(p.action && p.action.type !== 'attack' && p.action.type !== 'storm'
+     && p.action.t > (p.action.dur || 1) + 1.0){
+    p.action = null;
+  }
   let canMove = !p.action || p.action.type === 'storm';
   if(p.action && p.action.type === 'bladeDash' && p.action.phase === 'dash') canMove = true;
   if(p.action && p.action.type === 'attack') canMove = p.action.t > p.action.c.windup + p.action.c.strike;
+  /* ★ 技能不再整段定身：前 0.3 秒起手定住，之后允许走动（连放两个技能也不会被钉死原地） */
+  if(p.action && !canMove && p.action.type !== 'attack' && p.action.type !== 'storm'
+     && p.action.type !== 'bladeDash' && p.action.t > 0.3){
+    canMove = true;
+  }
 
   const moveSpeed = p.moveSpeed || 350;
   if(canMove){
