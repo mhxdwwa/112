@@ -1201,37 +1201,43 @@ function castSwordTruthArray(){
   const tg = skAim(p, 240);                  /* 活坐标：剑阵中心全程跟着目标 */
   skCastPose(p, 2.4, '诛 仙 剑 阵', '#c4b0ff', 46);
   skCastAura(p, 2.4, '#c4b0ff', 3);
-  const cxF = () => clamp(tg.x, WORLD_L + 200, WORLD_R - 200);
+  const cxF = () => clamp(tg.x, WORLD_L + 220, WORLD_R - 220);
   const cyF = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
-  const GAP = 92;                            /* 四剑横向间距，把敌人夹在阵中 */
-  const spots = [-GAP*3, -GAP, GAP, GAP*3];
+
+  /* ★ 四剑「圆环」围住敌人（不是一排）：
+     上(远) / 右 / 下(近) / 左 四个方位绕成一圈；按纵深排序绘制，远的先画、近的盖在后面，
+     这样读起来就是一圈插在地上的剑把敌人圈在阵中央。 */
+  const RING_RX = 200, RING_RY = 88;
+  const ring = [-Math.PI/2, 0, Math.PI/2, Math.PI]
+    .map(a => ({ ox: Math.cos(a) * RING_RX, oy: Math.sin(a) * RING_RY }))
+    .sort((a, b) => a.oy - b.oy);
 
   /* ① 四柄本命剑自天而降，剑尖插入地面（手中剑模型） */
-  spots.forEach((off, i)=>{
+  ring.forEach((sp, i)=>{
     skAt(120 + i * 95, ()=>{
       if(!G || gameState !== 'playing') return;
       playSound('swordSwing');
-      addEffect('swordStake', cxF() + off, cyF(), 2.5, {color:'#c4b0ff', scale:1.65, fallDur:0.3, fromH:660});
-      meleeAoe(p, cxF() + off, cyF(), 88, A*6, {kb:80});
-      addEffect('hitRing', cxF() + off, cyF(), 0.4, {color:'#e8e0ff', r:70});
+      addEffect('swordStake', cxF() + sp.ox, cyF() + sp.oy, 2.5, {color:'#c4b0ff', scale:1.65, fallDur:0.3, fromH:660});
+      meleeAoe(p, cxF() + sp.ox, cyF() + sp.oy, 88, A*6, {kb:80});
+      addEffect('hitRing', cxF() + sp.ox, cyF() + sp.oy, 0.4, {color:'#e8e0ff', r:70});
       skShake(6, 0.04, '#c4b0ff');
     });
   });
 
-  /* ② 剑阵激活：地面剑气在四剑之间横向贯穿扫射 */
+  /* ② 剑阵激活：地面剑气在圆环内横向贯穿扫射 */
   skAt(720, ()=>{
     if(!G || gameState !== 'playing') return;
     let wave = 0;
     const timer = setInterval(()=>{
       if(!G || gameState !== 'playing'){ clearInterval(timer); return; }
       wave++;
-      const zL = cxF() - GAP*3.6, zR = cxF() + GAP*3.6;
+      const zL = cxF() - RING_RX * 1.08, zR = cxF() + RING_RX * 1.08;
       const zx = (zL + zR) / 2, zw = zR - zL;
-      /* ★ 剑气横扫：整条阵线一次判定 —— 视觉与命中范围完全一致 */
-      meleeHitRect(p, zx, cyF(), zw, 190, A*12, {kb:120});
+      /* ★ 剑气横扫：整条阵线一次判定 —— 视觉（左右剑之间的光带）与命中范围一致 */
+      meleeHitRect(p, zx, cyF(), zw, 240, A*12, {kb:120});
       addEffect('spearLine', zL, cyF() - 46, 0.26, {endX:zR, endY:cyF() - 46, color:'#e8e0ff', width:14});
-      addEffect('spearLine', zR, cyF() - 28, 0.26, {endX:zL, endY:cyF() - 28, color:'#c4b0ff', width:10});
-      addEffect('hitRing', zx, cyF(), 0.32, {color:'#d0c8ff', r:180});
+      addEffect('spearLine', zR, cyF() - 26, 0.26, {endX:zL, endY:cyF() - 26, color:'#c4b0ff', width:10});
+      addEffect('hitRing', zx, cyF(), 0.32, {color:'#d0c8ff', r:190});
       skShake(7, 0.03, '#c4b0ff');
       if(wave >= 6){
         clearInterval(timer);
@@ -1241,7 +1247,7 @@ function castSwordTruthArray(){
           meleeAoe(p, zx, cyF(), 320, A*60, {kb:520, launch:true});
           addEffect('explosion', zx, cyF() - 20, 0.9, {color:'#c4b0ff', r:260});
           addEffect('hitRing', zx, cyF(), 0.8, {color:'#ffffff', r:300});
-          spots.forEach(off=> addEffect('skyPillar', cxF() + off, cyF(), 0.7, {height:520, color:'#e8e0ff'}));
+          ring.forEach(sp=> addEffect('skyPillar', cxF() + sp.ox, cyF() + sp.oy, 0.7, {height:520, color:'#e8e0ff'}));
           skShake(26, 0.4, '#c4b0ff');
           fxHitstop(0.08);
         });
