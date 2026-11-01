@@ -1031,19 +1031,33 @@ function castSwordTruthArray(){
   const tg = skAim(p, 240);                  /* 活坐标：剑阵中心全程跟着目标 */
   skCastPose(p, 2.4, '诛 仙 剑 阵', '#c4b0ff', 46);
   skCastAura(p, 2.4, '#c4b0ff', 3);
-  const cxF = () => clamp(tg.x, WORLD_L + 220, WORLD_R - 220);
-  const cyF = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  /* ★ 剑阵大小按敌人「体型」来定：半径取自目标（以及附近最大那只）的碰撞半径，
+     小怪阵小、精英/巨兽阵大 —— 敌人在阵里不会显得挤，也不会空一大圈。 */
+  const _tRef = tg.ref || null;
+  const _baseR = Math.max(18, Number((_tRef && _tRef.radius) || 26));
+  let _maxR = _baseR;
+  for(const e of (G.enemies || [])){
+    if(!e.alive) continue;
+    if(Math.hypot(e.x - tg.x, e.y - tg.y) < _baseR * 2.4 + 140){
+      _maxR = Math.max(_maxR, Number(e.radius) || 0);
+    }
+  }
+  const RING_RX = clamp(Math.round(150 + _maxR * 2.6), 180, 520);
+  const RING_RY = Math.round(RING_RX * 0.44);
+  const SWORD_S = clamp(1.65 * Math.pow(RING_RX / 218, 0.35), 1.5, 2.4);   /* 大阵配大剑 */
 
-  /* ★ 四剑「圆环」围住敌人（不是一排）：
-     上(远) / 右 / 下(近) / 左 四个方位绕成一圈；按纵深排序绘制，远的先画、近的盖在后面，
-     这样读起来就是一圈插在地上的剑把敌人圈在阵中央。 */
-  const RING_RX = 200, RING_RY = 88;
+  /* ★ 落点精准：阵心就是敌人脚下（只做最小的世界边界收拢，不会把阵挪歪） */
+  const cxF = () => clamp(tg.x, WORLD_L + 40, WORLD_R - 40);
+  const cyF = () => clamp(tg.y, GY_TOP + 24, GY_BOTTOM);
+
+  /* 四剑「圆环」围住敌人：上(远)/右/下(近)/左，按纵深排序绘制 */
   const ring = [-Math.PI/2, 0, Math.PI/2, Math.PI]
     .map(a => ({ ox: Math.cos(a) * RING_RX, oy: Math.sin(a) * RING_RY }))
     .sort((a, b) => a.oy - b.oy);
 
-  /* ★ 剑阵锁敌：阵内的敌人被四剑剑气钉在原地（rootT），还会被缓缓拽向阵心；
-     阵外一圈的敌人也会被剑气压着往里吸——所以放完阵，敌人跑不出去，也不会站在阵外干看着。 */
+  /* ★ 剑阵锁敌：把敌人牢牢按在「阵心」——
+     越靠边拽得越狠（0.10~0.36/次），所以放完阵敌人会自己滑到中间被钉住；
+     阵外一圈的也会被剑气吸进来，不会站在阵外干看着。 */
   const lockIn = (hold, rootBoss)=>{
     const cx = cxF(), cy = cyF();
     for(const e of G.enemies){
@@ -1052,19 +1066,29 @@ function castSwordTruthArray(){
       const d2 = nx * nx + ny * ny;
       const isBoss = !!(e.def && e.def.boss);
       if(d2 <= 1.7 * 1.7){
-        /* 阵内：定身 + 往阵心拖，越跑越被拽回来 */
+        /* 阵内：定身 + 往阵心拽（越靠边拽得越狠） */
         /* BOSS 体量大：只吃「间歇性」剑压（隔一波锁一次），小怪则全程钉死 */
         const rk = isBoss ? (rootBoss ? Math.min(hold, 0.22) : 0) : hold;
         if(rk > 0) e.rootT = Math.max(e.rootT || 0, rk);
         e.rootColor = '#c4b0ff';
-        if(d2 > 0.16){
-          const k = isBoss ? 0.07 : 0.18;
-          e.x += (cx - e.x) * k;
-          e.y += (cy - e.y) * k * 0.8;
+        const edge = Math.min(1, Math.sqrt(d2) / 1.7);
+        const k = (isBoss ? 0.45 : 1) * (0.16 + 0.30 * edge);
+        let ddx = (cx - e.x) * k, ddy = (cy - e.y) * k * 0.8;
+        /* 每波最多拖这么远：看得见是「被剑气拽过去」，而不是瞬移 */
+        const stepMax = isBoss ? 34 : 58;
+        const len = Math.hypot(ddx, ddy);
+        if(len > stepMax){ ddx = ddx / len * stepMax; ddy = ddy / len * stepMax; }
+        /* 越靠近阵心，比例拉力会越来越小；这里补一个「最小步长」，
+           保证敌人真的被拖到阵中间，而不是停在半路上 */
+        const distPx = Math.hypot(cx - e.x, cy - e.y);
+        const minStep = isBoss ? 12 : 20;
+        if(distPx > 26){
+          if(len < minStep){ const kk = minStep / Math.max(1e-6, len); ddx *= kk; ddy *= kk; }
+          e.x += ddx; e.y += ddy;
         }
       } else if(d2 <= 3.4 * 3.4){
         /* 阵外一圈：剑气吸力，把没进阵的也拖进来 */
-        const k = isBoss ? 0.05 : 0.11;
+        const k = isBoss ? 0.06 : 0.16;
         e.x += (cx - e.x) * k;
         e.y += (cy - e.y) * k * 0.8;
       }
@@ -1076,7 +1100,8 @@ function castSwordTruthArray(){
     skAt(120 + i * 95, ()=>{
       if(!G || gameState !== 'playing') return;
       playSound('swordSwing');
-      addEffect('swordStake', cxF() + sp.ox, cyF() + sp.oy, 2.5, {color:'#c4b0ff', scale:1.65, fallDur:0.3, fromH:660});
+      addEffect('swordStake', cxF() + sp.ox, cyF() + sp.oy, 2.5,
+        {color:'#c4b0ff', scale:SWORD_S, fallDur:0.3, fromH:660 + (SWORD_S - 1.65) * 200});
       meleeAoe(p, cxF() + sp.ox, cyF() + sp.oy, 88, A*6, {kb:80});
       addEffect('hitRing', cxF() + sp.ox, cyF() + sp.oy, 0.4, {color:'#e8e0ff', r:70});
       skShake(6, 0.04, '#c4b0ff');
@@ -1086,7 +1111,12 @@ function castSwordTruthArray(){
   /* ② 剑阵激活：地面剑气在圆环内横向贯穿扫射 */
   skAt(720, ()=>{
     if(!G || gameState !== 'playing') return;
-    /* ★ 阵成的一瞬间就把阵内敌人锁住，并画出法阵 */
+    /* ★ 阵成的一瞬间：先把主目标按到阵心（保证「精准落在敌人脚下」），再全员上锁 */
+    if(_tRef && skAlive(_tRef)){
+      const _cx0 = cxF(), _cy0 = cyF();
+      _tRef.x += (_cx0 - _tRef.x) * 0.85;
+      _tRef.y += (_cy0 - _tRef.y) * 0.85;
+    }
     addEffect('dharmaWheel', cxF(), cyF(), 1.6, {color:'#c4b0ff', r:RING_RX * 1.12});
     addEffect('hitRing', cxF(), cyF(), 0.5, {color:'#e8e0ff', r:RING_RX});
     lockIn(0.45, true);
@@ -1098,19 +1128,30 @@ function castSwordTruthArray(){
       const zL = cxF() - RING_RX * 1.08, zR = cxF() + RING_RX * 1.08;
       const zx = (zL + zR) / 2, zw = zR - zL;
       /* ★ 剑气横扫：整条阵线一次判定 —— 视觉（左右剑之间的光带）与命中范围一致 */
-      meleeHitRect(p, zx, cyF(), zw, 240, A*12, {kb:120});
+      meleeHitRect(p, zx, cyF(), zw, Math.max(240, Math.round(RING_RY * 2.6)), A*12, {kb:120});
       addEffect('spearLine', zL, cyF() - 46, 0.26, {endX:zR, endY:cyF() - 46, color:'#e8e0ff', width:14});
       addEffect('spearLine', zR, cyF() - 26, 0.26, {endX:zL, endY:cyF() - 26, color:'#c4b0ff', width:10});
-      addEffect('hitRing', zx, cyF(), 0.32, {color:'#d0c8ff', r:190});
+      addEffect('hitRing', zx, cyF(), 0.32, {color:'#d0c8ff', r:RING_RX * 0.9});
       skShake(7, 0.03, '#c4b0ff');
       if(wave >= 6){
         clearInterval(timer);
         /* ③ 收阵：四剑齐鸣，阵心爆发 */
         skAt(150, ()=>{
           if(!G || gameState !== 'playing') return;
-          meleeAoe(p, zx, cyF(), 320, A*60, {kb:520, launch:true});
-          addEffect('explosion', zx, cyF() - 20, 0.9, {color:'#c4b0ff', r:260});
-          addEffect('hitRing', zx, cyF(), 0.8, {color:'#ffffff', r:300});
+          /* ★ 收阵：把阵内敌人一把吸到阵心，再一起炸开（保证是「在阵中间被收」） */
+          for(const e2 of G.enemies){
+            if(!e2.alive) continue;
+            const n2x = (e2.x - cxF()) / RING_RX, n2y = (e2.y - cyF()) / RING_RY;
+            if(n2x * n2x + n2y * n2y <= 1.7 * 1.7){
+              const sk2 = (e2.def && e2.def.boss) ? 0.45 : 0.9;   /* BOSS 不被一把拽飞 */
+              e2.x += (cxF() - e2.x) * sk2;
+              e2.y += (cyF() - e2.y) * sk2;
+            }
+          }
+          const _finR = Math.max(280, RING_RX * 1.4);       /* 收阵范围跟着阵走 */
+          meleeAoe(p, zx, cyF(), _finR, A*60, {kb:520, launch:true});
+          addEffect('explosion', zx, cyF() - 20, 0.9, {color:'#c4b0ff', r:_finR * 0.85});
+          addEffect('hitRing', zx, cyF(), 0.8, {color:'#ffffff', r:_finR});
           ring.forEach(sp=> addEffect('skyPillar', cxF() + sp.ox, cyF() + sp.oy, 0.7, {height:520, color:'#e8e0ff'}));
           skShake(26, 0.4, '#c4b0ff');
           fxHitstop(0.08);
