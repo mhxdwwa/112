@@ -771,7 +771,8 @@ function update(dt){
       e.atkCd -= dt * 0.5; e.skillCd -= dt * 0.5;
       e.action = null;
       if(e.mp < e.maxMp) e.mp = Math.min(e.maxMp, e.mp + 3 * dt);
-      if(Math.random() < 0.08) spawnParticles(e.x, e.y - e.h - 40, 2, {color:'#b6ff8a', angle:-Math.PI/2, spread:0.9, spMin:20, spMax:70, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:4, grav:-40});
+      /* ★ 定身飘的碎屑按「被什么困住」上色：藤蔓=绿，剑阵=紫 */
+      if(Math.random() < 0.08) spawnParticles(e.x, e.y - e.h - 40, 2, {color:e.rootColor || '#b6ff8a', angle:-Math.PI/2, spread:0.9, spMin:20, spMax:70, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:4, grav:-40});
       continue;
     }
 
