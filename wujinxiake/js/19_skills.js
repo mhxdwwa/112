@@ -1042,6 +1042,35 @@ function castSwordTruthArray(){
     .map(a => ({ ox: Math.cos(a) * RING_RX, oy: Math.sin(a) * RING_RY }))
     .sort((a, b) => a.oy - b.oy);
 
+  /* ★ 剑阵锁敌：阵内的敌人被四剑剑气钉在原地（rootT），还会被缓缓拽向阵心；
+     阵外一圈的敌人也会被剑气压着往里吸——所以放完阵，敌人跑不出去，也不会站在阵外干看着。 */
+  const lockIn = (hold, rootBoss)=>{
+    const cx = cxF(), cy = cyF();
+    for(const e of G.enemies){
+      if(!e.alive) continue;
+      const nx = (e.x - cx) / RING_RX, ny = (e.y - cy) / RING_RY;
+      const d2 = nx * nx + ny * ny;
+      const isBoss = !!(e.def && e.def.boss);
+      if(d2 <= 1.7 * 1.7){
+        /* 阵内：定身 + 往阵心拖，越跑越被拽回来 */
+        /* BOSS 体量大：只吃「间歇性」剑压（隔一波锁一次），小怪则全程钉死 */
+        const rk = isBoss ? (rootBoss ? Math.min(hold, 0.22) : 0) : hold;
+        if(rk > 0) e.rootT = Math.max(e.rootT || 0, rk);
+        e.rootColor = '#c4b0ff';
+        if(d2 > 0.16){
+          const k = isBoss ? 0.07 : 0.18;
+          e.x += (cx - e.x) * k;
+          e.y += (cy - e.y) * k * 0.8;
+        }
+      } else if(d2 <= 3.4 * 3.4){
+        /* 阵外一圈：剑气吸力，把没进阵的也拖进来 */
+        const k = isBoss ? 0.05 : 0.11;
+        e.x += (cx - e.x) * k;
+        e.y += (cy - e.y) * k * 0.8;
+      }
+    }
+  };
+
   /* ① 四柄本命剑自天而降，剑尖插入地面（手中剑模型） */
   ring.forEach((sp, i)=>{
     skAt(120 + i * 95, ()=>{
@@ -1057,10 +1086,15 @@ function castSwordTruthArray(){
   /* ② 剑阵激活：地面剑气在圆环内横向贯穿扫射 */
   skAt(720, ()=>{
     if(!G || gameState !== 'playing') return;
+    /* ★ 阵成的一瞬间就把阵内敌人锁住，并画出法阵 */
+    addEffect('dharmaWheel', cxF(), cyF(), 1.6, {color:'#c4b0ff', r:RING_RX * 1.12});
+    addEffect('hitRing', cxF(), cyF(), 0.5, {color:'#e8e0ff', r:RING_RX});
+    lockIn(0.45, true);
     let wave = 0;
     const timer = setInterval(()=>{
       if(!G || gameState !== 'playing'){ clearInterval(timer); return; }
       wave++;
+      lockIn(0.34, wave % 2 === 0);       /* 每波都续一次锁；BOSS 隔一波才吃一次定身 */
       const zL = cxF() - RING_RX * 1.08, zR = cxF() + RING_RX * 1.08;
       const zx = (zL + zR) / 2, zw = zR - zL;
       /* ★ 剑气横扫：整条阵线一次判定 —— 视觉（左右剑之间的光带）与命中范围一致 */
