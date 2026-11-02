@@ -2861,21 +2861,17 @@ function getTeacherClassSubjects() {
 }
 
 // 检查当前用户是否可以编辑指定班级的数据
-// 班主任可以编辑自己班级的数据，管理员可以编辑所有班级
+// 班主任可以编辑本班数据，管理员可以编辑所有班级；科任老师只能看
 function canEditClass(cls) {
   if (!xqCurrentUser) return false;
   
   // 管理员可以编辑所有班级
   if (isXqAdmin()) return true;
-  
-  // 检查是否是班主任角色（可能是多重角色）
-  if (xqCurrentUser.isHeadteacher) {
-    const myClasses = xqCurrentUser.headteacherClasses || [];
-    return myClasses.includes(cls);
-  }
-  
-  // 科任教师不能编辑班级数据
-  return false;
+
+  /* ★ v3.15：用统一判定（认「25-8 / 258班」两种写法，且绝不把科任班算进来）。
+     以前是 headteacherClasses.includes(cls) 的严格字符串比较，
+     班级名写法不一致时会误判成「不是本班」，现在归一化后再比。 */
+  return isHeadteacherOf(cls);
 }
 
 // 检查当前用户是否可以编辑当前查看的班级（用于座位表等页面）
@@ -3841,7 +3837,7 @@ async function saveClassCadresToCloud(cls) {
 loadClassCadres();
 
 // App version for cache invalidation
-const APP_VERSION = '3.14'; // v3.14: 全面排查「改了刷新就没」——课表版本升级不再清空课程；统一同步（删除弱版本）；保存失败自动重试并真实提示；本机更全时反向上推；班干部/请假/销假/排座位改完立刻上推
+const APP_VERSION = '3.15'; // v3.15: 快速标记权限收紧为「只有本班班主任」+ 请假登记/请假查看逐行鉴权　// v3.14: 全面排查「改了刷新就没」——课表版本升级不再清空课程；统一同步（删除弱版本）；保存失败自动重试并真实提示；本机更全时反向上推；班干部/请假/销假/排座位改完立刻上推
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -10209,7 +10205,9 @@ function renderClassSeatingPage() {
         <!-- 左侧：统计信息 -->
         <div style="display:flex;flex-direction:column;gap:8px;min-width:90px;padding-top:8px;flex-shrink:0">
           <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:4px">${cls}</div>
-          ${canMarkStudentStatus(cls) ? `<div style="font-size:10.5px;line-height:1.5;color:#2563EB;background:#EFF6FF;border:1px dashed #BFDBFE;border-radius:6px;padding:5px 6px;text-align:center">点学生姓名<br>可标记请假/状态</div>` : ''}
+          ${canMarkStudentStatus(cls)
+            ? `<div style="font-size:10.5px;line-height:1.5;color:#2563EB;background:#EFF6FF;border:1px dashed #BFDBFE;border-radius:6px;padding:5px 6px;text-align:center">点学生姓名<br>可标记请假/状态</div>`
+            : `<div style="font-size:10.5px;line-height:1.5;color:var(--gray-400);background:var(--gray-50);border:1px dashed var(--gray-200);border-radius:6px;padding:5px 6px;text-align:center">仅本班班主任<br>可标记状态</div>`}
           <div style="text-align:center;padding:6px 10px;background:var(--gray-50);border-radius:6px">
             <div style="font-size:10px;color:var(--gray-500)">总人数</div>
             <div style="font-size:18px;font-weight:700;color:var(--gray-800)">${total}</div>
@@ -10868,24 +10866,30 @@ function renderLeaveMgmt() {
     });
   });
   const isLeader = user.isLeader;
-  const canEdit = user.isHeadteacher || isXqAdmin();
-  let rows = leaveStudents.map(s => `<tr>
+  /* ★ v3.15：操作列按「这一行是不是我当班主任的班」逐行判断。
+     以前用 user.isHeadteacher 一刀切：253 班班主任兼 258 班科任时，
+     258 班的请假记录也出现了「请假原因 / 销假 / 审批 / 驳回」按钮，一点就改到别人班上。 */
+  const canEditAny = isXqAdmin() || getMyHeadteacherClasses().length > 0;
+  let rows = leaveStudents.map(s => {
+    const canEditRow = canMarkStudentStatus(s.class);
+    return `<tr>
     <td>${s.class}</td>
     <td style="font-weight:500">${s.name}</td>
     <td><span class="badge orange">${s.leaveReason}</span></td>
     <td style="white-space:normal;max-width:200px;font-size:12.5px;color:var(--gray-600)">${s.leaveNote || '-'}</td>
     <td>${s.leaveDays}天</td>
     <td>${s.parent}</td>
-    ${canEdit ? `<td style="white-space:nowrap">
+    ${canEditAny ? `<td style="white-space:nowrap">${canEditRow ? `
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px" onclick="editLeaveReason('${s.class}',${s.id})">请假原因</button>
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--warning)" onclick="cancelLeaveInMgmt('${s.class}',${s.id})">销假</button>
       <button class="toolbar-btn primary" style="padding:4px 10px;font-size:12px" onclick="approveLeave('${s.class}',${s.id})">审批</button>
       <button class="toolbar-btn ghost" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="rejectLeave('${s.class}',${s.id})">驳回</button>
-    </td>` : ''}
-  </tr>`).join('');
+    ` : '<span style="font-size:12px;color:var(--gray-400)">仅本班班主任可操作</span>'}</td>` : ''}
+  </tr>`;
+  }).join('');
 
   const statLabel = isLeader ? '请假中' : '待审批';
-  const tableCols = canEdit ? 7 : 6;
+  const tableCols = canEditAny ? 7 : 6;
 
   return `
     <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -10908,13 +10912,14 @@ function renderLeaveMgmt() {
         ${isLeader ? '<span style="font-size:12px;color:var(--gray-400)">全校查看（只读）</span>' : ''}
       </div>
       <div class="card-body no-pad"><div class="table-wrap">
-        <table><thead><tr><th>班级</th><th>姓名</th><th>类型</th><th>请假原因</th><th>天数</th><th>家长</th>${canEdit ? '<th>操作</th>' : ''}</tr></thead>
+        <table><thead><tr><th>班级</th><th>姓名</th><th>类型</th><th>请假原因</th><th>天数</th><th>家长</th>${canEditAny ? '<th>操作</th>' : ''}</tr></thead>
         <tbody>${rows || `<tr><td colspan="${tableCols}" style="text-align:center;color:var(--gray-400);padding:40px">暂无请假记录</td></tr>`}</tbody></table>
       </div></div>
     </div>`;
 }
 
 function editLeaveReason(cls, id) {
+  if (xqDenyStatusEdit(cls)) return;
   const s = STUDENTS[cls].find(st => st.id === id);
   if (!s) return;
   showModal('编辑请假原因', `
@@ -10950,6 +10955,7 @@ function editLeaveReason(cls, id) {
 }
 
 function saveLeaveReason(cls, id) {
+  if (xqDenyStatusEdit(cls)) return;
   const s = STUDENTS[cls].find(st => st.id === id);
   if (!s) return;
   s.leaveReason = document.getElementById('editReasonType').value;
@@ -10970,6 +10976,7 @@ function cancelLeaveInMgmt(cls, id) {
 }
 
 function confirmCancelLeaveInMgmt(cls, id) {
+  if (xqDenyStatusEdit(cls)) return;
   const s = STUDENTS[cls].find(st => st.id === id);
   if (s) {
     s.status = 'present';
@@ -10997,6 +11004,7 @@ function rejectLeave(cls, id) {
 }
 
 function confirmRejectLeave(cls, id) {
+  if (xqDenyStatusEdit(cls)) return;
   const s = STUDENTS[cls].find(st => st.id === id);
   if (s) {
     s.status = 'present';
@@ -11520,20 +11528,68 @@ async function saveAttendance() {
 /* ============================================================
    ★ 学生状态标记（座位表点名字即可操作）
    ------------------------------------------------------------
-   权限：仅「本班班主任」或管理员。
-     · 判断依据是 isHeadteacher + headteacherClasses 是否包含该班；
-     · 领导身份完全不参与判断 —— 班主任兼领导照样能标记，
-       只有领导头衔、没带这个班的人则不能标记。
+   权限：只有「这个班自己的班主任」或管理员。
+     · 只看两个来源：本人 headteacherClasses、学校授课分配里 headteacher===本人；
+     · ★ 绝不能把「科任班级」算进来（user.classes / allClasses 是班主任班 ∪ 科任班的合集，
+       以前拿它兜底，导致 253 班班主任兼 258 班科任时能改 258 班，纯科任也能改科任班）；
+     · 领导头衔不参与判断：班主任兼领导照样能标记，只有领导头衔不带班的人不能标记。
    ============================================================ */
+/* 我真正担任班主任的班级（严格：不含科任班） */
+function getMyHeadteacherClasses() {
+  const u = xqCurrentUser || {};
+  const set = new Set();
+  (Array.isArray(u.headteacherClasses) ? u.headteacherClasses : []).forEach(function (c) {
+    if (c) set.add(String(c));
+  });
+  try {
+    (Array.isArray(setupTeaching) ? setupTeaching : []).forEach(function (t) {
+      if (t && t.name && t.headteacher && u.teacherName && t.headteacher === u.teacherName) {
+        set.add(String(t.name));
+      }
+    });
+  } catch (e) {}
+  try {
+    const m = (typeof SCHOOL !== 'undefined' && SCHOOL) ? SCHOOL.headteacherClasses : null;
+    const arr = (m && u.teacherName) ? m[u.teacherName] : null;
+    if (Array.isArray(arr)) arr.forEach(function (c) { if (c) set.add(String(c)); });
+    else if (typeof arr === 'string' && arr) set.add(arr);
+  } catch (e) {}
+  return Array.from(set);
+}
+
+/* 「25-8」「258班」都归一成 258，避免两种写法认不出来 */
+function xqClassKey(cls) { return String(cls == null ? '' : cls).replace(/[^\d]/g, ''); }
+
+/* 我是不是「这个班」的班主任（严格，用于所有状态标记权限） */
+function isHeadteacherOf(cls) {
+  if (!cls) return false;
+  const list = getMyHeadteacherClasses();
+  if (!list.length) return false;
+  const key = xqClassKey(cls);
+  if (!key) return list.indexOf(String(cls)) >= 0;
+  return list.some(function (x) { return xqClassKey(x) === key; });
+}
+
+/* 管理员（吴胜闯）是否保留「可以直接改任意班状态」的超级权限。
+   规则本身是「只有本班班主任能标记」；管理员只是系统维护用的兜底开关，
+   想彻底关掉就改成 false（改完连管理员也只能标记自己当班主任的班）。 */
+const XQ_ADMIN_CAN_QUICK_MARK = true;
+
 function canMarkStudentStatus(cls) {
   if (!xqCurrentUser || !cls) return false;
-  if (isXqAdmin()) return true;                       // 管理员始终可以
-  if (!xqCurrentUser.isHeadteacher) return false;     // 必须是班主任角色（领导身份不影响）
-  const htClasses = xqCurrentUser.headteacherClasses || [];
-  if (htClasses.indexOf(cls) >= 0) return true;
-  /* 兼容旧账号：班主任班级存在 classes 里 */
-  const ownClasses = xqCurrentUser.classes || [];
-  return ownClasses.indexOf(cls) >= 0;
+  if (XQ_ADMIN_CAN_QUICK_MARK && isXqAdmin()) return true;   // 管理员兜底（可用上面的开关关闭）
+  return isHeadteacherOf(cls);                               // 其余人只能是本班班主任
+}
+
+/* 无权限时的统一提示：说清楚「你带的是哪个班」，避免老师一头雾水 */
+function xqDenyStatusEdit(cls) {
+  if (canMarkStudentStatus(cls)) return false;
+  const my = getMyHeadteacherClasses();
+  const msg = my.length
+    ? '只有本班班主任可以改学生状态（你带的是 ' + my.join('、') + '）'
+    : '只有班主任可以改学生状态（当前账号不是班主任）';
+  if (typeof showToast === 'function') showToast(msg, 'error');
+  return true;
 }
 
 function getStudentOfClass(cls, id) {
@@ -12649,6 +12705,7 @@ let leaveSelectedType = '病假';
 function renderLeaveRegister() {
   const cls = getHeadteacherClass();
   if (!cls || !STUDENTS[cls]) return emptyStateHtml('暂无班级数据');
+  if (!canMarkStudentStatus(cls)) return emptyStateHtml('只有班主任可以登记本班请假。科任老师可以查看名单、座位表，但不能修改学生状态。');
   const sts = STUDENTS[cls];
   const onLeave = sts.filter(s => s.status === 'leave');
 
@@ -12743,6 +12800,7 @@ function submitLeaveRegister() {
   const days = parseFloat(document.getElementById('leaveDays').value) || 1;
   const detail = document.getElementById('leaveDetail').value.trim();
   const cls = getHeadteacherClass();
+  if (xqDenyStatusEdit(cls)) return;
   let count = 0;
   leaveSelectedStudents.forEach(id => {
     const s = STUDENTS[cls].find(st => st.id === id);
@@ -12755,12 +12813,13 @@ function submitLeaveRegister() {
     }
   });
   leaveSelectedStudents.clear();
-  saveStudentsToStorage();
+  xqCommitStudentChange(cls);
   showToast(`已为 ${count} 名学生登记请假`);
   navigate('leave-register');
 }
 
 function editLeaveRecord(cls, id) {
+  if (xqDenyStatusEdit(cls)) return;
   const s = STUDENTS[cls].find(st => st.id === id);
   if (!s) return;
   showModal('编辑请假记录', `
@@ -12799,6 +12858,7 @@ function editLeaveRecord(cls, id) {
 }
 
 function saveLeaveEdit(cls, id) {
+  if (xqDenyStatusEdit(cls)) return;
   const s = STUDENTS[cls].find(st => st.id === id);
   if (!s) return;
   s.leaveReason = document.getElementById('editLeaveType').value;
@@ -12820,6 +12880,7 @@ function cancelLeave(cls, id) {
 }
 
 function confirmCancelLeave(cls, id) {
+  if (xqDenyStatusEdit(cls)) return;
   const s = STUDENTS[cls].find(st => st.id === id);
   if (s) {
     s.status = 'present';
@@ -13699,6 +13760,7 @@ function saveBatchMark() {
     return;
   }
   const cls = getHeadteacherClass();
+  if (xqDenyStatusEdit(cls)) return;
   const markText = markDetail ? `${markType}（${markDetail}）` : markType;
   let count = 0;
   markSelectedStudents.forEach(id => {
@@ -13720,6 +13782,7 @@ function clearSelectedMarks() {
     return;
   }
   const cls = getHeadteacherClass();
+  if (xqDenyStatusEdit(cls)) return;
   let count = 0;
   markSelectedStudents.forEach(id => {
     const s = STUDENTS[cls].find(st => st.id === id);
