@@ -11661,13 +11661,13 @@ function showStudentDetail(cls, id) {
       <div class="form-group"><div class="form-label">班级</div><div style="font-weight:500">${cls}</div></div>
       <div class="form-group"><div class="form-label">当前状态</div><div><span class="badge ${s.status==='present'?'green':s.status==='leave'?'orange':s.status==='absent'?'red':'blue'}">${STATUS[s.status]}</span></div></div>
     </div>
+    ${statusActionHtml}
     ${genderAddressHtml}
     ${parentHtml}
     ${phoneHtml}
     ${leaveDetails}
     ${markBoardingHtml}
     ${familyHtml}
-    ${statusActionHtml}
     ${disciplineBtnHtml}
   `, '<button class="toolbar-btn primary" onclick="hideModal()">关闭</button>', true);
 }
