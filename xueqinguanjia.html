@@ -2903,21 +2903,31 @@ function loadStudentsFromStorage() {
 
 // 保存学生数据到 localStorage（仅本地，不上传云端）
 let studentsDataChanged = false; // 标记是否有未保存到云端的更改
+let deletedClasses = []; // ★ 已删除待同步的班级（必须先声明：之前只在 loadDeletedClasses 有数据时才赋值，
+                         //   全新浏览器没有该缓存时会 ReferenceError，导致 saveStudentsToStorage 在写脏标记前中断、
+                         //   自动云同步永不触发，刷新后数据回滚）
 let autoSaveCloudTimer = null; // 自动保存到云端的防抖计时器
 const AUTO_SAVE_CLOUD_DELAY = 2000; // 自动保存到云端的延迟时间（毫秒）
 
 function saveStudentsToStorage() {
-  try {
-    localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
-    localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses));
-    studentsDataChanged = true; // 标记有未同步的更改
-    // 持久化脏标记：即使刷新页面也能知道本地有更新的数据
-    localStorage.setItem('xq_local_newer', 'true');
-    updateSaveToCloudButton(); // 更新保存按钮状态
-    
-    // 自动触发云保存（带防抖）
-    scheduleAutoSaveToCloud();
-  } catch (e) { console.warn('[XQ] Failed to save students to localStorage:', e); }
+  // ★ 每一步独立兜底：任何一步失败（比如本地存储写满、某个变量异常）
+  //   都不能阻断「脏标记 + 自动云同步」，否则会出现“界面改了、刷新就回滚”。
+  try { localStorage.setItem('xq_students', JSON.stringify(STUDENTS)); }
+  catch (e) { console.warn('[XQ] Failed to cache students:', e); }
+
+  try { localStorage.setItem('xq_deleted_classes', JSON.stringify(deletedClasses)); }
+  catch (e) { console.warn('[XQ] Failed to cache deleted classes:', e); }
+
+  studentsDataChanged = true; // 标记有未同步的更改
+
+  // 持久化脏标记：即使刷新页面也能知道本地有更新的数据
+  try { localStorage.setItem('xq_local_newer', 'true'); }
+  catch (e) { console.warn('[XQ] Failed to set local-newer flag:', e); }
+
+  try { updateSaveToCloudButton(); } catch (e) {}
+
+  // 自动触发云保存（带防抖）
+  scheduleAutoSaveToCloud();
 }
 
 // 安排自动保存到云端（防抖）
@@ -3338,6 +3348,7 @@ async function periodicSyncFromCloud() {
 function loadDeletedClasses() {
   try {
     const data = localStorage.getItem('xq_deleted_classes');
+    deletedClasses = [];                    /* ★ 无论有没有缓存都先给数组，避免未定义 */
     if (data) {
       deletedClasses = JSON.parse(data);
       console.log('[XQ] Deleted classes loaded:', deletedClasses.length);
@@ -3691,7 +3702,7 @@ async function saveClassCadresToCloud(cls) {
 loadClassCadres();
 
 // App version for cache invalidation
-const APP_VERSION = '3.10'; // v3.10: 座位表支持班主任点学生快速标记请假/未到校/销假/其他状态
+const APP_VERSION = '3.11'; // v3.11: 修复 deletedClasses 未声明导致保存函数中断、刷新回滚；标记后立即云保存
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -11396,7 +11407,14 @@ function applyStudentStatus(cls, id, patch, toastText) {
   Object.assign(s, patch);
   s.statusUpdatedAt = new Date().toISOString();
   s.statusUpdatedBy = (xqCurrentUser && xqCurrentUser.teacherName) || '';
-  saveStudentsToStorage();          // 内部会自动防抖同步到云端
+  saveStudentsToStorage();          // 本地缓存 + 脏标记（内部还会排一次防抖云同步）
+  /* ★ 再立即推一次云端：不等 2 秒防抖，避免“刚标记完就刷新/关页面”只留在本机。
+     失败也不影响本地（脏标记仍在，下次自动重试或手动保存）。 */
+  try {
+    if (typeof xqSaveStudentsToServer === 'function') {
+      Promise.resolve(xqSaveStudentsToServer(cls)).catch(function(){});
+    }
+  } catch (e) {}
   hideModal();
   refreshAfterStudentStatus();
   showToast(toastText || '状态已更新', 'success');
