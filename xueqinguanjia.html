@@ -3711,18 +3711,22 @@ function saveClassCadres() {
 
 // 保存班干部数据到云端
 async function saveClassCadresToCloud(cls) {
-  if (!cls || !CLASS_CADRES[cls]) return;
+  if (!cls || !CLASS_CADRES[cls]) return { ok: false, error: 'no class data' };
   try {
-    await xqSaveConfigToServer('cadres_' + cls, CLASS_CADRES[cls]);
+    const r = await xqSaveConfigToServer('cadres_' + cls, CLASS_CADRES[cls]);
     console.log('[XQ] Class cadres saved to cloud for:', cls);
-  } catch (e) { console.warn('[XQ] Failed to save class cadres to cloud:', e); }
+    return r || { ok: true };
+  } catch (e) {
+    console.warn('[XQ] Failed to save class cadres to cloud:', e);
+    return { ok: false, error: e.message };
+  }
 }
 
 // 初始化加载班干部数据
 loadClassCadres();
 
 // App version for cache invalidation
-const APP_VERSION = '3.12'; // v3.12: 全面审计——声明 currentPage、修正看板班级识别、移除课程表渲染时的模板自动保存
+const APP_VERSION = '3.13'; // v3.13: 班干部云保存失败不再假报成功，提示改为真实结果
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -9823,7 +9827,7 @@ async function resetSelectedPasswords() {
 // Helper: Generate cloud save bar for editable pages
  function renderCloudSaveBar(pageType) {
   const saveAction = pageType === 'cadres' 
-    ? `saveClassCadres();saveClassCadresToCloud(getHeadteacherClass());showToast('班干部数据已保存到云端','success')`
+    ? `saveClassCadres();saveClassCadresToCloud(getHeadteacherClass()).then(function(r){showToast(r&&r.ok?'班干部数据已保存到云端':'已保存到本机，云端同步失败，请重试', r&&r.ok?'success':'warning')})`
     : `saveStudentsToCloud()`;
   return `
     <div class="card anim-in" style="margin-bottom:12px;background:var(--gray-50);padding:10px 16px">
@@ -11238,7 +11242,7 @@ function renderClassCadres() {
       </div>
       <div class="toolbar-spacer"></div>
       <button class="toolbar-btn primary" onclick="addCadrePosition()">+ 添加职务</button>
-      <button class="toolbar-btn ghost" onclick="saveClassCadres();saveClassCadresToCloud('${cls}');showToast('班干部信息已保存','success')">保存</button>
+      <button class="toolbar-btn ghost" onclick="saveClassCadres();saveClassCadresToCloud('${cls}').then(function(r){showToast(r&&r.ok?'班干部信息已保存':'已保存到本机，云端同步失败，请重试', r&&r.ok?'success':'warning')})">保存</button>
     </div>
     <div class="card">
       <div class="card-body no-pad">
