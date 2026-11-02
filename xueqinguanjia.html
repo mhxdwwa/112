@@ -2175,9 +2175,16 @@ async function xqSaveStudentsToServer(className) {
   const students = STUDENTS[className] || [];
   
   // 检查用户是否有权保存该班级 - 增强逻辑：检查多个班级列表
-  let userClasses = xqCurrentUser.classes || xqCurrentUser.allClasses || [];
-  if (userClasses.length === 0 && xqCurrentUser.headteacherClasses && xqCurrentUser.headteacherClasses.length > 0) {
-    userClasses = xqCurrentUser.headteacherClasses;
+  // ★ 注意 `[] || allClasses` 会得到 []（空数组是真值），以前会误判成“无权限”
+  let userClasses = [];
+  if (Array.isArray(xqCurrentUser.classes) && xqCurrentUser.classes.length) userClasses = xqCurrentUser.classes.slice();
+  else if (Array.isArray(xqCurrentUser.allClasses) && xqCurrentUser.allClasses.length) userClasses = xqCurrentUser.allClasses.slice();
+  else if (Array.isArray(xqCurrentUser.headteacherClasses)) userClasses = xqCurrentUser.headteacherClasses.slice();
+  // 班主任保存自己班：无论其它列表怎么算，本班一定补进去
+  if (Array.isArray(xqCurrentUser.headteacherClasses) &&
+      xqCurrentUser.headteacherClasses.indexOf(className) >= 0 &&
+      userClasses.indexOf(className) < 0) {
+    userClasses.push(className);
   }
   
   const isAdmin = isXqAdmin();
@@ -2950,9 +2957,15 @@ function scheduleAutoSaveToCloud() {
     
     // 获取要保存的班级列表 - 增强逻辑：如果 allClasses 为空，尝试使用 headteacherClasses
     let teacherClasses = getTeacherClasses();
-    if (teacherClasses.length === 0 && xqCurrentUser.headteacherClasses && xqCurrentUser.headteacherClasses.length > 0) {
-      teacherClasses = xqCurrentUser.headteacherClasses;
+    if (!teacherClasses.length && xqCurrentUser.headteacherClasses && xqCurrentUser.headteacherClasses.length > 0) {
+      teacherClasses = xqCurrentUser.headteacherClasses.slice();
       console.log('[XQ] Auto-save: allClasses is empty, using headteacherClasses:', teacherClasses);
+    }
+    /* ★ 班主任本班始终纳入保存范围（即使班级列表算法有偏差） */
+    if (Array.isArray(xqCurrentUser.headteacherClasses)) {
+      xqCurrentUser.headteacherClasses.forEach(function(c){
+        if (teacherClasses.indexOf(c) < 0) teacherClasses.push(c);
+      });
     }
     
     const isClassTeacher = teacherClasses.length > 0;
@@ -3121,7 +3134,13 @@ async function syncFromCloud() {
               const lv = localStudents[i];
               if (!lv || sv.name !== lv.name || sv.gender !== lv.gender || 
                   sv.seat !== lv.seat || sv.phone !== lv.phone || 
-                  sv.parent !== lv.parent || (sv.g || '') !== (lv.g || '')) {
+                  sv.parent !== lv.parent || (sv.g || '') !== (lv.g || '') ||
+                  /* ★ 以前不比较这些字段：别的设备登记了请假，本机同步时会误判“没变化” */
+                  (sv.status || 'present') !== (lv.status || 'present') ||
+                  (sv.leaveReason || '') !== (lv.leaveReason || '') ||
+                  (sv.leaveDays || 0) !== (lv.leaveDays || 0) ||
+                  (sv.leaveNote || '') !== (lv.leaveNote || '') ||
+                  (sv.mark || '') !== (lv.mark || '')) {
                 hasDiff = true;
                 break;
               }
