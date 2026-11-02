@@ -1256,12 +1256,12 @@ function drawEffects(dt){
      以前照样每帧画带 shadowBlur 的大特效，白烧一大半性能 */
   const _camX = (G && G.camera) ? G.camera.x : 0;
   const _cullL = _camX - 460, _cullR = _camX + VW + 460;
-  /* ★ v54 低配自动降级：掉帧时同屏「装饰性」特效限量绘制。
+  /* ★ v54 低配自动降级：掉帧时同屏「纯装饰」特效限量绘制（地火/爆炸这类伤害指示不限制）。
      技能判定、伤害、时长都不受影响，只是少叠几层光雾，
      避免教室老电脑上一次技能铺十几层半透明大图把填充率吃满。 */
   const _slow = !!(window.PFX && window.PFX.slow);
   const _cap = _slow
-    ? { poisonCloud: 2, emberBurst: 2, hitRing: 6, groundFire: 4, lightBloom: 3, pillOrbit: 1, vine: 5, spiderSwarm: 1, shockWave: 2, explosion: 2 }
+    ? { poisonCloud: 2, emberBurst: 2, hitRing: 6, lightBloom: 3, pillOrbit: 1, vine: 5, spiderSwarm: 1 }
     : null;
   const _used = _cap ? {} : null;
   for(const ef of G.effects){
