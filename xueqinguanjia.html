@@ -1904,6 +1904,7 @@ PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9InpoLUNOIj4KPGhlYWQ+CiAgPG1ldGEgY2hhcnNldD0i
    ============================================================ */
 const XQ_API_BASE = '/api/xq';
 let xqCurrentUser = null; // { teacherId, teacherName, role, classes[] }
+let currentPage = '';      // ★ 当前页面（之前未声明，靠 navigate 赋值隐式创建；定时器里读取时有 ReferenceError 风险）
 let xqSyncInProgress = false;
 let xqLastSyncTime = 0;
 
@@ -3721,7 +3722,7 @@ async function saveClassCadresToCloud(cls) {
 loadClassCadres();
 
 // App version for cache invalidation
-const APP_VERSION = '3.11'; // v3.11: 修复 deletedClasses 未声明导致保存函数中断、刷新回滚；标记后立即云保存
+const APP_VERSION = '3.12'; // v3.12: 全面审计——声明 currentPage、修正看板班级识别、移除课程表渲染时的模板自动保存
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -5002,10 +5003,14 @@ document.addEventListener('keydown', function (e) {
 function dbCurrentClassName() {
   try {
     const u = (typeof xqCurrentUser !== 'undefined' && xqCurrentUser) ? xqCurrentUser : {};
-    const arr = u.headteacherClasses || u.classes || u.allClasses || [];
-    if (arr && arr.length) return arr[0];
+    /* ★ 空数组是真值：以前 headteacherClasses=[] 时会跳过 classes/allClasses */
+    const arr = (Array.isArray(u.headteacherClasses) && u.headteacherClasses.length) ? u.headteacherClasses
+              : (Array.isArray(u.classes) && u.classes.length) ? u.classes
+              : (Array.isArray(u.allClasses) ? u.allClasses : []);
+    if (arr.length) return arr[0];
   } catch (e) { /* ignore */ }
-  if (typeof cfg !== 'undefined' && cfg && cfg.className) return cfg.className;
+  /* 控制台里没有全局 cfg（以前这里写 typeof cfg，永远取不到）；用当前查看班级兜底 */
+  if (typeof currentViewClass !== 'undefined' && currentViewClass) return currentViewClass;
   return (typeof dutyCurrentClass !== 'undefined') ? dutyCurrentClass : '';
 }
 
@@ -15864,11 +15869,11 @@ async function migrateTimetableData() {
 }
 
 function getTimetableForClass(className) {
-  // 如果该班级没有课程数据，使用默认模板并保存到云端
+  // 如果该班级没有课程数据，只在内存里放一份默认模板用于显示。
+  // ★ 绝不能在这里自动保存到云端：renderPage('timetable') 会先 render 再 loadTimetableData，
+  //   以前这里一保存，就用空模板把云端已保存的课表覆盖掉了（刷新后老师排的课全没了）。
   if (!classTimetableData[className] || !Object.keys(classTimetableData[className]).some(k => /^\d+-\d+$/.test(k))) {
     classTimetableData[className] = JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_TEMPLATE));
-    // 保存到云端，让数据持久化
-    if (typeof saveClassTimetableData === 'function') saveClassTimetableData();
   }
   return classTimetableData[className];
 }
