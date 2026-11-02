@@ -177,7 +177,44 @@ body{
 .section:nth-child(5) .card:nth-child(3){animation-delay:.3s}
 .section:nth-child(5) .card:nth-child(4){animation-delay:.35s}
 
+/* === 精品卡片（学勤管家 / 考试计时器） === */
+.card-accent{
+  border-color:rgba(255,255,255,0.22);
+  box-shadow:0 12px 34px rgba(6,10,30,0.38);
+}
+.card-accent::after{
+  content:'';position:absolute;inset:0;border-radius:var(--radius);pointer-events:none;z-index:3;
+  background:linear-gradient(140deg,rgba(255,255,255,0.22),rgba(255,255,255,0) 45%);
+  opacity:0;transition:opacity .35s;
+}
+.card-accent:hover::after{opacity:1}
+.card-accent:hover{
+  box-shadow:0 24px 64px rgba(124,92,252,0.34),0 0 0 1px rgba(255,255,255,0.28);
+}
+.card-accent .card-body{padding-top:14px}
+.card-accent .card-title{letter-spacing:0.5px}
+
+/* 缩略图：SVG 自适应 + 缓慢流光 */
+.thumb-art{overflow:hidden}
+.thumb-art > svg{display:block;width:100%;height:100%;
+  transition:transform .6s cubic-bezier(.22,1,.36,1);}
+.card:hover .thumb-art > svg{transform:scale(1.07)}
+.thumb-art::after{
+  content:'';position:absolute;top:-40%;left:-140%;width:55%;height:190%;
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.22),rgba(255,255,255,0));
+  transform:rotate(16deg);animation:thumbShine 5.2s infinite;pointer-events:none;
+}
+@keyframes thumbShine{
+  0%{left:-140%}
+  45%{left:135%}
+  100%{left:135%}
+}
+@media(prefers-reduced-motion:reduce){
+  .thumb-art::after{animation:none;opacity:0}
+}
+
 /* === RESPONSIVE === */
+
 @media(max-width:640px){
   .page{padding:16px 16px 40px}
   .header{padding:36px 0 24px}
@@ -334,28 +371,6 @@ body{
         </div>
       </a>
 
-      <a class="card" href="shouhuyuegong.html" target="_blank">
-        <div class="card-thumb" data-card-id="shouhuyuegong">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/shouhuyuegong.jpg" alt="守护月宫">
-        </div>
-        <div class="card-body">
-          <div class="card-title">守护月宫</div>
-          <div class="card-desc">中秋主题，有理数减法对战，守护月宫</div>
-        </div>
-      </a>
-
-      <a class="card" href="jianfadaluandou.html" target="_blank">
-        <div class="card-thumb" data-card-id="jianfadaluandou">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/jianfadaluandou.jpg" alt="减法大乱斗">
-        </div>
-        <div class="card-body">
-          <div class="card-title">减法大乱斗</div>
-          <div class="card-desc">有理数减法PK对战，双人答题竞技</div>
-        </div>
-      </a>
-
       <a class="card" href="qingya-wenjian/index.html" target="_blank">
         <div class="card-thumb" data-card-id="qingya-wenjian" style="background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);">
           <span class="badge badge-new">新</span>
@@ -452,21 +467,68 @@ body{
         </div>
       </a>
 
-      <a class="card" href="youlishujianfa.html" target="_blank">
-        <div class="card-thumb" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
-          <span class="badge badge-new">新</span>
-          <svg viewBox="0 0 100 100"><rect x="15" y="25" width="70" height="50" rx="8" fill="#e8734a" opacity="0.9"/><text x="50" y="55" font-size="22" fill="#fff" text-anchor="middle" font-weight="bold">−</text><text x="30" y="45" font-size="14" fill="#fff" text-anchor="middle">5</text><text x="70" y="45" font-size="14" fill="#fff" text-anchor="middle">3</text><text x="50" y="70" font-size="12" fill="#ffe0b2" text-anchor="middle">= ?</text></svg>
-        </div>
-        <div class="card-body">
-          <div class="card-title">有理数减法法则探究</div>
-          <div class="card-desc">互动探究，理解有理数减法运算规律</div>
-        </div>
-      </a>
 
-      <a class="card" href="xueqinguanjia.html" target="_blank">
-        <div class="card-thumb" data-card-id="xueqinguanjia">
+      <a class="card card-accent" href="xueqinguanjia.html" target="_blank">
+        <div class="card-thumb thumb-art">
           <span class="badge badge-new">新</span>
-          <img src="home-cards/xueqinguanjia.jpg" alt="学勤管家">
+          <svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" role="img" aria-label="学勤管家">
+            <defs>
+              <linearGradient id="xqBg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#4338ca"/>
+                <stop offset="52%" stop-color="#7c3aed"/>
+                <stop offset="100%" stop-color="#0ea5e9"/>
+              </linearGradient>
+              <radialGradient id="xqGlow" cx="0.82" cy="0.1" r="0.75">
+                <stop offset="0%" stop-color="#fff" stop-opacity="0.42"/>
+                <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="xqPaper" x1="0" y1="0" x2="0.4" y2="1">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.97"/>
+                <stop offset="100%" stop-color="#dfe4ff" stop-opacity="0.88"/>
+              </linearGradient>
+              <linearGradient id="xqBar" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#34d399"/>
+                <stop offset="100%" stop-color="#22d3ee"/>
+              </linearGradient>
+            </defs>
+            <rect width="200" height="140" fill="url(#xqBg)"/>
+            <rect width="200" height="140" fill="url(#xqGlow)"/>
+            <g stroke="#ffffff" stroke-opacity="0.1" stroke-width="1">
+              <path d="M-10 110L70 30M10 130L90 50M40 140L120 60M70 150L150 70"/>
+            </g>
+            <circle cx="170" cy="108" r="46" fill="#fff" opacity="0.07"/>
+            <!-- 考勤板 -->
+            <g>
+              <rect x="26" y="36" width="66" height="72" rx="10" fill="url(#xqPaper)"/>
+              <rect x="45" y="29" width="28" height="13" rx="6.5" fill="#4338ca"/>
+              <rect x="51" y="33.5" width="16" height="4" rx="2" fill="#c7d2fe"/>
+              <g>
+                <circle cx="39" cy="54" r="5.6" fill="#10b981"/>
+                <path d="M36.6 54.1l1.8 1.9 3.3-3.7" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <rect x="48" y="51.6" width="34" height="4.8" rx="2.4" fill="#c7d2fe"/>
+              </g>
+              <g>
+                <circle cx="39" cy="71" r="5.6" fill="#10b981"/>
+                <path d="M36.6 71.1l1.8 1.9 3.3-3.7" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <rect x="48" y="68.6" width="28" height="4.8" rx="2.4" fill="#c7d2fe"/>
+              </g>
+              <g>
+                <circle cx="39" cy="88" r="5.6" fill="#f59e0b"/>
+                <path d="M39 85.8v3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+                <circle cx="39" cy="90.6" r="0.85" fill="#fff"/>
+                <rect x="48" y="85.6" width="31" height="4.8" rx="2.4" fill="#dbe3ff"/>
+              </g>
+            </g>
+            <!-- 出勤数据 -->
+            <g>
+              <rect x="102" y="36" width="80" height="72" rx="12" fill="#ffffff" opacity="0.17"/>
+              <rect x="102" y="36" width="80" height="72" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.34"/>
+              <text x="112" y="55" font-size="9.5" fill="#efeaff" font-family="'Noto Sans SC',sans-serif" letter-spacing="0.5">今日出勤</text>
+              <text x="112" y="79" font-size="20" font-weight="700" fill="#ffffff" font-family="'Noto Sans SC',sans-serif">28/30</text>
+              <rect x="112" y="88" width="60" height="5" rx="2.5" fill="#ffffff" opacity="0.25"/>
+              <rect x="112" y="88" width="54" height="5" rx="2.5" fill="url(#xqBar)"/>
+            </g>
+          </svg>
         </div>
         <div class="card-body">
           <div class="card-title">学勤管家</div>
@@ -474,16 +536,55 @@ body{
         </div>
       </a>
 
-      <a class="card" href="kaoshijishiqi.html" target="_blank">
-        <div class="card-thumb" data-card-id="kaoshijishiqi" style="background:linear-gradient(135deg,#070b14,#1a1f3a);">
+      <a class="card card-accent" href="kaoshijishiqi.html" target="_blank">
+        <div class="card-thumb thumb-art">
           <span class="badge badge-new">新</span>
-          <svg viewBox="0 0 200 140" style="width:100%;height:100%;">
-            <rect width="200" height="140" fill="#070b14"/>
-            <circle cx="100" cy="60" r="35" fill="none" stroke="#38bdf8" stroke-width="3" opacity="0.8"/>
-            <line x1="100" y1="60" x2="100" y2="38" stroke="#e8eefc" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="100" y1="60" x2="118" y2="60" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="100" cy="60" r="3" fill="#38bdf8"/>
-            <text x="100" y="115" font-size="16" fill="#38bdf8" text-anchor="middle" font-family="sans-serif" font-weight="bold" opacity="0.9">考试计时器</text>
+          <svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" role="img" aria-label="考试计时器">
+            <defs>
+              <linearGradient id="ksBg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#050912"/>
+                <stop offset="50%" stop-color="#0d1b33"/>
+                <stop offset="100%" stop-color="#0b3a55"/>
+              </linearGradient>
+              <radialGradient id="ksGlow" cx="0.3" cy="0.45" r="0.55">
+                <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.38"/>
+                <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="ksArc" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#22d3ee"/>
+                <stop offset="100%" stop-color="#818cf8"/>
+              </linearGradient>
+            </defs>
+            <rect width="200" height="140" fill="url(#ksBg)"/>
+            <rect width="200" height="140" fill="url(#ksGlow)"/>
+            <g stroke="#38bdf8" stroke-opacity="0.09" stroke-width="1">
+              <path d="M0 35H200M0 70H200M0 105H200M50 0V140M100 0V140M150 0V140"/>
+            </g>
+            <!-- 表盘 -->
+            <g transform="translate(58,70)">
+              <circle r="32" fill="#0b1220" opacity="0.85"/>
+              <circle r="32" fill="none" stroke="#38bdf8" stroke-opacity="0.18" stroke-width="7"/>
+              <circle r="32" fill="none" stroke="url(#ksArc)" stroke-width="5.5" stroke-linecap="round"
+                      stroke-dasharray="132 201" transform="rotate(-90)"/>
+              <g stroke="#7dd3fc" stroke-opacity="0.55" stroke-width="1.5" stroke-linecap="round">
+                <path d="M0 -25V-21.5"/><path d="M0 21.5V25"/>
+                <path d="M-25 0H-21.5"/><path d="M21.5 0H25"/>
+              </g>
+              <path d="M0 0V-16" stroke="#e8f6ff" stroke-width="2.8" stroke-linecap="round"/>
+              <path d="M0 0L9.5 6" stroke="#22d3ee" stroke-width="2.2" stroke-linecap="round"/>
+              <circle r="3" fill="#22d3ee"/>
+              <circle r="1.2" fill="#050912"/>
+            </g>
+            <!-- 数字化时间 -->
+            <text x="103" y="64" font-size="24" font-weight="700" fill="#eaf6ff"
+                  font-family="'Noto Sans SC',ui-monospace,monospace" letter-spacing="1">45:00</text>
+            <text x="104" y="78" font-size="9" fill="#7dd3fc" opacity="0.9"
+                  font-family="'Noto Sans SC',sans-serif" letter-spacing="2">剩余时间</text>
+            <rect x="103" y="85" width="73" height="20" rx="10" fill="#38bdf8" opacity="0.14"/>
+            <rect x="103" y="85" width="73" height="20" rx="10" fill="none" stroke="#38bdf8" stroke-opacity="0.4"/>
+            <circle cx="112" cy="95" r="2.8" fill="#f87171"/>
+            <text x="119" y="98.6" font-size="9" fill="#cfe9ff"
+                  font-family="'Noto Sans SC',sans-serif">全屏投影</text>
           </svg>
         </div>
         <div class="card-body">
