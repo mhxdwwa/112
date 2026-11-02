@@ -545,6 +545,19 @@ tbody tr:last-child td { border-bottom: none; }
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
+.stu-status-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 768px) {
+  .stu-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.seat-leave-badge {
+  position: absolute; top: 3px; right: 3px;
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+  background: rgba(255,255,255,0.94); color: #E65100;
+  font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18); z-index: 2;
+}
+.seat-mark-badge + .seat-leave-badge { right: 24px; }
+.seat-leave-badge + .seat-boarding-badge { right: 24px; }
 .seat-boarding-badge {
   position: absolute; bottom: 2px; right: 2px;
   font-size: 12px; line-height: 1;
@@ -3678,7 +3691,7 @@ async function saveClassCadresToCloud(cls) {
 loadClassCadres();
 
 // App version for cache invalidation
-const APP_VERSION = '3.9'; // v3.9: 修复设置密码失败问题，确保本地保存成功即视为成功
+const APP_VERSION = '3.10'; // v3.10: 座位表支持班主任点学生快速标记请假/未到校/销假/其他状态
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -9991,13 +10004,17 @@ function renderClassSeatingPage() {
         const editCls = seatingEditMode && canEdit ? 'editing' : '';
         const outerCls = s.boarding === 'outer' ? 'outer-boarder' : '';
         const markBadge = s.mark ? `<span class="seat-mark-badge" title="标记: ${s.mark}">!</span>` : '';
+        /* ★ 请假角标：一眼看出这人今天请假了（角标里显示假别首字） */
+        const leaveBadge = s.status === 'leave'
+          ? `<span class="seat-leave-badge" title="请假：${escapeHtml((s.leaveReason || '未填写') + (s.leaveDays ? ' · ' + s.leaveDays + '天' : '') + (s.leaveNote ? ' · ' + s.leaveNote : ''))}">${escapeHtml((s.leaveReason || '假').charAt(0))}</span>`
+          : '';
         const boardingBadge = s.boarding === 'outer' ? `<span class="seat-boarding-badge" title="外宿">🏠</span>` : '';
-        const titleText = `${s.name} - ${STATUS[s.status]}`;
+        const titleText = `${s.name} - ${STATUS[s.status]}${s.status === 'leave' ? '（' + (s.leaveReason || '') + '）' : ''}`;
         flexRows += `<div class="seat ${statusCls} ${editCls} ${outerCls}" data-slot="${i}" data-sid="${s.id}" data-slot-idx="${i}" style="flex:1;min-width:0"
           ${seatingEditMode && canEdit ? `draggable="true" ondragstart="onSeatDragStart(event,${i})" ondragover="onSeatDragOver(event)" ondrop="onSeatDrop(event,${i})" ondragend="onSeatDragEnd(event)" ontouchstart="onSeatTouchStart(event,${i})" ontouchmove="onSeatTouchMove(event)" ontouchend="onSeatTouchEnd(event)"` :
           `onclick="showStudentDetail('${cls}',${s.id})"`}
           title="${titleText}">
-          ${markBadge}${boardingBadge}
+          ${markBadge}${leaveBadge}${boardingBadge}
           <span class="seat-name">${s.name}</span>
         </div>`;
       } else {
@@ -10029,6 +10046,7 @@ function renderClassSeatingPage() {
         <!-- 左侧：统计信息 -->
         <div style="display:flex;flex-direction:column;gap:8px;min-width:90px;padding-top:8px;flex-shrink:0">
           <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:4px">${cls}</div>
+          ${canMarkStudentStatus(cls) ? `<div style="font-size:10.5px;line-height:1.5;color:#2563EB;background:#EFF6FF;border:1px dashed #BFDBFE;border-radius:6px;padding:5px 6px;text-align:center">点学生姓名<br>可标记请假/状态</div>` : ''}
           <div style="text-align:center;padding:6px 10px;background:var(--gray-50);border-radius:6px">
             <div style="font-size:10px;color:var(--gray-500)">总人数</div>
             <div style="font-size:18px;font-weight:700;color:var(--gray-800)">${total}</div>
@@ -11336,6 +11354,156 @@ async function saveAttendance() {
     showToast('保存考勤失败：' + e.message, 'error');
   }
 }
+/* ============================================================
+   ★ 学生状态标记（座位表点名字即可操作）
+   ------------------------------------------------------------
+   权限：仅「本班班主任」或管理员。
+     · 判断依据是 isHeadteacher + headteacherClasses 是否包含该班；
+     · 领导身份完全不参与判断 —— 班主任兼领导照样能标记，
+       只有领导头衔、没带这个班的人则不能标记。
+   ============================================================ */
+function canMarkStudentStatus(cls) {
+  if (!xqCurrentUser || !cls) return false;
+  if (isXqAdmin()) return true;                       // 管理员始终可以
+  if (!xqCurrentUser.isHeadteacher) return false;     // 必须是班主任角色（领导身份不影响）
+  const htClasses = xqCurrentUser.headteacherClasses || [];
+  if (htClasses.indexOf(cls) >= 0) return true;
+  /* 兼容旧账号：班主任班级存在 classes 里 */
+  const ownClasses = xqCurrentUser.classes || [];
+  return ownClasses.indexOf(cls) >= 0;
+}
+
+function getStudentOfClass(cls, id) {
+  const arr = STUDENTS[cls] || [];
+  return arr.find(st => String(st.id) === String(id));
+}
+
+function refreshAfterStudentStatus() {
+  const page = (typeof currentPage !== 'undefined') ? currentPage : '';
+  const pages = ['class-seating','seating','my-class','roster','leave-mgmt','leave-register','class-attendance','attendance-stats','overview','all-classes','all-classes-view'];
+  if (pages.indexOf(page) >= 0 && typeof renderPage === 'function') {
+    renderPage(page);
+  }
+}
+
+function applyStudentStatus(cls, id, patch, toastText) {
+  if (!canMarkStudentStatus(cls)) {
+    showToast('只有本班班主任可以标记学生状态', 'error');
+    return false;
+  }
+  const s = getStudentOfClass(cls, id);
+  if (!s) { showToast('未找到该学生', 'error'); return false; }
+  Object.assign(s, patch);
+  s.statusUpdatedAt = new Date().toISOString();
+  s.statusUpdatedBy = (xqCurrentUser && xqCurrentUser.teacherName) || '';
+  saveStudentsToStorage();          // 内部会自动防抖同步到云端
+  hideModal();
+  refreshAfterStudentStatus();
+  showToast(toastText || '状态已更新', 'success');
+  return true;
+}
+
+/* 销假 / 在校 */
+function markStudentPresent(cls, id) {
+  const s = getStudentOfClass(cls, id);
+  if (!s) return;
+  applyStudentStatus(cls, id, {
+    status: 'present', leaveReason: '', leaveNote: '', leaveDays: 0
+  }, s.name + ' 已标记为在校');
+}
+
+/* 未到校（进入控辍关注） */
+function markStudentAbsent(cls, id) {
+  const s = getStudentOfClass(cls, id);
+  if (!s) return;
+  if (!confirm('把 ' + s.name + ' 标记为「未到校」？\n\n会进入控辍关注名单，并计入今日缺勤统计。')) return;
+  applyStudentStatus(cls, id, {
+    status: 'absent', leaveReason: '', leaveNote: '', leaveDays: 0
+  }, s.name + ' 已标记为未到校');
+}
+
+/* 请假登记表单 */
+function openStudentLeaveForm(cls, id) {
+  const s = getStudentOfClass(cls, id);
+  if (!s) return;
+  if (!canMarkStudentStatus(cls)) { showToast('只有本班班主任可以登记请假', 'error'); return; }
+  const types = ['病假','事假','就医','其他'];
+  const opts = types.map(t => `<option value="${t}" ${s.leaveReason === t ? 'selected' : ''}>${t}</option>`).join('');
+  showModal('登记请假 · ' + s.name, `
+    <div class="form-group">
+      <label class="form-label">请假类型</label>
+      <select class="form-select" id="stuLeaveType">${opts}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">请假天数</label>
+      <input class="form-input" id="stuLeaveDays" type="number" value="${s.leaveDays || 1}" min="0.5" step="0.5">
+    </div>
+    <div class="form-group">
+      <label class="form-label">详细说明</label>
+      <textarea class="form-textarea" id="stuLeaveNote" placeholder="请假具体原因（可留空）">${escapeHtml(s.leaveNote || '')}</textarea>
+    </div>
+    <div style="font-size:12px;color:var(--gray-500);line-height:1.6">
+      保存后座位卡会变成橙色并显示「假」角标，同时同步到「请假查看 / 学生考勤」。
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+      <button class="toolbar-btn primary" onclick="submitStudentLeave('${cls}',${id})">确认登记</button>`, false);
+}
+
+function submitStudentLeave(cls, id) {
+  const s = getStudentOfClass(cls, id);
+  if (!s) return;
+  const typeEl = document.getElementById('stuLeaveType');
+  const daysEl = document.getElementById('stuLeaveDays');
+  const noteEl = document.getElementById('stuLeaveNote');
+  const type = typeEl ? typeEl.value : '病假';
+  const days = daysEl ? (parseFloat(daysEl.value) || 1) : 1;
+  const note = noteEl ? noteEl.value.trim() : '';
+  applyStudentStatus(cls, id, {
+    status: 'leave', leaveReason: type, leaveDays: days, leaveNote: note
+  }, s.name + ' 已登记请假（' + type + '）');
+}
+
+/* 其他状态标记（迟到 / 早退 / 临时离校…） */
+function openStudentTagForm(cls, id) {
+  const s = getStudentOfClass(cls, id);
+  if (!s) return;
+  if (!canMarkStudentStatus(cls)) { showToast('只有本班班主任可以标记', 'error'); return; }
+  const presets = ['迟到','早退','临时离校','外出就医','公干','家长接送'];
+  const chips = presets.map(t =>
+    `<button type="button" class="toolbar-btn ghost" style="padding:6px 10px;font-size:12px"
+       onclick="var el=document.getElementById('stuTagText'); if(el) el.value='${t}';">${t}</button>`).join('');
+  showModal('其他状态标记 · ' + s.name, `
+    <div class="form-group">
+      <label class="form-label">常用状态（点一下填入）</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${chips}</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">状态说明</label>
+      <input class="form-input" id="stuTagText" value="${escapeHtml(s.mark || '')}" placeholder="如：迟到、早退、临时离校…">
+    </div>
+    <div style="font-size:12px;color:var(--gray-500);line-height:1.6">
+      保存后座位卡右上角会显示「!」角标，鼠标悬停可看说明；领导和科任老师也能看到。
+    </div>
+  `, `<button class="toolbar-btn ghost" onclick="hideModal()">取消</button>
+      ${s.mark ? `<button class="toolbar-btn ghost" onclick="clearStudentTag('${cls}',${id})">清除标记</button>` : ''}
+      <button class="toolbar-btn primary" onclick="submitStudentTag('${cls}',${id})">保存标记</button>`, false);
+}
+
+function submitStudentTag(cls, id) {
+  const s = getStudentOfClass(cls, id);
+  if (!s) return;
+  const el = document.getElementById('stuTagText');
+  const txt = el ? el.value.trim() : '';
+  if (!txt) { showToast('请输入状态说明', 'warning'); return; }
+  applyStudentStatus(cls, id, { mark: txt }, '已标记：' + txt);
+}
+
+function clearStudentTag(cls, id) {
+  const s = getStudentOfClass(cls, id);
+  if (!s) return;
+  applyStudentStatus(cls, id, { mark: '' }, '已清除标记');
+}
+
 function showStudentDetail(cls, id) {
   const s = STUDENTS[cls].find(st => st.id === id);
   if (!s) return;
@@ -11461,6 +11629,31 @@ function showStudentDetail(cls, id) {
     `;
   }
 
+  // ★ 班主任快速标记（领导身份不影响；只有"本班班主任"才显示）
+  let statusActionHtml = '';
+  if (canMarkStudentStatus(cls)) {
+    statusActionHtml = `
+      <div style="margin-top:16px;padding:14px 16px;border-radius:10px;background:linear-gradient(180deg,#EFF6FF,#F8FAFF);border:1px solid #BFDBFE">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="font-weight:700;color:#1D4ED8;font-size:14px">⚡ 快速标记</div>
+          <div style="font-size:11.5px;color:#64748B">本班班主任权限 · 点一下立即生效</div>
+        </div>
+        <div class="stu-status-actions">
+          <button class="toolbar-btn primary" style="justify-content:center;padding:9px 6px;font-size:12.5px"
+            onclick="openStudentLeaveForm('${cls}',${s.id})">请假</button>
+          <button class="toolbar-btn ghost" style="justify-content:center;padding:9px 6px;font-size:12.5px;color:#B45309;border-color:#FCD34D;background:#FFFBEB"
+            onclick="markStudentAbsent('${cls}',${s.id})">未到校</button>
+          <button class="toolbar-btn ghost" style="justify-content:center;padding:9px 6px;font-size:12.5px;color:#15803D;border-color:#86EFAC;background:#F0FDF4"
+            onclick="markStudentPresent('${cls}',${s.id})">销假/在校</button>
+          <button class="toolbar-btn ghost" style="justify-content:center;padding:9px 6px;font-size:12.5px"
+            onclick="openStudentTagForm('${cls}',${s.id})">其他状态</button>
+        </div>
+        <div style="margin-top:8px;font-size:11.5px;color:#64748B;line-height:1.6">
+          请假会同步到「请假查看 / 学生考勤」；其他状态（迟到、早退等）会在座位卡显示「!」角标。
+        </div>
+      </div>`;
+  }
+
   showModal(`${s.name} 详细信息`, `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="form-group"><div class="form-label">学生姓名</div><div style="font-weight:600;font-size:15px">${s.name}</div></div>
@@ -11474,6 +11667,7 @@ function showStudentDetail(cls, id) {
     ${leaveDetails}
     ${markBoardingHtml}
     ${familyHtml}
+    ${statusActionHtml}
     ${disciplineBtnHtml}
   `, '<button class="toolbar-btn primary" onclick="hideModal()">关闭</button>', true);
 }
