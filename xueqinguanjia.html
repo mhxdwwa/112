@@ -2127,33 +2127,151 @@ async function xqSaveConfigToServer(configKey, configData) {
   return result;
 }
 
+/* ============================================================
+   ★ v3.14 各数据域（值日 / 纪律 / 报修 / 收集 / 课程表）统一保存
+   ------------------------------------------------------------
+   以前每个 saveXxx 都是「发一次请求，成败都不说」：
+     · 网络抖一下 → 云端还是旧数据，界面却像保存成功了；
+     · 用户切页面/刷新 → 又从云端拉回旧数据，改动就这么没了。
+   现在统一走这里：失败自动重试 3 次（0.9s / 2.6s），仍然失败就
+     · 记一个「未同步」标记（存在 localStorage，刷新后还在）；
+     · 明确弹错误提示，不再假装成功。
+   ============================================================ */
+const XQ_DOMAIN_LABEL = {
+  duty: '值日安排',
+  discipline: '纪律记录',
+  discipline_hidden: '纪律隐藏设置',
+  repair: '报修记录',
+  collection: '收集数据',
+  class_timetable: '班级课程表',
+  personal_timetable: '我的课程表'
+};
+
+function xqSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+function xqReadPendingDomains() {
+  try {
+    const v = JSON.parse(localStorage.getItem('xq_pending_domains') || '{}');
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  } catch (e) { return {}; }
+}
+
+function xqMarkDomainPending(key) {
+  const m = xqReadPendingDomains();
+  m[key] = Date.now();
+  try { localStorage.setItem('xq_pending_domains', JSON.stringify(m)); } catch (e) {}
+}
+
+function xqClearDomainPending(key) {
+  const m = xqReadPendingDomains();
+  if (m[key]) {
+    delete m[key];
+    try { localStorage.setItem('xq_pending_domains', JSON.stringify(m)); } catch (e) {}
+  }
+}
+
+function xqIsDomainPending(key) { return !!xqReadPendingDomains()[key]; }
+
+/* 统一保存：自动重试 + 失败标记 + 真实提示 */
+async function xqSaveDomain(configKey, data, opt) {
+  const o = opt || {};
+  const action = o.action || 'set_all';
+  const label = o.label || XQ_DOMAIN_LABEL[configKey] || '数据';
+  let last = null;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await xqSleep(attempt === 1 ? 900 : 2600);
+    try {
+      last = (action === 'set')
+        ? await xqApi('config', {
+            action: 'set', configKey: configKey, configData: data,
+            teacherName: (xqCurrentUser && xqCurrentUser.teacherName) || ''
+          })
+        : await xqApi('config', {
+            action: 'set_all', configs: { [configKey]: data },
+            teacherName: (xqCurrentUser && xqCurrentUser.teacherName) || ''
+          });
+    } catch (e) {
+      last = { ok: false, error: e && e.message ? e.message : String(e) };
+    }
+    if (last && last.ok) {
+      xqClearDomainPending(configKey);
+      return last;
+    }
+    console.warn('[XQ] 保存失败 ' + configKey + ' 第' + (attempt + 1) + '/3 次：', last && last.error);
+  }
+
+  xqMarkDomainPending(configKey);
+  if (o.silent !== true && typeof showToast === 'function') {
+    showToast(label + '同步失败：改动还在本机，联网后请再点一次保存', 'error');
+  }
+  return last || { ok: false, error: 'unknown' };
+}
+
 // 批量保存所有配置（仅管理员 吴胜闯 可操作）
 async function xqSaveAllConfigToServer() {
-  const configs = {
-    classes: SCHOOL.importedClasses || {},
-    teaching: {
+  /* ★ v3.14 空数据保护：
+     以前不管内存里有没有货都整批写回去。万一这次是「配置没加载成功」（断网、接口 500、
+     或本地缓存被清），SCHOOL / setupClasses 全是空的，一次保存就会把全校班级、授课、
+     权限、账号密码全部覆盖成空 —— 属于最不可逆的一类丢数据。
+     现在：核心结构（班级/授课/角色/setup*）为空时一律不写这几块，只写确实有内容的项。 */
+  const countOf = (v) => Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : 0);
+
+  const configs = {};
+  const skipped = [];
+
+  const classesCount = countOf(SCHOOL.importedClasses);
+  const teachingCount = countOf(SCHOOL.teacherClasses) + countOf(SCHOOL.headteacherClasses);
+  const setupTeachingCount = countOf(setupTeaching);
+  const setupClassesCount = countOf(setupClasses);
+
+  if (classesCount || setupClassesCount) {
+    configs.classes = SCHOOL.importedClasses || {};
+    configs.setupClasses = setupClasses || [];
+  } else {
+    skipped.push('classes', 'setupClasses');
+  }
+
+  if (teachingCount || setupTeachingCount) {
+    configs.teaching = {
       teacherClasses: SCHOOL.teacherClasses || {},
       headteacherClasses: SCHOOL.headteacherClasses || {}
-    },
-    roles: SCHOOL.importedUsers || {},
-    setupTeaching: setupTeaching || [],
-    setupClasses: setupClasses || [],
-    setupRoles: setupRoles || [],
-    credentials: xqCredentials || {},
-    classGradeMap: classGradeMap || {}
-  };
+    };
+    configs.setupTeaching = setupTeaching || [];
+  } else {
+    skipped.push('teaching', 'setupTeaching');
+  }
+
+  if (countOf(SCHOOL.importedUsers)) configs.roles = SCHOOL.importedUsers || {};
+  else skipped.push('roles');
+
+  if (countOf(setupRoles)) configs.setupRoles = setupRoles || [];
+  else skipped.push('setupRoles');
+
+  if (countOf(xqCredentials)) configs.credentials = xqCredentials || {};
+  else skipped.push('credentials');
+
+  // 班级-年级映射允许是空对象（删完班级时确实会空），照常写
+  configs.classGradeMap = classGradeMap || {};
+
+  if (skipped.length) {
+    console.warn('[XQ] 以下配置当前为空，已跳过写入（避免把云端覆盖成空）：', skipped.join(', '));
+  }
+  if (!Object.keys(configs).length) {
+    return { ok: false, error: 'nothing to save' };
+  }
   
   // 注意：不在此处保存学生数据（students_XXX）和座位数据（seating_XXX）
   // 这些数据由班主任/管理员通过 saveStudentsToStorage() 自动同步机制单独管理
   // 避免管理员保存设置时覆盖班主任刚添加的学生数据
   
   console.log('[XQ] Saving config to server:', {
-    classes: Object.keys(configs.classes).length,
-    teaching: Object.keys(configs.teaching.teacherClasses).length + ' teacher classes',
-    setupTeaching: configs.setupTeaching.length,
-    setupClasses: configs.setupClasses.length,
-    credentials: Object.keys(configs.credentials).length,
-    classGradeMap: Object.keys(configs.classGradeMap).length
+    classes: countOf(configs.classes),
+    teaching: countOf(configs.teaching && configs.teaching.teacherClasses) + ' teacher classes',
+    setupTeaching: countOf(configs.setupTeaching),
+    setupClasses: countOf(configs.setupClasses),
+    credentials: countOf(configs.credentials),
+    classGradeMap: countOf(configs.classGradeMap)
   });
   
   // 保存前留一份旧值（整批一起存成一份快照，内容没变则不会产生）
@@ -2170,8 +2288,7 @@ async function xqSaveAllConfigToServer() {
 }
 
 // 保存学生数据到服务器
-async function xqSaveStudentsToServer(className) {
-  if (!xqCurrentUser) return { ok: false, error: 'Not logged in' };
+async function xqSaveStudentsToServer(className) {  if (!xqCurrentUser) return { ok: false, error: 'Not logged in' };
   
   const students = STUDENTS[className] || [];
   
@@ -2938,8 +3055,66 @@ function saveStudentsToStorage() {
   scheduleAutoSaveToCloud();
 }
 
+/* ============================================================
+   ★ v3.14 「本机有改动没推上去」的统一保护
+   ------------------------------------------------------------
+   目标：任何一次云保存失败，都不能表现得像成功。
+     · 失败 → 保留脏标记（内存 + localStorage），界面显示「有未保存更改」；
+     · 自动重试（1s / 3s / 8s / 20s / 45s，最多 5 次）；
+     · 刷新页面或换设备回来，登录后自动把本机改动补推一次；
+     · 同步（拉云端）时，只要本机还有脏数据就跳过，绝不用云端旧数据盖掉本机。
+   ============================================================ */
+let xqAutoSaveRetry = 0;
+const XQ_AUTO_SAVE_MAX_RETRY = 5;
+const XQ_AUTO_SAVE_BACKOFF = [1000, 3000, 8000, 20000, 45000];
+
+function xqKeepLocalNewer() {
+  studentsDataChanged = true;
+  try { localStorage.setItem('xq_local_newer', 'true'); } catch (e) {}
+  try { updateSaveToCloudButton(); } catch (e) {}
+}
+
+function xqClearLocalNewer() {
+  studentsDataChanged = false;
+  xqAutoSaveRetry = 0;
+  try { localStorage.removeItem('xq_local_newer'); } catch (e) {}
+  try { updateSaveToCloudButton(); } catch (e) {}
+}
+
+/* 登录完成（或恢复到会话）后调用：把上次没推成功的改动补推上去 */
+async function xqFlushPendingCloudSaves() {
+  if (!xqCurrentUser) return;
+  let pending = false;
+  try { pending = localStorage.getItem('xq_local_newer') === 'true'; } catch (e) {}
+  if (!pending) return;
+  if (typeof deletedClasses !== 'undefined' && Array.isArray(deletedClasses) && deletedClasses.length) pending = true;
+  if (!pending) return;
+  console.log('[XQ] 本机有未同步的改动，登录后自动补推一次');
+  studentsDataChanged = true;
+  xqAutoSaveRetry = 0;
+  scheduleAutoSaveToCloud(600);
+}
+
+/* ★ v3.14：改完学生数据后统一走这里 —— 本地缓存 + 脏标记 + 立刻推一趟云端。
+   以前只有「座位表点名字」那条路会立刻推，请假登记、销假、编辑原因、批量标记、排座位
+   都只靠 2 秒防抖：改完马上切页面/关窗口/断网，云端就还是旧的，换台设备看就是「没改成功」。
+   现在全部走同一条路；推失败也保留脏标记，登录后会自动补推。 */
+function xqCommitStudentChange(cls) {
+  saveStudentsToStorage();
+  if (!xqCurrentUser || !cls) return;
+  try {
+    Promise.resolve(xqSaveStudentsToServer(cls)).then(function (r) {
+      if (r && r.ok === false) {
+        console.warn('[XQ] 立即上推失败，保留本机改动等待重试:', cls, r.error);
+      }
+    }).catch(function () {});
+  } catch (e) {
+    console.warn('[XQ] 立即上推异常:', e);
+  }
+}
+
 // 安排自动保存到云端（防抖）
-function scheduleAutoSaveToCloud() {
+function scheduleAutoSaveToCloud(delayOverride) {
   // 清除之前的计时器
   if (autoSaveCloudTimer) {
     clearTimeout(autoSaveCloudTimer);
@@ -3039,25 +3214,36 @@ function scheduleAutoSaveToCloud() {
       
       // 只有在没有失败的情况下才清除更改标志
       if (failCount === 0) {
-        studentsDataChanged = false;
-        // 清除持久化脏标记（本地数据已成功同步到云端）
-        localStorage.removeItem('xq_local_newer');
-        updateSaveToCloudButton();
+        xqClearLocalNewer();
         console.log(`[XQ] Auto-save completed: ${successCount} classes saved successfully`);
         console.log('[XQ] ✓ 数据已成功同步到云端');
       } else {
-        // 有失败，保持更改标志，显示警告
-        updateSaveToCloudButton();
+        // 有失败：保留脏标记 + 自动退避重试（不能表现成已保存）
+        xqKeepLocalNewer();
         console.warn(`[XQ] Auto-save partially failed: ${successCount} saved, ${failCount} failed`);
-        showToast(`云端同步部分失败（${failCount}个班级），请手动点击"保存到云端"重试`, 'warning');
+        xqScheduleAutoSaveRetry();
       }
     } catch (e) {
       console.error('[XQ] Auto-save to cloud failed:', e);
-      // 保存失败，保持更改标志
-      updateSaveToCloudButton();
-      showToast('云端同步失败，请检查网络连接或手动保存', 'error');
+      // 保存失败，保持更改标志并重试
+      xqKeepLocalNewer();
+      xqScheduleAutoSaveRetry();
     }
-  }, AUTO_SAVE_CLOUD_DELAY);
+  }, (typeof delayOverride === 'number' && delayOverride > 0) ? delayOverride : AUTO_SAVE_CLOUD_DELAY);
+}
+
+/* 失败后退避重试：最多 5 次；仍然失败才提示用户手动保存。
+   重试期间不会再弹一次「已同步」的假成功提示。 */
+function xqScheduleAutoSaveRetry() {
+  if (!studentsDataChanged) return;
+  if (xqAutoSaveRetry >= XQ_AUTO_SAVE_MAX_RETRY) {
+    showToast('云端同步失败：改动已安全保存在本机，联网后会自动重试（也可手动点「保存到云端」）', 'error');
+    return;
+  }
+  const wait = XQ_AUTO_SAVE_BACKOFF[Math.min(xqAutoSaveRetry, XQ_AUTO_SAVE_BACKOFF.length - 1)];
+  xqAutoSaveRetry++;
+  console.warn('[XQ] 云保存失败，' + Math.round(wait / 1000) + 's 后第 ' + xqAutoSaveRetry + ' 次重试');
+  scheduleAutoSaveToCloud(wait);
 }
 
 // ===== 按需同步机制（只在有变化或切换页面时同步，减少流量消耗）=====
@@ -3114,6 +3300,7 @@ async function syncFromCloud() {
     }
     
     let updated = false;
+    let needsPush = false;   // 云端比本机还旧（本机更全）时，改成把本机推上去，而不是覆盖本机
     
     // 同步各班学生数据
     for (const [key, value] of Object.entries(result.config)) {
@@ -3149,6 +3336,15 @@ async function syncFromCloud() {
           }
           
           if (hasDiff) {
+            /* ★ v3.14：本机名单人数比云端多，说明本机有还没推上去的新增学生。
+               直接拿云端覆盖会把这些人弄没（就是“改了、刷新就回滚”的另一条路径）。
+               这种情况保留本机数据，改为反向上推。 */
+            if (localStudents.length > serverStudents.length) {
+              console.log('[XQ] Sync: 本机名单比云端多',
+                          localStudents.length - serverStudents.length, '人 → 保留本机并上推');
+              needsPush = true;
+              continue;
+            }
             console.log('[XQ] Sync: updating students for class', className, '(content differs)');
             // 迁移：为云端数据补充 g 字段
             serverStudents.forEach(s => syncStudentGender(s));
@@ -3166,14 +3362,20 @@ async function syncFromCloud() {
           const serverCadres = value.data;
           const localCadres = CLASS_CADRES[className] || {};
           
-          // 比较班干部数量，判断是否有更新
-          const serverCount = Object.keys(serverCadres).length;
-          const localCount = Object.keys(localCadres).length;
-          
-          if (serverCount !== localCount) {
-            console.log('[XQ] Sync: updating cadres for class', className);
-            CLASS_CADRES[className] = serverCadres;
-            updated = true;
+          /* ★ v3.14：改成内容比较（原来只比职位数，同一职位的老师换了人它看不出来）。
+             本机填写得更多 → 保留本机并上推，不覆盖。 */
+          const sameCadres = JSON.stringify(serverCadres) === JSON.stringify(localCadres);
+          if (!sameCadres) {
+            const serverFilled = Object.values(serverCadres).filter(v => v && String(v).trim()).length;
+            const localFilled = Object.values(localCadres).filter(v => v && String(v).trim()).length;
+            if (localFilled > serverFilled) {
+              console.log('[XQ] Sync: 本机班干部比云端全 → 保留本机并上推', className);
+              needsPush = true;
+            } else {
+              console.log('[XQ] Sync: updating cadres for class', className);
+              CLASS_CADRES[className] = serverCadres;
+              updated = true;
+            }
           }
         }
       }
@@ -3185,19 +3387,26 @@ async function syncFromCloud() {
           const serverLayout = value.data.layout;
           const localLayout = seatLayout[className] || [];
           
-          // 比较布局长度，判断是否有更新
-          if (serverLayout.length !== localLayout.length) {
-            console.log('[XQ] Sync: updating seating for class', className);
-            seatLayout[className] = serverLayout;
-            if (value.data.cols || value.data.rows) {
-              seatConfig[className] = {
-                cols: value.data.cols || 8,
-                rows: value.data.rows || 7,
-                colGaps: value.data.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
-                colGroups: value.data.colGroups || []
-              };
+          /* ★ v3.14：改成整份比较（同长度换人也要能同步），本机座位更多则保留本机。 */
+          const sameSeating = JSON.stringify(serverLayout) === JSON.stringify(localLayout)
+            && (value.data.cols || 8) === ((seatConfig[className] || {}).cols || 8);
+          if (!sameSeating) {
+            if (localLayout.length > serverLayout.length) {
+              console.log('[XQ] Sync: 本机座位表比云端大 → 保留本机并上推', className);
+              needsPush = true;
+            } else {
+              console.log('[XQ] Sync: updating seating for class', className);
+              seatLayout[className] = serverLayout;
+              if (value.data.cols || value.data.rows) {
+                seatConfig[className] = {
+                  cols: value.data.cols || 8,
+                  rows: value.data.rows || 7,
+                  colGaps: value.data.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+                  colGroups: value.data.colGroups || []
+                };
+              }
+              updated = true;
             }
-            updated = true;
           }
         }
       }
@@ -3210,6 +3419,13 @@ async function syncFromCloud() {
       } catch (e) {}
       
       console.log('[XQ] Sync completed: data updated from cloud');
+    }
+
+    if (needsPush) {
+      // 云端比本机旧：把本机这份当成待同步改动，稍后自动推上去
+      console.log('[XQ] Sync: 检测到本机数据更全，安排一次上推');
+      xqKeepLocalNewer();
+      scheduleAutoSaveToCloud(1200);
     }
   } catch (e) {
     console.warn('[XQ] Sync failed:', e);
@@ -3241,128 +3457,12 @@ async function manualSyncFromCloud() {
   }
 }
 
-function stopPeriodicSync() {
-  // 按需同步模式，无需停止定时器
-  console.log('[XQ] Sync stopped');
-}
+/* ★ v3.14：这里原本还有一套 stopPeriodicSync / syncOnPageChange / periodicSyncFromCloud，
+   是早期的「弱版本」按需同步。因为同名函数后定义覆盖前定义，实际页面切换跑的就是它：
+     · 只比人数和 maxId，别的设备改的「请假 / 销假 / 备注」它永远看不出来（等于不同步）；
+     · 不看 xq_local_newer 持久化脏标记，本机刚加的学生可能被云端旧名单整体盖掉。
+   现已整体删除，统一由上面那份「字段级比较 + 脏标记保护 + 本机更全时反向上推」的 syncFromCloud() 负责。 */
 
-// 按需同步：在切换页面时调用，确保数据是最新的
-async function syncOnPageChange(pageId) {
-  // 如果距离上次同步不到30秒，跳过
-  const now = Date.now();
-  if (now - lastSyncTime < 30000) return;
-  
-  // 如果正在同步或有未保存的更改，跳过
-  if (periodicSyncRunning || xqSyncInProgress || studentsDataChanged) return;
-  
-  // 只在关键页面触发同步
-  const syncPages = ['roster', 'seating', 'class-seating', 'class-cadres', 'leave-register', 'all-classes-view'];
-  if (!syncPages.includes(pageId)) return;
-  
-  await periodicSyncFromCloud();
-}
-
-async function periodicSyncFromCloud() {
-  // 防止重入
-  if (periodicSyncRunning || xqSyncInProgress) return;
-  // 未登录不同步
-  if (!xqCurrentUser) return;
-  // 如果有未保存的本地更改，暂不同步（避免覆盖本地数据）
-  if (studentsDataChanged) return;
-  
-  periodicSyncRunning = true;
-  try {
-    const result = await xqApi('config', { action: 'get' });
-    if (!result.ok || !result.config) return;
-    
-    let updated = false;
-    
-    // 同步各班学生数据
-    for (const [key, value] of Object.entries(result.config)) {
-      if (key.startsWith('students_')) {
-        const className = key.replace('students_', '');
-        if (value.data && value.data.students && Array.isArray(value.data.students)) {
-          const serverStudents = value.data.students;
-          const localStudents = STUDENTS[className] || [];
-          
-          // 比较学生数量或最后一个学生的id，判断是否有更新
-          const serverCount = serverStudents.length;
-          const localCount = localStudents.length;
-          const serverMaxId = serverCount > 0 ? Math.max(...serverStudents.map(s => s.id)) : 0;
-          const localMaxId = localCount > 0 ? Math.max(...localStudents.map(s => s.id)) : 0;
-          
-          if (serverCount !== localCount || serverMaxId !== localMaxId) {
-            console.log('[XQ] Periodic sync: updating students for class', className, 'local:', localCount, 'server:', serverCount);
-            STUDENTS[className] = serverStudents;
-            if (!CLASS_LIST.includes(className)) CLASS_LIST.push(className);
-            updated = true;
-          }
-        }
-      }
-      
-      // 同步班干部数据
-      if (key.startsWith('cadres_')) {
-        const className = key.replace('cadres_', '');
-        if (value.data) {
-          const serverCadres = value.data;
-          const localCadres = CLASS_CADRES[className] || {};
-          
-          // 比较班干部数量，判断是否有更新
-          const serverCount = Object.keys(serverCadres).length;
-          const localCount = Object.keys(localCadres).length;
-          
-          if (serverCount !== localCount) {
-            console.log('[XQ] Periodic sync: updating cadres for class', className);
-            CLASS_CADRES[className] = serverCadres;
-            updated = true;
-          }
-        }
-      }
-      
-      // 同步座位布局数据
-      if (key.startsWith('seating_')) {
-        const className = key.replace('seating_', '');
-        if (value.data && value.data.layout) {
-          const serverLayout = value.data.layout;
-          const localLayout = seatLayout[className] || [];
-          
-          // 比较布局长度，判断是否有更新
-          if (serverLayout.length !== localLayout.length) {
-            console.log('[XQ] Periodic sync: updating seating for class', className);
-            seatLayout[className] = serverLayout;
-            if (value.data.cols || value.data.rows) {
-              seatConfig[className] = {
-                cols: value.data.cols || 8,
-                rows: value.data.rows || 7,
-                colGaps: value.data.colGaps || [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
-                colGroups: value.data.colGroups || []
-              };
-            }
-            updated = true;
-          }
-        }
-      }
-    }
-    
-    if (updated) {
-      // 保存到 localStorage 缓存（不触发云同步）
-      try {
-        localStorage.setItem('xq_students', JSON.stringify(STUDENTS));
-      } catch (e) {}
-      
-      // 如果当前正在查看学生名单、座位表或班干部，刷新页面
-      if (typeof currentPage !== 'undefined' && (currentPage === 'roster' || currentPage === 'seating' || currentPage === 'class-seating' || currentPage === 'class-cadres')) {
-        navigate(currentPage);
-      }
-      
-      console.log('[XQ] Periodic sync completed: data updated');
-    }
-  } catch (e) {
-    console.warn('[XQ] Periodic sync failed:', e);
-  } finally {
-    periodicSyncRunning = false;
-  }
-}
 
 // 加载已删除班级列表
 function loadDeletedClasses() {
@@ -3522,10 +3622,15 @@ async function saveStudentsToCloud() {
       localStorage.removeItem('xq_deleted_classes');
     }
     
-    studentsDataChanged = false;
-    // 清除持久化脏标记
+    /* ★ v3.14：只有「一个都没失败」才允许清掉脏标记。
+       旧实现不管失败与否都先把 studentsDataChanged 置 false，界面立刻显示「已保存／已同步」，
+       可云端其实还是旧数据，之后再也不会自动重试 —— 换台电脑/清缓存看就是「改了没生效」。 */
     if (failCount === 0) {
+      studentsDataChanged = false;
       localStorage.removeItem('xq_local_newer');
+    } else {
+      studentsDataChanged = true;       // 保持脏状态，自动保存会继续重试
+      if (typeof xqKeepLocalNewer === 'function') xqKeepLocalNewer();
     }
     updateSaveToCloudButton();
     
@@ -3701,12 +3806,22 @@ function loadClassCadres() {
 }
 
 // 保存班干部数据到本地
-function saveClassCadres() {
+function saveClassCadres(cls) {
   try {
     localStorage.setItem('xq_class_cadres', JSON.stringify(CLASS_CADRES));
     studentsDataChanged = true;
     console.log('[XQ] Class cadres saved locally');
   } catch (e) { console.warn('[XQ] Failed to save class cadres:', e); }
+
+  /* ★ v3.14：以前班干部只写本机，刷新时又会被云端旧数据盖回去（就是「改了刷新就没」）。
+     现在填完/改完立刻推一趟云端；失败会在控制台留痕，页面上点「保存」还能再推一次。 */
+  if (cls && CLASS_CADRES[cls] && typeof xqCurrentUser !== 'undefined' && xqCurrentUser) {
+    try {
+      Promise.resolve(saveClassCadresToCloud(cls)).then(function (r) {
+        if (r && r.ok === false) console.warn('[XQ] 班干部上推失败，已保留本机数据:', cls, r.error);
+      }).catch(function () {});
+    } catch (e) { console.warn('[XQ] 班干部上推异常:', e); }
+  }
 }
 
 // 保存班干部数据到云端
@@ -3726,7 +3841,7 @@ async function saveClassCadresToCloud(cls) {
 loadClassCadres();
 
 // App version for cache invalidation
-const APP_VERSION = '3.13'; // v3.13: 班干部云保存失败不再假报成功，提示改为真实结果
+const APP_VERSION = '3.14'; // v3.14: 全面排查「改了刷新就没」——课表版本升级不再清空课程；统一同步（删除弱版本）；保存失败自动重试并真实提示；本机更全时反向上推；班干部/请假/销假/排座位改完立刻上推
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -4387,6 +4502,11 @@ function restoreSession() {
     refreshCurrentUserClass();
     buildSidebar(); // 重建侧边栏（管理员角色可能已更新）
     navigate(getDefaultPage());
+
+    /* ★ v3.14：恢复会话这条路径以前不会补推「上次没同步成功」的改动
+       （它没走 initAppAfterLogin），所以刷新后本地虽然没丢，云端一直是旧的。
+       这里补一次。 */
+    setTimeout(function () { try { xqFlushPendingCloudSaves(); } catch (e) {} }, 400);
     
     return true;
   } catch (e) {
@@ -4440,6 +4560,10 @@ function initAppAfterLogin() {
   
   // 启动定期云同步
   startPeriodicSync();
+
+  /* ★ v3.14：登录完成（含恢复会话）后，把上次没推上去的改动补推一次。
+     以前这种情况只能靠用户自己想起来点「保存到云端」，一刷新就当没改过。 */
+  setTimeout(() => { xqFlushPendingCloudSaves(); }, 300);
   
   // 预加载收集数据（用于侧边栏徽章）
   loadCollectionData(true).then(() => {
@@ -10831,7 +10955,7 @@ function saveLeaveReason(cls, id) {
   s.leaveReason = document.getElementById('editReasonType').value;
   s.leaveNote = document.getElementById('editReasonDetail').value.trim();
   s.leaveDays = parseFloat(document.getElementById('editReasonDays').value) || s.leaveDays;
-  saveStudentsToStorage();
+  xqCommitStudentChange(cls);
   hideModal();
   showToast('请假原因已更新');
   navigate('leave-mgmt');
@@ -10851,7 +10975,7 @@ function confirmCancelLeaveInMgmt(cls, id) {
     s.status = 'present';
     s.leaveReason = '';
     s.leaveDays = 0;
-    saveStudentsToStorage();
+    xqCommitStudentChange(cls);
   }
   hideModal();
   showToast(`${s.name} 已销假`);
@@ -10878,7 +11002,7 @@ function confirmRejectLeave(cls, id) {
     s.status = 'present';
     s.leaveReason = '';
     s.leaveDays = 0;
-    saveStudentsToStorage();
+    xqCommitStudentChange(cls);
   }
   hideModal();
   showToast('已驳回请假申请');
@@ -11271,7 +11395,7 @@ function updateCadre(cls, position, studentName) {
   } else {
     delete CLASS_CADRES[cls][position];
   }
-  saveClassCadres();
+  saveClassCadres(cls);
 }
 
 function addCadrePosition() {
@@ -11299,7 +11423,7 @@ function confirmAddCadrePosition() {
     return;
   }
   CLASS_CADRES[cls][pos] = '';
-  saveClassCadres();
+  saveClassCadres(cls);
   hideModal();
   navigate('class-cadres');
 }
@@ -11308,7 +11432,7 @@ function removeCadrePosition(position) {
   const cls = getHeadteacherClass();
   if (CLASS_CADRES[cls] && CLASS_CADRES[cls][position]) {
     delete CLASS_CADRES[cls][position];
-    saveClassCadres();
+    saveClassCadres(cls);
     navigate('class-cadres');
   }
 }
@@ -11435,14 +11559,7 @@ function applyStudentStatus(cls, id, patch, toastText) {
   Object.assign(s, patch);
   s.statusUpdatedAt = new Date().toISOString();
   s.statusUpdatedBy = (xqCurrentUser && xqCurrentUser.teacherName) || '';
-  saveStudentsToStorage();          // 本地缓存 + 脏标记（内部还会排一次防抖云同步）
-  /* ★ 再立即推一次云端：不等 2 秒防抖，避免“刚标记完就刷新/关页面”只留在本机。
-     失败也不影响本地（脏标记仍在，下次自动重试或手动保存）。 */
-  try {
-    if (typeof xqSaveStudentsToServer === 'function') {
-      Promise.resolve(xqSaveStudentsToServer(cls)).catch(function(){});
-    }
-  } catch (e) {}
+  xqCommitStudentChange(cls);   // 本地缓存 + 脏标记 + 立即上推（失败保留脏标记自动重试）
   hideModal();
   refreshAfterStudentStatus();
   showToast(toastText || '状态已更新', 'success');
@@ -12688,7 +12805,7 @@ function saveLeaveEdit(cls, id) {
   s.leaveNote = document.getElementById('editLeaveNote').value.trim();
   s.leaveDays = parseFloat(document.getElementById('editLeaveDays').value) || s.leaveDays;
   s.status = document.getElementById('editLeaveStatus').value;
-  saveStudentsToStorage();
+  xqCommitStudentChange(cls);
   hideModal();
   showToast('请假记录已更新');
   navigate('leave-register');
@@ -12708,7 +12825,7 @@ function confirmCancelLeave(cls, id) {
     s.status = 'present';
     s.leaveReason = '';
     s.leaveDays = 0;
-    saveStudentsToStorage();
+    xqCommitStudentChange(cls);
   }
   hideModal();
   showToast(`${s.name} 已销假`);
@@ -12980,7 +13097,7 @@ function doAutoArrange(method) {
   for (let i = 0; i < emptyCount; i++) seatLayout[cls].push(null);
   for (let i = 0; i < studentCount; i++) seatLayout[cls].push(sts[i].id);
   
-  saveStudentsToStorage();
+  xqCommitStudentChange(cls);
   hideModal();
   showToast('座位已重新排列');
   navigate('class-seating');
@@ -13040,7 +13157,7 @@ function onSeatDrop(e, targetSlotIdx) {
     }
   }
   
-  saveStudentsToStorage();
+  xqCommitStudentChange(cls);
   dragSourceSlotIdx = null;
   navigate('class-seating');
 }
@@ -13592,7 +13709,7 @@ function saveBatchMark() {
     }
   });
   markSelectedStudents.clear();
-  saveStudentsToStorage();
+  xqCommitStudentChange(cls);
   hideModal();
   showToast(`已为 ${count} 名学生添加标记`);
 }
@@ -13612,7 +13729,7 @@ function clearSelectedMarks() {
     }
   });
   markSelectedStudents.clear();
-  saveStudentsToStorage();
+  xqCommitStudentChange(cls);
   hideModal();
   showToast(`已清除 ${count} 名学生的标记`);
 }
@@ -15698,7 +15815,18 @@ async function loadTimetableData() {
   if (result.ok && result.config) {
     // 加载班级课程表
     if (result.config.class_timetable) {
-      let rawCT = result.config.class_timetable.data || {};
+      /* ★ v3.14：上次课表没保存成功时，优先用本机缓存，避免被云端旧课表覆盖 */
+      let rawCT = null;
+      if (xqIsDomainPending('class_timetable')) {
+        try {
+          const cachedCT = localStorage.getItem('xq_class_timetable_cache');
+          if (cachedCT) {
+            rawCT = JSON.parse(cachedCT);
+            console.warn('[ClassTimetable] 本机课表还没同步到云端，先使用本机缓存');
+          }
+        } catch (e) { rawCT = null; }
+      }
+      if (!rawCT) rawCT = result.config.class_timetable.data || {};
       // 防御性检查：如果旧数据被双重包装，则解包
       if (rawCT && typeof rawCT === 'object' && !Array.isArray(rawCT) && rawCT.data && typeof rawCT.data === 'object') {
         // 检查是否是双重包装：如果 rawCT 只有 data 属性且 data 是对象
@@ -15712,16 +15840,16 @@ async function loadTimetableData() {
         rawCT = {};
       }
       classTimetableData = rawCT;
-      // 检查模板版本，如果版本不同则重置所有班级数据
+      /* ★ v3.14 修复「课表刷新后没了」：
+         旧实现在模板版本号变化时，会把「所有班级、所有节次」的课程单元格全部 delete 掉，
+         再自动保存回云端 —— 老师排好的课只要版本号一升级就彻底清空，属于最严重的一类丢数据。
+         现在版本号只用于记录，永远不删除任何已有课程；
+         只有「该班完全没有课」时才由渲染层补默认节次名，绝不覆盖已排的内容。 */
       if (classTimetableData._templateVersion !== DEFAULT_TIMETABLE_VERSION) {
-        Object.keys(classTimetableData).forEach((cls) => {
-          if (cls.charAt(0) === '_') return;
-          Object.keys(classTimetableData[cls]).forEach((key) => {
-            if (/^\d+-\d+$/.test(key)) delete classTimetableData[cls][key];
-          });
-        });
+        const prevVer = classTimetableData._templateVersion;
         classTimetableData._templateVersion = DEFAULT_TIMETABLE_VERSION;
-        saveClassTimetableData();
+        console.log('[ClassTimetable] 模板版本', prevVer === undefined ? '(无)' : prevVer,
+                    '->', DEFAULT_TIMETABLE_VERSION, '：保留全部已有课程，不做任何清空');
       }
       console.log('[ClassTimetable] Loaded data for', Object.keys(classTimetableData).length, 'classes');
       // 加载节次名称
@@ -15808,7 +15936,15 @@ async function loadTimetableData() {
     }
     // 加载个人课程表
     if (result.config.personal_timetable) {
-      let rawPT = result.config.personal_timetable.data || {};
+      /* ★ v3.14：同上，未同步成功时用本机缓存 */
+      let rawPT = null;
+      if (xqIsDomainPending('personal_timetable')) {
+        try {
+          const cachedPT = localStorage.getItem('xq_personal_timetable_cache');
+          if (cachedPT) rawPT = JSON.parse(cachedPT);
+        } catch (e) { rawPT = null; }
+      }
+      if (!rawPT) rawPT = result.config.personal_timetable.data || {};
       // 防御性检查：如果旧数据被双重包装，则解包
       if (rawPT && typeof rawPT === 'object' && !Array.isArray(rawPT) && rawPT.data && typeof rawPT.data === 'object') {
         const keys = Object.keys(rawPT);
@@ -15837,26 +15973,19 @@ async function loadTimetableData() {
 async function saveClassTimetableData() {
   // 保存作息时间表
   classTimetableData._schedule = timetableSchedule;
-  // 使用与座位表相同的保存模式（set_all）
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'class_timetable': classTimetableData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  // 统一保存：失败自动重试 3 次，仍失败会明确提示（不再假装成功）
+  const result = await xqSaveDomain('class_timetable', classTimetableData, { label: '班级课程表' });
+  if (result && result.ok) {
+    try { localStorage.setItem('xq_class_timetable_cache', JSON.stringify(classTimetableData)); } catch (e) {}
+  }
   return result;
 }
 
 async function savePersonalTimetableData() {
-  // 使用与座位表相同的保存模式（set_all）
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'personal_timetable': personalTimetableData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  const result = await xqSaveDomain('personal_timetable', personalTimetableData, { label: '我的课程表' });
+  if (result && result.ok) {
+    try { localStorage.setItem('xq_personal_timetable_cache', JSON.stringify(personalTimetableData)); } catch (e) {}
+  }
   return result;
 }
 
@@ -16874,6 +17003,20 @@ let disciplineCurrentClass = '';
 let disciplineCurrentDate = '';
 
 async function loadDisciplineData() {
+  /* ★ v3.14：本机纪律记录还没同步成功时，别用云端旧数据覆盖本机改动 */
+  if (xqIsDomainPending('discipline')) {
+    try {
+      const cached = localStorage.getItem('xq_discipline_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          disciplineData = parsed;
+          console.warn('[Discipline] 本机记录还没同步到云端，先使用本机缓存');
+          return;
+        }
+      }
+    } catch (e) {}
+  }
   const result = await xqApi('config', { action: 'get' });
   if (result.ok && result.config) {
     if (result.config.discipline) {
@@ -16896,6 +17039,7 @@ async function loadDisciplineData() {
         }
       });
       disciplineData = raw;
+      try { localStorage.setItem('xq_discipline_cache', JSON.stringify(disciplineData)); } catch (e) {}
       console.log('[Discipline] Loaded', disciplineData.length, 'records, IDs:', disciplineData.map(r => r.id));
       // 如果修复了缺失的 ID，立即保存回后端
       if (needsSave) {
@@ -16926,13 +17070,10 @@ async function saveDisciplineData() {
   });
   // 使用与座位表相同的保存模式（set_all）
   console.log('[Discipline] Saving', disciplineData.length, 'records, IDs:', disciplineData.map(r => r.id));
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'discipline': disciplineData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  const result = await xqSaveDomain('discipline', disciplineData, { label: '纪律记录' });
+  if (result && result.ok) {
+    try { localStorage.setItem('xq_discipline_cache', JSON.stringify(disciplineData)); } catch (e) {}
+  }
   console.log('[Discipline] Save result:', result);
   return result;
 }
@@ -16940,13 +17081,7 @@ async function saveDisciplineData() {
 // 保存科任老师的隐藏记录（拉黑列表）
 async function saveDisciplineHidden() {
   console.log('[Discipline] Saving hidden records:', disciplineHidden);
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'discipline_hidden': disciplineHidden
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  const result = await xqSaveDomain('discipline_hidden', disciplineHidden, { label: '纪律隐藏设置' });
   console.log('[Discipline] Hidden save result:', result);
   return result;
 }
@@ -17838,6 +17973,21 @@ let dutyGroupExpanded = {};  // track which groups are expanded
 let dutyDragGroupIndex = null;
 
 async function loadDutyData() {
+  /* ★ v3.14：上一次保存没成功（xq_pending_domains 里有 duty）时，
+     不能拿云端旧数据盖掉本机刚改的值日表 —— 直接用本机缓存。 */
+  if (xqIsDomainPending('duty')) {
+    try {
+      const cached = localStorage.getItem('xq_duty_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          dutyData = parsed;
+          console.warn('[Duty] 本机值日还没同步到云端，先使用本机缓存');
+          return;
+        }
+      }
+    } catch (e) {}
+  }
   const result = await xqApi('config', { action: 'get' });
   if (result.ok && result.config && result.config.duty) {
     let rawDuty = result.config.duty.data || {};
@@ -17853,19 +18003,17 @@ async function loadDutyData() {
       rawDuty = {};
     }
     dutyData = rawDuty;
+    try { localStorage.setItem('xq_duty_cache', JSON.stringify(dutyData)); localStorage.setItem('xq_duty_cache_time', String(Date.now())); } catch (e) {}
     console.log('[Duty] Loaded data for', Object.keys(dutyData).length, 'classes');
   }
 }
 
 async function saveDutyData() {
-  // 使用与座位表相同的保存模式（set_all）
-  const result = await xqApi('config', {
-    action: 'set_all',
-    configs: {
-      'duty': dutyData
-    },
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  const result = await xqSaveDomain('duty', dutyData, { label: '值日安排' });
+  // 本地留一份：万一云端没写成功，刷新后还能拿回来（配合 loadDutyData 的未同步判断）
+  if (result && result.ok) {
+    try { localStorage.setItem('xq_duty_cache', JSON.stringify(dutyData)); localStorage.setItem('xq_duty_cache_time', String(Date.now())); } catch (e) {}
+  }
   return result;
 }
 
@@ -18715,16 +18863,11 @@ async function loadRepairData(forceRefresh) {
 }
 
 async function saveRepairData() {
-  // 使用 set 而不是 set_all，只保存 repair 数据，减少传输量
-  const result = await xqApi('config', {
-    action: 'set',
-    configKey: 'repair',
-    configData: repairData,
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  // 使用 set 而不是 set_all，只保存 repair 数据，减少传输量；失败会自动重试并真实报错
+  const result = await xqSaveDomain('repair', repairData, { action: 'set', label: '报修记录' });
   
   // 保存成功后，更新本地缓存
-  if (result.ok) {
+  if (result && result.ok) {
     try {
       localStorage.setItem('xq_repair_data', JSON.stringify(repairData));
       localStorage.setItem('xq_repair_data_time', Date.now().toString());
@@ -19279,14 +19422,9 @@ async function loadCollectionData(forceRefresh = false) {
 
 // 保存收集数据
 async function saveCollectionData() {
-  const result = await xqApi('config', {
-    action: 'set',
-    configKey: 'collection',
-    configData: collectionData,
-    teacherName: xqCurrentUser?.teacherName || ''
-  });
+  const result = await xqSaveDomain('collection', collectionData, { action: 'set', label: '收集数据' });
   
-  if (result.ok) {
+  if (result && result.ok) {
     try {
       localStorage.setItem('xq_collection_data', JSON.stringify(collectionData));
       localStorage.setItem('xq_collection_data_time', Date.now().toString());
