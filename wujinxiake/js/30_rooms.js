@@ -35,6 +35,261 @@ function rndAt(i, salt){
   return x - Math.floor(x);
 }
 
+/* ============================================================
+   ★ 精灵缓存（v54）：把「每帧都要重画一遍的多笔画/多渐变图形」
+     预渲染成一张小位图，之后只 drawImage。
+   ------------------------------------------------------------
+   为什么：教室低端机基本都是软件光栅（无 GPU 加速），
+   每帧几百次 stroke + 每帧新建 radialGradient 是最贵的两件事。
+   缓存后：远景道具 466 次 stroke/帧 → 约 15 次 drawImage；
+   毒雾/火花/金丹等特效同理。画面观感不变。
+   ============================================================ */
+const _sprCache = new Map();
+let _sprCount = 0;
+
+/* 取（或首次渲染）一张精灵。key 相同即复用 */
+function _sprGet(key, w, h, draw){
+  let cv = _sprCache.get(key);
+  if(cv) return cv;
+  w = Math.max(1, Math.ceil(w)); h = Math.max(1, Math.ceil(h));
+  cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  try{ draw(c, w, h); }catch(e){ console.warn('[spr]', key, e); }
+  _sprCache.set(key, cv);
+  _sprCount++;
+  /* 上限保护：极端情况下（换了很多房间）不至于吃满内存 */
+  if(_sprCount > 260 && _sprCache.size > 260){
+    const it = _sprCache.keys();
+    for(let i = 0; i < 60; i++){ const k = it.next().value; if(k !== key) _sprCache.delete(k); }
+  }
+  return cv;
+}
+
+/* 柔和光斑：中心白 → 颜色 → 透明。用 drawImage 代替 createRadialGradient */
+function _sprGlow(color){
+  const key = 'glow|' + color;
+  return _sprGet(key, 128, 128, (c, w, h) => {
+    const g = c.createRadialGradient(w/2, h/2, 1, w/2, h/2, w/2);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.32, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(w/2, h/2, w/2, 0, TAU); c.fill();
+  });
+}
+
+/* 烟雾团：几个不规则圆叠出来的云团（替代每帧 7 个径向渐变） */
+function _sprPuff(color){
+  const key = 'puff|' + color;
+  return _sprGet(key, 160, 160, (c, w, h) => {
+    const blobs = [[0.5,0.52,0.42],[0.32,0.44,0.28],[0.70,0.46,0.26],[0.46,0.70,0.24],[0.62,0.66,0.20]];
+    for(const b of blobs){
+      const cx = b[0]*w, cy = b[1]*h, r = b[2]*w;
+      const g = c.createRadialGradient(cx, cy, 1, cx, cy, r);
+      g.addColorStop(0, hexA(color, 0.46));
+      g.addColorStop(0.55, hexA(color, 0.18));
+      g.addColorStop(1, hexA(color, 0));
+      c.fillStyle = g;
+      c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
+    }
+  });
+}
+
+/* 火花拖尾：一段从白到色的射线，旋转后 drawImage */
+function _sprStreak(color){
+  const key = 'streak|' + color;
+  return _sprGet(key, 64, 16, (c, w, h) => {
+    const g = c.createLinearGradient(0, h/2, w, h/2);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.35, hexA(color, 0.85));
+    g.addColorStop(1, hexA(color, 0));
+    c.fillStyle = g;
+    c.fillRect(0, h*0.30, w, h*0.40);
+  });
+}
+
+/* 毒蛛：八条腿 + 发光毒体，整体一张精灵（原来每只每帧 8 次 stroke + 1 个渐变） */
+function _sprSpider(color, color2){
+  const key = 'spider|' + color + '|' + color2;
+  return _sprGet(key, 64, 60, (c, w, h) => {
+    const cx = w / 2, cy = h / 2 + 4, sz = 16;
+    c.strokeStyle = color;
+    c.lineWidth = 2.4;
+    c.lineCap = 'round';
+    for(let f = 0; f < 8; f++){
+      const a = -Math.PI * 0.85 + f * (Math.PI * 0.7 / 7);
+      const knee = sz * 0.75;
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.lineTo(cx + Math.cos(a) * knee, cy + Math.sin(a) * knee * 0.5);
+      c.lineTo(cx + Math.cos(a) * sz * 1.5, cy + Math.sin(a) * sz * 1.5 * 0.5 + sz * 0.55);
+      c.stroke();
+    }
+    c.globalCompositeOperation = 'lighter';
+    const bg = c.createRadialGradient(cx, cy, 1, cx, cy, sz * 1.3);
+    bg.addColorStop(0, '#fff');
+    bg.addColorStop(0.35, color2);
+    bg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = bg;
+    c.beginPath(); c.ellipse(cx, cy, sz * 0.95, sz * 0.78, 0, 0, TAU); c.fill();
+  });
+}
+
+/* 毒蛛：八条腿 + 发光毒体，整体一张精灵（原来每只每帧 8 次 stroke + 1 个渐变） */
+function _sprSpider(color, color2){
+  const key = 'spider|' + color + '|' + color2;
+  return _sprGet(key, 64, 60, (c, w, h) => {
+    const cx = w / 2, cy = h / 2 + 4, sz = 16;
+    c.strokeStyle = color;
+    c.lineWidth = 2.4;
+    c.lineCap = 'round';
+    for(let f = 0; f < 8; f++){
+      const a = -Math.PI * 0.85 + f * (Math.PI * 0.7 / 7);
+      const knee = sz * 0.75;
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.lineTo(cx + Math.cos(a) * knee, cy + Math.sin(a) * knee * 0.5);
+      c.lineTo(cx + Math.cos(a) * sz * 1.5, cy + Math.sin(a) * sz * 1.5 * 0.5 + sz * 0.55);
+      c.stroke();
+    }
+    c.globalCompositeOperation = 'lighter';
+    const bg = c.createRadialGradient(cx, cy, 1, cx, cy, sz * 1.3);
+    bg.addColorStop(0, '#fff');
+    bg.addColorStop(0.35, color2);
+    bg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = bg;
+    c.beginPath(); c.ellipse(cx, cy, sz * 0.95, sz * 0.78, 0, 0, TAU); c.fill();
+  });
+}
+
+/* 光爆：光核 + 16 条放射线 + 外环，整体一张精灵（原来每帧 1 渐变 + 20 条描边 + 1 个环） */
+function _sprBurst(color){
+  const key = 'burst|' + color;
+  return _sprGet(key, 192, 192, (c, w, h) => {
+    const cx = w/2, cy = h/2;
+    c.globalCompositeOperation = 'lighter';
+    /* 光核 */
+    const g = c.createRadialGradient(cx, cy, 1, cx, cy, w*0.28);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.35, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(cx, cy, w*0.28, 0, TAU); c.fill();
+    /* 放射线 */
+    for(let i = 0; i < 16; i++){
+      const a = i / 16 * TAU;
+      const len = w*0.46 * (0.75 + (i % 3) * 0.14);
+      c.globalAlpha = i % 2 ? 0.62 : 0.4;
+      c.strokeStyle = i % 2 ? '#ffffff' : color;
+      c.lineWidth = i % 2 ? 3.4 : 1.8;
+      c.beginPath();
+      c.moveTo(cx + Math.cos(a) * w*0.10, cy + Math.sin(a) * w*0.075);
+      c.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len * 0.75);
+      c.stroke();
+    }
+    /* 外环 */
+    c.globalAlpha = 0.55;
+    c.strokeStyle = color;
+    c.lineWidth = 3.2;
+    c.beginPath(); c.ellipse(cx, cy, w*0.44, h*0.30, 0, 0, TAU); c.stroke();
+  });
+}
+
+/* 七彩莲花：7 片渐变花瓣 + 中心光晕，整体一张精灵 */
+function _sprLotus(colors){
+  const key = 'lotus|' + colors.join(',');
+  return _sprGet(key, 224, 224, (c, w, h) => {
+    const cx = w/2, cy = h/2;
+    c.globalCompositeOperation = 'lighter';
+    for(let i = 0; i < 7; i++){
+      const a = i * (TAU / 7);
+      const col = colors[i % colors.length];
+      const pl = w * 0.42, pw = w * 0.16;
+      c.save();
+      c.translate(cx + Math.cos(a) * pl * 0.4, cy + Math.sin(a) * pl * 0.25);
+      c.rotate(a);
+      const pg = c.createRadialGradient(0, 0, 1, 0, 0, pl * 0.5);
+      pg.addColorStop(0, '#fff');
+      pg.addColorStop(0.3, col);
+      pg.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = pg;
+      c.beginPath(); c.ellipse(0, 0, pl * 0.5, pw, 0, 0, TAU); c.fill();
+      c.restore();
+    }
+    const cg = c.createRadialGradient(cx, cy, 2, cx, cy, w*0.18);
+    cg.addColorStop(0, '#fff');
+    cg.addColorStop(0.6, colors[0]);
+    cg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = cg;
+    c.beginPath(); c.arc(cx, cy, w*0.18, 0, TAU); c.fill();
+  });
+}
+
+/* 竖向渐变条（光柱/火柱）：只缓存 1×256 的渐变，拉伸使用 */
+function _sprVBar(color){
+  const key = 'vbar|' + color;
+  return _sprGet(key, 4, 256, (c, w, h) => {
+    const g = c.createLinearGradient(0, h, 0, 0);
+    g.addColorStop(0, color);
+    g.addColorStop(0.5, hexA(color, 0.8));
+    g.addColorStop(1, hexA(color, 0));
+    c.fillStyle = g;
+    c.fillRect(0, 0, w, h);
+  });
+}
+
+/* 法阵圆环（三层圈 + 24 刻度 + 符文点）：预渲染一次，之后只旋转 drawImage。
+   ★ 原来每帧用 shadowBlur 画圈，软件光栅下一个法阵就能吃掉 60ms。 */
+function _sprRing(color){
+  const key = 'ring|' + color;
+  return _sprGet(key, 256, 256, (c, w, h) => {
+    const cx = w/2, cy = h/2, R = w/2 - 6;
+    c.strokeStyle = color;
+    c.globalAlpha = 0.95;
+    c.lineWidth = 5;
+    c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke();
+    c.globalAlpha = 0.62;
+    c.lineWidth = 2.2;
+    c.beginPath(); c.arc(cx, cy, R*0.78, 0, TAU); c.stroke();
+    c.globalAlpha = 0.42;
+    c.beginPath(); c.arc(cx, cy, R*0.52, 0, TAU); c.stroke();
+    c.lineWidth = 2.6;
+    c.globalAlpha = 0.8;
+    for(let i = 0; i < 24; i++){
+      const a = i/24*TAU;
+      const r1 = R*0.80, r2 = i % 3 === 0 ? R*0.97 : R*0.90;
+      c.beginPath();
+      c.moveTo(cx + Math.cos(a)*r1, cy + Math.sin(a)*r1);
+      c.lineTo(cx + Math.cos(a)*r2, cy + Math.sin(a)*r2);
+      c.stroke();
+    }
+    /* 符文点 */
+    c.globalAlpha = 0.55;
+    c.fillStyle = color;
+    for(let i = 0; i < 8; i++){
+      const a = i/8*TAU + 0.2;
+      c.beginPath(); c.arc(cx + Math.cos(a)*R*0.65, cy + Math.sin(a)*R*0.65, 3, 0, TAU); c.fill();
+    }
+  });
+}
+
+/* 火焰：地火/炉火共用的小火苗精灵 */
+function _sprFlame(color){
+  const key = 'flame|' + color;
+  return _sprGet(key, 96, 96, (c, w, h) => {
+    const g = c.createRadialGradient(w/2, h*0.62, 2, w/2, h*0.55, w*0.5);
+    g.addColorStop(0, 'rgba(255,255,255,0.98)');
+    g.addColorStop(0.28, '#ffcc00');
+    g.addColorStop(0.55, color);
+    g.addColorStop(1, 'rgba(255,50,0,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.ellipse(w/2, h*0.56, w*0.34, h*0.46, 0, 0, TAU); c.fill();
+    c.globalAlpha = 0.85;
+    c.beginPath(); c.ellipse(w/2, h*0.42, w*0.18, h*0.30, 0, 0, TAU); c.fill();
+  });
+}
+
 function drawRoomMountain(pal, off, alpha){
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -63,115 +318,138 @@ function drawRoomMountain(pal, off, alpha){
   ctx.restore();
 }
 
+
+/* 各道具的绘制包围盒（相对锚点：x 左边界 / y 上边界 / w / h） */
+const _PROP_BOUNDS = {
+  bamboo:  { x:-70,  y:-310, w:150, h:330 },
+  deadTree:{ x:-82,  y:-224, w:170, h:240 },
+  pine:    { x:-112, y:-286, w:230, h:300 },
+  ruins:   { x:-104, y:-176, w:216, h:192 },
+  mesa:    { x:-126, y:-130, w:246, h:146 },
+  crystal: { x:-84,  y:-206, w:176, h:226 },
+  rift:    { x:-104, y:-256, w:216, h:272 }
+};
+
+/* ★ 远景道具走精灵缓存：原来每帧 30 次左右的 stroke（一屏 15 个道具 ≈ 466 次），
+   现在每个道具只 drawImage 一次，形状/配色完全一致。灯笼有摆动动画，不缓存。 */
 function drawRoomProp(kind, x, baseY, scale, col, accent){
-  ctx.save();
-  ctx.translate(x, baseY);
-  ctx.scale(scale, scale);
-  ctx.fillStyle = col;
-  ctx.strokeStyle = col;
+  const B = _PROP_BOUNDS[kind];
+  if(!B){ _drawRoomPropOn(ctx, kind, x, baseY, scale, col, accent); return; }
+  const spr = _sprGet('prop|' + kind + '|' + col + '|' + accent, B.w, B.h, function(c){
+    _drawRoomPropOn(c, kind, -B.x, -B.y, 1, col, accent);
+  });
+  ctx.drawImage(spr, x + B.x * scale, baseY + B.y * scale, B.w * scale, B.h * scale);
+}
+
+function _drawRoomPropOn(c, kind, x, baseY, scale, col, accent){
+  c.save();
+  c.translate(x, baseY);
+  c.scale(scale, scale);
+  c.fillStyle = col;
+  c.strokeStyle = col;
 
   if(kind === 'bamboo'){
-    ctx.lineCap = 'round';
+    c.lineCap = 'round';
     for(let b = 0; b < 3; b++){
       const bx = (b - 1) * 22;
       const bh = 190 + b * 46;
-      ctx.lineWidth = 9 - b * 1.5;
-      ctx.beginPath(); ctx.moveTo(bx, 0); ctx.lineTo(bx + Math.sin(b) * 10, -bh); ctx.stroke();
+      c.lineWidth = 9 - b * 1.5;
+      c.beginPath(); c.moveTo(bx, 0); c.lineTo(bx + Math.sin(b) * 10, -bh); c.stroke();
       /* 竹节 */
-      ctx.strokeStyle = hexA(accent, 0.35); ctx.lineWidth = 2;
+      c.strokeStyle = hexA(accent, 0.35); c.lineWidth = 2;
       for(let j = 1; j < 4; j++){
         const yy = -bh * j / 4;
-        ctx.beginPath(); ctx.moveTo(bx - 6, yy); ctx.lineTo(bx + 7, yy); ctx.stroke();
+        c.beginPath(); c.moveTo(bx - 6, yy); c.lineTo(bx + 7, yy); c.stroke();
       }
       /* 叶 */
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 3;
+      c.strokeStyle = col;
+      c.lineWidth = 3;
       for(let j = 0; j < 4; j++){
         const yy = -bh + j * 22;
         const dir = j % 2 ? 1 : -1;
-        ctx.beginPath(); ctx.moveTo(bx, yy); ctx.quadraticCurveTo(bx + dir * 24, yy - 10, bx + dir * 40, yy - 4); ctx.stroke();
+        c.beginPath(); c.moveTo(bx, yy); c.quadraticCurveTo(bx + dir * 24, yy - 10, bx + dir * 40, yy - 4); c.stroke();
       }
     }
   } else if(kind === 'deadTree'){
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 12;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, -120); ctx.stroke();
-    ctx.lineWidth = 8;
+    c.lineCap = 'round';
+    c.lineWidth = 12;
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(-4, -120); c.stroke();
+    c.lineWidth = 8;
     for(let b = 0; b < 4; b++){
       const yy = -40 - b * 24;
       const dir = b % 2 ? 1 : -1;
-      ctx.beginPath(); ctx.moveTo(-3, yy); ctx.lineTo(dir * 44, yy - 46); ctx.stroke();
-      ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(dir * 44, yy - 46); ctx.lineTo(dir * 62, yy - 78); ctx.stroke();
-      ctx.lineWidth = 8;
+      c.beginPath(); c.moveTo(-3, yy); c.lineTo(dir * 44, yy - 46); c.stroke();
+      c.lineWidth = 4;
+      c.beginPath(); c.moveTo(dir * 44, yy - 46); c.lineTo(dir * 62, yy - 78); c.stroke();
+      c.lineWidth = 8;
     }
   } else if(kind === 'pine'){
     for(let i = 0; i < 4; i++){
       const w = 92 - i * 18, yy = -30 - i * 44;
-      ctx.beginPath();
-      ctx.moveTo(-w, yy); ctx.lineTo(0, yy - 74); ctx.lineTo(w, yy);
-      ctx.closePath(); ctx.fill();
+      c.beginPath();
+      c.moveTo(-w, yy); c.lineTo(0, yy - 74); c.lineTo(w, yy);
+      c.closePath(); c.fill();
     }
-    ctx.fillRect(-8, -30, 16, 34);
+    c.fillRect(-8, -30, 16, 34);
   } else if(kind === 'ruins'){
     /* 断墙 + 立柱 */
-    ctx.fillRect(-90, -150, 180, 150);
-    ctx.fillStyle = '#000';
-    ctx.globalAlpha = 0.18;
-    ctx.fillRect(-90, -150, 180, 22);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = col;
-    ctx.fillRect(-60, -86, 34, 86);
-    ctx.fillRect(26, -66, 34, 66);
+    c.fillRect(-90, -150, 180, 150);
+    c.fillStyle = '#000';
+    c.globalAlpha = 0.18;
+    c.fillRect(-90, -150, 180, 22);
+    c.globalAlpha = 1;
+    c.fillStyle = col;
+    c.fillRect(-60, -86, 34, 86);
+    c.fillRect(26, -66, 34, 66);
     /* 破口 */
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.moveTo(-18, -150); ctx.lineTo(14, -112); ctx.lineTo(-6, -74); ctx.lineTo(-30, -104);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = hexA(accent, 0.5);
-    ctx.fillRect(-90, -154, 180, 4);
+    c.fillStyle = 'rgba(0,0,0,0.35)';
+    c.beginPath();
+    c.moveTo(-18, -150); c.lineTo(14, -112); c.lineTo(-6, -74); c.lineTo(-30, -104);
+    c.closePath(); c.fill();
+    c.fillStyle = hexA(accent, 0.5);
+    c.fillRect(-90, -154, 180, 4);
   } else if(kind === 'crystal'){
-    ctx.fillStyle = hexA('#7dffd4', 0.20);
+    c.fillStyle = hexA('#7dffd4', 0.20);
     for(let i = 0; i < 5; i++){
       const cx = (i - 2) * 26;
       const hh = 70 + rndAt(i, 3) * 110;
       const ww = 12 + rndAt(i, 7) * 12;
-      ctx.beginPath();
-      ctx.moveTo(cx, 0); ctx.lineTo(cx - ww, -hh * 0.4); ctx.lineTo(cx, -hh); ctx.lineTo(cx + ww, -hh * 0.4);
-      ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = hexA('#d8fff2', 0.55); ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = hexA('#7dffd4', 0.20);
+      c.beginPath();
+      c.moveTo(cx, 0); c.lineTo(cx - ww, -hh * 0.4); c.lineTo(cx, -hh); c.lineTo(cx + ww, -hh * 0.4);
+      c.closePath(); c.fill();
+      c.strokeStyle = hexA('#d8fff2', 0.55); c.lineWidth = 1.5; c.stroke();
+      c.fillStyle = hexA('#7dffd4', 0.20);
     }
   } else if(kind === 'mesa'){
-    ctx.beginPath();
-    ctx.moveTo(-110, 0); ctx.lineTo(-80, -108); ctx.lineTo(60, -108); ctx.lineTo(100, 0);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = hexA(accent, 0.16);
-    ctx.fillRect(-74, -108, 128, 8);
+    c.beginPath();
+    c.moveTo(-110, 0); c.lineTo(-80, -108); c.lineTo(60, -108); c.lineTo(100, 0);
+    c.closePath(); c.fill();
+    c.fillStyle = hexA(accent, 0.16);
+    c.fillRect(-74, -108, 128, 8);
   } else if(kind === 'lantern'){
     /* 灯杆 + 悬灯 */
-    ctx.lineWidth = 8;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -190); ctx.lineTo(46, -190); ctx.stroke();
+    c.lineWidth = 8;
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -190); c.lineTo(46, -190); c.stroke();
     const ly = -152 + Math.sin((G ? G.t : 0) * 1.2) * 3;
-    ctx.fillStyle = hexA('#b388ff', 0.30);
-    ctx.beginPath(); ctx.arc(52, ly, 34, 0, TAU); ctx.fill();
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.ellipse(52, ly, 13, 17, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = hexA('#e8dcff', 0.85);
-    ctx.beginPath(); ctx.arc(52, ly, 5, 0, TAU); ctx.fill();
+    c.fillStyle = hexA('#b388ff', 0.30);
+    c.beginPath(); c.arc(52, ly, 34, 0, TAU); c.fill();
+    c.fillStyle = col;
+    c.beginPath(); c.ellipse(52, ly, 13, 17, 0, 0, TAU); c.fill();
+    c.fillStyle = hexA('#e8dcff', 0.85);
+    c.beginPath(); c.arc(52, ly, 5, 0, TAU); c.fill();
   } else if(kind === 'rift'){
     /* 浮空岩 + 裂光 */
     for(let i = 0; i < 3; i++){
       const cx = (i - 1) * 60, cy = -90 - i * 48;
-      ctx.beginPath();
-      ctx.moveTo(cx - 26, cy); ctx.lineTo(cx, cy - 16); ctx.lineTo(cx + 26, cy); ctx.lineTo(cx, cy + 14);
-      ctx.closePath(); ctx.fill();
+      c.beginPath();
+      c.moveTo(cx - 26, cy); c.lineTo(cx, cy - 16); c.lineTo(cx + 26, cy); c.lineTo(cx, cy + 14);
+      c.closePath(); c.fill();
     }
-    ctx.strokeStyle = hexA(accent, 0.45);
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(0, -230); ctx.lineTo(-10, -140); ctx.lineTo(8, -90); ctx.stroke();
+    c.strokeStyle = hexA(accent, 0.45);
+    c.lineWidth = 3;
+    c.beginPath(); c.moveTo(0, -230); c.lineTo(-10, -140); c.lineTo(8, -90); c.stroke();
   }
-  ctx.restore();
+  c.restore();
 }
 
 function drawRoomScenery(pal, camX){
@@ -978,8 +1256,21 @@ function drawEffects(dt){
      以前照样每帧画带 shadowBlur 的大特效，白烧一大半性能 */
   const _camX = (G && G.camera) ? G.camera.x : 0;
   const _cullL = _camX - 460, _cullR = _camX + VW + 460;
+  /* ★ v54 低配自动降级：掉帧时同屏「装饰性」特效限量绘制。
+     技能判定、伤害、时长都不受影响，只是少叠几层光雾，
+     避免教室老电脑上一次技能铺十几层半透明大图把填充率吃满。 */
+  const _slow = !!(window.PFX && window.PFX.slow);
+  const _cap = _slow
+    ? { poisonCloud: 2, emberBurst: 2, hitRing: 6, groundFire: 4, lightBloom: 3, pillOrbit: 1, vine: 5, spiderSwarm: 1, shockWave: 2, explosion: 2 }
+    : null;
+  const _used = _cap ? {} : null;
   for(const ef of G.effects){
     if(ef.x < _cullL || ef.x > _cullR) continue;
+    if(_cap && _cap[ef.type] !== undefined){
+      const c0 = (_used[ef.type] || 0) + 1;
+      _used[ef.type] = c0;
+      if(c0 > _cap[ef.type]) continue;
+    }
     const k = ef.t/ef.dur;
     const sc = depthScale(ef.y);
     ctx.save();
@@ -1103,21 +1394,31 @@ function drawEffects(dt){
       ctx.restore();
     }
     else if(ef.type === 'poisonCloud'){
-      /* 毒雾：多层绿色半透明云团，缓慢上升扩散 */
+      /* 毒雾：多层绿色半透明云团，缓慢上升扩散
+         ★ v54：预渲染烟团精灵，3 张代替原来 7 个逐帧径向渐变（每帧省 7 次渐变创建） */
       ctx.globalCompositeOperation = 'lighter';
       const pc = ef.color || '#7ed957';
-      for(let i = 0; i < 7; i++){
-        const a = i / 7 * TAU + k * 1.2;
-        const rad = (ef.r || 70) * (0.25 + k * 0.85) * (0.6 + (i % 3) * 0.22);
-        const cx0 = ef.x + Math.cos(a) * rad * 0.7;
-        const cy0 = ef.y - 34 - k * 46 + Math.sin(a) * rad * 0.42;
-        const g = ctx.createRadialGradient(cx0, cy0, 1, cx0, cy0, rad * 0.72);
-        g.addColorStop(0, hexA(pc, 0.42 * (1 - k)));
-        g.addColorStop(0.55, hexA(pc, 0.20 * (1 - k)));
-        g.addColorStop(1, hexA(pc, 0));
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(cx0, cy0, rad * 0.72, 0, TAU); ctx.fill();
+      const puff = _sprPuff(pc);
+      const rad0 = (ef.r || 70);
+      const grow = (0.45 + k * 0.9);
+      const al = (1 - k) * 0.95;
+      const lift = -34 - k * 46;
+      /* 小雾团只铺 2 张、整体尺寸收一点：软光栅下“画得越大越贵”，
+         原来 3 张 1.9 倍半径会吃掉更多填充率，观感却没差多少 */
+      const big = rad0 >= 78;
+      const spots = big
+        ? [[0, 0, 1.0], [0.75, -0.30, 0.72], [-0.62, 0.26, 0.62]]
+        : [[0, 0, 0.95], [0.55, -0.22, 0.60]];
+      const nSp = spots.length;
+      for(let i = 0; i < nSp; i++){
+        const sp = spots[i];
+        const rad = rad0 * grow * sp[2] * 1.55;
+        const cx0 = ef.x + Math.cos(k * 1.2 + i * 2.1) * rad0 * 0.42 * sp[0] + sp[0] * rad0 * 0.3;
+        const cy0 = ef.y + lift + sp[1] * rad0 * 0.5;
+        ctx.globalAlpha = al * (i === 0 ? 0.95 : 0.55);
+        ctx.drawImage(puff, cx0 - rad / 2, cy0 - rad / 2, rad, rad);
       }
+      ctx.globalAlpha = 1;
     }
     /* ★ 新增：地面窜出的岩石尖刺（撼山者 / 山石系通用） */
     else if(ef.type === 'rockSpike'){
@@ -1190,70 +1491,51 @@ function drawEffects(dt){
     }
     /* ★ 新增：火星爆裂（带火花拖尾的放射爆点，通用"炸裂"底子） */
     else if(ef.type === 'emberBurst'){
+      /* ★ v54：射线改成预渲染拖尾精灵，中心改用光斑精灵 —— 每帧不再创建 n+1 个渐变 */
       const n = ef.n || 16;
       const rr = (ef.r || 120) * (0.2 + k * 1.05);
+      const col = ef.color || '#ffb04a';
       ctx.save();
       ctx.translate(ef.x, ef.y);
       ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = (1 - k) * 0.95;
+      const core = _sprGlow(col);
+      const cs = rr * 1.15;
+      ctx.drawImage(core, -cs / 2, -cs / 2, cs, cs);
+      const streak = _sprStreak(col);
+      ctx.globalAlpha = (1 - k) * 0.9;
       for(let i = 0; i < n; i++){
         const a = (i / n) * TAU + (ef.rot || 0);
         const wob = Math.sin(k * 9 + i * 1.7) * 0.16;
         const r1 = rr * (0.55 + (i % 4) * 0.16);
         const r0 = r1 * 0.28;
-        const px = Math.cos(a + wob) * r1, py = Math.sin(a + wob) * r1 * 0.62;
-        const qx = Math.cos(a + wob) * r0, qy = Math.sin(a + wob) * r0 * 0.62;
-        const g = ctx.createLinearGradient(qx, qy, px, py);
-        g.addColorStop(0, hexA('#ffffff', 0.9 * (1 - k)));
-        g.addColorStop(0.35, hexA(ef.color || '#ffb04a', 0.85 * (1 - k)));
-        g.addColorStop(1, hexA(ef.color || '#ffb04a', 0));
-        ctx.strokeStyle = g;
-        ctx.lineWidth = 5 * (1 - k * 0.6) + 1;
-        ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(px, py); ctx.stroke();
+        const len = r1 - r0;
+        ctx.save();
+        ctx.rotate(a + wob);
+        ctx.drawImage(streak, r0 * 1.0, -(2.2 + (1 - k) * 2.4) * 0.5 - 1.2, len, 2.2 + (1 - k) * 2.4);
+        ctx.restore();
       }
-      /* 中心闪光 */
-      ctx.globalAlpha = (1 - k) * (1 - k);
-      const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, rr * 0.55);
-      cg.addColorStop(0, hexA('#ffffff', 0.95));
-      cg.addColorStop(0.4, hexA(ef.color || '#ffb04a', 0.6));
-      cg.addColorStop(1, hexA(ef.color || '#ffb04a', 0));
-      ctx.fillStyle = cg;
-      ctx.beginPath(); ctx.arc(0, 0, rr * 0.55, 0, TAU); ctx.fill();
       ctx.restore();
+      ctx.globalAlpha = 1;
     }
     /* ★ 新增：毒蛛群 —— 自地底爬出成群毒蛛，扑向目标（炼药师·千蛛万毒手） */
     else if(ef.type === 'spiderSwarm'){
+      /* ★ v54：毒蛛改成预渲染精灵（原来每只每帧 8 条腿 stroke + 1 个径向渐变） */
       const n = ef.n || 6;
       const dir = ef.facing || 1;
       const reach = ef.reach || 260;
+      const spr = _sprSpider(ef.color || '#b388ff', ef.color2 || '#7ed957');
       for(let i = 0; i < n; i++){
         const t0 = clamp(k * (n + 2) - i * 0.8, 0, 1);
         if(t0 <= 0) continue;
         const sx = ef.x + dir * (reach / n) * i + Math.sin(i * 2.1) * 18;
         const sy = ef.y - 8 - Math.abs(Math.sin(t0 * Math.PI * 3)) * 16;
         const sz = (ef.size || 16) * (0.6 + (i % 3) * 0.22) * t0;
-        ctx.save();
+        const kk = sz / 16;
         ctx.globalAlpha = (1 - k) * 0.9 * t0;
-        ctx.translate(sx, sy);
-        ctx.strokeStyle = ef.color || '#b388ff';
-        ctx.lineWidth = 2.4; ctx.lineCap = 'round';
-        /* 八条腿 */
-        for(let f = 0; f < 8; f++){
-          const a = -Math.PI * 0.85 + f * (Math.PI * 0.7 / 7);
-          const knee = sz * 0.75;
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(Math.cos(a) * knee, Math.sin(a) * knee * 0.5);
-          ctx.lineTo(Math.cos(a) * sz * 1.5, Math.sin(a) * sz * 1.5 * 0.5 + sz * 0.55);
-          ctx.stroke();
-        }
-        /* 发光的毒体 */
-        ctx.globalCompositeOperation = 'lighter';
-        const bg = ctx.createRadialGradient(0, 0, 1, 0, 0, sz * 1.3);
-        bg.addColorStop(0, '#fff'); bg.addColorStop(0.35, ef.color2 || '#7ed957'); bg.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = bg;
-        ctx.beginPath(); ctx.ellipse(0, 0, sz * 0.95, sz * 0.78, 0, 0, TAU); ctx.fill();
-        ctx.restore();
+        ctx.drawImage(spr, sx - 32 * kk, sy - 22 * kk, 64 * kk, 60 * kk);
       }
+      ctx.globalAlpha = 1;
     }
     /* ★ 新增：火龙柱 —— 火焰长龙绕柱盘旋升腾（丹道师·九龙神火罩） */
     else if(ef.type === 'flameDragon'){
@@ -1369,23 +1651,28 @@ function drawEffects(dt){
       const R = (ef.r || 110) * (0.5 + k * 0.5);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      /* ★ v54：每颗金丹改成一张预渲染光斑（原来是每颗一个径向渐变 + 一条描边） */
       const rot = ef.t * (ef.speed || 2.6);
+      const glow = _sprGlow(ef.color || '#ffd166');
+      const trail = _sprStreak(ef.color2 || '#fff6c8');
       for(let i = 0; i < n; i++){
         const a = rot + i / n * TAU;
         const px = ef.x + Math.cos(a) * R;
         const py = ef.y - (ef.h || 70) + Math.sin(a) * R * 0.42;
         const sz = (ef.size || 13) * (0.8 + 0.2 * Math.sin(ef.t * 6 + i));
-        ctx.globalAlpha = (1 - k) * 0.35;
-        ctx.strokeStyle = ef.color2 || '#fff6c8'; ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(ef.x + Math.cos(a - 0.4) * R, ef.y - (ef.h || 70) + Math.sin(a - 0.4) * R * 0.42);
-        ctx.stroke();
+        ctx.globalAlpha = (1 - k) * 0.30;
+        const tx = ef.x + Math.cos(a - 0.4) * R;
+        const ty = ef.y - (ef.h || 70) + Math.sin(a - 0.4) * R * 0.42;
+        const dx = px - tx, dy = py - ty;
+        const dl = Math.hypot(dx, dy) || 1;
+        ctx.save();
+        ctx.translate(tx, ty);
+        ctx.rotate(Math.atan2(dy, dx));
+        ctx.drawImage(trail, 0, -2, dl, 4);
+        ctx.restore();
         ctx.globalAlpha = (1 - k) * 0.95;
-        const g = ctx.createRadialGradient(px, py, 1, px, py, sz * 1.6);
-        g.addColorStop(0, '#fff'); g.addColorStop(0.4, ef.color || '#ffd166'); g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(px, py, sz * 1.6, 0, TAU); ctx.fill();
+        const ds = sz * 3.2;
+        ctx.drawImage(glow, px - ds / 2, py - ds / 2, ds, ds);
       }
       ctx.restore();
     }
@@ -1443,45 +1730,20 @@ function drawEffects(dt){
       ctx.globalAlpha = 1;
     }
     else if(ef.type === 'lotusBurst'){
-      /* 七彩莲花绽放效果 */
+      /* ★ v54：七色莲整体预渲染，旋转/缩放一次 drawImage（原来 7 个花瓣各建 1 个径向渐变 + 中心 1 个） */
       ctx.globalCompositeOperation = 'lighter';
       const colors = ef.colors || ['#3366ff','#ff3300','#33cc33','#ffcc00','#cc33ff','#ff6600','#00ccff'];
-      const petalCount = 7;
       const baseR = ef.r * (0.3 + k * 0.7);
-      const rotAngle = ef.t * (ef.rotateSpeed || 8);
-      
-      /* 绘制七色莲花花瓣 */
-      for(let i=0;i<petalCount;i++){
-        const pa = rotAngle + i*(TAU/petalCount);
-        const petalLen = baseR * (0.8 + 0.2*Math.sin(ef.t*6+i*1.2));
-        const petalW = baseR * 0.35;
-        const tipX = ef.x + Math.cos(pa)*petalLen*0.4;
-        const tipY = ef.y + Math.sin(pa)*petalLen*0.25;
-        
-        ctx.globalAlpha = (1-k*0.5)*0.75;
-        ctx.save();
-        ctx.translate(tipX, tipY);
-        ctx.rotate(pa);
-        
-        const pg = ctx.createRadialGradient(0,0,1,0,0,petalLen*0.5);
-        pg.addColorStop(0,'#fff');
-        pg.addColorStop(0.3, colors[i%colors.length]);
-        pg.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = pg;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, petalLen*0.5, petalW, 0, 0, TAU);
-        ctx.fill();
-        ctx.restore();
-      }
-      
-      /* 中心光晕 */
-      ctx.globalAlpha = (1-k)*0.6;
-      const cg = ctx.createRadialGradient(ef.x,ef.y,2,ef.x,ef.y,baseR*0.35);
-      cg.addColorStop(0,'#fff');
-      cg.addColorStop(0.6, colors[0]);
-      cg.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle = cg;
-      ctx.beginPath(); ctx.arc(ef.x,ef.y,baseR*0.35,0,TAU); ctx.fill();
+      const spr = _sprLotus(colors);
+      const sz = baseR * 2.3;
+      ctx.save();
+      ctx.translate(ef.x, ef.y);
+      ctx.rotate(ef.t * (ef.rotateSpeed || 8) * 0.15);
+      ctx.globalAlpha = (1 - k * 0.5) * 0.85;
+      ctx.scale(1, 0.72);
+      ctx.drawImage(spr, -sz/2, -sz/2, sz, sz);
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
     else if(ef.type === 'bladeArray'){
       ctx.globalAlpha = 0.6*(1-k*0.5);
@@ -1672,12 +1934,14 @@ function drawEffects(dt){
       ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(ef.x,ef.y,200+gk*100,0,TAU); ctx.fill();
     }
     else if(ef.type === 'groundFire'){
+      /* ★ v54：火苗改用预渲染精灵，去掉逐帧径向渐变 */
       ctx.globalCompositeOperation = 'lighter';
       const fs = (ef.size||40)*sc;
-      ctx.globalAlpha = (1-k)*0.7;
-      const g = ctx.createRadialGradient(ef.x,ef.y,2,ef.x,ef.y-fs*0.3,fs);
-      g.addColorStop(0,'#fff'); g.addColorStop(0.3,'#ffcc00'); g.addColorStop(0.6,'#ff6a20'); g.addColorStop(1,'rgba(255,50,0,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(ef.x,ef.y,fs,fs*0.6,0,0,TAU); ctx.fill();
+      const flick = 0.9 + 0.1 * Math.sin(ef.t * 14 + ef.x * 0.01);
+      ctx.globalAlpha = (1-k)*0.75;
+      const spr = _sprFlame(ef.color || '#ff6a20');
+      const w = fs * 2.1 * flick, h = fs * 2.4 * flick;
+      ctx.drawImage(spr, ef.x - w/2, ef.y - h*0.62, w, h);
     }
     else if(ef.type === 'groundCrack'){
       const delay = ef.delay||0;
@@ -1796,12 +2060,8 @@ function drawEffects(dt){
       ctx.globalAlpha = clamp(alpha,0,1)*0.8;
       const h = ef.height || 500;
       const w = 60+Math.sin(ef.t*12)*15;
-      const pg = ctx.createLinearGradient(ef.x,ef.y,ef.x,ef.y-h);
-      pg.addColorStop(0, ef.color||'#9fe6ff');
-      pg.addColorStop(0.5, (ef.color||'#9fe6ff')+'cc');
-      pg.addColorStop(1, 'rgba(159,230,255,0)');
-      ctx.fillStyle = pg;
-      ctx.fillRect(ef.x-w, ef.y-h, w*2, h);
+      /* ★ v54：竖向渐变改成缓存的 1×256 渐变条拉伸，不再每帧新建 LinearGradient */
+      ctx.drawImage(_sprVBar(ef.color || '#9fe6ff'), ef.x-w, ef.y-h, w*2, h);
       /* 光柱核心 */
       ctx.globalAlpha = clamp(alpha,0,1)*0.5;
       const coreW = w*0.4;
@@ -2168,38 +2428,37 @@ function drawEffects(dt){
       }
     }
     else if(ef.type === 'dharmaWheel'){
-      /* 炁轮：多层旋转法阵 + 刻度 */
+      /* 炁轮：多层旋转法阵 + 刻度
+         ★ v54 性能重做：去掉 shadowBlur（软件光栅下单个法阵就吃掉 60ms+），
+           环与刻度改成预渲染精灵，每帧只做 1 次柔光 drawImage + 2 次旋转 drawImage。
+           观感：仍是三层圈 + 刻度旋转 + 中心光晕。 */
       ctx.globalCompositeOperation = 'lighter';
       const dwK = ef.t/ef.dur;
       const dwA = dwK < 0.15 ? dwK/0.15 : (1-dwK)/0.85;
       const dwR = (ef.r || 180) * (0.6 + dwK*0.5);
       const dwCol = ef.color || '#7dffd4';
-      ctx.globalAlpha = clamp(dwA,0,1) * 0.85;
+      const dwAl = clamp(dwA, 0, 1);
+
+      /* 中心光晕（压扁成地面透视） */
+      ctx.globalAlpha = dwAl * 0.5;
+      const gs = dwR * 1.35;
+      ctx.drawImage(_sprGlow(dwCol), ef.x - gs/2, ef.y - gs*0.21, gs, gs*0.42);
+
+      /* 外圈（正转） */
+      const ringSpr = _sprRing(dwCol);
+      ctx.save();
+      ctx.globalAlpha = dwAl * 0.92;
       ctx.translate(ef.x, ef.y);
       ctx.scale(1, 0.42);
-      ctx.strokeStyle = dwCol; ctx.lineWidth = 3; ctx.shadowColor = dwCol; ctx.shadowBlur = 20;
-      ctx.beginPath(); ctx.arc(0,0,dwR,0,TAU); ctx.stroke();
-      ctx.lineWidth = 1.5; ctx.globalAlpha = clamp(dwA,0,1)*0.55;
-      ctx.beginPath(); ctx.arc(0,0,dwR*0.78,0,TAU); ctx.stroke();
-      ctx.beginPath(); ctx.arc(0,0,dwR*0.5,0,TAU); ctx.stroke();
-      /* 旋转刻度 */
-      ctx.globalAlpha = clamp(dwA,0,1)*0.75;
-      const dwN = 24;
-      for(let i=0;i<dwN;i++){
-        const a = i/dwN*TAU + ef.t*1.6;
-        const r1 = dwR*0.82, r2 = dwR*0.98;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a)*r1, Math.sin(a)*r1);
-        ctx.lineTo(Math.cos(a)*r2, Math.sin(a)*r2);
-        ctx.stroke();
-      }
-      /* 内圈光晕 */
-      ctx.globalAlpha = clamp(dwA,0,1)*0.5;
-      const dwg = ctx.createRadialGradient(0,0,4,0,0,dwR*0.7);
-      dwg.addColorStop(0,'#ffffff'); dwg.addColorStop(0.4,dwCol); dwg.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle = dwg;
-      ctx.beginPath(); ctx.arc(0,0,dwR*0.7,0,TAU); ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.rotate(ef.t * 1.6);
+      ctx.drawImage(ringSpr, -dwR, -dwR, dwR*2, dwR*2);
+      /* 内圈（反转，稍小） */
+      ctx.globalAlpha = dwAl * 0.5;
+      ctx.rotate(-ef.t * 2.6);
+      const ir = dwR * 0.62;
+      ctx.drawImage(ringSpr, -ir, -ir, ir*2, ir*2);
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
     else if(ef.type === 'punchWave'){
       /* 拳风：锥形冲击波 */
@@ -2480,34 +2739,23 @@ function drawEffects(dt){
       ctx.shadowBlur = 0;
     }
     else if(ef.type === 'lightBloom'){
-      /* ★ 光爆：亮核 + 放射光线 + 扩散环（替代成片粒子炸裂，省性能也更像“炸开”） */
+      /* ★ v54：整体预渲染成一张精灵（光核 + 16 条放射线 + 外环），
+         每帧只做 1 次旋转缩放 drawImage —— 原来要 1 个径向渐变 + 20 条描边/帧。 */
       const bk = ef.t / ef.dur;
       const ba = bk < 0.12 ? bk/0.12 : (1 - bk)/0.88;
       const col = ef.color || '#ffd166';
       const R = (ef.r || 120) * (0.45 + 0.55 * Math.min(1, bk * 2.2));
+      const spr = _sprBurst(col);
+      const sz = R * 2.55;
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = clamp(ba, 0, 1);
-      const cg = ctx.createRadialGradient(ef.x, ef.y, 1, ef.x, ef.y, R * 0.55);
-      cg.addColorStop(0, 'rgba(255,255,255,0.95)');
-      cg.addColorStop(0.35, col);
-      cg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = cg;
-      ctx.beginPath(); ctx.arc(ef.x, ef.y, R * 0.55, 0, TAU); ctx.fill();
-      const nRays = ef.rays || 16;
-      for(let i = 0; i < nRays; i++){
-        const a2 = (i / nRays) * TAU + (ef.rot || 0) + bk * 0.5;
-        const len = R * (0.75 + (i % 3) * 0.28) * (0.6 + 0.4 * Math.min(1, bk * 3));
-        ctx.globalAlpha = clamp(ba, 0, 1) * (i % 2 ? 0.7 : 0.45);
-        ctx.strokeStyle = i % 2 ? '#ffffff' : col;
-        ctx.lineWidth = (i % 2 ? 5 : 2.5) * (1 - bk * 0.6);
-        ctx.beginPath();
-        ctx.moveTo(ef.x + Math.cos(a2) * R * 0.18, ef.y + Math.sin(a2) * R * 0.14);
-        ctx.lineTo(ef.x + Math.cos(a2) * len, ef.y + Math.sin(a2) * len * 0.75);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = clamp(ba, 0, 1) * 0.75;
-      ctx.strokeStyle = col; ctx.lineWidth = 5 * (1 - bk * 0.6);
-      ctx.beginPath(); ctx.ellipse(ef.x, ef.y, R * 1.05, R * 0.72, 0, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = clamp(ba, 0, 1) * 0.95;
+      ctx.save();
+      ctx.translate(ef.x, ef.y);
+      ctx.rotate(bk * 0.5 + (ef.rot || 0));
+      ctx.scale(1, 0.8);
+      ctx.drawImage(spr, -sz/2, -sz/2, sz, sz);
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
     else if(ef.type === 'fireLotus'){
       /* ★ 佛怒火莲：绽放中的莲花本体 */
