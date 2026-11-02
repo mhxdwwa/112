@@ -746,6 +746,13 @@ function openChuangge(){
 
   paintFavs();paintLast();apply();
 
+  // 所有卡片/导航按钮点击后在新标签页打开目标网页，不再于当前页内跳转
+  document.querySelectorAll('a.card, a.btn').forEach(function(a){
+    var h=a.getAttribute('href');
+    if(h && h.indexOf('javascript')===-1){ a.target='_blank'; a.rel='noopener noreferrer'; }
+  });
+
+
   // 卡片封面优先用高清 base64（cards-data.json），在入场动画期间完成替换，避免闪烁
   (function(){
     fetch('/home-cards/cards-data.json?t='+Date.now()).then(function(r){return r.ok?r.json():null}).then(function(d){
