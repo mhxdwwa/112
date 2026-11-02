@@ -1893,13 +1893,13 @@ function castHerbPouch(){
   skCastPose(p, 0.46, '青 囊 掷 露', '#7ed957', 34);
   skCastAura(p, 0.46, '#7ed957', 4);
   /* 药囊本体：飞行中一路滴落毒露 */
-  for(let i = 0; i < 14; i++){
-    skAt(i * 20, ()=>{
-      const t = i / 13;
+  /* ★ v54 性能：滴落段 14→8，每段只喷一次粒子（原来两次共 4 颗） */
+  for(let i = 0; i < 8; i++){
+    skAt(i * 34, ()=>{
+      const t = i / 7;
       const px = p.x + dx * t, py = p.y - 60 + dy * t - Math.sin(t * Math.PI) * 70;
       addEffect('hitRing', px, py, 0.22, {color:'#d8ff9a', r:16});
-      spawnParticles(px, py, 2, {color:i % 2 ? '#7ed957' : '#d8ff9a', spMin:20, spMax:110, lifeMin:0.25, lifeMax:0.5, sizeMin:2, sizeMax:6, grav:160});
-      spawnParticles(px, py, 2, {color:'#b6ff8a', angle:-Math.PI / 2, spread:1.0, spMin:30, spMax:120, lifeMin:0.3, lifeMax:0.6, sizeMin:2, sizeMax:5, grav:220});
+      spawnParticles(px, py, 3, {color:i % 2 ? '#7ed957' : '#d8ff9a', spMin:20, spMax:110, lifeMin:0.25, lifeMax:0.5, sizeMin:2, sizeMax:6, grav:180});
     });
   }
   skAt(270, ()=>{
@@ -1908,9 +1908,9 @@ function castHerbPouch(){
     addEffect('explosion', tx, tg.y, 0.5, {color:'#7ed957', r:79});
     addEffect('emberBurst', tx, tg.y - 22, 0.55, {color:'#7ed957', r:170, n:18, rot:rand(0, TAU)});
     addEffect('shockWave', tx, tg.y + 2, 0.5, {facing:p.facing, r:190, color:'#b6ff8a'});
-    addEffect('poisonCloud', tx, tg.y, 1.6, {color:'#7ed957', r:86});
-    addEffect('poisonCloud', tx + rand(-60, 60), tg.y, 1.1, {color:'#b6ff8a', r:62});
-    addEffect('poisonCloud', tx + rand(-90, 90), tg.y, 0.9, {color:'#4aa03a', r:54});
+    /* ★ v54 性能：三层毒雾合并为一团主雾 + 一团淡雾（层次靠颜色，不靠数量） */
+    addEffect('poisonCloud', tx, tg.y, 1.6, {color:'#7ed957', r:104});
+    addEffect('poisonCloud', tx + rand(-70, 70), tg.y, 1.0, {color:'#b6ff8a', r:64});
     meleeAoe(p, tx, tg.y, 105, A * 30, {kb:80});
     skBloom(tx, tg.y - 30, 150, '#7ed957', 16);
     skBloomRing(tx, tg.y, 130, 8, '#b6ff8a', 60);
@@ -1979,8 +1979,7 @@ function castHerbLifeDeath(){
       const sx = ox + Math.cos(a) * 96, sy = oy - 46 + Math.sin(a) * 42;
       /* 毒丹本体：紫绿双色核心 */
       addEffect('hitRing', sx, sy, 0.34, {color:'#b388ff', r:30});
-      addEffect('poisonCloud', sx, sy, 0.6, {color:'#8a5ad9', r:44});
-      addEffect('emberBurst', sx, sy, 0.42, {color:'#b388ff', r:104, n:12, rot:rand(0, TAU)});
+      addEffect('emberBurst', sx, sy, 0.42, {color:'#b388ff', r:104, n:8, rot:rand(0, TAU)});
       /* 毒丹从施法者飞向目标 */
       skTravel(p, sx, sy, '#b388ff', 3);
       meleeAoe(p, sx, sy, 74, A * 26, {kb:30});
@@ -2074,24 +2073,26 @@ function castHerbSpider(){
   /* ★ 毒蛛自地底成群爬出，扑向目标 */
   addEffect('spiderSwarm', p.x, p.y, 1.0, {facing:p.facing, n:7, reach:300, size:17, color:'#b388ff', color2:'#7ed957'});
   addEffect('spiderSwarm', p.x + p.facing * 120, p.y, 0.9, {facing:p.facing, n:6, reach:240, size:14, color:'#7ed957', color2:'#b388ff'});
-  for(let i = 0; i < 8; i++){
-    skAt(120 + i * 95, ()=>{
-      const a = i / 8 * TAU;
+  /* ★ v54 性能：毒点 8→6，每点粒子 6→3 */
+  for(let i = 0; i < 6; i++){
+    skAt(120 + i * 125, ()=>{
+      const a = i / 6 * TAU;
       /* ★ 毒点跟随目标，每处落毒都炸开一团紫雾 */
       const bx = clamp(skSpot(p, tg, 0, 620).x, WORLD_L + 80, WORLD_R - 80);
       const sx = bx + Math.cos(a) * 130, sy = tg.y + Math.sin(a) * 56;
       addEffect('poisonCloud', sx, sy, 0.7, {color:'#b388ff', r:54});
       addEffect('emberBurst', sx, sy - 18, 0.42, {color:'#b388ff', r:96, n:10, rot:rand(0, TAU)});
-      for(let j = 0; j < 6; j++){
-        const aa = j / 6 * TAU;
-        spawnParticles(sx, sy, 1, {color:'#b388ff', angle:aa, spread:0.2, spMin:60, spMax:190, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:200});
+      for(let j = 0; j < 3; j++){
+        const aa = j / 3 * TAU + rand(0, 1);
+        spawnParticles(sx, sy, 1, {color:'#b388ff', angle:aa, spread:0.35, spMin:60, spMax:190, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:5, grav:200});
       }
       spawnText(sx, sy, 110, '毒', '#b388ff', 16);
       meleeAoe(p, sx, sy, 58, A * 14, {kb:0});
       skShake(5, 0, '#b388ff');
     });
   }
-  for(let t = 0; t < 6; t++) skAt(1000 + t * 380, ()=>{
+  /* ★ v54 性能：毒发段 6→4（总时长不变，间隔拉长） */
+  for(let t = 0; t < 4; t++) skAt(1000 + t * 560, ()=>{
     const bx = clamp(skSpot(p, tg, 0, 620).x, WORLD_L + 80, WORLD_R - 80);
     meleeAoe(p, bx, tg.y, 175, A * 10, {kb:0});
     addEffect('poisonCloud', bx + rand(-70, 70), tg.y, 0.6, {color:'#b388ff', r:60});
@@ -2109,12 +2110,13 @@ function castHerbShennong(){
   addEffect('dharmaWheel', p.x, p.y, 2.0, {color:'#d8ff9a', r:260});
   addEffect('lotusBurst', p.x, p.y, 2.0, {colors:['#7ed957','#d8ff9a','#fff6c8','#b6ff8a','#ffe9a8','#4aa03a','#eaffd0'], r:260, rotateSpeed:1.6});
   /* ★ 万物归毒：十二枚药丹绕身，一念生一念枯 */
-  addEffect('pillOrbit', p.x, p.y, 1.8, {color:'#7ed957', color2:'#b388ff', n:12, r:190, h:120, size:15, speed:2.0});
-  addEffect('pillOrbit', p.x, p.y, 1.8, {color:'#b388ff', color2:'#d8ff9a', n:12, r:130, h:70, size:11, speed:-2.8});
+  addEffect('pillOrbit', p.x, p.y, 1.8, {color:'#7ed957', color2:'#b388ff', n:9, r:190, h:120, size:15, speed:2.0});
+  addEffect('pillOrbit', p.x, p.y, 1.8, {color:'#b388ff', color2:'#d8ff9a', n:6, r:130, h:70, size:11, speed:-2.8});
   /* 百草自地面疯长 */
-  for(let i = 0; i < 14; i++){
-    skAt(i * 70, ()=>{
-      const bx = p.x + (i - 6.5) * 46;
+  /* ★ v54 性能：百草 14→10 株（间距拉开，覆盖范围不变） */
+  for(let i = 0; i < 10; i++){
+    skAt(i * 96, ()=>{
+      const bx = p.x + (i - 4.5) * 64;
       addEffect('vine', clamp(bx, WORLD_L + 30, WORLD_R - 30), p.y + 6, 1.0, {color:i % 3 ? '#7ed957' : '#d8ff9a', h:130 + (i % 4) * 30, n:2});
       meleeAoe(p, bx, p.y, 58, A * 16, {kb:20});
       skBurst(bx, p.y - 60, '#7ed957', 3, {grav:-80});
