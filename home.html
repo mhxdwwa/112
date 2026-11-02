@@ -6,472 +6,385 @@
   <link rel="apple-touch-icon" href="/icon-180.png?v=20261026">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>智趣课堂</title>
+<title>智趣课堂 · 课堂工具箱</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-/* === RESET & BASE === */
+/* ============ TOKENS ============ */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg1:#0f0c29;--bg2:#302b63;--bg3:#24243e;
-  --glass:rgba(255,255,255,0.08);
-  --glass-border:rgba(255,255,255,0.15);
-  --accent:#7c5cfc;--accent2:#ff6bcb;
-  --text:#f0f0f5;--text-dim:rgba(255,255,255,0.55);
-  --card-bg:rgba(255,255,255,0.06);
-  --card-hover:rgba(255,255,255,0.12);
-  --radius:20px;
+  /* 间距：4px 网格 */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px; --sp-8:64px;
+  /* 字号：1.25 阶梯 */
+  --fs-xs:12px; --fs-sm:14px; --fs-md:16px; --fs-lg:20px; --fs-xl:26px; --fs-2xl:40px;
+  /* 圆角 */
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:28px;
+  /* 颜色 */
+  --bg-1:#0a0918; --bg-2:#181431; --bg-3:#0e1030;
+  --accent:#7c5cfc; --accent-2:#ff6bcb; --accent-3:#22d3ee;
+  --text:#f3f2fb; --dim:#aca8c6; --mute:#7b769c;
+  --card:rgba(255,255,255,0.055); --card-2:rgba(255,255,255,0.09);
+  --line:rgba(255,255,255,0.10); --line-2:rgba(255,255,255,0.22);
+  --shadow:0 18px 44px rgba(6,4,24,0.55);
+  --ease:cubic-bezier(.22,1,.36,1);
 }
 html{scroll-behavior:smooth}
 body{
   font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;
-  background:linear-gradient(160deg,var(--bg1),var(--bg2),var(--bg3));
-  min-height:100vh;color:var(--text);overflow-x:hidden;
+  font-size:var(--fs-md); line-height:1.7; color:var(--text);
+  background:linear-gradient(160deg,var(--bg-1),var(--bg-2) 55%,var(--bg-3));
+  background-attachment:fixed; min-height:100vh; overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
 }
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent-3);outline-offset:3px;border-radius:var(--r-sm)}
 
-/* === ANIMATED BACKGROUND === */
 .bg-orbs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.bg-orbs span{
-  position:absolute;border-radius:50%;filter:blur(80px);opacity:.35;
-  animation:orbFloat 20s infinite ease-in-out alternate;
-}
-.bg-orbs span:nth-child(1){width:500px;height:500px;background:#7c5cfc;top:-10%;left:-5%;animation-delay:0s}
-.bg-orbs span:nth-child(2){width:400px;height:400px;background:#ff6bcb;bottom:-10%;right:-5%;animation-delay:-7s}
-.bg-orbs span:nth-child(3){width:350px;height:350px;background:#00d2ff;top:40%;left:50%;animation-delay:-14s}
-@keyframes orbFloat{
-  0%{transform:translate(0,0) scale(1)}
-  33%{transform:translate(40px,-60px) scale(1.1)}
-  66%{transform:translate(-30px,40px) scale(0.9)}
-  100%{transform:translate(20px,-20px) scale(1.05)}
-}
+.bg-orbs span{position:absolute;border-radius:50%;filter:blur(90px);opacity:.22;animation:orb 22s infinite ease-in-out alternate}
+.bg-orbs span:nth-child(1){width:520px;height:520px;background:#7c5cfc;top:-14%;left:-8%}
+.bg-orbs span:nth-child(2){width:420px;height:420px;background:#ff6bcb;bottom:-12%;right:-6%;animation-delay:-7s}
+.bg-orbs span:nth-child(3){width:360px;height:360px;background:#22d3ee;top:44%;left:56%;animation-delay:-14s;opacity:.14}
+@keyframes orb{0%{transform:translate(0,0) scale(1)}50%{transform:translate(32px,-48px) scale(1.08)}100%{transform:translate(-24px,26px) scale(.94)}}
 
-/* === LAYOUT === */
-.page{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:24px 28px 60px}
+.page{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 
-/* === CREATOR BADGE === */
-.creator-badge{
-  position:fixed;top:20px;right:24px;z-index:100;
-  background:rgba(255,255,255,0.1);backdrop-filter:blur(20px);
-  border:1px solid rgba(255,255,255,0.2);
-  padding:8px 20px;border-radius:40px;
-  font-size:13px;font-weight:500;color:rgba(255,255,255,0.85);
-  box-shadow:0 4px 24px rgba(0,0,0,0.2);
-  animation:badgeFloat 4s infinite ease-in-out;
+/* ============ HERO ============ */
+.hero{padding:var(--sp-8) 0 var(--sp-6);text-align:center}
+.hero-eyebrow{
+  display:inline-flex;align-items:center;gap:var(--sp-2);
+  font-size:var(--fs-xs);letter-spacing:.08em;color:#cfcaff;
+  background:rgba(124,92,252,.14);border:1px solid rgba(124,92,252,.34);
+  padding:6px 14px;border-radius:999px;margin-bottom:var(--sp-4);
 }
-@keyframes badgeFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.hero-eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:#5eead4;box-shadow:0 0 10px #5eead4}
+.hero h1{
+  font-size:var(--fs-2xl);font-weight:900;letter-spacing:.04em;line-height:1.25;
+  background:linear-gradient(135deg,#fff 8%,#cfc2ff 48%,#ff9bd8 96%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.hero-sub{margin-top:var(--sp-3);font-size:var(--fs-md);color:var(--dim);line-height:1.7}
+.hero-actions{display:flex;flex-wrap:wrap;gap:var(--sp-3);justify-content:center;margin-top:var(--sp-5)}
+.btn{
+  display:inline-flex;align-items:center;gap:var(--sp-2);
+  font-size:var(--fs-sm);font-weight:700;padding:11px 22px;border-radius:999px;
+  border:1px solid transparent;transition:transform .3s var(--ease),box-shadow .3s,border-color .3s,background .3s;
+}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;box-shadow:0 10px 26px rgba(124,92,252,.36)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(124,92,252,.48)}
+.btn-ghost{background:rgba(255,255,255,.05);border-color:var(--line-2);color:var(--text)}
+.btn-ghost:hover{transform:translateY(-2px);background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.34)}
+.hero-last{margin-top:var(--sp-4);font-size:var(--fs-xs);color:rgba(255,255,255,.62);min-height:20px}
+.hero-last a{color:#b9b2ff;border-bottom:1px dashed rgba(185,178,255,.5);padding-bottom:1px}
+.hero-last a:hover{color:#fff}
 
-/* === HEADER === */
-.header{text-align:center;padding:50px 0 36px;position:relative}
-.header h1{
-  font-size:42px;font-weight:900;
-  background:linear-gradient(135deg,#fff 0%,#c4b5fd 50%,#ff6bcb 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;
-  letter-spacing:2px;
+/* ============ FILTER BAR ============ */
+.filters{
+  position:sticky;top:var(--sp-3);z-index:30;
+  display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
+  padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-3);
+  background:rgba(13,11,32,.82);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--line);border-radius:999px;
+  box-shadow:0 14px 36px rgba(4,3,18,.45);
 }
+.chip{
+  font-family:inherit;font-size:var(--fs-sm);font-weight:500;color:var(--dim);
+  background:rgba(255,255,255,.04);border:1px solid var(--line);
+  padding:8px 16px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  transition:color .25s,border-color .25s,background .25s,transform .25s var(--ease);
+}
+.chip:hover{color:#fff;border-color:var(--line-2);background:rgba(255,255,255,.08)}
+.chip[aria-pressed="true"]{
+  color:#fff;border-color:transparent;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  box-shadow:0 6px 18px rgba(124,92,252,.34);
+}
+.chip-count{font-size:11px;opacity:.7;margin-left:5px}
+.search{margin-left:auto;position:relative}
+.search input{
+  font-family:inherit;font-size:var(--fs-sm);color:var(--text);
+  background:rgba(255,255,255,.05);border:1px solid var(--line);
+  width:220px;padding:9px 16px 9px 36px;border-radius:999px;
+  transition:border-color .25s,background .25s,width .25s var(--ease);
+}
+.search input::placeholder{color:var(--mute)}
+.search input:focus{outline:none;border-color:rgba(124,92,252,.6);background:rgba(124,92,252,.1);width:260px}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;stroke:var(--mute);fill:none;stroke-width:2;pointer-events:none}
 
-/* === SECTION === */
-.section{margin-top:40px}
-.section-head{
-  display:flex;align-items:center;gap:12px;
-  margin-bottom:18px;padding-left:2px;
-}
+/* ============ SECTION ============ */
+.section{margin-top:var(--sp-7)}
+.section[hidden]{display:none}
+.section-head{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)}
 .section-icon{
-  width:36px;height:36px;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:18px;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  box-shadow:0 4px 16px rgba(124,92,252,0.3);
+  width:38px;height:38px;flex:none;border-radius:var(--r-md);display:grid;place-items:center;font-size:18px;
+  background:linear-gradient(135deg,rgba(124,92,252,.9),rgba(255,107,203,.85));
+  box-shadow:0 6px 18px rgba(124,92,252,.3);
 }
-.section-label{
-  font-size:18px;font-weight:700;
-  background:linear-gradient(90deg,#fff,rgba(255,255,255,0.7));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;
-}
-.section-line{flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.15),transparent)}
+.section-title{font-size:var(--fs-lg);font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.section-count{font-size:var(--fs-xs);color:var(--mute);white-space:nowrap}
+.section-line{flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
 
-/* === CARD GRID === */
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-  gap:18px;
-}
+/* ============ GRID ============ */
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4)}
+.cell{position:relative;display:flex}
+.cell--wide{grid-column:span 2}
+.cell[hidden]{display:none}
 
-/* === CARD === */
+/* ============ CARD ============ */
 .card{
-  background:var(--card-bg);
-  border:1px solid var(--glass-border);
-  border-radius:var(--radius);
-  overflow:hidden;cursor:pointer;
-  text-decoration:none;color:inherit;display:block;
-  transition:transform .35s cubic-bezier(.22,1,.36,1),
-             box-shadow .35s cubic-bezier(.22,1,.36,1),
-             border-color .35s;
-  backdrop-filter:blur(12px);
-  position:relative;
+  position:relative;display:flex;flex-direction:column;width:100%;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  overflow:hidden;
+  transition:transform .4s var(--ease),border-color .3s,box-shadow .4s var(--ease),background .3s;
 }
-.card::before{
-  content:'';position:absolute;inset:0;border-radius:var(--radius);
-  background:linear-gradient(135deg,rgba(124,92,252,0.15),rgba(255,107,203,0.08));
-  opacity:0;transition:opacity .35s;pointer-events:none;z-index:0;
+.cell:hover .card{transform:translateY(-6px);border-color:var(--line-2);box-shadow:var(--shadow);background:var(--card-2)}
+.card-thumb{position:relative;aspect-ratio:16/10;overflow:hidden;background:#151233}
+.cell--wide .card-thumb{aspect-ratio:16/7}
+.card-thumb img,.card-thumb svg{display:block;width:100%;height:100%;object-fit:cover;transition:transform .6s var(--ease)}
+.cell:hover .card-thumb img,.cell:hover .card-thumb svg{transform:scale(1.05)}
+.card-thumb::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);
+  background:linear-gradient(to top,rgba(10,9,24,.42),transparent 34%);
 }
-.card:hover{
-  transform:translateY(-8px) scale(1.02);
-  box-shadow:0 20px 60px rgba(124,92,252,0.2),0 0 0 1px rgba(255,255,255,0.1);
-  border-color:rgba(255,255,255,0.3);
+.card-body{padding:var(--sp-3) var(--sp-4) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-1)}
+.card-title{font-size:var(--fs-md);font-weight:700;line-height:1.45;letter-spacing:.01em}
+.cell--wide .card-title{font-size:var(--fs-lg)}
+.card-desc{
+  font-size:var(--fs-sm);color:var(--dim);line-height:1.6;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
-.card:hover::before{opacity:1}
 
-.card-thumb{
-  height:140px;position:relative;overflow:hidden;
-  background-size:cover;background-position:center;
-}
-.card-thumb img{
-  width:100%;height:100%;object-fit:cover;
-  transition:transform .5s cubic-bezier(.22,1,.36,1);
-}
-.card:hover .card-thumb img{transform:scale(1.08)}
-
-.card-body{padding:16px 18px 20px;position:relative;z-index:1}
-.card-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;line-height:1.4}
-.card-desc{font-size:12px;color:var(--text-dim);line-height:1.6}
-
-/* === BADGE === */
+/* 徽章 */
 .badge{
-  position:absolute;top:10px;right:10px;z-index:2;
-  font-size:10px;padding:4px 10px;border-radius:20px;
-  font-weight:600;letter-spacing:0.5px;
+  position:absolute;top:var(--sp-2);left:var(--sp-2);z-index:2;
+  font-size:11px;font-weight:700;letter-spacing:.04em;
+  padding:3px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.24);
   backdrop-filter:blur(8px);
-  border:1px solid rgba(255,255,255,0.2);
 }
-.badge-hot{background:rgba(255,75,75,0.85);color:#fff}
-.badge-new{background:rgba(0,210,130,0.85);color:#fff}
-.badge-main{background:rgba(124,92,252,0.85);color:#fff}
+.badge-main{background:rgba(124,92,252,.92);color:#fff}
+.badge-hot{background:rgba(255,86,86,.92);color:#fff}
+.badge-new{background:rgba(34,211,238,.92);color:#04222b}
 
-/* === FOOTER === */
+/* 收藏 */
+.fav{
+  position:absolute;top:var(--sp-2);right:var(--sp-2);z-index:3;
+  width:32px;height:32px;display:grid;place-items:center;cursor:pointer;
+  border-radius:50%;border:1px solid rgba(255,255,255,.24);
+  background:rgba(10,9,24,.5);backdrop-filter:blur(8px);
+  opacity:0;transform:scale(.9);
+  transition:opacity .25s,transform .25s var(--ease),background .25s,border-color .25s;
+}
+.fav svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:1.7;stroke-linejoin:round}
+.cell:hover .fav,.fav:focus-visible{opacity:1;transform:scale(1)}
+.fav[aria-pressed="true"]{opacity:1;transform:scale(1);background:rgba(251,191,36,.9);border-color:rgba(251,191,36,.9)}
+.fav[aria-pressed="true"] svg{fill:#3b2600;stroke:#3b2600}
+@media(hover:none){.fav{opacity:1;transform:scale(1)}}
+
+/* 空状态 */
+.empty{display:none;text-align:center;padding:var(--sp-8) var(--sp-4);color:var(--mute)}
+.empty.show{display:block}
+.empty-title{font-size:var(--fs-md);color:var(--dim);margin-bottom:var(--sp-2)}
+.empty-tip{font-size:var(--fs-sm)}
+
+/* ============ FOOTER / BACK TO TOP ============ */
 .footer{
-  text-align:center;padding:48px 0 20px;
-  font-size:12px;color:var(--text-dim);
-  border-top:1px solid rgba(255,255,255,0.06);
-  margin-top:48px;
+  margin-top:var(--sp-8);padding-top:var(--sp-5);
+  border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap;
+  font-size:var(--fs-xs);color:var(--mute);
 }
+.to-top{
+  position:fixed;right:var(--sp-5);bottom:var(--sp-5);z-index:40;
+  width:44px;height:44px;border-radius:50%;cursor:pointer;
+  border:1px solid var(--line-2);background:rgba(20,17,44,.86);backdrop-filter:blur(12px);
+  color:#fff;font-size:16px;display:grid;place-items:center;
+  opacity:0;pointer-events:none;transform:translateY(8px);
+  transition:opacity .3s,transform .3s var(--ease),background .3s;
+}
+.to-top.show{opacity:1;pointer-events:auto;transform:none}
+.to-top:hover{background:rgba(124,92,252,.9);border-color:transparent}
 
-/* === ENTRANCE ANIMATION === */
-.card{opacity:0;transform:translateY(30px);animation:cardIn .6s forwards}
-@keyframes cardIn{to{opacity:1;transform:translateY(0)}}
-.section:nth-child(2) .card:nth-child(1){animation-delay:.05s}
-.section:nth-child(3) .card:nth-child(1){animation-delay:.05s}
-.section:nth-child(3) .card:nth-child(2){animation-delay:.1s}
-.section:nth-child(3) .card:nth-child(3){animation-delay:.15s}
-.section:nth-child(3) .card:nth-child(4){animation-delay:.2s}
-.section:nth-child(3) .card:nth-child(5){animation-delay:.25s}
-.section:nth-child(3) .card:nth-child(6){animation-delay:.3s}
-.section:nth-child(3) .card:nth-child(7){animation-delay:.35s}
-.section:nth-child(3) .card:nth-child(8){animation-delay:.4s}
-.section:nth-child(3) .card:nth-child(9){animation-delay:.45s}
-.section:nth-child(4) .card:nth-child(1){animation-delay:.15s}
-.section:nth-child(4) .card:nth-child(2){animation-delay:.2s}
-.section:nth-child(5) .card:nth-child(1){animation-delay:.2s}
-.section:nth-child(5) .card:nth-child(2){animation-delay:.25s}
-.section:nth-child(5) .card:nth-child(3){animation-delay:.3s}
-.section:nth-child(5) .card:nth-child(4){animation-delay:.35s}
-
-/* === 精品卡片（学勤管家 / 考试计时器） === */
-.card-accent{
-  border-color:rgba(255,255,255,0.22);
-  box-shadow:0 12px 34px rgba(6,10,30,0.38);
-}
-.card-accent::after{
-  content:'';position:absolute;inset:0;border-radius:var(--radius);pointer-events:none;z-index:3;
-  background:linear-gradient(140deg,rgba(255,255,255,0.22),rgba(255,255,255,0) 45%);
-  opacity:0;transition:opacity .35s;
-}
-.card-accent:hover::after{opacity:1}
-.card-accent:hover{
-  box-shadow:0 24px 64px rgba(124,92,252,0.34),0 0 0 1px rgba(255,255,255,0.28);
-}
-.card-accent .card-body{padding-top:14px}
-.card-accent .card-title{letter-spacing:0.5px}
-
-/* 缩略图：SVG 自适应 + 缓慢流光 */
-.thumb-art{overflow:hidden}
-.thumb-art > svg{display:block;width:100%;height:100%;
-  transition:transform .6s cubic-bezier(.22,1,.36,1);}
-.card:hover .thumb-art > svg{transform:scale(1.07)}
-.thumb-art::after{
-  content:'';position:absolute;top:-40%;left:-140%;width:55%;height:190%;
-  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.22),rgba(255,255,255,0));
-  transform:rotate(16deg);animation:thumbShine 5.2s infinite;pointer-events:none;
-}
-@keyframes thumbShine{
-  0%{left:-140%}
-  45%{left:135%}
-  100%{left:135%}
-}
+/* ============ 入场动效 ============ */
+.cell{opacity:0;transform:translateY(16px)}
+.cell.in{opacity:1;transform:none;transition:opacity .55s var(--ease),transform .55s var(--ease);transition-delay:var(--d,0ms)}
 @media(prefers-reduced-motion:reduce){
-  .thumb-art::after{animation:none;opacity:0}
+  html{scroll-behavior:auto}
+  .cell{opacity:1;transform:none;transition:none}
+  .bg-orbs span{animation:none}
+  *{transition-duration:.01ms!important}
 }
 
-/* === RESPONSIVE === */
-
-@media(max-width:640px){
-  .page{padding:16px 16px 40px}
-  .header{padding:36px 0 24px}
-  .header h1{font-size:30px}
-  .grid{grid-template-columns:repeat(2,1fr);gap:12px}
-  .card-thumb{height:110px}
-  .card-body{padding:12px 14px 16px}
-  .card-title{font-size:14px}
-  .creator-badge{top:12px;right:12px;font-size:11px;padding:6px 14px}
+/* ============ RESPONSIVE ============ */
+@media(max-width:1120px){
+  .grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:860px){
+  .page{padding:0 var(--sp-4) var(--sp-7)}
+  .hero{padding:var(--sp-7) 0 var(--sp-5)}
+  .hero h1{font-size:32px}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-3)}
+  .cell--wide{grid-column:span 2}
+  .cell--wide .card-thumb{aspect-ratio:16/8}
+  .cell--wide .card-title{font-size:var(--fs-md)}
+  .search{order:3;width:100%;margin-left:0;margin-top:var(--sp-1)}
+  .search input,.search input:focus{width:100%}
+  .filters{top:var(--sp-2);gap:var(--sp-2);padding:var(--sp-3);border-radius:var(--r-lg)}
+  .chip{padding:6px 12px;font-size:13px}
+  .chip-count{font-size:10px;margin-left:3px}
+}
+@media(max-width:420px){
+  .hero h1{font-size:28px}
+  .hero-sub{font-size:var(--fs-sm)}
+  .card-body{padding:var(--sp-3)}
+  .card-title{font-size:15px}
+  .card-desc{font-size:13px}
+  .section-title{font-size:17px}
 }
 </style>
+<noscript><style>
+  /* 禁用 JS 时，卡片直接可见，避免整页白屏 */
+  .cell{opacity:1!important;transform:none!important}
+</style></noscript>
 </head>
 <body>
 
-<!-- Animated background orbs -->
 <div class="bg-orbs"><span></span><span></span><span></span></div>
-
-<!-- Creator badge -->
-<div class="creator-badge">© 智趣课堂 开发者：吴胜闯</div>
 
 <div class="page">
 
-  <!-- Header -->
-  <div class="header">
+  <header class="hero">
+    <span class="hero-eyebrow">课堂工具箱 · 18 个工具</span>
     <h1>智趣课堂</h1>
-  </div>
-
-  <!-- 核心功能 -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-icon">⭐</div>
-      <div class="section-label">习惯养成</div>
-      <div class="section-line"></div>
+    <p class="hero-sub">答题闯关、课堂互动、教学小工具，开学第一天就能用</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="index.html">进入班级宠物</a>
+      <a class="btn btn-ghost" href="kaoshijishiqi.html">打开考试计时器</a>
     </div>
-    <div class="grid">
-      <a class="card" href="index.html" target="_blank">
-        <div class="card-thumb" data-card-id="banji">
-          <span class="badge badge-main">主站</span>
-          <img src="home-cards/banji.jpg" alt="班级宠物">
-        </div>
-        <div class="card-body">
-          <div class="card-title">班级宠物</div>
-          <div class="card-desc">养成宠物、课堂互动、积分排行，登录即用</div>
-        </div>
-      </a>
-    </div>
-  </div>
+    <div class="hero-last" id="heroLast"></div>
+  </header>
 
-  <!-- 答题闯关 -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-icon">🎮</div>
-      <div class="section-label">趣味学习</div>
-      <div class="section-line"></div>
-    </div>
-    <div class="grid">
+  <nav class="filters" id="filters" aria-label="筛选工具">
+    <button class="chip" type="button" data-filter="all" aria-pressed="true">全部<span class="chip-count">18</span></button>
+    <button class="chip" type="button" data-filter="tool" aria-pressed="false">课堂工具<span class="chip-count">7</span></button>
+    <button class="chip" type="button" data-filter="game" aria-pressed="false">闯关游戏<span class="chip-count">11</span></button>
+    <button class="chip" type="button" data-filter="fav" aria-pressed="false">我的收藏<span class="chip-count" id="favCount">0</span></button>
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <input type="search" id="q" placeholder="搜索工具…" aria-label="搜索工具名称" autocomplete="off">
+    </label>
+  </nav>
 
-      <a class="card" href="jiangyaoji.html" target="_blank">
-        <div class="card-thumb" data-card-id="jiangyaoji">
-          <span class="badge badge-hot">热门</span>
-          <img src="home-cards/jiangyaoji.jpg" alt="降妖记">
-        </div>
-        <div class="card-body">
-          <div class="card-title">降妖记</div>
-          <div class="card-desc">西游降妖，答题除魔，挑战十方妖王</div>
-        </div>
-      </a>
-
-      <a class="card" href="jiangmoji.html" target="_blank">
-        <div class="card-thumb" data-card-id="jiangmoji">
-          <span class="badge badge-hot">热门</span>
-          <img src="home-cards/jiangmoji.jpg" alt="降魔记">
-        </div>
-        <div class="card-body">
-          <div class="card-title">降魔记</div>
-          <div class="card-desc">降妖除魔，答题闯关，修炼升级</div>
-        </div>
-      </a>
-
-      <a class="card" href="zhenjiadasheng.html" target="_blank">
-        <div class="card-thumb" data-card-id="zhenjiadasheng">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/zhenjiadasheng.jpg" alt="真假大圣">
-        </div>
-        <div class="card-body">
-          <div class="card-title">真假大圣</div>
-          <div class="card-desc">火眼金睛，辨别真假，答题闯关</div>
-        </div>
-      </a>
-
-      <a class="card" href="wulinzhengba.html" target="_blank">
-        <div class="card-thumb" data-card-id="wulinzhengba">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/wulinzhengba.jpg" alt="武林争霸">
-        </div>
-        <div class="card-body">
-          <div class="card-title">武林争霸</div>
-          <div class="card-desc">水墨风格，武侠对战，答题闯关</div>
-        </div>
-      </a>
-
-      <a class="card" href="damaoxian.html" target="_blank">
-        <div class="card-thumb" data-card-id="damaoxian">
-          <span class="badge badge-hot">热门</span>
-          <img src="home-cards/damaoxian.jpg" alt="数学大冒险">
-        </div>
-        <div class="card-body">
-          <div class="card-title">数学大冒险</div>
-          <div class="card-desc">横版闯关，答题打怪，挑战吴老师Boss</div>
-        </div>
-      </a>
-
-      <a class="card" href="mengdaxia.html" target="_blank">
-        <div class="card-thumb" data-card-id="mengdaxia">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/mengdaxia.jpg" alt="萌大侠">
-        </div>
-        <div class="card-body">
-          <div class="card-title">萌大侠</div>
-          <div class="card-desc">红蓝对决，答题格斗，谁是真大侠</div>
-        </div>
-      </a>
-
-      <a class="card" href="bahe.html" target="_blank">
-        <div class="card-thumb" data-card-id="bahe">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/bahe.jpg" alt="拔河答题大挑战">
-        </div>
-        <div class="card-body">
-          <div class="card-title">拔河答题大挑战</div>
-          <div class="card-desc">红蓝对抗，答题拔河，团队竞技</div>
-        </div>
-      </a>
-
-      <a class="card" href="shendouluo.html" target="_blank">
-        <div class="card-thumb" data-card-id="shendouluo">
-          <span class="badge badge-hot">热门</span>
-          <img src="home-cards/shendouluo.jpg" alt="神斗罗">
-        </div>
-        <div class="card-body">
-          <div class="card-title">神斗罗</div>
-          <div class="card-desc">横版射击，神话角色，闯关答题</div>
-        </div>
-      </a>
-
-      <a class="card" href="zhandouluo.html" target="_blank">
-        <div class="card-thumb" data-card-id="zhandouluo">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/zhandouluo.jpg" alt="战斗罗">
-        </div>
-        <div class="card-body">
-          <div class="card-title">战斗罗</div>
-          <div class="card-desc">横版射击，多角色切换，Boss闯关</div>
-        </div>
-      </a>
-
-      <a class="card" href="qingya-wenjian/index.html" target="_blank">
-        <div class="card-thumb" data-card-id="qingya-wenjian" style="background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);">
-          <span class="badge badge-new">新</span>
-          <svg viewBox="0 0 200 140" style="width:100%;height:100%;">
+  <main>
+    <section class="section" data-section>
+      <div class="section-head">
+        <div class="section-icon">🧰</div>
+        <h2 class="section-title">课堂工具</h2>
+        <span class="section-count">7 个</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid">
+      <div class="cell cell--wide" data-cat="tool" data-id="index.html">
+        <a class="card" href="index.html">
+          <div class="card-thumb" data-card-id="banji"><span class="badge badge-main">主站</span><img src="home-cards/banji.jpg" alt="班级宠物"></div>
+          <div class="card-body">
+            <h3 class="card-title">班级宠物</h3>
+            <p class="card-desc">养成宠物、课堂互动、积分排行，登录即用</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 班级宠物" data-fav="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="kaoshijishiqi.html">
+        <a class="card" href="kaoshijishiqi.html">
+          <div class="card-thumb"><svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" role="img" aria-label="考试计时器">
             <defs>
-              <linearGradient id="qySky" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#0f3460"/>
-                <stop offset="60%" stop-color="#e94560" stop-opacity="0.4"/>
-                <stop offset="100%" stop-color="#f5a623" stop-opacity="0.6"/>
+              <linearGradient id="ksBg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#050912"/>
+                <stop offset="50%" stop-color="#0d1b33"/>
+                <stop offset="100%" stop-color="#0b3a55"/>
               </linearGradient>
-              <linearGradient id="qyMtn" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#2d4a7a"/>
-                <stop offset="100%" stop-color="#1a1a2e"/>
+              <radialGradient id="ksGlow" cx="0.3" cy="0.45" r="0.55">
+                <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.38"/>
+                <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="ksArc" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#22d3ee"/>
+                <stop offset="100%" stop-color="#818cf8"/>
               </linearGradient>
             </defs>
-            <rect width="200" height="140" fill="url(#qySky)"/>
-            <polygon points="0,100 40,55 80,80 120,45 160,70 200,50 200,140 0,140" fill="url(#qyMtn)" opacity="0.8"/>
-            <polygon points="0,110 50,75 100,95 150,65 200,85 200,140 0,140" fill="#1a1a2e" opacity="0.9"/>
-            <circle cx="160" cy="35" r="12" fill="#f5a623" opacity="0.8"/>
-            <text x="100" y="125" font-size="18" fill="#e8d3ad" text-anchor="middle" font-family="Ma Shan Zheng,serif" font-weight="bold" opacity="0.9">青崖问剑</text>
-          </svg>
-        </div>
-        <div class="card-body">
-          <div class="card-title">青崖问剑</div>
-          <div class="card-desc">3D武侠开放世界，实时光影，探索冒险</div>
-        </div>
-      </a>
-
-      <a class="card" href="wujinxiake/" target="_blank">
-        <div class="card-thumb" data-card-id="wujinxiake">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/wujinxiake.jpg" alt="无尽侠客">
-        </div>
-        <div class="card-body">
-          <div class="card-title">无尽侠客</div>
-          <div class="card-desc">2.5D横版武侠格斗，八大职业连招闯关</div>
-        </div>
-      </a>
-
-    </div>
-  </div>
-
-  <!-- 互动课堂 -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-icon">📢</div>
-      <div class="section-label">互动课堂</div>
-      <div class="section-line"></div>
-    </div>
-    <div class="grid">
-
-      <a class="card" href="starrollcall.html" target="_blank">
-        <div class="card-thumb" data-card-id="starrollcall">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/starrollcall.jpg" alt="播报星空点名">
-        </div>
-        <div class="card-body">
-          <div class="card-title">播报星空点名</div>
-          <div class="card-desc">星空旋转点名，随机抽选，课堂必备</div>
-        </div>
-      </a>
-
-      <a class="card" href="aoyoutiandi.html" target="_blank">
-        <div class="card-thumb" data-card-id="aoyoutiandi">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/aoyoutiandi.jpg" alt="早读神器：遨游天地">
-        </div>
-        <div class="card-body">
-          <div class="card-title">早读神器：遨游天地</div>
-          <div class="card-desc">大声朗读，化身飞鸟翱翔天地之间</div>
-        </div>
-      </a>
-
-    </div>
-  </div>
-
-  <!-- 实用工具 -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-icon">🔧</div>
-      <div class="section-label">实用工具</div>
-      <div class="section-line"></div>
-    </div>
-    <div class="grid">
-
-      <a class="card" href="shuxuezuotu.html" target="_blank">
-        <div class="card-thumb" data-card-id="shuxuezuotu">
-          <span class="badge badge-new">新</span>
-          <img src="home-cards/shuxuezuotu.jpg" alt="数学作图工具">
-        </div>
-        <div class="card-body">
-          <div class="card-title">数学作图工具</div>
-          <div class="card-desc">函数图像，几何作图，动态演示</div>
-        </div>
-      </a>
-
-
-      <a class="card card-accent" href="xueqinguanjia.html" target="_blank">
-        <div class="card-thumb thumb-art">
-          <span class="badge badge-new">新</span>
-          <svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" role="img" aria-label="学勤管家">
+            <rect width="200" height="140" fill="url(#ksBg)"/>
+            <rect width="200" height="140" fill="url(#ksGlow)"/>
+            <g stroke="#38bdf8" stroke-opacity="0.09" stroke-width="1">
+              <path d="M0 35H200M0 70H200M0 105H200M50 0V140M100 0V140M150 0V140"/>
+            </g>
+            <!-- 表盘 -->
+            <g transform="translate(58,70)">
+              <circle r="32" fill="#0b1220" opacity="0.85"/>
+              <circle r="32" fill="none" stroke="#38bdf8" stroke-opacity="0.18" stroke-width="7"/>
+              <circle r="32" fill="none" stroke="url(#ksArc)" stroke-width="5.5" stroke-linecap="round"
+                      stroke-dasharray="132 201" transform="rotate(-90)"/>
+              <g stroke="#7dd3fc" stroke-opacity="0.55" stroke-width="1.5" stroke-linecap="round">
+                <path d="M0 -25V-21.5"/><path d="M0 21.5V25"/>
+                <path d="M-25 0H-21.5"/><path d="M21.5 0H25"/>
+              </g>
+              <path d="M0 0V-16" stroke="#e8f6ff" stroke-width="2.8" stroke-linecap="round"/>
+              <path d="M0 0L9.5 6" stroke="#22d3ee" stroke-width="2.2" stroke-linecap="round"/>
+              <circle r="3" fill="#22d3ee"/>
+              <circle r="1.2" fill="#050912"/>
+            </g>
+            <!-- 数字化时间 -->
+            <text x="103" y="64" font-size="24" font-weight="700" fill="#eaf6ff"
+                  font-family="'Noto Sans SC',ui-monospace,monospace" letter-spacing="1">45:00</text>
+            <text x="104" y="78" font-size="9" fill="#7dd3fc" opacity="0.9"
+                  font-family="'Noto Sans SC',sans-serif" letter-spacing="2">剩余时间</text>
+            <rect x="103" y="85" width="73" height="20" rx="10" fill="#38bdf8" opacity="0.14"/>
+            <rect x="103" y="85" width="73" height="20" rx="10" fill="none" stroke="#38bdf8" stroke-opacity="0.4"/>
+            <circle cx="112" cy="95" r="2.8" fill="#f87171"/>
+            <text x="119" y="98.6" font-size="9" fill="#cfe9ff"
+                  font-family="'Noto Sans SC',sans-serif">全屏投影</text>
+          </svg></div>
+          <div class="card-body">
+            <h3 class="card-title">考试计时器</h3>
+            <p class="card-desc">考试倒计时，科目设置，全屏投影，语音提醒</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 考试计时器" data-fav="kaoshijishiqi.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="starrollcall.html">
+        <a class="card" href="starrollcall.html">
+          <div class="card-thumb" data-card-id="starrollcall"><img src="home-cards/starrollcall.jpg" alt="播报星空点名"></div>
+          <div class="card-body">
+            <h3 class="card-title">播报星空点名</h3>
+            <p class="card-desc">星空旋转点名，随机抽选，课堂必备</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 播报星空点名" data-fav="starrollcall.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="aoyoutiandi.html">
+        <a class="card" href="aoyoutiandi.html">
+          <div class="card-thumb" data-card-id="aoyoutiandi"><img src="home-cards/aoyoutiandi.jpg" alt="早读神器：遨游天地"></div>
+          <div class="card-body">
+            <h3 class="card-title">早读神器：遨游天地</h3>
+            <p class="card-desc">大声朗读，化身飞鸟翱翔天地之间</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 早读神器：遨游天地" data-fav="aoyoutiandi.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="shuxuezuotu.html">
+        <a class="card" href="shuxuezuotu.html">
+          <div class="card-thumb" data-card-id="shuxuezuotu"><img src="home-cards/shuxuezuotu.jpg" alt="数学作图工具"></div>
+          <div class="card-body">
+            <h3 class="card-title">数学作图工具</h3>
+            <p class="card-desc">函数图像，几何作图，动态演示</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 数学作图工具" data-fav="shuxuezuotu.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="xueqinguanjia.html">
+        <a class="card" href="xueqinguanjia.html">
+          <div class="card-thumb"><svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" role="img" aria-label="学勤管家">
             <defs>
               <linearGradient id="xqBg" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stop-color="#4338ca"/>
@@ -528,132 +441,322 @@ body{
               <rect x="112" y="88" width="60" height="5" rx="2.5" fill="#ffffff" opacity="0.25"/>
               <rect x="112" y="88" width="54" height="5" rx="2.5" fill="url(#xqBar)"/>
             </g>
-          </svg>
-        </div>
-        <div class="card-body">
-          <div class="card-title">学勤管家</div>
-          <div class="card-desc">学生在校情况管理，考勤记录，行为追踪</div>
-        </div>
-      </a>
+          </svg></div>
+          <div class="card-body">
+            <h3 class="card-title">学勤管家</h3>
+            <p class="card-desc">学生在校情况管理，考勤记录，行为追踪</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 学勤管家" data-fav="xueqinguanjia.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="tool" data-id="javascript:void(0)">
+        <a class="card" href="javascript:void(0)" onclick="openChuangge()" target="_blank">
+          <div class="card-thumb"><svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" role="img" aria-label="闯哥影视"><defs><linearGradient id="cgBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1b1030"/><stop offset="55%" stop-color="#2a1140"/><stop offset="100%" stop-color="#3a0f26"/></linearGradient><linearGradient id="cgPlay" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff8fa8"/><stop offset="100%" stop-color="#ff3d71"/></linearGradient><radialGradient id="cgGlow" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#ff4d7e" stop-opacity="0.42"/><stop offset="100%" stop-color="#ff4d7e" stop-opacity="0"/></radialGradient></defs><rect width="200" height="140" fill="url(#cgBg)"/><circle cx="100" cy="64" r="54" fill="url(#cgGlow)"/><g fill="#ffffff" opacity="0.10"><rect x="9" y="12" width="7" height="9" rx="2"/><rect x="9" y="33" width="7" height="9" rx="2"/><rect x="9" y="54" width="7" height="9" rx="2"/><rect x="9" y="75" width="7" height="9" rx="2"/><rect x="9" y="96" width="7" height="9" rx="2"/><rect x="9" y="117" width="7" height="9" rx="2"/><rect x="184" y="12" width="7" height="9" rx="2"/><rect x="184" y="33" width="7" height="9" rx="2"/><rect x="184" y="54" width="7" height="9" rx="2"/><rect x="184" y="75" width="7" height="9" rx="2"/><rect x="184" y="96" width="7" height="9" rx="2"/><rect x="184" y="117" width="7" height="9" rx="2"/></g><circle cx="100" cy="64" r="24" fill="url(#cgPlay)"/><path d="M94 54.5l16 9.5-16 9.5z" fill="#fff"/><text x="100" y="110" font-size="10" fill="#ffd9e3" text-anchor="middle" font-family="Noto Sans SC,sans-serif" letter-spacing="3" opacity="0.9">多源聚合 · 免费观看</text></svg></div>
+          <div class="card-body">
+            <h3 class="card-title">闯哥影视</h3>
+            <p class="card-desc">免费在线视频搜索与观看，多源聚合</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 闯哥影视" data-fav="javascript:void(0)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      </div>
+    </section>
 
-      <a class="card card-accent" href="kaoshijishiqi.html" target="_blank">
-        <div class="card-thumb thumb-art">
-          <span class="badge badge-new">新</span>
-          <svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" role="img" aria-label="考试计时器">
+    <section class="section" data-section>
+      <div class="section-head">
+        <div class="section-icon">🎮</div>
+        <h2 class="section-title">闯关游戏</h2>
+        <span class="section-count">11 个</span>
+        <div class="section-line"></div>
+      </div>
+      <div class="grid">
+      <div class="cell" data-cat="game" data-id="jiangyaoji.html">
+        <a class="card" href="jiangyaoji.html">
+          <div class="card-thumb" data-card-id="jiangyaoji"><span class="badge badge-hot">热门</span><img src="home-cards/jiangyaoji.jpg" alt="降妖记"></div>
+          <div class="card-body">
+            <h3 class="card-title">降妖记</h3>
+            <p class="card-desc">西游降妖，答题除魔，挑战十方妖王</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 降妖记" data-fav="jiangyaoji.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="jiangmoji.html">
+        <a class="card" href="jiangmoji.html">
+          <div class="card-thumb" data-card-id="jiangmoji"><img src="home-cards/jiangmoji.jpg" alt="降魔记"></div>
+          <div class="card-body">
+            <h3 class="card-title">降魔记</h3>
+            <p class="card-desc">降妖除魔，答题闯关，修炼升级</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 降魔记" data-fav="jiangmoji.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="zhenjiadasheng.html">
+        <a class="card" href="zhenjiadasheng.html">
+          <div class="card-thumb" data-card-id="zhenjiadasheng"><img src="home-cards/zhenjiadasheng.jpg" alt="真假大圣"></div>
+          <div class="card-body">
+            <h3 class="card-title">真假大圣</h3>
+            <p class="card-desc">火眼金睛，辨别真假，答题闯关</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 真假大圣" data-fav="zhenjiadasheng.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="wulinzhengba.html">
+        <a class="card" href="wulinzhengba.html">
+          <div class="card-thumb" data-card-id="wulinzhengba"><img src="home-cards/wulinzhengba.jpg" alt="武林争霸"></div>
+          <div class="card-body">
+            <h3 class="card-title">武林争霸</h3>
+            <p class="card-desc">水墨风格，武侠对战，答题闯关</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 武林争霸" data-fav="wulinzhengba.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="damaoxian.html">
+        <a class="card" href="damaoxian.html">
+          <div class="card-thumb" data-card-id="damaoxian"><span class="badge badge-hot">热门</span><img src="home-cards/damaoxian.jpg" alt="数学大冒险"></div>
+          <div class="card-body">
+            <h3 class="card-title">数学大冒险</h3>
+            <p class="card-desc">横版闯关，答题打怪，挑战吴老师Boss</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 数学大冒险" data-fav="damaoxian.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="mengdaxia.html">
+        <a class="card" href="mengdaxia.html">
+          <div class="card-thumb" data-card-id="mengdaxia"><img src="home-cards/mengdaxia.jpg" alt="萌大侠"></div>
+          <div class="card-body">
+            <h3 class="card-title">萌大侠</h3>
+            <p class="card-desc">红蓝对决，答题格斗，谁是真大侠</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 萌大侠" data-fav="mengdaxia.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="bahe.html">
+        <a class="card" href="bahe.html">
+          <div class="card-thumb" data-card-id="bahe"><img src="home-cards/bahe.jpg" alt="拔河答题大挑战"></div>
+          <div class="card-body">
+            <h3 class="card-title">拔河答题大挑战</h3>
+            <p class="card-desc">红蓝对抗，答题拔河，团队竞技</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 拔河答题大挑战" data-fav="bahe.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="shendouluo.html">
+        <a class="card" href="shendouluo.html">
+          <div class="card-thumb" data-card-id="shendouluo"><img src="home-cards/shendouluo.jpg" alt="神斗罗"></div>
+          <div class="card-body">
+            <h3 class="card-title">神斗罗</h3>
+            <p class="card-desc">横版射击，神话角色，闯关答题</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 神斗罗" data-fav="shendouluo.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="zhandouluo.html">
+        <a class="card" href="zhandouluo.html">
+          <div class="card-thumb" data-card-id="zhandouluo"><img src="home-cards/zhandouluo.jpg" alt="战斗罗"></div>
+          <div class="card-body">
+            <h3 class="card-title">战斗罗</h3>
+            <p class="card-desc">横版射击，多角色切换，Boss闯关</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 战斗罗" data-fav="zhandouluo.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="qingya-wenjian/index.html">
+        <a class="card" href="qingya-wenjian/index.html">
+          <div class="card-thumb"><span class="badge badge-new">新</span><svg viewBox="0 0 200 140" style="width:100%;height:100%;">
             <defs>
-              <linearGradient id="ksBg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#050912"/>
-                <stop offset="50%" stop-color="#0d1b33"/>
-                <stop offset="100%" stop-color="#0b3a55"/>
+              <linearGradient id="qySky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0f3460"/>
+                <stop offset="60%" stop-color="#e94560" stop-opacity="0.4"/>
+                <stop offset="100%" stop-color="#f5a623" stop-opacity="0.6"/>
               </linearGradient>
-              <radialGradient id="ksGlow" cx="0.3" cy="0.45" r="0.55">
-                <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.38"/>
-                <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="ksArc" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#22d3ee"/>
-                <stop offset="100%" stop-color="#818cf8"/>
+              <linearGradient id="qyMtn" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2d4a7a"/>
+                <stop offset="100%" stop-color="#1a1a2e"/>
               </linearGradient>
             </defs>
-            <rect width="200" height="140" fill="url(#ksBg)"/>
-            <rect width="200" height="140" fill="url(#ksGlow)"/>
-            <g stroke="#38bdf8" stroke-opacity="0.09" stroke-width="1">
-              <path d="M0 35H200M0 70H200M0 105H200M50 0V140M100 0V140M150 0V140"/>
-            </g>
-            <!-- 表盘 -->
-            <g transform="translate(58,70)">
-              <circle r="32" fill="#0b1220" opacity="0.85"/>
-              <circle r="32" fill="none" stroke="#38bdf8" stroke-opacity="0.18" stroke-width="7"/>
-              <circle r="32" fill="none" stroke="url(#ksArc)" stroke-width="5.5" stroke-linecap="round"
-                      stroke-dasharray="132 201" transform="rotate(-90)"/>
-              <g stroke="#7dd3fc" stroke-opacity="0.55" stroke-width="1.5" stroke-linecap="round">
-                <path d="M0 -25V-21.5"/><path d="M0 21.5V25"/>
-                <path d="M-25 0H-21.5"/><path d="M21.5 0H25"/>
-              </g>
-              <path d="M0 0V-16" stroke="#e8f6ff" stroke-width="2.8" stroke-linecap="round"/>
-              <path d="M0 0L9.5 6" stroke="#22d3ee" stroke-width="2.2" stroke-linecap="round"/>
-              <circle r="3" fill="#22d3ee"/>
-              <circle r="1.2" fill="#050912"/>
-            </g>
-            <!-- 数字化时间 -->
-            <text x="103" y="64" font-size="24" font-weight="700" fill="#eaf6ff"
-                  font-family="'Noto Sans SC',ui-monospace,monospace" letter-spacing="1">45:00</text>
-            <text x="104" y="78" font-size="9" fill="#7dd3fc" opacity="0.9"
-                  font-family="'Noto Sans SC',sans-serif" letter-spacing="2">剩余时间</text>
-            <rect x="103" y="85" width="73" height="20" rx="10" fill="#38bdf8" opacity="0.14"/>
-            <rect x="103" y="85" width="73" height="20" rx="10" fill="none" stroke="#38bdf8" stroke-opacity="0.4"/>
-            <circle cx="112" cy="95" r="2.8" fill="#f87171"/>
-            <text x="119" y="98.6" font-size="9" fill="#cfe9ff"
-                  font-family="'Noto Sans SC',sans-serif">全屏投影</text>
-          </svg>
-        </div>
-        <div class="card-body">
-          <div class="card-title">考试计时器</div>
-          <div class="card-desc">考试倒计时，科目设置，全屏投影，语音提醒</div>
-        </div>
-      </a>
+            <rect width="200" height="140" fill="url(#qySky)"/>
+            <polygon points="0,100 40,55 80,80 120,45 160,70 200,50 200,140 0,140" fill="url(#qyMtn)" opacity="0.8"/>
+            <polygon points="0,110 50,75 100,95 150,65 200,85 200,140 0,140" fill="#1a1a2e" opacity="0.9"/>
+            <circle cx="160" cy="35" r="12" fill="#f5a623" opacity="0.8"/>
+            <text x="100" y="125" font-size="18" fill="#e8d3ad" text-anchor="middle" font-family="Ma Shan Zheng,serif" font-weight="bold" opacity="0.9">青崖问剑</text>
+          </svg></div>
+          <div class="card-body">
+            <h3 class="card-title">青崖问剑</h3>
+            <p class="card-desc">3D武侠开放世界，实时光影，探索冒险</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 青崖问剑" data-fav="qingya-wenjian/index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      <div class="cell" data-cat="game" data-id="wujinxiake/">
+        <a class="card" href="wujinxiake/">
+          <div class="card-thumb" data-card-id="wujinxiake"><span class="badge badge-new">新</span><img src="home-cards/wujinxiake.jpg" alt="无尽侠客"></div>
+          <div class="card-body">
+            <h3 class="card-title">无尽侠客</h3>
+            <p class="card-desc">2.5D横版武侠格斗，八大职业连招闯关</p>
+          </div>
+        </a>
+        <button class="fav" type="button" aria-pressed="false" aria-label="收藏 无尽侠客" data-fav="wujinxiake/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg></button>
+      </div>
+      </div>
+    </section>
 
-      <a class="card" href="javascript:void(0)" onclick="openChuangge()" target="_blank">
-        <div class="card-thumb" data-card-id="chuangge-yingshi" style="background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);">
-          <span class="badge badge-new">新</span>
-          <svg viewBox="0 0 200 140" style="width:100%;height:100%;">
-            <defs>
-              <linearGradient id="cgBg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#1a1a2e"/>
-                <stop offset="50%" stop-color="#16213e"/>
-                <stop offset="100%" stop-color="#0f3460"/>
-              </linearGradient>
-            </defs>
-            <rect width="200" height="140" fill="url(#cgBg)"/>
-            <rect x="40" y="35" width="120" height="70" rx="8" fill="#e94560" opacity="0.9"/>
-            <polygon points="85,55 85,85 115,70" fill="#fff"/>
-            <text x="100" y="125" font-size="16" fill="#f5a623" text-anchor="middle" font-family="sans-serif" font-weight="bold" opacity="0.9">闯哥影视</text>
-          </svg>
-        </div>
-        <div class="card-body">
-          <div class="card-title">闯哥影视</div>
-          <div class="card-desc">免费在线视频搜索与观看，多源聚合</div>
-        </div>
-      </a>
-
+    <div class="empty" id="empty">
+      <div class="empty-title">没有匹配的工具</div>
+      <div class="empty-tip">换个关键词，或点「全部」看看所有工具</div>
     </div>
-  </div>
+  </main>
 
-  <!-- Footer -->
-  <div class="footer">© 智趣课堂 开发者：吴胜闯</div>
+  <footer class="footer">
+    <span>© 智趣课堂 · 开发者：吴胜闯</span>
+    <span>共 18 个工具 · 收藏和「继续上次」只保存在本机</span>
+  </footer>
 
 </div>
 
-<script>
-// Sync card images from server
-window.addEventListener('DOMContentLoaded',()=>{syncFromServer()});
-async function syncFromServer(){
-  try{
-    const r=await fetch('/home-cards/cards-data.json?t='+Date.now());
-    if(r.ok){const d=await r.json();if(Object.keys(d).length>0)applyImages(d)}
-  }catch(e){}
-}
-function applyImages(data){
-  Object.keys(data).forEach(id=>{
-    const el=document.querySelector(`.card-thumb[data-card-id="${id}"]`);
-    if(el&&data[id]){
-      const badge=el.querySelector('.badge');
-      const bHTML=badge?badge.outerHTML:'';
-      el.innerHTML=bHTML+`<img src="data:image/jpeg;base64,${data[id]}" alt="${id}">`;
-    }
-  });
-}
+<button class="to-top" id="toTop" type="button" aria-label="回到顶部">↑</button>
 
-// 闯哥影视密码验证
+<script>
+// 闯哥影视密码验证（沿用原首页逻辑）
 function openChuangge(){
-  const pwd=prompt('请输入访问密码（提示：q4）：');
-  if(pwd==='qq1111'){
-    window.open('chuangge-yingshi.html','_blank');
-  }else if(pwd!==null){
-    alert('密码错误');
-  }
+  var pwd=prompt('请输入访问密码（提示：q4）：');
+  if(pwd==='qq1111'){window.open('chuangge-yingshi.html','_blank');}
+  else if(pwd!==null){alert('密码错误');}
 }
+(function(){
+  var FAV_KEY='zq_favs', LAST_KEY='zq_last';
+  var cells=[].slice.call(document.querySelectorAll('.cell'));
+  var sections=[].slice.call(document.querySelectorAll('[data-section]'));
+  var empty=document.getElementById('empty');
+  var searchInput=document.getElementById('q');
+  var favCountEl=document.getElementById('favCount');
+
+  function readFavs(){try{return JSON.parse(localStorage.getItem(FAV_KEY))||[]}catch(e){return[]}}
+  function writeFavs(a){try{localStorage.setItem(FAV_KEY,JSON.stringify(a))}catch(e){}}
+  var favs=readFavs();
+
+  function paintFavs(){
+    cells.forEach(function(c){
+      var b=c.querySelector('.fav');
+      var on=favs.indexOf(b.dataset.fav)>-1;
+      b.setAttribute('aria-pressed',on?'true':'false');
+      b.setAttribute('aria-label',(on?'取消收藏 ':'收藏 ')+(c.querySelector('.card-title')||{}).textContent);
+    });
+    if(favCountEl) favCountEl.textContent=favs.length;
+  }
+
+  var state={cat:'all',q:''};
+  function apply(){
+    var q=state.q.trim().toLowerCase();
+    var shown=0;
+    cells.forEach(function(c){
+      var cat=c.dataset.cat;
+      var okCat=state.cat==='all' || (state.cat==='fav'?favs.indexOf(c.querySelector('.fav').dataset.fav)>-1:cat===state.cat);
+      var text=(c.textContent||'').toLowerCase();
+      var okQ=!q || text.indexOf(q)>-1;
+      var show=okCat&&okQ;
+      c.hidden=!show;
+      if(show){
+        shown++;
+        if(state.cat!=='all'||q) c.classList.add('in');
+      }
+    });
+    sections.forEach(function(s){
+      var cellsInS=[].slice.call(s.querySelectorAll('.cell'));
+      var vis=cellsInS.filter(function(c){return !c.hidden});
+      s.hidden=vis.length===0;
+      var cnt=s.querySelector('.section-count');
+      if(cnt) cnt.textContent=vis.length+' 个';
+    });
+    empty.classList.toggle('show',shown===0);
+  }
+
+  document.querySelectorAll('.chip').forEach(function(chip){
+    chip.addEventListener('click',function(){
+      document.querySelectorAll('.chip').forEach(function(c){c.setAttribute('aria-pressed','false')});
+      chip.setAttribute('aria-pressed','true');
+      state.cat=chip.dataset.filter;
+      apply();
+    });
+  });
+
+  var t;
+  searchInput.addEventListener('input',function(){
+    clearTimeout(t);
+    t=setTimeout(function(){state.q=searchInput.value;apply()},120);
+  });
+
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.fav');
+    if(btn){
+      e.preventDefault();e.stopPropagation();
+      var href=btn.dataset.fav, i=favs.indexOf(href);
+      if(i>-1)favs.splice(i,1);else favs.push(href);
+      writeFavs(favs);paintFavs();apply();
+      return;
+    }
+    var card=e.target.closest('.card');
+    if(card&&card.getAttribute('href')&&card.getAttribute('href').indexOf('javascript')!==-1){
+      e.preventDefault();
+    }
+    if(card){
+      var titleEl=card.querySelector('.card-title');
+      try{localStorage.setItem(LAST_KEY,JSON.stringify({href:card.getAttribute('href'),title:titleEl?titleEl.textContent:'',t:Date.now()}))}catch(err){}
+    }
+  },true);
+
+  function paintLast(){
+    var el=document.getElementById('heroLast'); if(!el) return;
+    var d=null;
+    try{d=JSON.parse(localStorage.getItem(LAST_KEY))}catch(e){}
+    if(d&&d.title&&d.href&&d.href.indexOf('javascript')!==-1) d=null;
+    if(!d||!d.title){el.innerHTML='<span style="opacity:.7">小提示：鼠标移到卡片上可以点星标收藏，下次更快找到</span>';return;}
+    el.innerHTML='继续上次：<a href="'+d.href+'">'+d.title+'</a>';
+  }
+
+  var toTop=document.getElementById('toTop');
+  window.addEventListener('scroll',function(){
+    toTop.classList.toggle('show',window.scrollY>600);
+  },{passive:true});
+  toTop.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'})});
+
+  var io=('IntersectionObserver' in window)?new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        var el=en.target;
+        var i=[].slice.call(el.parentNode.children).indexOf(el);
+        el.style.setProperty('--d',Math.min(i,7)*45+'ms');
+        el.classList.add('in');
+        io.unobserve(el);
+      }
+    });
+  },{rootMargin:'0px 0px -8% 0px',threshold:.08}):null;
+
+  cells.forEach(function(c){ if(io) io.observe(c); else c.classList.add('in'); });
+
+  // 首屏保险：约 600ms 后，把仍在视口内但尚未加 .in 的卡片强制显示，
+  // 兜住任何 IntersectionObserver 未触发首屏元素的极端情况
+  setTimeout(function(){
+    if(!io) return;
+    cells.forEach(function(c){
+      if(c.classList.contains('in')) return;
+      var r=c.getBoundingClientRect();
+      if(r.bottom>0 && r.top<window.innerHeight) c.classList.add('in');
+    });
+  },600);
+
+  paintFavs();paintLast();apply();
+
+  // 卡片封面优先用高清 base64（cards-data.json），在入场动画期间完成替换，避免闪烁
+  (function(){
+    fetch('/home-cards/cards-data.json?t='+Date.now()).then(function(r){return r.ok?r.json():null}).then(function(d){
+      if(!d) return;
+      Object.keys(d).forEach(function(id){
+        var img=document.querySelector('.card-thumb[data-card-id="'+id+'"] img');
+        if(img&&d[id]) img.src='data:image/jpeg;base64,'+d[id];
+      });
+    }).catch(function(){});
+  })();
+})();
 </script>
 </body>
 </html>
-
