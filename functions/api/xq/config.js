@@ -32,7 +32,7 @@ function isTeacherAllowedKey(key) {
   if (!key) return false;
   if (key.startsWith('seating_') || key.startsWith('cadres_')) return true;
   // 教师可以保存课程表、纪律留言、值日安排、维修申报、收集数据
-  const teacherAllowedKeys = ['class_timetable', 'personal_timetable', 'discipline', 'discipline_hidden', 'duty', 'repair', 'collection'];
+  const teacherAllowedKeys = ['class_timetable', 'personal_timetable', 'discipline', 'discipline_hidden', 'duty', 'repair', 'collection', 'user_links'];
   return teacherAllowedKeys.includes(key);
 }
 
@@ -124,6 +124,18 @@ export const onRequestPost = async ({ request, env }) => {
       
       // 合并教师的凭证更新
       dataToSave = { ...existingCredentials, ...configData };
+    }
+
+    /* 常用网址本：所有老师共用一条记录（{老师名: [网址...]}），
+       谁保存只动自己那一格，不能把别人的覆盖掉。 */
+    if (configKey === 'user_links' && !isAdmin(body) && teacherName) {
+      const existLinks = await sbSelect(env, 'xq_school_config', 'config_data', 'config_key=eq.user_links');
+      if (!existLinks.error) {
+        const all = (existLinks.data && existLinks.data[0] && existLinks.data[0].config_data) || {};
+        const mine = (configData && configData[teacherName]) || [];
+        dataToSave = Object.assign({}, all);
+        dataToSave[teacherName] = Array.isArray(mine) ? mine : [];
+      }
     }
 
     const updateResult = await sbUpdate(
