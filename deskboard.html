@@ -4583,6 +4583,8 @@ const TABS = {
      · 读不到云端（单独打开控制台、没登录）时退回本机缓存，功能不至于不可用
    ========================================================================== */
 var XQ_LINKS = { list: [], loaded: false, loading: false, name: '', styleReady: false };
+/* 调试/测试用：控制台里 __xqLinks 可以看到当前老师名和已加载的网址 */
+window.__xqLinks = XQ_LINKS;
 
 function xqLinksTeacher() {
   /* 同页（将来内嵌到别的页面）时也能拿到 */
@@ -4650,7 +4652,7 @@ function xqLinksRender(note) {
 function xqLinksLoad(force) {
   if (XQ_LINKS.loading) return;
   if (XQ_LINKS.loaded && !force) { xqLinksRender(); return; }
-  XQ_LINKS.name = xqLinksTeacher();
+  if (!XQ_LINKS.name) XQ_LINKS.name = xqLinksTeacher();   // 已经由父页面 postMessage 告知过就别清掉
   XQ_LINKS.loading = true;
 
   var fromLocal = function (note) {
@@ -4675,6 +4677,21 @@ function xqLinksLoad(force) {
     fromLocal('云端暂时读不到，先显示本机保存的');
   });
 }
+
+/* 父页面（学勤管家）载入控制台时会把当前登录老师名 postMessage 过来：
+   同源 iframe 里 xqCurrentUser 是 let 声明，读不到，只能靠这条消息。 */
+window.addEventListener('message', function (e) {
+  if (e.source !== window.parent) return;
+  var d = e.data;
+  if (!d || d.type !== 'xq-user') return;
+  var name2 = String(d.teacherName || '');
+  if (!name2 || name2 === XQ_LINKS.name) return;
+  XQ_LINKS.name = name2;
+  XQ_LINKS.loaded = false;
+  if (document.getElementById('xqLinksBox')) xqLinksLoad(true);
+});
+
+window.__xqLinksReload = function () { XQ_LINKS.loaded = false; xqLinksLoad(true); };
 
 function xqLinksSave() {
   var name = XQ_LINKS.name || xqLinksTeacher();
