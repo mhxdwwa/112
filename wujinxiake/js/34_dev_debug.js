@@ -91,7 +91,7 @@ setTimeout(function(){
       const job = Number(q.get('job') || 0);
       startSingleWithChar(job);
       playerName = '测试'; G.playerName = playerName;
-      /* ?lvl=N 可进任意关卡（深渊五境 = 12~16），用于 Boss/小怪回归测试 */
+      /* ?lvl=N 可进任意关卡（秘境五境 = 12~16），用于 Boss/小怪回归测试 */
       startLevel(Number(q.get('lvl') || 0));
       const sk = Number(q.get('skill') || 0);
       /* 放完技能后把帧异常计数写进 title */

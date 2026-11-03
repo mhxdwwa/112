@@ -166,7 +166,7 @@ function rollEnemyDrops(enemy, levelIdx){
   const diffMul = G && G.difficulty ? G.difficulty : 1;
   const diffBonus = diffMul - 1; // 普通=0, 困难=1, 地狱=2
 
-  // ★ 深渊模式掉率加成
+  // ★ 秘境模式掉率加成
   const lvlConfig = G ? getLevelConfig(G.levelIdx || 0) : null;
   const abyssBonus = (lvlConfig && lvlConfig.isAbyss) ? (lvlConfig.abyssDropBonus || 2) : 0;
   const dLv = dropLevelIdx(levelIdx);
@@ -177,14 +177,14 @@ function rollEnemyDrops(enemy, levelIdx){
   drops.push({ type:'gold', amount: goldAmt });
 
   /* ★ 装备：数量与品阶按「小怪 < 精英 < BOSS」拉开差距
-       - 小怪：低概率、且吃不到深渊品阶加成（免得小兵掉高质量装备）
+       - 小怪：低概率、且吃不到秘境品阶加成（免得小兵掉高质量装备）
        - 精英：必掉 1~2 件
-       - BOSS：必掉 3~5 件，品阶额外 +2 档，并带保底（普通紫装 / 深渊粉装） */
+       - BOSS：必掉 3~5 件，品阶额外 +2 档，并带保底（普通紫装 / 秘境粉装） */
   let eqCount = 0, tierBonus = diffBonus, minTier = 0, minGrade = 0;
   if(isBoss){
     eqCount = 3 + (Math.random() < 0.5 ? 1 : 0) + (abyssBonus ? 1 : 0);
     tierBonus = diffBonus + 2 + abyssBonus;
-    minTier  = abyssBonus ? 3 : 2;      /* 深渊 boss 粉色保底，普通 boss 紫色保底 */
+    minTier  = abyssBonus ? 3 : 2;      /* 秘境 boss 粉色保底，普通 boss 紫色保底 */
     minGrade = 3;                       /* 至少上级品级 */
   } else if(isElite){
     eqCount = 1 + (Math.random() < 0.35 ? 1 : 0);
@@ -192,7 +192,7 @@ function rollEnemyDrops(enemy, levelIdx){
     minGrade = 2;
   } else {
     eqCount = Math.random() < Math.min(1.0, table.equipRate) ? 1 : 0;
-    tierBonus = diffBonus;              /* ★ 小怪不再享用深渊品阶加成 */
+    tierBonus = diffBonus;              /* ★ 小怪不再享用秘境品阶加成 */
   }
   for(let i = 0; i < eqCount; i++){
     const slot = EQUIP_SLOTS[Math.floor(Math.random() * EQUIP_SLOTS.length)];
@@ -201,7 +201,7 @@ function rollEnemyDrops(enemy, levelIdx){
     announceDrop(_dropEq);              /* ★ 传说 / 史诗全屏公告 */
   }
 
-  /* ★ 飞行道具：BOSS 概率大幅提高（深渊 boss 基本必掉） */
+  /* ★ 飞行道具：BOSS 概率大幅提高（秘境 boss 基本必掉） */
   if(window.MOUNT){
     const _mo = MOUNT.rollDrop(dLv, {
       isBoss: isBoss, isElite: isElite, abyss: !!(lvlConfig && lvlConfig.isAbyss),

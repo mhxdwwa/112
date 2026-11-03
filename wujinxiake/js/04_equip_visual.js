@@ -665,8 +665,81 @@ const WEAPON_GLOW = {
   __default:{ type:'beam', shape:'sword',    aX:-0.133, aY:-0.558, bX:0.65,  bY:0.075,  gripFrac:0   }
 };
 
+/* ===== 攻击/施法时的 +10 特效：挥砍光弧 =====
+   站立时发光轮廓贴着手中武器；出手时精灵姿态变化大，固定锚点必然脱节
+   （之前攻击时发光成了摆设）。攻击/施法期间改画一道随动作进度扫过的
+   强化色新月刃光：强化=白、增幅=粉、双满=双色相间，命中瞬间爆闪。
+   这样强化/增幅的「拉风感」在战斗中每一下普攻/技能都看得到。 */
+function drawWeaponSwingTrail(p, x, y, s, bp, glow, inten, facing, t, pulse, I){
+  const act = p.action;
+  let u = 0.5, flash = 0.4;
+  if(act && act.type === 'attack'){
+    const c = act.c || { windup:0.07, strike:0.07, recover:0.14 };
+    const total = Math.max(0.06, c.windup + c.strike + c.recover);
+    u = clamp((act.t || 0) / total, 0, 1);
+    const s0 = c.windup / total, s1 = (c.windup + c.strike) / total;
+    const mid = (s0 + s1) * 0.5, half = Math.max(0.1, (s1 - s0) * 0.5 + 0.16);
+    flash = (u >= s0 - 0.08 && u <= s1 + 0.24) ? Math.max(0, 1 - Math.abs(u - mid) / half) : 0.12;
+  } else if(act && act.dur){
+    u = clamp((act.t || 0) / Math.max(0.2, act.dur), 0, 1);
+    flash = 0.3 + 0.5 * Math.sin(Math.min(1, u) * Math.PI);
+  }
+  const segs = 16;
+  const cx = x + facing * 8 * s, cy = y - bp * 0.47;
+  const R = bp * (0.34 + 0.15 * easeOutQuad(u));
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(facing, 1);
+  ctx.scale(1, 0.8);
+  const a0 = -2.3, a1 = 0.9;
+  const head = a0 + (a1 - a0) * easeOutQuad(u);
+  const tail = Math.max(a0, head - (0.8 + 0.6 * u));
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  /* 三层：外晕 / 主刃 / 高光芯，沿弧从尾到头渐亮 */
+  for(let pass = 0; pass < 3; pass++){
+    const lw = bp * [0.085, 0.045, 0.016][pass] * (0.75 + 0.25 * pulse);
+    for(let i = 0; i < segs; i++){
+      const f0 = i / segs;
+      const ang0 = tail + (head - tail) * f0;
+      const ang1 = tail + (head - tail) * ((i + 1) / segs);
+      const fade = Math.pow(f0, 1.4);
+      const colFn = (glow.enhOn && (i % 2 === 0 || !glow.ampOn)) ? _glowWhite : _glowPink;
+      const al = [0.30, 0.55, 0.95][pass] * inten * fade * (0.55 + 0.45 * flash) * (0.7 + 0.3 * pulse);
+      if(al <= 0.01) continue;
+      ctx.strokeStyle = colFn(glow, Math.min(1, al));
+      ctx.lineWidth = lw * (0.5 + 0.5 * fade);
+      ctx.beginPath();
+      ctx.arc(0, 0, R, ang0, ang1);
+      ctx.stroke();
+    }
+  }
+  /* 刃头亮点 */
+  const hx = Math.cos(head) * R, hy = Math.sin(head) * R;
+  const hr = (10 + 16 * I + 22 * flash) * s;
+  const hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
+  hg.addColorStop(0, _glowWhite(glow, (0.75 + 0.25 * flash) * inten));
+  hg.addColorStop(0.4, _glowMain(glow, 0.55 * inten));
+  hg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hg;
+  ctx.beginPath(); ctx.arc(hx, hy, hr, 0, TAU); ctx.fill();
+  ctx.restore();
+  /* 命中瞬间：身前爆闪 */
+  if(flash > 0.3){
+    const fx = x + facing * bp * 0.42, fy = cy;
+    const fr = bp * (0.22 + 0.3 * flash);
+    const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr);
+    fg.addColorStop(0, _glowWhite(glow, 0.8 * flash * inten));
+    fg.addColorStop(0.5, _glowMain(glow, 0.4 * flash * inten));
+    fg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.arc(fx, fy, fr, 0, TAU); ctx.fill();
+  }
+}
+
 /* 前景光效：★ 强化/增幅 +10 后，让「角色手中武器」发光（轮廓精确贴合），
-   而非另做一把漂浮武器。含握把光、尖端火花、星芒、环绕火花、上升光点。 */
+   而非另做一把漂浮武器。含握把光、尖端火花、星芒、环绕火花、上升光点。
+   攻击/施法时固定锚点会脱节，改画随动作扫过的挥砍光弧（见 drawWeaponSwingTrail）。 */
 function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
   opts = opts || {};
   const eq = p && p.equipment && p.equipment.weapon;
@@ -681,6 +754,8 @@ function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
   const bp = 150 * s;                                  // bodyPx（与 drawFighterSprite 中一致）
   const wtype = (WEAPONS[p.weaponIdx] && WEAPONS[p.weaponIdx].id) || 'sword';
   const cfg = WEAPON_GLOW[wtype] || WEAPON_GLOW.__default;
+  /* ★ 出手中（普攻/技能/施法）：贴身锚点会脱节，改画挥砍光弧 */
+  const acting = !!(p.action && p.action.type);
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -688,7 +763,9 @@ function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
   /* ★ 让武器轮廓沿 a→b 精确贴合手中武器（pommel→tip 缩放/旋转到两端之间） */
   let gripX = x, gripY = y - 80 * s;
 
-  if(cfg.type === 'fist'){
+  if(acting){
+    drawWeaponSwingTrail(p, x, y, s, bp, glow, inten, facing, t, pulse, I);
+  } else if(cfg.type === 'fist'){
     /* 格斗家：双手拳套直接发光 */
     const fists = [ [x + facing*cfg.fX*bp, y + cfg.fY*bp], [x + facing*cfg.bX*bp, y + cfg.bY*bp] ];
     for(let i = 0; i < 2; i++){
@@ -742,8 +819,8 @@ function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
     ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(bx,by,tipR,0,TAU); ctx.fill();
   }
 
-  /* 武器星芒（强化/增幅越强，星芒越大）——定位到握把/武器处 */
-  if(I > 0.3){
+  /* 武器星芒（强化/增幅越强，星芒越大）——定位到握把/武器处（出手时改画光弧，不画星芒） */
+  if(!acting && I > 0.3){
     const fl = (18 + 30*I) * s * pulse;
     ctx.save();
     ctx.translate(gripX, gripY);

@@ -265,10 +265,16 @@ function handleCanvasClick(cx, cy){
           }
         }
       } else if(r.action === 'continueQuest'){
-        // ★ 继续任务：不返回城镇，直接重新进入当前地图
+        // ★ 继续任务 / 继续秘境：不返回城镇，直接重新进入当前地图
         stageClearData = null;
         /* ★ 清除Boss伤害统计（新一场战斗重新开始） */
         if(G) G.skillDamageStats = {};
+        /* ★ 连刷前先把地面掉落自动收起（startLevel 会清空 G.drops，不收就丢了） */
+        if(G && Array.isArray(G.drops) && G.drops.length && typeof pickupDrop === 'function'){
+          const _ds = G.drops.slice();
+          G.drops = [];
+          for(const _d of _ds){ try{ pickupDrop(_d); }catch(e){} }
+        }
         startLevel(G.levelIdx);
       } else if(!r.flipCard && r.flipCard !== 0){
         // 返回城镇（非翻牌按钮）：检查是否有高价值物品未拾取

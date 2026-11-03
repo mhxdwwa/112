@@ -390,7 +390,7 @@ function update(dt){
   if(G.drops && G.drops.length > 0 && !G.isPvp){
     const canPick = p && p.alive !== false && !p.dead;
     const MAGNET_DELAY = 0.40;   /* 落地散开 0.4 秒后开始吸附 */
-    /* ★ 深渊模式Boss房间：装备不自动拾取，需要手动捡取 */
+    /* ★ 秘境模式Boss房间：装备不自动拾取，需要手动捡取 */
     const lvlCfg = G.currentLvlCfg;
     const isAbyssBossRoom = lvlCfg && lvlCfg.isAbyss && G.currentIsBoss;
     /* ★ 通关结算期间：掉落物一律留在地上等玩家走过去捡，不再自动飞过来 */
@@ -403,7 +403,7 @@ function update(dt){
       let dx = d.x - p.x, dy = d.y - p.y;
       let dist = Math.sqrt(dx*dx + dy*dy);
 
-      /* ★ 深渊Boss房间装备 / 通关结算：跳过自动吸附，只认「走过去」拾取 */
+      /* ★ 秘境Boss房间装备 / 通关结算：跳过自动吸附，只认「走过去」拾取 */
       if(settleManual || (isAbyssBossRoom && d.type === 'equip')){
         /* 物理照常走完（结算瞬间可能还在空中），但落地后不会自己飞走 */
         d.vy += 800 * dt;
@@ -597,7 +597,7 @@ function update(dt){
             }
           }
 
-          /* ★ 深渊模式：不再保底传说，所有品阶完全随机 */
+          /* ★ 秘境模式：不再保底传说，所有品阶完全随机 */
 
           // 生成奖励材料
           const matTypes = ['enhance_stone_low', 'enhance_stone_mid', 'enhance_stone_high'];

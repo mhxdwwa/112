@@ -628,7 +628,7 @@
        1–20 级地图：最高粉（神器）
        21–40 级：最高传说
        50 级以上：才能出史诗
-     小怪不掉，精英 1.5%、BOSS 6%（深渊更高） */
+     小怪不掉，精英 1.5%、BOSS 6%（秘境更高） */
   function capTierForLevel(lv){
     if(lv <= 20) return 3;
     if(lv <= 40) return 4;
@@ -639,7 +639,7 @@
     var abyss = !!opts.abyss;
     var p = opts.isBoss ? 0.06 : (opts.isElite ? 0.015 : 0);
     if(abyss) p = opts.isBoss ? 0.16 : 0.03;
-    /* ★ 掉落加成倍率：BOSS 用 rateMul 抬高（深渊 boss 基本必掉） */
+    /* ★ 掉落加成倍率：BOSS 用 rateMul 抬高（秘境 boss 基本必掉） */
     p = Math.min(0.92, p * (opts.rateMul || 1));
     if(!(Math.random() < p)) return null;
 

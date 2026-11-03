@@ -1,9 +1,9 @@
 /* ============================================================
-   ★ 深渊准入：完成前置任务链才会解锁
-     返回可进入的深渊数量：0=全锁 / 1=仅「子夜鬼门」/ 5=全部解锁
-   - qa1「深渊的邀请」完成 → 解锁第一境
+   ★ 秘境准入：完成前置任务链才会解锁
+     返回可进入的秘境数量：0=全锁 / 1=仅「子夜鬼门」/ 8=全部解锁（八境）
+   - qa1「秘境的邀请」完成 → 解锁第一境
    - qa2「子夜鬼门」完成   → 解锁全部五境
-   - 兼容旧存档：深渊通关记录达到对应数量也视为已解锁
+   - 兼容旧存档：秘境通关记录达到对应数量也视为已解锁
      ============================================================ */
 const ABYSS_LEVEL_IDXS = [];
 for(let _i = 0; _i < LEVEL_TEMPLATES.length; _i++) if(LEVEL_TEMPLATES[_i] && LEVEL_TEMPLATES[_i].isAbyss) ABYSS_LEVEL_IDXS.push(_i);
@@ -13,17 +13,17 @@ function abyssUnlockCount(p){
   const q = questOf(p);
   let n = 0;
   if(q.done.indexOf('qa1') >= 0) n = 1;
-  if(q.done.indexOf('qa2') >= 0) n = 5;
+  if(q.done.indexOf('qa2') >= 0) n = 8;   /* ★ 八境全开（含3个60级新秘境） */
   /* 任务链索引已越过对应任务（自愈推进过的旧存档）也算解锁 */
   const iqa1 = MAIN_QUESTS.findIndex(m => m.id === 'qa1');
   const iqa2 = MAIN_QUESTS.findIndex(m => m.id === 'qa2');
   if(q.idx > iqa1) n = Math.max(n, 1);
-  if(q.idx > iqa2) n = Math.max(n, 5);
-  /* 旧存档兜底：深渊通关记录达到几境就开几境 */
+  if(q.idx > iqa2) n = Math.max(n, 8);
+  /* 旧存档兜底：秘境通关记录达到几境就开几境 */
   let clearedAbyss = 0;
   for(const li of ABYSS_LEVEL_IDXS) if((p.clearedLevels || []).indexOf(li) >= 0) clearedAbyss++;
   if(clearedAbyss >= 1) n = Math.max(n, 1);
-  if(clearedAbyss >= 2) n = Math.max(n, 5);
+  if(clearedAbyss >= 2) n = Math.max(n, 8);
   return n;
 }
 function questStepProgress(p, st){

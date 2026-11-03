@@ -109,7 +109,7 @@ const ENEMY_TYPES = {
     tint:'hue-rotate(280deg) saturate(1.35)',pal:{skin:'#1a0a2a',cloth:'#2a0a3a'}},
 
   /* ============================================================
-     ★ 十二生肖小怪（深渊五境专属，专属精灵图 + 专属数值）
+     ★ 十二生肖小怪（秘境五境专属，专属精灵图 + 专属数值）
        子鼠/丑牛/寅虎(虎)/卯兔/辰龙(龙)/巳蛇(蛇)/午马/未羊/申猴/酉鸡/戌狗/亥猪
      ============================================================ */
   zrat:{name:'生肖·鬼门鼠妖',hp:13000,atk:190,spd:150,reach:95,exp:120,weapon:'blade',scale:1.0,maxMp:45,ghost:true,
@@ -132,7 +132,7 @@ const ENEMY_TYPES = {
     pal:{skin:'#2a201a',cloth:'#1a1410',cloth2:'#0a0806',belt:'#6a3a2a',hat:'#2a201a',pants:'#1a1410'}},
 
   /* ============================================================
-     ★ 深渊神话五 Boss（专属模型，对应深渊一~五）
+     ★ 秘境神话五 Boss（专属模型，对应秘境一~五）
      ============================================================ */
   abthunder:{name:'子帝·玄夜雷君',hp:42500,atk:300,spd:105,reach:150,exp:600,boss:true,weapon:'dual',scale:1.8,maxMp:170,god:true,
     pal:{skin:'#d0c0ff',cloth:'#302066',cloth2:'#201048',belt:'#c0b0ff',hat:'#6050aa',pants:'#302066'}},
@@ -143,5 +143,18 @@ const ENEMY_TYPES = {
   abdragon:{name:'辰帝·渊火龙皇',hp:50000,atk:350,spd:110,reach:160,exp:700,boss:true,weapon:'spear',scale:1.85,maxMp:180,god:true,
     pal:{skin:'#cc6618',cloth:'#aa3a08',cloth2:'#801a00',belt:'#ffcc44',hat:'#cc6618',pants:'#aa3a08'}},
   abserpent:{name:'巳祖·万毒蛇渊',hp:55000,atk:370,spd:85,reach:165,exp:750,boss:true,weapon:'spear',scale:1.9,maxMp:190,monster:true,
-    pal:{skin:'#2a5a2a',cloth:'#1a3a1a',cloth2:'#0a2a0a',belt:'#8a4a9a',hat:'#2a5a2a',pants:'#1a3a1a'}}
+    pal:{skin:'#2a5a2a',cloth:'#1a3a1a',cloth2:'#0a2a0a',belt:'#8a4a9a',hat:'#2a5a2a',pants:'#1a3a1a'}},
+
+  /* ============================================================
+     ★ 秘境神话新三 Boss（60 级终极秘境，专属模型 + 专属技能）
+       烛龙 abzhulong —— 山海经烛九阴：人面龙身，睁眼为昼闭眼为夜
+       饕餮 abtaotie  —— 四凶之首：青铜纹贪兽，有首无身，食人未咽
+       鲲鹏 abkunpeng —— 北冥有鱼，化而为鸟，其翼若垂天之云
+     ============================================================ */
+  abzhulong:{name:'烛帝·烛九阴',hp:60000,atk:395,spd:95,reach:165,exp:800,boss:true,weapon:'dual',scale:1.95,maxMp:200,god:true,
+    pal:{skin:'#e8b04a',cloth:'#a01818',cloth2:'#701010',belt:'#ffb04a',hat:'#c82818',pants:'#701010'}},
+  abtaotie:{name:'凶兽·饕餮',hp:66000,atk:420,spd:78,reach:170,exp:850,boss:true,weapon:'fist',scale:2.0,maxMp:180,boss2:true,
+    pal:{skin:'#4a6a3a',cloth:'#3a5a2a',cloth2:'#2a4a1a',belt:'#8a7a4a',hat:'#4a6a3a',pants:'#3a5a2a'}},
+  abkunpeng:{name:'北冥·鲲鹏',hp:72000,atk:445,spd:130,reach:160,exp:900,boss:true,weapon:'blade',scale:2.05,maxMp:220,god:true,
+    pal:{skin:'#2a4a7a',cloth:'#1a3a6a',cloth2:'#0a2a52',belt:'#7ac8ff',hat:'#2a4a7a',pants:'#1a3a6a'}}
 };

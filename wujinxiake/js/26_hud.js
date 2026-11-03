@@ -192,7 +192,7 @@ function questGuideTarget(){
   const st = cq.steps[q.step];
   if(!st) return null;
   
-  /* 深渊前置任务：qa1/qa2 → 指向深渊传送使·玄冥 */
+  /* 秘境前置任务：qa1/qa2 → 指向秘境传送使·玄冥 */
   if(cq.id === 'qa2' || cq.id === 'qa1') return NPCS.find(n => n.id === 'porter') || null;
   
   /* 根据任务步骤类型决定指向 */

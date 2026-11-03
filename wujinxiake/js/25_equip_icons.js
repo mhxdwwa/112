@@ -1132,9 +1132,13 @@ function drawStageClear(){
       }
     }
 
+    /* ★ 秘境连刷：通关秘境后始终提供「继续秘境」，不用回城再进 */
+    const _scTpl = stageClearData ? LEVEL_TEMPLATES[stageClearData.levelIdx] : null;
+    const abyssContinue = !!(_scTpl && _scTpl.isAbyss);
+
     const btnW = 180, btnH = 44, btnGap = 16;
-    if(needContinue){
-      /* 两个按钮并排：继续任务 + 返回城镇 */
+    if(needContinue || abyssContinue){
+      /* 两个按钮并排：继续任务/继续秘境 + 返回城镇 */
       const totalW = btnW * 2 + btnGap;
       const startX = VW/2 - totalW/2;
       const btnY = VH - 70;
@@ -1147,7 +1151,7 @@ function drawStageClear(){
       ctx.fillStyle = '#1a3a2a';
       ctx.font = 'bold 17px "Microsoft YaHei"';
       ctx.textAlign = 'center';
-      ctx.fillText('继续任务', startX + btnW/2, btnY + 28);
+      ctx.fillText(needContinue ? '继续任务' : '继续秘境 ⟳', startX + btnW/2, btnY + 28);
       stageClearClickRegions.push({ x: startX, y: btnY, w: btnW, h: btnH, action: 'continueQuest' });
 
       /* 返回城镇按钮 */
@@ -1208,7 +1212,7 @@ function drawDungeonSelect(){
   ctx.fillText('想进地下城？去找城里的四方传送使', VW/2, 140);
   ctx.fillStyle = '#8fa4b8';
   ctx.font = '14px "Microsoft YaHei"';
-  ctx.fillText('东 · 青鸾（1~22）｜南 · 朱明（22~41）｜西 · 白泽（41~60）｜传送阵 · 玄冥（深渊）', VW/2, 168);
+  ctx.fillText('东 · 青鸾（1~22）｜南 · 朱明（22~41）｜西 · 白泽（41~60）｜传送阵 · 玄冥（秘境）', VW/2, 168);
 
   dungeonSelectClickRegions = [];
 

@@ -14,7 +14,7 @@
    16~17 天雷峰（第七章·山脚 / 峰顶）        Lv.51~57
    18~19 魔尊殿（第八章·前厅 / 魔尊殿）      Lv.57~60
    20~23 终局四窟（落霞古渡 / 枯骨佛窟 / 焚天火窟 / 太墟剑冢）
-   24~28 深渊五境
+   24~28 秘境五境
    ============================================================ */
 const LEVEL_TEMPLATES = [
   /* ── 第一章 · 乱石岗（Lv.1~7）── 纯人形山贼，新手教学 ── */
@@ -250,10 +250,10 @@ const LEVEL_TEMPLATES = [
     bossHpMul:24.0, bossAtkMul:4.8, bossScaleMul:3.3 },
 
   /* ============================================================
-     ★ 深渊五境（索引 24~28）：50 级准入，Boss 难度约为对应
+     ★ 秘境五境（索引 24~28）：50 级准入，Boss 难度约为对应
      等级普通 Boss 的 10 倍，小怪少而精，传说/史诗掉率大增。
      ============================================================ */
-  { name:'深渊·子夜鬼门', desc:'子时已到，门后没有活人', theme:1, minLevel:50, maxLevel:60, isAbyss:true,
+  { name:'秘境·子夜鬼门', desc:'子时已到，门后没有活人', theme:1, minLevel:50, maxLevel:60, isAbyss:true,
     waves:[
       ['zrat','zrat','ghost','ghost','bat'],
       ['zrat','zrat','skeleton','bat','bat','ghost']
@@ -262,7 +262,7 @@ const LEVEL_TEMPLATES = [
     bossHpMul:117.0, bossAtkMul:7.05, bossScaleMul:3.4,
     enemyHpMul:2.7, enemyAtkMul:1.07, enemySpdMul:1.2 },
 
-  { name:'深渊·丑牛铁壁', desc:'牛角撞碎过三次城门', theme:0, minLevel:52, maxLevel:60, isAbyss:true,
+  { name:'秘境·丑牛铁壁', desc:'牛角撞碎过三次城门', theme:0, minLevel:52, maxLevel:60, isAbyss:true,
     waves:[
       ['zox','zox','zboar','zboar','brute'],
       ['zox','zboar','zboar','brute','brute','zgoat']
@@ -271,7 +271,7 @@ const LEVEL_TEMPLATES = [
     bossHpMul:150.0, bossAtkMul:9.0, bossScaleMul:3.8,
     enemyHpMul:3.0, enemyAtkMul:1.17, enemySpdMul:1.1 },
 
-  { name:'深渊·寅虎啸林', desc:'虎啸过处，连风都跪着走', theme:0, minLevel:54, maxLevel:60, isAbyss:true,
+  { name:'秘境·寅虎啸林', desc:'虎啸过处，连风都跪着走', theme:0, minLevel:54, maxLevel:60, isAbyss:true,
     waves:[
       ['zrabbit','zrabbit','zdog','zdog','tiger'],
       ['zrabbit','zdog','zdog','tiger','tiger','zrat']
@@ -280,7 +280,7 @@ const LEVEL_TEMPLATES = [
     bossHpMul:173.0, bossAtkMul:10.5, bossScaleMul:3.6,
     enemyHpMul:3.3, enemyAtkMul:1.27, enemySpdMul:1.35 },
 
-  { name:'深渊·辰渊龙墟', desc:'龙骨为山，龙血为河', theme:2, minLevel:56, maxLevel:60, isAbyss:true,
+  { name:'秘境·辰渊龙墟', desc:'龙骨为山，龙血为河', theme:2, minLevel:56, maxLevel:60, isAbyss:true,
     waves:[
       ['zhorse','zhorse','zrooster','zrooster','zgoat'],
       ['zhorse','zrooster','zrooster','zgoat','zgoat','dragon']
@@ -289,21 +289,54 @@ const LEVEL_TEMPLATES = [
     bossHpMul:207.0, bossAtkMul:12.45, bossScaleMul:3.9,
     enemyHpMul:3.7, enemyAtkMul:1.4, enemySpdMul:1.25 },
 
-  { name:'深渊·巳狱毒渊', desc:'井底的东西比深渊更老', theme:1, minLevel:58, maxLevel:60, isAbyss:true,
+  { name:'秘境·巳狱毒渊', desc:'井底的东西比秘境更老', theme:1, minLevel:58, maxLevel:60, isAbyss:true,
     waves:[
       ['zmonkey','zmonkey','snake','snake','scorpion'],
       ['zmonkey','snake','snake','scorpion','scorpion','zdog']
     ],
     boss:'abserpent', bossName:'巳祖·万毒蛇渊', bossPool:['abserpent'],
     bossHpMul:253.0, bossAtkMul:15.0, bossScaleMul:4.0,
-    enemyHpMul:4.0, enemyAtkMul:1.5, enemySpdMul:1.3 }
+    enemyHpMul:4.0, enemyAtkMul:1.5, enemySpdMul:1.3 },
+
+  /* ============================================================
+     ★ 秘境新三境（索引 29~31）：60 级准入的终极秘境，
+       三只上古神话凶兽坐镇（参考玄幻名篇里的经典 Boss 形象）。
+       烛龙——睁眼为昼闭眼为夜；饕餮——食尽万物的贪兽；鲲鹏——北冥垂天之翼。
+       难度在五境之上：Boss 血/攻按 1.15/1.32/1.53 倍梯度递进。
+     ============================================================ */
+  { name:'秘境·烛龙阴渊', desc:'它睁开眼，白天就结束了', theme:2, minLevel:60, maxLevel:60, isAbyss:true,
+    waves:[
+      ['zdog','zdog','ghost','ghost','zhorse'],
+      ['zdog','ghost','ghost','zhorse','zhorse','dragon_flame']
+    ],
+    boss:'abzhulong', bossName:'烛帝·烛九阴', bossPool:['abzhulong'],
+    bossHpMul:292.0, bossAtkMul:17.0, bossScaleMul:4.1,
+    enemyHpMul:4.2, enemyAtkMul:1.55, enemySpdMul:1.3 },
+
+  { name:'秘境·饕餮蚀界', desc:'它的胃里装着一整个王朝', theme:1, minLevel:60, maxLevel:60, isAbyss:true,
+    waves:[
+      ['zboar','zboar','zox','zox','zgoat'],
+      ['zboar','zox','zox','zgoat','zgoat','brute']
+    ],
+    boss:'abtaotie', bossName:'凶兽·饕餮', bossPool:['abtaotie'],
+    bossHpMul:335.0, bossAtkMul:19.0, bossScaleMul:4.2,
+    enemyHpMul:4.5, enemyAtkMul:1.62, enemySpdMul:1.25 },
+
+  { name:'秘境·北冥鲲鹏', desc:'垂天之云落下来的时候，记得抬头', theme:2, minLevel:60, maxLevel:60, isAbyss:true,
+    waves:[
+      ['zhorse','zhorse','eagle','eagle','zrooster'],
+      ['zhorse','eagle','eagle','zrooster','zrooster','phoenix_dark']
+    ],
+    boss:'abkunpeng', bossName:'北冥·鲲鹏', bossPool:['abkunpeng'],
+    bossHpMul:388.0, bossAtkMul:21.5, bossScaleMul:4.3,
+    enemyHpMul:4.8, enemyAtkMul:1.7, enemySpdMul:1.4 }
 ];
 
 /* 无限关卡生成函数 */
 function getLevelConfig(levelIdx){
   const TPL_N = LEVEL_TEMPLATES.length;
   const template = LEVEL_TEMPLATES[levelIdx % TPL_N];
-  /* ★ 深渊五境：数值已按 ×10 难度写死在模板里，这里直通并给掉落加成 */
+  /* ★ 秘境五境：数值已按 ×10 难度写死在模板里，这里直通并给掉落加成 */
   if(template && template.isAbyss){
     return {
       name: template.name,
@@ -321,7 +354,7 @@ function getLevelConfig(levelIdx){
       waveCount: template.waves.length,
       extraPerWave: 0,
       isAbyss: true,
-      abyssDropBonus: 3   /* 深渊掉率加成：传说/史诗概率大增 */
+      abyssDropBonus: 3   /* 秘境掉率加成：传说/史诗概率大增 */
     };
   }
 
@@ -332,7 +365,7 @@ function getLevelConfig(levelIdx){
   const spdMul = Math.min(Math.pow(1.015, levelIdx), 1.3);
 
   // 章节名称前缀（注意：chapter=0 时前缀就是空串，不能用 || 兜底，否则第 1 关会显示"轮回·"）
-  const chapterNames = ['', '轮回·', '深渊·', '炼狱·', '混沌·', '无尽·'];
+  const chapterNames = ['', '轮回·', '秘境·', '炼狱·', '混沌·', '无尽·'];
   const prefix = chapterNames[Math.min(chapter, chapterNames.length - 1)] ?? '轮回·';
 
   /* ★ BOSS 轮换：轮回后从 bossPool 里换一位领主，让每个特色角色都有登场机会 */

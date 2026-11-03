@@ -171,10 +171,10 @@ const TOWN_DEFS = [
       { suf:'魂灯', sub:'九盏魂灯照着北去的路' },
       { suf:'雾坊', sub:'雾浓得能拧出水，也拧出低语' },
       { suf:'夜市', sub:'北境没有白天，夜市就是白昼' },
-      { suf:'幽渡', sub:'渡船驶向的裂隙，是深渊的门廊' }
+      { suf:'幽渡', sub:'渡船驶向的裂隙，是秘境的门廊' }
     ],
     npcs:[
-      { id:'porter', name:'深渊传送使·玄冥', x:1500, y:900, type:'gate', gate:'abyss', desc:'传送深渊（50级准入）' },
+      { id:'porter', name:'秘境传送使·玄冥', x:1500, y:900, type:'gate', gate:'abyss', desc:'传送秘境（50级准入）' },
       { id:'gatekeeper', name:'守门人', x:2900, y:500, type:'dungeon', desc:'守门人试炼',
         home:{ x:2900, y:460, w:300, h:200, kind:'gate', name:'北城门', color:'#3a3a46', roof:'#33333e', accent:'#b18bff' } },
       { id:'ferry', name:'船家·橹叔', x:600, y:1700, type:'lore', desc:'听渡口的传说',
@@ -968,7 +968,7 @@ function triggerNpc(npc){
     case 'dungeon':
       gameState = 'dungeonSelect'; break;
     case 'gate':
-      /* ★ 四方传送使：各自只传送自己管辖的等级段（或深渊） */
+      /* ★ 四方传送使：各自只传送自己管辖的等级段（或秘境） */
       levelSelectFilter = npc.gate;
       gameState = 'levelSelect'; break;
     case 'portal': {

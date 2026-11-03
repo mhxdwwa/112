@@ -968,7 +968,7 @@ function boss_fire_ground(){
 }
 
 /* ============================================================
-   ★ 深渊神话五 Boss —— 专属技能（特效全加强：多段、大范围、狂震屏）
+   ★ 秘境神话五 Boss —— 专属技能（特效全加强：多段、大范围、狂震屏）
    ============================================================ */
 
 /* ---- 子帝·玄夜雷君(abthunder): 九霄神雷 / 雷狱风暴 / 玄夜雷狱 ---- */
@@ -1299,6 +1299,203 @@ function boss_ab_serpent_bind(){
   }
 }
 
+/* ============================================================
+   ★ 秘境神话新三 Boss（60 级终极秘境）
+   ============================================================ */
+
+/* ---- 烛帝·烛九阴(abzhulong): 烛阴焚世 / 昼夜颠倒 / 九幽龙息 ---- */
+function boss_ab_zhulong_fire(){
+  const e=currentSkillCaster; if(!e)return;
+  spawnText(e.x,e.y,220,'烛 阴 焚 世','#ff6a2a',40);
+  addEffect('enemyCastRing',e.x,e.y,0.7,{color:'#ff6a2a'});
+  for(let z=0;z<5;z++){
+    const tx=G.player.x+rand(-240,240), ty=G.player.y+rand(-40,40);
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      addEffect('groundFire',tx,ty,2.8,{color:'#ff2200'});
+      for(let t=0;t<6;t++) setTimeout(()=>{
+        if(!G||gameState!=='playing'||!e.alive)return;
+        _bDmgAoe(tx,ty,95,e.atk*0.36,{kb:0});
+        for(let j=0;j<5;j++) spawnParticles(tx+rand(-40,40),ty-rand(0,15),3,{color:j%2?'#ff2200':'#ffb040',angle:-Math.PI/2,spread:0.9,spMin:60,spMax:190,lifeMin:0.2,lifeMax:0.5,sizeMin:3,sizeMax:7,grav:-60});
+      },t*360);
+    },400+z*230);
+  }
+  G.shake=Math.max(G.shake,18);
+}
+function boss_ab_zhulong_night(){
+  const e=currentSkillCaster; if(!e)return;
+  spawnText(e.x,e.y,240,'昼 夜 颠 倒','#ffd166',42);
+  e.action={type:'enemySkill',t:0,dur:3.2,hitAt:0.99,hitDone:false};
+  addEffect('enemyCastRing',e.x,e.y,1.0,{color:'#ffd166'});
+  const px=G.player.x, py=G.player.y;
+  /* 天光熄灭，随后六道目视之光轮替落在战场 */
+  for(let i=0;i<6;i++){
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      const tx=(i%2===0)?G.player.x:e.x+rand(-200,200), ty=(i%2===0)?G.player.y:e.y+rand(-30,30);
+      addEffect('lightning',tx,-50,0.45,{endX:tx,endY:ty,color:i%2?'#ffd166':'#ffe8a0',width:10});
+      playSound('thunder');
+      _bDmgAoe(tx,ty,130,e.atk*0.88,{kb:220});
+      addEffect('hitRing',tx,ty,0.4,{color:'#ffd166',r:74});
+      for(let j=0;j<10;j++) spawnParticles(tx+rand(-45,45),ty-rand(0,45),5,{color:j%2?'#ffd166':'#fff2c8',angle:-Math.PI/2,spread:1.3,spMin:110,spMax:340,lifeMin:0.3,lifeMax:0.7,sizeMin:3,sizeMax:8,grav:550});
+      G.shake=Math.max(G.shake,15);
+    },600+i*420);
+  }
+  setTimeout(()=>{
+    if(!G||gameState!=='playing'||!e.alive)return;
+    playSound('explosion');
+    addEffect('lightning',px,-50,0.8,{endX:px,endY:py,color:'#ffe8a0',width:18});
+    _bDmgAoe(px,py,230,e.atk*1.98,{kb:430,launch:true});
+    G.shake=Math.max(G.shake,36);
+  },3100);
+}
+function boss_ab_zhulong_breath(){
+  const e=currentSkillCaster; if(!e)return;
+  e.facing=G.player.x>e.x?1:-1;
+  spawnText(e.x,e.y,220,'九 幽 龙 息','#ff8a3a',42);
+  e.action={type:'enemySkill',t:0,dur:2.4,hitAt:0.99,hitDone:false};
+  addEffect('enemyCastRing',e.x,e.y,0.6,{color:'#ff8a3a'});
+  /* 龙息沿身前一线持续喷吐 */
+  for(let i=0;i<14;i++){
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      const f=e.facing, fx=e.x+f*(90+i*46);
+      addEffect('explosion',fx,e.y-14,0.5,{r:72,color:i%2?'#ff8a3a':'#ffc86a'});
+      _bDmgAoe(fx,e.y,105,e.atk*0.5,{kb:110});
+      for(let j=0;j<6;j++) spawnParticles(fx+rand(-30,30),e.y-rand(0,30),3,{color:j%2?'#ff8a3a':'#ffe0a0',angle:0,spread:0.8,spMin:90,spMax:260,lifeMin:0.2,lifeMax:0.5,sizeMin:3,sizeMax:7,grav:-40});
+      G.shake=Math.max(G.shake,10);
+    },500+i*140);
+  }
+}
+
+/* ---- 凶兽·饕餮(abtaotie): 吞天食地 / 饕餮巨口 / 饥荒领域 ---- */
+function boss_ab_taotie_devour(){
+  const e=currentSkillCaster; if(!e)return;
+  spawnText(e.x,e.y,220,'吞 天 食 地','#9acd50',40);
+  e.action={type:'enemySkill',t:0,dur:2.2,hitAt:0.99,hitDone:false};
+  addEffect('enemyCastRing',e.x,e.y,0.8,{color:'#9acd50'});
+  /* 三吸三咬：漩涡把猎物往嘴边拖 */
+  for(let i=0;i<3;i++){
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      playSound('impact');
+      addEffect('hitRing',e.x,e.y,0.7,{color:'#9acd50',r:190+i*50});
+      _bDmgAoe(e.x,e.y,300+i*40,e.atk*0.5,{kb:-340});
+      for(let j=0;j<14;j++){
+        const a=rand(0,TAU), r=rand(140,300);
+        spawnParticles(e.x+Math.cos(a)*r,e.y+Math.sin(a)*r*0.3,2,{color:j%2?'#9acd50':'#c8e890',angle:Math.atan2(e.y-(e.y+Math.sin(a)*r*0.3),e.x-(e.x+Math.cos(a)*r)),spread:0.25,spMin:260,spMax:420,lifeMin:0.3,lifeMax:0.6,sizeMin:3,sizeMax:7,grav:0});
+      }
+      G.shake=Math.max(G.shake,14);
+    },500+i*520);
+  }
+}
+function boss_ab_taotie_bite(){
+  const e=currentSkillCaster; if(!e)return;
+  spawnText(e.x,e.y,220,'饕 餮 巨 口','#c8e850',42);
+  e.action={type:'enemySkill',t:0,dur:1.8,hitAt:0.99,hitDone:false};
+  addEffect('enemyCastRing',e.x,e.y,0.6,{color:'#c8e850'});
+  for(let i=0;i<3;i++){
+    const tx=G.player.x+rand(-60,60), ty=G.player.y+rand(-24,24);
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      addEffect('explosion',tx,ty,0.9,{r:130,color:'#c8e850'});
+      addEffect('hitRing',tx,ty,0.4,{color:'#f0ffb0',r:120});
+      playSound('explosion');
+      _bDmgAoe(tx,ty,150,e.atk*1.28,{kb:260,launch:i===1});
+      for(let j=0;j<16;j++) spawnParticles(tx+rand(-70,70),ty-rand(0,50),5,{color:j%2?'#c8e850':'#6a8a2a',angle:-Math.PI/2,spread:1.4,spMin:120,spMax:380,lifeMin:0.3,lifeMax:0.7,sizeMin:4,sizeMax:9,grav:650});
+      G.shake=Math.max(G.shake,26);
+    },450+i*430);
+  }
+}
+function boss_ab_taotie_famine(){
+  const e=currentSkillCaster; if(!e)return;
+  spawnText(e.x,e.y,240,'饥 荒 领 域','#8ab840',44);
+  e.action={type:'enemySkill',t:0,dur:2.6,hitAt:0.99,hitDone:false};
+  addEffect('enemyCastRing',e.x,e.y,1.0,{color:'#8ab840'});
+  /* 凶纹领域：四圈扩散啃噬波 */
+  for(let r=0;r<4;r++){
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      playSound('explosion');
+      addEffect('hitRing',e.x,e.y,0.8,{color:r%2?'#8ab840':'#c8e850',r:100+r*95});
+      _bDmgAoe(e.x,e.y,140+r*80,e.atk*(0.8-r*0.1),{kb:280});
+      for(let i=0;i<24;i++){
+        const a=rand(0,TAU);
+        spawnParticles(e.x+Math.cos(a)*rand(60,220),e.y-rand(0,30),4,{color:i%3===0?'#c8e850':i%3===1?'#8ab840':'#4a6a2a',angle:-Math.PI/2,spread:1.4,spMin:120,spMax:380,lifeMin:0.3,lifeMax:0.8,sizeMin:4,sizeMax:10,grav:600});
+      }
+      G.shake=Math.max(G.shake,22+r*4);
+    },600+r*380);
+  }
+}
+
+/* ---- 北冥·鲲鹏(abkunpeng): 鹏程万里 / 北冥罡风 / 垂天之云 ---- */
+function boss_ab_kunpeng_dash(){
+  const e=currentSkillCaster; if(!e)return;
+  e.facing=G.player.x>e.x?1:-1;
+  spawnText(e.x,e.y,220,'鹏 程 万 里','#6ab8ff',40);
+  addEffect('enemyCastRing',e.x,e.y,0.5,{color:'#6ab8ff'});
+  const x0=e.x, x1=clamp(G.player.x+e.facing*140, WORLD_L+80, WORLD_R-80);
+  e.action={type:'enemySkill',t:0,dur:1.4,hitAt:0.99,hitDone:false};
+  const steps=8;
+  for(let i=1;i<=steps;i++){
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      e.x=x0+(x1-x0)*i/steps;
+      const f=(G.player.x>e.x)?1:-1;
+      addEffect('slashArc',e.x+f*60,e.y-40,0.25,{facing:f,color:'#6ab8ff',size:2.8,typeStr:'blade'});
+      _bDmgAoe(e.x,e.y,120,e.atk*0.72,{kb:360,launch:i===steps});
+      for(let j=0;j<6;j++) spawnParticles(e.x-f*rand(0,60),e.y-rand(0,50),3,{color:j%2?'#6ab8ff':'#c0e8ff',angle:Math.PI+(f<0?Math.PI:0),spread:0.7,spMin:120,spMax:320,lifeMin:0.2,lifeMax:0.5,sizeMin:3,sizeMax:8,grav:100});
+      playSound('bladeSwing');
+      G.shake=Math.max(G.shake,14);
+    },220+i*110);
+  }
+}
+function boss_ab_kunpeng_gale(){
+  const e=currentSkillCaster; if(!e)return;
+  spawnText(e.x,e.y,220,'北 冥 罡 风','#50d8ff',40);
+  e.action={type:'enemySkill',t:0,dur:2.0,hitAt:0.99,hitDone:false};
+  addEffect('enemyCastRing',e.x,e.y,0.7,{color:'#50d8ff'});
+  for(let wv=0;wv<2;wv++){
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      const baseA=Math.atan2((G.player.y-e.y)*0.4,(G.player.x-e.x));
+      for(let i=0;i<9;i++){
+        const a=baseA+(i-4)*0.17+wv*0.09;
+        G.projectiles.push({kind:'qiBomb',x:e.x+Math.cos(a)*50,y:e.y-40+Math.sin(a)*14,h:36,vx:Math.cos(a)*560,vy:Math.sin(a)*170,life:1.5,w:66,hh:44,dmg:e.atk*0.6,pierce:1,hitSet:new Set(),color:wv?'#50d8ff':'#a8e8ff',facing:Math.cos(a)>0?1:-1,owner:e});
+      }
+      playSound('bladeSwing');
+      G.shake=Math.max(G.shake,12);
+    },450+wv*480);
+  }
+}
+function boss_ab_kunpeng_cloud(){
+  const e=currentSkillCaster; if(!e)return;
+  spawnText(e.x,e.y,240,'垂 天 之 云','#8fd8ff',44);
+  e.action={type:'enemySkill',t:0,dur:3.0,hitAt:0.99,hitDone:false};
+  addEffect('enemyCastRing',e.x,e.y,1.0,{color:'#8fd8ff'});
+  /* 羽落如云压：全屏 12 处羽击 */
+  for(let i=0;i<12;i++){
+    setTimeout(()=>{
+      if(!G||gameState!=='playing'||!e.alive)return;
+      const tx=(i%2===0)?G.player.x+rand(-120,120):G.player.x+rand(-320,320);
+      const ty=G.player.y+rand(-40,40);
+      addEffect('lightning',tx,-50,0.32,{endX:tx,endY:ty,color:i%2?'#8fd8ff':'#d8f4ff',width:7});
+      playSound('thunder');
+      _bDmgAoe(tx,ty,115,e.atk*0.7,{kb:180});
+      addEffect('hitRing',tx,ty,0.35,{color:'#8fd8ff',r:66});
+      for(let j=0;j<8;j++) spawnParticles(tx+rand(-40,40),ty-rand(0,40),4,{color:j%2?'#8fd8ff':'#e0f6ff',angle:-Math.PI/2,spread:1.2,spMin:100,spMax:300,lifeMin:0.3,lifeMax:0.6,sizeMin:3,sizeMax:8,grav:520});
+      G.shake=Math.max(G.shake,14);
+    },550+i*190);
+  }
+  setTimeout(()=>{
+    if(!G||gameState!=='playing'||!e.alive)return;
+    playSound('explosion');
+    addEffect('explosion',G.player.x,G.player.y,1.1,{r:190,color:'#8fd8ff'});
+    _bDmgAoe(G.player.x,G.player.y,240,e.atk*1.7,{kb:420,launch:true});
+    G.shake=Math.max(G.shake,34);
+  },3050);
+}
+
 const BOSS_SKILLS = {
   boss:    [boss_bandit_cross, boss_bandit_call, boss_bandit_dash],
   brute:   [boss_brute_slam, boss_brute_spin, boss_brute_charge],
@@ -1313,12 +1510,15 @@ const BOSS_SKILLS = {
   fire_god:[boss_fire_meteor, boss_fire_nova, boss_fire_ground],
   thunder_god:[boss_thunder_hammer, boss_thunder_chain, boss_thunder_domain],
   dark_lord:[boss_dark_wave, boss_dark_summon, boss_dark_slash],
-  /* 深渊神话五 Boss */
+  /* 秘境神话五 Boss */
   abthunder:[boss_ab_thunder_nine, boss_ab_thunder_storm, boss_ab_thunder_descend],
   abbull:   [boss_ab_bull_charge, boss_ab_bull_wall, boss_ab_bull_smash],
-  abtiger:  [boss_ab_tiger_gale, boss_ab_tiger_roar, boss_ab_tiger_dash],
-  abdragon: [boss_ab_dragon_flame, boss_ab_dragon_roar, boss_ab_dragon_meteor],
-  abserpent:[boss_ab_serpent_spit, boss_ab_serpent_venom, boss_ab_serpent_bind]
+  abtiger:  [boss_ab_tiger_gale, boss_ab_tiger_roar, boss_ab_tiger_dash],  abdragon: [boss_ab_dragon_flame, boss_ab_dragon_roar, boss_ab_dragon_meteor],
+  abserpent:[boss_ab_serpent_spit, boss_ab_serpent_venom, boss_ab_serpent_bind],
+  /* 秘境神话新三 Boss */
+  abzhulong:[boss_ab_zhulong_fire, boss_ab_zhulong_night, boss_ab_zhulong_breath],
+  abtaotie: [boss_ab_taotie_devour, boss_ab_taotie_bite, boss_ab_taotie_famine],
+  abkunpeng:[boss_ab_kunpeng_dash, boss_ab_kunpeng_gale, boss_ab_kunpeng_cloud]
 };
 
 function tryUseSkill(p, idx){

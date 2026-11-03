@@ -55,6 +55,10 @@ regMonsterAtlas('abbull', 'assets/monsters/abbull_atlas.webp', 96.8, 193.8, 192.
 regMonsterAtlas('abdragon', 'assets/monsters/abdragon_atlas.webp', 100.8, 194.0, 192.6, 150);
 regMonsterAtlas('abserpent', 'assets/monsters/abserpent_atlas.webp', 101.3, 195.6, 192.6, 142);
 regMonsterAtlas('abthunder', 'assets/monsters/abthunder_atlas.webp', 100.1, 193.0, 192.6, 138);
+/* ★ 60级新秘境Boss：复用现有图集（烛龙→焰神 / 饕餮→巨熊 / 鲲鹏→凤凰），坐标与源图集一致 */
+regMonsterAtlas('abzhulong', 'assets/monsters/fire_god_atlas.webp', 103.4, 200.4, 192.6, 138);
+regMonsterAtlas('abtaotie',  'assets/monsters/bear_atlas.webp',     99.3,  202.2, 192.6, 146);
+regMonsterAtlas('abkunpeng', 'assets/monsters/phoenix_atlas.webp',  101.0, 195.0, 192.6, 142);
 regMonsterAtlas('abtiger', 'assets/monsters/abtiger_atlas.webp', 97.5, 195.2, 192.6, 128);
 regMonsterAtlas('assassin', 'assets/monsters/assassin_atlas.webp', 122.0, 221.6, 192.6, 110);
 regMonsterAtlas('bandit', 'assets/monsters/bandit_atlas.webp', 101.8, 201.0, 192.6, 110);

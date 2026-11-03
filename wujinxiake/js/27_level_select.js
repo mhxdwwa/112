@@ -1,6 +1,6 @@
 /* ===== 关卡选择界面 ===== */
 let levelSelectClickRegions = [];
-/* ★ 四方传送使的管辖过滤：null=全部（游戏菜单入口）| {from,to}=地图段 | 'abyss'=深渊五境 */
+/* ★ 四方传送使的管辖过滤：null=全部（游戏菜单入口）| {from,to}=地图段 | 'abyss'=秘境五境 */
 let levelSelectFilter = null;
 
 function drawLevelSelect(){
@@ -23,9 +23,9 @@ function drawLevelSelect(){
   let filterSub = '守门人 · 轮回塔';
   if(levelSelectFilter === 'abyss'){
     const _ac = abyssUnlockCount(G ? G.player : null);
-    filterSub = _ac >= 5 ? '深渊传送使·玄冥 —— 深渊五境已全部开启 · 传说/史诗掉率大增'
-      : _ac >= 1 ? '深渊传送使·玄冥 —— 已开启「子夜鬼门」，通关后解锁其余四境'
-      : '深渊传送使·玄冥 —— 🔒 完成前置任务「深渊的邀请」（50 级后自动接取）方可开启深渊';
+    filterSub = _ac >= 5 ? '秘境传送使·玄冥 —— 秘境五境已全部开启 · 传说/史诗掉率大增'
+      : _ac >= 1 ? '秘境传送使·玄冥 —— 已开启「子夜鬼门」，通关后解锁其余四境'
+      : '秘境传送使·玄冥 —— 🔒 完成前置任务「秘境的邀请」（50 级后自动接取）方可开启秘境';
   } else if(levelSelectFilter){
     const GNAMES = { 0:'传送使·青鸾 —— 初阶 1~22 级地图', 7:'传送使·朱明 —— 进阶 22~41 级地图', 13:'传送使·白泽 —— 高阶 41~60 级地图' };
     filterSub = GNAMES[levelSelectFilter.from] || '传送使 · 专区地图';
@@ -96,7 +96,7 @@ function drawLevelSelect(){
     const lvl = getLevelConfig(i);
     const tpl = LEVEL_TEMPLATES[i];
     const isAbyss = !!(tpl && tpl.isAbyss);
-    /* ★ 深渊准入：未完成前置任务链的深渊图锁定（0=全锁/1=仅第一境/5=全开） */
+    /* ★ 秘境准入：未完成前置任务链的秘境图锁定（0=全锁/1=仅第一境/5=全开） */
     let abyssLocked = false, abyssLockTip = '';
     if(isAbyss){
       const aSeq = ABYSS_LEVEL_IDXS.indexOf(i);
@@ -107,7 +107,7 @@ function drawLevelSelect(){
         abyssLocked = true;
         const q = (G && G.player) ? questOf(G.player) : null;
         abyssLockTip = (q && (q.done.indexOf('qa1') >= 0 || q.idx > MAIN_QUESTS.findIndex(m => m.id === 'qa1')))
-          ? '通关「子夜鬼门」后开启' : '完成「深渊的邀请」后开启';
+          ? '通关「子夜鬼门」后开启' : '完成「秘境的邀请」后开启';
       }
     }
     const col = pos % COLS, row = Math.floor(pos / COLS);
@@ -117,7 +117,7 @@ function drawLevelSelect(){
     const cleared = G.player && G.player.clearedLevels && G.player.clearedLevels.includes(i);
     const levelLocked = playerLevel < (lvl.minLevel || 1);
 
-    /* 主题配色（深渊关用紫色） */
+    /* 主题配色（秘境关用紫色） */
     const themeCol = isAbyss ? ABYSS_COL : (THEME_COL[lvl.theme] || '#7fe0b0');
 
     /* 卡片底 */
@@ -183,7 +183,7 @@ function drawLevelSelect(){
       ctx.font = 'bold 11px "Microsoft YaHei"';
       ctx.fillText('未解锁', cx + cardW - 12, cy + 24);
     } else if(abyssLocked){
-      /* ★ 深渊未做任务：卡片压暗 + 锁标 + 提示文案 */
+      /* ★ 秘境未做任务：卡片压暗 + 锁标 + 提示文案 */
       ctx.fillStyle = 'rgba(6,8,14,0.55)';
       ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 8); ctx.fill();
       ctx.textAlign = 'left';
