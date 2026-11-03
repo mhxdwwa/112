@@ -1448,33 +1448,40 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
   }
 
   function rpc(op, payload, timeout) {
+    var id = 'c' + (++seq) + '_' + Math.random().toString(16).slice(2, 6);   /* 补发沿用同一个 id */
     return new Promise(function (resolve, reject) {
       if (!code) { reject(new Error('还没选择教室')); return; }
       var waited = 0;
       var tick = setInterval(function () {
         waited += 200;
-        if (rt && rt.isOpen()) { clearInterval(tick); send(); }
+        if (rt && rt.isOpen()) { clearInterval(tick); start(); }
         else if (waited >= 6000) { clearInterval(tick); reject(new Error('教室电脑没有连上（正在自动重连）')); }
       }, 200);
 
-      function send() {
-        var id = 'c' + (++seq) + '_' + Math.random().toString(16).slice(2, 6);
+      var msg = { id: id, op: op, from: 'control-page' };
+      if (payload !== undefined) {
+        if (op === 'set') msg.config = payload;
+        else Object.assign(msg, payload);
+      }
+
+      /* 有结果了就不补发（pending 被删掉即为有结果） */
+      function sendOnce() {
+        if (!pending[id]) return;
+        try { rt.send('rpc', msg); } catch (e) { /* ignore */ }
+      }
+
+      function start() {
         var timer = setTimeout(function () {
           delete pending[id];
-          reject(new Error('教室没有响应（超时）'));
+          reject(new Error('教室没有响应（已补发 2 次，仍在自动重连）'));
         }, timeout || 9000);
         pending[id] = { resolve: resolve, reject: reject, timer: timer };
-        var msg = { id: id, op: op, from: 'control-page' };
-        if (payload !== undefined) {
-          if (op === 'set') msg.config = payload;
-          else Object.assign(msg, payload);
-        }
-        rt.send('rpc', msg);
+        sendOnce();
+        setTimeout(sendOnce, 2500);
+        setTimeout(sendOnce, 5000);
       }
     });
-  }
-
-  /* ---------------- 界面 ---------------- */
+  }  /* ---------------- 界面 ---------------- */
 
   var STYLE = ''
     + '#rmveil{position:fixed;inset:0;z-index:9999;background:rgba(20,24,30,.55);backdrop-filter:blur(6px);'
