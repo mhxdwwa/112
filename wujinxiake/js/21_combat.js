@@ -201,6 +201,18 @@ function pickupDrop(d){
       spawnText(d.x, d.y-30, 60, '+'+d.gold+' 金币', '#ffd700', 18);
       break;
     case 'equip':
+      /* ★ 拾取传说 / 史诗装备：入包爆发 + 品阶色闪屏 + 上行琶音 */
+      {
+        const _ptr = TIER_ORDER.indexOf(d.equip.tier);
+        if(_ptr >= 4){
+          const _pc = d.equip.tierColor || '#ffd166';
+          spawnParticles(d.x, d.y - 20, 24, {color:_pc, spMin:120, spMax:360, lifeMin:0.4, lifeMax:1.0, sizeMin:2, sizeMax:5, grav:-80});
+          spawnText(d.x, d.y - 52, 70, d.equip.tier === 'mythic' ? '★ 史诗入手 ★' : '☆ 传说入手 ☆', _pc, 18);
+          G.flash = Math.max(G.flash || 0, 0.14);
+          G.hitFlashColor = _pc;
+          playSound('epicDrop');
+        }
+      }
       // 自动装备：检查等级、职业匹配，且比当前装备更好才装备
       const slot = d.equip.slot;
       const oldEquip = p.equipment[slot];

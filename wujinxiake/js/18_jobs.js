@@ -721,6 +721,21 @@ function killEnemy(e){
       if(drop.type === 'equip'){
         spawnText(dx, dy-30, 80, '获得装备!', drop.equip.tierColor, 20);
         spawnParticles(dx, dy-20, 15, {color:drop.equip.tierColor, spMin:50, spMax:200, lifeMin:0.3, lifeMax:0.8, sizeMin:2, sizeMax:5, grav:-100});
+        /* ★ 传说 / 史诗装备掉落：全屏仪式感演出（震屏 + 彩闪 + 星尘爆发 + 上行琶音） */
+        const _tr = TIER_ORDER.indexOf(drop.equip.tier);
+        if(_tr >= 4){
+          const _isMy = drop.equip.tier === 'mythic';
+          const _col = drop.equip.tierColor || '#ffd166';
+          /* 冲击爆发：中心放射 + 慢落星尘 */
+          spawnParticles(dx, dy-20, _isMy ? 42 : 26, {color:_col, spMin:120, spMax:_isMy?420:320, lifeMin:0.5, lifeMax:1.2, sizeMin:2, sizeMax:_isMy?6:4, grav:-40});
+          spawnParticles(dx, dy-20, _isMy ? 18 : 10, {color:'#ffffff', spMin:200, spMax:460, lifeMin:0.25, lifeMax:0.6, sizeMin:1.5, sizeMax:3, grav:60});
+          spawnText(dx, dy-58, _isMy ? 110 : 90, _isMy ? '★ 史 诗 装 备 ★' : '☆ 传 说 装 备 ☆', _col, _isMy ? 22 : 18);
+          /* 震屏 + 品阶色闪屏（沿用全局受击演出机制） */
+          G.shake = Math.max(G.shake, _isMy ? 15 : 9);
+          G.flash = Math.max(G.flash, _isMy ? 0.30 : 0.16);
+          G.hitFlashColor = _col;
+          playSound('epicDrop');
+        }
       }
     }
   }

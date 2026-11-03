@@ -41,16 +41,30 @@ function playSound(type) {
     src.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
     src.start(t);
   };
-  const playTone = (dur, startFreq, endFreq, vol) => {
+  const playTone = (dur, startFreq, endFreq, vol, delay) => {
+    const t0 = t + (delay || 0);
     const osc = audioCtx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(startFreq, t);
-    osc.frequency.exponentialRampToValueAtTime(endFreq, t + dur);
+    osc.frequency.setValueAtTime(startFreq, t0);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + dur);
     const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + dur);
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
     osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.start(t); osc.stop(t + dur);
+    osc.start(t0); osc.stop(t0 + dur);
+  };
+  /* ★ 三角波音色（史诗掉落琶音用，更「剔透」） */
+  const playChime = (dur, freq, vol, delay) => {
+    const t0 = t + (delay || 0);
+    const osc = audioCtx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t0);
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.01, t0 + dur);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t0); osc.stop(t0 + dur);
   };
   if (type === 'swordSwing') playNoise(0.12, 3000, 3, 0.15);
   else if (type === 'bladeSwing') playNoise(0.2, 1200, 1.5, 0.25);
@@ -64,6 +78,15 @@ function playSound(type) {
   else if (type === 'jump') { playTone(0.15, 200, 400, 0.15); }
   else if (type === 'levelup') { playTone(0.16, 440, 880, 0.22); playTone(0.3, 660, 1320, 0.16); }
   else if (type === 'portal') { playTone(0.5, 180, 900, 0.2); playNoise(0.4, 2000, 3, 0.12); }
+  else if (type === 'epicDrop') {
+    /* ★ 史诗/传说掉落：上行琶音（C-E-G-C）+ 高八度剔透回响 + 微光噪声 */
+    playChime(0.35, 523.25, 0.24, 0);      /* C5 */
+    playChime(0.35, 659.25, 0.24, 0.10);   /* E5 */
+    playChime(0.35, 783.99, 0.26, 0.20);   /* G5 */
+    playChime(0.55, 1046.50, 0.30, 0.30);  /* C6 */
+    playChime(0.70, 2093.00, 0.12, 0.42);  /* C7 闪烁尾音 */
+    playTone(0.5, 261.63, 523.25, 0.10, 0.05);
+  }
 }
 
 /* ===== 程序化背景音乐 ===== */

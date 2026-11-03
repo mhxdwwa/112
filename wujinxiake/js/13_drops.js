@@ -105,6 +105,14 @@ function drawDropAnnounce(){
   const pop = T.t < 0.34 ? (0.82 + 0.18 * (T.t / 0.34)) : 1;
   const cx = VW / 2, cy = VH * 0.30;
   ctx.save();
+  /* ★ 公告登场瞬间：全屏品阶色闪光（仪式感拉满） */
+  if(T.t < 0.45){
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = hexA(col, 0.30 * (1 - T.t / 0.45));
+    ctx.fillRect(0, 0, VW, VH);
+    ctx.restore();
+  }
   ctx.globalAlpha = a;
   ctx.translate(cx, cy);
   ctx.scale(pop, pop);

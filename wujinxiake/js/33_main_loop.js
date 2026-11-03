@@ -363,6 +363,47 @@ function drawGroundDrops(){
           const tierIdx = ['common','advanced','rare','epic','legend','mythic'].indexOf(eq.tier);
           const tcol = eq.tierColor || '#ffffff';
           const gt = (G ? G.t : performance.now() * 0.001);
+          /* ---- ★ 掉落瞬间演出：双重冲击波扩散环 + 放射光 + 中心白闪（传说/史诗） ---- */
+          if(tierIdx >= 4 && (d.age || 0) < 1.1){
+            const _bu = Math.min(1, (d.age || 0) / 1.1);
+            const _isMy2 = eq.tier === 'mythic';
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            /* 双重贴地扩散冲击环 */
+            for(let k = 0; k < 2; k++){
+              const ru = Math.min(1, Math.max(0, _bu * 1.25 - k * 0.28));
+              if(ru <= 0 || ru >= 1) continue;
+              const rr = 12 + ru * (_isMy2 ? 95 : 66);
+              ctx.strokeStyle = hexA(tcol, (1 - ru) * (_isMy2 ? 0.85 : 0.6));
+              ctx.lineWidth = 3.5 * (1 - ru) + 1;
+              ctx.beginPath();
+              ctx.ellipse(drawX, drawY + 7, rr, rr * 0.32, 0, 0, TAU);
+              ctx.stroke();
+            }
+            /* 放射光条 + 中心白闪（前 0.55 秒） */
+            if(_bu < 0.5){
+              const rayN = _isMy2 ? 12 : 8;
+              const rayLen = (1 - _bu / 0.5) * (_isMy2 ? 78 : 52);
+              const rot = _bu * 0.9;
+              for(let k = 0; k < rayN; k++){
+                const ang = rot + k * TAU / rayN;
+                ctx.strokeStyle = hexA(k % 2 ? '#ffffff' : tcol, (1 - _bu / 0.5) * 0.8);
+                ctx.lineWidth = 2.2;
+                ctx.beginPath();
+                ctx.moveTo(drawX + Math.cos(ang) * 10, drawY - 6 + Math.sin(ang) * 6);
+                ctx.lineTo(drawX + Math.cos(ang) * (10 + rayLen), drawY - 6 + Math.sin(ang) * (6 + rayLen * 0.55));
+                ctx.stroke();
+              }
+              const fr = (1 - _bu / 0.5) * (_isMy2 ? 46 : 30);
+              const fg = ctx.createRadialGradient(drawX, drawY - 6, 0, drawX, drawY - 6, fr);
+              fg.addColorStop(0, hexA('#ffffff', (1 - _bu / 0.5) * 0.9));
+              fg.addColorStop(0.5, hexA(tcol, (1 - _bu / 0.5) * 0.5));
+              fg.addColorStop(1, hexA(tcol, 0));
+              ctx.fillStyle = fg;
+              ctx.beginPath(); ctx.arc(drawX, drawY - 6, fr, 0, TAU); ctx.fill();
+            }
+            ctx.restore();
+          }
           /* ---- 地面光斑 ---- */
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
