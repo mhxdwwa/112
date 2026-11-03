@@ -1176,7 +1176,7 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
     'wss://broker.hivemq.com:8884/mqtt',
     'wss://broker.emqx.io:8084/mqtt'
   ];
-  var PREFIX = 'deskboard/v3';
+  var PREFIX = 'dbx-';   // 房间名前缀，后面接 8 位连接码（和教室端一致）
   var LS_ROOMS = 'deskboard:rooms:v1';
   var LS_LAST = 'deskboard:last:v1';
 
@@ -1356,7 +1356,7 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
 
     var my = ++connSeq;
 
-    rt = createRt('dbx-' + c, function () {
+    rt = createRt(base(), function () {
       if (my !== connSeq) return;
       connRetry = 0;
       setState('connecting', '已连上通道，正在确认教室机…');
