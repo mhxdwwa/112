@@ -3837,7 +3837,7 @@ async function saveClassCadresToCloud(cls) {
 loadClassCadres();
 
 // App version for cache invalidation
-const APP_VERSION = '3.19'; // v3.19: 学生给班主任留言（文字/语音）+ 未读感叹号 + 两端同步删除　// v3.18: 控制台指令丢包自动补发(2.5s/5s) + 链路半死45s自愈　// v3.17: 全校到校情况年级统计修正（改读年级归属映射，不再按班级名猜）+ 最新动态按班级汇总　// v3.16: 管理员侧栏「全校班级查看」改为「全校到校情况」（与领导一致）　// v3.15: 快速标记权限收紧为「只有本班班主任」+ 请假登记/请假查看逐行鉴权　// v3.14: 全面排查「改了刷新就没」——课表版本升级不再清空课程；统一同步（删除弱版本）；保存失败自动重试并真实提示；本机更全时反向上推；班干部/请假/销假/排座位改完立刻上推
+const APP_VERSION = '3.20'; // v3.20: 修「正在上课」误报（改用真实作息表判断，不再用写死时段）　// v3.19: 学生给班主任留言（文字/语音）+ 未读感叹号 + 两端同步删除　// v3.18: 控制台指令丢包自动补发(2.5s/5s) + 链路半死45s自愈　// v3.17: 全校到校情况年级统计修正（改读年级归属映射，不再按班级名猜）+ 最新动态按班级汇总　// v3.16: 管理员侧栏「全校班级查看」改为「全校到校情况」（与领导一致）　// v3.15: 快速标记权限收紧为「只有本班班主任」+ 请假登记/请假查看逐行鉴权　// v3.14: 全面排查「改了刷新就没」——课表版本升级不再清空课程；统一同步（删除弱版本）；保存失败自动重试并真实提示；本机更全时反向上推；班干部/请假/销假/排座位改完立刻上推
 
 // 管理员名字（只有此用户可以访问学校数据设置）
 const XQ_ADMIN_NAME = '吴胜闯';
@@ -17073,55 +17073,62 @@ function exportTimetableExcel(className) {
   XLSX.writeFile(wb, `${className}_课程表.xlsx`);
 }
 
-function getTimetableReminderHtml(teacherTT) {
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
-  if (dayOfWeek === 0 || dayOfWeek === 6) return ''; // Weekend
-  
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-  const currentTotalMin = currentHour * 60 + currentMinute;
-  
-  // Approximate period times (can be customized later)
-  const periodTimes = [
-    { start: 480, end: 525 },   // 8:00-8:45
-    { start: 535, end: 580 },   // 8:55-9:40
-    { start: 600, end: 645 },   // 10:00-10:45
-    { start: 655, end: 700 },   // 10:55-11:40
-    { start: 840, end: 885 },   // 14:00-14:45
-    { start: 895, end: 940 },   // 14:55-15:40
-    { start: 960, end: 1005 },  // 16:00-16:45
-    { start: 1015, end: 1060 }, // 16:55-17:40
-  ];
-  
-  // Find current or next class
-  for (let p = 1; p <= timetablePeriods; p++) {
-    const key = `${dayOfWeek}-${p}`;
-    const slot = teacherTT[key];
-    if (!slot) continue;
-    
-    const pt = periodTimes[p - 1];
-    if (!pt) continue;
-    
-    const diff = pt.start - currentTotalMin;
-    
-    if (diff > 0 && diff <= 10) {
-      // Class starting within 10 minutes
-      return `<div class="timetable-reminder">
-        <span style="font-size:18px">&#9200;</span>
-        <div><strong>${diff}分钟后上课</strong>：${escapeHtml(slot.className)} ${escapeHtml(slot.subject)}</div>
-      </div>`;
-    } else if (currentTotalMin >= pt.start && currentTotalMin < pt.end) {
-      // Currently in class
-      return `<div class="timetable-reminder active-class">
-        <span style="font-size:18px">&#128218;</span>
-        <div><strong>正在上课</strong>：${escapeHtml(slot.className)} ${escapeHtml(slot.subject)}</div>
-      </div>`;
-    }
-  }
-  return '';
+function xqHmToMin(hm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(hm || ''));
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 
+function getTimetableReminderHtml(teacherTT) {
+  const now = new Date();
+  let weekday = now.getDay();          // 0=周日
+  if (weekday === 0) weekday = 7;      // 统一成 1-7
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  /* ★ 关键：以学校真实作息（timetableSchedule，表格里显示的也是它）为准。
+     原来这里写死了 8 个时段（第五节 14:00-14:45），和实际作息差半小时，
+     午休/课间也会误报「正在上课」。 */
+  const daySchedule = timetableSchedule[String(weekday)] || [];
+  const rows = [];
+  daySchedule.forEach(function (slotTime, i) {
+    if (!slotTime || !slotTime.start || !slotTime.end) return;
+    const st = xqHmToMin(slotTime.start);
+    const en = xqHmToMin(slotTime.end);
+    if (st == null || en == null) return;
+    rows.push({
+      period: i + 1,
+      start: st,
+      end: en,
+      slot: teacherTT ? teacherTT[weekday + '-' + (i + 1)] : null
+    });
+  });
+
+  /* 1) 现在正处于某一节 */
+  const cur = rows.find(function (r) { return nowMin >= r.start && nowMin < r.end; });
+  if (cur) {
+    if (cur.slot && cur.slot.subject) {
+      return `<div class="timetable-reminder active-class">
+        <span style="font-size:18px">&#128218;</span>
+        <div><strong>正在上课</strong>：${escapeHtml(cur.slot.className)} ${escapeHtml(cur.slot.subject)}</div>
+      </div>`;
+    }
+    /* 本节没课 → 不提示「正在上课」，继续看下一节是否快开始 */
+  }
+
+  /* 2) 10 分钟内有课 */
+  const next = rows
+    .filter(function (r) { return r.start > nowMin && r.start - nowMin <= 10 && r.slot && r.slot.subject; })
+    .sort(function (a, b) { return a.start - b.start; })[0];
+  if (next) {
+    const diff = next.start - nowMin;
+    return `<div class="timetable-reminder">
+      <span style="font-size:18px">&#9200;</span>
+      <div><strong>${diff}分钟后上课</strong>：${escapeHtml(next.slot.className)} ${escapeHtml(next.slot.subject)}</div>
+    </div>`;
+  }
+
+  return '';
+}
 function startTimetableReminder() {
   if (timetableReminderInterval) clearInterval(timetableReminderInterval);
   // Check every 60 seconds
