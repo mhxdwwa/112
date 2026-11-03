@@ -1273,6 +1273,7 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
   function createRt(channel, onOpen, onEvent, onFail) {
     var ws = null, ref = 0, joined = false, stopped = false, retry = 0;
     var reconnectTimer = null, hbTimer = null, joinTimer = null;
+    var lastRx = Date.now();   /* 最近一次收到任何帧的时间（判活用） */
 
     function frame(topic, event, payload) {
       return JSON.stringify({ topic: topic, event: event, payload: payload, ref: String(++ref), join_ref: '1' });
@@ -1283,6 +1284,7 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
       if (stopped) return;
       clearTimers();
       joined = false;
+      lastRx = Date.now();
       try { ws && ws.close(); } catch (e) { /* ignore */ }
       try { ws = new WebSocket(RT_HOST); } catch (e) { fail('无法打开通道'); return; }
 
@@ -1295,12 +1297,15 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
       ws.onmessage = function (ev) {
         var m = null;
         try { m = JSON.parse(ev.data); } catch (e) { return; }
+        lastRx = Date.now();
         if (m.event === 'phx_reply' && m.payload) {
           if (m.payload.status === 'ok' && !joined) {
             joined = true; retry = 0; clearTimeout(joinTimer);
+            /* 每 20 秒心跳；45 秒一帧都没收到 → 链路半死，拆掉重连 */
             hbTimer = setInterval(function () {
+              if (Date.now() - lastRx > 45000) { fail('通道无响应'); return; }
               try { ws && ws.send(frame('phoenix', 'heartbeat', {})); } catch (e) { /* ignore */ }
-            }, 25000);
+            }, 20000);
             onOpen && onOpen();
           } else if (m.payload.status === 'error') {
             fail('通道拒绝加入');
@@ -1322,7 +1327,7 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
       ws = null;
       if (was) onFail && onFail(why);
       if (reconnectTimer) return;
-      var delay = Math.min(8000, 800 * Math.pow(1.7, retry));
+      var delay = Math.min(5000, 600 * Math.pow(1.6, retry));
       retry = Math.min(retry + 1, 6);
       reconnectTimer = setTimeout(function () { reconnectTimer = null; connect(); }, delay);
     }
@@ -1345,13 +1350,19 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
     };
   }
 
+  var probeTimer = null, probeMiss = 0, lastStateAt = 0, channelOk = false;
+
   function connect(c) {
     code = c;
+    probeMiss = 0;
+    lastStateAt = 0;
+    clearInterval(probeTimer);
     try { localStorage.setItem(LS_LAST, c); } catch (e) { /* ignore */ }
 
     if (rt) { try { rt.close(); } catch (e) { /* ignore */ } rt = null; }
     cfg = null;
     remoteInfo = {};
+    channelOk = false;
     setState('connecting', '正在连接 ' + c + '…');
 
     var my = ++connSeq;
@@ -1359,6 +1370,29 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
     rt = createRt(base(), function () {
       if (my !== connSeq) return;
       connRetry = 0;
+      lastStateAt = Date.now();
+      channelOk = true;
+      /* 每 25 秒敲一次门：教室端收到 hello 会立刻回 state，
+         连续两次没回音就认为教室机失联，主动重连而不是干等。 */
+      clearInterval(probeTimer);
+      probeTimer = setInterval(function () {
+        if (my !== connSeq) { clearInterval(probeTimer); return; }
+        if (!rt || !rt.isOpen()) return;
+        rt.send('hello', {});
+        setTimeout(function () {
+          if (my !== connSeq) return;
+          var silent = Date.now() - (lastStateAt || 0);
+          if (silent > 55000) {
+            probeMiss++;
+            if (probeMiss >= 2) {
+              probeMiss = 0;
+              setState('offline', '教室机失联，正在自动重连…');
+              if (rt) { try { rt.close(); } catch (e2) { /* ignore */ } rt = null; }
+              scheduleReconnect();
+            }
+          }
+        }, 8000);
+      }, 25000);
       setState('connecting', '已连上通道，正在确认教室机…');
       rt.send('hello', {});
       setTimeout(function () {
@@ -1369,6 +1403,8 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
       if (my !== connSeq) return;
       var m = payload || {};
       if (evt === 'state') {
+        lastStateAt = Date.now();
+        probeMiss = 0;
         remoteInfo = m;
         if (m.online) {
           setState('online', '已连接：' + (m.className || m.school || code));
@@ -1631,7 +1667,11 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
       } else if (Date.now() - started > 9000) {
         clearInterval(wait);
         $('#rmgo').disabled = false;
-        msg('这台教室没有响应：确认那台电脑开着 DeskBoard、连接码正确', true);
+        if (channelOk) {
+          msg('通道已连上，但教室机没有回应：确认那台电脑开着 DeskBoard、连接码正确', true);
+        } else {
+          msg('连不上实时通道（网络可能拦截了长连接），正在自动重试…', true);
+        }
       }
     }, 300);
   }
