@@ -1182,7 +1182,7 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
 
   var DEFAULTS = window.__DB_DEFAULTS || {};
 
-  var client = null;
+  var rt = null;
   var code = '';
   var rooms = [];
   var state = 'offline';        // offline | connecting | online
@@ -1258,44 +1258,117 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
 
   /* ---------------- MQTT ---------------- */
 
-  function base() { return PREFIX + '/' + code; }
+  function base() { return PREFIX + code; }
+
+
+  /* ---------------- 实时通道（wss / 443） ----------------
+     ★ v3 起不再用公共 MQTT（1883 / 8884 / 8084），学校网络经常整段封端口，
+       表现就是"连接码永远连不上"。现在改走 Supabase Realtime 的广播通道，
+       只占 443，和网页本身同一个网络条件。房间名 = dbx-<8位连接码>，码不变。
+     事件：rpc（我→教室）、rep / cfg / state（教室→我）、hello（我→教室）。 */
+  var RT_HOST = 'wss://xbygooadskfqllnhwmet.supabase.co/realtime/v1/websocket?apikey='
+    + 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhieWdvb2Fkc2tmcWxsbmh3bWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NjU0NDgsImV4cCI6MjA5ODU0MTQ0OH0.ryfpesmsFqBnaJurlMhjEJOWxZV4oFg3NBu7kQD8EKA'
+    + '&vsn=1.0.0';
+
+  function createRt(channel, onOpen, onEvent, onFail) {
+    var ws = null, ref = 0, joined = false, stopped = false, retry = 0;
+    var reconnectTimer = null, hbTimer = null, joinTimer = null;
+
+    function frame(topic, event, payload) {
+      return JSON.stringify({ topic: topic, event: event, payload: payload, ref: String(++ref), join_ref: '1' });
+    }
+    function clearTimers() { clearInterval(hbTimer); clearTimeout(joinTimer); hbTimer = null; joinTimer = null; }
+
+    function connect() {
+      if (stopped) return;
+      clearTimers();
+      joined = false;
+      try { ws && ws.close(); } catch (e) { /* ignore */ }
+      try { ws = new WebSocket(RT_HOST); } catch (e) { fail('无法打开通道'); return; }
+
+      ws.onopen = function () {
+        ws.send(frame('realtime:' + channel, 'phx_join', {
+          config: { broadcast: { self: false, ack: false }, presence: { key: '' } }
+        }));
+        joinTimer = setTimeout(function () { if (!joined) fail('连接通道超时'); }, 9000);
+      };
+      ws.onmessage = function (ev) {
+        var m = null;
+        try { m = JSON.parse(ev.data); } catch (e) { return; }
+        if (m.event === 'phx_reply' && m.payload) {
+          if (m.payload.status === 'ok' && !joined) {
+            joined = true; retry = 0; clearTimeout(joinTimer);
+            hbTimer = setInterval(function () {
+              try { ws && ws.send(frame('phoenix', 'heartbeat', {})); } catch (e) { /* ignore */ }
+            }, 25000);
+            onOpen && onOpen();
+          } else if (m.payload.status === 'error') {
+            fail('通道拒绝加入');
+          }
+          return;
+        }
+        if (m.event === 'broadcast' && m.payload) { onEvent && onEvent(m.payload.event, m.payload.payload); return; }
+        if (m.event === 'phx_error' || m.event === 'phx_close') fail('通道已断开');
+      };
+      ws.onclose = function () { if (!stopped) fail('连接已断开'); };
+      ws.onerror = function () { if (!stopped) fail('网络错误'); };
+    }
+
+    function fail(why) {
+      if (stopped) return;
+      var was = joined;
+      joined = false; clearTimers();
+      try { ws && ws.close(); } catch (e) { /* ignore */ }
+      ws = null;
+      if (was) onFail && onFail(why);
+      if (reconnectTimer) return;
+      var delay = Math.min(8000, 800 * Math.pow(1.7, retry));
+      retry = Math.min(retry + 1, 6);
+      reconnectTimer = setTimeout(function () { reconnectTimer = null; connect(); }, delay);
+    }
+
+    connect();
+    return {
+      send: function (event, payload) {
+        if (!joined || !ws) return false;
+        try {
+          ws.send(frame('realtime:' + channel, 'broadcast', { type: 'broadcast', event: event, payload: payload }));
+          return true;
+        } catch (e) { return false; }
+      },
+      isOpen: function () { return joined; },
+      close: function () {
+        stopped = true; clearTimers(); clearTimeout(reconnectTimer);
+        try { ws && ws.close(); } catch (e) { /* ignore */ }
+        ws = null; joined = false;
+      }
+    };
+  }
 
   function connect(c) {
-    if (!window.MQTTLite) { setState('offline', '缺少 MQTT 组件'); return; }
     code = c;
     try { localStorage.setItem(LS_LAST, c); } catch (e) { /* ignore */ }
 
-    if (client) { try { client.stop(); } catch (e) { /* ignore */ } }
+    if (rt) { try { rt.close(); } catch (e) { /* ignore */ } rt = null; }
     cfg = null;
     remoteInfo = {};
     setState('connecting', '正在连接 ' + c + '…');
 
     var my = ++connSeq;
 
-    client = new window.MQTTLite.Client(BROKERS, {
-      clientId: 'ctl_' + c + '_' + Math.random().toString(16).slice(2, 8),
-      keepalive: 40
-    });
-
-    client.on('connect', function () {
-      if (my !== connSeq) return;             // 已经换成新的连接了，丢弃旧回调
+    rt = createRt('dbx-' + c, function () {
+      if (my !== connSeq) return;
       connRetry = 0;
-      client.subscribe(base() + '/state');
-      client.subscribe(base() + '/cfg');
-      client.subscribe(base() + '/rep');
-      setState('connecting', '已连上中转服务器，正在确认教室机…');
+      setState('connecting', '已连上通道，正在确认教室机…');
+      rt.send('hello', {});
       setTimeout(function () {
         if (my !== connSeq) return;
         if (state !== 'online') setState('offline', '这台教室没有响应（检查是否开机 / 码是否正确）');
       }, 6000);
-    });
-
-    client.on('message', function (topic, payload) {
-      var m = null;
-      try { m = JSON.parse(payload); } catch (e) { return; }
-      if (!m || typeof m !== 'object') return;
-
-      if (topic === base() + '/state') {
+    }, function (evt, payload) {
+      if (my !== connSeq) return;
+      var m = payload || {};
+      if (evt === 'state') {
         remoteInfo = m;
         if (m.online) {
           setState('online', '已连接：' + (m.className || m.school || code));
@@ -1306,33 +1379,25 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
         }
         return;
       }
-
-      if (topic === base() + '/cfg') {
+      if (evt === 'cfg') {
         cfg = m;
         emit('config', m);
         emit('info', { code: code });
         return;
       }
-
-      if (topic === base() + '/rep') {
-        var p = pending[m.id];
-        if (!p) return;
+      if (evt === 'rep') {
+        var pp = pending[m.id];
+        if (!pp) return;
         delete pending[m.id];
-        clearTimeout(p.timer);
-        if (m.ok) p.resolve(m.data);
-        else p.reject(new Error(m.err || '操作失败'));
+        clearTimeout(pp.timer);
+        if (m.ok) pp.resolve(m.data);
+        else pp.reject(new Error(m.err || '操作失败'));
       }
-    });
-
-    client.on('close', function (why) {
+    }, function (why) {
       if (my !== connSeq) return;
-      // mqtt-lite 自身不重连，断了就永久失联 —— 以前只能靠用户手动刷新页面。
-      // 这里做指数退避自动重连（2s → 3.2s → … 最多 30s），公共 broker 抖动时能自己恢复。
       if (state === 'online') setState('connecting', '连接中断，正在重连…（' + (why || '') + '）');
       scheduleReconnect();
     });
-
-    client.start();
   }
 
   function scheduleReconnect() {
@@ -1349,21 +1414,12 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
   function rpc(op, payload, timeout) {
     return new Promise(function (resolve, reject) {
       if (!code) { reject(new Error('还没选择教室')); return; }
-      // 正在重连时不要立刻报"没连上"，先等最多 6 秒 —— 公共 broker 抖一下就恢复，
-      // 用户点保存时常常正好撞上重连窗口，等到就成功了。
-      if (!client || !client.connected) {
-        var waited = 0;
-        var tick = setInterval(function () {
-          waited += 200;
-          if (client && client.connected) { clearInterval(tick); send(); }
-          else if (waited >= 6000) {
-            clearInterval(tick);
-            reject(new Error('教室电脑没有连上（正在自动重连）'));
-          }
-        }, 200);
-        return;
-      }
-      send();
+      var waited = 0;
+      var tick = setInterval(function () {
+        waited += 200;
+        if (rt && rt.isOpen()) { clearInterval(tick); send(); }
+        else if (waited >= 6000) { clearInterval(tick); reject(new Error('教室电脑没有连上（正在自动重连）')); }
+      }, 200);
 
       function send() {
         var id = 'c' + (++seq) + '_' + Math.random().toString(16).slice(2, 6);
@@ -1377,7 +1433,7 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
           if (op === 'set') msg.config = payload;
           else Object.assign(msg, payload);
         }
-        client.publishJSON(base() + '/rpc', msg);
+        rt.send('rpc', msg);
       }
     });
   }
