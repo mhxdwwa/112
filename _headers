@@ -14,6 +14,14 @@
   Cache-Control: no-cache, no-store, must-revalidate
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com https://xbygooadskfqllnhwmet.supabase.co data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
 
+# 控制台无扩展名路径（Pages pretty-URL 会把 /deskboard.html 308 到 /deskboard，此路径不匹配 /*.html）
+/deskboard
+  Cache-Control: no-cache, no-store, must-revalidate
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com https://xbygooadskfqllnhwmet.supabase.co data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
+
+/xueqinguanjia
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /*.html
   Cache-Control: no-cache, no-store, must-revalidate
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; connect-src 'self' blob: https://xbygooadskfqllnhwmet.supabase.co wss://xbygooadskfqllnhwmet.supabase.co https://bjcw.444522621.workers.dev; img-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com https://xbygooadskfqllnhwmet.supabase.co data: blob:; media-src 'self' https://mhxdwwa.oss-cn-shenzhen.aliyuncs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'
