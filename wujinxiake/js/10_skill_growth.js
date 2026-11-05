@@ -5,7 +5,7 @@
 */
 const SP_PER_LEVEL = 10;         // 每级获得技能点
 const SP_START = 10;             // 初始技能点
-const SKILL_DMG_PER_LV = 0.12;   // 每级技能伤害成长（12%，更明显）
+const SKILL_DMG_PER_LV = 0.15;   // ★ v46 每级技能伤害成长 12% → 15%（点满 20 级 = ×3.85）
 
 function skillMaxLv(sk){ return (sk && sk.maxLv) ? sk.maxLv : 20; }
 
@@ -49,23 +49,55 @@ function skillDmgMul(p, idx){
   const lv = (p && p.skillLevels && p.skillLevels[idx]) || 1;
   return 1 + (lv - 1) * SKILL_DMG_PER_LV;
 }
-/* ★ v43 前五式伤害平衡表（第六式觉醒技不动）
-   玩家反馈「前 5 个技能伤害太低」，这里统一上调实际伤害；
-   09_world.js 里各技能的 power（技能栏上显示的伤害数字）已按同一比例同步上调，
-   所以「面板数字」和「真实打出的伤害」是一起涨的，不会只顾着好看。 */
-const SKILL_DMG_TUNE = [1.50, 1.50, 1.45, 1.35, 1.28, 1.00];
+/* ★ v46 前五式伤害重调（第二次上调）
+   玩家反馈「除了终极技，其他技能伤害还是太低」。上一版只上调了 28%~50%，
+   对「一招打不掉一截血」的观感帮助有限，这里按档位再拉一档。
+   档位分布（以剑士「剑来」名义威力 18.0 为 100%）：
+     1式 3.45(18%)　2式 4.5(23%)　3式 7.4(38%)　4式 10.5(54%)　5式 13.3(70%)　6式 18.9(105%)
+   低阶技能补得最多，高阶克制，终极技仍稳稳压一头（第 5 式不再和觉醒技打平）。 */
+const SKILL_DMG_TUNE = [2.30, 2.15, 1.95, 1.75, 1.22, 1.05];
 
-/* 技能伤害基数：基础攻击 × 武器倍率 × 技能等级加成 */
-function skillAtkVal(p){
+/* ★ v46 装备差距「乘法层」
+   p.atk 是加法堆出来的：玩家基础攻击 + 全部防具 + 四维折算。
+   基础攻击在后期占比越来越小 → 换一件好武器、点满强化，最后只涨几个百分点，
+   玩家当然「感觉不到差距」。
+   所以再加一层只由装备强化 / 增幅决定的乘数，直接乘在技能伤害上：
+     · 每 +1 强化：技能伤害 +0.5%
+     · 每 +1 增幅：技能伤害 +0.8%
+   全身 6 件防具 + 武器都 +15 / 增幅 +10 时：+45% / +48%，合计约 ×1.93。
+   这一层和 atk 的增长是叠乘关系，越到后期「毕业号」和「白板号」的差距越明显。 */
+function gearSkillMul(p){
+  const eq = p && p.equipment;
+  if(!eq) return 1;
+  const slots = (typeof EQUIP_SLOTS !== 'undefined') ? EQUIP_SLOTS : Object.keys(eq);
+  let enh = 0, amp = 0;
+  for(let i = 0; i < slots.length; i++){
+    const it = eq[slots[i]];
+    if(!it) continue;
+    enh += Math.min(20, it.enhance || 0);
+    amp += Math.min(15, it.amplify || 0);
+  }
+  return 1 + enh * 0.005 + amp * 0.008;
+}
+
+/* 指定技能索引的伤害基数（面板与实际伤害共用这一份，避免两边走散） */
+function skillAtkValFor(p, idx){
+  if(!p) return 0;
   const w = WEAPONS[p.weaponIdx];
   let v = p.atk * (w ? w.atkMul : 1.0);
-  if(currentSkillIdx >= 0){
-    v *= skillDmgMul(p, currentSkillIdx);
-    v *= (SKILL_DMG_TUNE[currentSkillIdx] || 1);
+  if(idx >= 0){
+    v *= skillDmgMul(p, idx);
+    v *= (SKILL_DMG_TUNE[idx] || 1);
+    v *= gearSkillMul(p);
   }
   /* 魔法系职业：智力转化为技能伤害加成 */
   if(p.skillIntBonus) v *= (1 + p.skillIntBonus);
   return v;
+}
+
+/* 技能伤害基数：基础攻击 × 武器倍率 × 技能等级加成 × 装备差距 */
+function skillAtkVal(p){
+  return skillAtkValFor(p, currentSkillIdx);
 }
 
 const ENEMY_TYPES = {

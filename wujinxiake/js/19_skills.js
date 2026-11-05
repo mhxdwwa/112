@@ -2019,7 +2019,7 @@ function castHerbLifeDeath(){
 
 /* 4 九花玉露 */
 function castHerbDew(){
-  const p = currentSkillCaster || G.player; playSound('heal');
+  const p = currentSkillCaster || G.player; playSound('skillCast'); playSound('heal');
   const A = skillAtkVal(p);
   skCastPose(p, 0.9, '九 花 玉 露 丸', '#ffe9a8', 40);
   skCastAura(p, 0.9, '#ffe9a8', 4);
@@ -2472,7 +2472,7 @@ function castTalismanBind(){
 
 /* 2 五雷符 */
 function castTalismanThunder(){
-  const p = currentSkillCaster || G.player; playSound('thunder');
+  const p = currentSkillCaster || G.player; playSound('skillCast'); playSound('thunder');
   const A = skillAtkVal(p);
   /* ★ 五道雷符沿地面推进，一路追到目标脚下 */
   const tg = skAim(p, 220);
@@ -2536,7 +2536,7 @@ function castTalismanRain(){
 
 /* 4 神剑御雷真诀 */
 function castTalismanSword(){
-  const p = currentSkillCaster || G.player; playSound('thunder');
+  const p = currentSkillCaster || G.player; playSound('skillCast'); playSound('thunder');
   const A = skillAtkVal(p);
   const tg = skAim(p, 280);
   skCastPose(p, 1.1, '神 剑 御 雷 真 诀', '#b6cbd6', 40);
@@ -2769,7 +2769,7 @@ function castCauldronSamadhi(){
 function castCauldronPill(){
   /* 九转金丹：九枚金丹绕身轮转后入体 —— 疗伤、回蓝、短暂无敌，并炸开护体丹光。
      ★ 金丹绕身用 pillOrbit 模型，不用粒子描边 */
-  const p = currentSkillCaster || G.player; playSound('heal');
+  const p = currentSkillCaster || G.player; playSound('skillCast'); playSound('heal');
   const A = skillAtkVal(p);
   spawnText(p.x, p.y, 210, '九 转 金 丹', '#ffd166', 44);
   p.action = { type:'cast', dur:1.0, t:0 };

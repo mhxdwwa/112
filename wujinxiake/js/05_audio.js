@@ -73,7 +73,50 @@ function playSound(type) {
   else if (type === 'impact') { playTone(0.15, 150, 40, 0.3); playNoise(0.15, 600, 1, 0.2); }
   else if (type === 'explosion') { playTone(0.4, 100, 20, 0.5); playNoise(0.4, 400, 0.5, 0.4); }
   else if (type === 'thunder') { playTone(0.6, 80, 15, 0.6); playNoise(0.5, 300, 0.8, 0.5); playTone(0.3, 200, 50, 0.4); }
-  else if (type === 'skillCast') { playTone(0.3, 300, 600, 0.2); playNoise(0.3, 1500, 2, 0.2); }
+  else if (type === 'skillCast') {
+    /* ============================================================
+       ★ v46 各职业 · 各档位技能专属施法音
+       —— 以前全职业共用一个 "300→600Hz 上滑 + 1500Hz 噪声"，
+          三十六招听起来一模一样，放技能完全没有「这招很重」的体感。
+       现在按「武器职业 × 技能档位」现场合成：
+         剑＝清亮金属铮鸣　刀＝厚重劈风　枪＝锐利贯穿　拳＝低频闷击
+         药＝柔和气泡　　　斧＝低沉重压　符＝纸符翻飞　鼎＝钟鼎鸣响
+       档位 1→6 逐级抬音高、加长、加厚；第 6 式（觉醒）再叠一层地鸣与长尾。
+       ============================================================ */
+    const caster = (typeof currentSkillCaster !== 'undefined' && currentSkillCaster) ? currentSkillCaster : null;
+    let wid = 'sword';
+    try {
+      if (caster && typeof WEAPONS !== 'undefined') {
+        const _w = WEAPONS[caster.weaponIdx];
+        if (_w && _w.id) wid = _w.id;
+      }
+    } catch (e) { /* 极端情况下退回剑士音色 */ }
+    const tier = Math.max(0, Math.min(5, (typeof currentSkillIdx !== 'undefined' && currentSkillIdx >= 0) ? currentSkillIdx : 0));
+    const pMul = 1 + tier * 0.11;        /* 档位越高音高越抬，听感「一层比一层强」 */
+    const vMul = 0.80 + tier * 0.06;     /* 音量同步递增 */
+    const dMul = 1 + tier * 0.14;        /* 尾音越长 */
+    /* [时长, 频率, Q, 音量] */
+    const V = {
+      sword:    { n:[[0.18,4200,4,0.13]],  t:[[0.22,520,1180,0.16,0]] },
+      blade:    { n:[[0.26,1400,1.6,0.22]],t:[[0.28,300,130,0.20,0]] },
+      spear:    { n:[[0.10,5200,6,0.15]],  t:[[0.12,900,420,0.14,0]] },
+      fist:     { n:[[0.09,700,2,0.17]],   t:[[0.16,180,70,0.24,0]] },
+      herb:     { n:[[0.30,1000,1.0,0.10]],t:[[0.26,420,640,0.12,0],[0.30,640,520,0.09,0.07]] },
+      axe:      { n:[[0.30,900,1.2,0.24]], t:[[0.34,150,50,0.26,0]] },
+      talisman: { n:[[0.20,3200,2.0,0.10]],t:[], c:[[0.50,880,0.14,0],[0.60,1320,0.09,0.08]] },
+      cauldron: { n:[[0.18,2200,3,0.10]],  t:[], c:[[0.50,440,0.16,0],[0.70,660,0.11,0.06],[0.90,880,0.07,0.14]] }
+    };
+    const v = V[wid] || V.sword;
+    for (const q of (v.n || [])) playNoise(q[0] * dMul, q[1] * pMul, q[2], q[3] * vMul);
+    for (const q of (v.t || [])) playTone(q[0] * dMul, q[1] * pMul, q[2] * pMul, q[3] * vMul, q[4]);
+    for (const q of (v.c || [])) playChime(q[0] * dMul, q[1] * pMul, q[2] * vMul, q[3]);
+    /* 觉醒技：加一层地鸣 + 长尾，把「终极」和其它档位彻底区分开 */
+    if (tier >= 5) {
+      playTone(0.85, 95 * pMul, 38, 0.30);
+      playNoise(0.65, 480, 0.7, 0.16);
+      playChime(0.90, 1760, 0.07, 0.12);
+    }
+  }
   else if (type === 'enemySkill') { playTone(0.2, 200, 100, 0.4); }
   else if (type === 'jump') { playTone(0.15, 200, 400, 0.15); }
   else if (type === 'levelup') { playTone(0.16, 440, 880, 0.22); playTone(0.3, 660, 1320, 0.16); }

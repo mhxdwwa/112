@@ -320,17 +320,22 @@ function drawAmplifyTab(p, fx, fy, fw, fh){
   ctx.textAlign = 'left'; ctx.fillStyle = '#c9a2ff'; ctx.font = 'bold 12px "Microsoft YaHei"';
   ctx.fillText('当前增幅属性（异次元四维）', sx, sy - 8);
   const rows = [
-    ['力量', '+' + cur.str, '#c9a2ff'],
-    ['体力', '+' + cur.vit, '#c9a2ff'],
-    ['转化攻击', '+' + cur.atk, '#2ee6a8'],
-    ['转化生命', '+' + cur.hp, '#2ee6a8'],
-    ['无视防御', '+' + cur.pierce, '#9fe6ff']
+    ['力量',     '+' + cur.str,    '#c9a2ff'],
+    ['体力',     '+' + cur.vit,    '#c9a2ff'],
+    ['转化攻击', '+' + cur.atk,    '#2ee6a8'],
+    ['转化防御', '+' + (cur.def || 0), '#9fe6ff'],
+    ['转化生命', '+' + cur.hp,     '#2ee6a8'],
+    ['无视防御', '+' + cur.pierce, '#ffd166']
   ];
   for(let i = 0; i < rows.length; i++){
+    const col = Math.floor(i / 3), row = i % 3;
+    const rx = sx + col * 148, ry = sy + 16 + row * 22;
     ctx.fillStyle = '#8fa8bc'; ctx.font = '12px "Microsoft YaHei"';
-    ctx.fillText(rows[i][0], sx, sy + 16 + i*21);
+    ctx.fillText(rows[i][0], rx, ry);
     ctx.fillStyle = rows[i][2]; ctx.font = 'bold 12px "Microsoft YaHei"';
-    ctx.fillText(rows[i][1], sx + 96, sy + 16 + i*21);
+    ctx.textAlign = 'right';
+    ctx.fillText(rows[i][1], rx + 74, ry);
+    ctx.textAlign = 'left';
   }
 
   /* 下一级预览 */
@@ -346,9 +351,15 @@ function drawAmplifyTab(p, fx, fy, fw, fh){
     ctx.fillStyle = '#ff9ae0'; ctx.font = 'bold 12px "Microsoft YaHei"';
     ctx.fillText('成功率 ' + Math.round(amplifyRateOf(ampLv, eq)*100) + '%', nx + 14, ny + 46);
     ctx.fillStyle = '#8fa8bc'; ctx.font = '11px "Microsoft YaHei"';
-    ctx.fillText('力量 +' + (nxt.str-cur.str) + '　体力 +' + (nxt.vit-cur.vit), nx + 14, ny + 70);
-    ctx.fillText('攻击 +' + (nxt.atk-cur.atk) + '　生命 +' + (nxt.hp-cur.hp), nx + 14, ny + 90);
-    ctx.fillText('无视防御 +' + (nxt.pierce-cur.pierce), nx + 14, ny + 110);
+    const c2 = nx + 14, c3 = nx + 14 + Math.max(120, nw/2 - 10);
+    ctx.fillText('力量 +' + (nxt.str-cur.str), c2, ny + 70);
+    ctx.fillText('体力 +' + (nxt.vit-cur.vit), c3, ny + 70);
+    ctx.fillText('攻击 +' + (nxt.atk-cur.atk), c2, ny + 90);
+    ctx.fillStyle = '#9fe6ff';
+    ctx.fillText('防御 +' + ((nxt.def||0)-(cur.def||0)), c3, ny + 90);
+    ctx.fillStyle = '#8fa8bc';
+    ctx.fillText('生命 +' + (nxt.hp-cur.hp), c2, ny + 110);
+    ctx.fillText('无视防御 +' + (nxt.pierce-cur.pierce), c3, ny + 110);
     ctx.fillStyle = '#6f8b9e'; ctx.font = '10px "Microsoft YaHei"';
     ctx.fillText('品阶越高，增幅四维成长越高', nx + 14, ny + nh - 12);
   } else {

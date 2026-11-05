@@ -336,13 +336,18 @@ function recalcPlayerStats(){
   const isMagic = wMain.dmgType === 'magic';
   p.dmgType   = wMain.dmgType || 'phys';       /* 物理 / 魔法 */
   p.mainStat  = isMagic ? 'int' : 'str';       /* 主属性 */
+  /* ★ v46 防具强化/增幅的百分比收益：防御 + 生命（DNF 式「强化防具堆防御」）
+     这一层必须乘在最后，才能让「换一整套 +15 防具」真的肉一大圈。 */
+  const gdh = (typeof gearDefHpBonus === 'function') ? gearDefHpBonus(p) : { defPct:0, hpPct:0 };
   p.atk      = bs.atk + (isMagic ? b.matk + b.int * DNF_COEF.atkPerStr
                                  : b.patk + b.str * DNF_COEF.atkPerStr) + (pb.atk || 0);
   /* 魔法系：智力额外加成技能伤害（1 智力 = +0.15%），物理系不加 */
   p.skillIntBonus = isMagic ? b.int * DNF_COEF.skillPctPerInt / 100 : 0;
-  p.maxHp    = bs.maxHp + b.hp + b.vit * DNF_COEF.hpPerVit + (pb.hp || 0);
+  p.maxHp    = (bs.maxHp + b.hp + b.vit * DNF_COEF.hpPerVit + (pb.hp || 0)) * (1 + gdh.hpPct);
   p.maxMp    = bs.maxMp + b.mp + b.spr * DNF_COEF.mpPerSpr + (pb.mp || 0);
-  p.def      = bs.def + b.pdef + b.vit * DNF_COEF.defPerVit;
+  p.def      = (bs.def + b.pdef + b.vit * DNF_COEF.defPerVit) * (1 + gdh.defPct);
+  p.gearDefPct = Math.round(gdh.defPct * 100);   /* 面板展示用：防具强化/增幅带来的防御加成 */
+  p.gearHpPct  = Math.round(gdh.hpPct * 100);
   p.moveSpeed = (bs.moveSpeed + b.spd) * (1 + b.moveSpd / 100);
   p.critBonus = bs.critBonus + b.pcrit / 100 + (pb.crit || 0) / 100;
   p.pierce    = b.pierce;

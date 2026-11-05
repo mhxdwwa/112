@@ -1263,12 +1263,15 @@ function drawEffects(dt){
   const _cullL = _camX - 460, _cullR = _camX + VW + 460;
   /* ★ v54 低配自动降级：掉帧时同屏「纯装饰」特效限量绘制（地火/爆炸这类伤害指示不限制）。
      技能判定、伤害、时长都不受影响，只是少叠几层光雾，
-     避免教室老电脑上一次技能铺十几层半透明大图把填充率吃满。 */
+     避免教室老电脑上一次技能铺十几层半透明大图把填充率吃满。
+     ★ v46：这套限量不再只在掉帧时生效——高画质档也按 ×2.5 的宽松值限量，
+     单帧里同类型装饰特效最多画 20 层，再多的直接跳过（肉眼几乎看不出差别，填充率省一大截）。 */
   const _slow = !!(window.PFX && window.PFX.slow);
-  const _cap = _slow
-    ? { poisonCloud: 2, emberBurst: 2, hitRing: 6, lightBloom: 3, pillOrbit: 1, vine: 5, spiderSwarm: 1 }
-    : null;
-  const _used = _cap ? {} : null;
+  const _BASE_CAP = { poisonCloud: 4, emberBurst: 4, hitRing: 12, lightBloom: 5, pillOrbit: 1, vine: 8, spiderSwarm: 2,
+                      groundFire: 6, skyGlow: 4, shockWave: 4, explosion: 6 };
+  const _cap = {};
+  for(const _k in _BASE_CAP) _cap[_k] = _slow ? _BASE_CAP[_k] : Math.round(_BASE_CAP[_k] * 2.5);
+  const _used = {};
   for(const ef of G.effects){
     if(ef.x < _cullL || ef.x > _cullR) continue;
     if(_cap && _cap[ef.type] !== undefined){

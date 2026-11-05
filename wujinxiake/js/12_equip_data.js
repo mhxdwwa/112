@@ -250,7 +250,7 @@ function equipDnfEnhance(eq){
   const lv = eq.enhance || 0, amp = eq.amplify || 0;
   const g = ENHANCE_TIER_GAIN[equipTierKey(eq)] || ENHANCE_TIER_GAIN.common;
   out.patk = Math.round((eq.baseAtk || 0) * g.atkPct * lv);
-  out.pdef = Math.round((eq.baseDef || 0) * g.defPct * lv);
+  out.pdef = Math.round(equipDefHpBase(eq).def * g.defPct * lv);
   if(amp > 0){
     const ag = AMPLIFY_TIER_GAIN[equipTierKey(eq)] || AMPLIFY_TIER_GAIN.common;
     out.str = ag.str * amp;
@@ -425,13 +425,60 @@ const SET_SLOTS = ['head', 'armor', 'shoes', 'necklace', 'ring', 'bracer'];
    · 白阶（普通）成长最低，粉阶（神器）成长最高 —— 越高品阶越值得打造
 */
 const ENHANCE_TIER_GAIN = {
-  common:  { label:'白阶', atkPct:0.060, defPct:0.08, hpPct:0.030, piercePct:0.030 },
-  advanced:{ label:'蓝阶', atkPct:0.065, defPct:0.09, hpPct:0.035, piercePct:0.035 },
-  rare:    { label:'紫阶', atkPct:0.070, defPct:0.10, hpPct:0.040, piercePct:0.040 },
-  epic:    { label:'粉阶', atkPct:0.080, defPct:0.12, hpPct:0.050, piercePct:0.050 },
-  legend:  { label:'橙阶', atkPct:0.085, defPct:0.13, hpPct:0.055, piercePct:0.055 },
-  mythic:  { label:'史诗', atkPct:0.090, defPct:0.14, hpPct:0.060, piercePct:0.060 }
+  common:  { label:'白阶', atkPct:0.060, defPct:0.13, hpPct:0.060, piercePct:0.030 },
+  advanced:{ label:'蓝阶', atkPct:0.065, defPct:0.14, hpPct:0.070, piercePct:0.035 },
+  rare:    { label:'紫阶', atkPct:0.070, defPct:0.15, hpPct:0.080, piercePct:0.040 },
+  epic:    { label:'粉阶', atkPct:0.080, defPct:0.17, hpPct:0.095, piercePct:0.050 },
+  legend:  { label:'橙阶', atkPct:0.085, defPct:0.18, hpPct:0.105, piercePct:0.055 },
+  mythic:  { label:'史诗', atkPct:0.090, defPct:0.20, hpPct:0.120, piercePct:0.060 }
 };
+
+/* ★ v46 防具强化：没有基础防御/生命的部位也要按部位给一份「等效基数」
+   —— 以前鞋子的 baseDef/baseHp 都是 0，强化鞋子只涨移速，
+      玩家在面板上完全看不到「我强化了鞋」的效果（DNF 里鞋是加防的）。
+   数值按「同品阶 battle 装」的量级给，保证各部位强化收益差不多。 */
+const SLOT_DEF_BASE = { weapon:0, head:3.5, armor:5, shoes:2.5, necklace:1.2, ring:1.2, bracer:1.2, accessory:1.2, mount:0 };
+const SLOT_HP_BASE  = { weapon:0, head:30, armor:30, shoes:14, necklace:10, ring:10, bracer:10, accessory:10, mount:0 };
+
+/* ★ v46 防具强化 / 增幅的「百分比」收益（DNF 式：强化防具抬防御，增幅防具抬生命）
+   为什么用百分比：固定值几十点在后期几千点防御 / 上万血面前根本看不见。
+     · 每 +1 强化：防御 +0.8%　生命 +0.4%
+     · 每 +1 增幅：防御 +0.5%　生命 +0.9%
+   6 件防具全 +15 / 增幅 +10 → 防御 +72% / +30%，生命 +36% / +54%。
+   只统计防具槽（头/衣/鞋/项链/戒指/护腕），武器与飞行道具不参与。 */
+const ARMOR_SLOTS = ['head','armor','shoes','necklace','ring','bracer'];
+function gearDefHpBonus(p){
+  const out = { defPct:0, hpPct:0 };
+  const eq = p && p.equipment;
+  if(!eq) return out;
+  let enh = 0, amp = 0;
+  for(let i = 0; i < ARMOR_SLOTS.length; i++){
+    const it = eq[ARMOR_SLOTS[i]];
+    if(!it) continue;
+    enh += Math.min(20, it.enhance || 0);
+    amp += Math.min(15, it.amplify || 0);
+  }
+  out.defPct = enh * 0.008 + amp * 0.005;
+  out.hpPct  = enh * 0.004 + amp * 0.009;
+  return out;
+}
+
+/* ★ v46 强化用的「等效防御/生命基数」：有本体值就用本体值，
+   没有（头/鞋/项链/戒指/护腕本体 baseDef 都是 0）就按部位给一份等效基数。
+   强化界面与实际结算共用这一个函数，避免「界面显示的和算出来的不一样」。 */
+function equipDefHpBase(eq){
+  const out = { def:0, hp:0 };
+  if(!eq) return out;
+  const tier = EQUIP_TIERS.find(function(t){ return t.id === eq.tier; }) || EQUIP_TIERS[0];
+  const lvScale = 1 + (eq.level || 1) * 0.05;
+  const gm = eq.gradeMul || 1;
+  const slot = eq.slot || 'armor';
+  out.def = (eq.baseDef || 0) > 0 ? eq.baseDef
+          : Math.round((SLOT_DEF_BASE[slot] || 0) * tier.baseMul * lvScale * gm);
+  out.hp  = (eq.baseHp || 0) > 0 ? eq.baseHp
+          : Math.round((SLOT_HP_BASE[slot] || 0) * tier.baseMul * lvScale * gm);
+  return out;
+}
 
 /* 增幅四维成长（每+1级） */
 const AMPLIFY_TIER_GAIN = {
@@ -443,7 +490,8 @@ const AMPLIFY_TIER_GAIN = {
   mythic:  { str:8, vit:8 }
 };
 const AMP_ATK_PER_STR = 1.5;   // 1点力量 = 1.5攻击
-const AMP_HP_PER_VIT  = 8;     // 1点体力 = 8生命
+const AMP_HP_PER_VIT  = 12;    // 1点体力 = 12生命（★ v46 从 8 上调，增幅要看得见血条变长）
+const AMP_DEF_PER_VIT = 1.6;   // 1点体力 = 1.6物防（★ v46 新增：增幅也抬防御）
 const ENHANCE_MAX_LV = 15;
 const AMPLIFY_MAX_LV = 15;
 
@@ -479,16 +527,17 @@ function calcEnhanceStats(eq){
   const lv = eq.enhance || 0;
   if(lv <= 0) return out;
   const g = equipTierGain(eq);
+  const base = equipDefHpBase(eq);
   out.atk    = Math.round((eq.baseAtk || 0) * g.atkPct * lv);
-  out.def    = Math.round((eq.baseDef || 0) * g.defPct * lv);
-  out.hp     = Math.round((eq.baseHp  || 0) * g.hpPct  * lv);
+  out.def    = Math.round(base.def * g.defPct * lv);
+  out.hp     = Math.round(base.hp  * g.hpPct  * lv);
   out.pierce = Math.round((eq.baseAtk || 0) * g.piercePct * lv);
   return out;
 }
 
 /* 增幅带来的实际属性（力量/体力 + 异次元攻击） */
 function calcAmplifyStats(eq){
-  const out = { str:0, vit:0, atk:0, hp:0, pierce:0 };
+  const out = { str:0, vit:0, atk:0, hp:0, def:0, pierce:0 };
   if(!eq) return out;
   const lv = eq.amplify || 0;
   if(lv <= 0) return out;
@@ -497,6 +546,9 @@ function calcAmplifyStats(eq){
   out.vit = g.vit * lv;
   out.atk = Math.round(out.str * AMP_ATK_PER_STR);
   out.hp  = Math.round(out.vit * AMP_HP_PER_VIT);
+  /* ★ v46：增幅防具不能只长力量体力，防御也要跟着涨（体力→防御），
+     否则增幅完只有血条变长，被怪打一下照样暴毙，感觉不到增幅的价值 */
+  out.def = Math.round(out.vit * AMP_DEF_PER_VIT);
   out.pierce = Math.round((eq.baseAtk || 0) * 0.020 * lv);
   return out;
 }
@@ -733,10 +785,10 @@ function equipFullStats(eq){
   o.vit = (d.vit || 0) + (amp.vit || 0);
   o.spr = (d.spr || 0);
 
-  /* 三攻 / 双防（强化同时抬攻击与防御） */
+  /* 三攻 / 双防（强化同时抬攻击与防御；增幅的体力也折算一部分防御） */
   o.patk = (d.patk || 0) + (eq.baseAtk || 0) + (enh.atk || 0) + (amp.atk || 0);
   o.matk = (d.matk || 0);
-  o.pdef = (d.pdef || 0) + (eq.baseDef || 0) + (enh.def || 0);
+  o.pdef = (d.pdef || 0) + (eq.baseDef || 0) + (enh.def || 0) + (amp.def || 0);
   o.mdef = (d.mdef || 0);
 
   /* 暴击 / 命中 / 回避 / 三速 */

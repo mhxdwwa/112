@@ -41,9 +41,11 @@ const QUALITY_TIERS = [
   /* 0 流畅：零模糊零滤镜，画布 720p，粒子/特效大幅收紧 —— 软渲染教室机的目标档 */
   { name: '流畅', dpr: 1,            cap: 130, scale: 0.38, slow: 1, shadow: 0,   fxMax: 22, filter: false },
   /* 1 均衡：不超屏分辨率，中等特效 */
-  { name: '均衡', dpr: 1,            cap: 340, scale: 0.72, slow: 0, shadow: 0.5, fxMax: 46, filter: true },
-  /* 2 高画质：跟随设备像素比（最高2x），全特效 */
-  { name: '高画质', dpr: __dprBase, cap: 560, scale: 1,    slow: 0, shadow: 1,   fxMax: 78, filter: true }
+  { name: '均衡', dpr: 1,            cap: 320, scale: 0.72, slow: 0, shadow: 0.5, fxMax: 44, filter: true },
+  /* 2 高画质：跟随设备像素比（最高2x），全特效
+     ★ v46 高画质也做了一轮收紧（cap 560→420 / fxMax 78→60 / 模糊 1→0.85）：
+     8 大职业 × 6 式技能全放完的压力比之前大得多，高画质档不能是"无底洞"。 */
+  { name: '高画质', dpr: __dprBase, cap: 420, scale: 0.92, slow: 0, shadow: 0.85, fxMax: 60, filter: true }
 ];
 window.QUALITY = { mode: 'auto', tier: 2, autoBase: 2, softRender: false };
 

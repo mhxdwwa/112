@@ -405,19 +405,30 @@ function drawEnhanceTab(p, fx, fy, fw, fh){
 
   /* 属性表 */
   const sx = fx + 18, sy = fy + 150;
+  const dnfS = eq.dnf || {};
+  const baseAtkShow = (eq.baseAtk || 0) + (dnfS.patk || 0);
+  const baseDefShow = (eq.baseDef || 0) + (dnfS.pdef || 0);
+  /* ★ 生命值：dnf.hp 本身就是 baseHp 的副本（见 rollEquipDnf），相加会翻倍，这里只取一份 */
+  const baseHpShow  = (eq.baseHp || 0) || (dnfS.hp || 0);
   ctx.textAlign = 'right'; ctx.fillStyle = '#6f8b9e'; ctx.font = '10px "Microsoft YaHei"';
   ctx.fillText('基础', sx + 128, sy - 20);
   ctx.fillStyle = '#b9a45e'; ctx.fillText('强化', sx + 196, sy - 20);
   ctx.fillStyle = '#b06a9a'; ctx.fillText('增幅', sx + 262, sy - 20);
   ctx.fillStyle = '#5fae8e'; ctx.fillText('合计', sx + 340, sy - 20);
 
-  drawStatLine('攻击力', eq.baseAtk, cur.atk, amp.atk, sx, sy);
-  drawStatLine('防御力', eq.baseDef, cur.def, 0, sx, sy + 22);
-  drawStatLine('生命值', eq.baseHp, cur.hp, amp.hp, sx, sy + 44);
+  drawStatLine('攻击力', baseAtkShow, cur.atk, amp.atk, sx, sy);
+  drawStatLine('防御力', baseDefShow, cur.def, amp.def || 0, sx, sy + 22);
+  drawStatLine('生命值', baseHpShow, cur.hp, amp.hp, sx, sy + 44);
   drawStatLine('无视防御', 0, cur.pierce, amp.pierce, sx, sy + 66);
   if(amp.str > 0 || amp.vit > 0){
     ctx.textAlign = 'left'; ctx.fillStyle = '#ff9ae0'; ctx.font = '11px "Microsoft YaHei"';
-    ctx.fillText('异次元：力量 +' + amp.str + '　体力 +' + amp.vit + '（1力量=1.5攻击，1体力=8生命）', sx, sy + 88);
+    ctx.fillText('异次元：力量 +' + amp.str + '　体力 +' + amp.vit + '（1力量=1.5攻击，1体力=12生命/1.6防御）', sx, sy + 88);
+  }
+  /* 防具整套强化/增幅的百分比收益（DNF 式：强化堆防御、增幅堆生命） */
+  const gdhShow = (typeof gearDefHpBonus === 'function') ? gearDefHpBonus(p) : { defPct:0, hpPct:0 };
+  if(gdhShow.defPct > 0 || gdhShow.hpPct > 0){
+    ctx.textAlign = 'left'; ctx.fillStyle = '#7fd4ff'; ctx.font = '11px "Microsoft YaHei"';
+    ctx.fillText('防具套装加成：防御 +' + Math.round(gdhShow.defPct*100) + '%　生命 +' + Math.round(gdhShow.hpPct*100) + '%', sx, sy + 108);
   }
 
   /* 下一级预览 */
@@ -436,13 +447,13 @@ function drawEnhanceTab(p, fx, fy, fw, fh){
     ctx.fillStyle = '#8fa8bc'; ctx.font = '11px "Microsoft YaHei"';
     const dAtk = nxt.atk - cur.atk, dDef = nxt.def - cur.def, dHp = nxt.hp - cur.hp, dP = nxt.pierce - cur.pierce;
     const lines = [];
-    if(eq.baseAtk) lines.push('攻击 +' + dAtk + '　无视防御 +' + dP);
-    if(eq.baseDef) lines.push('防御 +' + dDef);
-    if(eq.baseHp)  lines.push('生命 +' + dHp);
+    if(dAtk > 0 || dP > 0) lines.push('攻击 +' + dAtk + '　无视防御 +' + dP);
+    if(dDef > 0) lines.push('防御 +' + dDef);
+    if(dHp  > 0) lines.push('生命 +' + dHp);
     if(!lines.length) lines.push('该部位强化不提供额外属性');
     for(let i = 0; i < lines.length && i < 3; i++) ctx.fillText(lines[i], nx + 14, ny + 68 + i*17);
     ctx.fillStyle = '#6f8b9e'; ctx.font = '10px "Microsoft YaHei"';
-    ctx.fillText('每级成长：' + g.label + ' 基础攻击×' + Math.round(g.atkPct*100) + '%', nx + 14, ny + nh - 12);
+    ctx.fillText('每级：' + g.label + ' 攻击×' + Math.round(g.atkPct*100) + '%　防御×' + Math.round(g.defPct*100) + '%　生命×' + Math.round(g.hpPct*100) + '%', nx + 14, ny + nh - 12);
   } else {
     ctx.fillStyle = '#ffd700'; ctx.font = '11px "Microsoft YaHei"';
     ctx.fillText('继续强化不再提升属性', nx + 14, ny + 50);
@@ -474,9 +485,13 @@ function drawEnhanceTab(p, fx, fy, fw, fh){
 
   /* 规则说明 */
   ctx.fillStyle = 'rgba(140,160,180,0.75)'; ctx.font = '11px "Microsoft YaHei"';
-  ctx.fillText('白阶每级 +' + Math.round(ENHANCE_TIER_GAIN.common.atkPct*100) + '% 基础攻击　·　粉阶每级 +' +
-    Math.round(ENHANCE_TIER_GAIN.epic.atkPct*100) + '% 基础攻击　·　失败惩罚：+5~+7 掉1级，+8以上归零',
-    fx + fw/2, fy + 390);
+  ctx.fillText('每级成长：白阶 攻击+' + Math.round(ENHANCE_TIER_GAIN.common.atkPct*100) + '%／防御+' +
+    Math.round(ENHANCE_TIER_GAIN.common.defPct*100) + '%／生命+' + Math.round(ENHANCE_TIER_GAIN.common.hpPct*100) +
+    '%　·　粉阶 攻击+' + Math.round(ENHANCE_TIER_GAIN.epic.atkPct*100) + '%／防御+' + Math.round(ENHANCE_TIER_GAIN.epic.defPct*100) +
+    '%／生命+' + Math.round(ENHANCE_TIER_GAIN.epic.hpPct*100) + '%',
+    fx + fw/2, fy + 384);
+  ctx.fillText('失败惩罚：+5~+7 掉 1 级，+8 以上归零　·　全套 6 件防具同时强化还会额外提供全属性防御/生命加成',
+    fx + fw/2, fy + 400);
 }
 
 /* 分解标签页 */

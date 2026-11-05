@@ -450,11 +450,14 @@ function makePvpPlayerWithChar(num, char, bal){
 }
 
 /* ★ 全局特效预算（由 33_main_loop 的自适应画质治理器动态调整） */
-if(!window.PFX) window.PFX = { cap:560, scale:1, slow:0, shadow:1, avg:0.016, acc:0 };
-/* ★ 粒子量按来源降档基准（教室大屏弱机为基准设计）：
-   boss=Boss技能 0.4 / player=玩家技能 0.55 / other=其余(掉落/环境) 0.7 */
-if(!window.FX_PSCALE) window.FX_PSCALE = { boss:0.4, player:0.55, other:0.7 };
+if(!window.PFX) window.PFX = { cap:420, scale:0.92, slow:0, shadow:0.85, avg:0.016, acc:0 };
+/* ★ v46 粒子量再降一档（8 大职业 × 6 式技能，全放完的压力比之前大得多）：
+   boss=Boss技能 0.32 / player=玩家技能 0.45 / other=其余(掉落/环境) 0.6 */
+if(!window.FX_PSCALE) window.FX_PSCALE = { boss:0.32, player:0.45, other:0.6 };
 if(!window.__fxSrc) window.__fxSrc = 'player';
+/* ★ v46 单次喷发硬上限：以前一个技能里 spawnParticles(..., 60) 会无视全局预算一口气塞 60 颗，
+   几招一起放就把粒子池顶满。现在任何一次调用最多 30 颗，视觉靠"少而精"的轨迹撑。 */
+const FX_BURST_MAX = 30;
 
 /* ★ 顿帧（hitstop）限流器：
    以前每次伤害都直接 Math.max(G.hitstop, 0.03~0.15)，而顿帧期间 dt 只有 10%，
@@ -480,6 +483,7 @@ function spawnParticles(x,y,n,o){
   const psM = PS[window.__fxSrc || 'other'];
   if(psM !== undefined && psM < 1) cnt = Math.max(1, Math.round(cnt * psM));
   if(PFX.scale < 1) cnt = Math.max(1, Math.round(cnt * PFX.scale));      /* 掉帧时按比例少喷 */
+  if(cnt > FX_BURST_MAX) cnt = FX_BURST_MAX;                            /* ★ v46 单次喷发硬上限 */
   if(cur > PFX.cap * 0.7) cnt = Math.max(1, Math.round(cnt * 0.5));    /* 接近上限再砍一半 */
   for(let i=0;i<cnt;i++){
     const a = o.angle!==undefined ? o.angle + rand(-(o.spread||0.9),(o.spread||0.9)) : rand(0,TAU);

@@ -143,15 +143,13 @@ function calcSkillDamage(p, skillIdx){
   const w = WEAPONS[p.weaponIdx];
   if(!w || !w.skills[skillIdx]) return 0;
   const sk = w.skills[skillIdx];
-  const lv = (p.skillLevels && p.skillLevels[skillIdx]) || 1;
-  const power = sk.power || 1.0;
-  /* 基础攻击力 × 武器倍率 × 技能等级加成 × 技能威力系数 */
-  let atkVal = p.atk * (w.atkMul || 1.0);
-  atkVal *= (1 + (lv - 1) * SKILL_DMG_PER_LV);
-  /* 魔法系职业：智力转化为技能伤害加成 */
-  if(p.skillIntBonus) atkVal *= (1 + p.skillIntBonus);
-  /* 技能威力系数（每个技能不同，大招系数更高） */
-  return Math.round(atkVal * power);
+  /*
+    ★ v46：面板数字改成和「真实伤害」走同一条公式（skillAtkValFor）。
+      以前这里自己算了一遍 atk × 武器 × 技能等级 × power，
+      既没有装备强化/增幅的乘数、也没有前五式平衡表，
+      所以玩家看到的面板数字和实际打出来的完全对不上。
+  */
+  return Math.round(skillAtkValFor(p, skillIdx) * (sk.power || 1));
 }
 
 /* ★ 计算技能下一级伤害（用于对比显示） */
@@ -164,11 +162,11 @@ function calcSkillDamageNext(p, skillIdx){
   const nextLv = lv + 1;
   const maxLv = sk.maxLv || 20;
   if(nextLv > maxLv) return 0; // 已满级
-  const power = sk.power || 1.0;
-  let atkVal = p.atk * (w.atkMul || 1.0);
-  atkVal *= (1 + (nextLv - 1) * SKILL_DMG_PER_LV);
-  if(p.skillIntBonus) atkVal *= (1 + p.skillIntBonus);
-  return Math.round(atkVal * power);
+  /* 用同一份基数，把「技能等级那一项」换成下一级再算一次 */
+  const cur = skillAtkValFor(p, skillIdx);
+  const curMul = skillDmgMul(p, skillIdx) || 1;
+  const nextMul = 1 + (nextLv - 1) * SKILL_DMG_PER_LV;
+  return Math.round(cur / curMul * nextMul * (sk.power || 1));
 }
 
 /* ★ 更新技能按钮上的伤害数值和等级显示 */
