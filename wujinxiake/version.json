@@ -1,1 +1,1 @@
-{"v": "39", "t": "2026-11-05 19:40", "note": "fix: 怪物图集朝向逐一核对修正(凤凰/幽灵/蜘蛛/食人魔/刺客/蝠/暗黑领主/火龙/青龙/石牛等15处不再倒着走)+刷怪间距拉散(每波上限18→12)"}
+{"v": "40", "t": "2026-11-05 20:05", "note": "fix: 41只怪物图集朝向全部逐一精查(亮背景+头部2~6倍特写)：修正bear/饕餮、dark_lord、demon_mage、demon_soldier、skeleton、zmonkey、zrat共8处(原生朝右误标朝左)；确认abdragon/abtiger/zox/zhorse/zrooster/dragon为原生朝左正确保留"}

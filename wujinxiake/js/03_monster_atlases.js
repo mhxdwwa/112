@@ -59,18 +59,18 @@ regMonsterAtlas('abserpent', 'assets/monsters/abserpent_atlas.webp', 101.3, 195.
 regMonsterAtlas('abthunder', 'assets/monsters/abthunder_atlas.webp', 100.1, 193.0, 192.6, 138);
 /* ★ 60级新秘境Boss：复用现有图集（烛龙→焰神 / 饕餮→巨熊 / 鲲鹏→凤凰），坐标与源图集一致 */
 regMonsterAtlas('abzhulong', 'assets/monsters/fire_god_atlas.webp', 103.4, 200.4, 192.6, 138);
-regMonsterAtlas('abtaotie',  'assets/monsters/bear_atlas.webp',     99.3,  202.2, 192.6, 146, true);
+regMonsterAtlas('abtaotie',  'assets/monsters/bear_atlas.webp',     99.3,  202.2, 192.6, 146);
 regMonsterAtlas('abkunpeng', 'assets/monsters/phoenix_atlas.webp',  101.0, 195.0, 192.6, 142);
 regMonsterAtlas('abtiger', 'assets/monsters/abtiger_atlas.webp', 97.5, 195.2, 192.6, 128, true);
 regMonsterAtlas('assassin', 'assets/monsters/assassin_atlas.webp', 122.0, 221.6, 192.6, 110);
 regMonsterAtlas('bandit', 'assets/monsters/bandit_atlas.webp', 101.8, 201.0, 192.6, 110, true);
 regMonsterAtlas('bat', 'assets/monsters/bat_atlas.webp', 94.4, 195.2, 192.6, 110);
-regMonsterAtlas('bear', 'assets/monsters/bear_atlas.webp', 99.3, 202.2, 192.6, 110, true);
+regMonsterAtlas('bear', 'assets/monsters/bear_atlas.webp', 99.3, 202.2, 192.6, 110);
 regMonsterAtlas('boss', 'assets/monsters/boss_atlas.webp', 93.5, 191.6, 192.6, 110);
 regMonsterAtlas('brute', 'assets/monsters/brute_atlas.webp', 121.8, 222.3, 192.6, 110);
-regMonsterAtlas('dark_lord', 'assets/monsters/dark_lord_atlas.webp', 100.1, 198.4, 192.6, 110, true);
-regMonsterAtlas('demon_mage', 'assets/monsters/demon_mage_atlas.webp', 89.5, 197.3, 192.6, 110, true);
-regMonsterAtlas('demon_soldier', 'assets/monsters/demon_soldier_atlas.webp', 87.9, 191.6, 192.6, 110, true);
+regMonsterAtlas('dark_lord', 'assets/monsters/dark_lord_atlas.webp', 100.1, 198.4, 192.6, 110);
+regMonsterAtlas('demon_mage', 'assets/monsters/demon_mage_atlas.webp', 89.5, 197.3, 192.6, 110);
+regMonsterAtlas('demon_soldier', 'assets/monsters/demon_soldier_atlas.webp', 87.9, 191.6, 192.6, 110);
 regMonsterAtlas('dragon', 'assets/monsters/dragon_atlas.webp', 102.2, 189.6, 183.3, 110, true);
 regMonsterAtlas('eagle', 'assets/monsters/eagle_atlas.webp', 124.5, 222.6, 182.2, 110);
 regMonsterAtlas('fire_god', 'assets/monsters/fire_god_atlas.webp', 103.4, 200.4, 192.6, 110);
@@ -79,7 +79,7 @@ regMonsterAtlas('ghost', 'assets/monsters/ghost_atlas.webp', 113.8, 209.5, 192.6
 regMonsterAtlas('phoenix', 'assets/monsters/phoenix_atlas.webp', 101.0, 195.0, 192.6, 110);
 regMonsterAtlas('qilin', 'assets/monsters/qilin_atlas.webp', 105.8, 191.6, 192.6, 110);
 regMonsterAtlas('scorpion', 'assets/monsters/scorpion_atlas.webp', 91.7, 191.6, 192.6, 110);
-regMonsterAtlas('skeleton', 'assets/monsters/skeleton_atlas.webp', 94.7, 191.6, 192.6, 110, true);
+regMonsterAtlas('skeleton', 'assets/monsters/skeleton_atlas.webp', 94.7, 191.6, 192.6, 110);
 regMonsterAtlas('snake', 'assets/monsters/snake_atlas.webp', 106.2, 191.6, 192.6, 110);
 regMonsterAtlas('spider', 'assets/monsters/spider_atlas.webp', 93.3, 191.6, 192.6, 110);
 regMonsterAtlas('thunder_god', 'assets/monsters/thunder_god_atlas.webp', 94.4, 195.2, 192.6, 110);
@@ -90,10 +90,10 @@ regMonsterAtlas('zboar', 'assets/monsters/zboar_atlas.webp', 110.5, 198.3, 191.6
 regMonsterAtlas('zdog', 'assets/monsters/zdog_atlas.webp', 106.2, 180.8, 151.9, 98);
 regMonsterAtlas('zgoat', 'assets/monsters/zgoat_atlas.webp', 101.9, 198.0, 192.6, 108);
 regMonsterAtlas('zhorse', 'assets/monsters/zhorse_atlas.webp', 104.9, 197.0, 192.6, 112, true);
-regMonsterAtlas('zmonkey', 'assets/monsters/zmonkey_atlas.webp', 96.4, 191.6, 192.6, 104, true);
+regMonsterAtlas('zmonkey', 'assets/monsters/zmonkey_atlas.webp', 96.4, 191.6, 192.6, 104);
 regMonsterAtlas('zox', 'assets/monsters/zox_atlas.webp', 106.9, 196.2, 188.7, 118, true);
 regMonsterAtlas('zrabbit', 'assets/monsters/zrabbit_atlas.webp', 97.4, 197.0, 192.6, 92);
-regMonsterAtlas('zrat', 'assets/monsters/zrat_atlas.webp', 96.5, 191.6, 192.6, 96, true);
+regMonsterAtlas('zrat', 'assets/monsters/zrat_atlas.webp', 96.5, 191.6, 192.6, 96);
 regMonsterAtlas('zrooster', 'assets/monsters/zrooster_atlas.webp', 104.2, 191.6, 192.6, 92, true);
 /* === MONSTER_ATLAS_END === */
 
