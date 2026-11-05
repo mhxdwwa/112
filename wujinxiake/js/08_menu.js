@@ -305,6 +305,13 @@ function handleCanvasClick(cx, cy){
     const r = hitTestRegion(pos.x, pos.y, inventoryClickRegions);
     if(r){
       const p = G.player;
+      /* ★ v42：刷图途中（含战斗中打开的背包）不开放铁匠类操作 */
+      if((r.action === 'toggleDecompose' || r.action === 'decomposeTier' || r.action === 'decomposeToggle' ||
+          r.action === 'decomposeConfirm' || r.action === 'decomposeLow') &&
+         typeof inDungeonRun === 'function' && inDungeonRun()){
+        if(typeof blacksmithRefuse === 'function') blacksmithRefuse();
+        return;
+      }
       if(r.close){
         // 从战斗或城镇打开的背包，返回到对应界面
         gameState = G && G.inventoryReturnState ? G.inventoryReturnState : 'town';

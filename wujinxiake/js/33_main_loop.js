@@ -128,6 +128,8 @@ function loopBody(now){
     ctx.restore();
     // 绘制暂停遮罩
     drawPauseMenu();
+    /* ★ v42：暂停时也要能看到「刷图途中不能强化」这类提示横幅 */
+    drawQuestToast();
     handleInput(); requestAnimationFrame(loop); return;
   }
   if(gameState === 'pvpEnd'){

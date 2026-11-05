@@ -11,6 +11,7 @@ const KB_ACTIONS = [
   { id:'left',    name:'向左移动', group:'移动' },
   { id:'right',   name:'向右移动', group:'移动' },
   { id:'attack',  name:'普通攻击', group:'战斗' },
+  { id:'glide',   name:'滑翔（闪避）', group:'战斗' },
   { id:'skill1',  name:'技能 1',   group:'战斗' },
   { id:'skill2',  name:'技能 2',   group:'战斗' },
   { id:'skill3',  name:'技能 3',   group:'战斗' },
@@ -25,6 +26,7 @@ const KB_ACTIONS = [
 const KB_BATTLE_DEFAULT = {
   up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight',
   attack:'KeyX',
+  glide:'KeyC',
   skill1:'KeyA', skill2:'KeyS', skill3:'KeyD', skill4:'KeyF', skill5:'KeyG', skill6:'KeyH',
   potionHp:'KeyQ', potionMp:'KeyW'
 };
@@ -32,6 +34,7 @@ const KB_BATTLE_DEFAULT = {
 const KB_P1_CLASSIC = {
   up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
   attack:'KeyJ',
+  glide:'ShiftLeft',
   skill1:'Digit1', skill2:'Digit2', skill3:'Digit3', skill4:'Digit4', skill5:'Digit5', skill6:'Digit6',
   potionHp:'KeyH', potionMp:'KeyG'
 };
@@ -39,6 +42,7 @@ const KB_P1_CLASSIC = {
 const KB_P2_CLASSIC = {
   up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight',
   attack:'Period',
+  glide:'ShiftRight',
   skill1:'Comma', skill2:'Slash', skill3:'Numpad6', skill4:'Numpad7', skill5:'Numpad8', skill6:'Numpad9',
   potionHp:'Numpad1', potionMp:'Numpad2'
 };
@@ -190,6 +194,7 @@ function drawKeyBindMenu(){
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(140,160,180,0.7)'; ctx.font = '11.5px "Microsoft YaHei"';
   ctx.fillText('※ 本套键位作用于地下城与城镇PK；练习模式（双人同屏）仍使用方向键+小键盘分键', px + 30, py + ph - 92);
+  ctx.fillText('※ 滑翔/闪避默认 C（Shift 也可）；城镇里 C 仍是角色信息，铁匠活只能在城镇做', px + 30, py + ph - 74);
 }
 
 function kbClick(pos){

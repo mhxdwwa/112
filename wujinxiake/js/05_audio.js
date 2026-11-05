@@ -228,16 +228,16 @@ addEventListener('keydown', e=>{
   
   if(!keys[e.code]) pressed[e.code] = true;
   keys[e.code] = true;
-  /* ★ B键打开/关闭装备强化菜单 */
+  /* ★ B键打开/关闭装备强化菜单（★ v42：只有城镇能开，刷图途中拒绝） */
   if(e.code === 'KeyB' && !e.repeat){
-    if(gameState === 'playing' && G && !G.isPvp){
+    if(gameState === 'town'){
       autoSelectEquipSlots();
+      if(typeof blacksmithTab !== 'undefined' && !blacksmithTab) blacksmithTab = 'enhance';
       gameState = 'enhanceMenu';
     } else if(gameState === 'enhanceMenu'){
-      gameState = 'playing';
-    } else if(gameState === 'town'){
-      autoSelectEquipSlots();
-      gameState = 'enhanceMenu';
+      gameState = 'town';     /* v42：铁匠铺只从城镇开，关掉必然回城镇 */
+    } else if(gameState === 'playing' || gameState === 'paused'){
+      if(typeof blacksmithRefuse === 'function') blacksmithRefuse();
     } else if(gameState === 'inventory'){
       gameState = 'town';
     }
@@ -245,9 +245,17 @@ addEventListener('keydown', e=>{
   /* ★ I键打开/关闭背包 */
   if(e.code === 'KeyI' && !e.repeat){
     if(gameState === 'town'){
+      G.inventoryReturnState = 'town';
       gameState = 'inventory';
     } else if(gameState === 'inventory'){
-      gameState = 'town';
+      /* ★ v42：从战斗里开的背包，按 I 关掉要回战斗，不能直接飘回城镇 */
+      const back = (G && G.inventoryReturnState) ? G.inventoryReturnState : 'town';
+      gameState = back;
+      if(G) G.inventoryReturnState = null;
+      if(typeof decomposeMode !== 'undefined'){
+        decomposeMode = false;
+        if(typeof decomposeResetSelection === 'function') decomposeResetSelection();
+      }
     }
   }
   /* ★ U键打开/关闭技能界面 */

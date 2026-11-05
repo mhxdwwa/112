@@ -567,11 +567,19 @@ function initTown(){
 function updateTown(dt){
   if(!townPlayer) return;
   // 移动控制（键盘+虚拟摇杆）：八方向自由行走
+  /* ★ v42：城镇也统一走键位表，WASD 不再是移动键（默认 ↑↓←→，自定义键位同样生效） */
   let dx = 0, dy = 0;
-  if(keys['KeyA'] || keys['ArrowLeft'])  dx -= 1;
-  if(keys['KeyD'] || keys['ArrowRight']) dx += 1;
-  if(keys['KeyW'] || keys['ArrowUp'])    dy -= 1;
-  if(keys['KeyS'] || keys['ArrowDown'])  dy += 1;
+  if(typeof kbDown === 'function'){
+    if(kbDown('left', 1))  dx -= 1;
+    if(kbDown('right', 1)) dx += 1;
+    if(kbDown('up', 1))    dy -= 1;
+    if(kbDown('down', 1))  dy += 1;
+  } else {
+    if(keys['ArrowLeft'])  dx -= 1;
+    if(keys['ArrowRight']) dx += 1;
+    if(keys['ArrowUp'])    dy -= 1;
+    if(keys['ArrowDown'])  dy += 1;
+  }
   // 虚拟摇杆支持
   if(touchState.p1 && touchState.p1.active){
     dx += touchState.p1.x;
@@ -1098,6 +1106,25 @@ function sortInventory(){
   inventorySelectedIndex = -1;
   inventoryMessage = '背包已排序';
   inventoryMessageTimer = 60;
+}
+
+/* ===== v42：铁匠活（强化 / 增幅 / 分解）只能在城镇做 =====
+   刷图途中不开放这些操作，理由有三：
+   1. 战斗里临时改数值，等于把「装备成长」挪进了战斗中，Boss 打到一半换装太作弊；
+   2. 强化 / 增幅 / 分解都要消耗材料，战斗分心操作容易误分解；
+   3. DNF 式的常识就是「回城找铁匠」，城镇才该有这份仪式感。
+   唯一的合法上下文是城镇（含从城镇 NPC 打开的界面）。 */
+function inDungeonRun(){
+  if(gameState === 'playing' || gameState === 'paused' || gameState === 'stageClear') return true;
+  /* 背包是在战斗中打开的（左侧药水栏上方的背包按钮） */
+  if(gameState === 'inventory' && G && G.inventoryReturnState === 'playing') return true;
+  return false;
+}
+/* 拒绝提示：统一走顶部横幅，战斗里也看得见 */
+function blacksmithRefuse(){
+  if(typeof questToastMsg === 'function'){
+    questToastMsg('铁匠铺未开张', '刷图途中不能强化 / 增幅 / 分解，回城镇找铁匠·王大锤。', '#ff8a5c');
+  }
 }
 
 /* ===== v41 一键分解：品阶可选 + 全选后逐件取消 ===== */

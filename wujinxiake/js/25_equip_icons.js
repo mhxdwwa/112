@@ -518,9 +518,11 @@ function drawInventory(){
     ctx.textAlign = 'left';
 
     /* ★ v41 背包工具行：普通态 = 排序 / 一键分解；分解态 = 品阶筛选 + 确认 */
+    /* ★ v42：刷图途中打开的背包不提供分解，按钮变灰并给出「回城可分解」提示 */
     const btnRowY = bagY + 30;
     const btnH = 24;
-    const isDeco = (typeof decomposeMode !== 'undefined') && decomposeMode;
+    const bsLocked = (typeof inDungeonRun === 'function') && inDungeonRun();
+    const isDeco = !bsLocked && (typeof decomposeMode !== 'undefined') && decomposeMode;
 
     if(!isDeco){
       const sortBtnW = 70, decomposeBtnW = 92;
@@ -536,13 +538,23 @@ function drawInventory(){
       ctx.fillText('一键排序', sortBtnX + sortBtnW/2, btnRowY + 16);
       inventoryClickRegions.push({ x: sortBtnX, y: btnRowY, w: sortBtnW, h: btnH, action: 'sortBag' });
 
-      ctx.fillStyle = 'rgba(200,80,40,0.85)';
-      ctx.beginPath(); ctx.roundRect(decomposeBtnX, btnRowY, decomposeBtnW, btnH, 4); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,120,80,0.6)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(decomposeBtnX + 0.5, btnRowY + 0.5, decomposeBtnW - 1, btnH - 1, 4); ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
-      ctx.fillText('一键分解', decomposeBtnX + decomposeBtnW/2, btnRowY + 16);
-      inventoryClickRegions.push({ x: decomposeBtnX, y: btnRowY, w: decomposeBtnW, h: btnH, action: 'toggleDecompose' });
+      if(bsLocked){
+        /* 锁定态：灰底 + 锁图标，不注册点击区域 */
+        ctx.fillStyle = 'rgba(52,56,68,0.85)';
+        ctx.beginPath(); ctx.roundRect(decomposeBtnX, btnRowY, decomposeBtnW, btnH, 4); ctx.fill();
+        ctx.strokeStyle = 'rgba(110,118,134,0.55)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(decomposeBtnX + 0.5, btnRowY + 0.5, decomposeBtnW - 1, btnH - 1, 4); ctx.stroke();
+        ctx.fillStyle = 'rgba(150,158,172,0.85)'; ctx.font = 'bold 11px "Microsoft YaHei"';
+        ctx.fillText('🔒 回城可分解', decomposeBtnX + decomposeBtnW/2, btnRowY + 16);
+      } else {
+        ctx.fillStyle = 'rgba(200,80,40,0.85)';
+        ctx.beginPath(); ctx.roundRect(decomposeBtnX, btnRowY, decomposeBtnW, btnH, 4); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,120,80,0.6)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(decomposeBtnX + 0.5, btnRowY + 0.5, decomposeBtnW - 1, btnH - 1, 4); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
+        ctx.fillText('一键分解', decomposeBtnX + decomposeBtnW/2, btnRowY + 16);
+        inventoryClickRegions.push({ x: decomposeBtnX, y: btnRowY, w: decomposeBtnW, h: btnH, action: 'toggleDecompose' });
+      }
     } else {
       /* 品阶筛选条：点一下 = 整档全选 / 取消；再点格子可逐件剔除 */
       let fx3 = bagX + 12;

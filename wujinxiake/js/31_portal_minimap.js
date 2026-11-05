@@ -468,6 +468,8 @@ function drawRoomMinimap(){
 /* ★ 战斗界面的药水快捷按钮点击区（每帧重建） */
 let potionBtnRegions = [];
 function hitPotionBtn(x, y){
+  /* ★ v42：药水只在战斗中生效；城镇/各类菜单里一律不响应（热区也不会残留） */
+  if(typeof gameState !== 'undefined' && gameState !== 'playing') return null;
   for(let i = 0; i < potionBtnRegions.length; i++){
     const r = potionBtnRegions[i];
     if(x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r.kind;
@@ -544,7 +546,10 @@ function drawBottomUI(){
     }
     ctx.fillStyle = 'rgba(220,235,250,0.75)';
     ctx.font = '10px "Microsoft YaHei"';
-    ctx.fillText('H 血 / G 蓝', bagBtnX, bagBtnY - 92);
+    /* ★ v42：按键提示跟随键位表（默认 Q 血 / W 蓝），不再写死 H/G */
+    const _kbP = (typeof kbProfile === 'function') ? kbProfile(1) : { potionHp:'KeyQ', potionMp:'KeyW' };
+    const _lb = (typeof kbLabel === 'function') ? kbLabel : function(c){ return c || ''; };
+    ctx.fillText(_lb(_kbP.potionHp) + ' 血 / ' + _lb(_kbP.potionMp) + ' 蓝', bagBtnX, bagBtnY - 92);
   }
   
   ctx.fillStyle = 'rgba(5,10,20,0.85)';

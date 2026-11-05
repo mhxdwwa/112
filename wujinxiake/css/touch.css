@@ -200,3 +200,17 @@
   0%,100%{transform:scale(1); opacity:1;}
   50%{transform:scale(1.15); opacity:0.85;}
 }
+
+/* ===== ★ v42 城镇模式：收起战斗键，只留摇杆 + 普攻（城镇里普攻=交互） =====
+   以前 syncTouchMode() 会挂 .town-mode 类，但 stylesheet 里一直没写规则，
+   结果城镇里六技能 / 跳跃 / 滑翔键全都画着却按了没反应。 */
+#touchControls.town-mode .skill1,
+#touchControls.town-mode .skill2,
+#touchControls.town-mode .skill3,
+#touchControls.town-mode .skill4,
+#touchControls.town-mode .skill5,
+#touchControls.town-mode .skill6,
+#touchControls.town-mode .jump-btn,
+#touchControls.town-mode .glide-btn{
+  display:none;
+}

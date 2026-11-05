@@ -384,7 +384,11 @@ function setupTouchControls(){
       else if(action==='skill5'){ if(player==='1') pressed[KB1.skill5]=true; else pressed['Numpad8']=true; }
       else if(action==='skill6'){ if(player==='1') pressed[KB1.skill6]=true; else pressed['Numpad9']=true; }
       else if(action==='jump'){ if(player==='1') pressed['Space']=true; else pressed['Numpad0']=true; }
-      else if(action==='glide'){ if(player==='1') pressed['ShiftLeft']=true; else pressed['ShiftRight']=true; }
+      else if(action==='glide'){
+        /* ★ v42：滑翔跟随键位表（默认 C），玩家2 仍走经典 Shift */
+        if(player==='1') pressed[KB1.glide || 'KeyC'] = true;
+        else pressed['ShiftRight'] = true;
+      }
     };
     btn.addEventListener('touchstart', trigger);
     btn.addEventListener('mousedown', trigger);
@@ -484,7 +488,17 @@ bindMobileFrame();
     else if(gameState === 'equipWiki') gameState = 'gameMenu';
     else if(gameState === 'gameMenu') gameState = 'town';
     else if(gameState === 'town') gameState = 'gameMenu';
-    else if(gameState === 'inventory' || gameState === 'skillMenu' || gameState === 'characterInfo' ||
+    else if(gameState === 'inventory'){
+      /* ★ v42：战斗里开的背包，关掉回到战斗而不是城镇 */
+      const back = (G && G.inventoryReturnState) ? G.inventoryReturnState : 'town';
+      gameState = back;
+      if(G) G.inventoryReturnState = null;
+      if(typeof decomposeMode !== 'undefined'){
+        decomposeMode = false;
+        if(typeof decomposeResetSelection === 'function') decomposeResetSelection();
+      }
+    }
+    else if(gameState === 'skillMenu' || gameState === 'characterInfo' ||
             gameState === 'questMenu' || gameState === 'enhanceMenu' || gameState === 'shopMenu' ||
             gameState === 'levelSelect' || gameState === 'dungeonSelect') gameState = 'town';
   }

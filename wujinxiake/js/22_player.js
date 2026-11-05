@@ -124,8 +124,17 @@ function updatePlayer(p, dt){
     if(p.dodgeCd > 0) p.dodgeCd -= dt;
     /* 体力恢复 */
     p.stamina = Math.min(p.maxStamina, p.stamina + 20 * dt);
-    /* 闪避输入 */
-    const dodgeKey = p.playerNum === 1 ? (pressed['ShiftLeft'] || pressed['KeyL']) : (pressed['ShiftRight'] || pressed['Numpad3']);
+    /* 闪避输入：★ v42 统一走键位表（默认 C = 滑翔/闪避） */
+    let dodgeKey;
+    if(typeof kbPressed === 'function'){
+      dodgeKey = kbPressed('glide', p.playerNum);
+    } else {
+      dodgeKey = p.playerNum === 1 ? (pressed['ShiftLeft'] || pressed['KeyL']) : (pressed['ShiftRight'] || pressed['Numpad3']);
+    }
+    /* 老习惯兜底：Shift 仍然可以滑翔，不强制改手 */
+    if(!dodgeKey){
+      dodgeKey = p.playerNum === 1 ? (pressed['ShiftLeft'] || pressed['KeyL']) : (pressed['ShiftRight'] || pressed['Numpad3']);
+    }
     if(dodgeKey && p.dodgeCd <= 0 && p.stamina >= 20 && !p.action && p.h <= 0 && !p.jumpT){
       p.dodgeT = 0.4;
       /* ★ Roguelike: 闪避冷却缩减 */
