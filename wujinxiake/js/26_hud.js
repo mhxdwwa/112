@@ -557,7 +557,9 @@ function drawTownHud(){
       ctx.textAlign = 'center';
       ctx.font = 'bold 8px "Microsoft YaHei"';
       ctx.fillStyle = lit ? '#ffd166' : '#6a7886';
-      ctx.fillText(String(i + 1), x + 8, sy + SS - 4);
+      /* ★ v41：技能槽角标跟随键位表（默认 A S D F G H） */
+      const kbTxt = (typeof kbLabel === 'function') ? kbLabel((kbProfile(1) || {})['skill' + (i + 1)]) : String(i + 1);
+      ctx.fillText(kbTxt, x + 8, sy + SS - 4);
       if(!lit){
         ctx.fillStyle = 'rgba(0,0,0,0.42)';
         ctx.beginPath(); ctx.roundRect(x, sy, SS, SS, 5); ctx.fill();
@@ -570,7 +572,10 @@ function drawTownHud(){
     ctx.textAlign = 'right';
     ctx.font = '11px "Microsoft YaHei"';
     ctx.fillStyle = 'rgba(170,188,204,0.55)';
-    ctx.fillText('WASD 移动　J 交互　Q 任务　I 背包　U 技能　C 角色', VW - 20, VH - 12);
+    /* ★ v41 键位提示跟随自定义键位 */
+    const KBH = (typeof kbProfile === 'function') ? kbProfile(1) : { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight', attack:'KeyX', potionHp:'KeyQ', potionMp:'KeyW' };
+    const L = (typeof kbLabel === 'function') ? kbLabel : function(c){ return c; };
+    ctx.fillText(L(KBH.up) + L(KBH.left) + L(KBH.down) + L(KBH.right) + ' 移动　' + L(KBH.attack) + ' 攻击　J 交互　T 任务　I 背包　U 技能　C 角色', VW - 20, VH - 12);
   }
 
   ctx.restore();

@@ -517,32 +517,72 @@ function drawInventory(){
       (inv.length >= bagCap ? '（已满，请分解）' : (inv.length >= bagWarn ? '（即将满）' : '')), bagX + bagPanelW - 12, bagY + 22);
     ctx.textAlign = 'left';
 
-    /* ★ 一键排序 & 一键分解按钮 */
+    /* ★ v41 背包工具行：普通态 = 排序 / 一键分解；分解态 = 品阶筛选 + 确认 */
     const btnRowY = bagY + 30;
-    const sortBtnW = 70, sortBtnH = 24, decomposeBtnW = 100, decomposeBtnH = 24;
-    const sortBtnX = bagX + 12;
-    const decomposeBtnX = sortBtnX + sortBtnW + 8;
+    const btnH = 24;
+    const isDeco = (typeof decomposeMode !== 'undefined') && decomposeMode;
 
-    // 排序按钮
-    ctx.fillStyle = 'rgba(60,120,200,0.85)';
-    ctx.beginPath(); ctx.roundRect(sortBtnX, btnRowY, sortBtnW, sortBtnH, 4); ctx.fill();
-    ctx.strokeStyle = 'rgba(100,180,255,0.6)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(sortBtnX + 0.5, btnRowY + 0.5, sortBtnW - 1, sortBtnH - 1, 4); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
-    ctx.textAlign = 'center';
-    ctx.fillText('一键排序', sortBtnX + sortBtnW/2, btnRowY + 16);
-    inventoryClickRegions.push({ x: sortBtnX, y: btnRowY, w: sortBtnW, h: sortBtnH, action: 'sortBag' });
+    if(!isDeco){
+      const sortBtnW = 70, decomposeBtnW = 92;
+      const sortBtnX = bagX + 12;
+      const decomposeBtnX = sortBtnX + sortBtnW + 8;
 
-    // 一键分解按钮（紫色及以下）
-    ctx.fillStyle = 'rgba(200,80,40,0.85)';
-    ctx.beginPath(); ctx.roundRect(decomposeBtnX, btnRowY, decomposeBtnW, decomposeBtnH, 4); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,120,80,0.6)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(decomposeBtnX + 0.5, btnRowY + 0.5, decomposeBtnW - 1, decomposeBtnH - 1, 4); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
-    ctx.fillText('分解紫及以下', decomposeBtnX + decomposeBtnW/2, btnRowY + 16);
-    inventoryClickRegions.push({ x: decomposeBtnX, y: btnRowY, w: decomposeBtnW, h: decomposeBtnH, action: 'decomposeLow' });
-    ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(60,120,200,0.85)';
+      ctx.beginPath(); ctx.roundRect(sortBtnX, btnRowY, sortBtnW, btnH, 4); ctx.fill();
+      ctx.strokeStyle = 'rgba(100,180,255,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(sortBtnX + 0.5, btnRowY + 0.5, sortBtnW - 1, btnH - 1, 4); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
+      ctx.textAlign = 'center';
+      ctx.fillText('一键排序', sortBtnX + sortBtnW/2, btnRowY + 16);
+      inventoryClickRegions.push({ x: sortBtnX, y: btnRowY, w: sortBtnW, h: btnH, action: 'sortBag' });
 
+      ctx.fillStyle = 'rgba(200,80,40,0.85)';
+      ctx.beginPath(); ctx.roundRect(decomposeBtnX, btnRowY, decomposeBtnW, btnH, 4); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,120,80,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(decomposeBtnX + 0.5, btnRowY + 0.5, decomposeBtnW - 1, btnH - 1, 4); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Microsoft YaHei"';
+      ctx.fillText('一键分解', decomposeBtnX + decomposeBtnW/2, btnRowY + 16);
+      inventoryClickRegions.push({ x: decomposeBtnX, y: btnRowY, w: decomposeBtnW, h: btnH, action: 'toggleDecompose' });
+    } else {
+      /* 品阶筛选条：点一下 = 整档全选 / 取消；再点格子可逐件剔除 */
+      let fx3 = bagX + 12;
+      ctx.textAlign = 'center';
+      for(let ti = 0; ti < EQUIP_TIERS.length; ti++){
+        const t = EQUIP_TIERS[ti];
+        const on = decomposeTierPick.indexOf(t.id) >= 0;
+        const cw = 46;
+        ctx.fillStyle = on ? hexA(t.color, 0.24) : 'rgba(255,255,255,0.045)';
+        ctx.beginPath(); ctx.roundRect(fx3, btnRowY, cw, btnH, 4); ctx.fill();
+        ctx.strokeStyle = on ? hexA(t.color, 0.9) : 'rgba(255,255,255,0.14)';
+        ctx.lineWidth = on ? 1.6 : 1;
+        ctx.beginPath(); ctx.roundRect(fx3 + 0.5, btnRowY + 0.5, cw - 1, btnH - 1, 4); ctx.stroke();
+        ctx.fillStyle = on ? t.color : '#7b8592';
+        ctx.font = 'bold 11px "Microsoft YaHei"';
+        ctx.fillText(t.name, fx3 + cw/2, btnRowY + 16);
+        inventoryClickRegions.push({ x: fx3, y: btnRowY, w: cw, h: btnH, action: 'decomposeTier', tier: t.id });
+        fx3 += cw + 4;
+      }
+      /* 确认 / 取消 */
+      const picked = (typeof decomposeSelectedList === 'function') ? decomposeSelectedList() : [];
+      const okX = bagX + bagPanelW - 12 - 86;
+      ctx.fillStyle = picked.length ? 'rgba(220,90,40,0.92)' : 'rgba(90,90,90,0.5)';
+      ctx.beginPath(); ctx.roundRect(okX, btnRowY, 86, btnH, 4); ctx.fill();
+      ctx.fillStyle = picked.length ? '#fff' : '#999';
+      ctx.font = 'bold 11px "Microsoft YaHei"';
+      ctx.fillText('分解 ' + picked.length + ' 件', okX + 43, btnRowY + 16);
+      inventoryClickRegions.push({ x: okX, y: btnRowY, w: 86, h: btnH, action: 'decomposeConfirm' });
+
+      const cx2 = okX - 8 - 46;
+      ctx.fillStyle = 'rgba(90,90,110,0.65)';
+      ctx.beginPath(); ctx.roundRect(cx2, btnRowY, 46, btnH, 4); ctx.fill();
+      ctx.fillStyle = '#ddd'; ctx.font = 'bold 11px "Microsoft YaHei"';
+      ctx.fillText('取消', cx2 + 23, btnRowY + 16);
+      inventoryClickRegions.push({ x: cx2, y: btnRowY, w: 46, h: btnH, action: 'decomposeCancel' });
+      ctx.textAlign = 'left';
+    }
+
+    /* 分解模式下先把「已选索引」算一次，避免每格重复扫描 */
+    const decoSet = isDeco && (typeof decomposeSelectedList === 'function') ? decomposeSelectedList() : [];
     for(let r = 0; r < GRID_ROWS; r++){
       for(let c = 0; c < GRID_COLS; c++){
         const idx = r * GRID_COLS + c;
@@ -550,14 +590,26 @@ function drawInventory(){
         const by = btnRowY + 30 + r * (CELL + C_GAP);
         const eq = inv[idx] || null;
         const sel = inventorySelectedIndex === idx;
-        const tcol = eq ? (eq.tierColor || '#8fa8bc') : '#2c3444';
+        const ts = eq ? (typeof tierStyle === 'function' ? tierStyle(eq) : { color:(eq.tierColor||'#8fa8bc'), glow:0, ring:1, alpha:0.72 }) : null;
+        const tcol = eq ? ts.color : '#2c3444';
+        const decoOn = isDeco && eq && decoSet.indexOf(idx) >= 0;
         const bg2 = ctx.createLinearGradient(bx, by, bx, by + CELL);
         bg2.addColorStop(0, eq ? hexA(tcol, 0.22) : 'rgba(30,36,48,0.5)');
         bg2.addColorStop(1, 'rgba(8,12,20,0.9)');
         ctx.fillStyle = bg2;
         ctx.beginPath(); ctx.roundRect(bx, by, CELL, CELL, 4); ctx.fill();
-        ctx.strokeStyle = sel ? '#ffd700' : (eq ? hexA(tcol, 0.72) : 'rgba(80,92,108,0.35)');
-        ctx.lineWidth = sel ? 2.2 : 1;
+        /* 高品阶外发光（阶梯式：稀有 6 / 神器 10 / 传说 14 / 史诗 18） */
+        if(eq && ts.glow){
+          ctx.save();
+          ctx.shadowColor = hexA(tcol, 0.9);
+          ctx.shadowBlur = ts.glow;
+          ctx.strokeStyle = hexA(tcol, ts.alpha);
+          ctx.lineWidth = ts.ring;
+          ctx.beginPath(); ctx.roundRect(bx + 0.5, by + 0.5, CELL - 1, CELL - 1, 4); ctx.stroke();
+          ctx.restore();
+        }
+        ctx.strokeStyle = decoOn ? '#ff8a3d' : (sel ? '#ffd700' : (eq ? hexA(tcol, ts ? ts.alpha : 0.72) : 'rgba(80,92,108,0.35)'));
+        ctx.lineWidth = decoOn ? 2 : (sel ? 2.2 : (ts ? ts.ring : 1));
         ctx.beginPath(); ctx.roundRect(bx + 0.5, by + 0.5, CELL - 1, CELL - 1, 4); ctx.stroke();
         if(eq){
           ctx.save(); ctx.globalAlpha = 0.96;
@@ -589,7 +641,34 @@ function drawInventory(){
             ctx.fillText('赠', bx + 8, by + 10);
             ctx.textAlign = 'left';
           }
-          inventoryClickRegions.push({ x: bx, y: by, w: CELL, h: CELL, selectIndex: idx });
+          /* ★ 品阶刻度：右上角 N 个菱形，不依赖颜色也能数出档位 */
+          if(ts && ts.ring){
+            const ti2 = (typeof tierIndex === 'function') ? tierIndex(eq) : 0;
+            for(let d = 0; d <= ti2; d++){
+              const dx = bx + CELL - 7 - d * 6, dy = by + 7;
+              ctx.fillStyle = tcol;
+              ctx.beginPath();
+              ctx.moveTo(dx, dy - 2); ctx.lineTo(dx + 2, dy); ctx.lineTo(dx, dy + 2); ctx.lineTo(dx - 2, dy);
+              ctx.closePath(); ctx.fill();
+            }
+          }
+          /* ★ 分解模式：已选打勾角标 */
+          if(isDeco){
+            if(decoOn){
+              ctx.fillStyle = 'rgba(255,122,24,0.95)';
+              ctx.beginPath(); ctx.arc(bx + CELL - 8, by + CELL - 8, 7, 0, TAU); ctx.fill();
+              ctx.fillStyle = '#20140a'; ctx.font = 'bold 10px "Microsoft YaHei"'; ctx.textAlign = 'center';
+              ctx.fillText('✓', bx + CELL - 8, by + CELL - 4.5); ctx.textAlign = 'left';
+            } else if(!eq.sysGift){
+              ctx.globalAlpha = 0.35;
+              ctx.fillStyle = '#000';
+              ctx.beginPath(); ctx.roundRect(bx + 1, by + 1, CELL - 2, CELL - 2, 4); ctx.fill();
+              ctx.globalAlpha = 1;
+            }
+            inventoryClickRegions.push({ x: bx, y: by, w: CELL, h: CELL, action: 'decomposeToggle', index: idx });
+          } else {
+            inventoryClickRegions.push({ x: bx, y: by, w: CELL, h: CELL, selectIndex: idx });
+          }
           equipHoverRegions.push({ x: bx, y: by, w: CELL, h: CELL, equip: eq });
         }
       }

@@ -15,7 +15,7 @@ const WEAPONS = [
       {name:'剑开天门',key:'1',cost:12,cd:2.5,unlock:1,plannedUnlock:1,maxLv:20,spCost:3,spStep:1,power:1.0,src:'基础剑技',desc:'裂空召唤飞剑，自九天坠落重击目标'},
       {name:'剑二十三',key:'2',cost:22,cd:5.5,unlock:1,plannedUnlock:1,maxLv:15,spCost:5,spStep:1,power:1.4,src:'基础剑技',desc:'剑意化形，二十三道剑影连续斩击'},
       {name:'万剑归宗',key:'3',cost:38,cd:13.0,unlock:8,plannedUnlock:8,maxLv:12,spCost:8,spStep:1,power:2.6,src:'基础剑技',desc:'万剑齐发覆盖战场，大招级范围伤害'},
-      {name:'天雷剑诀',key:'4',cost:26,cd:9.0,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.2,src:'《仙剑奇侠传》· 蜀山御雷',desc:'以剑引雷，雷随剑走；剑落之处雷电沿敌连锁，一雷传一雷'},
+      {name:'白虹贯日',key:'4',cost:22,cd:7.5,unlock:14,plannedUnlock:14,maxLv:15,spCost:10,spStep:2,power:4.4,src:'《战国策》· 聂政刺韩傀',desc:'身随剑走，化作一道白虹直贯敌阵；过身处皆被斩，落地回身再补一记横斩'},
       {name:'诛仙剑阵',key:'5',cost:45,cd:16.0,unlock:22,plannedUnlock:22,maxLv:12,spCost:14,spStep:2,power:8.5,src:'萧鼎《诛仙》· 诛仙剑阵',desc:'四剑自天而降插入地面围成剑阵，地面剑气横向贯穿扫射，最终四剑齐鸣爆阵'},
       {name:'剑来',key:'6',cost:70,cd:26.0,unlock:30,plannedUnlock:30,maxLv:10,spCost:18,spStep:2,power:18.0,src:'烽火戏诸侯《剑来》',desc:'天开一线，万剑垂落——天地皆为我剑'}
     ] },

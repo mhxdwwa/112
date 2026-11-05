@@ -45,16 +45,14 @@ function updatePlayer(p, dt){
           tryPlayerAttack(p);
         }
       }
-    } else if(p.playerNum === 2){
-      if(keys['ArrowLeft']) mx--;
-      if(keys['ArrowRight']) mx++;
-      if(keys['ArrowUp']) my--;
-      if(keys['ArrowDown']) my++;
     } else {
-      if(keys['KeyA'] || (keys['ArrowLeft'] && !G.isPvp)) mx--;
-      if(keys['KeyD'] || (keys['ArrowRight'] && !G.isPvp)) mx++;
-      if(keys['KeyW'] || (keys['ArrowUp'] && !G.isPvp)) my--;
-      if(keys['KeyS'] || (keys['ArrowDown'] && !G.isPvp)) my++;
+      /* ★ v41 键位：地下城/城镇PK 用自定义键位（默认 ↑↓←→）；
+         练习模式双人局 P1 走经典 WASD、P2 走方向键，由 kbProfile 分流 */
+      const pn = p.playerNum || 1;
+      if(kbDown('left', pn))  mx--;
+      if(kbDown('right', pn)) mx++;
+      if(kbDown('up', pn))    my--;
+      if(kbDown('down', pn))  my++;
     }
     const touch = getTouchInput(p.playerNum);
     if(touch.mx !== 0 || touch.my !== 0){ mx += touch.mx; my += touch.my; }
@@ -136,12 +134,10 @@ function updatePlayer(p, dt){
       p.state = 'dodge';
       /* 翻滚方向：根据输入方向或面朝方向 */
       let dodgeDir = p.facing;
-      if(p.playerNum === 2){
-        if(keys['ArrowLeft']) dodgeDir = -1;
-        else if(keys['ArrowRight']) dodgeDir = 1;
-      } else {
-        if(keys['KeyA'] || (keys['ArrowLeft'] && !G.isPvp)) dodgeDir = -1;
-        else if(keys['KeyD'] || (keys['ArrowRight'] && !G.isPvp)) dodgeDir = 1;
+      {
+        const pn2 = p.playerNum || 1;
+        if(kbDown('left', pn2)) dodgeDir = -1;
+        else if(kbDown('right', pn2)) dodgeDir = 1;
       }
       p.dodgeDir = dodgeDir;
       p.facing = dodgeDir;
@@ -613,32 +609,33 @@ function handleInput(){
   const p = G.player;
   /* ★ 主线任务面板：Q / Tab 开关 */
   if(gameState === 'questMenu'){
-    if(pressed['KeyQ'] || pressed['Escape'] || pressed['Tab'] || pressed['Space']){
+    if(pressed['KeyT'] || pressed['Escape'] || pressed['Tab'] || pressed['Space']){
       gameState = questReturnState || 'town';
     }
     for(const k in pressed) delete pressed[k]; return;
   }
-  if((pressed['KeyQ'] || pressed['Tab']) && !G.isPvp && (gameState === 'town' || gameState === 'playing')){
+  /* ★ v41：Q 已让位给药水，任务面板改 T（Tab 仍可用） */
+  if((pressed['KeyT'] || pressed['Tab']) && !G.isPvp && (gameState === 'town' || gameState === 'playing')){
     questReturnState = gameState;
     gameState = 'questMenu';
     for(const k in pressed) delete pressed[k]; return;
   }
-  /* ★ 药水快捷键：H 喝血瓶，G 喝蓝瓶（城镇 / 战斗都能用） */
-  if(pressed['KeyH'] && typeof drinkPotion === 'function'){ drinkPotion('hp'); delete pressed['KeyH']; }
-  if(pressed['KeyG'] && typeof drinkPotion === 'function'){ drinkPotion('mp'); delete pressed['KeyG']; }
-  if(pressed['KeyJ']) tryPlayerAttack(p);
-  if(pressed['Digit1']) tryUseSkill(p, 0);
-  if(pressed['Digit2']) tryUseSkill(p, 1);
-  if(pressed['Digit3']) tryUseSkill(p, 2);
-  if(pressed['Digit4']) tryUseSkill(p, 3);
-  if(pressed['Digit5']) tryUseSkill(p, 4);
-  if(pressed['Digit6']) tryUseSkill(p, 5);
+  /* ★ v41 键位：药水 Q 血瓶 / W 内力瓶；普攻 X；技能 A S D F G H（可自定义） */
+  if(kbPressed('potionHp') && typeof drinkPotion === 'function'){ drinkPotion('hp'); delete pressed[kbProfile(1).potionHp]; }
+  if(kbPressed('potionMp') && typeof drinkPotion === 'function'){ drinkPotion('mp'); delete pressed[kbProfile(1).potionMp]; }
+  if(kbPressed('attack')) tryPlayerAttack(p);
+  if(kbPressed('skill1')) tryUseSkill(p, 0);
+  if(kbPressed('skill2')) tryUseSkill(p, 1);
+  if(kbPressed('skill3')) tryUseSkill(p, 2);
+  if(kbPressed('skill4')) tryUseSkill(p, 3);
+  if(kbPressed('skill5')) tryUseSkill(p, 4);
+  if(kbPressed('skill6')) tryUseSkill(p, 5);
   /* 御剑飞行已移除 */
   if(G.isPvp && G.player2 && !G.player2.dead){
     const p2 = G.player2;
     if(pressed['Numpad1'] || pressed['Period']) tryPlayerAttack(p2);
     if(pressed['Numpad4'] || pressed['Comma']) tryUseSkill(p2, 0);
-    if(pressed['Numpad5'] || pressed['Slash']) tryUseSkill(p2, 1);
+    if(pressed['Numpad5'] || pressed['Slash']) tryUseSkill(p2, 1);   /* 练习模式 P2 键位保持不变 */
     if(pressed['Numpad6']) tryUseSkill(p2, 2);
     if(pressed['Numpad7']) tryUseSkill(p2, 3);
     if(pressed['Numpad8']) tryUseSkill(p2, 4);

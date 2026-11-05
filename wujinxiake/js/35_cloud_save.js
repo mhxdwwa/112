@@ -209,6 +209,12 @@ function apply(data){
     }
   }catch(e){ console.warn('[save] 装备属性迁移失败', e); }
 
+  /* ★ v41 老存档迁移：品阶色板重排 —— 装备的 tierColor 是生成时写进存档的，
+     只改 EQUIP_TIERS 老玩家仓库还是旧色，这里统一刷成新色板。 */
+  try{
+    if(typeof syncTierColor === 'function') syncTierColor(G.player);
+  }catch(e){ console.warn('[save] 品阶颜色同步失败', e); }
+
   /* ★ 老存档迁移：按新公式重新计算基础属性（HP/MP/ATK成长优化） */
   try{
     if(typeof ensureBaseStat === 'function') ensureBaseStat(G.player);

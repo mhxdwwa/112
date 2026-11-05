@@ -309,24 +309,71 @@ function handleCanvasClick(cx, cy){
         // 从战斗或城镇打开的背包，返回到对应界面
         gameState = G && G.inventoryReturnState ? G.inventoryReturnState : 'town';
         G.inventoryReturnState = null;
+        /* 离开背包时退出分解模式，避免下次进来还停在分解态 */
+        if(typeof decomposeMode !== 'undefined'){ decomposeMode = false; if(typeof decomposeResetSelection === 'function') decomposeResetSelection(); }
       } else if(r.tab){
         inventoryTab = r.tab;
         inventorySelectedIndex = -1;
       } else if(r.action === 'sortBag'){
         // 一键排序
         if(typeof sortInventory === 'function') sortInventory();
+      } else if(r.action === 'toggleDecompose'){
+        /* ★ v41 进入分解模式：默认勾白/蓝/紫，可用品阶条调整，也可逐件取消 */
+        decomposeMode = !decomposeMode;
+        decomposeResetSelection();
+        inventoryMessage = decomposeMode ? '分解模式：勾品阶批量选，点格子可逐件取消' : '';
+        inventoryMessageTimer = 120;
+      } else if(r.action === 'decomposeTier'){
+        const ti = decomposeTierPick.indexOf(r.tier);
+        if(ti >= 0){
+          decomposeTierPick.splice(ti, 1);
+          /* 该档的手动加选一并撤销，避免「取消品阶却没取消选中」 */
+          const inv2 = G.player.inventory || [];
+          for(let i = 0; i < inv2.length; i++){
+            if(inv2[i] && inv2[i].tier === r.tier){
+              const mi = decomposeManualOn.indexOf(i); if(mi >= 0) decomposeManualOn.splice(mi, 1);
+            }
+          }
+        } else {
+          decomposeTierPick.push(r.tier);
+          const inv3 = G.player.inventory || [];
+          for(let i = 0; i < inv3.length; i++){
+            if(inv3[i] && inv3[i].tier === r.tier){
+              const mo = decomposeManualOff.indexOf(i); if(mo >= 0) decomposeManualOff.splice(mo, 1);
+            }
+          }
+        }
+        decomposeConfirmPending = false;
+      } else if(r.action === 'decomposeToggle'){
+        const idx2 = r.index;
+        const inv4 = G.player.inventory || [];
+        if(inv4[idx2] && !inv4[idx2].sysGift){
+          if(decomposeSelectedList().indexOf(idx2) >= 0){
+            decomposeManualOff.push(idx2);
+            const oi = decomposeManualOn.indexOf(idx2); if(oi >= 0) decomposeManualOn.splice(oi, 1);
+          } else {
+            decomposeManualOn.push(idx2);
+            const fi = decomposeManualOff.indexOf(idx2); if(fi >= 0) decomposeManualOff.splice(fi, 1);
+          }
+          decomposeConfirmPending = false;
+        }
+      } else if(r.action === 'decomposeCancel'){
+        decomposeMode = false;
+        decomposeResetSelection();
+        inventoryMessage = '';
+      } else if(r.action === 'decomposeConfirm'){
+        const list = decomposeSelectedList();
+        const result = (typeof decomposeBatch === 'function') ? decomposeBatch(list) : { count:0, msg:'' };
+        inventoryMessage = result.msg;
+        inventoryMessageTimer = result.needConfirm ? 150 : 180;
+        if(result.count > 0 && typeof playSound === 'function') playSound('skillCast');
       } else if(r.action === 'decomposeLow'){
-        // 一键分解紫色及以下
+        /* 旧入口保留兼容 */
         if(typeof decomposeLowTierEquip === 'function'){
           const result = decomposeLowTierEquip();
-          if(result.count > 0){
-            inventoryMessage = result.msg;
-            inventoryMessageTimer = 180;
-            if(typeof playSound === 'function') playSound('skillCast');
-          } else {
-            inventoryMessage = result.msg;
-            inventoryMessageTimer = 90;
-          }
+          inventoryMessage = result.msg;
+          inventoryMessageTimer = result.count > 0 ? 180 : 90;
+          if(result.count > 0 && typeof playSound === 'function') playSound('skillCast');
         }
       } else if(typeof r.selectIndex === 'number'){
         // 点击选中装备
@@ -531,10 +578,13 @@ function handleCanvasClick(cx, cy){
       else if(r.id === 'shop') gameState = 'shopMenu';
       else if(r.id === 'levelSelect'){ levelSelectFilter = null; gameState = 'levelSelect'; }
       else if(r.id === 'equipWiki') openEquipWiki();
+      else if(r.id === 'keybind'){ kbCapture = null; kbMsg = ''; gameState = 'keyBindMenu'; }
       else if(r.id === 'qualityPrev') cycleQuality(-1);
       else if(r.id === 'qualityNext') cycleQuality(1);
       else if(r.id === 'menu'){ gameState = 'menu'; if(window.stopBGM) stopBGM(); }
     }
+  } else if(gameState==='keyBindMenu'){
+    kbClick(pos);
   } else if(gameState==='equipWiki'){
     const r = hitTestRegion(pos.x, pos.y, wikiClickRegions);
     if(r){

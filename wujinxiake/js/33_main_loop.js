@@ -58,6 +58,8 @@ function loopBody(now){
   /* ★ ESC 系统菜单 + 装备图鉴 */
   if(gameState === 'gameMenu'){ drawTown(); drawGameMenu(); handleInput(); requestAnimationFrame(loop); return; }
   if(gameState === 'equipWiki'){ drawTown(); drawEquipWiki(); handleInput(); requestAnimationFrame(loop); return; }
+  /* ★ v41 键位设置 */
+  if(gameState === 'keyBindMenu'){ drawTown(); drawKeyBindMenu(); handleInput(); requestAnimationFrame(loop); return; }
   /* ★ 主线任务面板 */
   if(gameState === 'questMenu'){ drawQuestMenu(); handleInput(); drawQuestToast(); drawDialogue(); requestAnimationFrame(loop); return; }
   if(gameState === 'stageClear'){

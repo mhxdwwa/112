@@ -236,13 +236,23 @@ function drawGameMenu(){
   ctx.fillText('✕', px + PW - 31, py + 37);
   gameMenuClickRegions = [{ x: px + PW - 46, y: py + 16, w: 30, h: 30, id: 'close' }];
 
+  /* ★ v41 键位设置入口（放在标题旁，不占 3×3 网格） */
+  const kbBtnX = px + 150, kbBtnY = py + 20, kbBtnW = 108, kbBtnH = 28;
+  ctx.fillStyle = 'rgba(60,90,140,0.55)';
+  ctx.beginPath(); ctx.roundRect(kbBtnX, kbBtnY, kbBtnW, kbBtnH, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(150,200,255,0.55)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(kbBtnX + 0.5, kbBtnY + 0.5, kbBtnW - 1, kbBtnH - 1, 6); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.fillStyle = '#cfe6ff'; ctx.font = 'bold 12.5px "Microsoft YaHei"';
+  ctx.fillText('⌨ 键位设置', kbBtnX + kbBtnW / 2, kbBtnY + 19);
+  gameMenuClickRegions.push({ x: kbBtnX, y: kbBtnY, w: kbBtnW, h: kbBtnH, id: 'keybind' });
+
   /* 功能按钮网格 3×3 */
   const items = [
     { id:'characterInfo', icon:'👤', name:'角色信息', desc:'属性面板 · C' },
     { id:'inventory',     icon:'🎒', name:'行囊',     desc:'装备 · 道具 · I' },
     { id:'equipWiki',     icon:'📖', name:'装备系统', desc:'全部装备图鉴' },
     { id:'skillMenu',     icon:'✨', name:'技能',     desc:'加点 · 技能栏' },
-    { id:'questMenu',     icon:'📜', name:'任务',     desc:'主线任务链 · Q' },
+    { id:'questMenu',     icon:'📜', name:'任务',     desc:'主线任务链 · T' },
     { id:'enhanceMenu',   icon:'🔨', name:'铁匠铺',   desc:'强化 · 分解 · 增幅' },
     { id:'shop',          icon:'🏪', name:'杂货铺',   desc:'购买 · 出售' },
     { id:'levelSelect',   icon:'🗺️', name:'选择地图', desc:'挑战地下城' },

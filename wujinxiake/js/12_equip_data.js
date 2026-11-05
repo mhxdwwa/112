@@ -1,12 +1,45 @@
 /* ===== 装备系统（参考DNF） ===== */
+/* ★ 品阶色板 v41 重排：相邻档色相拉开 40°~60°，同时按档位递增
+   「描边粗细 / 描边不透明度 / 外发光半径」，做到不靠颜色也能读出高低。
+   旧色板的问题：稀有 #9b59b6 与神器 #e91e63 色相只差 22°；传说用纯红与神器同族；
+   史诗金与普通白在暗底上亮度接近，五档糊成一片。            */
 const EQUIP_TIERS = [
-  { id:'common', name:'普通', color:'#ffffff', baseMul:1.0, extraStats:0, dropRate:0.60 },
-  { id:'advanced', name:'高级', color:'#3498db', baseMul:1.3, extraStats:1, dropRate:0.25 },
-  { id:'rare', name:'稀有', color:'#9b59b6', baseMul:1.7, extraStats:2, dropRate:0.10 },
-  { id:'epic', name:'神器', color:'#e91e63', baseMul:2.2, extraStats:3, dropRate:0.04 },
-  { id:'legend', name:'传说', color:'#ff0000', baseMul:2.8, extraStats:4, dropRate:0.009 },
-  { id:'mythic', name:'史诗', color:'#ffd700', baseMul:3.5, extraStats:5, dropRate:0.001 }
+  { id:'common',   name:'普通', color:'#C7D2DE', glow:0,  ring:1.0, alpha:0.30, baseMul:1.0, extraStats:0, dropRate:0.60 },
+  { id:'advanced', name:'高级', color:'#2E9BFF', glow:0,  ring:1.0, alpha:0.45, baseMul:1.3, extraStats:1, dropRate:0.25 },
+  { id:'rare',     name:'稀有', color:'#8B5CF6', glow:6,  ring:1.5, alpha:0.62, baseMul:1.7, extraStats:2, dropRate:0.10 },
+  { id:'epic',     name:'神器', color:'#FF3D9A', glow:10, ring:1.5, alpha:0.72, baseMul:2.2, extraStats:3, dropRate:0.04 },
+  { id:'legend',   name:'传说', color:'#FF6A1A', glow:14, ring:2.0, alpha:0.88, baseMul:2.8, extraStats:4, dropRate:0.009 },
+  { id:'mythic',   name:'史诗', color:'#FFD24A', glow:18, ring:2.0, alpha:1.00, baseMul:3.5, extraStats:5, dropRate:0.001, shine:true }
 ];
+
+/* ★ 品阶序号（0 起）：画格子右上角的品阶刻度菱形用 */
+function tierIndex(eq){
+  const i = EQUIP_TIERS.findIndex(function(t){ return t.id === (eq && eq.tier); });
+  return i < 0 ? 0 : i;
+}
+/* ★ 取某品阶的色板配置（找不到兜底普通） */
+function tierStyle(eq){
+  return EQUIP_TIERS[tierIndex(eq)] || EQUIP_TIERS[0];
+}
+/* ★ 老玩家存档颜色同步：装备的 tierColor 是「生成时」写进存档的，
+   只改上面的色板不会影响已有装备，读档后必须整包刷一遍。      */
+function syncTierColor(p){
+  if(!p) return;
+  const fix = function(eq){
+    if(!eq || !eq.tier) return;
+    const t = EQUIP_TIERS.find(function(x){ return x.id === eq.tier; });
+    if(t){ eq.tierColor = t.color; eq.tierName = t.name; }
+  };
+  if(p.inventory && p.inventory.length){
+    for(let i = 0; i < p.inventory.length; i++) fix(p.inventory[i]);
+  }
+  if(p.equipment){
+    for(const slot in p.equipment) fix(p.equipment[slot]);
+  }
+  if(p.stash && p.stash.length){
+    for(let i = 0; i < p.stash.length; i++) fix(p.stash[i]);
+  }
+}
 
 /* 7 个装备槽：武器 / 头部 / 上衣 / 鞋子 / 项链 / 戒指 / 护腕 */
 const EQUIP_SLOTS = ['weapon', 'head', 'armor', 'shoes', 'necklace', 'ring', 'bracer'];

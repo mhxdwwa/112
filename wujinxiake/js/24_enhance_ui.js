@@ -1100,6 +1100,79 @@ function sortInventory(){
   inventoryMessageTimer = 60;
 }
 
+/* ===== v41 一键分解：品阶可选 + 全选后逐件取消 ===== */
+let decomposeMode = false;                 /* 背包是否处于分解模式 */
+let decomposeTierPick = ['common','advanced','rare'];   /* 默认只勾白蓝紫（安全默认） */
+let decomposeManualOff = [];               /* 手动取消的索引 */
+let decomposeManualOn  = [];               /* 手动额外加选的索引 */
+let decomposeConfirmPending = false;
+
+function decomposeResetSelection(){
+  decomposeTierPick = ['common','advanced','rare'];
+  decomposeManualOff = [];
+  decomposeManualOn = [];
+  decomposeConfirmPending = false;
+}
+
+/* 当前会进分解的装备索引 */
+function decomposeSelectedList(){
+  if(!G || !G.player || !G.player.inventory) return [];
+  const inv = G.player.inventory;
+  const out = [];
+  for(let i = 0; i < inv.length; i++){
+    const eq = inv[i];
+    if(!eq || eq.sysGift) continue;                       /* 系统赠送不可分解 */
+    const byTier = decomposeTierPick.indexOf(eq.tier) >= 0;
+    const on = decomposeManualOn.indexOf(i) >= 0;
+    const off = decomposeManualOff.indexOf(i) >= 0;
+    if((byTier || on) && !off) out.push(i);
+  }
+  return out;
+}
+
+/* 分解任意一批索引（与旧版同一套增幅石结算规则） */
+function decomposeBatch(indices){
+  if(!G || !G.player || !G.player.inventory) return { count:0, msg:'' };
+  const p = G.player, inv = p.inventory;
+  const list = (indices || []).filter(function(i){ return inv[i]; });
+  if(!list.length) return { count:0, msg:'没有选中任何装备' };
+
+  /* 含神器及以上、或数量 ≥10 → 需要二次确认 */
+  const hasHigh = list.some(function(i){ return ['epic','legend','mythic'].indexOf(inv[i].tier) >= 0; });
+  if((hasHigh || list.length >= 10) && !decomposeConfirmPending){
+    decomposeConfirmPending = true;
+    return { count:0, needConfirm:true,
+      msg:'将分解 ' + list.length + ' 件' + (hasHigh ? '（含神器及以上）' : '') + '，再点一次确认' };
+  }
+
+  if(!p.amplifyStones) p.amplifyStones = {};
+  const stoneTotals = {};
+  let total = 0;
+  for(let ii = 0; ii < list.length; ii++){
+    const eq = inv[list[ii]];
+    if(!eq) continue;
+    const stoneKey = (typeof equipTierKey === 'function') ? equipTierKey(eq) : 'common';
+    const stoneInfo = (typeof AMPLIFY_STONES !== 'undefined' && AMPLIFY_STONES[stoneKey]) ? AMPLIFY_STONES[stoneKey] : { id:'common_amplify', name:'普通增幅石' };
+    const cnt = 1 + (eq.enhance || 0) + Math.floor((eq.level || 1) / 10);
+    if(!stoneTotals[stoneInfo.id]) stoneTotals[stoneInfo.id] = { info:stoneInfo, count:0 };
+    stoneTotals[stoneInfo.id].count += cnt;
+    total++;
+  }
+  /* 从大到小删除，避免索引错位 */
+  const sorted = list.slice().sort(function(a,b){ return b - a; });
+  for(let ii = 0; ii < sorted.length; ii++) inv.splice(sorted[ii], 1);
+  const rewardParts = [];
+  for(const key in stoneTotals){
+    const st = stoneTotals[key];
+    p.amplifyStones[st.info.id] = (p.amplifyStones[st.info.id] || 0) + st.count;
+    rewardParts.push(st.info.name + ' x' + st.count);
+  }
+  inventorySelectedIndex = -1;
+  decomposeResetSelection();
+  decomposeMode = false;
+  return { count: total, msg: '分解成功！' + total + '件装备 → ' + rewardParts.join('，') };
+}
+
 /* ★ 一键分解紫色及以下装备 */
 function decomposeLowTierEquip(){
   if(!G || !G.player || !G.player.inventory) return { count: 0, msg: '' };

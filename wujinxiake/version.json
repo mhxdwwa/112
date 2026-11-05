@@ -1,1 +1,1 @@
-{"v": "40", "t": "2026-11-05 20:05", "note": "fix: 41只怪物图集朝向全部逐一精查(亮背景+头部2~6倍特写)：修正bear/饕餮、dark_lord、demon_mage、demon_soldier、skeleton、zmonkey、zrat共8处(原生朝右误标朝左)；确认abdragon/abtiger/zox/zhorse/zrooster/dragon为原生朝左正确保留"}
+{"v": "41", "t": "2026-11-05 21:05", "note": "feat: 键位重做(↑↓←→移动 / X 普攻 / A~H 六技能 / Q 血瓶 W 内力瓶，ESC 可自定义，练习模式保留原分键) + 六档品阶色板重排(稀有紫/神器粉/传说橙，老存档自动同步) + 品阶筛选式一键分解(可选各档 + 全选后逐件取消) + 剑士4式改白虹贯日位移技"}

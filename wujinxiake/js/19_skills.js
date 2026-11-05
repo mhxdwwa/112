@@ -913,113 +913,88 @@ function skBloomRing(cx, cy, ringR, n, color, r){
   }
 }
 
-/* ---------- 宝剑剑士 4：天雷剑诀（《仙剑奇侠传》蜀山御雷） ----------
-   ★ 特色：以剑引雷、雷随剑走 —— 天雷先劈在剑尖上，把剑掷出后落点即雷击点，
-     雷电再从落点沿附近敌人**连锁传导（雷链）**，每跳衰减，最后一节点雷爆收尾。
-   与其余五招彻底区分：不落剑雨(万剑归宗)、不起剑阵(诛仙剑阵)、不是万剑齐发(剑来)、
-   不走残剑(剑二十三)、也不是一道剑气冲天(剑开天门)——本招的核心是「电」的传导。 */
+/* ---------- 宝剑剑士 4：白虹贯日（《战国策》· 聂政刺韩傀） ----------
+   ★ 定位：剑士唯一的「人剑合一」位移技。
+   与其余五招的区别：1/3/6 是「剑从天上落」，2 是「剑影连斩」，5 是「剑阵里反复扫」，
+   它们的动词是「落」「多」「阵」；本招的动词是「过」——人先过去，剑才到。
+   全屏只有一道白虹，视觉极简，不与万剑争亮。                          */
 function castSwordImmortal(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 280);                 /* 活坐标：剑与雷都追着目标 */
-  p.action = { type:'swordCharge', dur:0.6, t:0 };
-  spawnText(p.x, p.y, 208, '天 雷 剑 诀', '#bfe0ff', 44);
-  skCastAura(p, 0.6, '#bfe0ff', 3);
+  const tg = skAim(p, 300);
+  const face = (tg.x >= p.x) ? 1 : -1;
+  p.facing = face;
+  p.action = { type:'swordCharge', dur:0.12, t:0 };
 
-  const CX = () => clamp(tg.x, WORLD_L + 60, WORLD_R - 60);
-  const CY = () => clamp(tg.y, GY_TOP + 20, GY_BOTTOM);
+  /* ① 拔剑：一线反光，不读条、不放蓄力光圈 */
+  addEffect('slashArc', p.x + face*40, p.y - 70, 0.14,
+    {facing:face, color:'#dff6ff', size:0.7, typeStr:'draw'});
 
-  /* ① 引雷入剑：一道天雷从天上劈在举起的剑尖上 */
-  addEffect('lightning', p.x + p.facing*30, p.y - 60, 0.5, {color:'#eaf6ff', scale:1.1, fromY:-320});
-  addEffect('hitRing', p.x + p.facing*30, p.y - 60, 0.4, {color:'#bfe0ff', r:80});
-
-  skAt(420, ()=>{
+  skAt(120, ()=>{
     if(!G || gameState !== 'playing') return;
-    playSound('thunder');
-    /* ② 掷剑引雷：本命剑带电飞出（用手中这柄剑的模型），落点即雷击点 */
-    const sx = p.x + p.facing*46, sy = p.y - 58;
-    const dy = (CY() - 24) - sy;
-    const ang = Math.atan2(dy, CX() - sx);
-    const dist = Math.max(60, Math.hypot(CX() - sx, dy));
-    const spd = 1700;
-    G.projectiles.push({ kind:'realSword', x:sx, y:sy, h:1,
-      vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
-      life: Math.min(0.7, dist/spd + 0.06), w:120, hh:90,
-      dmg:A*30, pierce:1, hitSet:new Set(), rot:ang, scale:1.6,
-      color:'#bfe0ff', owner:p });
-    addEffect('slashArc', sx + p.facing*40, sy, 0.18, {facing:p.facing, color:'#bfe0ff', size:0.9, typeStr:'stab'});
+    playSound('swordSwing');
 
-    /* ③ 雷落 + 雷链：★ 雷击总段数固定为 5 段（首段落雷 + 4 段续击）
-       有别的敌人 → 雷电在怪之间跳；场上只有一个敌人 → 4 段续击全部劈在它身上 */
-    skAt(150, ()=>{
+    /* ② 贯日：朝瞄准方向突进，最长 420px，期间无敌 */
+    const sx = p.x, sy = p.y;
+    const dxT = tg.x - sx, dyT = tg.y - sy;
+    const dist = Math.min(420, Math.max(160, Math.hypot(dxT, dyT)));
+    const dirY = clamp(dyT / Math.max(1, Math.abs(dxT)), -0.55, 0.55);
+    const ex = clamp(sx + face * dist, WORLD_L + 56, WORLD_R - 56);
+    const ey = clamp(sy + dirY * dist, GY_TOP + 20, GY_BOTTOM);
+
+    p.invuln = Math.max(p.invuln || 0, G.isPvp ? 0.18 : 0.35);
+
+    for(let i = 1; i <= 3; i++){
+      addEffect('afterImage', sx + (ex-sx)*i/4, sy + (ey-sy)*i/4, 0.3,
+        {facing:face, weaponIdx:p.weaponIdx, spriteKey:'sword', anim:'run',
+         alpha:0.52 - i*0.1, color:'#9fe6ff'});
+    }
+    p.x = ex; p.y = ey; p.h = 0; p.vy = 0; p.kx = 0; p.launchT = 0;
+
+    /* ③ 贯穿判定：一条横线，每个敌人只吃一次 */
+    const cxLine = (sx + ex) / 2, cyLine = (sy + ey) / 2;
+    const wLine = Math.abs(ex - sx) + 90;
+    const pierced = new Set();
+    for(const e of G.enemies){
+      if(!e.alive) continue;
+      if(Math.abs(e.x - cxLine) < wLine/2 + e.radius
+        && Math.abs((e.y - cyLine) * 2.2) < 70 + e.radius*0.6){
+        pierced.add(e);
+        damageEnemy(e, A*16, p, {kb:60});
+      }
+    }
+    addEffect('spearLine', sx, sy - 70, 0.34, {endX:ex, endY:ey - 70, color:'#dff6ff', width:8});
+    addEffect('hitRing', ex, ey, 0.24, {color:'#dff6ff', r:56});
+
+    const multi = pierced.size >= 2;
+
+    /* ④ 回锋：落地立刻反向横斩，被贯穿过的目标伤口裂开 +40% */
+    skAt(90, ()=>{
       if(!G || gameState !== 'playing') return;
-      let nodeX = CX(), nodeY = CY();
-      addEffect('lightning', nodeX, nodeY, 0.55, {color:'#eaf6ff', scale:1.4, fromY:-360});
-      addEffect('explosion', nodeX, nodeY - 20, 0.5, {color:'#bfe0ff', r:120});
-      addEffect('hitRing', nodeX, nodeY, 0.45, {color:'#eaf6ff', r:120});
-      meleeAoe(p, nodeX, nodeY, 120, A*15, {kb:180});
-      /* 首段已命中的目标记下来，优先跳向「没被电过」的敌人 */
-      const hitSet = new Set();
+      playSound('swordSwing');
+      p.facing = -face;
+      const sw = multi ? 340 : 260;
+      addEffect('slashArc', p.x, p.y - 70, 0.2,
+        {facing:p.facing, color:'#ffffff', size:1.3, typeStr:'sweep'});
       for(const e of G.enemies){
-        if(e.alive && Math.abs(e.x - nodeX) < 120 && Math.abs(e.y - nodeY) < 80) hitSet.add(e);
-      }
-      /* 先算好 4 段续击的落点（优先新目标，没有就重复劈当前目标） */
-      const chainPath = [];
-      let cx2 = nodeX, cy2 = nodeY, dmgMul = 1;
-      for(let hop = 0; hop < 4; hop++){
-        dmgMul *= 0.82;                     /* 每段衰减，首段最痛 */
-        let best = null, bd = Infinity;
-        for(const e of G.enemies){
-          if(!e.alive || hitSet.has(e)) continue;
-          const d = Math.hypot(e.x - cx2, e.y - cy2);
-          if(d < 300 && d < bd){ bd = d; best = e; }
+        if(!e.alive) continue;
+        if(Math.abs(e.x - p.x) < sw/2 + e.radius && Math.abs((e.y - p.y) * 2.2) < 130){
+          const bonus = pierced.has(e) ? 1.4 : 1.0;
+          damageEnemy(e, A*14*bonus, p, {kb:260});
         }
-        let repeat = false;
-        if(!best){
-          /* ★ 没有可跳的新目标：雷回到当前目标继续劈，保证总段数不变 */
-          for(const e of G.enemies){
-            if(!e.alive) continue;
-            const d = Math.hypot(e.x - cx2, e.y - cy2);
-            if(d < 360 && d < bd){ bd = d; best = e; }
-          }
-          repeat = !!best;
-        }
-        if(!best) break;
-        chainPath.push({ tgt:best, mul:dmgMul, repeat:repeat, fromX:cx2, fromY:cy2 });
-        if(!repeat) hitSet.add(best);
-        cx2 = best.x; cy2 = best.y;
       }
-      /* 按 90ms 一节依次落雷，雷链/续劈各有对应表现 */
-      chainPath.forEach((nd, i)=>{
-        skAt(90 * (i + 1), ()=>{
-          if(!G || gameState !== 'playing') return;
-          const tx = (nd.tgt && nd.tgt.alive) ? nd.tgt.x : nd.fromX;   /* 用实时位置，目标跑不掉 */
-          const ty = (nd.tgt && nd.tgt.alive) ? nd.tgt.y : nd.fromY;
-          if(nd.repeat){
-            /* 同一目标续劈：竖直落雷 */
-            addEffect('lightning', tx, ty, 0.34, {color:'#eaf6ff', scale:0.9, fromY:-300});
-            addEffect('hitRing', tx, ty, 0.3, {color:'#bfe0ff', r:52});
-          } else {
-            /* 换目标：两道闪电之间的雷链 */
-            addEffect('chainBolt', nd.fromX, nd.fromY - 40, 0.3, {endX:tx, endY:ty - 40, color:'#eaf6ff'});
-            addEffect('hitRing', tx, ty, 0.3, {color:'#bfe0ff', r:64});
-          }
-          meleeAoe(p, tx, ty, 96, A*15*nd.mul, {kb:120});
-        });
-      });
-      /* ④ 收雷：最后一段落点雷爆 */
-      const lastN = chainPath.length ? chainPath[chainPath.length - 1] : null;
-      skAt(90 * chainPath.length + 170, ()=>{
-        if(!G || gameState !== 'playing') return;
-        const lx = (lastN && lastN.tgt && lastN.tgt.alive) ? lastN.tgt.x : nodeX;
-        const ly = (lastN && lastN.tgt && lastN.tgt.alive) ? lastN.tgt.y : nodeY;
-        addEffect('explosion', lx, ly - 20, 0.6, {color:'#eaf6ff', r:150});
-        addEffect('hitRing', lx, ly, 0.5, {color:'#ffffff', r:150});
-        meleeAoe(p, lx, ly, 150, A*20, {kb:380, launch:true});
-        skShake(16, 0.22, '#eaf6ff');
-        fxHitstop(0.06);
-        if(p.action && p.action.type === 'swordCharge') p.action = null;
-      });
+      p.facing = face;
+      skShake(9, 0.06, '#dff6ff');
+      fxHitstop(0.05);
+      if(p.action && p.action.type === 'swordCharge') p.action = null;
+
+      /* ⑤ 余韵：连穿两人以上，冷却立刻退 40%；一个人都没穿到则补 0.8s 移速 */
+      if(multi && p.cds && currentSkillIdx >= 0){
+        p.cds[currentSkillIdx] = Math.max(0, (p.cds[currentSkillIdx] || 0) * 0.6);
+      } else if(pierced.size === 0){
+        p.moveSpeed = (p.moveSpeed || 320) * 1.3;
+        setTimeout(()=>{ if(p) p.moveSpeed = (p.moveSpeed || 320) / 1.3; }, 800);
+      }
     });
   });
 }

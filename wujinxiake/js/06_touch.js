@@ -374,13 +374,15 @@ function setupTouchControls(){
           }
         }
       }
-      if(action==='attack'){ if(player==='1') pressed['KeyJ']=true; else pressed['Period']=true; }
-      else if(action==='skill1'){ if(player==='1') pressed['Digit1']=true; else pressed['Comma']=true; }
-      else if(action==='skill2'){ if(player==='1') pressed['Digit2']=true; else pressed['Slash']=true; }
-      else if(action==='skill3'){ if(player==='1') pressed['Digit3']=true; else pressed['Numpad6']=true; }
-      else if(action==='skill4'){ if(player==='1') pressed['Digit4']=true; else pressed['Numpad7']=true; }
-      else if(action==='skill5'){ if(player==='1') pressed['Digit5']=true; else pressed['Numpad8']=true; }
-      else if(action==='skill6'){ if(player==='1') pressed['Digit6']=true; else pressed['Numpad9']=true; }
+      /* ★ v41：触屏按钮映射到当前键位表（玩家1 跟随自定义键位，玩家2 保持原样） */
+      const KB1 = (typeof kbProfile === 'function') ? kbProfile(1) : { attack:'KeyX', skill1:'KeyA', skill2:'KeyS', skill3:'KeyD', skill4:'KeyF', skill5:'KeyG', skill6:'KeyH' };
+      if(action==='attack'){ if(player==='1') pressed[KB1.attack]=true; else pressed['Period']=true; }
+      else if(action==='skill1'){ if(player==='1') pressed[KB1.skill1]=true; else pressed['Comma']=true; }
+      else if(action==='skill2'){ if(player==='1') pressed[KB1.skill2]=true; else pressed['Slash']=true; }
+      else if(action==='skill3'){ if(player==='1') pressed[KB1.skill3]=true; else pressed['Numpad6']=true; }
+      else if(action==='skill4'){ if(player==='1') pressed[KB1.skill4]=true; else pressed['Numpad7']=true; }
+      else if(action==='skill5'){ if(player==='1') pressed[KB1.skill5]=true; else pressed['Numpad8']=true; }
+      else if(action==='skill6'){ if(player==='1') pressed[KB1.skill6]=true; else pressed['Numpad9']=true; }
       else if(action==='jump'){ if(player==='1') pressed['Space']=true; else pressed['Numpad0']=true; }
       else if(action==='glide'){ if(player==='1') pressed['ShiftLeft']=true; else pressed['ShiftRight']=true; }
     };

@@ -274,13 +274,16 @@ addEventListener('keydown', e=>{
       gameState = 'playing';
     } else if(gameState === 'equipWiki'){
       gameState = 'gameMenu';
+    } else if(gameState === 'keyBindMenu'){
+      gameState = 'gameMenu';
     } else if(gameState === 'gameMenu'){
       gameState = 'town';
     } else if(gameState === 'town'){
       gameState = 'gameMenu';
     }
   }
-  if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyJ','KeyW','KeyA','KeyS','KeyD','Period','Comma','Slash','Numpad0','Numpad1','Numpad4','Numpad5','Numpad6','Numpad7','Numpad8','Numpad9','ShiftLeft','ShiftRight'].includes(e.code)) e.preventDefault();
+  if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyJ','KeyW','KeyA','KeyS','KeyD','Period','Comma','Slash','Numpad0','Numpad1','Numpad4','Numpad5','Numpad6','Numpad7','Numpad8','Numpad9','ShiftLeft','ShiftRight'].includes(e.code)
+     || (typeof kbAllCodes === 'function' && kbAllCodes().indexOf(e.code) >= 0)) e.preventDefault();
 });
 addEventListener('keyup', e=>{ keys[e.code] = false; });
 addEventListener('blur', ()=>{ for(const k in keys) keys[k]=false; });
