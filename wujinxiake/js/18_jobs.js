@@ -165,6 +165,7 @@ function startSingleWithChar(charIdx){
   sp.equipment.bracer = makeStarterEquip('bracer', char.weaponIdx);
   sp.materials.enhance_stone_low = 12;
   sp.materials.chaos_stone = 3;
+  sp.materials.adjust_box = 2;   /* ★ v44：开局送 2 个调整箱，让新手能立刻试品级重掷 */
   sp.gold = 800;
   sp.amplifyStones = { amplify_stone_common: 6 };
   /* ★ 开局送一组新手药水（回血瓶 / 回蓝瓶） */
@@ -366,7 +367,7 @@ function makePlayerWithChar(char){
     equipment: { weapon:null, head:null, armor:null, shoes:null, necklace:null, ring:null, bracer:null },
     inventory: [],
     gold: 0,
-    materials: { enhance_stone_low:0, enhance_stone_mid:0, enhance_stone_high:0, chaos_stone:0 },
+    materials: { enhance_stone_low:0, enhance_stone_mid:0, enhance_stone_high:0, chaos_stone:0, adjust_box:0 },
     amplifyStones: {},
     propBonuses: { atk:0, hp:0, mp:0, cdReduce:0, crit:0 },
     props: { atk_pill:0, hp_pill:0, mp_pill:0, cd_book:0, crit_gem:0 },

@@ -483,6 +483,7 @@ function handleCanvasClick(cx, cy){
         if(blacksmithTab === 'enhance') enhanceSelectedSlot = r.slot;
         else if(blacksmithTab === 'amplify') amplifySelectedSlot = r.slot;
         else if(blacksmithTab === 'reforge') reforgeSelectedSlot = r.slot;
+        else if(blacksmithTab === 'adjust') adjustSelectedSlot = r.slot;
       } else if(r.action === 'selectDecompose'){
         // 多选切换：点击已选中的取消选中，点击未选中的加入
         const idx = r.index;
@@ -502,6 +503,8 @@ function handleCanvasClick(cx, cy){
         doAmplify();
       } else if(r.action === 'reforge'){
         doReforge();
+      } else if(r.action === 'adjust'){
+        doAdjustBox();
       }
     }
   } else if(gameState==='characterInfo'){

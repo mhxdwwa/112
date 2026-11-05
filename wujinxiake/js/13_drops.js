@@ -238,6 +238,10 @@ function rollEnemyDrops(enemy, levelIdx){
   for(let i = 0; i < chaosN; i++){
     drops.push({ type:'material', material:{ id:'chaos_stone', name:'混沌魔石', desc:'用于洗练装备随机词条' } });
   }
+  /* ★ v44 调整箱：BOSS 25% 掉 1 个（另一条主要来源是分解装备） */
+  if(isBoss && Math.random() < 0.25 + diffBonus * 0.05){
+    drops.push({ type:'material', material:{ id:'adjust_box', name:'调整箱', desc:'随机重掷装备品级' } });
+  }
 
   return drops;
 }

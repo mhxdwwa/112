@@ -530,11 +530,14 @@ function drawGroundDrops(){
           ctx.beginPath(); ctx.moveTo(drawX, drawY-9); ctx.lineTo(drawX+8, drawY); ctx.lineTo(drawX, drawY+9); ctx.lineTo(drawX-8, drawY); ctx.closePath(); ctx.fill();
           ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
           // 材料名称
-          const matNames = { enhance_stone_low: '下级强化石', enhance_stone_mid: '中级强化石', enhance_stone_high: '高级强化石' };
-          ctx.fillStyle = '#88ccff';
+          const matNames = { enhance_stone_low: '下级强化石', enhance_stone_mid: '中级强化石', enhance_stone_high: '高级强化石', chaos_stone: '混沌魔石', adjust_box: '调整箱' };
+          /* 掉落体上带的是 material 对象，优先用它自己的名字（v44 起调整箱也走这条路） */
+          const matLabel = (d.material && d.material.name) || matNames[d.matType] || '强化石';
+          const matColor = (d.material && d.material.id === 'adjust_box') ? '#7fd4ff' : '#88ccff';
+          ctx.fillStyle = matColor;
           ctx.font = 'bold 10px "Microsoft YaHei"';
           ctx.textAlign = 'center';
-          ctx.fillText(matNames[d.matType] || '强化石', drawX, drawY - 15);
+          ctx.fillText(matLabel, drawX, drawY - 15);
         }
         ctx.globalAlpha = 1;
       }

@@ -12,6 +12,84 @@ const EQUIP_TIERS = [
   { id:'mythic',   name:'史诗', color:'#FFD24A', glow:18, ring:2.0, alpha:1.00, baseMul:3.5, extraStats:5, dropRate:0.001, shine:true }
 ];
 
+/* ★ 装备品级（五档）：影响整体属性倍率 0.85 ~ 1.20
+   v44：从生成函数里提到全局，供「调整箱」随机重掷品级复用。 */
+const EQUIP_GRADES = [
+  { name:'最下级', mul:0.85, color:'#8d99a6' },
+  { name:'下级',   mul:0.92, color:'#a9c2d4' },
+  { name:'中级',   mul:1.00, color:'#7fd4ff' },
+  { name:'上级',   mul:1.10, color:'#7ee08a' },
+  { name:'最上级', mul:1.20, color:'#ffd166' }
+];
+function gradeIndexOf(eq){
+  const nm = eq && eq.grade;
+  const i = EQUIP_GRADES.findIndex(function(g){ return g.name === nm; });
+  /* 老存档可能没有 grade 字段：按倍率反推最接近的一档 */
+  if(i >= 0) return i;
+  const mul = (eq && eq.gradeMul) || 1;
+  let best = 2, bd = 9;
+  for(let k = 0; k < EQUIP_GRADES.length; k++){
+    const d = Math.abs(EQUIP_GRADES[k].mul - mul);
+    if(d < bd){ bd = d; best = k; }
+  }
+  return best;
+}
+
+/* ★ v44 调整箱核心：把一件装备的品级改成 idx 档，并重算全部属性
+   · 基础五围按「生成时同一套公式」重算
+   · 四维 / 三攻 / 双防 / 三速 由 rollEquipDnf 依新倍率重算
+   · 随机词条「不重掷」：品级变了、词条种类与数值原样保留（避免调一次品级把好词条洗掉） */
+function applyEquipGrade(eq, idx){
+  if(!eq) return null;
+  const i = clamp(idx | 0, 0, EQUIP_GRADES.length - 1);
+  const g = EQUIP_GRADES[i];
+  const tier = EQUIP_TIERS.find(function(t){ return t.id === eq.tier; }) || EQUIP_TIERS[0];
+  const lv = eq.level || 1;
+  const base = 1 + lv * 0.05;
+  const gm = g.mul;
+  const slot = eq.slot;
+
+  const origMul = eq.gradeMul || 1;   /* 原倍率：算属性强化的缩放比例用 */
+
+  eq.grade = g.name;
+  eq.gradeMul = gm;
+
+  /* ① 基础五围（与生成时公式一致；套装 +8% 仍在最后补，保持和掉落时完全一样） */
+  eq.baseAtk  = Math.round((slot === 'weapon' ? 10 * tier.baseMul * base : 0) * gm);
+  eq.baseHp   = Math.round(((slot === 'head' || slot === 'armor') ? 30 * tier.baseMul * base : 0) * gm);
+  eq.baseDef  = Math.round((slot === 'armor' ? 5 * tier.baseMul * base : 0) * gm);
+  eq.baseSpd  = Math.round((slot === 'shoes' ? 10 * tier.baseMul * base : 0) * gm);
+  eq.baseCrit = Math.round(((['accessory','necklace','ring','bracer'].indexOf(slot) >= 0)
+                  ? 3 * tier.baseMul * base : 0) * gm);
+
+  /* ② 四维 / 三攻 / 双防 / 三速 依新倍率重算；词条与属性强化保持原样
+        （饰品三件套的「火/冰/光/暗」是随机抽的，重算不能顺带把它洗成别的属性） */
+  const oldAff = eq.affixes;
+  const ELEMS = ['elemFire','elemIce','elemLight','elemDark'];
+  let elemKey = null, elemVal = 0;
+  if(eq.dnf){
+    for(let k = 0; k < ELEMS.length; k++){
+      if((eq.dnf[ELEMS[k]] || 0) > 0){ elemKey = ELEMS[k]; elemVal = eq.dnf[ELEMS[k]]; break; }
+    }
+  }
+  rollEquipDnf(eq);
+  if(oldAff) eq.affixes = oldAff;
+  if(elemKey && eq.dnf){
+    for(let k = 0; k < ELEMS.length; k++) eq.dnf[ELEMS[k]] = 0;
+    const rr = origMul > 0 ? (gm / origMul) : 1;
+    eq.dnf[elemKey] = Math.max(1, Math.round(elemVal * rr));
+  }
+
+  /* ③ 套装件的基础属性 +8%（跟生成流程同序：洗完之后再补） */
+  if(eq.setId){
+    eq.baseHp  = Math.round((eq.baseHp  || 0) * 1.08);
+    eq.baseDef = Math.round((eq.baseDef || 0) * 1.08);
+    eq.baseSpd = Math.round((eq.baseSpd || 0) * 1.08);
+    eq.baseCrit= Math.round((eq.baseCrit|| 0) * 1.08);
+  }
+  return eq;
+}
+
 /* ★ 品阶序号（0 起）：画格子右上角的品阶刻度菱形用 */
 function tierIndex(eq){
   const i = EQUIP_TIERS.findIndex(function(t){ return t.id === (eq && eq.tier); });
@@ -534,14 +612,9 @@ function generateEquipment(slot, levelIdx, diffBonus, minTier, minGrade){
   // 装备品级（最下/下/中/上/最上），影响属性倍率
   const gradeRoll = Math.random();
   let gradeIdx = 2, gradeMul = 1.0;
-  /* ★ 品级倍率拉开差距（0.85~1.20），让品级有实际意义 */
-  const GRADES = [
-    { name: '最下级', mul: 0.85 },
-    { name: '下级', mul: 0.92 },
-    { name: '中级', mul: 1.0 },
-    { name: '上级', mul: 1.10 },
-    { name: '最上级', mul: 1.20 }
-  ];
+  /* ★ 品级倍率拉开差距（0.85~1.20），让品级有实际意义
+     v44：统一用全局 EQUIP_GRADES，避免「生成」和「调整箱重掷」两套数值走散 */
+  const GRADES = EQUIP_GRADES;
   if(gradeRoll < 0.15) gradeIdx = 0;
   else if(gradeRoll < 0.35) gradeIdx = 1;
   else if(gradeRoll < 0.65) gradeIdx = 2;

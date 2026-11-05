@@ -656,6 +656,8 @@ function drawQuestToast(){
 /* ---- 任务 HUD ---- */
 /* 主线任务追踪（城镇左侧，可点击「−」收起 /「+」展开） */
 let questTrackerCollapsed = false;
+/* ★ v44：主线全部做完后，追踪框默认自动收起（只留标题栏）；玩家手动展开后不再强收 */
+let questTrackerAutoDone = false;
 let questTrackerClickRegions = [];
 function drawQuestTracker(x, y){
   questTrackerClickRegions = [];
@@ -664,8 +666,16 @@ function drawQuestTracker(x, y){
   const q = questOf(p);
   if(!q) return;
   const cq = MAIN_QUESTS[q.idx];
-  /* 收起时只留「任务追踪」+ 号，宽度收到刚好包住四个字 */
-  const W = questTrackerCollapsed ? 112 : 286, HH = 30;
+  /* ★ v44：主线清空 → 默认缩小；主线重新有了 → 恢复展开 */
+  if(!cq && !questTrackerAutoDone){
+    questTrackerAutoDone = true;
+    questTrackerCollapsed = true;
+  } else if(cq && questTrackerAutoDone){
+    questTrackerAutoDone = false;
+    questTrackerCollapsed = false;
+  }
+  /* 收起时只留「任务追踪」+ 号，宽度收到刚好包住四个字；主线全完成时留出 ✓ 的位置 */
+  const W = questTrackerCollapsed ? (questTrackerAutoDone ? 140 : 112) : 286, HH = 30;
   /* 给手机端图标栏避让用：框在画布虚拟坐标里的位置（高度按展开时的正文粗估） */
   window.__questTrackerBox = { x: x, y: y, w: W, h: questTrackerCollapsed ? HH : 112 };
   ctx.save();
@@ -683,6 +693,11 @@ function drawQuestTracker(x, y){
   ctx.beginPath(); ctx.arc(x + 15, y + 15, 14, 0, TAU); ctx.fill();
   ctx.fillStyle = '#ffd166'; ctx.font = 'bold 13px "Microsoft YaHei"';
   ctx.fillText('任务追踪', x + 30, y + 20);
+  /* ★ v44：主线全完成时，收起态后面挂一个绿色 ✓，不展开也知道已经没事要做 */
+  if(questTrackerCollapsed && questTrackerAutoDone){
+    ctx.fillStyle = '#5ee08a'; ctx.font = 'bold 14px "Microsoft YaHei"';
+    ctx.fillText('✓', x + 86, y + 20);
+  }
   /* 收起态：字后面直接接 + 号，不再画分隔与章节名 */
   if(cq && !questTrackerCollapsed){
     ctx.fillStyle = '#8ea6b8'; ctx.font = '11px "Microsoft YaHei"';
@@ -874,7 +889,7 @@ function drawQuestMenu(){
     if(r.sp) parts.push('技能点 ' + r.sp);
     if(r.equip) parts.push('装备 ×' + r.equip);
     if(r.mats) for(const k in r.mats){
-      const nm = { enhance_stone_low:'下级强化石', enhance_stone_mid:'中级强化石', enhance_stone_high:'高级强化石', chaos_stone:'混沌魔石' }[k] || k;
+      const nm = { enhance_stone_low:'下级强化石', enhance_stone_mid:'中级强化石', enhance_stone_high:'高级强化石', chaos_stone:'混沌魔石', adjust_box:'调整箱' }[k] || k;
       parts.push(nm + ' ×' + r.mats[k]);
     }
     ctx.fillStyle = '#d8e4ee'; ctx.font = '12px "Microsoft YaHei"';

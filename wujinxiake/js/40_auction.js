@@ -26,6 +26,7 @@
     enhance_stone_mid:    { name: '中级强化石', color: '#5aa9ff', trade: true },
     enhance_stone_high:   { name: '高级强化石', color: '#ff9f43', trade: false },
     chaos_stone:          { name: '混沌魔石',   color: '#b57bff', trade: true },
+    adjust_box:           { name: '调整箱',     color: '#7fd4ff', trade: true },
     amplify_stone_common: { name: '普通增幅石', color: '#cfd8e3', trade: true },
     amplify_stone_advanced:{ name: '高级增幅石', color: '#5aa9ff', trade: true },
     amplify_stone_rare:   { name: '稀有增幅石', color: '#b57bff', trade: true },

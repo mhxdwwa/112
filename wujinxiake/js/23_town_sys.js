@@ -102,6 +102,7 @@ function autoSelectEquipSlots(){
     if(!p.equipment[enhanceSelectedSlot]) enhanceSelectedSlot = first;
     if(!p.equipment[amplifySelectedSlot]) amplifySelectedSlot = first;
     if(!p.equipment[reforgeSelectedSlot]) reforgeSelectedSlot = first;
+    if(!p.equipment[adjustSelectedSlot]) adjustSelectedSlot = first;
   }
 }
 
@@ -142,16 +143,17 @@ function drawEnhanceOverlay(){
   ctx.fillText('金币 ' + (p.gold||0) + '　｜　下级石 ' + (p.materials.enhance_stone_low||0) +
     ' · 中级石 ' + (p.materials.enhance_stone_mid||0) +
     ' · 高级石 ' + (p.materials.enhance_stone_high||0) +
-    '　｜　增幅石 ' + ampTotal, VW/2, panelY + 50);
+    '　｜　增幅石 ' + ampTotal + '　｜　调整箱 ' + (p.materials.adjust_box||0), VW/2, panelY + 50);
 
-  /* 四个标签页 */
+  /* 五个标签页 */
   const tabW = 96, tabH = 28;
   const tabY = panelY + 58;
   const tabs = [
     { id:'enhance', label:'强 化', color:'#ffd166' },
     { id:'decompose', label:'分 解', color:'#e67e22' },
     { id:'amplify', label:'增 幅', color:'#c96bff' },
-    { id:'reforge', label:'洗 练', color:'#5ee08a' }
+    { id:'reforge', label:'洗 练', color:'#5ee08a' },
+    { id:'adjust', label:'调整箱', color:'#7fd4ff' }
   ];
   const totalTabW = tabW * tabs.length + 10 * (tabs.length - 1);
   const tabStartX = VW/2 - totalTabW/2;
@@ -193,7 +195,8 @@ function drawEnhanceOverlay(){
 
     const isHighlighted = (blacksmithTab === 'enhance' && enhanceSelectedSlot === slot) ||
                           (blacksmithTab === 'amplify' && amplifySelectedSlot === slot) ||
-                          (blacksmithTab === 'reforge' && reforgeSelectedSlot === slot);
+                          (blacksmithTab === 'reforge' && reforgeSelectedSlot === slot) ||
+                          (blacksmithTab === 'adjust' && adjustSelectedSlot === slot);
 
     ctx.fillStyle = isHighlighted ? 'rgba(255,209,102,0.4)' : 'rgba(30,25,15,0.7)';
     ctx.beginPath(); ctx.roundRect(sx, sy, slotSize, slotSize, 3); ctx.fill();
@@ -223,7 +226,7 @@ function drawEnhanceOverlay(){
     }
 
     if(eq) equipHoverRegions.push({ x: sx, y: sy, w: eqPanelW - 16, h: slotSize, equip: eq });
-    if(blacksmithTab === 'enhance' || blacksmithTab === 'amplify' || blacksmithTab === 'reforge'){
+    if(blacksmithTab === 'enhance' || blacksmithTab === 'amplify' || blacksmithTab === 'reforge' || blacksmithTab === 'adjust'){
       G.enhanceClickRegions.push({ x: sx, y: sy, w: eqPanelW - 16, h: slotSize, action: 'selectSlot', slot: slot });
     }
   }
@@ -288,6 +291,8 @@ function drawEnhanceOverlay(){
     drawAmplifyTab(p, funcX, funcY, funcW, funcH);
   } else if(blacksmithTab === 'reforge'){
     drawReforgeTab(p, funcX, funcY, funcW, funcH);
+  } else if(blacksmithTab === 'adjust'){
+    drawAdjustTab(p, funcX, funcY, funcW, funcH);
   }
 
   /* 结果提示条 */
@@ -299,7 +304,8 @@ function drawEnhanceOverlay(){
     enhance: '提示：选择左侧装备后点击按钮。强化 +10 起武器发白光，增幅 +10 起发粉光，二者叠加会混色',
     decompose: '提示：分解背包中不需要的装备，可获得对应品阶的增幅石',
     amplify: '提示：增幅额外提供力量与体力，品阶越高成长越多，失败等级不变',
-    reforge: '提示：洗练会重铸该装备的全部随机词条，词条数量由品阶决定（普通装备无词条）'
+    reforge: '提示：洗练会重铸该装备的全部随机词条，词条数量由品阶决定（普通装备无词条）',
+    adjust: '提示：调整箱随机重掷装备品级（最下级 / 下级 / 中级 / 上级 / 最上级，各 20%），只动品级不动词条 · 分解装备有概率获得'
   };
   ctx.fillText(msg ? msg.text : (hintMap[blacksmithTab] || hintMap.enhance), VW/2, panelY + panelH - 56);
 

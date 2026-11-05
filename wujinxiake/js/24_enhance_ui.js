@@ -109,6 +109,158 @@ function drawReforgeTab(p, fx, fy, fw, fh){
   }
 }
 
+/* ============================================================
+   ★ 调整箱：消耗 1 个调整箱，随机重掷一件装备的「品级」
+   —— 最下级 / 下级 / 中级 / 上级 / 最上级，五档等概率
+   —— 只动品级（连带基础属性与四维按新倍率重算），随机词条原样保留
+   ============================================================ */
+
+/* 分解装备时的调整箱掉落：单件基础 4%，品阶越高越容易出，最多 2 个 */
+function rollAdjustBoxDrop(tiers){
+  const list = tiers || [];
+  let got = 0;
+  for(let i = 0; i < list.length; i++){
+    const ti = equipTierIndex ? equipTierIndex(list[i]) : 0;
+    const rate = 0.04 + ti * 0.016;         /* 普通 4% → 史诗 12% */
+    if(Math.random() < rate) got++;
+  }
+  if(got > 2) got = 2;   /* 单次分解最多产出 2 个，避免一次性洗一堆品级 */
+  return got;
+}
+
+function doAdjustBox(){
+  const p = G.player;
+  if(!p || !p.equipment) return;
+  const slot = adjustSelectedSlot || 'weapon';
+  const eq = p.equipment[slot];
+  if(!eq){ enhanceMsg('该部位没有装备，无法调整', '#ff8a7a'); playSound('impact'); return; }
+  if(!p.materials) p.materials = {};
+  const have = p.materials.adjust_box || 0;
+  if(have < 1){
+    enhanceMsg('调整箱不足：需要 1 个（当前 ' + have + ' 个）· 分解装备有概率获得', '#ff8a7a');
+    playSound('impact');
+    return;
+  }
+  const beforeIdx = gradeIndexOf(eq);
+  const beforeName = EQUIP_GRADES[beforeIdx].name;
+  /* 五档等概率重掷 */
+  const idx = Math.floor(Math.random() * EQUIP_GRADES.length);
+  p.materials.adjust_box -= 1;
+  applyEquipGrade(eq, idx);
+  G.adjustLast = { name: eq.name, before: beforeName, after: EQUIP_GRADES[idx].name, idx: idx };
+  recalcPlayerStats();
+  if(idx > beforeIdx)      enhanceMsg('调整成功！品级  ' + beforeName + ' → ' + EQUIP_GRADES[idx].name + '（属性提升）', '#5ee08a', 4800);
+  else if(idx === beforeIdx) enhanceMsg('品级未变：仍是「' + EQUIP_GRADES[idx].name + '」，再试一次吧', '#ffd166', 4200);
+  else                     enhanceMsg('品级变为「' + EQUIP_GRADES[idx].name + '」（' + beforeName + ' → ' + EQUIP_GRADES[idx].name + '）', '#9fe6ff', 4200);
+  playSound(idx > beforeIdx ? 'skillCast' : 'impact');
+}
+
+function drawAdjustTab(p, fx, fy, fw, fh){
+  const slot = adjustSelectedSlot || 'weapon';
+  const eq = p.equipment[slot];
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#7fd4ff'; ctx.font = 'bold 20px "Microsoft YaHei"';
+  ctx.fillText('调 整 箱', fx + fw/2, fy + 30);
+  ctx.fillStyle = 'rgba(180,205,225,0.85)'; ctx.font = '12px "Microsoft YaHei"';
+  ctx.fillText('消耗 1 个调整箱，随机重掷该装备的品级（五档等概率）· 随机词条与强化/增幅等级不受影响', fx + fw/2, fy + 54);
+
+  if(!eq){
+    ctx.fillStyle = '#7a8a96'; ctx.font = '14px "Microsoft YaHei"';
+    ctx.fillText('请先在左侧选择要调整的装备', fx + fw/2, fy + fh/2);
+    return;
+  }
+
+  const curIdx = gradeIndexOf(eq);
+
+  /* 装备卡片 */
+  const boxW = Math.min(fw - 40, 470), boxX = fx + (fw - boxW)/2, boxY = fy + 70, boxH = 186;
+  ctx.fillStyle = 'rgba(10,18,24,0.85)';
+  ctx.strokeStyle = hexA(eq.tierColor || '#8a9a90', 0.8); ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = eq.tierColor || '#fff'; ctx.font = 'bold 16px "Microsoft YaHei"';
+  ctx.fillText((eq.enhance > 0 ? '+' + eq.enhance + ' ' : '') + eq.name, boxX + 14, boxY + 26);
+  ctx.fillStyle = '#8ea6c0'; ctx.font = '11px "Microsoft YaHei"';
+  ctx.fillText((SLOT_NAMES[eq.slot] || '') + ' · ' + eq.tierName + ' · Lv.' + eq.level +
+               '　｜　当前品级：' + EQUIP_GRADES[curIdx].name, boxX + 14, boxY + 44);
+
+  ctx.strokeStyle = hexA(eq.tierColor || '#8a9a90', 0.3); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(boxX + 14, boxY + 54); ctx.lineTo(boxX + boxW - 14, boxY + 54); ctx.stroke();
+
+  /* 五档图例（当前档位高亮） */
+  ctx.fillStyle = '#c9a84c'; ctx.font = 'bold 12px "Microsoft YaHei"';
+  ctx.fillText('品级刻度（各 20%）', boxX + 14, boxY + 74);
+  const gN = EQUIP_GRADES.length;
+  const gapG = 6, padX = 14;
+  const cellW = (boxW - padX * 2 - gapG * (gN - 1)) / gN;
+  for(let i = 0; i < gN; i++){
+    const g = EQUIP_GRADES[i];
+    const gx = boxX + padX + i * (cellW + gapG);
+    const gy = boxY + 84;
+    const on = (i === curIdx);
+    ctx.fillStyle = on ? hexA(g.color, 0.30) : 'rgba(40,50,60,0.7)';
+    ctx.beginPath(); ctx.roundRect(gx, gy, cellW, 24, 4); ctx.fill();
+    ctx.strokeStyle = on ? g.color : 'rgba(120,140,160,0.45)';
+    ctx.lineWidth = on ? 1.8 : 1;
+    ctx.beginPath(); ctx.roundRect(gx, gy, cellW, 24, 4); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = on ? g.color : '#8b9aa6';
+    ctx.font = (on ? 'bold ' : '') + '11px "Microsoft YaHei"';
+    ctx.fillText(g.name, gx + cellW/2, gy + 16);
+    ctx.fillStyle = on ? hexA(g.color, 0.75) : '#5d6b76';
+    ctx.font = '9px "Microsoft YaHei"';
+    ctx.fillText('×' + g.mul.toFixed(2), gx + cellW/2, gy + 34);
+  }
+
+  /* 品级带来的能力差异（按部位挑该件装备真正吃的那条主属性来对比） */
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8fa8bc'; ctx.font = '11px "Microsoft YaHei"';
+  ctx.fillText('同件装备：最上级比最下级主属性高约 41%（×0.85 → ×1.20）', boxX + 14, boxY + 136);
+  const sMax = 1 + (eq.level || 1) * 0.05;
+  const tierMul = (EQUIP_TIERS.find(function(t){ return t.id === eq.tier; }) || EQUIP_TIERS[0]).baseMul;
+  const topOf = function(v){ return Math.round(v * tierMul * sMax * EQUIP_GRADES[gN-1].mul); };
+  let statTxt = '';
+  if(eq.baseAtk)      statTxt = '攻击 ' + eq.baseAtk + '（最上级可达 ' + topOf(10) + '）';
+  else if(eq.baseDef) statTxt = '防御 ' + eq.baseDef + '（最上级可达 ' + topOf(5) + '）';
+  else if(eq.baseHp)  statTxt = '生命 ' + eq.baseHp + '（最上级可达 ' + topOf(30) + '）';
+  else if(eq.baseSpd) statTxt = '移速 ' + eq.baseSpd + '（最上级可达 ' + topOf(10) + '）';
+  else if(eq.baseCrit) statTxt = '暴击 ' + eq.baseCrit + '（最上级可达 ' + topOf(3) + '）';
+  ctx.fillStyle = '#6f8b9e';
+  ctx.fillText('本件：' + (statTxt || '—'), boxX + 14, boxY + 154);
+
+  /* 消耗 */
+  const haveBox = (p.materials && p.materials.adjust_box) || 0;
+  const okBox = haveBox >= 1;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = okBox ? '#5ee08a' : '#ff8a7a';
+  ctx.font = '13px "Microsoft YaHei"';
+  ctx.fillText('调整箱 1 / 持有 ' + haveBox, fx + fw/2, boxY + boxH + 30);
+
+  /* 按钮 */
+  const btnW = 190, btnH = 42;
+  const bx = fx + fw/2 - btnW/2, by = boxY + boxH + 48;
+  ctx.fillStyle = okBox ? 'rgba(127,212,255,0.9)' : 'rgba(70,80,86,0.85)';
+  ctx.beginPath(); ctx.roundRect(bx, by, btnW, btnH, 6); ctx.fill();
+  ctx.strokeStyle = okBox ? '#d6f1ff' : 'rgba(140,150,156,0.6)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(bx, by, btnW, btnH, 6); ctx.stroke();
+  ctx.fillStyle = okBox ? '#04161f' : '#9aa6a0';
+  ctx.font = 'bold 17px "Microsoft YaHei"';
+  ctx.fillText('调 整', fx + fw/2, by + 28);
+  G.enhanceClickRegions.push({ x: bx, y: by, w: btnW, h: btnH, action: 'adjust' });
+
+  /* 上次结果 */
+  if(G.adjustLast && G.adjustLast.name === eq.name){
+    ctx.font = '11px "Microsoft YaHei"';
+    const up = G.adjustLast.idx > curIdx ? 1 : (G.adjustLast.idx === curIdx ? 0 : -1);
+    ctx.fillStyle = '#7f8f88';
+    ctx.fillText('上次：' + G.adjustLast.before, fx + fw/2, by + btnH + 18);
+    ctx.fillStyle = up > 0 ? '#5ee08a' : (up < 0 ? '#ff8a7a' : '#ffd166');
+    ctx.fillText('→ ' + G.adjustLast.after, fx + fw/2, by + btnH + 34);
+  }
+}
+
 function drawAmplifyTab(p, fx, fy, fw, fh){
   const slot = amplifySelectedSlot || 'weapon';
   const eq = p.equipment[slot];
@@ -1078,6 +1230,7 @@ let decomposeSelectedIndex = -1; // 分解选中的背包物品索引（保留�
 let decomposeSelectedIndices = []; // 分解选中的背包物品索引列表（支持多选）
 let amplifySelectedSlot = 'weapon'; // 增幅选中的装备槽位
 let reforgeSelectedSlot = 'weapon'; // 洗练选中的装备槽位
+let adjustSelectedSlot = 'weapon';  // 调整箱选中的装备槽位
 let inventorySelectedIndex = -1; // 背包中选中的装备索引
 let selectedMaterial = null; // 选中的材料
 let inventoryMessage = ''; // 背包提示消息
@@ -1185,6 +1338,8 @@ function decomposeBatch(indices){
     stoneTotals[stoneInfo.id].count += cnt;
     total++;
   }
+  /* ★ v44：分解有概率额外掉「调整箱」（品阶越高越容易出） */
+  const boxGot = rollAdjustBoxDrop(list.map(function(i){ return inv[i] && inv[i].tier; }));
   /* 从大到小删除，避免索引错位 */
   const sorted = list.slice().sort(function(a,b){ return b - a; });
   for(let ii = 0; ii < sorted.length; ii++) inv.splice(sorted[ii], 1);
@@ -1193,6 +1348,11 @@ function decomposeBatch(indices){
     const st = stoneTotals[key];
     p.amplifyStones[st.info.id] = (p.amplifyStones[st.info.id] || 0) + st.count;
     rewardParts.push(st.info.name + ' x' + st.count);
+  }
+  if(boxGot > 0){
+    if(!p.materials) p.materials = {};
+    p.materials.adjust_box = (p.materials.adjust_box || 0) + boxGot;
+    rewardParts.push('调整箱 x' + boxGot);
   }
   inventorySelectedIndex = -1;
   decomposeResetSelection();
@@ -1208,12 +1368,14 @@ function decomposeLowTierEquip(){
   // 紫色及以下：common(普通), advanced(高级), rare(稀有)
   const lowTiers = ['common', 'advanced', 'rare'];
   const toDecompose = [];
+  const toDecomposeTiers = [];
   for(let i = inv.length - 1; i >= 0; i--){
     const eq = inv[i];
     if(!eq) continue;
     if(eq.sysGift) continue; // 系统赠送的不可分解
     if(lowTiers.indexOf(eq.tier) >= 0){
       toDecompose.push(i);
+      toDecomposeTiers.push(eq.tier);
     }
   }
   if(toDecompose.length === 0){
@@ -1245,11 +1407,18 @@ function decomposeLowTierEquip(){
     const st = stoneTotals[key];
     p.amplifyStones[st.info.id] = (p.amplifyStones[st.info.id] || 0) + st.count;
   }
-  // 生成奖励描述
+  /* 生成奖励描述 */
   const rewardParts = [];
   for(const key in stoneTotals){
     const st = stoneTotals[key];
     rewardParts.push(st.info.name + ' x' + st.count);
+  }
+  /* ★ v44：一键分解同样有概率产出调整箱 */
+  if(!p.materials) p.materials = {};
+  const boxGot2 = rollAdjustBoxDrop(toDecomposeTiers);
+  if(boxGot2 > 0){
+    p.materials.adjust_box = (p.materials.adjust_box || 0) + boxGot2;
+    rewardParts.push('调整箱 x' + boxGot2);
   }
   inventorySelectedIndex = -1;
   return { count: totalItems, msg: '分解成功！' + totalItems + '件装备 → ' + rewardParts.join('，') };

@@ -754,20 +754,23 @@ function drawInventory(){
       enhance_stone_low: '下级强化石',
       enhance_stone_mid: '中级强化石',
       enhance_stone_high: '高级强化石',
-      chaos_stone: '混沌魔石'
+      chaos_stone: '混沌魔石',
+      adjust_box: '调整箱'
     };
     const matDesc = {
       enhance_stone_low: '用于强化白色/绿色品质的装备，+0至+6强化等级',
       enhance_stone_mid: '用于强化蓝色/紫色品质的装备，+0至+12强化等级',
       enhance_stone_high: '用于强化粉色/橙色品质的装备，+0至+15强化等级',
-      chaos_stone: '铁匠铺「洗练」重铸装备随机词条'
+      chaos_stone: '铁匠铺「洗练」重铸装备随机词条',
+      adjust_box: '铁匠铺「调整箱」随机重掷装备品级（最下级→最上级），一次消耗1个，分解装备有概率获得'
     };
     
     const matColors = {
       enhance_stone_low: '#88ccff',
       enhance_stone_mid: '#ff8a4a',
       enhance_stone_high: '#ff4a4a',
-      chaos_stone: '#9b6bff'
+      chaos_stone: '#9b6bff',
+      adjust_box: '#7fd4ff'
     };
     
     const matKeys = Object.keys(matNames);
@@ -775,8 +778,9 @@ function drawInventory(){
       const matType = matKeys[i];
       const count = materials[matType] || 0;
       
-      const mx = contentX + 30 + i * 80;
-      const my = contentY + 50;
+      /* ★ v44：材料变多了（新增调整箱），一行 4 格换行，避免压到右侧详情面板 */
+      const mx = contentX + 30 + (i % 4) * 80;
+      const my = contentY + 50 + Math.floor(i / 4) * 100;
       
       // 材料格子
       ctx.fillStyle = 'rgba(20,20,40,0.8)';
@@ -790,16 +794,28 @@ function drawInventory(){
       // 强化石水晶图标
       ctx.save();
       ctx.translate(mx + 30, my + 30);
-      const stoneGrad = ctx.createLinearGradient(-10, -15, 10, 15);
-      stoneGrad.addColorStop(0, matColors[matType] || '#888');
-      stoneGrad.addColorStop(1, 'rgba(255,255,255,0.3)');
-      ctx.fillStyle = stoneGrad;
-      ctx.beginPath();
-      ctx.moveTo(0, -18); ctx.lineTo(-12, -5); ctx.lineTo(-8, 15);
-      ctx.lineTo(8, 15); ctx.lineTo(12, -5); ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
-      ctx.stroke();
+      if(matType === 'adjust_box'){
+        /* 调整箱：一只带锁扣的小宝箱 */
+        ctx.fillStyle = matColors[matType];
+        ctx.beginPath(); ctx.roundRect(-15, -12, 30, 24, 3); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(-15, -4, 30, 4);
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.fillRect(-3, -7, 6, 8);
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(-15, -12, 30, 24, 3); ctx.stroke();
+      } else {
+        const stoneGrad = ctx.createLinearGradient(-10, -15, 10, 15);
+        stoneGrad.addColorStop(0, matColors[matType] || '#888');
+        stoneGrad.addColorStop(1, 'rgba(255,255,255,0.3)');
+        ctx.fillStyle = stoneGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, -18); ctx.lineTo(-12, -5); ctx.lineTo(-8, 15);
+        ctx.lineTo(8, 15); ctx.lineTo(12, -5); ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
+        ctx.stroke();
+      }
       ctx.restore();
 
       // 数量
