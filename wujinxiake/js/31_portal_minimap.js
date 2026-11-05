@@ -640,7 +640,11 @@ function drawBottomUI(){
       else { ctx.fillStyle = '#7fd4ff'; ctx.fillText(`MP ${sk.cost}`, sx+36, panelY+38); }
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.font = 'bold 10px "Microsoft YaHei"';
-      ctx.fillText(String(i+1), sx+10, panelY+panelH-12);
+      /* ★ v43：角标跟随键位表（默认 A S D F G H），改键后自动同步 */
+      const _kbS = (typeof kbProfile === 'function') ? kbProfile(1) : null;
+      const _slotCode = _kbS ? _kbS['skill' + (i + 1)] : null;
+      const _slotTxt = (typeof kbLabel === 'function' && _slotCode) ? kbLabel(_slotCode) : String(i + 1);
+      ctx.fillText(_slotTxt, sx+10, panelY+panelH-12);
     }
   }
 }

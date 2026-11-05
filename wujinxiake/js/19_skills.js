@@ -913,89 +913,125 @@ function skBloomRing(cx, cy, ringR, n, color, r){
   }
 }
 
-/* ---------- 宝剑剑士 4：白虹贯日（《战国策》· 聂政刺韩傀） ----------
-   ★ 定位：剑士唯一的「人剑合一」位移技。
-   与其余五招的区别：1/3/6 是「剑从天上落」，2 是「剑影连斩」，5 是「剑阵里反复扫」，
-   它们的动词是「落」「多」「阵」；本招的动词是「过」——人先过去，剑才到。
-   全屏只有一道白虹，视觉极简，不与万剑争亮。                          */
-function castSwordImmortal(){
+/* ---------- 宝剑剑士 4：独孤九剑（《笑傲江湖》· 独孤求败） ----------
+   ★ v43 释放类伤害技：角色分化出九道分身，各自蓄力，再齐射九柄实体飞剑。
+   · 场内只有一个敌人 → 九道剑气全部贯穿同一个目标
+   · 场内有多个敌人 → 每个分身都把剑气掷向「最强的敌人」（九剑集火斩首），
+     但剑形 / 出剑角度 / 出手时序各自随机，形成九剑先后交织的齐射感
+   · 全程不位移、不换站位：纯释放，和位移型的白虹贯日彻底分开
+*/
+function castSwordDugu(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
-  const tg = skAim(p, 300);
-  const face = (tg.x >= p.x) ? 1 : -1;
-  p.facing = face;
-  p.action = { type:'swordCharge', dur:0.12, t:0 };
+  const face = p.facing || 1;
+  const N = 9;
+  const CHARGE = 760;                        /* 蓄力时长（ms） */
 
-  /* ① 拔剑：一线反光，不读条、不放蓄力光圈 */
-  addEffect('slashArc', p.x + face*40, p.y - 70, 0.14,
-    {facing:face, color:'#dff6ff', size:0.7, typeStr:'draw'});
+  spawnText(p.x, p.y - 140, 260, '独 孤 九 剑', '#e6f4ff', 40);
+  p.action = { type:'swordCharge', dur: CHARGE/1000 + 0.18, t:0 };
+  /* 蓄力期间给一点无敌：九剑要站桩 0.8 秒，不保护会被小怪白打 */
+  p.invuln = Math.max(p.invuln || 0, G.isPvp ? 0.25 : 0.75);
 
-  skAt(120, ()=>{
+  /* ① 九个分身站位：以角色为圆心的扇面，中间近、两侧远，高矮错开 */
+  const spots = [];
+  for(let i = 0; i < N; i++){
+    const u = (i / (N - 1)) - 0.5;                   /* -0.5 … 0.5 */
+    const ang = u * 2.7;                             /* 扇面张开约 155° */
+    const rad = 96 + Math.abs(u) * 118;
+    spots.push({
+      x: p.x + face * Math.cos(ang) * rad * 0.55 - face * 26,
+      y: p.y + Math.sin(ang) * 46 + (i % 2 ? 6 : -4)
+    });
+  }
+
+  /* ② 分身逐个现身 + 各自蓄力（像九个人依次拔剑） */
+  for(let i = 0; i < N; i++){
+    const s = spots[i];
+    skAt(i * 38, ()=>{
+      if(!G || gameState !== 'playing') return;
+      addEffect('afterImage', s.x, s.y, CHARGE/1000 + 0.55, {
+        facing: face, weaponIdx: p.weaponIdx, spriteKey:'sword', anim:'skill',
+        alpha:0.52, color:'#cfe9ff'
+      });
+      addEffect('hitRing', s.x, s.y - 64, 0.32, { color:'#a8d8ff', r:22 });
+      spawnParticles(s.x, s.y - 40, 6, {
+        color:'#bfe4ff', angle:-Math.PI/2, spread:0.9,
+        spMin:60, spMax:190, lifeMin:0.25, lifeMax:0.55, sizeMin:2, sizeMax:5, grav:-120
+      });
+    });
+    skAt(i * 38 + 180, ()=>{
+      if(!G || gameState !== 'playing') return;
+      addEffect('hitRing', s.x, s.y - 64, 0.36, { color:'#dff3ff', r:16 });
+    });
+    skAt(i * 38 + 400, ()=>{
+      if(!G || gameState !== 'playing') return;
+      addEffect('hitRing', s.x, s.y - 64, 0.40, { color:'#ffffff', r:11 });
+    });
+  }
+
+  /* ③ 蓄力顶点：九剑齐鸣 */
+  skAt(CHARGE - 120, ()=>{
+    if(!G || gameState !== 'playing') return;
+    if(p.action && p.action.type === 'swordCharge') p.action = null;
+    skShake(6, 0.10, '#dff3ff');
+  });
+
+  /* ④ 齐射：九柄飞剑先后脱手 */
+  skAt(CHARGE, ()=>{
     if(!G || gameState !== 'playing') return;
     playSound('swordSwing');
 
-    /* ② 贯日：朝瞄准方向突进，最长 420px，期间无敌 */
-    const sx = p.x, sy = p.y;
-    const dxT = tg.x - sx, dyT = tg.y - sy;
-    const dist = Math.min(420, Math.max(160, Math.hypot(dxT, dyT)));
-    const dirY = clamp(dyT / Math.max(1, Math.abs(dxT)), -0.55, 0.55);
-    const ex = clamp(sx + face * dist, WORLD_L + 56, WORLD_R - 56);
-    const ey = clamp(sy + dirY * dist, GY_TOP + 20, GY_BOTTOM);
-
-    p.invuln = Math.max(p.invuln || 0, G.isPvp ? 0.18 : 0.35);
-
-    for(let i = 1; i <= 3; i++){
-      addEffect('afterImage', sx + (ex-sx)*i/4, sy + (ey-sy)*i/4, 0.3,
-        {facing:face, weaponIdx:p.weaponIdx, spriteKey:'sword', anim:'run',
-         alpha:0.52 - i*0.1, color:'#9fe6ff'});
+    /* 目标：最强敌人。有多个也只打最强 —— 九剑是用来斩首的 */
+    const foes = (G.enemies || []).filter(function(e){ return e && e.alive; });
+    let boss = null;
+    for(const e of foes){
+      if(!boss) boss = e;
+      else if((e.maxHp || e.hp || 0) > (boss.maxHp || boss.hp || 0)) boss = e;
     }
-    p.x = ex; p.y = ey; p.h = 0; p.vy = 0; p.kx = 0; p.launchT = 0;
 
-    /* ③ 贯穿判定：一条横线，每个敌人只吃一次 */
-    const cxLine = (sx + ex) / 2, cyLine = (sy + ey) / 2;
-    const wLine = Math.abs(ex - sx) + 90;
-    const pierced = new Set();
-    for(const e of G.enemies){
-      if(!e.alive) continue;
-      if(Math.abs(e.x - cxLine) < wLine/2 + e.radius
-        && Math.abs((e.y - cyLine) * 2.2) < 70 + e.radius*0.6){
-        pierced.add(e);
-        damageEnemy(e, A*16, p, {kb:60});
-      }
-    }
-    addEffect('spearLine', sx, sy - 70, 0.34, {endX:ex, endY:ey - 70, color:'#dff6ff', width:8});
-    addEffect('hitRing', ex, ey, 0.24, {color:'#dff6ff', r:56});
-
-    const multi = pierced.size >= 2;
-
-    /* ④ 回锋：落地立刻反向横斩，被贯穿过的目标伤口裂开 +40% */
-    skAt(90, ()=>{
-      if(!G || gameState !== 'playing') return;
-      playSound('swordSwing');
-      p.facing = -face;
-      const sw = multi ? 340 : 260;
-      addEffect('slashArc', p.x, p.y - 70, 0.2,
-        {facing:p.facing, color:'#ffffff', size:1.3, typeStr:'sweep'});
-      for(const e of G.enemies){
-        if(!e.alive) continue;
-        if(Math.abs(e.x - p.x) < sw/2 + e.radius && Math.abs((e.y - p.y) * 2.2) < 130){
-          const bonus = pierced.has(e) ? 1.4 : 1.0;
-          damageEnemy(e, A*14*bonus, p, {kb:260});
+    for(let i = 0; i < N; i++){
+      const s = spots[i];
+      skAt(i * 26, ()=>{
+        if(!G || gameState !== 'playing') return;
+        const sx = s.x, sy = s.y - 64;
+        let tx, ty, aimRef = null;
+        if(boss && typeof skAlive === 'function' && skAlive(boss)){
+          aimRef = boss;
+          tx = boss.x + rand(-18, 18);
+          ty = boss.y - 58 + rand(-10, 10);
+        } else {
+          /* 场上没敌人：朝身前空放，保证手感不空挥 */
+          tx = p.x + face * rand(280, 460);
+          ty = p.y - 58 + rand(-24, 24);
         }
-      }
-      p.facing = face;
-      skShake(9, 0.06, '#dff6ff');
-      fxHitstop(0.05);
-      if(p.action && p.action.type === 'swordCharge') p.action = null;
+        const dx = tx - sx, dy = ty - sy;
+        const d = Math.max(1, Math.hypot(dx, dy));
+        const speed = 1450 + rand(-120, 160);
+        G.projectiles.push({
+          kind:'realSword', x:sx, y:sy, h:0,
+          vx:(dx/d)*speed, vy:(dy/d)*speed,
+          life: d/speed + 0.14,
+          w:78, hh:46,
+          dmg: A * 3.2,
+          pierce: 0, hitSet: new Set(),
+          color:'#dff3ff', facing:(dx >= 0 ? 1 : -1),
+          rot: Math.atan2(dy, dx), owner:p,
+          aimTip:true, aimRef: aimRef
+        });
+        /* 出剑一瞬：剑身脱手的反光 + 指尖气流 */
+        addEffect('slashArc', sx, sy, 0.14, { facing: face, color:'#ffffff', size:0.55, typeStr:'thrust' });
+        spawnParticles(sx, sy, 4, {
+          color:'#cfe9ff', angle:Math.atan2(dy, dx), spread:0.5,
+          spMin:120, spMax:320, lifeMin:0.12, lifeMax:0.28, sizeMin:2, sizeMax:4, grav:0
+        });
+      });
+    }
 
-      /* ⑤ 余韵：连穿两人以上，冷却立刻退 40%；一个人都没穿到则补 0.8s 移速 */
-      if(multi && p.cds && currentSkillIdx >= 0){
-        p.cds[currentSkillIdx] = Math.max(0, (p.cds[currentSkillIdx] || 0) * 0.6);
-      } else if(pierced.size === 0){
-        p.moveSpeed = (p.moveSpeed || 320) * 1.3;
-        setTimeout(()=>{ if(p) p.moveSpeed = (p.moveSpeed || 320) / 1.3; }, 800);
-      }
-    });
+    /* 齐射收束：角色身上炸开一圈白光 */
+    addEffect('hitRing', p.x, p.y - 60, 0.35, { color:'#ffffff', r:70 });
+    G.flash = Math.max(G.flash || 0, 0.10);
+    G.hitFlashColor = '#dff3ff';
+    skShake(8, 0.08, '#dff3ff');
   });
 }
 
@@ -2847,7 +2883,7 @@ function castCauldronBagua(){
 }
 
 const SKILL_FUNCS = {
-  sword:[castSwordQi, castSwordSky, castSwordRain, castSwordImmortal, castSwordTruthArray, castSwordCome],
+  sword:[castSwordQi, castSwordSky, castSwordRain, castSwordDugu, castSwordTruthArray, castSwordCome],
   blade:[castBladeFire, castBladeArray, castBladeStorm, castBladeAbyss, castBladeFrostSix, castBladeRulerFlame],
   spear:[castSpearDragon, castSpearThrust, castSpearRain, castSpearPhoenix, castSpearRainStorm, castSpearBlueSilver],
   fist:[castFistQi, castFistPalm, castFistRush, castFistEightExtremes, castFistGreatPalm, castSixPathsFist],

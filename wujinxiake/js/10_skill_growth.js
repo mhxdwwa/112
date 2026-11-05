@@ -49,11 +49,20 @@ function skillDmgMul(p, idx){
   const lv = (p && p.skillLevels && p.skillLevels[idx]) || 1;
   return 1 + (lv - 1) * SKILL_DMG_PER_LV;
 }
+/* ★ v43 前五式伤害平衡表（第六式觉醒技不动）
+   玩家反馈「前 5 个技能伤害太低」，这里统一上调实际伤害；
+   09_world.js 里各技能的 power（技能栏上显示的伤害数字）已按同一比例同步上调，
+   所以「面板数字」和「真实打出的伤害」是一起涨的，不会只顾着好看。 */
+const SKILL_DMG_TUNE = [1.50, 1.50, 1.45, 1.35, 1.28, 1.00];
+
 /* 技能伤害基数：基础攻击 × 武器倍率 × 技能等级加成 */
 function skillAtkVal(p){
   const w = WEAPONS[p.weaponIdx];
   let v = p.atk * (w ? w.atkMul : 1.0);
-  if(currentSkillIdx >= 0) v *= skillDmgMul(p, currentSkillIdx);
+  if(currentSkillIdx >= 0){
+    v *= skillDmgMul(p, currentSkillIdx);
+    v *= (SKILL_DMG_TUNE[currentSkillIdx] || 1);
+  }
   /* 魔法系职业：智力转化为技能伤害加成 */
   if(p.skillIntBonus) v *= (1 + p.skillIntBonus);
   return v;
