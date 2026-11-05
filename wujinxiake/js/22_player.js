@@ -318,7 +318,8 @@ function updatePlayer(p, dt){
           const arcCx = p.x + p.facing*(c.reach*0.4);
           const arcCy = p.y - 50;
           addEffect('taiChiArc', arcCx, arcCy, 0.45, {facing:p.facing, color:'#ffcc33', radius:arcR, comboType:c.type});
-          const particleCount = c.type === 'cloudHands' ? 16 : 10;
+          /* ★ 格斗家普攻粒子减量（配合全局 FX_PSCALE.player 再砍一半） */
+          const particleCount = c.type === 'cloudHands' ? 8 : 5;
           for(let i=0;i<particleCount;i++){
             const angle = p.facing>0 ? (-Math.PI*0.4 + (i/particleCount)*Math.PI*0.8) : (Math.PI*0.6 + (i/particleCount)*Math.PI*0.8);
             const dist = arcR * (0.5 + Math.random()*0.5);
@@ -331,8 +332,8 @@ function updatePlayer(p, dt){
           }
           spawnParticles(arcCx, arcCy, 6, {color:'#ffcc33', angle:p.facing>0?0:Math.PI, spread:0.8, spMin:80, spMax:200, lifeMin:0.2, lifeMax:0.5, sizeMin:3, sizeMax:6, grav:100});
           if(c.type === 'cloudHands'){
-            for(let i=0;i<12;i++){
-              const a = i*(TAU/12);
+            for(let i=0;i<6;i++){
+              const a = i*(TAU/6);
               const r = arcR*0.7;
               spawnParticles(arcCx+Math.cos(a)*r, arcCy+Math.sin(a)*r*0.5, 3, {color:i%4===0?'#fff':i%4===1?'#ffcc33':i%4===2?'#ff9933':'#ffdd66', angle:a, spread:0.5, spMin:60, spMax:180, lifeMin:0.3, lifeMax:0.7, sizeMin:3, sizeMax:7, grav:0});
             }
@@ -344,7 +345,7 @@ function updatePlayer(p, dt){
           addEffect('slashArc', hx, hy, 0.24, {facing:p.facing, color:'#7ed957', size:1.2});
           addEffect('poisonCloud', hx, hy + 12, 0.5, {color:'#7ed957', r:48});
           addEffect('hitRing', hx, hy, 0.28, {color:'#d8ff9a', r:44});
-          for(let i = 0; i < 14; i++){
+          for(let i = 0; i < 7; i++){
             const ang = p.facing > 0 ? (-0.6 + Math.random() * 1.2) : (Math.PI - 0.6 + Math.random() * 1.2);
             spawnParticles(hx, hy, 1, {color:i % 3 ? '#7ed957' : '#d8ff9a', angle:ang, spread:0.5,
               spMin:60, spMax:210, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:6, grav:220});
@@ -354,9 +355,9 @@ function updatePlayer(p, dt){
           const size = Math.max(0.7, (ext - 60) / 75);
           addEffect('slashArc', p.x, p.y, 0.3, {facing:p.facing, color:'#ffb04a', size, typeStr:'blade'});
           const hx = p.x + p.facing * (c.reach * 0.55), hy = p.y - 54;
-          addEffect('emberBurst', hx, hy, 0.36, {color:'#ffb04a', r:88, n:11, rot:rand(0, TAU)});
+          addEffect('emberBurst', hx, hy, 0.36, {color:'#ffb04a', r:64, n:8, rot:rand(0, TAU)});
           addEffect('groundCrack', hx, p.y + 4, 0.5, {angle:p.facing > 0 ? 0 : Math.PI, color:'#ffb04a'});
-          for(let i = 0; i < 10; i++){
+          for(let i = 0; i < 5; i++){
             const ang = p.facing > 0 ? (-0.7 + Math.random() * 1.4) : (Math.PI - 0.7 + Math.random() * 1.4);
             spawnParticles(hx, hy, 1, {color:i % 4 === 0 ? '#c9a06a' : (i % 2 ? '#ffb04a' : '#ffd08a'), angle:ang, spread:0.6,
               spMin:100, spMax:300, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:7, grav:420});
@@ -368,7 +369,7 @@ function updatePlayer(p, dt){
           addEffect('talisman', hx, hy, 0.42, {color:'#ffe066', n:2, r:22, rise:18});
           addEffect('hitRing', hx, hy, 0.3, {color:'#fff6b0', r:50});
           addEffect('lightning', hx, hy, 0.28, {color:'#fff6b0', scale:0.8, fromY:-90});
-          for(let i = 0; i < 14; i++){
+          for(let i = 0; i < 7; i++){
             const ang = p.facing > 0 ? (-0.6 + Math.random() * 1.2) : (Math.PI - 0.6 + Math.random() * 1.2);
             spawnParticles(hx, hy, 1, {color:i % 3 === 0 ? '#ffffff' : '#ffe066', angle:ang, spread:0.5,
               spMin:80, spMax:240, lifeMin:0.2, lifeMax:0.5, sizeMin:2, sizeMax:6, grav:160});
@@ -377,9 +378,9 @@ function updatePlayer(p, dt){
           /* ★ 丹道师：鼎火喷发，火星与灰烬 */
           const hx = p.x + p.facing * (c.reach * 0.55), hy = p.y - 54;
           addEffect('groundFire', hx, p.y, 0.45, {color:'#ff7a4a'});
-          addEffect('emberBurst', hx, hy, 0.4, {color:'#ff7a4a', r:96, n:13, rot:rand(0, TAU)});
+          addEffect('emberBurst', hx, hy, 0.4, {color:'#ff7a4a', r:70, n:9, rot:rand(0, TAU)});
           addEffect('hitRing', hx, hy, 0.3, {color:'#ffd08a', r:46});
-          for(let i = 0; i < 16; i++){
+          for(let i = 0; i < 8; i++){
             const ang = p.facing > 0 ? (-0.7 + Math.random() * 1.4) : (Math.PI - 0.7 + Math.random() * 1.4);
             spawnParticles(hx, hy, 1, {color:i % 3 === 0 ? '#fff6c8' : (i % 2 ? '#ff7a4a' : '#ffb04a'), angle:ang, spread:0.55,
               spMin:70, spMax:230, lifeMin:0.22, lifeMax:0.55, sizeMin:2, sizeMax:7, grav:-60});

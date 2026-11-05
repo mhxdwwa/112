@@ -1067,7 +1067,7 @@ function drawTownPlayer(p){
   ctx.fill();
 
   /* ★ 武器强化/增幅光效（城镇中全功率展示） */
-  if(G && G.player && G.player.equipment) drawPlayerWeaponAura(G.player, x, y, auraScale, {strong:true});
+  if(G && G.player && G.player.equipment) drawPlayerWeaponAura(G.player, x, y, auraScale, {strong:true, facing:p.facing});
 
   if(!drawTownPlayerSprite(p)){
     // 精灵表未加载时的简易小人
@@ -1083,7 +1083,7 @@ function drawTownPlayer(p){
     ctx.beginPath(); ctx.arc(x, y - 88, 14, Math.PI, 0); ctx.fill();
   }
 
-  if(G && G.player && G.player.equipment) drawPlayerWeaponAuraFront(G.player, x, y, auraScale, {strong:true});
+  if(G && G.player && G.player.equipment) drawPlayerWeaponAuraFront(G.player, x, y, auraScale, {strong:true, facing:p.facing});
 
   /* ★ 标尺（?cal=1 时显示，用于校准装备外观锚点） */
   if(window.DBG_CAL && townAtlas){

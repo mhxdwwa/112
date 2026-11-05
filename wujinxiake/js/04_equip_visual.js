@@ -372,8 +372,9 @@ function drawTownPlayerSprite(p){
   drawSpriteFrame(at, animName, prog, p.x, p.y, facing, bodyPx);
   /* ★ 城镇里也展示装备外观 */
   drawEquipAppearanceFront(G.player, p.x, p.y, bodyPx, {facing:facing});
-  /* ★ 城镇里也让「手中武器」发光（强化/增幅 +10）：发光轮廓精确贴合手中武器 */
-  drawPlayerWeaponAuraFront(G.player, p.x, p.y, bodyPx / 150, {strong:false});
+  /* ★ 城镇里也让「手中武器」发光（强化/增幅 +10）：发光轮廓精确贴合手中武器
+     ★ 朝向必须传城镇角色 p.facing（townPlayer 与 G.player 是两个对象） */
+  drawPlayerWeaponAuraFront(G.player, p.x, p.y, bodyPx / 150, {strong:false, facing:facing});
   ctx.restore();
   return true;
 }
@@ -751,7 +752,8 @@ function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
   const I = Math.max(glow.enhI, glow.ampI);
   const inten = (opts.strong === false) ? 0.55 : 1;
   const pulse = 0.82 + 0.18 * Math.sin(t * 3.1);
-  const facing = p.facing || 1;
+  /* ★ 城镇中 townPlayer 与 G.player 是两个对象，必须用城镇角色的朝向（opts.facing 优先） */
+  const facing = (opts.facing !== undefined) ? opts.facing : (p.facing || 1);
   const bp = 150 * s;                                  // bodyPx（与 drawFighterSprite 中一致）
   const wtype = (WEAPONS[p.weaponIdx] && WEAPONS[p.weaponIdx].id) || 'sword';
   const cfg = WEAPON_GLOW[wtype] || WEAPON_GLOW.__default;
@@ -820,54 +822,8 @@ function drawPlayerWeaponAuraFront(p, x, y, scale, opts){
     ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(bx,by,tipR,0,TAU); ctx.fill();
   }
 
-  /* 武器星芒（强化/增幅越强，星芒越大）——定位到握把/武器处（出手时改画光弧，不画星芒） */
-  if(!acting && I > 0.3){
-    const fl = (18 + 30*I) * s * pulse;
-    ctx.save();
-    ctx.translate(gripX, gripY);
-    ctx.rotate(t * 0.5);
-    for(let k = 0; k < 2; k++){
-      ctx.rotate(Math.PI / 2 * k);
-      const gg = ctx.createLinearGradient(-fl, 0, fl, 0);
-      gg.addColorStop(0, 'rgba(255,255,255,0)');
-      gg.addColorStop(0.5, _glowMain(glow, 0.75 * inten));
-      gg.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gg;
-      ctx.beginPath();
-      ctx.moveTo(-fl, 0); ctx.lineTo(0, -3.2*s); ctx.lineTo(fl, 0); ctx.lineTo(0, 3.2*s);
-      ctx.closePath(); ctx.fill();
-    }
-    if(glow.mixed){
-      const gp = ctx.createRadialGradient(0, 0, 0, 0, 0, fl*0.75);
-      gp.addColorStop(0, _glowPink(glow, 0.45 * inten));
-      gp.addColorStop(1, 'rgba(255,118,214,0)');
-      ctx.fillStyle = gp;
-      ctx.beginPath(); ctx.arc(0, 0, fl*0.75, 0, TAU); ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  /* 环绕火花 */
-  const n = Math.round(7 + 10 * I);
-  for(let i = 0; i < n; i++){
-    const ang = t * (0.9 + (i % 3) * 0.16) + i * TAU / n;
-    const rr = (32 + 20*I + (i % 4) * 5) * s;
-    const px = x + Math.cos(ang) * rr;
-    const py = y - 74*s + Math.sin(ang) * rr * 0.48;
-    const sz = (1.6 + 1.9 * ((i % 3) / 2)) * s * (0.7 + 0.5 * pulse);
-    ctx.fillStyle = (glow.enhOn && (i % 2 === 0 || !glow.ampOn)) ? _glowWhite(glow, 1.0) : _glowPink(glow, 1.0);
-    ctx.beginPath(); ctx.arc(px, py, sz, 0, TAU); ctx.fill();
-  }
-
-  /* 上升光点 */
-  for(let i = 0; i < 12; i++){
-    const ph = ((t * 0.20 + i * 0.1) % 1);
-    const px = x + Math.sin(i * 2.4 + t * 0.8) * 24 * s;
-    const py = y - 8*s - ph * 150 * s;
-    ctx.globalAlpha = (1 - ph) * 0.75 * inten;
-    ctx.fillStyle = (glow.enhOn && (i % 2 === 0 || !glow.ampOn)) ? '#eaf6ff' : '#ff9ae0';
-    ctx.beginPath(); ctx.arc(px, py, (1.8 + (i % 3) * 1.0) * s, 0, TAU); ctx.fill();
-  }
+  /* ★ 按需求精简：去掉星芒 / 环绕火花 / 上升光点等多余点缀，
+     手持武器角色只保留「武器模型轮廓发光 + 握把/尖端微光」——干净且省性能 */
   ctx.globalAlpha = 1;
   ctx.restore();
 }
