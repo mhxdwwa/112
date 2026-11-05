@@ -510,7 +510,7 @@ function fxWeaponVolley(owner, x, y, tx, ty, kind, count, opt){
 const FX_DECOR = { hitRing:1, slashArc:1, emberBurst:1, shockWave:1, groundCrack:1, skyCrack:1, skyGlow:1, afterImage:1, talisman:1, groundFire:1 };
 function addEffect(type,x,y,dur,extra){
   const PFX = window.PFX || (window.PFX = { cap:560, scale:1, slow:0, shadow:1 });
-  const maxFx = PFX.slow ? 36 : 78;
+  const maxFx = (PFX.fxMax !== undefined) ? PFX.fxMax : (PFX.slow ? 36 : 78);
   if(G.effects.length >= maxFx){
     if(FX_DECOR[type]) return;              /* 装饰类：直接不生成 */
     G.effects.shift();                      /* 关键类：挤掉最老的特效 */

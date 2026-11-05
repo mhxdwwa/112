@@ -18,29 +18,115 @@ function updateCanvasSize(){
   cvs.style.width = '100vw';
   cvs.style.height = '100vh';
 }
-/* ★ 高清渲染：按设备像素比放大画布，逻辑坐标不变（解决画面发糊）
-   低端设备（CPU 核心少 / 内存小）自动降一档到 0.75：特效、玩法、布局全不变，
-   只是少画像素，放技能时明显更流畅；好设备完全不受影响（仍是原来的 1~2 倍）。
-   也可手动指定：网址加 ?perf=low 强制流畅模式，?perf=high 强制原画质。 */
+/* ============================================================
+   ★ 画质治理系统（为教室大屏弱机设计，2026-11-05 重构）
+   三档：0=流畅(极简) / 1=均衡 / 2=高画质
+   - 启动时自动检测：WebGL 渲染器字符串识别软渲染（SwiftShader/llvmpipe，
+     教室机旧驱动常见，软渲染下一切开销×10）+ shadowBlur 微基准 + 核心数/内存
+   - 自动模式下游戏运行中还会按帧率升降档（见 33_main_loop）
+   - 手动锁档：ESC 系统菜单「画质」栏切换，localStorage 持久化
+   - 网址参数仍有效：?perf=low 强制流畅档，?perf=high 强制高画质
+   ============================================================ */
+window.PFX = window.PFX || { cap: 560, scale: 1, slow: 0, shadow: 1 };
 const PERF_LOW = (function () {
   var q = '';
   try { q = String((new URLSearchParams(location.search).get('perf') || '')).toLowerCase(); } catch (e) {}
-  if (q === 'high') return false;
-  if (q === 'low') return true;
-  var cores = navigator.hardwareConcurrency || 8;
-  var mem = navigator.deviceMemory || 8;
-  return (cores <= 4 || mem <= 4);
+  return q === 'low';
 })();
-const DPR = (function () {
-  var base = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-  var q = '';
-  try { q = String((new URLSearchParams(location.search).get('perf') || '')).toLowerCase(); } catch (e) {}
-  if (q === 'high') return base;
-  if (q === 'low') return 0.75;
-  var cores = navigator.hardwareConcurrency || 8;
-  var mem = navigator.deviceMemory || 8;
-  if (cores <= 4 || mem <= 4) return 0.75;
-  return base;
+const __dprBase = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+let DPR = 1;
+
+/* 各档位参数：弱机跑得动是第一优先级，特效浓度由档位兜底 */
+const QUALITY_TIERS = [
+  /* 0 流畅：零模糊零滤镜，画布 720p，粒子/特效大幅收紧 —— 软渲染教室机的目标档 */
+  { name: '流畅', dpr: 1,            cap: 130, scale: 0.38, slow: 1, shadow: 0,   fxMax: 22, filter: false },
+  /* 1 均衡：不超屏分辨率，中等特效 */
+  { name: '均衡', dpr: 1,            cap: 340, scale: 0.72, slow: 0, shadow: 0.5, fxMax: 46, filter: true },
+  /* 2 高画质：跟随设备像素比（最高2x），全特效 */
+  { name: '高画质', dpr: __dprBase, cap: 560, scale: 1,    slow: 0, shadow: 1,   fxMax: 78, filter: true }
+];
+window.QUALITY = { mode: 'auto', tier: 2, autoBase: 2, softRender: false };
+
+function applyQuality(){
+  const t = QUALITY_TIERS[Math.max(0, Math.min(2, QUALITY.tier))];
+  DPR = t.dpr;
+  window.PFX.cap = t.cap;
+  window.PFX.scale = t.scale;
+  window.PFX.slow = t.slow;
+  window.PFX.shadow = t.shadow;
+  window.PFX.fxMax = t.fxMax;
+  window.PFX.filter = t.filter;
+  window.PFX.tier = QUALITY.tier;
+  updateCanvasSize();
+}
+/* 档位显示名（菜单用） */
+function qualityLabel(){
+  const t = QUALITY_TIERS[Math.max(0, Math.min(2, QUALITY.tier))];
+  return (QUALITY.mode === 'auto' ? '自动 · ' : '锁定 · ') + t.name;
+}
+function setQualityMode(mode, tier){
+  QUALITY.mode = mode;
+  if(mode === 'auto'){
+    QUALITY.tier = QUALITY.autoBase;
+    try { localStorage.removeItem('wjq_quality'); } catch(e){}
+  } else {
+    QUALITY.tier = Math.max(0, Math.min(2, tier|0));
+    try { localStorage.setItem('wjq_quality', String(QUALITY.tier)); } catch(e){}
+  }
+  applyQuality();
+}
+function cycleQuality(dir){
+  /* auto → 2 → 1 → 0 → auto 循环 */
+  if(QUALITY.mode === 'auto') setQualityMode('manual', dir > 0 ? 2 : 1);
+  else {
+    const t = QUALITY.tier + dir;
+    if(t > 2) setQualityMode('auto');
+    else if(t < 0) setQualityMode('auto');
+    else setQualityMode('manual', t);
+  }
+}
+/* 启动检测：软渲染/弱核 → 直接从流畅或均衡档起步 */
+(function __qualityInit(){
+  let saved = null, q = '';
+  try { saved = localStorage.getItem('wjq_quality'); } catch(e){}
+  try { q = String((new URLSearchParams(location.search).get('perf') || '')).toLowerCase(); } catch(e){}
+  if(q === 'low'){ QUALITY.mode = 'manual'; QUALITY.tier = 0; }
+  else if(q === 'high'){ QUALITY.mode = 'manual'; QUALITY.tier = 2; }
+  else if(saved !== null && saved !== ''){ QUALITY.mode = 'manual'; QUALITY.tier = Math.max(0, Math.min(2, saved|0)); }
+  else {
+    /* 自动档初判：先按硬件给个保守起点，几百毫秒后跑微基准再修正 */
+    const cores = navigator.hardwareConcurrency || 8;
+    const mem = navigator.deviceMemory || 8;
+    QUALITY.tier = (cores <= 4 || mem <= 4) ? 0 : 2;
+    QUALITY.autoBase = QUALITY.tier;
+    setTimeout(function(){
+      let soft = false, blurMs = 0;
+      try {
+        const gc = document.createElement('canvas');
+        const gl = gc.getContext('webgl') || gc.getContext('experimental-webgl');
+        if(!gl) soft = true;
+        else {
+          const ext = gl.getExtension('WEBGL_debug_renderer_info');
+          const r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
+          if(/swiftshader|llvmpipe|software|basic render|angle \(software\)/i.test(r)) soft = true;
+        }
+      } catch(e){}
+      try {
+        const bc = document.createElement('canvas'); bc.width = bc.height = 256;
+        const b = bc.getContext('2d');
+        b.shadowColor = '#fff'; b.shadowBlur = 20; b.fillStyle = '#fff';
+        const t0 = performance.now();
+        for(let i = 0; i < 60; i++) b.fillRect((i * 37) % 200, (i * 53) % 200, 40, 40);
+        blurMs = performance.now() - t0;
+      } catch(e){}
+      QUALITY.softRender = soft;
+      if(soft || blurMs > 140) QUALITY.autoBase = 0;        /* 软渲染/极弱核：锁定流畅档 */
+      else if(blurMs > 45)     QUALITY.autoBase = 1;        /* 偏弱：均衡档 */
+      else                     QUALITY.autoBase = 2;
+      if(QUALITY.mode === 'auto'){ QUALITY.tier = QUALITY.autoBase; applyQuality(); }
+    }, 300);
+  }
+  applyQuality();
 })();
 updateCanvasSize();
 window.addEventListener('resize', updateCanvasSize);

@@ -14,22 +14,21 @@ function loopBody(now){
   if(window.__dbgFreeze){ requestAnimationFrame(loop); return; }
   const dt = Math.min((now-lastTime)/1000, 0.05);
   lastTime = now;
-  /* ★ 自适应画质治理器：按真实帧时长动态收放粒子/特效预算。
-     以前粒子上限写死 3000，两三个技能同时开就能喷满并让整台机器卡住；
-     现在持续掉帧就把预算砍到很低，帧率恢复后再慢慢放开。 */
-  if(window.PFX){
+  /* ★ 自适应画质治理器（auto 模式专用）：持续掉帧就降档，恢复后再升回去。
+     手动锁档（ESC 菜单）时不干预，完全尊重玩家选择。 */
+  if(window.QUALITY && window.QUALITY.mode === 'auto'){
     const P = window.PFX;
     P.avg = (P.avg === undefined) ? dt : (P.avg * 0.9 + dt * 0.1);
     P.acc = (P.acc || 0) + dt;
     if(P.acc > 0.25){
       P.acc = 0;
       const fps = 1 / Math.max(0.001, P.avg);
-      if(fps < 34){                      /* 严重掉帧：进入低画质 */
-        P.slow = 1; P.cap = 200; P.scale = 0.45; P.shadow = 0.35;
-      } else if(fps < 48){               /* 有点卡：中等画质 */
-        P.slow = 0; P.cap = 340; P.scale = 0.7; P.shadow = 0.7;
-      } else if(fps > 56){               /* 流畅：恢复高画质 */
-        P.slow = 0; P.cap = 560; P.scale = 1; P.shadow = 1;
+      if(fps < 30 && QUALITY.tier > 0){          /* 严重掉帧：降到流畅档 */
+        QUALITY.tier = 0; applyQuality();
+      } else if(fps < 46 && QUALITY.tier > 1){   /* 有点卡：降一档 */
+        QUALITY.tier = 1; applyQuality();
+      } else if(fps > 56 && QUALITY.tier < QUALITY.autoBase){  /* 流畅：升回基准档 */
+        QUALITY.tier = QUALITY.autoBase; applyQuality();
       }
     }
   }

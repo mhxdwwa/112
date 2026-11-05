@@ -1246,10 +1246,13 @@ function drawCharGhost(atKey, anim, frameT, x, y, facing, bodyWorld, tint, alpha
   return true;
 }
 
-/* ★ 阴影模糊按画质缩放：低画质时统一压到 35%，大幅省下每帧的高斯模糊开销 */
+/* ★ 阴影模糊按画质缩放：均衡档压到 50%，流畅档直接归零
+   （shadowBlur=0 时浏览器完全不跑高斯模糊，这是弱机最大的单项开销） */
 function _fxBlur(v){
-  const s = (window.PFX && window.PFX.shadow !== undefined) ? window.PFX.shadow : 1;
-  return v * s;
+  const P = window.PFX;
+  if(!P || P.shadow === undefined) return v;
+  if(P.shadow <= 0) return 0;
+  return v * P.shadow;
 }
 function drawEffects(dt){
   /* ★ 屏外特效直接跳过绘制：大地图里技能常在视野外空转，

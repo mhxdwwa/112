@@ -127,20 +127,21 @@ function drawMonsterSprite(e){
   ctx.save();
   if(!e.alive) ctx.globalAlpha = clamp(1 - (e.deathT||0) / 1.05, 0, 1);
   if(e.hurtT > 0){
-    ctx.filter = 'brightness(1.85) saturate(0.5)';
+    /* ★ 廉价受击闪红：烘焙红辉光叠加（替代每帧 ctx.filter 亮度滤镜——
+       filter 会强制生成中间画布，弱机上一只怪就是一次全精灵重采样） */
     drawSpriteFrame(at, a.name, a.t, px, py, face, bodyPx, {color:'#ff5a3a', alpha:0.5, blur:16});
-    ctx.filter = 'none';
   } else {
-    /* 精英 / BOSS 描边光 */
+    /* 精英 / BOSS 描边光（烘焙辉光，零模糊成本） */
     if(e.affix === 'elite' || (e.def && e.def.boss)){
       const glowCol = (e.def && e.def.boss) ? '#ffd166' : '#c56bff';
       drawSpriteFrame(at, a.name, a.t, px, py, face, bodyPx, {color:glowCol, alpha:0.30, blur:22});
     }
-    /* ★ 变体怪换色：只作用于本体绘制，不影响描边光 */
+    /* ★ 变体怪换色：只作用于本体绘制，不影响描边光（流畅档跳过滤镜） */
     const tint = e.def && e.def.tint;
-    if(tint) ctx.filter = tint;
+    const _filterOk = !window.PFX || PFX.filter !== false;
+    if(tint && _filterOk) ctx.filter = tint;
     drawSpriteFrame(at, a.name, a.t, px, py, face, bodyPx);
-    if(tint) ctx.filter = 'none';
+    if(tint && _filterOk) ctx.filter = 'none';
   }
   ctx.restore();
   return true;
@@ -188,6 +189,48 @@ function fighterAnimFor(p){
 
 /* 按精灵表绘制一帧；bodyPx = 角色身体在屏幕上的像素高度
    glow（可选）: {color, alpha, blur} 用同帧绘制发光轮廓 */
+/* ============================================================
+   ★ 预烘焙辉光（性能根治）：把「带 shadowBlur 的精灵描边光」按
+   (图集, 颜色) 一次性烘成离屏画布，运行时只是一次普通 drawImage。
+   以前每只精英/Boss每帧一次高斯模糊，教室弱机上一次就是几十毫秒；
+   现在模糊只发生在首次烘焙时，之后零成本。
+   烘焙法：画精灵+阴影 → 用 destination-out 把本体挖掉，只留轮廓辉光。
+   ============================================================ */
+const __spriteGlowBake = new Map();
+function bakeSpriteGlow(at, color){
+  const key = ((at.img && at.img.src) || Math.random()) + '|' + color;
+  let b = __spriteGlowBake.get(key);
+  if(b) return b.ready ? b : null;
+  b = { ready:false, cvs:null };
+  __spriteGlowBake.set(key, b);
+  try {
+    const img = at.img;
+    if(!img || !img.width || !at.cellW){ __spriteGlowBake.delete(key); return null; }
+    const rows = Math.max(1, Math.round(img.height / at.cellH));
+    const c2 = document.createElement('canvas');
+    c2.width = img.width; c2.height = img.height;
+    const g = c2.getContext('2d');
+    g.shadowColor = color;
+    g.shadowBlur = Math.round(at.cellW * 0.09);
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < at.cols; c++){
+        const sx = c * at.cellW, sy = r * at.cellH;
+        g.drawImage(img, sx, sy, at.cellW, at.cellH, sx, sy, at.cellW, at.cellH);
+        g.globalCompositeOperation = 'destination-out';
+        g.drawImage(img, sx, sy, at.cellW, at.cellH, sx, sy, at.cellW, at.cellH);
+        g.globalCompositeOperation = 'source-over';
+      }
+    }
+    b.cvs = c2; b.ready = true;
+    /* 缓存上限保护：烘焙图很大，只留最近 10 张 */
+    if(__spriteGlowBake.size > 10){
+      const k0 = __spriteGlowBake.keys().next().value;
+      if(k0 !== key) __spriteGlowBake.delete(k0);
+    }
+    return b;
+  } catch(e){ __spriteGlowBake.delete(key); return null; }
+}
+
 function drawSpriteFrame(at, animName, prog, x, y, facing, bodyPx, glow){
   /* ★ 角色图集还没下载完时退回 256px 预览图，画面不会出现空白等待（怪物图集无预览，行为不变） */
   if(typeof charAtlasDrawable === 'function') at = charAtlasDrawable(at);
@@ -208,10 +251,16 @@ function drawSpriteFrame(at, animName, prog, x, y, facing, bodyPx, glow){
   const f = at.faceLeft ? -facing : facing;
   if(f < 0) ctx.scale(-1, 1);
   if(glow){
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = glow.alpha;
-    ctx.shadowColor = glow.color;
-    ctx.shadowBlur = glow.blur;
+    /* ★ 烘焙辉光叠加：一次 drawImage，无 shadowBlur（首次按图集+颜色烘一次） */
+    const bg = bakeSpriteGlow(at, glow.color);
+    if(bg){
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = glow.alpha;
+      ctx.drawImage(bg.cvs, sx, sy, at.cellW, at.cellH,
+        -at.feetX*k, -at.groundY*k, at.cellW*k, at.cellH*k);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
   ctx.drawImage(at.img, sx, sy, at.cellW, at.cellH,
     -at.feetX*k, -at.groundY*k, at.cellW*k, at.cellH*k);

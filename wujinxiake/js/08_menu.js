@@ -531,6 +531,8 @@ function handleCanvasClick(cx, cy){
       else if(r.id === 'shop') gameState = 'shopMenu';
       else if(r.id === 'levelSelect'){ levelSelectFilter = null; gameState = 'levelSelect'; }
       else if(r.id === 'equipWiki') openEquipWiki();
+      else if(r.id === 'qualityPrev') cycleQuality(-1);
+      else if(r.id === 'qualityNext') cycleQuality(1);
       else if(r.id === 'menu'){ gameState = 'menu'; if(window.stopBGM) stopBGM(); }
     }
   } else if(gameState==='equipWiki'){

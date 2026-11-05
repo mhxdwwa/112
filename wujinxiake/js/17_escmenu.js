@@ -274,6 +274,36 @@ function drawGameMenu(){
     ctx.fillText(it.desc, bx + bw / 2, by + 78);
     gameMenuClickRegions.push({ x: bx, y: by, w: bw, h: bh, id: it.id });
   }
+
+  /* ★ 画质设置栏（教室大屏弱机可手动锁「流畅」档，设置会记住） */
+  const qy = startY + 3 * (bh + gy) + 6;
+  const qh = 44;
+  const qbg = ctx.createLinearGradient(px + 20, qy, px + 20, qy + qh);
+  qbg.addColorStop(0, 'rgba(44,54,78,0.85)');
+  qbg.addColorStop(1, 'rgba(16,20,32,0.9)');
+  ctx.fillStyle = qbg;
+  ctx.beginPath(); ctx.roundRect(px + 20, qy, PW - 40, qh, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,135,158,0.4)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(px + 20.5, qy + 0.5, PW - 41, qh - 1, 8); ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e6edf5';
+  ctx.font = 'bold 14px "Microsoft YaHei"';
+  ctx.fillText('⚙ 画质', px + 38, qy + 28);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd166';
+  ctx.font = 'bold 14px "Microsoft YaHei"';
+  ctx.fillText(qualityLabel(), px + PW / 2 + 10, qy + 28);
+  /* 左右切换按钮 */
+  const qbw = 34;
+  for(const side of [-1, 1]){
+    const ax = side < 0 ? px + PW - 118 : px + PW - 66;
+    ctx.fillStyle = 'rgba(70,86,120,0.9)';
+    ctx.beginPath(); ctx.roundRect(ax, qy + 7, qbw, qh - 14, 6); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px "Microsoft YaHei"';
+    ctx.fillText(side < 0 ? '＜' : '＞', ax + qbw / 2, qy + 28);
+    gameMenuClickRegions.push({ x: ax, y: qy + 7, w: qbw, h: qh - 14, id: side < 0 ? 'qualityPrev' : 'qualityNext' });
+  }
   ctx.textAlign = 'left';
 }
 

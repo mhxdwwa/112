@@ -310,7 +310,8 @@ function drawFighterSprite(p, scaleMul){
       if(gi.ampOn) drawSpriteFrame(at, a.name, a.t, p.x, py, facing, bodyPx, {color:'#ff7ad9', alpha:0.6*gi.ampI, blur:26});
     }
   }
-  if(p.hitFlash > 0) ctx.filter = 'brightness(1.75) saturate(0.7)';
+  /* ★ 受击闪白：均衡/高画质用滤镜，流畅档跳过（ctx.filter 需中间画布，弱机很贵） */
+  if(p.hitFlash > 0 && (!window.PFX || PFX.filter !== false)) ctx.filter = 'brightness(1.75) saturate(0.7)';
   /* ★ 装备外观（身后层：短披 / 胸口甲光） */
   drawEquipAppearanceBack(p, p.x, py, bodyPx, {facing:facing});
   /* ★ 护甲体形辉光：沿角色轮廓染色，比贴色块更贴身形 */
