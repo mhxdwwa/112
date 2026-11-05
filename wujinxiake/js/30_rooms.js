@@ -943,7 +943,8 @@ function drawProjectile(pr){
   const px = pr.x, py = pr.y - (pr.h||0)*sc;
   ctx.save();
   if(pr.kind === 'realSword'){
-    ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(1.5,1.5); drawWeapon('sword',0,0,0);
+    const swS = pr.scale || 1.5;
+    ctx.translate(px,py); ctx.rotate(pr.rot); ctx.scale(swS,swS); drawWeapon('sword',0,0,0);
     ctx.restore(); return;
   }
   if(pr.kind === 'realBlade'){
@@ -2430,6 +2431,38 @@ function drawEffects(dt){
         ctx.fillStyle = ag;
         ctx.fillRect(ef.x - 26*sc, ef.y - 110*sc, 52*sc, 110*sc);
       }
+    }
+    else if(ef.type === 'charClone'){
+      /* ★ v45 分身（独孤九剑专用）：画成「和本体一模一样的角色」。
+         以前这里复用 afterImage —— lighter 叠加 + shadowBlur + 0.5 透明度，
+         九个分身叠在一起就是九团糊在一起的光，根本看不出是同一个人。
+         现在：正常合成(source-over) + 实心精灵 + 脚下一点预烘焙冷光，
+         分身本体清清楚楚，冷光只负责说明「这是剑意化身」。 */
+      const ck = clamp(ef.t / ef.dur, 0, 1);
+      let ca = 1;
+      if(ck < 0.14) ca = ck / 0.14;             /* 现身：一瞬淡入，不用闪光 */
+      else if(ck > 0.76) ca = (1 - ck) / 0.24;  /* 出剑之后淡出 */
+      ca = clamp(ca, 0, 1) * (ef.alpha || 0.95);
+
+      /* 脚下冷光：预烘焙精灵，一次 drawImage（不用每帧径向渐变） */
+      const cgr = 48 * sc;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = ca * 0.32;
+      ctx.drawImage(_sprGlow(ef.color || '#bcd9ff'), ef.x - cgr, ef.y - cgr * 0.26, cgr * 2, cgr * 0.52);
+
+      /* 角色本体：实心精灵，动作随施法推进（起势 → 举剑 → 挥出） */
+      const CK_KEYS = ['sword','blade','spear','fist','herb','axe','talisman','cauldron'];
+      let cat2 = CHAR_ATLASES[ef.spriteKey || CK_KEYS[ef.weaponIdx || 0]];
+      /* 图集还没下载完时退回 256px 预览图，别让分身当场消失 */
+      if(typeof charAtlasDrawable === 'function') cat2 = charAtlasDrawable(cat2) || cat2;
+      if(cat2 && cat2.img && cat2.img.naturalWidth){
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = ca;
+        drawSpriteFrame(cat2, ef.anim || 'skill', clamp(0.08 + ck * 0.86, 0, 1),
+                        ef.x, ef.y, ef.facing || 1, cat2.bodyWorld * sc, null);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
     else if(ef.type === 'dharmaWheel'){
       /* 炁轮：多层旋转法阵 + 刻度

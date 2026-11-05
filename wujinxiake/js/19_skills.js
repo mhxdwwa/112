@@ -914,115 +914,115 @@ function skBloomRing(cx, cy, ringR, n, color, r){
 }
 
 /* ---------- 宝剑剑士 4：独孤九剑（《笑傲江湖》· 独孤求败） ----------
-   ★ v43 释放类伤害技：角色分化出九道分身，各自蓄力，再齐射九柄实体飞剑。
-   · 场内只有一个敌人 → 九道剑气全部贯穿同一个目标
-   · 场内有多个敌人 → 每个分身都把剑气掷向「最强的敌人」（九剑集火斩首），
-     但剑形 / 出剑角度 / 出手时序各自随机，形成九剑先后交织的齐射感
-   · 全程不位移、不换站位：纯释放，和位移型的白虹贯日彻底分开
+   ★ v45 大改：分身从「光团」改成「和本体一模一样的角色」，剑也改成实体剑模型脱手飞出去。
+   · 九个分身是本体的实心精灵（charClone），各自起势举剑，不是九团光
+   · 出剑：每个分身把「手里那把剑」射出去 —— 实体剑模型飞行（kind:'realSword'）
+   · 只有一个敌人 → 九剑全部奔它；有多个敌人 → 九剑各自随机取角度砸向最强的那只（斩首）
+   · 伤害：单剑 8.5 倍攻击，九剑全中约 76 倍 —— 与符咒师 4 式（75 倍）、药师 4 式（45 倍）同一档
+   · 全程不位移：纯释放技，和位移型的白虹贯日彻底分开
 */
 function castSwordDugu(){
   const p = currentSkillCaster || G.player; playSound('skillCast');
   const A = skillAtkVal(p);
   const face = p.facing || 1;
   const N = 9;
-  const CHARGE = 760;                        /* 蓄力时长（ms） */
+  const CHARGE = 820;                        /* 蓄力时长（ms） */
+  const HAND_H = 62;                         /* 剑离地高度：齐胸，脱手后从这儿飞出去 */
 
   spawnText(p.x, p.y - 140, 260, '独 孤 九 剑', '#e6f4ff', 40);
   p.action = { type:'swordCharge', dur: CHARGE/1000 + 0.18, t:0 };
-  /* 蓄力期间给一点无敌：九剑要站桩 0.8 秒，不保护会被小怪白打 */
-  p.invuln = Math.max(p.invuln || 0, G.isPvp ? 0.25 : 0.75);
+  /* 蓄力期间给一点无敌：九剑要站桩 0.82 秒，不保护会被小怪白打 */
+  p.invuln = Math.max(p.invuln || 0, G.isPvp ? 0.25 : 0.8);
 
-  /* ① 九个分身站位：以角色为圆心的扇面，中间近、两侧远，高矮错开 */
+  /* ① 九个分身站位：以角色身前为圆心拉开一道宽弧
+     ★ v45：v43 的站位全部挤在 79px 宽的一条竖列里，九个人叠成一坨，也是「看着像光团」的原因之一。
+     现在按椭圆弧铺开（最远 280px、纵深 ±92px），九个人各自独立站得开，一眼数得出是九个。 */
   const spots = [];
+  const ARC_RX = 240, ARC_RY = 92, ARC_PUSH = 42;
   for(let i = 0; i < N; i++){
-    const u = (i / (N - 1)) - 0.5;                   /* -0.5 … 0.5 */
-    const ang = u * 2.7;                             /* 扇面张开约 155° */
-    const rad = 96 + Math.abs(u) * 118;
+    const a = -1.36 + (i / (N - 1)) * 2.72;          /* -78° … +78° */
     spots.push({
-      x: p.x + face * Math.cos(ang) * rad * 0.55 - face * 26,
-      y: p.y + Math.sin(ang) * 46 + (i % 2 ? 6 : -4)
+      x: clamp(p.x + face * (Math.cos(a) * ARC_RX + ARC_PUSH), WORLD_L + 40, WORLD_R - 40),
+      y: clamp(p.y + Math.sin(a) * ARC_RY, GY_TOP + 16, GY_BOTTOM)
     });
   }
 
-  /* ② 分身逐个现身 + 各自蓄力（像九个人依次拔剑） */
+  /* ② 分身逐个现身：实体角色本体，各自起势举剑 */
   for(let i = 0; i < N; i++){
     const s = spots[i];
-    skAt(i * 38, ()=>{
+    skAt(i * 40, ()=>{
       if(!G || gameState !== 'playing') return;
-      addEffect('afterImage', s.x, s.y, CHARGE/1000 + 0.55, {
+      addEffect('charClone', s.x, s.y, CHARGE/1000 + 0.62, {
         facing: face, weaponIdx: p.weaponIdx, spriteKey:'sword', anim:'skill',
-        alpha:0.52, color:'#cfe9ff'
+        alpha:0.95, color:'#bcd9ff'
       });
-      addEffect('hitRing', s.x, s.y - 64, 0.32, { color:'#a8d8ff', r:22 });
-      spawnParticles(s.x, s.y - 40, 6, {
-        color:'#bfe4ff', angle:-Math.PI/2, spread:0.9,
-        spMin:60, spMax:190, lifeMin:0.25, lifeMax:0.55, sizeMin:2, sizeMax:5, grav:-120
+      /* 现身只留脚下一点点气流/涟漪，不再在胸口叠光斑（那才是「光团」的来源） */
+      addEffect('hitRing', s.x, s.y, 0.28, { color:'#a8d8ff', r:24 });
+      spawnParticles(s.x, s.y - 10, 3, {
+        color:'#bfe4ff', angle:-Math.PI/2, spread:0.8,
+        spMin:50, spMax:150, lifeMin:0.2, lifeMax:0.45, sizeMin:2, sizeMax:4, grav:-90
       });
-    });
-    skAt(i * 38 + 180, ()=>{
-      if(!G || gameState !== 'playing') return;
-      addEffect('hitRing', s.x, s.y - 64, 0.36, { color:'#dff3ff', r:16 });
-    });
-    skAt(i * 38 + 400, ()=>{
-      if(!G || gameState !== 'playing') return;
-      addEffect('hitRing', s.x, s.y - 64, 0.40, { color:'#ffffff', r:11 });
     });
   }
 
   /* ③ 蓄力顶点：九剑齐鸣 */
-  skAt(CHARGE - 120, ()=>{
+  skAt(CHARGE - 140, ()=>{
     if(!G || gameState !== 'playing') return;
     if(p.action && p.action.type === 'swordCharge') p.action = null;
-    skShake(6, 0.10, '#dff3ff');
+    skShake(5, 0.10, '#dff3ff');
   });
 
-  /* ④ 齐射：九柄飞剑先后脱手 */
+  /* ④ 齐射：九个分身把剑扔出去 */
   skAt(CHARGE, ()=>{
     if(!G || gameState !== 'playing') return;
     playSound('swordSwing');
 
-    /* 目标：最强敌人。有多个也只打最强 —— 九剑是用来斩首的 */
-    const foes = (G.enemies || []).filter(function(e){ return e && e.alive; });
-    let boss = null;
-    for(const e of foes){
-      if(!boss) boss = e;
-      else if((e.maxHp || e.hp || 0) > (boss.maxHp || boss.hp || 0)) boss = e;
-    }
-
     for(let i = 0; i < N; i++){
       const s = spots[i];
-      skAt(i * 26, ()=>{
+      skAt(i * 28, ()=>{
         if(!G || gameState !== 'playing') return;
-        const sx = s.x, sy = s.y - 64;
+
+        /* ★ 每次出剑都重新挑一次「最强敌人」：
+           第一个分身可能已经把它砍死了，后面的剑要自动改打剩下最硬的，不然就空放 */
+        let boss = null;
+        for(const e of (G.enemies || [])){
+          if(!e || !e.alive) continue;
+          if(typeof skAlive === 'function' && !skAlive(e)) continue;
+          if(!boss || (e.maxHp || e.hp || 0) > (boss.maxHp || boss.hp || 0)) boss = e;
+        }
+
+        /* 剑从分身手里（齐胸高）出手；判定用的是地面坐标，h 只负责「看起来在高处」 */
+        const sx = s.x, sy = s.y;
         let tx, ty, aimRef = null;
-        if(boss && typeof skAlive === 'function' && skAlive(boss)){
+        if(boss){
           aimRef = boss;
-          tx = boss.x + rand(-18, 18);
-          ty = boss.y - 58 + rand(-10, 10);
+          tx = boss.x + rand(-20, 20);
+          ty = boss.y;
         } else {
           /* 场上没敌人：朝身前空放，保证手感不空挥 */
-          tx = p.x + face * rand(280, 460);
-          ty = p.y - 58 + rand(-24, 24);
+          tx = p.x + face * rand(300, 480);
+          ty = p.y + rand(-16, 16);
         }
         const dx = tx - sx, dy = ty - sy;
         const d = Math.max(1, Math.hypot(dx, dy));
-        const speed = 1450 + rand(-120, 160);
+        const speed = 1500 + rand(-140, 180);
         G.projectiles.push({
-          kind:'realSword', x:sx, y:sy, h:0,
+          kind:'realSword', x:sx, y:sy, h:HAND_H,
           vx:(dx/d)*speed, vy:(dy/d)*speed,
-          life: d/speed + 0.14,
-          w:78, hh:46,
-          dmg: A * 3.2,
+          life: d/speed + 0.16,
+          w:88, hh:54,
+          scale:1.55,
+          dmg: A * 8.5,
           pierce: 0, hitSet: new Set(),
           color:'#dff3ff', facing:(dx >= 0 ? 1 : -1),
           rot: Math.atan2(dy, dx), owner:p,
           aimTip:true, aimRef: aimRef
         });
-        /* 出剑一瞬：剑身脱手的反光 + 指尖气流 */
-        addEffect('slashArc', sx, sy, 0.14, { facing: face, color:'#ffffff', size:0.55, typeStr:'thrust' });
-        spawnParticles(sx, sy, 4, {
+        /* 脱手一瞬：手部气流 + 极短的一道白线 */
+        addEffect('slashArc', sx, sy - HAND_H*0.6, 0.12, { facing: face, color:'#ffffff', size:0.5, typeStr:'thrust' });
+        spawnParticles(sx, sy - HAND_H*0.6, 4, {
           color:'#cfe9ff', angle:Math.atan2(dy, dx), spread:0.5,
-          spMin:120, spMax:320, lifeMin:0.12, lifeMax:0.28, sizeMin:2, sizeMax:4, grav:0
+          spMin:130, spMax:340, lifeMin:0.1, lifeMax:0.24, sizeMin:2, sizeMax:4, grav:0
         });
       });
     }
