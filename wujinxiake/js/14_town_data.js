@@ -954,10 +954,14 @@ function hash01(n){
 const NPC_VERB = {
   enhance: '强化', shop: '商店', quest: '任务', dungeon: '进本',
   heal: '疗伤', stash: '行囊', reforge: '洗练', decompose: '分解', lore: '听书',
-  portal: '传送'
+  portal: '传送', gate: '选图'
 };
+/* ★ v47 当前「站得最近、按空格就能互动」的那个 NPC（由 updateTown 每帧刷新，HUD 共用） */
+let townActiveNpc = null;
+/* ★ v47 传送落地余波（一次性的光环，t 归零后清空） */
+let townPortalFx = null;
 
-/* 统一的 NPC 交互入口：点击与 J 键都走这里，新增 NPC 只需加数据 */
+/* 统一的 NPC 交互入口：点击、城镇互动键（默认空格）与 J 键都走这里，新增 NPC 只需加数据 */
 function triggerNpc(npc){
   if(!npc) return;
   switch(npc.type){
@@ -979,6 +983,9 @@ function triggerNpc(npc){
         townCam.x = clamp(townPlayer.x - VW/2, 0, Math.max(0, TOWN_W - VW));
         townCam.y = clamp(townPlayer.y - VH/2, 0, Math.max(0, TOWN_H - VH));
         questToastMsg('传送门', '穿过传送门，抵达「' + tdef.name + '」', '#7fd0ff');
+        playSound('portal');
+        /* ★ v47 落地反馈：抵达点脚下起一圈传送余波，玩家一眼知道自己被传到哪 */
+        townPortalFx = { x: townPlayer.x, y: townPlayer.y, t: 0, dur: 0.9 };
       }
       break;
     }

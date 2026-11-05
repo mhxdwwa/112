@@ -537,7 +537,7 @@ function maybeShowPrologue(){
     /* 序章读完 → 解锁 1、2 技（与 q0 的 unlock 保持一致，避免重复解锁） */
     unlockPlayerSkill(p, 0);
     unlockPlayerSkill(p, 1);
-    questToastMsg('第一盏灯 · 余烬', '任务已接取：跟着金色箭头去找传送使·青鸾，走到他面前按 J 交谈。', '#ffd166');
+    questToastMsg('第一盏灯 · 余烬', '任务已接取：跟着金色箭头去找传送使·青鸾，走到他面前按 空格 交谈。', '#ffd166');
   });
 }
 function updateDialogue(dt){

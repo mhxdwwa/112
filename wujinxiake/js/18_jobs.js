@@ -781,16 +781,36 @@ function damagePlayer(dmg){
   }
   /* ★ Roguelike: 伤害减免 */
   const dmgReduction = p.damageReduction || 0;
-  /* ★ 防御力减伤（装备强化/增幅提升防御后更耐打） */
+  /* ★ 防御力减伤（装备强化/增幅提升防御后更耐打）
+     v47：分母常数 30×等级 → 24×等级、上限 70% → 75%。
+     原因：60 级时分母里的 1800 把高防玩家的收益稀释得很厉害，
+     堆到 5000 防御也只减 60%，和「一身 +15」的投入完全不成比例。 */
   const pdef = Math.max(0, p.def || 0);
-  const defRed = Math.min(0.7, pdef / (pdef + 400 + 30 * (p.level || 1)));
-  const finalDmg = Math.max(1, Math.round(dmg * (1 - dmgReduction) * (1 - defRed)));
+  const defRed = Math.min(0.75, pdef / (pdef + 400 + 24 * (p.level || 1)));
+  let finalDmg = Math.max(1, Math.round(dmg * (1 - dmgReduction) * (1 - defRed)));
+  /* ★ v47 防秒杀护栏 —— 单次受击最多打掉 50% 生命上限
+     为什么必须加：秘境 Boss 的攻击基数是普通关的十余倍
+     （如鲲鹏 445 × bossAtkMul 21.5 × 难度倍率），再乘技能倍率（最高 ×4.5）
+     可以打出十万级伤害，对没打满防御的玩家就是「进本即死」，没有任何操作空间。
+     现在任何一击最多扣半管血：至少能看见血条、能反应、能喝药、能闪，
+     但残血时该死死，不会变成无敌。
+     PK 不受影响（PVP 本来就有按血量比例的伤害预算）。 */
+  if(!(G && G.isPvp) && p.maxHp && p.maxHp > 0){
+    const _dmgCap = Math.max(1, Math.round(p.maxHp * 0.5));
+    if(finalDmg > _dmgCap) finalDmg = _dmgCap;
+  }
   p.hp -= finalDmg; p.invuln = 0.6; p.hitFlash = 0.15; p.hurtT = 0.2;
   playSound('impact');
   G.shake = Math.max(G.shake, 8); G.flash = 0.25; G.hitFlashColor = '#ff4444';
   spawnText(p.x, p.y, 120, '-'+finalDmg, '#ff6a5a', 24);
   spawnParticles(p.x, p.y-50, 15, {color:'#cc0000', spMin:100, spMax:300, lifeMin:0.3, lifeMax:0.8, sizeMin:2, sizeMax:5, grav:1500, vh:rand(50,150), isBlood:true});
   addEffect('bloodStain', p.x, p.y, 2.0, {size:rand(10,20)});
+  /* ★ v47 濒死护体：一击之后血量掉到 20% 以下，给 0.9 秒无敌
+     避免「被同一套连段两段带走」，也留出喝药 / 闪避的时间窗口（PVP 不加） */
+  if(!(G && G.isPvp) && p.hp > 0 && p.hp < p.maxHp * 0.2){
+    if(p.invuln < 0.9) p.invuln = 0.9;
+    spawnText(p.x, p.y - 168, 150, '濒 死 · 护 体', '#ffd166', 20);
+  }
   if(p.hp <= 0){
     p.hp = 0; p.dead = true;
     if(!G.isPvp && !(window.REVIVE && REVIVE.ask())) gameState = 'gameover';

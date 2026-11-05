@@ -795,11 +795,23 @@ function updateTown(dt){
   /* 街道吸附微引导：靠近街道中心线时轻轻往路上带（不锁死，草地也能走） */
   void 0;
 
-  // NPC交互检测（按J键，全地图就近）
-  if(pressed['KeyJ']){
+  /* ★ v47 交互：走进 NPC / 传送阵，按「城镇互动键」（默认空格，J 兼容）触发
+     —— 每帧刷新 townActiveNpc，HUD 用它决定谁头顶显示空格胶囊、谁脚下亮圈 */
+  townActiveNpc = townNearestNpc();
+
+  /* 传送落地余波计时 */
+  if(townPortalFx){
+    townPortalFx.t += dt;
+    if(townPortalFx.t >= townPortalFx.dur) townPortalFx = null;
+  }
+
+  const _interactCode = (typeof kbProfile === 'function') ? (kbProfile(1).interact || 'Space') : 'Space';
+  const _wantInteract = !!pressed[_interactCode] || !!pressed['KeyJ'];
+  if(_wantInteract){
+    /* 消费掉这次按键，避免同一帧被别处重复触发、也避免按住连发 */
+    delete pressed[_interactCode];
     pressed['KeyJ'] = false;
-    const best = townNearestNpc();
-    if(best) triggerNpc(best);
+    if(townActiveNpc) triggerNpc(townActiveNpc);
   }
 }
 

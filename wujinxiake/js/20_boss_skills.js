@@ -145,15 +145,30 @@ const ENEMY_SKILL_FUNCS = {
 
 /* ============ BOSS专属技能系统 ============ */
 /* 每个Boss有3个独特技能，带可见轨迹可躲避 */
+/* ★ v47 秘境 Boss 技能伤害系数
+   秘境的 Boss 攻击基数本来就是普通关的十余倍（bossAtkMul 21.5~24 × 难度 ×2），
+   而技能倍率还是按普通关的 ×2.5~×4.5 设计的 —— 两个「高倍率」叠在一起就过载了。
+   所以按 Boss 的攻击基数分档压缩：基数越高压得越狠（最低 0.5 折）。
+     7 倍级秘境 → ×1.00（本来就不至于秒杀，不动）
+     12 倍级　  → ×0.81
+     17 倍级　  → ×0.65
+     21.5 倍级　→ ×0.50
+   普通关卡完全不受影响。 */
+function _bossSkillDamp(){
+  const lvl = (G && G.currentLvlCfg) || null;
+  if(!lvl || !lvl.isAbyss) return 1;
+  const m = lvl.bossAtkMul || 0;
+  return Math.max(0.5, Math.min(1, 1.25 - m * 0.035));
+}
 function _bDmg(dmg){
   const p = G.player;
-  if(p && !p.dead && p.invuln<=0) damagePlayer(dmg);
+  if(p && !p.dead && p.invuln<=0) damagePlayer(dmg * _bossSkillDamp());
 }
 function _bDmgAoe(cx,cy,r,dmg,opt){
   const p = G.player;
   if(p && !p.dead && p.invuln<=0){
     if(Math.abs(p.x-cx)<r && Math.abs((p.y-cy)*2.2)<r*0.6){
-      damagePlayer(dmg);
+      damagePlayer(dmg * _bossSkillDamp());
       if(opt&&opt.kb) p.kx = (Math.sign(p.x-cx)||1)*opt.kb;
       if(opt&&opt.launch){ p.launchT=0.4; p.vy=-400; p.h=Math.max(p.h,1); }
     }

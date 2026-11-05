@@ -19,7 +19,9 @@ const KB_ACTIONS = [
   { id:'skill5',  name:'技能 5',   group:'战斗' },
   { id:'skill6',  name:'技能 6',   group:'战斗' },
   { id:'potionHp',name:'血瓶',     group:'道具' },
-  { id:'potionMp',name:'内力瓶',   group:'道具' }
+  { id:'potionMp',name:'内力瓶',   group:'道具' },
+  /* ★ v47：走进 NPC / 传送阵后的互动键（对话、开商店、传送……） */
+  { id:'interact',name:'城镇互动', group:'城镇' }
 ];
 
 /* 新键位（地下城 / 城镇PK）默认值 */
@@ -28,7 +30,8 @@ const KB_BATTLE_DEFAULT = {
   attack:'KeyX',
   glide:'KeyC',
   skill1:'KeyA', skill2:'KeyS', skill3:'KeyD', skill4:'KeyF', skill5:'KeyG', skill6:'KeyH',
-  potionHp:'KeyQ', potionMp:'KeyW'
+  potionHp:'KeyQ', potionMp:'KeyW',
+  interact:'Space'
 };
 /* 练习模式 P1（原样保留） */
 const KB_P1_CLASSIC = {
@@ -193,8 +196,11 @@ function drawKeyBindMenu(){
   /* 切换提示 */
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(140,160,180,0.7)'; ctx.font = '11.5px "Microsoft YaHei"';
-  ctx.fillText('※ 本套键位作用于地下城与城镇PK；练习模式（双人同屏）仍使用方向键+小键盘分键', px + 30, py + ph - 92);
-  ctx.fillText('※ 滑翔/闪避默认 C（Shift 也可）；城镇里 C 仍是角色信息，铁匠活只能在城镇做', px + 30, py + ph - 74);
+  ctx.fillText('※ 本套键位作用于地下城与城镇PK；练习模式（双人同屏）仍使用方向键+小键盘分键', px + 30, py + ph - 112);
+  ctx.fillText('※ 滑翔/闪避默认 C（Shift 也可）；城镇里 C 仍是角色信息，铁匠活只能在城镇做', px + 30, py + ph - 94);
+  /* ★ v47 新增：城镇互动键说明 */
+  ctx.fillStyle = 'rgba(190,215,235,0.82)';
+  ctx.fillText('※ 「城镇互动」默认空格：走到 NPC / 传送阵旁，头顶亮出金色胶囊时按下即可对话 / 传送 / 开店', px + 30, py + ph - 76);
 }
 
 function kbClick(pos){

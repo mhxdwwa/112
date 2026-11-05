@@ -834,6 +834,29 @@ function drawTown(){
   drawables.sort((a,b)=>a.y-b.y);
   for(const d of drawables) d.fn();
 
+  /* ★ v47 传送落地余波：一圈扩散的青色光环 + 几缕上升光尘 */
+  if(typeof townPortalFx !== 'undefined' && townPortalFx){
+    const k = townPortalFx.t / townPortalFx.dur;
+    const fx = townPortalFx.x, fy = townPortalFx.y;
+    ctx.save();
+    ctx.globalAlpha = (1 - k) * 0.9;
+    ctx.strokeStyle = '#8fe8ff'; ctx.lineWidth = 3 * (1 - k) + 1;
+    ctx.beginPath(); ctx.ellipse(fx, fy, 20 + k * 90, (20 + k * 90) * 0.34, 0, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = (1 - k) * 0.55;
+    ctx.strokeStyle = '#dff6ff'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.ellipse(fx, fy, 8 + k * 56, (8 + k * 56) * 0.34, 0, 0, TAU); ctx.stroke();
+    for(let i = 0; i < 6; i++){
+      const a = i / 6 * TAU + k * 1.6;
+      const rr = 22 + k * 66;
+      ctx.globalAlpha = (1 - k) * 0.8;
+      ctx.fillStyle = '#a8eeff';
+      ctx.beginPath();
+      ctx.arc(fx + Math.cos(a) * rr, fy + Math.sin(a) * rr * 0.34 - k * 26, 2.2 * (1 - k) + 0.6, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   ctx.restore();
   /* ══════════ 世界层结束 ══════════ */
 
@@ -980,8 +1003,13 @@ function drawNPC(npc){
   ctx.fillStyle = '#ffe9b0';
   ctx.fillText(npc.name, x, y - 228);
 
-  /* ★ 交互状态：远处是感叹号气泡，进入范围变成 J 键提示 */
-  const d = townPlayer ? Math.abs(townPlayer.x - npc.x) : 999;
+  /* ★ v47 交互状态：远处是「！」，走近（= 可互动范围）才换成键位胶囊。
+     距离判定和 townNearestNpc() 完全一致，所以「胶囊亮着 = 按下去一定有反应」。
+     胶囊里的键帽跟着键位表走（默认空格，玩家改键后自动同步）。 */
+  const _dx = townPlayer ? (townPlayer.x - npc.x) : 999;
+  const _dy = townPlayer ? (townPlayer.y - npc.y) * 1.6 : 999;
+  const d = Math.hypot(_dx, _dy);
+  const isActive = (typeof townActiveNpc !== 'undefined' && townActiveNpc === npc);
   const tNow = (G ? G.t : performance.now() * 0.001);
   /* ★ 任务状态标记（DNF 式）：！= 有任务进行中，？= 可交付领奖 */
   let questMark = null, markGold = true;
@@ -994,10 +1022,79 @@ function drawNPC(npc){
     const st = qq && MAIN_QUESTS[qq.idx] ? MAIN_QUESTS[qq.idx].steps[qq.step] : null;
     if(st && (st.type === 'clear' || st.type === 'kills')) questMark = '！';
   }
-  if(d < 130 && d >= 80){
+
+  /* ★ 选中光圈：脚下一圈旋转虚环 + 向上飘的细光柱，把「就是这个人」说清楚 */
+  if(isActive){
+    const gp = (G ? G.t : performance.now() * 0.001);
+    ctx.save();
+    const rg = ctx.createRadialGradient(x, y, 4, x, y, 62);
+    rg.addColorStop(0, 'rgba(255,214,120,0.22)');
+    rg.addColorStop(1, 'rgba(255,214,120,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath(); ctx.ellipse(x, y, 62, 20, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,214,120,0.75)';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([9, 7]);
+    ctx.lineDashOffset = -gp * 26;
+    ctx.beginPath(); ctx.ellipse(x, y, 48, 15, 0, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  if(isActive){
+    /* 键位提示胶囊：宽度按文字实测，避免长短不一时挤压或溢出 */
+    const verb = NPC_VERB[npc.type] || '交谈';
+    /* 触屏设备没有空格键，提示改成「点击」（点 NPC 本体同样能互动） */
+    const _touchDev = (typeof touchState !== 'undefined' && touchState.p1 && touchState.p1.active)
+                   || (typeof navigator !== 'undefined' && 'ontouchstart' in window);
+    const keyTxt = _touchDev ? '点击'
+                 : ((typeof kbLabel === 'function' && typeof kbProfile === 'function')
+                    ? kbLabel(kbProfile(1).interact) : '空格');
+    const pulse = 0.80 + 0.20 * Math.sin(tNow * 4);
+    ctx.font = 'bold 14px "Microsoft YaHei"';
+    const tw = ctx.measureText(verb).width;
+    ctx.font = 'bold 12px "Consolas", "Microsoft YaHei", monospace';
+    const kw = Math.max(20, ctx.measureText(keyTxt).width + 12);
+    const cw = Math.round(kw + tw + 20), ch = 28, cy = y - 300;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = 'rgba(10,12,24,0.90)';
+    ctx.beginPath();
+    ctx.roundRect(x - cw/2, cy - ch/2, cw, ch, 9);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,214,90,0.95)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    /* 金色键帽 */
+    ctx.fillStyle = '#ffd45a';
+    ctx.beginPath();
+    ctx.roundRect(x - cw/2 + 5, cy - 10, kw, 20, 5);
+    ctx.fill();
+    ctx.fillStyle = '#2a1c00';
+    ctx.font = 'bold 12px "Consolas", "Microsoft YaHei", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(keyTxt, x - cw/2 + 5 + kw/2, cy + 4);
+    /* 动词：左对齐接在键帽后面 */
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffe9b0';
+    ctx.font = 'bold 14px "Microsoft YaHei"';
+    ctx.fillText(verb, x - cw/2 + kw + 11, cy + 5);
+    ctx.textAlign = 'center';
+
+    /* 副标题：这人是干什么的 / 传送去哪，让玩家按之前就知道会发生什么 */
+    if(npc.desc){
+      ctx.font = '10.5px "Microsoft YaHei"';
+      const dw = ctx.measureText(npc.desc).width;
+      ctx.fillStyle = 'rgba(8,10,20,0.72)';
+      ctx.beginPath();
+      ctx.roundRect(x - dw/2 - 8, cy + ch/2 + 2, dw + 16, 18, 6);
+      ctx.fill();
+      ctx.fillStyle = npc.type === 'portal' ? '#7fd0ff' : 'rgba(190,208,225,0.92)';
+      ctx.fillText(npc.desc, x, cy + ch/2 + 15);
+    }
+  } else if(d < 150){
     const bobY = Math.sin(tNow * 3) * 4;
     const by = y - 278 + bobY;
-    const isQ = questMark === '？';
     ctx.fillStyle = questMark ? 'rgba(255,214,90,0.98)' : 'rgba(255,214,90,0.95)';
     ctx.beginPath();
     ctx.arc(x, by, 14, 0, TAU);
@@ -1008,36 +1105,6 @@ function drawNPC(npc){
     ctx.fillStyle = '#3a2600';
     ctx.font = 'bold 18px "Microsoft YaHei"';
     ctx.fillText(questMark || '!', x, by + 7);
-  } else if(d < 80){
-    /* 键位提示胶囊：宽度按文字实测，避免长短不一时挤压或溢出 */
-    const verb = NPC_VERB[npc.type] || '交谈';
-    const pulse = 0.72 + 0.28 * Math.sin(tNow * 4);
-    ctx.font = 'bold 13px "Microsoft YaHei"';
-    const tw = ctx.measureText(verb).width;
-    const cw = Math.round(44 + tw), ch = 26, cy = y - 278;
-    ctx.globalAlpha = pulse;
-    ctx.fillStyle = 'rgba(10,12,24,0.88)';
-    ctx.beginPath();
-    ctx.roundRect(x - cw/2, cy - ch/2, cw, ch, 8);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,214,90,0.9)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    /* 金色 J 键帽 */
-    ctx.fillStyle = '#ffd45a';
-    ctx.beginPath();
-    ctx.roundRect(x - cw/2 + 6, cy - 9, 18, 18, 4);
-    ctx.fill();
-    ctx.fillStyle = '#2a1c00';
-    ctx.font = 'bold 13px "Consolas", monospace';
-    ctx.fillText('J', x - cw/2 + 15, cy + 5);
-    /* 动词：左对齐接在键帽后面 */
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffe9b0';
-    ctx.font = 'bold 13px "Microsoft YaHei"';
-    ctx.fillText(verb, x - cw/2 + 30, cy + 5);
-    ctx.textAlign = 'center';
   } else if(questMark){
     /* ★ 远距离也要看到任务标记（弹跳的！/？） */
     const bobY = Math.sin(tNow * 2.4) * 5;
