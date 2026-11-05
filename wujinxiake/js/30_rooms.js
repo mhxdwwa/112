@@ -1029,12 +1029,13 @@ function drawProjectile(pr){
     ctx.restore(); return;
   }
   if(pr.kind === 'qiBomb'){
+    /* ★ 气弹光斑大幅缩小（原来渐变半径 112px、白核加法叠加，多颗重叠就是一屏白斑） */
     ctx.globalCompositeOperation = 'lighter';
-    const r = 45;
-    const g = ctx.createRadialGradient(px,py,5,px,py,r*2.5);
-    g.addColorStop(0,'#fff'); g.addColorStop(0.2,'#ffe066'); g.addColorStop(0.5,pr.color); g.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px,py,r*2.5,0,TAU); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px,py,r*0.5,0,TAU); ctx.fill();
+    const r = 22;
+    const g = ctx.createRadialGradient(px,py,4,px,py,r*1.5);
+    g.addColorStop(0,'rgba(255,255,255,0.9)'); g.addColorStop(0.25,pr.color); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px,py,r*1.5,0,TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(px,py,r*0.32,0,TAU); ctx.fill();
   }
   if(pr.kind === 'dart'){
     ctx.translate(px,py); ctx.rotate(pr.rot);
