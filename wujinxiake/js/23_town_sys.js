@@ -36,10 +36,11 @@ function spawnWaveEnemies(){
   const isBossWave = G.currentIsBoss || false;
   G.enemies = G.enemies.filter(e => !e.alive);
 
-  /* ★ 每波怪数：模板数量 + 关卡增量 + 房间序号增量（越往深处越密） */
+  /* ★ 每波怪数：模板数量 + 关卡增量 + 房间序号增量（越往深处越密）
+     ★ 上限 18→12：之前后期一波能到 18 只，全挤在玩家右侧一小片区域里太密集 */
   const _cfg = G.currentLvlCfg || getLevelConfig(G.levelIdx || 0);
   const _extra = isBossWave ? 0 : ((_cfg.extraPerWave || 0) + (G.waveIdx || 0));
-  const _total = Math.min(18, wave.length + _extra);
+  const _total = Math.min(12, wave.length + _extra);
 
   for(let i=0;i<_total;i++){
     const typeKey = wave[i % wave.length];
@@ -61,10 +62,13 @@ function spawnWaveEnemies(){
       atk = baseDef.atk * atkMul;
       def = Object.assign({}, baseDef, { scale:scale });
     }
-    /* ★ 分批从右侧涌入：每 6 只一排，排与排略微错开，避免排到房间外 */
+    /* ★ 分批从右侧涌入：每 6 只一排。
+       ★ 间距 84→130、排距 44→90、纵向 ±50→±85：之前一排 6 只挤在
+       约 420px 宽、100px 高的小片区域里，一进场就叠成一坨；现在拉开成
+       约 650px 宽、170px 高的一片，进场后也有喘息空间。 */
     const _slot = i % 6, _ring = Math.floor(i / 6);
-    const spawnDist = isBossWave ? 600+rand(-30,30) : 470 + _slot*84 + _ring*44 + rand(-28,28);
-    const ex = p.x + spawnDist, ey = p.y+rand(-50,50);
+    const spawnDist = isBossWave ? 600+rand(-30,30) : 470 + _slot*130 + _ring*90 + rand(-40,40);
+    const ex = p.x + spawnDist, ey = p.y+rand(-85,85);
     const spdMul = G.currentSpdMul || 1.0;
     /* ★ DNF式：敌人等级和防御 */
     const eLv = (G.levelIdx || 0) + 1;
