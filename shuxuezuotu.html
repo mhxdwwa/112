@@ -290,7 +290,9 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 // MathLab v8.0 - Complete rewrite with fixes
 // ============================================================
 const bgC=document.getElementById('bgC'),imgC=document.getElementById('imgC'),mainC=document.getElementById('mainC'),ovC=document.getElementById('ovC');
-const bgX=bgC.getContext('2d'),imgX=imgC.getContext('2d'),mx=mainC.getContext('2d'),ox=ovC.getContext('2d');
+// 截图功能需要把绘制临时重定向到离屏画布，所以这三个上下文用 let
+let bgX=bgC.getContext('2d'),imgX=imgC.getContext('2d'),mx=mainC.getContext('2d');
+const ox=ovC.getContext('2d');
 const cw=document.getElementById('cw');
 let dpr=window.devicePixelRatio||1;
 
@@ -348,8 +350,8 @@ function snapPt(m){
   return{x:Math.round(m.x*10)/10,y:Math.round(m.y*10)/10};
 }
 
-function resize(dprOverride){
-  dpr=(typeof dprOverride==='number'&&dprOverride>0)?dprOverride:(window.devicePixelRatio||1);
+function resize(){
+  dpr=window.devicePixelRatio||1;
   const w=cw.clientWidth,h=cw.clientHeight;
   [bgC,imgC,mainC,ovC].forEach(c=>{
     c.width=w*dpr;c.height=h*dpr;
@@ -3958,16 +3960,17 @@ document.getElementById('mobileCloseBtn').addEventListener('click',()=>{
 });
 
 // ============================================================
-// === 截图功能（框选 → 高清图铺满 → 手写 → 关闭恢复） ===
+// === 截图功能（框选 → 矢量重绘放大铺满屏幕 → 手写 → 关闭恢复） ===
 // ============================================================
-const SNAP_BOTTOM_H=56;   // 底部按钮条高度（关闭按钮固定在其最左下角，位于图片外）
+const SNAP_BOTTOM_H=56;   // 底部按钮条高度（关闭按钮固定在其最左下角，位于图片之外）
 const SNAP={
   selecting:false,        // 正在框选
   viewing:false,          // 已截图，正在手写
   sx:0,sy:0,cx:0,cy:0,    // 框选起点/当前点（画布内 CSS 像素）
   pid:null,               // 框选指针 id
-  cap:null,               // 截图 canvas（高清）
-  dx:0,dy:0,dw:0,dh:0,    // 截图在屏幕上的显示矩形
+  region:null,            // 截图区域（原屏幕 CSS 像素）
+  cap:null,               // 重绘出来的高清图 canvas
+  dx:0,dy:0,dw:0,dh:0,    // 高清图在屏幕上的显示矩形
   strokes:[],cur:null,drawPid:null  // 手写笔迹
 };
 const snapSelLayer=document.getElementById('snapSelLayer');
@@ -3980,6 +3983,29 @@ const snapImgBox=document.getElementById('snapImgBox');
 const snapAnnot=document.getElementById('snapAnnot');
 const snapActx=snapAnnot.getContext('2d');
 const btnSnap=document.getElementById('btnSnap');
+const snapSelTip=document.getElementById('snapSelTip');
+
+// 触屏按钮：不依赖浏览器合成 click（部分手机/模拟器会吞掉），
+// pointerup / touchend / click 谁先到就用谁，同一次手势只执行一次
+function bindTapAction(el,fn){
+  if(!el)return;
+  let last=0;
+  const reset=()=>{last=0};
+  el.addEventListener('pointerdown',reset,true);
+  el.addEventListener('touchstart',reset,true);
+  el.addEventListener('mousedown',reset,true);
+  const run=(e)=>{
+    if(e&&e.cancelable!==undefined)e.preventDefault();
+    if(e&&e.stopPropagation)e.stopPropagation();
+    const now=Date.now();
+    if(now-last<400)return;
+    last=now;
+    fn(e);
+  };
+  el.addEventListener('pointerup',run);
+  el.addEventListener('touchend',run);
+  el.addEventListener('click',run);
+}
 
 /* ---------- 框选 ---------- */
 function snapSelBox(){
@@ -4006,17 +4032,17 @@ function updateSnapSelRect(){
 function startSnapSelect(){
   if(SNAP.viewing)return;
   if(SNAP.selecting){cancelSnapSelect();return}
-  SNAP.selecting=true;SNAP.pid=null;
+  SNAP.selecting=true;SNAP.pid=null;snapSelActive=false;
   SNAP.sx=SNAP.sy=SNAP.cx=SNAP.cy=0;
   snapSelRect.style.display='none';
   snapSelCtrl.style.display='none';
   snapDim.style.display='block';
   snapSelLayer.classList.add('on');
   btnSnap.classList.add('on');
-  document.getElementById('snapSelTip').textContent='按住并拖动，框选要截图的范围';
+  snapSelTip.textContent='按住并拖动，框选要截图的范围';
 }
 function cancelSnapSelect(){
-  SNAP.selecting=false;SNAP.pid=null;
+  SNAP.selecting=false;SNAP.pid=null;snapSelActive=false;
   snapSelLayer.classList.remove('on');
   snapSelRect.style.display='none';
   snapSelCtrl.style.display='none';
@@ -4024,165 +4050,178 @@ function cancelSnapSelect(){
   btnSnap.classList.remove('on');
 }
 function resetSnapSelection(){
-  SNAP.pid=null;
+  SNAP.pid=null;snapSelActive=false;
   SNAP.sx=SNAP.sy=SNAP.cx=SNAP.cy=0;
   snapSelRect.style.display='none';
   snapSelCtrl.style.display='none';
   snapDim.style.display='block';
-  document.getElementById('snapSelTip').textContent='按住并拖动，框选要截图的范围';
+  snapSelTip.textContent='按住并拖动，框选要截图的范围';
 }
 function placeSnapCtrl(){
   const b=snapSelBox();
-  const W=snapSelLayer.clientWidth,H=snapSelLayer.clientHeight;
+  const W=snapSelLayer.clientWidth||1,H=snapSelLayer.clientHeight||1;
   snapSelCtrl.style.display='flex';
   const barW=snapSelCtrl.offsetWidth||124;
   const barH=snapSelCtrl.offsetHeight||60;
-  let left=Math.max(8,Math.min(b.x+b.w-barW,W-barW-8));
+  const left=Math.max(8,Math.min(b.x+b.w-barW,W-barW-8));
   let top=b.y+b.h+10;
   if(top+barH>H-8)top=Math.max(8,b.y-barH-10);
   snapSelCtrl.style.left=left+'px';
   snapSelCtrl.style.top=top+'px';
-  document.getElementById('snapSelTip').textContent='点 ✓ 按这个范围截图，点 ✕ 重新框选';
+  snapSelTip.textContent='点 ✓ 按这个范围截图，点 ✕ 重新框选';
 }
 
+// 注意：这里刻意不用 setPointerCapture —— 部分手机浏览器(尤其 iOS)在触摸时
+// 一 capture 就不再派发 pointermove，导致框选永远只有起笔那一个点。
+// 改为在 window 上监听，抬手位置一定拿得到。
+let snapSelActive=false;
 snapSelLayer.addEventListener('pointerdown',e=>{
   if(!SNAP.selecting||SNAP.pid!==null)return;
+  if(snapSelCtrl.contains(e.target))return;   // 按在 ✓/✕ 上时不要开始新框选
   e.preventDefault();
   SNAP.pid=e.pointerId;
-  try{snapSelLayer.setPointerCapture(e.pointerId)}catch(_){}
+  snapSelActive=true;
   const p=snapSelPos(e);
   SNAP.sx=p.x;SNAP.sy=p.y;SNAP.cx=p.x;SNAP.cy=p.y;
   snapDim.style.display='none';
   snapSelCtrl.style.display='none';
   snapSelRect.style.display='block';
-  document.getElementById('snapSelTip').textContent='拖到合适大小后松手，再点 ✓ 或 ✕';
+  snapSelTip.textContent='拖到合适大小后松手，再点 ✓ 或 ✕';
   updateSnapSelRect();
 });
-snapSelLayer.addEventListener('pointermove',e=>{
-  if(!SNAP.selecting||SNAP.pid!==e.pointerId)return;
-  e.preventDefault();
+function onSnapSelMove(e){
+  if(!snapSelActive||SNAP.pid!==e.pointerId)return;
+  if(e.cancelable)e.preventDefault();
   const p=snapSelPos(e);
   SNAP.cx=p.x;SNAP.cy=p.y;
   updateSnapSelRect();
-});
-function snapSelEnd(e){
-  if(!SNAP.selecting||SNAP.pid!==e.pointerId)return;
-  SNAP.pid=null;
+}
+function onSnapSelEnd(e){
+  if(!snapSelActive)return;
+  if(SNAP.pid!==null&&e.pointerId!==undefined&&e.pointerId!==SNAP.pid)return;
+  snapSelActive=false;SNAP.pid=null;
+  // 用抬手时的真实坐标补一次，防止最后一段 move 丢失
+  if(e.type!=='pointercancel'&&typeof e.clientX==='number'&&(e.clientX||e.clientY)){
+    const p=snapSelPos(e);
+    SNAP.cx=p.x;SNAP.cy=p.y;
+    updateSnapSelRect();
+  }
   const b=snapSelBox();
+  const moved=Math.abs(SNAP.cx-SNAP.sx)+Math.abs(SNAP.cy-SNAP.sy);
   if(b.w<20||b.h<20){
-    showToast('框选范围太小，请重新拖动');
     resetSnapSelection();
+    if(moved>10)showToast('框选范围太小，请拖动大一点');
     return;
   }
   placeSnapCtrl();
 }
-snapSelLayer.addEventListener('pointerup',snapSelEnd);
-snapSelLayer.addEventListener('pointercancel',snapSelEnd);
+window.addEventListener('pointermove',onSnapSelMove,{passive:false});
+window.addEventListener('pointerup',onSnapSelEnd);
+window.addEventListener('pointercancel',onSnapSelEnd);
 
-document.getElementById('snapOk').addEventListener('click',e=>{
-  e.stopPropagation();e.preventDefault();
-  confirmSnapSelection();
-});
-document.getElementById('snapNo').addEventListener('click',e=>{
-  e.stopPropagation();e.preventDefault();
-  resetSnapSelection();
-});
+bindTapAction(document.getElementById('snapOk'),()=>confirmSnapSelection());
+bindTapAction(document.getElementById('snapNo'),()=>resetSnapSelection());
 
-/* ---------- 高清抓取 ---------- */
-function renderSnapCapture(b){
-  const W=cw.clientWidth,H=cw.clientHeight;
-  const savedDpr=dpr,savedSel=G.selected,savedHov=G.hovered;
-  let out=null;
-  // 截图里不要出现选中高亮
-  G.selected=null;G.hovered=null;
-  try{
-    // 先用更高的像素密度重绘一次，让线段/文字在截图里更清晰（高清）
-    const maxCanvasDpr=Math.sqrt(14000000/Math.max(1,W*H));      // 防止超出浏览器 canvas 上限
-    const hiDpr=Math.max(1,Math.min(3.5,savedDpr*1.75,maxCanvasDpr));
-    let useDpr=savedDpr;
-    if(hiDpr>savedDpr+0.02){
-      resize(hiDpr);
-      if(bgC.width>=Math.floor(W*hiDpr)-1&&mainC.height>=Math.floor(H*hiDpr)-1){
-        useDpr=hiDpr;
-      }else{
-        resize(savedDpr);   // 高分辨率画布创建失败，退回原分辨率
-        useDpr=savedDpr;
-      }
-    }
-    const sx=b.x*useDpr,sy=b.y*useDpr,sw=b.w*useDpr,sh=b.h*useDpr;
-    let ow=Math.max(1,Math.round(sw)),oh=Math.max(1,Math.round(sh));
-    const capArea=12000000;
-    if(ow*oh>capArea){
-      const k=Math.sqrt(capArea/(ow*oh));
-      ow=Math.max(1,Math.round(ow*k));oh=Math.max(1,Math.round(oh*k));
-    }
-    out=document.createElement('canvas');
-    out.width=ow;out.height=oh;
-    const c=out.getContext('2d');
-    c.imageSmoothingEnabled=true;
-    if('imageSmoothingQuality' in c)c.imageSmoothingQuality='high';
-    c.fillStyle='#ffffff';c.fillRect(0,0,ow,oh);
-    [bgC,imgC,mainC].forEach(cv=>{
-      try{c.drawImage(cv,sx,sy,sw,sh,0,0,ow,oh)}catch(_){}
-    });
-  }catch(err){
-    out=null;
-  }finally{
-    if(dpr!==savedDpr)resize(savedDpr);
-    G.selected=savedSel;G.hovered=savedHov;
-    draw();
-  }
-  return out;
-}
-
-function confirmSnapSelection(){
-  const b=snapSelBox();
-  if(b.w<20||b.h<20){showToast('框选范围太小，请重新拖动');resetSnapSelection();return}
-  const cap=renderSnapCapture(b);
-  if(!cap||!cap.width){showToast('截图失败，请重试');return}
-  enterSnapView(cap);
-}
-
-/* ---------- 高清图铺屏 + 手写 ---------- */
-function enterSnapView(cap){
-  SNAP.viewing=true;SNAP.cap=cap;
-  cancelSnapSelect();
-  btnSnap.classList.add('on');
-  snapImgBox.innerHTML='';
-  cap.style.display='block';
-  cap.style.width='100%';
-  cap.style.height='100%';
-  snapImgBox.appendChild(cap);
-  SNAP.strokes=[];SNAP.cur=null;SNAP.drawPid=null;
-  snapViewLayer.classList.add('on');
-  layoutSnapView();
-  showToast('截图已铺到屏幕上，可直接手写');
-}
-function layoutSnapView(){
-  if(!SNAP.cap)return;
+/* ---------- 矢量重绘：按"放大后的屏幕分辨率"重新渲染，放大多少倍都不糊 ---------- */
+function snapDisplaySize(){
   const W=cw.clientWidth,H=cw.clientHeight;
   const availW=Math.max(40,W-20);
   const availH=Math.max(40,H-SNAP_BOTTOM_H-28);
-  const iw=SNAP.cap.width||1,ih=SNAP.cap.height||1;
-  let sc=Math.min(availW/iw,availH/ih);
-  sc=Math.min(sc,4);        // 小范围截图最多放大 4 倍，避免糊掉
-  sc=Math.max(sc,0.05);
-  const dw=Math.max(1,Math.round(iw*sc)),dh=Math.max(1,Math.round(ih*sc));
-  const oldW=SNAP.dw,oldH=SNAP.dh;
-  // 屏幕尺寸变化时，把已有笔迹按比例跟到新位置
-  if(oldW>0&&oldH>0&&SNAP.strokes.length&&(Math.abs(dw-oldW)>0.5||Math.abs(dh-oldH)>0.5)){
-    const kx=dw/oldW,ky=dh/oldH;
-    SNAP.strokes.forEach(st=>st.pts.forEach(p=>{p.x*=kx;p.y*=ky}));
+  const r=SNAP.region||{w:1,h:1};
+  const k=Math.min(availW/r.w,availH/r.h);   // 铺满可视区，不限制放大倍数
+  return{dw:Math.max(1,Math.round(r.w*k)),dh:Math.max(1,Math.round(r.h*k))};
+}
+
+function buildSnapImage(b,dw,dh){
+  const MAX_AREA=9000000,MAX_SIDE=8192;
+  let nw=Math.round(dw*dpr*2),nh=Math.round(dh*dpr*2);   // 2 倍超采样，边缘更细腻
+  if(nw*nh>MAX_AREA||nw>MAX_SIDE||nh>MAX_SIDE){
+    const k=Math.min(Math.sqrt(MAX_AREA/(nw*nh)),MAX_SIDE/nw,MAX_SIDE/nh);
+    nw=Math.max(1,Math.floor(nw*k));
+    nh=Math.max(1,Math.floor(nh*k));
   }
+  const s=nw/b.w;                 // 图像像素 / 原屏幕 CSS 像素
+  const cvs=document.createElement('canvas');
+  cvs.width=nw;cvs.height=nh;
+  const ctx=cvs.getContext('2d');
+  if(!ctx)return null;
+  // 把原屏幕上的 (b.x,b.y) 映射到画布左上角，并放大 s 倍：
+  // 线宽、字号、虚线都跟着一起放大，看起来就是"原画面放大"，但因为是重新画的，所以清晰
+  ctx.setTransform(s,0,0,s,-b.x*s,-b.y*s);
+  // 背景 / 上传图片 / 图形 三层叠加在同一张画布上，只让第一次 clearRect 生效
+  let clears=0;
+  const realClear=ctx.clearRect.bind(ctx);
+  ctx.clearRect=function(x,y,w,h){if(clears++===0)realClear(x,y,w,h)};
+  const sBg=bgX,sImg=imgX,sMain=mx;
+  try{
+    bgX=ctx;imgX=ctx;mx=ctx;
+    drawBg();
+    drawImage();
+    G.funcs.forEach(f=>drawFunc(f));
+    G.objs.forEach(o=>drawObj(o,false,false));
+  }catch(err){
+    console.warn('截图重绘失败',err);
+    return null;
+  }finally{
+    bgX=sBg;imgX=sImg;mx=sMain;
+  }
+  return cvs;
+}
+
+function layoutSnapView(){
+  const W=cw.clientWidth,H=cw.clientHeight;
+  const dw=SNAP.dw,dh=SNAP.dh;
+  if(!dw||!dh)return;
   const dx=Math.round((W-dw)/2);
   const dy=Math.round(Math.max(14,(H-SNAP_BOTTOM_H-dh)/2));
-  SNAP.dx=dx;SNAP.dy=dy;SNAP.dw=dw;SNAP.dh=dh;
+  SNAP.dx=dx;SNAP.dy=dy;
   snapImgWrap.style.left=dx+'px';
   snapImgWrap.style.top=dy+'px';
   snapImgWrap.style.width=dw+'px';
   snapImgWrap.style.height=dh+'px';
   resizeSnapAnnot();
 }
+
+function refreshSnapImage(){
+  if(!SNAP.region)return false;
+  const size=snapDisplaySize();
+  const cap=buildSnapImage(SNAP.region,size.dw,size.dh);
+  if(!cap)return false;
+  const oldDw=SNAP.dw||size.dw,oldDh=SNAP.dh||size.dh;
+  SNAP.cap=cap;SNAP.dw=size.dw;SNAP.dh=size.dh;
+  snapImgBox.innerHTML='';
+  cap.style.display='block';
+  cap.style.width='100%';
+  cap.style.height='100%';
+  snapImgBox.appendChild(cap);
+  // 屏幕尺寸变了，已有笔迹按比例跟随
+  if(SNAP.strokes.length&&(size.dw!==oldDw||size.dh!==oldDh)){
+    const kx=size.dw/oldDw,ky=size.dh/oldDh;
+    SNAP.strokes.forEach(st=>st.pts.forEach(p=>{p.x*=kx;p.y*=ky}));
+  }
+  layoutSnapView();
+  return true;
+}
+
+function confirmSnapSelection(){
+  const b=snapSelBox();
+  if(b.w<20||b.h<20){showToast('框选范围太小，请拖动大一点');resetSnapSelection();return}
+  SNAP.region={x:b.x,y:b.y,w:b.w,h:b.h};
+  SNAP.dw=0;SNAP.dh=0;
+  enterSnapView();
+}
+
+/* ---------- 高清图铺屏 + 手写 ---------- */
+function enterSnapView(){
+  SNAP.strokes=[];SNAP.cur=null;SNAP.drawPid=null;
+  if(!refreshSnapImage()){showToast('截图失败，请重试');SNAP.region=null;return}
+  SNAP.viewing=true;
+  cancelSnapSelect();
+  btnSnap.classList.add('on');
+  snapViewLayer.classList.add('on');
+  showToast('已放大铺满屏幕，可直接手写');
+}
+
 function resizeSnapAnnot(){
   const w=Math.max(1,Math.round(SNAP.dw*dpr)),h=Math.max(1,Math.round(SNAP.dh*dpr));
   snapAnnot.width=w;snapAnnot.height=h;
@@ -4213,11 +4252,9 @@ function snapAnnotPos(e){
   return{x:e.clientX-r.left,y:e.clientY-r.top};
 }
 snapAnnot.addEventListener('pointerdown',e=>{
-  if(!SNAP.viewing)return;
+  if(!SNAP.viewing||SNAP.drawPid!==null)return;
   e.preventDefault();e.stopPropagation();
-  if(SNAP.drawPid!==null)return;
   SNAP.drawPid=e.pointerId;
-  try{snapAnnot.setPointerCapture(e.pointerId)}catch(_){}
   const p=snapAnnotPos(e);
   const st={
     color:G.color||'#2563eb',
@@ -4229,9 +4266,9 @@ snapAnnot.addEventListener('pointerdown',e=>{
   snapActx.lineWidth=st.width;snapActx.lineCap='round';snapActx.lineJoin='round';
   snapActx.beginPath();snapActx.arc(p.x,p.y,st.width/2,0,Math.PI*2);snapActx.fill();
 });
-snapAnnot.addEventListener('pointermove',e=>{
-  if(!SNAP.viewing||SNAP.drawPid!==e.pointerId||!SNAP.cur)return;
-  e.preventDefault();
+function onSnapAnnotMove(e){
+  if(SNAP.drawPid===null||e.pointerId!==SNAP.drawPid||!SNAP.cur)return;
+  if(e.cancelable)e.preventDefault();
   const c=snapActx,st=SNAP.cur;
   c.strokeStyle=st.color;c.lineWidth=st.width;c.lineCap='round';c.lineJoin='round';
   let evs=null;
@@ -4244,17 +4281,17 @@ snapAnnot.addEventListener('pointermove',e=>{
     c.beginPath();c.moveTo(last?last.x:p.x,last?last.y:p.y);c.lineTo(p.x,p.y);c.stroke();
     st.pts.push(p);
   });
-},{passive:false});
-function endSnapStroke(e){
-  if(SNAP.drawPid!==null&&e.pointerId!==undefined&&e.pointerId!==SNAP.drawPid)return;
+}
+function onSnapAnnotEnd(e){
+  if(SNAP.drawPid===null)return;
+  if(e.pointerId!==undefined&&e.pointerId!==SNAP.drawPid)return;
   SNAP.drawPid=null;SNAP.cur=null;
 }
-snapAnnot.addEventListener('pointerup',endSnapStroke);
-snapAnnot.addEventListener('pointercancel',endSnapStroke);
-snapAnnot.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')endSnapStroke(e)});
+window.addEventListener('pointermove',onSnapAnnotMove,{passive:false});
+window.addEventListener('pointerup',onSnapAnnotEnd);
+window.addEventListener('pointercancel',onSnapAnnotEnd);
 
-document.getElementById('snapUndo').addEventListener('click',e=>{
-  e.stopPropagation();
+bindTapAction(document.getElementById('snapUndo'),()=>{
   if(!SNAP.strokes.length){showToast('没有可撤销的笔迹');return}
   SNAP.strokes.pop();
   drawSnapAnnot();
@@ -4265,24 +4302,22 @@ function closeSnapView(){
   SNAP.viewing=false;SNAP.drawPid=null;SNAP.cur=null;SNAP.strokes=[];
   snapViewLayer.classList.remove('on');
   snapImgBox.innerHTML='';
-  SNAP.cap=null;
+  SNAP.cap=null;SNAP.region=null;SNAP.dw=0;SNAP.dh=0;
   btnSnap.classList.remove('on');
   // 原画面各图层内容从未被修改，重绘即可完整恢复
   drawBg();drawImage();draw();
   showToast('已关闭截图，回到截图前的画面');
 }
-document.getElementById('snapClose').addEventListener('click',e=>{
-  e.stopPropagation();
-  closeSnapView();
-});
+bindTapAction(document.getElementById('snapClose'),()=>closeSnapView());
 snapViewLayer.addEventListener('pointerdown',e=>{
-  // 点击图片外的空白区域不做任何事，只阻止穿透到画布
+  // 点图片外的空白区域不做任何事，只阻止穿透到下面画布
   e.stopPropagation();
 });
 
 /* ---------- 入口按钮 / 键盘 / 尺寸变化 ---------- */
 if(btnSnap){
-  btnSnap.addEventListener('click',()=>{
+  // 用 pointerup 兜底，手机上不依赖浏览器合成 click
+  bindTapAction(btnSnap,()=>{
     if(SNAP.viewing){closeSnapView();return}
     startSnapSelect();
   });
@@ -4307,8 +4342,8 @@ document.addEventListener('keydown',e=>{
   },true);
 })();
 window.addEventListener('resize',()=>{
-  if(SNAP.viewing)layoutSnapView();
-  if(SNAP.selecting&&SNAP.pid===null)resetSnapSelection();
+  if(SNAP.viewing)refreshSnapImage();          // 重新按新尺寸渲染，仍然清晰
+  else if(SNAP.selecting&&!snapSelActive)cancelSnapSelect();
 });
 
 // Simple toast notification
