@@ -139,6 +139,31 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
 .photo-role-buttons{display:flex;flex-direction:column;gap:4px}
 .photo-role-btn{padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;border:1.5px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;transition:all .15s}
 .photo-role-btn:active{transform:scale(.95);background:var(--blue);color:#fff}
+/* ===== 截图功能（框选 → 高清图铺屏 → 手写 → 关闭恢复） ===== */
+.snap-sel-layer{position:absolute;inset:0;z-index:120;display:none;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.snap-sel-layer.on{display:block}
+.snap-dim{position:absolute;inset:0;background:rgba(15,23,42,.45);pointer-events:none}
+.snap-sel-rect{position:absolute;display:none;border:2px solid var(--blue);background:rgba(37,99,235,.06);box-shadow:0 0 0 9999px rgba(15,23,42,.45),0 0 14px rgba(37,99,235,.55);pointer-events:none;box-sizing:border-box;border-radius:2px}
+.snap-sel-tip{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(37,99,235,.95);color:#fff;font-size:12px;font-weight:600;padding:7px 14px;border-radius:20px;pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.2);white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+.snap-sel-ctrl{position:absolute;display:none;gap:10px;align-items:center;padding:6px;background:rgba(255,255,255,.97);border-radius:40px;box-shadow:0 6px 20px rgba(0,0,0,.25);border:1px solid #e5e7eb;z-index:2}
+.snap-btn{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;line-height:1;transition:transform .1s;flex-shrink:0}
+.snap-btn:active{transform:scale(.9)}
+.snap-btn.ok{background:#059669;box-shadow:0 2px 8px rgba(5,150,105,.35)}
+.snap-btn.no{background:var(--red);box-shadow:0 2px 8px rgba(220,38,38,.3)}
+.snap-view-layer{position:absolute;inset:0;z-index:130;display:none;background:#fff;touch-action:none;user-select:none;-webkit-user-select:none}
+.snap-view-layer.on{display:block}
+.snap-img-wrap{position:absolute;overflow:hidden;background:#fff;border-radius:4px;box-shadow:0 3px 16px rgba(0,0,0,.16);border:1px solid #e5e7eb}
+.snap-img-box{position:absolute;inset:0}
+.snap-img-box canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block}
+#snapAnnot{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;cursor:crosshair;z-index:2}
+.snap-bottom{position:absolute;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;gap:10px;padding:0 10px;background:#fff;border-top:1px solid #e5e7eb;z-index:3}
+.snap-close{display:flex;align-items:center;gap:6px;padding:10px 16px;border-radius:8px;background:var(--red);color:#fff;font-size:13px;font-weight:700;box-shadow:0 2px 10px rgba(220,38,38,.28);flex-shrink:0}
+.snap-close:active{transform:scale(.95);background:#b91c1c}
+.snap-undo{padding:9px 14px;border-radius:8px;border:1.5px solid var(--bd);background:#fff;color:#111827;font-size:13px;font-weight:600;flex-shrink:0}
+.snap-undo:active{transform:scale(.95);background:#f3f4f6}
+.snap-hint{margin-left:auto;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:560px){.snap-hint{display:none}}
+@media (pointer:coarse){.snap-btn{width:54px;height:54px;font-size:26px}.snap-close{padding:12px 18px;font-size:14px}}
 </style>
 </head>
 <body>
@@ -186,6 +211,28 @@ input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueg)}
       <div class="up-row" id="upShapes"></div>
       <div class="up-nets" id="upNets"></div>
       <button class="up-close" id="upClose">关闭</button>
+    </div>
+    <!-- 截图：框选层 -->
+    <div class="snap-sel-layer" id="snapSelLayer">
+      <div class="snap-dim" id="snapDim"></div>
+      <div class="snap-sel-rect" id="snapSelRect"></div>
+      <div class="snap-sel-tip" id="snapSelTip">按住并拖动，框选要截图的范围</div>
+      <div class="snap-sel-ctrl" id="snapSelCtrl">
+        <button class="snap-btn ok" id="snapOk" title="截取好了">✓</button>
+        <button class="snap-btn no" id="snapNo" title="重新框选">✕</button>
+      </div>
+    </div>
+    <!-- 截图：查看/手写层 -->
+    <div class="snap-view-layer" id="snapViewLayer">
+      <div class="snap-img-wrap" id="snapImgWrap">
+        <div class="snap-img-box" id="snapImgBox"></div>
+        <canvas id="snapAnnot"></canvas>
+      </div>
+      <div class="snap-bottom">
+        <button class="snap-close" id="snapClose">✕ 关闭截图</button>
+        <button class="snap-undo" id="snapUndo">↶ 撤销</button>
+        <span class="snap-hint" id="snapHint">截图模式：可用画笔直接手写 · 关闭后回到截图前的画面</span>
+      </div>
     </div>
   </div>
   <div class="func-panel" id="funcPanel">
@@ -301,8 +348,8 @@ function snapPt(m){
   return{x:Math.round(m.x*10)/10,y:Math.round(m.y*10)/10};
 }
 
-function resize(){
-  dpr=window.devicePixelRatio||1;
+function resize(dprOverride){
+  dpr=(typeof dprOverride==='number'&&dprOverride>0)?dprOverride:(window.devicePixelRatio||1);
   const w=cw.clientWidth,h=cw.clientHeight;
   [bgC,imgC,mainC,ovC].forEach(c=>{
     c.width=w*dpr;c.height=h*dpr;
@@ -2753,6 +2800,7 @@ tbHTML+='<div style="flex:1"></div>';
 // Center group: main tools
 tbHTML+=`<button class="tb on" data-t="move"><span>☝</span><span class="tb-l">移动</span></button>`;
 tbHTML+=`<button class="tb" data-t="pen"><span>✎</span><span class="tb-l">画笔</span></button>`;
+tbHTML+=`<button class="tb" id="btnSnap" title="截图框选"><span>⬚</span><span class="tb-l">截图</span></button>`;
 tbHTML+=`<button class="tb" data-t="eraser"><span>⌫</span><span class="tb-l">擦除</span></button>`;
 tbHTML+='<button class="ab" id="btnUndo" title="撤销">↩</button>';
 tbHTML+='<button class="ab" id="btnRedo" title="重做">↪</button>';
@@ -3907,6 +3955,360 @@ document.getElementById('mobileCloseBtn').addEventListener('click',()=>{
   document.getElementById('mobileCodeInput').readOnly=false;
   document.getElementById('mobileCodeInput').style.background='#fff';
   stopPhotoUpload();
+});
+
+// ============================================================
+// === 截图功能（框选 → 高清图铺满 → 手写 → 关闭恢复） ===
+// ============================================================
+const SNAP_BOTTOM_H=56;   // 底部按钮条高度（关闭按钮固定在其最左下角，位于图片外）
+const SNAP={
+  selecting:false,        // 正在框选
+  viewing:false,          // 已截图，正在手写
+  sx:0,sy:0,cx:0,cy:0,    // 框选起点/当前点（画布内 CSS 像素）
+  pid:null,               // 框选指针 id
+  cap:null,               // 截图 canvas（高清）
+  dx:0,dy:0,dw:0,dh:0,    // 截图在屏幕上的显示矩形
+  strokes:[],cur:null,drawPid:null  // 手写笔迹
+};
+const snapSelLayer=document.getElementById('snapSelLayer');
+const snapDim=document.getElementById('snapDim');
+const snapSelRect=document.getElementById('snapSelRect');
+const snapSelCtrl=document.getElementById('snapSelCtrl');
+const snapViewLayer=document.getElementById('snapViewLayer');
+const snapImgWrap=document.getElementById('snapImgWrap');
+const snapImgBox=document.getElementById('snapImgBox');
+const snapAnnot=document.getElementById('snapAnnot');
+const snapActx=snapAnnot.getContext('2d');
+const btnSnap=document.getElementById('btnSnap');
+
+/* ---------- 框选 ---------- */
+function snapSelBox(){
+  return{
+    x:Math.min(SNAP.sx,SNAP.cx),y:Math.min(SNAP.sy,SNAP.cy),
+    w:Math.abs(SNAP.cx-SNAP.sx),h:Math.abs(SNAP.cy-SNAP.sy)
+  };
+}
+function snapSelPos(e){
+  const r=snapSelLayer.getBoundingClientRect();
+  const W=snapSelLayer.clientWidth||1,H=snapSelLayer.clientHeight||1;
+  return{
+    x:Math.max(0,Math.min(W,e.clientX-r.left)),
+    y:Math.max(0,Math.min(H,e.clientY-r.top))
+  };
+}
+function updateSnapSelRect(){
+  const b=snapSelBox();
+  snapSelRect.style.left=b.x+'px';
+  snapSelRect.style.top=b.y+'px';
+  snapSelRect.style.width=b.w+'px';
+  snapSelRect.style.height=b.h+'px';
+}
+function startSnapSelect(){
+  if(SNAP.viewing)return;
+  if(SNAP.selecting){cancelSnapSelect();return}
+  SNAP.selecting=true;SNAP.pid=null;
+  SNAP.sx=SNAP.sy=SNAP.cx=SNAP.cy=0;
+  snapSelRect.style.display='none';
+  snapSelCtrl.style.display='none';
+  snapDim.style.display='block';
+  snapSelLayer.classList.add('on');
+  btnSnap.classList.add('on');
+  document.getElementById('snapSelTip').textContent='按住并拖动，框选要截图的范围';
+}
+function cancelSnapSelect(){
+  SNAP.selecting=false;SNAP.pid=null;
+  snapSelLayer.classList.remove('on');
+  snapSelRect.style.display='none';
+  snapSelCtrl.style.display='none';
+  snapDim.style.display='block';
+  btnSnap.classList.remove('on');
+}
+function resetSnapSelection(){
+  SNAP.pid=null;
+  SNAP.sx=SNAP.sy=SNAP.cx=SNAP.cy=0;
+  snapSelRect.style.display='none';
+  snapSelCtrl.style.display='none';
+  snapDim.style.display='block';
+  document.getElementById('snapSelTip').textContent='按住并拖动，框选要截图的范围';
+}
+function placeSnapCtrl(){
+  const b=snapSelBox();
+  const W=snapSelLayer.clientWidth,H=snapSelLayer.clientHeight;
+  snapSelCtrl.style.display='flex';
+  const barW=snapSelCtrl.offsetWidth||124;
+  const barH=snapSelCtrl.offsetHeight||60;
+  let left=Math.max(8,Math.min(b.x+b.w-barW,W-barW-8));
+  let top=b.y+b.h+10;
+  if(top+barH>H-8)top=Math.max(8,b.y-barH-10);
+  snapSelCtrl.style.left=left+'px';
+  snapSelCtrl.style.top=top+'px';
+  document.getElementById('snapSelTip').textContent='点 ✓ 按这个范围截图，点 ✕ 重新框选';
+}
+
+snapSelLayer.addEventListener('pointerdown',e=>{
+  if(!SNAP.selecting||SNAP.pid!==null)return;
+  e.preventDefault();
+  SNAP.pid=e.pointerId;
+  try{snapSelLayer.setPointerCapture(e.pointerId)}catch(_){}
+  const p=snapSelPos(e);
+  SNAP.sx=p.x;SNAP.sy=p.y;SNAP.cx=p.x;SNAP.cy=p.y;
+  snapDim.style.display='none';
+  snapSelCtrl.style.display='none';
+  snapSelRect.style.display='block';
+  document.getElementById('snapSelTip').textContent='拖到合适大小后松手，再点 ✓ 或 ✕';
+  updateSnapSelRect();
+});
+snapSelLayer.addEventListener('pointermove',e=>{
+  if(!SNAP.selecting||SNAP.pid!==e.pointerId)return;
+  e.preventDefault();
+  const p=snapSelPos(e);
+  SNAP.cx=p.x;SNAP.cy=p.y;
+  updateSnapSelRect();
+});
+function snapSelEnd(e){
+  if(!SNAP.selecting||SNAP.pid!==e.pointerId)return;
+  SNAP.pid=null;
+  const b=snapSelBox();
+  if(b.w<20||b.h<20){
+    showToast('框选范围太小，请重新拖动');
+    resetSnapSelection();
+    return;
+  }
+  placeSnapCtrl();
+}
+snapSelLayer.addEventListener('pointerup',snapSelEnd);
+snapSelLayer.addEventListener('pointercancel',snapSelEnd);
+
+document.getElementById('snapOk').addEventListener('click',e=>{
+  e.stopPropagation();e.preventDefault();
+  confirmSnapSelection();
+});
+document.getElementById('snapNo').addEventListener('click',e=>{
+  e.stopPropagation();e.preventDefault();
+  resetSnapSelection();
+});
+
+/* ---------- 高清抓取 ---------- */
+function renderSnapCapture(b){
+  const W=cw.clientWidth,H=cw.clientHeight;
+  const savedDpr=dpr,savedSel=G.selected,savedHov=G.hovered;
+  let out=null;
+  // 截图里不要出现选中高亮
+  G.selected=null;G.hovered=null;
+  try{
+    // 先用更高的像素密度重绘一次，让线段/文字在截图里更清晰（高清）
+    const maxCanvasDpr=Math.sqrt(14000000/Math.max(1,W*H));      // 防止超出浏览器 canvas 上限
+    const hiDpr=Math.max(1,Math.min(3.5,savedDpr*1.75,maxCanvasDpr));
+    let useDpr=savedDpr;
+    if(hiDpr>savedDpr+0.02){
+      resize(hiDpr);
+      if(bgC.width>=Math.floor(W*hiDpr)-1&&mainC.height>=Math.floor(H*hiDpr)-1){
+        useDpr=hiDpr;
+      }else{
+        resize(savedDpr);   // 高分辨率画布创建失败，退回原分辨率
+        useDpr=savedDpr;
+      }
+    }
+    const sx=b.x*useDpr,sy=b.y*useDpr,sw=b.w*useDpr,sh=b.h*useDpr;
+    let ow=Math.max(1,Math.round(sw)),oh=Math.max(1,Math.round(sh));
+    const capArea=12000000;
+    if(ow*oh>capArea){
+      const k=Math.sqrt(capArea/(ow*oh));
+      ow=Math.max(1,Math.round(ow*k));oh=Math.max(1,Math.round(oh*k));
+    }
+    out=document.createElement('canvas');
+    out.width=ow;out.height=oh;
+    const c=out.getContext('2d');
+    c.imageSmoothingEnabled=true;
+    if('imageSmoothingQuality' in c)c.imageSmoothingQuality='high';
+    c.fillStyle='#ffffff';c.fillRect(0,0,ow,oh);
+    [bgC,imgC,mainC].forEach(cv=>{
+      try{c.drawImage(cv,sx,sy,sw,sh,0,0,ow,oh)}catch(_){}
+    });
+  }catch(err){
+    out=null;
+  }finally{
+    if(dpr!==savedDpr)resize(savedDpr);
+    G.selected=savedSel;G.hovered=savedHov;
+    draw();
+  }
+  return out;
+}
+
+function confirmSnapSelection(){
+  const b=snapSelBox();
+  if(b.w<20||b.h<20){showToast('框选范围太小，请重新拖动');resetSnapSelection();return}
+  const cap=renderSnapCapture(b);
+  if(!cap||!cap.width){showToast('截图失败，请重试');return}
+  enterSnapView(cap);
+}
+
+/* ---------- 高清图铺屏 + 手写 ---------- */
+function enterSnapView(cap){
+  SNAP.viewing=true;SNAP.cap=cap;
+  cancelSnapSelect();
+  btnSnap.classList.add('on');
+  snapImgBox.innerHTML='';
+  cap.style.display='block';
+  cap.style.width='100%';
+  cap.style.height='100%';
+  snapImgBox.appendChild(cap);
+  SNAP.strokes=[];SNAP.cur=null;SNAP.drawPid=null;
+  snapViewLayer.classList.add('on');
+  layoutSnapView();
+  showToast('截图已铺到屏幕上，可直接手写');
+}
+function layoutSnapView(){
+  if(!SNAP.cap)return;
+  const W=cw.clientWidth,H=cw.clientHeight;
+  const availW=Math.max(40,W-20);
+  const availH=Math.max(40,H-SNAP_BOTTOM_H-28);
+  const iw=SNAP.cap.width||1,ih=SNAP.cap.height||1;
+  let sc=Math.min(availW/iw,availH/ih);
+  sc=Math.min(sc,4);        // 小范围截图最多放大 4 倍，避免糊掉
+  sc=Math.max(sc,0.05);
+  const dw=Math.max(1,Math.round(iw*sc)),dh=Math.max(1,Math.round(ih*sc));
+  const oldW=SNAP.dw,oldH=SNAP.dh;
+  // 屏幕尺寸变化时，把已有笔迹按比例跟到新位置
+  if(oldW>0&&oldH>0&&SNAP.strokes.length&&(Math.abs(dw-oldW)>0.5||Math.abs(dh-oldH)>0.5)){
+    const kx=dw/oldW,ky=dh/oldH;
+    SNAP.strokes.forEach(st=>st.pts.forEach(p=>{p.x*=kx;p.y*=ky}));
+  }
+  const dx=Math.round((W-dw)/2);
+  const dy=Math.round(Math.max(14,(H-SNAP_BOTTOM_H-dh)/2));
+  SNAP.dx=dx;SNAP.dy=dy;SNAP.dw=dw;SNAP.dh=dh;
+  snapImgWrap.style.left=dx+'px';
+  snapImgWrap.style.top=dy+'px';
+  snapImgWrap.style.width=dw+'px';
+  snapImgWrap.style.height=dh+'px';
+  resizeSnapAnnot();
+}
+function resizeSnapAnnot(){
+  const w=Math.max(1,Math.round(SNAP.dw*dpr)),h=Math.max(1,Math.round(SNAP.dh*dpr));
+  snapAnnot.width=w;snapAnnot.height=h;
+  snapAnnot.style.width=SNAP.dw+'px';
+  snapAnnot.style.height=SNAP.dh+'px';
+  snapActx.setTransform(dpr,0,0,dpr,0,0);
+  snapActx.lineCap='round';snapActx.lineJoin='round';
+  drawSnapAnnot();
+}
+function drawSnapAnnot(){
+  const c=snapActx;
+  c.clearRect(0,0,SNAP.dw+4,SNAP.dh+4);
+  SNAP.strokes.forEach(st=>{
+    if(!st.pts.length)return;
+    c.strokeStyle=st.color;c.fillStyle=st.color;
+    c.lineWidth=st.width;c.lineCap='round';c.lineJoin='round';
+    if(st.pts.length===1){
+      c.beginPath();c.arc(st.pts[0].x,st.pts[0].y,st.width/2,0,Math.PI*2);c.fill();
+      return;
+    }
+    c.beginPath();c.moveTo(st.pts[0].x,st.pts[0].y);
+    for(let i=1;i<st.pts.length;i++)c.lineTo(st.pts[i].x,st.pts[i].y);
+    c.stroke();
+  });
+}
+function snapAnnotPos(e){
+  const r=snapAnnot.getBoundingClientRect();
+  return{x:e.clientX-r.left,y:e.clientY-r.top};
+}
+snapAnnot.addEventListener('pointerdown',e=>{
+  if(!SNAP.viewing)return;
+  e.preventDefault();e.stopPropagation();
+  if(SNAP.drawPid!==null)return;
+  SNAP.drawPid=e.pointerId;
+  try{snapAnnot.setPointerCapture(e.pointerId)}catch(_){}
+  const p=snapAnnotPos(e);
+  const st={
+    color:G.color||'#2563eb',
+    width:(e.pointerType==='pen'||e.pointerType==='touch')?3.2:2.6,
+    pts:[p]
+  };
+  SNAP.strokes.push(st);SNAP.cur=st;
+  snapActx.strokeStyle=st.color;snapActx.fillStyle=st.color;
+  snapActx.lineWidth=st.width;snapActx.lineCap='round';snapActx.lineJoin='round';
+  snapActx.beginPath();snapActx.arc(p.x,p.y,st.width/2,0,Math.PI*2);snapActx.fill();
+});
+snapAnnot.addEventListener('pointermove',e=>{
+  if(!SNAP.viewing||SNAP.drawPid!==e.pointerId||!SNAP.cur)return;
+  e.preventDefault();
+  const c=snapActx,st=SNAP.cur;
+  c.strokeStyle=st.color;c.lineWidth=st.width;c.lineCap='round';c.lineJoin='round';
+  let evs=null;
+  try{evs=e.getCoalescedEvents?e.getCoalescedEvents():null}catch(_){evs=null}
+  if(!evs||!evs.length)evs=[e];
+  evs.forEach(ev=>{
+    const p=snapAnnotPos(ev);
+    const last=st.pts[st.pts.length-1];
+    if(last&&Math.hypot(p.x-last.x,p.y-last.y)<0.7)return;
+    c.beginPath();c.moveTo(last?last.x:p.x,last?last.y:p.y);c.lineTo(p.x,p.y);c.stroke();
+    st.pts.push(p);
+  });
+},{passive:false});
+function endSnapStroke(e){
+  if(SNAP.drawPid!==null&&e.pointerId!==undefined&&e.pointerId!==SNAP.drawPid)return;
+  SNAP.drawPid=null;SNAP.cur=null;
+}
+snapAnnot.addEventListener('pointerup',endSnapStroke);
+snapAnnot.addEventListener('pointercancel',endSnapStroke);
+snapAnnot.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')endSnapStroke(e)});
+
+document.getElementById('snapUndo').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(!SNAP.strokes.length){showToast('没有可撤销的笔迹');return}
+  SNAP.strokes.pop();
+  drawSnapAnnot();
+});
+
+function closeSnapView(){
+  if(!SNAP.viewing)return;
+  SNAP.viewing=false;SNAP.drawPid=null;SNAP.cur=null;SNAP.strokes=[];
+  snapViewLayer.classList.remove('on');
+  snapImgBox.innerHTML='';
+  SNAP.cap=null;
+  btnSnap.classList.remove('on');
+  // 原画面各图层内容从未被修改，重绘即可完整恢复
+  drawBg();drawImage();draw();
+  showToast('已关闭截图，回到截图前的画面');
+}
+document.getElementById('snapClose').addEventListener('click',e=>{
+  e.stopPropagation();
+  closeSnapView();
+});
+snapViewLayer.addEventListener('pointerdown',e=>{
+  // 点击图片外的空白区域不做任何事，只阻止穿透到画布
+  e.stopPropagation();
+});
+
+/* ---------- 入口按钮 / 键盘 / 尺寸变化 ---------- */
+if(btnSnap){
+  btnSnap.addEventListener('click',()=>{
+    if(SNAP.viewing){closeSnapView();return}
+    startSnapSelect();
+  });
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(SNAP.viewing){closeSnapView();e.preventDefault()}
+  else if(SNAP.selecting){cancelSnapSelect();e.preventDefault()}
+});
+// 截图模式下禁止切换工具/撤销/清空，避免误改被盖住的原画面
+(function(){
+  const row=document.getElementById('toolRow');
+  if(!row)return;
+  row.addEventListener('click',e=>{
+    if(!SNAP.viewing)return;
+    const b=e.target.closest('button');
+    if(!b)return;
+    const block=b.matches('.tb[data-t]')||b.id==='btnClear'||b.id==='btnUndo'||b.id==='btnRedo';
+    if(!block)return;
+    e.preventDefault();e.stopPropagation();
+    showToast('截图模式下手写即可，点左下角「✕ 关闭截图」返回原画面');
+  },true);
+})();
+window.addEventListener('resize',()=>{
+  if(SNAP.viewing)layoutSnapView();
+  if(SNAP.selecting&&SNAP.pid===null)resetSnapSelection();
 });
 
 // Simple toast notification
