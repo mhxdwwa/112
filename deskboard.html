@@ -2035,8 +2035,16 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
       + '  html body #rmshout{top:8px;left:10px;bottom:auto;padding:8px 13px;font-size:12.5px;z-index:9998}'
       + '  html body #xqChatBtn{top:8px;right:10px;bottom:auto;width:42px;height:42px;border-radius:13px;font-size:19px;z-index:9998}'
       + '  html body .side{padding-left:92px;padding-right:62px}'
-      + '  html body #xqChat{left:6px;right:6px;top:58px;bottom:6px;width:auto;height:auto;border-radius:12px;max-height:none}'
-      + '  html body #xqChat .ls{max-height:none}'
+      + '  html body #xqChat{left:0;right:0;top:auto;bottom:0;width:auto;height:auto;border-radius:14px 14px 0 0;'
+      + '    max-height:calc(100% - 56px);box-shadow:0 -10px 34px -14px rgba(16,32,48,.45)}'
+      + '  html body.xq-chat-open #xqChatBtn{display:none}'
+      + '  html body #xqChat .ls{max-height:none;min-height:84px}'
+      + '  html body #xqChat .ft{padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}'
+      + '  html body #xqChat .to{padding:0 2px 4px}'
+      + '  html body #xqChat .tp{padding:0 3px 4px}'
+      + '  html body #xqChat .tp:empty{display:none}'
+      + '  html body #xqChat textarea{max-height:72px}'
+      + '  html body #xqChat .bt.sd{padding:0 14px}'
       + '  html body #rmpanel{align-items:flex-start;padding:52px 10px 12px;box-sizing:border-box;overflow-y:auto}'
       + '  html body .rmp-card{width:100%;max-width:520px;max-height:none;overflow:visible;padding:18px}'
       + '  html body .rmp-card h2{font-size:16px}'
@@ -2066,6 +2074,45 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
     if (d.toDateString() === now.toDateString()) return hm;
     return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
   }
+
+  /* 触屏设备：不自动聚焦输入框（自动聚焦会立刻弹软键盘，把"回复给 + 发送"挡住） */
+  function chatTouch() {
+    try { if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true; } catch (e) { /* ignore */ }
+    return ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
+  }
+
+  function chatNarrow() {
+    return window.innerWidth <= 860 || (chatTouch() && window.innerWidth <= 1100);
+  }
+
+  /* ★ 让面板永远贴着"看得见"的底边。
+     手机软键盘弹起时 visualViewport 会变矮，而 position:fixed 仍然贴在布局视口底部
+     —— 结果输入框和发送键被键盘整个压住。这里按可视区把面板整体抬起来并限高。 */
+  function chatFitViewport() {
+    var p = document.getElementById('xqChat');
+    if (!p) return;
+    var vv = window.visualViewport;
+    if (!chatNarrow() || !vv) { p.style.bottom = ''; p.style.maxHeight = ''; return; }
+    var lift = Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
+    p.style.bottom = lift + 'px';
+    /* 顶部留出 56px：那是手机上"学生留言"悬浮按钮占的位置（面板开着时按钮会隐藏，
+       留这点空也只是为了别顶到刘海/状态栏） */
+    p.style.maxHeight = Math.max(200, Math.round(vv.height - 56)) + 'px';
+  }
+
+  (function () {
+    var watch = { t: 0 };
+    function later() {
+      clearTimeout(watch.t);
+      watch.t = setTimeout(function () { if (CHAT.open) chatFitViewport(); }, 70);
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', later);
+      window.visualViewport.addEventListener('scroll', later);
+    }
+    window.addEventListener('orientationchange', later);
+    window.addEventListener('resize', later);
+  })();
 
   /* ---------------- 每间教室一条轻量连接 ---------------- */
 
@@ -2489,13 +2536,23 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
     var on = (force === undefined) ? !CHAT.open : !!force;
     CHAT.open = on;
     document.getElementById('xqChat').className = on ? 'on' : '';
+    /* 手机上"学生留言"悬浮按钮在右上角，会把面板标题栏的关闭 ✕ 压住 → 面板开着时先藏起来 */
+    document.body.classList.toggle('xq-chat-open', !!on);
     if (on) {
       CHAT.to = chatCurrent();      /* 一打开就对准当前教室 */
       chatRender();
       chatSyncAll();
-      setTimeout(function () { var t = document.getElementById('xqChatText'); if (t) t.focus(); }, 60);
+      /* ★ 手机上不要自动聚焦输入框：一聚焦就弹软键盘，键盘把面板下半部
+         （「回复给」+ 输入框 + 发送）整个盖住，老师得先划半天才找得到，
+         看着就像"打开面板看不到发送按钮"。电脑端保持自动聚焦，打字方便。 */
+      if (!chatTouch()) {
+        setTimeout(function () { var t = document.getElementById('xqChatText'); if (t) t.focus(); }, 60);
+      }
+      chatFitViewport();
     } else {
       chatStopAudio();
+      var pc = document.getElementById('xqChat');
+      if (pc) { pc.style.bottom = ''; pc.style.maxHeight = ''; }
     }
   }
 
@@ -5869,9 +5926,13 @@ function bindEvents() {
       const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       cfg.specialDays = cfg.specialDays || {};
       if (!cfg.specialDays[k]) cfg.specialDays[k] = '';
-      markDirty(); render(); return;
+      markDirty(); render(); specialSaveSoon(); return;
     }
-    if (act === 'special-del') { delete cfg.specialDays[b.dataset.k]; markDirty(); render(); return; }
+    if (act === 'special-del') {
+      delete cfg.specialDays[b.dataset.k];
+      markDirty(); render(); specialSaveSoon();
+      return;
+    }
 
     if (act === 'ov-add') {
       const ti = b.dataset.ti !== undefined ? Number(b.dataset.ti) : 0;
@@ -6306,6 +6367,8 @@ function onChange(e) {
   const p = el.dataset.b || '';
   // 外观类设置松手即下发；静默保存，失败只在状态条提示，不弹 toast
   if (p.indexOf('appearance.') === 0) save(true);
+  // 特殊日期的提示文字：改完松手就下发（不然要靠"记得点保存"才生效）
+  else if (p === 'specialDays' || p.indexOf('specialDays.') === 0) specialSaveSoon();
 }
 
 function onInput(e) {
@@ -6333,6 +6396,7 @@ function onInput(e) {
     if (el.value) cfg.specialDays[el.value] = val;
     markDirty();
     setTimeout(render, 0);
+    specialSaveSoon();   // 改日期也算改特殊日期，同样"改完就生效"
     return;
   }
   if (el.dataset.ovkey) {
@@ -6416,10 +6480,10 @@ async function save(silent) {
   //   这是「一个码一份内容」的最后防线，防止把别的教室残留内容写进来
   if (!cfg) {
     showBanner('正在加载这间教室的设置…', '刚切换教室，配置还没到，稍等几秒再保存。');
-    return;
+    return false;
   }
   // 串行化：连着改好几项时会同时触发多次保存，并发请求既慢又容易互相失败
-  if (savingNow) { saveWaiting = true; return; }
+  if (savingNow) { saveWaiting = true; return 'busy'; }
   savingNow = true;
 
   // 值日部分统一形状（旧配置迁移 + 清掉空的临时指定）
@@ -6447,6 +6511,7 @@ async function save(silent) {
   }
   const btn = $('btnSave');
   if (btn && !quiet) { btn.disabled = true; btn.textContent = '保存中…'; }
+  let done = false;
   try {
     /* ★ 以教室机的配置为底，只提交本次真正改过的字段。
        新老师登录后连上这间教室，界面上没动过的东西（班级信息、课表、值日、
@@ -6460,6 +6525,7 @@ async function save(silent) {
       if (res.info) INFO = res.info;
       if (cfg && cfg.className) INFO = Object.assign({}, INFO || {}, { className: cfg.className });
       clearDirty();
+      done = true;
       if (!quiet) { toast('已保存，桌面看板已更新'); render(); }
     } else if (!quiet) {
       toast('保存失败，请重试');
@@ -6477,6 +6543,88 @@ async function save(silent) {
     if (btn && !quiet) { btn.disabled = false; btn.textContent = '保存并应用'; }
     if (saveWaiting) { saveWaiting = false; setTimeout(() => save(true), 60); }
   }
+  return done;
+}
+
+/* ==========================================================================
+   特殊日期：改完立刻下发 + 失败留底自动补发
+   ★ 老师的预期是"删了就该没了"。以前删一条只是标成"有未保存的修改"，
+     忘了再点「保存并应用」就白改——下次打开又原样回来，看着像"自动恢复"。
+     这里改成：删除 / 新增 / 改日期 / 改文字 都自动下发；
+     教室机没连上就在本机把这份 specialDays 记下来，连上后自动补发。
+   ========================================================================== */
+let specialSaveTimer = 0;
+
+function specialPendingKey() {
+  let c = '';
+  try { c = String((window.deskboard && window.deskboard.code) || ''); } catch (e) { c = ''; }
+  return 'dbSpecialPending::' + (c || 'default');
+}
+
+function stashSpecialPending() {
+  try {
+    if (!cfg) return;
+    localStorage.setItem(specialPendingKey(), JSON.stringify({
+      ts: Date.now(),
+      days: deepClone(cfg.specialDays || {})
+    }));
+  } catch (e) { /* 存不下就算了 */ }
+}
+
+function clearSpecialPending() {
+  try { localStorage.removeItem(specialPendingKey()); } catch (e) { /* ignore */ }
+}
+
+function specialSaveSoon() {
+  clearTimeout(specialSaveTimer);
+  specialSaveTimer = setTimeout(function () { pushSpecialNow(false); }, 260);
+}
+
+function specialDayKeys(o) {
+  return Object.keys(o || {}).sort().join('|');
+}
+
+async function pushSpecialNow(resend) {
+  if (!cfg) return;
+  const want = deepClone(cfg.specialDays || {});
+  const r = await save(true);
+  if (r === 'busy') { specialSaveSoon(); return; }
+  if (r === true) {
+    /* 保存回来了还要核对：教室机确实按这份 specialDays 存下了才算生效。
+       有些旧版安装包做的是"只加不删"的合并 —— 删掉的那条会被悄悄留下，
+       表现出来就是"删了又自动恢复"。这种情况不装作成功，明确告诉老师。 */
+    const got = (cfg && cfg.specialDays) || {};
+    if (specialDayKeys(got) !== specialDayKeys(want)) {
+      cfg.specialDays = want;         // 界面上保持老师删完的样子，别再自己长回来
+      stashSpecialPending();
+      render();
+      showBanner('教室电脑没有按这次的「特殊日期」保存', '这次改动已经记在本机，连上同一间教室后会自动补发。如果一直不生效，请把教室电脑上的 DeskBoard 更新到最新版。');
+      return;
+    }
+    clearSpecialPending();
+    toast(resend ? '已把上次没同步成功的「特殊日期」补发到教室机' : '特殊日期已保存');
+  } else {
+    stashSpecialPending();
+    showBanner('特殊日期还没同步到教室电脑', '这次改动已经记在本机了，连上教室电脑后会自动补发，不用重新改一遍。');
+  }
+}
+
+/* 上次没下发成功的特殊日期：连上教室机后自动补发一次 */
+function flushSpecialPending() {
+  let raw = null;
+  try { raw = localStorage.getItem(specialPendingKey()); } catch (e) { return; }
+  if (!raw || !cfg) return;
+  let rec = null;
+  try { rec = JSON.parse(raw); } catch (e) { rec = null; }
+  if (!rec || !rec.days || typeof rec.days !== 'object' || !rec.ts || Date.now() - rec.ts > 7 * 86400000) {
+    clearSpecialPending();
+    return;
+  }
+  cfg.specialDays = rec.days;
+  markDirty();
+  render();
+  /* 走和手动修改同一条路：教室机确认存下了才算数，否则继续留底等下次 */
+  pushSpecialNow(true);
 }
 
 /* 「恢复示例数据」已按需求移除：误点一次就会把整间教室的配置全换成示例，
@@ -6625,6 +6773,9 @@ async function bootInner() {
   startLeaveWatch();
   if (tab === 'look') render();
   if (leavePendingPush) setTimeout(flushLeavePush, 600);
+  /* 上次（教室机没连上时）没下发成功的特殊日期：这次连上就自动补一次，
+     免得老师删过的那条又出现在看板上 */
+  setTimeout(flushSpecialPending, 400);
 
   // 桌面端（托盘操作）改了配置 → 非脏状态下自动同步到界面
   window.deskboard.onUpdate((c) => {
