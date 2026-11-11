@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>考试计时器</title>
-<!-- v1.1.0 (2026-11-11)：六套界面风格一键切换；时间数字放大（原来被 input 样式压成 16px）；顶部/日期/标语整体放大并重排 -->
+<!-- v1.1.1 (2026-11-11)：朱砂金/宣纸的秒数字改成等高（Cambria lining）等宽，不再高低错落；v1.1.0：六套界面风格一键切换；时间数字放大（原来被 input 样式压成 16px）；顶部/日期/标语整体放大并重排 -->
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
 
@@ -69,7 +69,7 @@
     --glow-a:.11;
     --glow-a2:.07;
     --font-ui:"SimSun","Songti SC","宋体","Microsoft YaHei",serif;
-    --font-num:"Georgia","Times New Roman","SimSun","Songti SC",serif;
+    --font-num:"Cambria","Times New Roman",Georgia,serif;
     --num-weight:700;
     --num-track:.03em;
     --num-glow:80px;
@@ -151,7 +151,7 @@
     --glow-a:.08;
     --glow-a2:.06;
     --font-ui:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
-    --font-num:"Georgia","Songti SC","SimSun",serif;
+    --font-num:"Cambria","Times New Roman",serif;
     --num-weight:700;
     --num-track:.02em;
     --num-glow:0px;
@@ -335,8 +335,8 @@
     font-size:1.12em;
     font-weight:600;
     letter-spacing:.02em;
-    font-variant-numeric:tabular-nums;
-    font-feature-settings:"tnum" 1;
+    font-variant-numeric:lining-nums tabular-nums;
+    font-feature-settings:"lnum" 1,"tnum" 1;
     color:var(--pill-fg,var(--accent));
     background:var(--pill-bg);
     border:2px solid var(--pill-bd);
@@ -448,8 +448,8 @@
     font-weight:var(--num-weight);
     line-height:1.04;
     letter-spacing:var(--num-track);
-    font-variant-numeric:tabular-nums;
-    font-feature-settings:"tnum" 1;
+    font-variant-numeric:lining-nums tabular-nums;
+    font-feature-settings:"lnum" 1,"tnum" 1;
     color:var(--fg);
     text-shadow:0 0 var(--num-glow) rgba(var(--glow),.22);
     transition:color .5s,text-shadow .5s;
