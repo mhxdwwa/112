@@ -7,35 +7,213 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>考试计时器</title>
+<!-- v1.1.0 (2026-11-11)：六套界面风格一键切换；时间数字放大（原来被 input 样式压成 16px）；顶部/日期/标语整体放大并重排 -->
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
 
   :root{
     --bg:#070b14;
     --fg:#e8eefc;
-    --muted:#5c6b83;
+    --muted:#8496b3;
     --accent:#38bdf8;
+    --accent-2:#818cf8;
     --warn:#fbbf24;
     --danger:#f87171;
+
+    /* 发光色（供 rgba() 用）与光晕浓度 */
+    --glow:56,189,248;
+    --glow-a:.10;
+    --glow-a2:.08;
+
+    /* 字体：界面文字 / 数字，两套分开，主题各自覆盖 */
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --font-num:var(--font-ui);
+    --num-weight:300;
+    --num-track:.01em;
+    --num-glow:90px;
+
+    /* 时间胶囊 / 卡片 */
+    --pill-bg:rgba(56,189,248,.10);
+    --pill-bd:rgba(56,189,248,.26);
+    --sheen:rgba(255,255,255,.05);
+    --sheen-2:rgba(255,255,255,.10);
+    --line:rgba(255,255,255,.12);
   }
+
+  /* ============================================================
+     六套风格：只换变量，不动布局；数字字体、字重、发光各不一样
+     ============================================================ */
+
+  /* ① 深空蓝（默认） */
+  body[data-theme="deep"]{
+    --bg:#070b14;
+    --fg:#e8eefc;
+    --muted:#8496b3;
+    --accent:#38bdf8;
+    --accent-2:#818cf8;
+    --glow:56,189,248;
+    --font-num:var(--font-ui);
+    --num-weight:300;
+    --num-track:.01em;
+  }
+
+  /* ② 朱砂金（考场庄重：宋体 + 衬线数字 + 粗体） */
+  body[data-theme="crimson"]{
+    --bg:#140609;
+    --fg:#ffeef0;
+    --muted:#d0919c;
+    --accent:#ff6b6b;
+    --accent-2:#ffd166;
+    --warn:#ffd166;
+    --glow:255,107,107;
+    --glow-a:.11;
+    --glow-a2:.07;
+    --font-ui:"SimSun","Songti SC","宋体","Microsoft YaHei",serif;
+    --font-num:"Georgia","Times New Roman","SimSun","Songti SC",serif;
+    --num-weight:700;
+    --num-track:.03em;
+    --num-glow:80px;
+    --pill-bg:rgba(255,107,107,.12);
+    --pill-bd:rgba(255,209,102,.30);
+    --pill-fg:#ffd166;
+  }
+
+  /* ③ 青玉（清爽：黑体 + 半粗等宽数字） */
+  body[data-theme="jade"]{
+    --bg:#04120f;
+    --fg:#e6fff7;
+    --muted:#7fb3a3;
+    --accent:#34d399;
+    --accent-2:#2dd4bf;
+    --warn:#fde68a;
+    --glow:52,211,153;
+    --glow-a:.12;
+    --glow-a2:.09;
+    --font-ui:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+    --font-num:"Consolas","Menlo","Microsoft YaHei",monospace;
+    --num-weight:600;
+    --num-track:.02em;
+    --pill-bg:rgba(52,211,153,.12);
+    --pill-bd:rgba(52,211,153,.28);
+  }
+
+  /* ④ 墨金（纯黑 + 金色 + Consolas 等宽，最“电子钟”） */
+  body[data-theme="gold"]{
+    --bg:#0a0904;
+    --fg:#fff6e0;
+    --muted:#b8a173;
+    --accent:#f5c451;
+    --accent-2:#ff9f1c;
+    --warn:#ffb703;
+    --glow:245,196,81;
+    --glow-a:.13;
+    --glow-a2:.10;
+    --font-ui:"Microsoft YaHei","PingFang SC",sans-serif;
+    --font-num:"Consolas","Courier New","Lucida Console",monospace;
+    --num-weight:700;
+    --num-track:.05em;
+    --num-glow:70px;
+    --pill-bg:rgba(245,196,81,.12);
+    --pill-bd:rgba(245,196,81,.30);
+    --sheen:rgba(245,196,81,.05);
+    --sheen-2:rgba(245,196,81,.10);
+  }
+
+  /* ⑤ 夜紫（细体 + 紫粉渐变，最“霓虹”） */
+  body[data-theme="violet"]{
+    --bg:#0b0616;
+    --fg:#f3eaff;
+    --muted:#a08cc8;
+    --accent:#c084fc;
+    --accent-2:#f472b6;
+    --glow:192,132,252;
+    --glow-a:.14;
+    --glow-a2:.11;
+    --font-ui:"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+    --font-num:"Segoe UI Light","Segoe UI","Microsoft YaHei UI",sans-serif;
+    --num-weight:200;
+    --num-track:.02em;
+    --num-glow:110px;
+    --pill-bg:rgba(192,132,252,.13);
+    --pill-bd:rgba(192,132,252,.30);
+  }
+
+  /* ⑥ 宣纸（浅色，适合明亮教室 / 强光环境） */
+  body[data-theme="paper"]{
+    --bg:#f6f3ea;
+    --fg:#1b2320;
+    --muted:#7d8a84;
+    --accent:#b3541e;
+    --accent-2:#0f766e;
+    --warn:#b45309;
+    --danger:#b91c1c;
+    --glow:179,84,30;
+    --glow-a:.08;
+    --glow-a2:.06;
+    --font-ui:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+    --font-num:"Georgia","Songti SC","SimSun",serif;
+    --num-weight:700;
+    --num-track:.02em;
+    --num-glow:0px;
+    --pill-bg:rgba(179,84,30,.08);
+    --pill-bd:rgba(179,84,30,.28);
+    --pill-fg:#8f3f12;
+    --sheen:rgba(0,0,0,.045);
+    --sheen-2:rgba(0,0,0,.09);
+    --line:rgba(0,0,0,.14);
+  }
+  body[data-theme="paper"]::before{
+    background:
+      radial-gradient(ellipse 70% 50% at 50% 0%,   rgba(179,84,30,.07), transparent 65%),
+      radial-gradient(ellipse 60% 45% at 50% 100%, rgba(15,118,110,.06), transparent 65%);
+  }
+  body[data-theme="paper"] .digits{ text-shadow:none }
+  body[data-theme="paper"] .school-badge,
+  body[data-theme="paper"] .corner-mark{ color:rgba(27,35,32,.72); background:rgba(0,0,0,.03) }
+  body[data-theme="paper"] .school-badge:hover{ background:rgba(179,84,30,.10) }
+  body[data-theme="paper"] .corner-mark b{ color:rgba(179,84,30,.85) }
+  body[data-theme="paper"] .datebar .clock{ color:#1b2320 }
+  body[data-theme="paper"] .time-pill{ color-scheme:light }
+  body[data-theme="paper"] .overlay,
+  body[data-theme="paper"] .hw-modal{ background:rgba(30,34,32,.55) }
+  body[data-theme="paper"] .panel,
+  body[data-theme="paper"] .hw-panel{ background:#fffdf7; border-color:rgba(0,0,0,.10); color:#1b2320 }
+  body[data-theme="paper"] .panel h2,
+  body[data-theme="paper"] .hw-panel h3{ color:#1b2320 }
+  body[data-theme="paper"] input[type=text],
+  body[data-theme="paper"] input[type=number],
+  body[data-theme="paper"] input[type=time]{ color:#1b2320; background:rgba(0,0,0,.03); border-color:rgba(0,0,0,.14); color-scheme:light }
+  body[data-theme="paper"] .btn:not(.primary){ color:#1b2320; background:rgba(0,0,0,.04); border-color:rgba(0,0,0,.14) }
+  body[data-theme="paper"] .btn:not(.primary):hover{ background:rgba(0,0,0,.08) }
+  body[data-theme="paper"] .btn.primary{ color:#fff }
+  body[data-theme="paper"] .seg{ background:rgba(0,0,0,.05) }
+  body[data-theme="paper"] .seg button{ color:#6b7671 }
+  body[data-theme="paper"] .chip{ color:#3c4642; background:rgba(0,0,0,.03); border-color:rgba(0,0,0,.10) }
+  body[data-theme="paper"] .chip .chip-time{ color:#7d8a84 }
+  body[data-theme="paper"] .field label{ color:#7d8a84 }
+  body[data-theme="paper"] .hw-hint,
+  body[data-theme="paper"] .hw-status{ color:#5f6b66 }
+  body[data-theme="paper"] #hwCanvas{ background:rgba(0,0,0,.02); border-color:rgba(0,0,0,.12) }
+  body[data-theme="paper"] .preview{ color:#5f6b66; background:rgba(179,84,30,.06) }
 
   html,body{height:100%}
 
   body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-family:var(--font-ui);
     background:var(--bg);
     color:var(--fg);
     overflow:hidden;
     -webkit-font-smoothing:antialiased;
     cursor:default;
+    transition:background .5s ease,color .5s ease;
   }
 
   body::before{
     content:"";
     position:fixed;inset:0;pointer-events:none;z-index:0;
     background:
-      radial-gradient(ellipse 70% 50% at 50% 0%,   rgba(56,189,248,.10), transparent 65%),
-      radial-gradient(ellipse 60% 45% at 50% 100%, rgba(129,140,248,.08), transparent 65%);
+      radial-gradient(ellipse 70% 50% at 50% 0%,   rgba(var(--glow),var(--glow-a)), transparent 65%),
+      radial-gradient(ellipse 60% 45% at 50% 100%, rgba(var(--glow),var(--glow-a2)), transparent 65%);
     transition:background .8s;
   }
   body.mode-warn::before{
@@ -53,7 +231,7 @@
     left:2.5vw;
     z-index:50;
     padding:.35em .95em;
-    font-size:clamp(.95rem,1.9vmin,1.4rem);
+    font-size:clamp(1rem,2.2vmin,1.75rem);
     font-weight:600;
     letter-spacing:.16em;
     color:rgba(232,238,252,.85);
@@ -107,79 +285,107 @@
     position:relative;
     height:100vh;height:100dvh;
     display:grid;
-    grid-template-rows:auto auto 1fr auto;
-    padding:7vh 4vw 4vh;
+    grid-template-rows:auto auto minmax(0,1fr) auto;
+    padding:5.5vh 4vw 3.4vh;
     z-index:1;
   }
 
-  /* ===== 顶栏 ===== */
+  /* ===== 顶栏：科目 / 时间，字号按 vmin 放大，远处也能读 ===== */
   .topbar{
     display:flex;
     justify-content:center;
     align-items:center;
     flex-wrap:wrap;
-    gap:clamp(1.5rem,5vw,4rem);
-    font-size:clamp(2rem,4.2vmin,3.4rem);
+    gap:clamp(1.4rem,4.4vw,4.5rem);
+    font-size:clamp(2.1rem,5.4vmin,5.4rem);
     font-weight:500;
+    line-height:1.15;
     animation:fadeDown .8s cubic-bezier(.2,.8,.3,1) both;
   }
 
   .info{
     display:flex;
     align-items:center;
-    gap:.35em;
+    gap:.34em;
     white-space:nowrap;
+  }
+
+  /* 两组之间一条细竖线，视线有分隔，不用加框 */
+  .info + .info{
+    padding-left:clamp(1.2rem,4vw,4rem);
+    border-left:1px solid var(--line);
   }
 
   .label{
     color:var(--muted);
-    letter-spacing:.1em;
+    letter-spacing:.08em;
     font-weight:400;
+    opacity:1;
   }
 
   .subject{
     color:var(--fg);
-    font-weight:600;
-    letter-spacing:.12em;
+    font-weight:700;
+    letter-spacing:.14em;
+    text-shadow:0 0 calc(var(--num-glow) * .35) rgba(var(--glow),.35);
   }
 
   .time-pill{
-    font-family:inherit;
-    font-size:inherit;
+    font-family:var(--font-num);
+    font-size:1.12em;
     font-weight:600;
-    letter-spacing:.04em;
+    letter-spacing:.02em;
     font-variant-numeric:tabular-nums;
-    color:var(--accent);
-    background:rgba(56,189,248,.10);
-    border:1px solid rgba(56,189,248,.22);
-    border-radius:9px;
-    padding:.28em .5em;
+    font-feature-settings:"tnum" 1;
+    color:var(--pill-fg,var(--accent));
+    background:var(--pill-bg);
+    border:2px solid var(--pill-bd);
+    border-radius:.26em;
+    padding:.18em .42em;
+    min-width:4.4em;
+    width:auto;
+    text-align:center;
     cursor:pointer;
     outline:none;
     color-scheme:dark;
     transition:background .2s,border-color .2s;
-    width:7.4em;
-    text-align:center;
+  }
+  /* ★ 关键：input 内部的日期编辑区默认不跟随外层字号，必须显式 inherit，
+     否则外框放大了、里面的 09:00 还是 16px（以前就是这样几乎看不见） */
+  .time-pill::-webkit-datetime-edit,
+  .time-pill::-webkit-datetime-edit-fields-wrapper,
+  .time-pill::-webkit-datetime-edit-text,
+  .time-pill::-webkit-datetime-edit-hour-field,
+  .time-pill::-webkit-datetime-edit-minute-field{
+    font:inherit;
+    line-height:1.1;
+    padding:0;
+    margin:0;
   }
   .time-pill:hover{
-    background:rgba(56,189,248,.18);
-    border-color:rgba(56,189,248,.45);
+    background:var(--pill-bg);
+    border-color:var(--accent);
   }
   .time-pill:focus{
     border-color:var(--accent);
-    background:rgba(56,189,248,.22);
+    background:var(--pill-bg);
+    box-shadow:0 0 0 .12em rgba(var(--glow),.18);
   }
   .time-pill::-webkit-calendar-picker-indicator{
     cursor:pointer;
-    opacity:.55;
+    opacity:.65;
+    width:.85em;
+    height:.85em;
     transition:opacity .2s;
   }
   .time-pill:hover::-webkit-calendar-picker-indicator{opacity:1}
 
   .sep{
     color:var(--muted);
-    margin:0 .1em;
-    letter-spacing:.1em;
+    margin:0 .12em;
+    letter-spacing:.08em;
+    font-size:.86em;
+    opacity:.9;
   }
 
   /* ===== 日期栏 ===== */
@@ -189,13 +395,14 @@
     align-items:center;
     flex-wrap:wrap;
     gap:.55em;
-    margin-top:clamp(1.6rem,4vh,3rem);
-    font-size:clamp(1.6rem,3.2vmin,2.5rem);
-    letter-spacing:.1em;
+    margin-top:clamp(1.2rem,3.2vh,2.6rem);
+    font-size:clamp(1.35rem,3.6vmin,3.6rem);
+    letter-spacing:.08em;
     font-variant-numeric:tabular-nums;
-    color:rgba(232,238,252,.78);
+    color:rgba(232,238,252,.92);
     animation:fadeDown .9s cubic-bezier(.2,.8,.3,1) both;
   }
+  body[data-theme="paper"] .datebar{ color:rgba(27,35,32,.92) }
   .datebar .weekday{
     color:var(--accent);
     font-weight:600;
@@ -208,10 +415,11 @@
     margin-left:.35em;
   }
   .datebar .clock{
-    color:#eaf4ff;
+    color:var(--fg);
+    font-family:var(--font-num);
     font-weight:600;
-    letter-spacing:.08em;
-    text-shadow:0 0 20px rgba(56,189,248,.35);
+    letter-spacing:.06em;
+    text-shadow:0 0 20px rgba(var(--glow),.32);
   }
 
   /* ===== 中部 ===== */
@@ -224,49 +432,51 @@
   }
 
   .count-label{
-    font-size:clamp(1.7rem,3.8vmin,3.2rem);
-    color:rgba(232,238,252,.72);
+    font-size:clamp(1.8rem,4.4vmin,4rem);
+    color:var(--fg);
+    opacity:.8;
     letter-spacing:.22em;
     font-weight:400;
     text-align:center;
     transition:color .5s;
   }
-  .mode-over .count-label{color:rgba(248,113,113,.9)}
+  .mode-over .count-label{color:#f87171;opacity:1}
 
   .digits{
-    font-size:clamp(3rem,18vmin,340px);
-    font-weight:300;
-    line-height:1.05;
-    letter-spacing:.01em;
+    font-family:var(--font-num);
+    font-size:clamp(3rem,min(21vmin,19vw),400px);
+    font-weight:var(--num-weight);
+    line-height:1.04;
+    letter-spacing:var(--num-track);
     font-variant-numeric:tabular-nums;
     font-feature-settings:"tnum" 1;
-    color:#eaf4ff;
-    text-shadow:0 0 90px rgba(56,189,248,.22);
+    color:var(--fg);
+    text-shadow:0 0 var(--num-glow) rgba(var(--glow),.22);
     transition:color .5s,text-shadow .5s;
     white-space:nowrap;
   }
 
   .mode-warn .digits{
     color:#fde68a;
-    text-shadow:0 0 90px rgba(251,191,36,.40);
+    text-shadow:0 0 var(--num-glow) rgba(251,191,36,.40);
   }
   .mode-danger .digits{
     color:#fca5a5;
-    text-shadow:0 0 100px rgba(248,113,113,.50);
+    text-shadow:0 0 var(--num-glow) rgba(248,113,113,.50);
     animation:pulse 1s ease-in-out infinite;
   }
   .mode-over .digits{
     color:#f87171;
-    text-shadow:0 0 120px rgba(248,113,113,.65);
+    text-shadow:0 0 var(--num-glow) rgba(248,113,113,.65);
     animation:pulse .85s ease-in-out infinite;
   }
 
   .progress{
-    width:min(64vw,820px);
-    height:7px;
-    margin-top:4vh;
+    width:min(66vw,900px);
+    height:clamp(6px,.9vmin,12px);
+    margin-top:3.6vh;
     border-radius:99px;
-    background:rgba(255,255,255,.07);
+    background:var(--sheen);
     overflow:hidden;
   }
   .progress i{
@@ -274,7 +484,7 @@
     height:100%;
     width:100%;
     border-radius:99px;
-    background:linear-gradient(90deg,#38bdf8,#818cf8);
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));
     transition:background .6s;
   }
   .mode-warn .progress i{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
@@ -286,7 +496,7 @@
     display:flex;
     flex-direction:column;
     align-items:center;
-    gap:clamp(2.6rem,6.5vh,4.5rem);
+    gap:clamp(1.8rem,4.6vh,3.4rem);
   }
 
   .slogan{
@@ -294,32 +504,30 @@
     justify-content:center;
     align-items:center;
     flex-wrap:wrap;
-    gap:clamp(1.2rem,4vw,3.5rem);
-    font-size:clamp(2.6rem,6.5vmin,5.2rem);
+    gap:clamp(1rem,3.4vw,3rem);
+    font-size:clamp(2.2rem,6.8vmin,6rem);
     font-weight:700;
-    letter-spacing:.3em;
-    text-indent:.3em;
+    letter-spacing:.26em;
+    text-indent:.26em;
     text-align:center;
-    line-height:1.4;
+    line-height:1.35;
   }
 
   .slogan span{
-    background:linear-gradient(135deg,#38bdf8 0%,#818cf8 100%);
+    background:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 100%);
     -webkit-background-clip:text;
     background-clip:text;
     color:transparent;
     -webkit-text-fill-color:transparent;
-    filter:drop-shadow(0 0 18px rgba(56,189,248,.5));
+    filter:drop-shadow(0 0 18px rgba(var(--glow),.45));
   }
-
   .slogan span:last-child{
-    background:linear-gradient(135deg,#fbbf24 0%,#f97316 100%);
-    -webkit-background-clip:text;
-    background-clip:text;
-    color:transparent;
-    -webkit-text-fill-color:transparent;
-    filter:drop-shadow(0 0 18px rgba(251,191,36,.5));
+    background:none;
+    color:var(--accent-2);
+    -webkit-text-fill-color:var(--accent-2);
+    filter:drop-shadow(0 0 16px rgba(var(--glow),.35));
   }
+  body[data-theme="paper"] .slogan span:last-child{ filter:none }
 
   .controls{
     display:flex;
@@ -329,21 +537,21 @@
   }
 
   .btn{
-    padding:.8em 2em;
+    padding:.72em 1.7em;
     font-family:inherit;
-    font-size:clamp(.85rem,1.7vmin,1.05rem);
+    font-size:clamp(.95rem,2.3vmin,1.55rem);
     letter-spacing:.1em;
     color:var(--fg);
-    background:rgba(255,255,255,.05);
-    border:1px solid rgba(255,255,255,.12);
+    background:var(--sheen);
+    border:1px solid var(--line);
     border-radius:999px;
     cursor:pointer;
     transition:background .2s,border-color .2s,transform .1s,color .2s;
     backdrop-filter:blur(8px);
   }
   .btn:hover{
-    background:rgba(255,255,255,.1);
-    border-color:rgba(255,255,255,.24);
+    background:var(--sheen-2);
+    border-color:var(--accent);
   }
   .btn:active{transform:scale(.97)}
   .btn.primary{
@@ -352,7 +560,7 @@
     color:#04121f;
     font-weight:600;
   }
-  .btn.primary:hover{background:#5ccbfa;border-color:#5ccbfa}
+  .btn.primary:hover{filter:brightness(1.1)}
 
   /* ===== 设置面板 ===== */
   .overlay{
@@ -367,7 +575,7 @@
   .overlay.show{opacity:1;pointer-events:auto}
 
   .panel{
-    width:min(94vw,520px);
+    width:min(92vw,640px);
     max-height:90vh;
     overflow-y:auto;
     padding:clamp(24px,4vw,36px);
@@ -381,7 +589,7 @@
   .overlay.show .panel{transform:none}
 
   .panel h2{
-    font-size:1.05rem;
+    font-size:1.2rem;
     font-weight:600;
     letter-spacing:.14em;
     margin-bottom:1.5em;
@@ -397,7 +605,7 @@
     color:#7b8ba6;
   }
 
-  input[type=text],input[type=number],input[type=time]{
+  input[type=text],input[type=number],input[type=time]:not(.time-pill){
     width:100%;
     padding:.8em 1em;
     font-family:inherit;
@@ -414,8 +622,8 @@
     border-color:var(--accent);
     background:rgba(56,189,248,.07);
   }
-  input[type=number],input[type=time]{font-variant-numeric:tabular-nums}
-  input[type=time]{letter-spacing:.06em}
+  input[type=number],input[type=time]:not(.time-pill){font-variant-numeric:tabular-nums}
+  input[type=time]:not(.time-pill){letter-spacing:.06em}
 
   .input-with-btn{display:flex;gap:8px}
   .input-with-btn input{flex:1;min-width:0}
@@ -524,6 +732,61 @@
     color:#fca5a5;
     background:rgba(248,113,113,.08);
     border-color:rgba(248,113,113,.22);
+  }
+
+  /* ===== 风格选择 ===== */
+  .theme-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:10px;
+  }
+  .theme-card{
+    display:flex;
+    align-items:center;
+    gap:.75em;
+    padding:.68em .8em;
+    font-family:inherit;
+    text-align:left;
+    color:var(--fg);
+    background:var(--sheen);
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    cursor:pointer;
+    transition:all .18s;
+  }
+  .theme-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .theme-card.on{
+    border-color:var(--accent);
+    box-shadow:0 0 0 2px rgba(var(--glow),.22);
+  }
+  .theme-card .sw{
+    display:flex;
+    flex-shrink:0;
+    gap:3px;
+  }
+  .theme-card .sw i{
+    display:block;
+    width:13px;
+    height:13px;
+    border-radius:50%;
+    border:1px solid rgba(0,0,0,.18);
+  }
+  .theme-card .tx{min-width:0}
+  .theme-card b{
+    display:block;
+    font-size:1rem;
+    font-weight:600;
+    letter-spacing:.05em;
+    white-space:nowrap;
+  }
+  .theme-card small{
+    display:block;
+    font-size:.76rem;
+    letter-spacing:.02em;
+    color:var(--muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
 
   .panel-actions{
@@ -677,7 +940,7 @@
   }
 </style>
 </head>
-<body class="mode-normal">
+<body class="mode-normal" data-theme="deep">
 
   <!-- ===== 左上角学校徽标（默认：九圩中学） ===== -->
   <div class="school-badge" id="schoolBadge" title="点击修改学校名称">九圩中学</div>
@@ -712,6 +975,7 @@
       </div>
       <div class="controls">
         <button class="btn primary" id="btnToggle">暂停</button>
+        <button class="btn" id="btnTheme">风格</button>
         <button class="btn" id="btnSettings">设置</button>
         <button class="btn" id="btnFullscreen">全屏</button>
       </div>
@@ -774,6 +1038,20 @@
     </div>
   </div>
 
+  <!-- ===== 风格面板 ===== -->
+  <div class="overlay" id="themeOverlay">
+    <div class="panel" role="dialog" aria-modal="true" aria-label="界面风格">
+      <h2>界 面 风 格</h2>
+      <p style="font-size:.82rem;color:var(--muted);letter-spacing:.06em;line-height:1.65;margin-bottom:1.1em">
+        点一下立即生效。选的这一套会记在这台电脑上，下次打开还是它；教室电脑上单独记自己那一套。
+      </p>
+      <div class="theme-grid" id="themeGrid"></div>
+      <div class="panel-actions">
+        <button class="btn" id="btnThemeClose">关 闭</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== 手写输入弹窗 ===== -->
   <div class="hw-modal" id="hwModal">
     <div class="hw-panel" role="dialog" aria-modal="true" aria-label="手写输入">
@@ -811,8 +1089,12 @@
     countLabel:    $('countdownLabel'),
     progressBar:   $('progressBar'),
     btnToggle:     $('btnToggle'),
+    btnTheme:      $('btnTheme'),
     btnSettings:   $('btnSettings'),
     btnFullscreen: $('btnFullscreen'),
+    themeOverlay:  $('themeOverlay'),
+    themeGrid:     $('themeGrid'),
+    btnThemeClose: $('btnThemeClose'),
     overlay:       $('overlay'),
     schoolInput:   $('schoolInput'),
     subjectInput:  $('subjectInput'),
@@ -849,6 +1131,98 @@
   const DEFAULT_SCHOOL  = '九圩中学';
   const WEEKDAYS = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
   const LS_SCHOOL = 'exam-timer-school-v3';
+  const LS_THEME  = 'exam-timer-theme-v1';
+
+  /* ============================================================
+     界面风格：六套，一键切换
+     只换 CSS 变量（配色 / 字体 / 字重 / 发光），布局完全一致。
+     ============================================================ */
+  const THEMES = [
+    { id:'deep',    name:'深空蓝', desc:'青蓝微光 · 细体数字',
+      sw:['#070b14','#38bdf8','#818cf8'] },
+    { id:'crimson', name:'朱砂金', desc:'宋体标题 · 衬线粗数字',
+      sw:['#140609','#ff6b6b','#ffd166'] },
+    { id:'jade',    name:'青玉',   desc:'薄荷青 · 半粗等宽',
+      sw:['#04120f','#34d399','#2dd4bf'] },
+    { id:'gold',    name:'墨金',   desc:'纯黑鎏金 · Consolas',
+      sw:['#0a0904','#f5c451','#ff9f1c'] },
+    { id:'violet',  name:'夜紫',   desc:'紫粉霓虹 · 极细体',
+      sw:['#0b0616','#c084fc','#f472b6'] },
+    { id:'paper',   name:'宣纸',   desc:'浅底深字 · 强光教室',
+      sw:['#f6f3ea','#b3541e','#0f766e'] }
+  ];
+
+  let curTheme = 'deep';
+
+  function themeExists(id){
+    return THEMES.some(t => t.id === id);
+  }
+
+  function loadTheme(){
+    /* ① URL 上的 ?theme= （控制台发布时带的）② 这台电脑上次选的 */
+    try{
+      const q = new URLSearchParams(location.search).get('theme');
+      if(q && themeExists(q)) return q;
+    }catch(e){}
+    try{
+      const v = localStorage.getItem(LS_THEME);
+      if(v && themeExists(v)) return v;
+    }catch(e){}
+    return 'deep';
+  }
+
+  function applyTheme(id, opts){
+    if(!themeExists(id)) id = 'deep';
+    curTheme = id;
+    document.body.dataset.theme = id;
+    if(!opts || opts.save !== false){
+      try{ localStorage.setItem(LS_THEME, id); }catch(e){}
+    }
+    if(els.themeGrid){
+      [].forEach.call(els.themeGrid.children, c => {
+        c.classList.toggle('on', c.dataset.id === id);
+      });
+    }
+    /* 在控制台里预览时告诉外面一句：发布到教室就按这个风格开 */
+    if(!opts || opts.notify !== false){
+      try{
+        if(window.parent && window.parent !== window){
+          window.parent.postMessage({ type:'ksjsq-theme', theme:id }, '*');
+        }
+      }catch(e){}
+    }
+  }
+
+  function buildThemeCards(){
+    if(!els.themeGrid) return;
+    els.themeGrid.innerHTML = '';
+    THEMES.forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'theme-card';
+      b.dataset.id = t.id;
+      b.innerHTML =
+        '<span class="sw">' +
+          t.sw.map(c => '<i style="background:' + c + '"></i>').join('') +
+        '</span>' +
+        '<span class="tx"><b>' + t.name + '</b><small>' + t.desc + '</small></span>';
+      b.addEventListener('click', () => applyTheme(t.id));
+      els.themeGrid.appendChild(b);
+    });
+  }
+
+  function openTheme(){
+    if(!els.themeOverlay) return;
+    els.themeOverlay.classList.add('show');
+  }
+  function closeTheme(){
+    if(els.themeOverlay) els.themeOverlay.classList.remove('show');
+  }
+
+  function cycleTheme(){
+    const i = THEMES.findIndex(t => t.id === curTheme);
+    applyTheme(THEMES[(i + 1) % THEMES.length].id);
+  }
 
   const state = {
     school:  DEFAULT_SCHOOL,
@@ -1607,6 +1981,11 @@
   }
 
   els.btnFullscreen.addEventListener('click', toggleFullscreen);
+  els.btnTheme.addEventListener('click', openTheme);
+  els.btnThemeClose.addEventListener('click', closeTheme);
+  els.themeOverlay.addEventListener('click', e => {
+    if(e.target === els.themeOverlay) closeTheme();
+  });
   els.btnToggle.addEventListener('click', () => { initAudio(); toggleTimer(); });
 
   let wakeLock = null;
@@ -1644,7 +2023,10 @@
       toggleTimer();
     }else if(e.key === 'f' || e.key === 'F'){
       toggleFullscreen();
+    }else if(e.key === 't' || e.key === 'T'){
+      cycleTheme();
     }else if(e.key === 'Escape'){
+      closeTheme();
       closeSettings();
     }
   });
@@ -1685,6 +2067,8 @@
   }
 
   buildChips();
+  buildThemeCards();
+  applyTheme(loadTheme(), { notify: false });
   init();
   updateDatebar();
   tick();
@@ -1703,7 +2087,8 @@
         school:  state.school  || '',
         subject: state.subject || '',
         start:   msToTime(state.startMs),
-        end:     msToTime(state.endMs)
+        end:     msToTime(state.endMs),
+        theme:   curTheme || 'deep'
       };
       if (e.source && e.source.postMessage) {
         e.source.postMessage({ type: 'ksjsq-settings', payload: payload }, '*');
