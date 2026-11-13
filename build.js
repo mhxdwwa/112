@@ -146,7 +146,7 @@ async function main() {
   console.log(`  ✓ ${cssFile}: copied`);
 
   // Copy HTML files
-  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html', 'test-api.html', 'home.html', 'jiangmoji.html', 'starrollcall.html', 'test-seewo.html', 'aoyoutiandi.html', 'bahe.html', 'damaoxian.html', 'jiangyaoji.html', 'mengdaxia.html', 'shendouluo.html', 'wulinzhengba.html', 'shuxuezuotu.html', 'zhandouluo.html', 'zhenjiadasheng.html', 'xueqinguanjia.html', 'kaoshijishiqi.html', 'chuangge-yingshi.html']) {
+  for (const html of ['index.html', 'login.html', 'happy-run-game.html', 'pdf-viewer.html', 'qr-scan.html', 'qr-verify.html', 'test-api.html', 'home.html', 'jiangmoji.html', 'starrollcall.html', 'test-seewo.html', 'aoyoutiandi.html', 'bahe.html', 'damaoxian.html', 'jiangyaoji.html', 'mengdaxia.html', 'shendouluo.html', 'wulinzhengba.html', 'shuxuezuotu.html', 'zhandouluo.html', 'zhenjiadasheng.html', 'xueqinguanjia.html', 'deskboard.html', 'kaoshijishiqi.html', 'chuangge-yingshi.html']) {
     const src = resolve(__dirname, html);
     try {
       copyFileSync(src, join(DIST, html));
@@ -159,6 +159,15 @@ async function main() {
       copyFileSync(resolve(__dirname, ic), join(DIST, ic));
       console.log('  ✓ ' + ic + ': copied');
     } catch (e) { /* 没有这个文件就跳过 */ }
+  }
+
+  // version.json：控制台顶部「有新版本，点此更新」的提示条靠它判断版本。
+  // 之前漏了复制，线上 /version.json 一直掉到首页兜底，提示条从来没生效过。
+  for (const f of ['version.json']) {
+    try {
+      copyFileSync(resolve(__dirname, f), join(DIST, f));
+      console.log('  ✓ ' + f + ': copied');
+    } catch (e) { /* 没有就跳过 */ }
   }
 
   // Copy image directories
