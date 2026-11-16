@@ -3764,6 +3764,7 @@ async function handleMobileFile(e){
   
   try{
     // 清晰度优先：小图原样直传，大图才按需压缩（见 compressImage）
+    const t0=Date.now();
     const origSizeKB=Math.round(file.size/1024);
     status.textContent='正在处理图片 ('+origSizeKB+'KB)...';
     let blob=await compressImage(file);
@@ -3803,10 +3804,10 @@ async function handleMobileFile(e){
       status.textContent='图片较大，正在自动降低一档重试...';
       try{
         blob = await compressImage(file, {
-          maxEdge: 1800,
-          softLimit: 1.2*1024*1024,
-          hardLimit: 1.5*1024*1024,
-          passThroughCap: 1.2*1024*1024
+          maxEdge: 2000,
+          softLimit: 0.9*1024*1024,
+          hardLimit: 1.2*1024*1024,
+          passThroughCap: 0.9*1024*1024
         });
         attempt = await doUpload(blob);
         usedTier = '标准';
@@ -3818,7 +3819,8 @@ async function handleMobileFile(e){
     const compSizeKB=Math.round(blob.size/1024);
     if(attempt.ok){
       const sizeKB = Math.round((attempt.data.size || blob.size) / 1024);
-      status.textContent='✅ 上传成功！('+sizeKB+'KB · '+usedTier+') 可以继续拍照';
+      const secs=((Date.now()-t0)/1000).toFixed(1);
+      status.textContent='✅ 上传成功！('+sizeKB+'KB · '+usedTier+' · '+secs+'秒) 可以继续拍照';
       status.className='mobile-upload-status success';
       // 允许同一配对码连续上传下一张
       e.target.value='';
@@ -3848,9 +3850,13 @@ async function handleMobileFile(e){
 //   2. Otherwise cap resolution at 3000px (long edge) and encode WebP/JPEG
 //      at high quality, stepping down ONLY if the result is still too big
 //   3. WebP is preferred: much better on text/lines than JPEG at same size
-const UP_MAX_EDGE = 3000;        // 长边上限，1600 会把板书小字压糊
-const UP_HARD_LIMIT = 6.0 * 1024 * 1024;  // 超过这个才继续降质
-const UP_SOFT_LIMIT = 3.0 * 1024 * 1024;  // 优先控制在这个以内
+// 目标：讲评投屏清晰 + 上传够快
+// 实测（真实试卷图，WebP，3000px）：q0.85 与 q0.92 像素平均只差 1.7/255，
+// 肉眼不可分辨，但体积只有 2/3。所以默认用 0.85，不再从 0.92 起。
+const UP_MAX_EDGE = 3000;                 // 长边上限：再低板书小字会糊
+const UP_HARD_LIMIT = 2.4 * 1024 * 1024;  // 兜底上限
+const UP_SOFT_LIMIT = 1.8 * 1024 * 1024;  // 优先控制在这个以内
+const UP_PASSTHROUGH = 0.9 * 1024 * 1024; // 只有真正的小图才原样直传
 
 function pickMimeType() {
   // WebP 对文字/线条的保真度远好于 JPEG，且体积更小
@@ -3879,7 +3885,7 @@ async function compressImage(file, opts) {
   const maxEdge = opts.maxEdge || UP_MAX_EDGE;
   const softLimit = opts.softLimit || UP_SOFT_LIMIT;
   const hardLimit = opts.hardLimit || UP_HARD_LIMIT;
-  const passThroughCap = opts.passThroughCap || (softLimit * 1.6);
+  const passThroughCap = opts.passThroughCap || UP_PASSTHROUGH;
 
   const origKB = Math.round(file.size / 1024);
   console.log('[Upload] 原图:', file.name, origKB + 'KB', file.type);
@@ -3913,12 +3919,13 @@ async function compressImage(file, opts) {
   const longEdge = Math.max(origW, origH);
   let scale = longEdge > maxEdge ? maxEdge / longEdge : 1;
 
-  // 质量阶梯：从高往低走，够用就停（注意 WebP 的 0.9 约等于 JPEG 的 0.95）
-  const qualities = [0.92, 0.86, 0.8, 0.72, 0.64];
-
+  // 编码策略：先按 0.85 编一次（绝大多数情况这一发就够），
+  // 超了就按比例估算下一档，最多编 3 次。
+  // 原来的"4 档质量 × 4 次缩放"最坏要编 16 次，手机上会明显卡。
+  let quality = 0.85;
   let bestBlob = null;
 
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let step = 0; step < 3; step++) {
     const targetW = Math.round(origW * scale);
     const targetH = Math.round(origH * scale);
 
@@ -3930,35 +3937,30 @@ async function compressImage(file, opts) {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(bitmap, 0, 0, targetW, targetH);
 
-    for (let i = 0; i < qualities.length; i++) {
-      const blob = await canvasToBlob(canvas, mime, qualities[i]);
-      if (!blob || !blob.size) continue;
-      const kb = Math.round(blob.size / 1024);
-      console.log('[Upload] ' + targetW + 'x' + targetH + ' q=' + qualities[i] + ' -> ' + kb + 'KB');
+    const blob = await canvasToBlob(canvas, mime, quality);
+    if (!blob || !blob.size) break;
 
-      if (!bestBlob || blob.size < bestBlob.size) {
-        // 记录"当前尺寸下最小的那次"，但优先保证质量，所以只在必要时替换
-      }
-      // 达到软上限即停止降质，保住清晰度
-      if (blob.size <= softLimit) {
-        bitmap.close();
-        console.log('[Upload] 采用:', targetW + 'x' + targetH, 'q=' + qualities[i], kb + 'KB');
-        return blob;
-      }
-      // 记下这个尺寸下最后（最低质量）的结果作为兜底
-      bestBlob = blob;
-    }
+    const kb = Math.round(blob.size / 1024);
+    console.log('[Upload] ' + targetW + 'x' + targetH + ' q=' + quality.toFixed(2) + ' -> ' + kb + 'KB');
 
-    // 到这个尺寸的最低质量仍然超软上限
-    if (bestBlob && bestBlob.size <= hardLimit) {
+    if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+
+    // 达标就收工（保住清晰度，不再继续降）
+    if (blob.size <= softLimit) {
       bitmap.close();
-      console.log('[Upload] 采用（接近硬上限）:', Math.round(bestBlob.size / 1024) + 'KB');
-      return bestBlob;
+      console.log('[Upload] 采用:', targetW + 'x' + targetH, 'q=' + quality.toFixed(2), kb + 'KB');
+      return blob;
     }
 
-    // 还不够小 -> 尺寸再收一档，重新走质量阶梯
-    scale *= 0.8;
-    if (scale < 0.15) break;
+    if (blob.size > hardLimit) {
+      // 超出硬上限：尺寸和质量的账要一起算，尺寸按面积开方估
+      const r = Math.max(0.55, Math.min(0.9, Math.sqrt(hardLimit / blob.size)));
+      scale *= r;
+      quality = Math.max(0.62, quality * 0.94);
+    } else {
+      // 已进硬上限，只是超软上限：只微调质量即可
+      quality = Math.max(0.62, Math.min(quality - 0.03, quality * (softLimit / blob.size)));
+    }
   }
 
   bitmap.close();
