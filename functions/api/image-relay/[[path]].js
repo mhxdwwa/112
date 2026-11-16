@@ -17,6 +17,9 @@
  * DELETE /api/image-relay/clear/:code - Clear image + flag
  */
 
+// 单张图片最大体积（KV 单值上限 25MiB，这里留足余量）
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -64,10 +67,40 @@ export async function onRequest(context) {
       }
 
       const contentType = request.headers.get('Content-Type') || 'image/jpeg';
-      const imageBuffer = await request.arrayBuffer();
-      
-      // Store image binary
-      await env.IMAGE_KV.put(`img:${code}`, imageBuffer, { 
+
+      // 体积兜底：KV 单值上限 25MiB，这里留足余量，防止异常大会话撑爆 KV
+      const declared = parseInt(request.headers.get('Content-Length') || '0', 10);
+      if (declared > MAX_UPLOAD_BYTES) {
+        return new Response(JSON.stringify({ error: 'Image too large', max: MAX_UPLOAD_BYTES }), {
+          status: 413,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ★关键★ request body 读出来的 ArrayBuffer 是绑定当前请求 IoContext 的
+      // native 对象（错误里的 I/O type: Native 就是指它）。直接交给 KV.put 时，
+      // 大体积下 workerd 会在另一个执行上下文里触碰这块内存，于是抛：
+      //   Cannot perform I/O on behalf of a different request
+      // 所以必须显式复制成纯 JS 内存的 Uint8Array，彻底脱离 native 引用。
+      const raw = await request.arrayBuffer();
+      const imageBuffer = new Uint8Array(raw.byteLength);
+      imageBuffer.set(new Uint8Array(raw));
+
+      if (imageBuffer.byteLength === 0) {
+        return new Response(JSON.stringify({ error: 'Empty image body' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      if (imageBuffer.byteLength > MAX_UPLOAD_BYTES) {
+        return new Response(JSON.stringify({ error: 'Image too large', max: MAX_UPLOAD_BYTES }), {
+          status: 413,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Store image binary（用复制后的纯 JS ArrayBuffer，不用 native 的那块）
+      await env.IMAGE_KV.put(`img:${code}`, imageBuffer.buffer, { 
         expirationTtl: 1800,
         metadata: { contentType }
       });
