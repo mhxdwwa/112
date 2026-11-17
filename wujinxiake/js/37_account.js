@@ -44,8 +44,8 @@ function update(){
 
   if(tip){
     tip.textContent = i.logged
-      ? '已登录：每 20 秒自动同步云端，关页面也会立刻保存。这个账号是浏览器里已有的登录状态（本站其他页面登录过会自动沿用）；想用自己的账号，点「退出 / 换账号」注册即可。'
-      : '游客进度只存在这台浏览器（localStorage），换设备、清缓存或换浏览器都会丢。注册后才有云端存档。';
+      ? '已登录：每 20 秒自动同步云端，关页面也会立刻保存。想换人，点「退出 / 换账号」用你自己的账号登录。'
+      : '游客模式：这里的角色和进度都是这台设备上的独立试玩存档，看不到也动不了任何账号的数据。想拥有自己的专属角色和云端存档，点「注册 / 登录」。';
   }
 
   const loginBtn = $('accLogin'), saveBtn = $('accSave'), switchBtn = $('accSwitch');
@@ -76,10 +76,12 @@ function boot(){
 
   const login = $('accLogin');
   if(login) login.addEventListener('click', function(){
-    const ok = confirm('去注册 / 登录？\n\n当前游客进度会先存在这台设备上；登录后如果云端没有更新的存档，会继续用这份进度。');
+    const ok = confirm('去注册 / 登录？\n\n· 游客试玩存档会留在本机，不会丢\n· 登录后进入你自己账号名下的角色列表（一个邮箱 = 一个专属账号）\n· 想一直当游客，点「取消」');
     if(!ok) return;
     try{ window.CloudSave && window.CloudSave.save(); }catch(e){}
-    location.reload();
+    /* ★ 带上 ?auth=login：跳过游客模式，停在登录页
+       （以前是 location.reload()，在游客模式下会又回到游客身份，永远登不进去） */
+    location.replace(location.pathname + '?auth=login');
   });
 
   const save = $('accSave');
@@ -119,7 +121,7 @@ function boot(){
     setTimeout(update, 300);
     if(!guestToasted && !(window.AUTH && window.AUTH.loggedIn)){
       guestToasted = true;
-      setTimeout(function(){ toast('游客模式：进度只存这台设备，点右上角「游客」可注册', '#ffcf6e'); }, 2200);
+      setTimeout(function(){ toast('游客模式：独立试玩存档 · 点右上角「游客」可注册专属账号', '#ffcf6e'); }, 2200);
     }
   });
   window.addEventListener('wjx:auth', function(){ setTimeout(update, 120); });

@@ -8,11 +8,22 @@
 (function(){
 'use strict';
 
-const LOCAL_KEY  = 'wjx_chars_v1';
+/* ===== 角色包存储：按「身份」分命名空间 =====
+   修复：以前所有身份共用一把钥匙 wjx_chars_v1，于是「游客试玩」会直接读到
+   上一次登录账号留下的角色（一进「侠客之路」就看到自己账号的角色）。
+   现在：
+     · 已登录 → wjx_chars_v3:<uid>
+     · 游客   → wjx_chars_v3:guest
+   两者永不相通；老键 wjx_chars_v1 只在「登录态」下被认领一次（登录后有云端
+   存档会覆盖，所以不会串号），游客态一律不读。                              */
+const LOCAL_KEY  = 'wjx_chars_v3';
+const LEGACY_KEY = 'wjx_chars_v1';
 const NAME_TABLE = 'wujinxiake_names';
 const MAX_CHARS  = 6;
 
 let bundle = { v: 3, t: 0, activeId: '', chars: [] };
+let boundKey = '';      /* 当前 bundle 对应的存储键 */
+let bootedKey = null;   /* 已经载入过的键，避免重复载入打断当前列表 */
 
 function sb(){ return window.SB || null; }
 function logged(){ return !!(window.AUTH && window.AUTH.loggedIn && window.AUTH.uid); }
@@ -22,16 +33,67 @@ function newId(){ return 'c' + Date.now().toString(36) + Math.random().toString(
 function norm(n){ return String(n || '').trim(); }
 function lower(n){ return norm(n).toLowerCase(); }
 
+/* 当前身份对应的存储键：登录用 uid，游客用独立槽位 */
+function keyOf(){
+  const uid = (window.AUTH && window.AUTH.loggedIn && window.AUTH.uid) || '';
+  return uid ? (LOCAL_KEY + ':' + uid) : (LOCAL_KEY + ':guest');
+}
+
+function normalize(d){
+  return {
+    v: 3, t: Number(d.t) || 0,
+    activeId: d.activeId || (d.chars[0] && d.chars[0].id) || '',
+    chars: (d.chars || []).map(function(c){
+      return {
+        id: c.id || newId(), name: c.name || '无名侠客',
+        charIdx: c.charIdx | 0, level: c.level | 0 || 1,
+        t: Number(c.t) || 0, p: c.p || {}
+      };
+    })
+  };
+}
+
 function loadLocal(){
+  const key = keyOf();
+  bundle = { v: 3, t: 0, activeId: '', chars: [] };
+  boundKey = key;
+  bootedKey = key;
+  let got = false;
   try{
-    const s = localStorage.getItem(LOCAL_KEY);
+    const s = localStorage.getItem(key);
+    if(s){
+      const d = JSON.parse(s);
+      if(d && d.chars && d.chars.length){ bundle = normalize(d); got = true; }
+    }
+  }catch(e){}
+  if(!got && logged()) migrateLegacy();
+  if(!get(bundle.activeId) && bundle.chars.length) bundle.activeId = bundle.chars[0].id;
+  return bundle;
+}
+
+/* 老键只允许「已登录」认领：老键没有身份信息，认领后立刻删除，
+   避免第二个账号登录时又把这批角色复制一遍。 */
+function migrateLegacy(){
+  try{
+    const s = localStorage.getItem(LEGACY_KEY);
     if(!s) return;
     const d = JSON.parse(s);
-    if(d && d.chars && d.chars.length) bundle = d;
+    if(!d || !d.chars || !d.chars.length){ localStorage.removeItem(LEGACY_KEY); return; }
+    bundle = normalize(d);
+    persist();
+    localStorage.removeItem(LEGACY_KEY);
   }catch(e){}
 }
+
 function persist(){
-  try{ localStorage.setItem(LOCAL_KEY, JSON.stringify(bundle)); }catch(e){}
+  const k = keyOf();
+  boundKey = k;
+  try{ localStorage.setItem(k, JSON.stringify(bundle)); }catch(e){}
+}
+
+/* 本机是否存在「游客专属角色包」（给云存档判断游客进度归属用） */
+function hasGuestBundle(){
+  try{ return !!localStorage.getItem(LOCAL_KEY + ':guest'); }catch(e){ return false; }
 }
 
 /* ---------- 查询 ---------- */
@@ -49,17 +111,9 @@ function count(){ return bundle.chars.length; }
 
 function loadBundle(data, useActive){
   if(!data || !data.chars || !data.chars.length) return false;
-  bundle = {
-    v: 3, t: Number(data.t) || 0,
-    activeId: (useActive !== false && data.activeId) ? data.activeId : (data.chars[0] && data.chars[0].id) || '',
-    chars: data.chars.map(function(c){
-      return {
-        id: c.id || newId(), name: c.name || '无名侠客',
-        charIdx: c.charIdx | 0, level: c.level | 0 || 1,
-        t: Number(c.t) || 0, p: c.p || {}
-      };
-    })
-  };
+  /* ★ 只有当前身份能接收这份角色包：防止游客态被云端/本地的账号包覆盖 */
+  bundle = normalize(data);
+  if(useActive === false) bundle.activeId = (data.chars[0] && data.chars[0].id) || bundle.activeId;
   if(!get(bundle.activeId)) bundle.activeId = bundle.chars[0].id;
   persist();
   return true;
@@ -202,7 +256,14 @@ function remove(id){
 }
 
 /* ---------- 面板 ---------- */
-function openPanel(){ renderPanel(); const p = $('charPanel'); if(p) p.classList.add('open'); }
+function openPanel(){
+  /* ★ 进面板前先把身份对齐：游客态绝不展示账号角色 */
+  if(bootedKey !== keyOf()) loadLocal();
+  renderPanel();
+  const h = document.querySelector('#charPanel .cp-head b');
+  if(h) h.textContent = logged() ? '选择角色' : '选择角色 · 游客';
+  const p = $('charPanel'); if(p) p.classList.add('open');
+}
 function closePanel(){ const p = $('charPanel'); if(p) p.classList.remove('open'); }
 
 function jobName(idx){
@@ -217,7 +278,9 @@ function renderPanel(){
   if(!box) return;
   const list = all();
   if(!list.length){
-    box.innerHTML = '<div class="cp-empty">还没有角色，点下面「创建新角色」开始</div>';
+    box.innerHTML = '<div class="cp-empty">' + (logged()
+      ? '还没有角色，点下面「创建新角色」开始'
+      : '游客模式还没有角色。<br>这里的角色只存在这台设备上；注册账号后才会变成你名下的专属角色。') + '</div>';
     return;
   }
   box.innerHTML = list.map(function(c){
@@ -262,20 +325,34 @@ function startCreate(){
 }
 
 /* ---------- 启动 ---------- */
-function boot(){
+/* 身份（账号 / 游客）由 00_auth.js 决定，而且是异步的：
+   登录成功派发 wjx:auth，真正进入游戏派发 wjx:enter。
+   所以这里不在脚本加载时就读角色包，等身份落定再读 —— 否则会先读到
+   上一个身份的包，「游客试玩」就会看到自己账号的角色。 */
+function rebind(){
+  if(bootedKey === keyOf()) return;
   loadLocal();
+  try{ window.dispatchEvent(new CustomEvent('wjx:chars', { detail: { key: boundKey, n: bundle.chars.length } })); }catch(e){}
+}
+
+function boot(){
   bindPanel();
-  /* 登录后云端整包会覆盖本机列表（见 CloudSave.apply） */
+  window.addEventListener('wjx:auth', rebind);
+  window.addEventListener('wjx:enter', function(){ if(bootedKey !== keyOf()) rebind(); });
+  /* 兜底：auth 脚本异常 / 离线时也别让角色系统一直空着 */
+  setTimeout(function(){ if(bootedKey === null) rebind(); }, 3000);
 }
 
 window.CHARS = {
   all: all, get: get, active: active, count: count,
   bundle: function(){ return bundle; },
+  key: function(){ return boundKey; },
+  hasGuestBundle: hasGuestBundle,
   loadBundle: loadBundle, pack: pack, activeSave: activeSave,
   validate: validate, createFromNaming: createFromNaming,
   enter: enter, remove: remove,
   openPanel: openPanel, closePanel: closePanel, renderPanel: renderPanel,
-  startCreate: startCreate
+  startCreate: startCreate, rebind: rebind
 };
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

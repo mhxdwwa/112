@@ -139,6 +139,16 @@
         try { window.SB.auth.signOut(); } catch (e) {}
         return;
       }
+      /* ★ 显式采纳会话：游客模式下 SIGNED_IN 事件是被忽略的，
+         不主动推这一把，扫码登录在游客身份下会一直登不进去。 */
+      try {
+        var u = (sess && sess.user) || null;
+        if (!u && window.SB.auth.getUser) {
+          var gu = await window.SB.auth.getUser();
+          u = gu && gu.data && gu.data.user;
+        }
+        if (u && window.AUTH && window.AUTH.adoptSession) window.AUTH.adoptSession(u);
+      } catch (e) { console.warn('[qr] adoptSession 失败', e); }
       await new Promise(function (r) { setTimeout(r, 400); });
       if (window.AUTH && window.AUTH.loggedIn && window.Boot) {
         window.Boot.auth();

@@ -262,10 +262,13 @@ function apply(data){
 }
 
 /* ---------- 本地 ---------- */
-/* 每个账号一份本机存档：wjx_save_v1:<uid>；游客仍用 wjx_save_v1。
-   同一台电脑/手机换账号时，不会把上一个人的进度带过去。 */
+/* 每个身份一份本机存档：wjx_save_v1:<uid>；游客用 wjx_save_v1:guest。
+   同一台电脑/手机换账号时，不会把上一个人的进度带过去。
+   ★ 修复：游客以前和无身份的旧键 wjx_save_v1 共用，升级前那里面可能躺着
+   某个账号的存档，游客一进来就会读取别人的等级装备。现在游客独立成 :guest，
+   旧键只保留不再读取。 */
 function acctId(){ return uid || (window.AUTH && window.AUTH.uid) || ''; }
-function keyOf(){ const id = acctId(); return id ? KEY + ':' + id : KEY; }
+function keyOf(){ const id = acctId(); return id ? (KEY + ':' + id) : (KEY + ':guest'); }
 function saveLocal(data){
   try{
     localStorage.setItem(keyOf(), JSON.stringify(data));
@@ -296,7 +299,7 @@ function guestFresh(){
 function loadGuest(){
   try{
     if(!uid || !guestFresh()) return null;
-    const s = localStorage.getItem(KEY);
+    const s = localStorage.getItem(KEY + ':guest');
     if(!s) return null;
     const d = JSON.parse(s);
     return (d && (d.p || (d.chars && d.chars.length))) ? d : null;
@@ -485,6 +488,8 @@ window.CloudSave = {
   status: function(){ return { cloud: cloudState, logged: logged(), user: uname, last: lastSaveAt }; },
   reset: function(){
     try{ localStorage.removeItem(keyOf()); }catch(e){}
+    /* 角色列表也一起清掉，否则「重开」后还会看到旧角色 */
+    try{ localStorage.removeItem('wjx_chars_v3:' + (acctId() || 'guest')); }catch(e){}
     if(logged() && sb()) sb().from(TABLE).delete().eq('user_id', uid).then(function(){});
     location.href = location.pathname + '?new=1';
   }
