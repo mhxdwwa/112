@@ -32,19 +32,27 @@ function loginEmail(username){ return 'u' + hashUser(username) + '@' + DOMAIN; }
 var state = { user:null, username:'', offline:false, ready:false };
 var booted = false;
 
-/* ---------- 游客模式标记 ----------
-   点过「游客试玩」后，这台设备就是游客身份：
-     · 不再静默恢复上一个账号的会话（否则刷新一下又变回别人）
-     · 角色列表 / 本地存档走独立的「guest」槽位，看不到任何账号的数据
-   只有在登录页主动登录 / 注册成功、或点「注册 · 登录」按钮时才清除。 */
+/* ---------- 游客模式标记（一次性） ----------
+   游客试玩不保存任何数据：角色只活在内存里，落盘一个字节都没有。
+   这个标记只放在 sessionStorage，唯一作用是「点过游客后刷新页面，
+   别把上一个账号静默登回来」—— 关掉标签页它就没了，下次打开回到登录页。
+   只有在登录 / 注册成功、或主动点「注册 · 登录」时才清。 */
 var GUEST_KEY = 'wjx_guest_mode';
 function guestMode(){
-  try{ return localStorage.getItem(GUEST_KEY) === '1'; }catch(e){ return false; }
+  try{ return sessionStorage.getItem(GUEST_KEY) === '1'; }catch(e){ return false; }
 }
 function setGuestMode(on){
   try{
-    if(on) localStorage.setItem(GUEST_KEY, '1');
-    else localStorage.removeItem(GUEST_KEY);
+    if(on) sessionStorage.setItem(GUEST_KEY, '1');
+    else sessionStorage.removeItem(GUEST_KEY);
+  }catch(e){}
+}
+/* 清掉历史版本替游客写过的一切本机数据 */
+function purgeGuestStorage(){
+  try{
+    localStorage.removeItem('wjx_chars_v3:guest');
+    localStorage.removeItem('wjx_save_v1:guest');
+    localStorage.removeItem('wjx_guest_at');
   }catch(e){}
 }
 
@@ -253,21 +261,19 @@ function bindUI(){
 
   var off = $('authOffline');
   if(off) off.addEventListener('click', function(){
-    if(!confirm('确定以「游客」身份试玩？\n\n· 游客有自己独立的试玩存档，不会看到任何账号的角色\n· 进度只存在这台浏览器里，换设备或清缓存会丢\n\n想要属于自己的专属角色和云端存档，请点「取消」回去注册。')) return;
+    if(!confirm('以「游客」身份试玩？\n\n· 一次性试玩：角色和进度都不保存，关掉或刷新页面就清空\n· 不会看到、也不会动到任何账号的数据\n\n想长期玩，请点「取消」用邮箱注册一个专属账号（存档会自动同步云端）。')) return;
     state.offline = true;
     state.user = null;
-    setGuestMode(true);                                  /* ★ 这台设备进入游客身份 */
-    try{ localStorage.setItem('wjx_guest_at', String(Date.now())); }catch(e){}
-    /* ★ 关键：把上一个账号的登录票据彻底注销。
-       否则刷新页面时 Supabase 会静默恢复会话，游客瞬间变回那个账号 —— 
-       这正是「游客试玩却进了自己账号」的另一半原因。 */
+    setGuestMode(true);                                  /* 仅用于刷新时防串号 */
+    purgeGuestStorage();                                 /* 本机不留任何游客残留 */
+    /* 把上一个账号的登录票据彻底注销，否则刷新会被静默登回那个账号 */
     try{
       if(window.SB && window.SB.auth && window.SB.auth.signOut){
         window.SB.auth.signOut().catch(function(){});
       }
     }catch(e){}
     try{ localStorage.removeItem('wjx_last_user'); }catch(e){}
-    msg('游客模式：独立试玩存档，只存本机', 'ok');
+    msg('游客模式：一次性试玩，不保存进度', 'ok');
     window.Boot.auth();
   });
 
@@ -307,10 +313,13 @@ function start(){
   /* ?auth=reg / ?auth=login / ?auth=switch：从「退出 / 换账号」或「注册登录」跳过来，
      强制停在登录页，并退出游客身份（用户明确要求去登录，就不能再当游客） */
   var wantAuth = /[?&]auth=(reg|login|switch)\b/.test(location.search);
-  if(wantAuth){
+  /* 游客态下刷新页面：sessionStorage 里还留着那个一次性标记 */
+  var wasGuest = !wantAuth && guestMode();
+  if(wantAuth || wasGuest){
     setGuestMode(false);
     state.offline = false;
-    try{ history.replaceState(null, '', location.pathname); }catch(e){}
+    purgeGuestStorage();
+    if(wantAuth){ try{ history.replaceState(null, '', location.pathname); }catch(e){} }
   }
 
   try{
@@ -323,24 +332,17 @@ function start(){
     console.warn('[auth] Supabase 初始化失败', e);
   }
 
-  /* ★ 这台设备上次点过「游客试玩」：不恢复任何账号会话，直接以游客进游戏。
-     这是「游客试玩」和「账号」彻底隔离的第一道闸门。 */
-  if(!wantAuth && guestMode()){
-    state.offline = true;
-    state.user = null;
-    if(!window.SB){
-      /* 连不上 Supabase 也照样能游客玩 */
-      window.__dbgFreeze = true;
-      window.Boot.auth();
-      return;
-    }
-    /* 防御：万一还残留着上个账号的票据，再注销一次 */
-    try{ window.SB.auth.signOut().catch(function(){}); }catch(e){}
-    /* 游客模式下任何「登录复活」事件都不采纳 */
-    window.SB.auth.onAuthStateChange(function(evt, session){
-      if(state.offline && session && session.user) return;
-    });
-    window.Boot.auth();
+  /* ★ 游客试玩是一次性的：刷新 / 重开就回到登录页，绝不自动登回上一个账号 */
+  if(wasGuest){
+    try{
+      if(window.SB && window.SB.auth && window.SB.auth.signOut){
+        window.SB.auth.signOut().catch(function(){});
+      }
+    }catch(e){}
+    window.__dbgFreeze = true;
+    showAuth();
+    if(window.SB) msg('游客试玩不保存进度。想继续玩请重新选游客，想留住角色请用邮箱注册。', 'ok');
+    else msg('网络组件加载失败。可以先「游客游玩」，刷新页面可重试登录。', 'err');
     return;
   }
 

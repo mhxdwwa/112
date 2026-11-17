@@ -12,8 +12,8 @@
    修复：以前所有身份共用一把钥匙 wjx_chars_v1，于是「游客试玩」会直接读到
    上一次登录账号留下的角色（一进「侠客之路」就看到自己账号的角色）。
    现在：
-     · 已登录 → wjx_chars_v3:<uid>
-     · 游客   → wjx_chars_v3:guest
+     · 已登录 → wjx_chars_v3:<uid>  （落盘，可长期保存）
+     · 游客   → 纯内存，一个字节都不写盘（关掉页面即清空）
    两者永不相通；老键 wjx_chars_v1 只在「登录态」下被认领一次（登录后有云端
    存档会覆盖，所以不会串号），游客态一律不读。                              */
 const LOCAL_KEY  = 'wjx_chars_v3';
@@ -33,17 +33,17 @@ function newId(){ return 'c' + Date.now().toString(36) + Math.random().toString(
 function norm(n){ return String(n || '').trim(); }
 function lower(n){ return norm(n).toLowerCase(); }
 
-/* 当前身份对应的存储键：登录用 uid，游客用独立槽位 */
+/* 当前身份对应的存储键：登录用 uid，游客没有键（不落盘） */
 function keyOf(){
   const uid = (window.AUTH && window.AUTH.loggedIn && window.AUTH.uid) || '';
-  return uid ? (LOCAL_KEY + ':' + uid) : (LOCAL_KEY + ':guest');
+  return uid ? (LOCAL_KEY + ':' + uid) : 'guest';
 }
 
 function normalize(d){
   return {
     v: 3, t: Number(d.t) || 0,
     activeId: d.activeId || (d.chars[0] && d.chars[0].id) || '',
-    chars: (d.chars || []).map(function(c){
+    chars: (Array.isArray(d.chars) ? d.chars : []).map(function(c){
       return {
         id: c.id || newId(), name: c.name || '无名侠客',
         charIdx: c.charIdx | 0, level: c.level | 0 || 1,
@@ -53,11 +53,25 @@ function normalize(d){
   };
 }
 
+function emptyBundle(){ return { v: 3, t: 0, activeId: '', chars: [] }; }
+
+/* 清掉历史版本（v48 及以前）替游客写过的本机数据，
+   现在游客一个字节都不留，本机不该有「多余的游客角色」。 */
+function purgeGuestStorage(){
+  try{
+    localStorage.removeItem(LOCAL_KEY + ':guest');
+    localStorage.removeItem('wjx_save_v1:guest');
+    localStorage.removeItem('wjx_guest_at');
+  }catch(e){}
+}
+
 function loadLocal(){
   const key = keyOf();
-  bundle = { v: 3, t: 0, activeId: '', chars: [] };
+  bundle = emptyBundle();
   boundKey = key;
   bootedKey = key;
+  /* ★ 游客：每次打开都是一张白纸，不读任何本机数据，顺手清掉旧版本残留 */
+  if(!logged()){ purgeGuestStorage(); return bundle; }
   let got = false;
   try{
     const s = localStorage.getItem(key);
@@ -66,7 +80,7 @@ function loadLocal(){
       if(d && d.chars && d.chars.length){ bundle = normalize(d); got = true; }
     }
   }catch(e){}
-  if(!got && logged()) migrateLegacy();
+  if(!got) migrateLegacy();
   if(!get(bundle.activeId) && bundle.chars.length) bundle.activeId = bundle.chars[0].id;
   return bundle;
 }
@@ -88,12 +102,23 @@ function migrateLegacy(){
 function persist(){
   const k = keyOf();
   boundKey = k;
+  /* ★ 游客不落盘：角色只活在这次打开的内存里，关掉页面就没了 */
+  if(!logged()) return;
   try{ localStorage.setItem(k, JSON.stringify(bundle)); }catch(e){}
 }
 
-/* 本机是否存在「游客专属角色包」（给云存档判断游客进度归属用） */
+/* 本机是否残留着历史版本的游客角色包（v48 之前会写 wjx_chars_v3:guest） */
 function hasGuestBundle(){
   try{ return !!localStorage.getItem(LOCAL_KEY + ':guest'); }catch(e){ return false; }
+}
+
+/* 清空当前身份的本机角色（「重开」用；游客本来就只在内存里） */
+function clearLocal(){
+  const k = keyOf();
+  if(k && k !== 'guest'){ try{ localStorage.removeItem(k); }catch(e){} }
+  purgeGuestStorage();
+  bundle = emptyBundle();
+  boundKey = k; bootedKey = k;
 }
 
 /* ---------- 查询 ---------- */
@@ -280,7 +305,7 @@ function renderPanel(){
   if(!list.length){
     box.innerHTML = '<div class="cp-empty">' + (logged()
       ? '还没有角色，点下面「创建新角色」开始'
-      : '游客模式还没有角色。<br>这里的角色只存在这台设备上；注册账号后才会变成你名下的专属角色。') + '</div>';
+      : '游客模式是<b>一次性试玩</b>：角色和进度都不保存，关掉页面就清空。<br>想长期玩，请先注册账号（一个邮箱一个专属账号）。') + '</div>';
     return;
   }
   box.innerHTML = list.map(function(c){
@@ -348,6 +373,7 @@ window.CHARS = {
   bundle: function(){ return bundle; },
   key: function(){ return boundKey; },
   hasGuestBundle: hasGuestBundle,
+  clearLocal: clearLocal,
   loadBundle: loadBundle, pack: pack, activeSave: activeSave,
   validate: validate, createFromNaming: createFromNaming,
   enter: enter, remove: remove,

@@ -262,44 +262,27 @@ function apply(data){
 }
 
 /* ---------- 本地 ---------- */
-/* 每个身份一份本机存档：wjx_save_v1:<uid>；游客用 wjx_save_v1:guest。
-   同一台电脑/手机换账号时，不会把上一个人的进度带过去。
-   ★ 修复：游客以前和无身份的旧键 wjx_save_v1 共用，升级前那里面可能躺着
-   某个账号的存档，游客一进来就会读取别人的等级装备。现在游客独立成 :guest，
-   旧键只保留不再读取。 */
+/* 只有「用邮箱注册并登录」的账号才有存档：
+     · 本机   wjx_save_v1:<uid>
+     · 云端   wujinxiake_saves（登录后自动同步）
+   游客没有任何存档 —— 试玩数据只在内存里，关掉页面即清空，
+   本机不会留下多余的游客角色/进度。 */
 function acctId(){ return uid || (window.AUTH && window.AUTH.uid) || ''; }
-function keyOf(){ const id = acctId(); return id ? (KEY + ':' + id) : (KEY + ':guest'); }
+function keyOf(){ const id = acctId(); return id ? (KEY + ':' + id) : ''; }
 function saveLocal(data){
+  const k = keyOf();
+  if(!k) return true;              /* ★ 游客：不写盘 */
   try{
-    localStorage.setItem(keyOf(), JSON.stringify(data));
-    /* 游客每次落盘都刷新时间戳：之后注册时凭它把这份进度认领过去 */
-    if(!acctId()) localStorage.setItem('wjx_guest_at', String(Date.now()));
+    localStorage.setItem(k, JSON.stringify(data));
     return true;
   }
   catch(e){ console.warn('[save] 本地写入失败', e); return false; }
 }
 function loadLocal(){
+  const k = keyOf();
+  if(!k) return null;              /* ★ 游客：不读盘 */
   try{
-    const s = localStorage.getItem(keyOf());
-    if(!s) return null;
-    const d = JSON.parse(s);
-    return (d && (d.p || (d.chars && d.chars.length))) ? d : null;
-  }catch(e){ return null; }
-}
-/* 游客存档迁移：登录后第一次没找到账号自己的存档时，用游客那份兜底，
-   这样「先试玩、再注册」的进度不会丢。
-   只认最近 6 小时内确实点过「游客试玩」的那份，避免同一台机器上
-   别的同学很久以前留下的游客进度被新账号继承。 */
-function guestFresh(){
-  try{
-    const t = Number(localStorage.getItem('wjx_guest_at') || 0);
-    return !!t && (Date.now() - t) < 6 * 3600 * 1000;
-  }catch(e){ return false; }
-}
-function loadGuest(){
-  try{
-    if(!uid || !guestFresh()) return null;
-    const s = localStorage.getItem(KEY + ':guest');
+    const s = localStorage.getItem(k);
     if(!s) return null;
     const d = JSON.parse(s);
     return (d && (d.p || (d.chars && d.chars.length))) ? d : null;
@@ -365,6 +348,8 @@ function payload(){
 }
 
 function saveNow(force){
+  /* ★ 游客试玩：不落盘、不上云。数据只活在内存里，关掉页面即清空 */
+  if(!logged()) return;
   /* ★ 还没进角色就别写盘，避免把角色数据冲掉 */
   if(!armed) return;
   const data = payload();
@@ -376,7 +361,7 @@ function saveNow(force){
   lastPushAt = Date.now();
   lastSaveAt = lastPushAt;
 
-  if(!logged() || cloudState === 'unavailable') return;
+  if(cloudState === 'unavailable') return;
   if(pushing) return;
   pushing = true;
   pushCloud(data).finally(function(){ pushing = false; });
@@ -393,9 +378,7 @@ async function boot(){
   uid = window.AUTH.uid;
   uname = window.AUTH.username;
 
-  const ownLocal = loadLocal();
-  const guestLocal = ownLocal ? null : loadGuest();
-  const local = ownLocal || guestLocal;
+  const local = loadLocal();
   const cloud = await pullCloud();
 
   /* ?new=1 忽略存档，重新开局 */
@@ -427,8 +410,6 @@ async function boot(){
     }
     window.CHARS.loadBundle(bundle, true);
     lastStr = JSON.stringify(bundle);
-    /* 游客进度已经并入账号，标记作废，避免下次又拿它兜底 */
-    if(pick === guestLocal){ try{ localStorage.removeItem('wjx_guest_at'); }catch(e){} }
     setTimeout(function(){
       try{
         if(window.CHARS.count() > 0){ window.CHARS.openPanel(); }
@@ -444,8 +425,6 @@ async function boot(){
   /* 兜底：没有角色系统时按老逻辑直接进 */
   if(apply(pick)){
     lastStr = JSON.stringify(pick);
-    /* 游客进度已经并入账号，标记作废，避免下次又拿它兜底 */
-    if(pick === guestLocal){ try{ localStorage.removeItem('wjx_guest_at'); }catch(e){} }
     setTimeout(function(){
       var who = (window.CHARS && window.CHARS.active && window.CHARS.active()) || pick;
       var lv = (who && who.level) || (pick.p && pick.p.level) || 1;
@@ -487,9 +466,10 @@ window.CloudSave = {
   applyBundle: function(b){ return apply(b); },
   status: function(){ return { cloud: cloudState, logged: logged(), user: uname, last: lastSaveAt }; },
   reset: function(){
-    try{ localStorage.removeItem(keyOf()); }catch(e){}
+    const k = keyOf();
+    if(k){ try{ localStorage.removeItem(k); }catch(e){} }
     /* 角色列表也一起清掉，否则「重开」后还会看到旧角色 */
-    try{ localStorage.removeItem('wjx_chars_v3:' + (acctId() || 'guest')); }catch(e){}
+    try{ if(window.CHARS && window.CHARS.clearLocal) window.CHARS.clearLocal(); }catch(e){}
     if(logged() && sb()) sb().from(TABLE).delete().eq('user_id', uid).then(function(){});
     location.href = location.pathname + '?new=1';
   }

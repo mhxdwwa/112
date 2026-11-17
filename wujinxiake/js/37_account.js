@@ -34,18 +34,18 @@ function update(){
   const who = $('accWho'), where = $('accWhere'), when = $('accWhen'), tip = $('accTip');
   if(who) who.textContent = i.logged ? i.name : '游客（未登录）';
   if(where){
-    if(!i.logged){ where.textContent = '仅本机（浏览器）'; where.className = 'warn'; }
+    if(!i.logged){ where.textContent = '不保存（一次性试玩）'; where.className = 'warn'; }
     else if(i.cloud === 'ok'){ where.textContent = '云端已同步'; where.className = 'ok'; }
     else if(i.cloud === 'unavailable'){ where.textContent = '云端未就绪 · 仅本机'; where.className = 'warn'; }
     else if(i.cloud === 'error'){ where.textContent = '云端连接失败 · 仅本机'; where.className = 'warn'; }
     else { where.textContent = '检测中…'; where.className = ''; }
   }
-  if(when) when.textContent = i.last ? hhmm(i.last) : '尚未保存';
+  if(when) when.textContent = i.last ? hhmm(i.last) : (i.logged ? '尚未保存' : '—');
 
   if(tip){
     tip.textContent = i.logged
       ? '已登录：每 20 秒自动同步云端，关页面也会立刻保存。想换人，点「退出 / 换账号」用你自己的账号登录。'
-      : '游客模式：这里的角色和进度都是这台设备上的独立试玩存档，看不到也动不了任何账号的数据。想拥有自己的专属角色和云端存档，点「注册 / 登录」。';
+      : '游客模式是一次性试玩：角色和进度都不保存，关掉或刷新页面就清空，本机也不会留下任何游客角色。想长期玩，用邮箱注册一个专属账号，存档会自动同步到云端。';
   }
 
   const loginBtn = $('accLogin'), saveBtn = $('accSave'), switchBtn = $('accSwitch');
@@ -76,11 +76,10 @@ function boot(){
 
   const login = $('accLogin');
   if(login) login.addEventListener('click', function(){
-    const ok = confirm('去注册 / 登录？\n\n· 游客试玩存档会留在本机，不会丢\n· 登录后进入你自己账号名下的角色列表（一个邮箱 = 一个专属账号）\n· 想一直当游客，点「取消」');
+    const ok = confirm('去注册 / 登录？\n\n· 游客试玩是一次性的，进登录页后这次的角色和进度会清空\n· 用邮箱注册后，角色会保存到云端，换设备也能接着玩\n· 一个邮箱 = 一个专属账号');
     if(!ok) return;
-    try{ window.CloudSave && window.CloudSave.save(); }catch(e){}
-    /* ★ 带上 ?auth=login：跳过游客模式，停在登录页
-       （以前是 location.reload()，在游客模式下会又回到游客身份，永远登不进去） */
+    /* ★ 带上 ?auth=login：不做会话恢复、停在登录页
+       （以前是 location.reload()，在游客态会又被拦回游客，永远登不进去） */
     location.replace(location.pathname + '?auth=login');
   });
 
@@ -121,7 +120,7 @@ function boot(){
     setTimeout(update, 300);
     if(!guestToasted && !(window.AUTH && window.AUTH.loggedIn)){
       guestToasted = true;
-      setTimeout(function(){ toast('游客模式：独立试玩存档 · 点右上角「游客」可注册专属账号', '#ffcf6e'); }, 2200);
+      setTimeout(function(){ toast('游客试玩 · 不保存进度，关掉页面即清空 · 想留住角色请用邮箱注册', '#ffcf6e'); }, 2200);
     }
   });
   window.addEventListener('wjx:auth', function(){ setTimeout(update, 120); });
