@@ -5689,12 +5689,41 @@ function injectDPControls() {
   mb.appendChild(ct);
 }
 
+// 判断一个地址是不是能直接喂给 <video> 的媒体，而不是一个网页。
+// 采集源混着两种：真媒体流（.m3u8 / .mp4）和「播放页」（一个 HTML）。
+// 播放页塞进 <video> 不会报错，只会一直黑屏 readyState=0，所以必须先认出来。
+function _looksLikeMedia(u) {
+  if (!u) return false;
+  var s = String(u).toLowerCase();
+  // 明确带媒体后缀（含 query 里带后缀的情况）
+  if (/\.(m3u8|mp4|m4v|webm|ogv|ogg|mov|flv|mpd)(\?|&|$)/.test(s)) return true;
+  // 明确是网页
+  if (/\.(html?|php|aspx?|jsp)(\?|&|$)/.test(s)) return false;
+  // /play/xxx、/vodplay/xxx、/embed/xxx 这类站点路径 → 播放页
+  if (/\/(play|playpage|vodplay|player|embed|watch)\//.test(s)) return false;
+  // 拿不准：交给后面的 8 秒超时兜底去降级，不算否决
+  return true;
+}
+
 function initDirectPlayer(url) {
   destroyHls();
   _curSrcUrl = url;          // 原始地址，中转失败时回退解析线路要用它
   _relayAttempted = false;
   _currentM3u8Url = url;
   try { console.log('[播放源] ' + url + '\n[提示] 想查这集的广告能不能删，输入 tcInspect()'); } catch (e) {}
+
+  // 采集源给的 playUrl 有两种：真正的媒体流（.m3u8/.mp4）和「播放页」（一个 HTML 页面）。
+  // 后者塞进 <video> 永远不会报错、只会一直 readyState=0 黑屏，所以要认出来改用 iframe 嵌。
+  if (!_looksLikeMedia(url)) {
+    var pa0 = document.getElementById('playerArea');
+    if (pa0) {
+      console.log('[播放] 这是播放页不是媒体流，改用内嵌播放');
+      pa0.innerHTML = _origPlayerIframe(url);
+      setChannelBadge('内嵌', true);
+    }
+    return;
+  }
+
   const video = document.getElementById('dpVideo');
   if(!video) return;
   _hlsVideo = video;
