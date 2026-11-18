@@ -329,6 +329,93 @@ export default {
         }
       }
 
+      // GET /resolve?url=xxx - 从「播放页」HTML 里抠出真正的 m3u8
+      //   采集源给的 playUrl 基本都是分享页（v.lzcdn27.com/share/xxx、hd.kuktxu.com/play/xxx），
+      //   页面里明文写着 var main = "/20261106/21557_xxx/index.m3u8?sign=..."。
+      //   直接解析出来走原生播放器，比套 iframe 快得多，而且去广告才生效。
+      if (path === '/resolve' && request.method === 'GET') {
+        const pageUrl = url.searchParams.get('url') || url.searchParams.get('u');
+        if (!pageUrl) return new Response('missing url', { status: 400, headers: corsHeaders });
+        let pu;
+        try { pu = new URL(pageUrl); } catch (e) {
+          return new Response('bad url', { status: 400, headers: corsHeaders });
+        }
+        if (pu.protocol !== 'http:' && pu.protocol !== 'https:') {
+          return new Response('protocol not allowed', { status: 400, headers: corsHeaders });
+        }
+
+        const cache = caches.default;
+        const ckey = new Request(url.origin + '/api/image-relay/resolve?url=' + encodeURIComponent(pageUrl), { method: 'GET' });
+        const hit = await cache.match(ckey);
+        if (hit) return hit;
+
+        try {
+          const up = await fetch(pu.href, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+              'Accept-Language': 'zh-CN,zh;q=0.9',
+              'Referer': pu.origin + '/',
+            },
+            redirect: 'follow',
+          });
+          if (!up.ok) {
+            return new Response(JSON.stringify({ ok: false, err: 'page ' + up.status }), {
+              status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          const html = await up.text();
+          // 站点自己就是 m3u8（有些源直接把流地址填进 playUrl）
+          const isM3u8Direct = /^#EXTM3U/.test(html.trim().slice(0, 40));
+
+          let m3u8 = '';
+          if (isM3u8Direct) {
+            m3u8 = pu.href;
+          } else {
+            // 依次试：var main = "..." / url: "..." / 任意 .m3u8 字面量
+            const pats = [
+              /var\s+main\s*=\s*["']([^"']*?\.m3u8[^"']*)["']/i,
+              /\bmain\s*[:=]\s*["']([^"']*?\.m3u8[^"']*)["']/i,
+              /\burl\s*[:=]\s*["']([^"']*?\.m3u8[^"']*)["']/i,
+              /["'](\/[^"']{2,200}\.m3u8[^"']*)["']/i,
+              /["'](https?:\/\/[^"']*?\.m3u8[^"']*)["']/i,
+            ];
+            for (const p of pats) {
+              const m = p.exec(html);
+              if (m && m[1]) { m3u8 = m[1]; break; }
+            }
+          }
+
+          if (!m3u8) {
+            const body = JSON.stringify({ ok: false, err: 'no m3u8', size: html.length });
+            return new Response(body, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
+          // 相对路径补全
+          if (m3u8.indexOf('//') === 0) m3u8 = pu.protocol + m3u8;
+          else if (m3u8.charAt(0) === '/') m3u8 = pu.origin + m3u8;
+          else if (!/^https?:/i.test(m3u8)) {
+            const base = pu.href.replace(/[?#].*$/, '').replace(/\/[^/]*$/, '/');
+            m3u8 = base + m3u8;
+          }
+
+          const body = JSON.stringify({ ok: true, m3u8, from: pu.origin, ts: Date.now() });
+          const res = new Response(body, {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=3600',
+            },
+          });
+          await cache.put(ckey, res.clone());
+          return res;
+        } catch (err) {
+          return new Response(JSON.stringify({ ok: false, err: String(err && err.message || err) }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
       // GET /m3u8-proxy?url=xxx - Proxy and filter M3U8 streams (remove ad segments)
       if (path === '/m3u8-proxy' && request.method === 'GET') {
         const targetUrl = url.searchParams.get('url');
