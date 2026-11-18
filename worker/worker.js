@@ -267,21 +267,43 @@ export default {
           return new Response('protocol not allowed', { status: 400, headers: corsHeaders });
         }
 
+        // 海报只要竖版小图，前端会带 w/h。豆瓣原图动辄 30~40KB，
+        // 交给 Cloudflare 的图片能力缩一下再转 WebP，能压到 5~8KB。
+        const rw = Math.min(Math.max(parseInt(url.searchParams.get('w') || '280', 10) || 280, 40), 1600);
+        const rh = Math.min(Math.max(parseInt(url.searchParams.get('h') || '0', 10) || 0, 0), 2400);
+        const variant = '/img/' + rw + 'x' + rh;
+
         const cache = caches.default;
-        const ckey = new Request(url.origin + '/api/image-relay/img?url=' + encodeURIComponent(imgUrl), { method: 'GET' });
+        const ckey = new Request(
+          url.origin + '/api/image-relay' + variant + '?url=' + encodeURIComponent(imgUrl),
+          { method: 'GET' }
+        );
         const hit = await cache.match(ckey);
         if (hit) return hit;
 
-        // 豆瓣要「不带 Referer」才放行，其它图床反过来要带自家 Referer
+        // 豆瓣图必须带 Referer 才给（不带 → 418 "cdn error 001"，带 movie.douban.com → 200）；
+        // 其它采集源图床反过来：带自家 origin 的 Referer 最稳。
         const isDouban = /(^|\.)doubanio\.com$|(^|\.)douban\.com$/.test(iu.hostname);
         const headers = {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
           'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
         };
-        if (!isDouban) headers.Referer = iu.origin + '/';
+        headers.Referer = isDouban ? 'https://movie.douban.com/' : iu.origin + '/';
+
+        async function pull(hs) {
+          const r = await fetch(iu.href, { headers: hs, redirect: 'follow' });
+          return r;
+        }
 
         try {
-          const up = await fetch(iu.href, { headers, redirect: 'follow' });
+          let up = await pull(headers);
+          // 有些图床对 Referer 挑剔，被拒时换「不带 Referer」再试一次
+          if (!up.ok && (up.status === 403 || up.status === 418 || up.status === 404)) {
+            const bare = { ...headers };
+            delete bare.Referer;
+            up = await pull(bare);
+          }
           if (!up.ok) {
             return new Response('upstream ' + up.status, { status: 502, headers: corsHeaders });
           }
