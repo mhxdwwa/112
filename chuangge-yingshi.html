@@ -16,6 +16,7 @@
 
 
 
+
 <link rel="preconnect" href="https://wsrv.nl" crossorigin>
 <link rel="dns-prefetch" href="//wsrv.nl">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -1999,7 +2000,10 @@ function normName(n) {
  * 任何一张图超过 7 秒没出来就直接换下一跳，不让用户对着空卡等。
  */
 var IMG_STAGE = 'data-stage';
-var IMG_HARD_TIMEOUT = 7000;      // 一张图最多等这么久
+// 一张图最多等这么久。别设太短：网慢的人 20KB 海报也可能要 8 秒，
+// 7 秒一到就被判失败去换备用图源，备用又超时，最后只能显示剧名占位——
+// 用户看到的不是「慢」而是「没海报」，比慢更糟。
+var IMG_HARD_TIMEOUT = 12000;
 
 function imgProxy(u, w, h) {
   if (!u) return '';
