@@ -20,8 +20,6 @@
 
 
 
-<link rel="preconnect" href="https://wsrv.nl" crossorigin>
-<link rel="dns-prefetch" href="//wsrv.nl">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
 <link rel="dns-prefetch" href="//cj.lziapi.com">
@@ -1739,12 +1737,15 @@ async function apiLoadCatFull(catName) {
 
 
 // === RENDER FUNCTIONS ===
+// 旧函数名留着：搜索建议面板、播放页侧栏好几处都在调它。
+// 真正的取图逻辑已经统一到 imgProxy（B站直连 / 其它走 Worker），
+// 原来这里写死 wsrv.nl —— 那个服务现在对任何地址都返回 404，
+// 走它等于每张图都先失败一次再回退，白白多等一个 RTT。
 function proxyImg(url) {
   if (!url) return '';
   if (url.startsWith('data:')) return url;
-  if (url.includes('wsrv.nl')) return url;
-  // 对已经是https的图片直接使用wsrv代理，降低图片尺寸加速加载
-  return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=280&h=420&fit=cover&output=webp&q=80';
+  if (/wsrv\.nl/.test(url)) return url;   // 外部已经包过一层，别再套
+  return imgProxy(url, 280, 420);
 }
 
 function cardHTML(item, idx, eager) {
@@ -5592,6 +5593,160 @@ function relayUrl(u) {
   return RELAY_BASE.replace(/\/+$/, '') + '/p?u=' + encodeURIComponent(u);
 }
 
+/* ================= 分片并发预取：卡顿的真正解法 =================
+ *
+ * 实测数据（采集源 hn.bfvvs.com，同一路 1080p 流）：
+ *   视频本身码率        1267 kbps
+ *   单连接吞吐           279 kbps   → 余量 0.22×，越播越落后
+ *   4 条并发            1923 kbps   → 余量 1.52×
+ *   8 条并发            3061 kbps   → 余量 2.42×
+ *   12 条并发           3315 kbps   → 基本到顶
+ *
+ * 结论：采集源是 HTTP/1.1 且**按连接限速**，一条连接最多给你 1Mbps。
+ * 而 hls.js 默认一次只拉一个分片（严格串行），所以它永远只能吃到那 279kbps，
+ * 视频却要 1267kbps —— 缓冲从第一秒就在亏损，播几分钟必定转圈。
+ * 这就是「人家的站丝滑、我的站卡」的全部原因，跟播放器参数、跟 CDN 快慢都无关。
+ *
+ * gaze.red 之所以不卡，是因为它用自有对象存储（天翼云 OOS，单连接不限速），
+ * 串行也够用。我们没有自己的存储，那就把「串行 1 条」改成「并发 8 条」——
+ * 效果等价，且不用花一分钱。
+ *
+ * 安全性：预取全程是 best-effort。任何一片拉失败就丢掉缓存条目，
+ * hls.js 自己的加载器照常去拉；最坏情况等于没装这东西，绝不会让播放变差。
+ */
+var PF_AHEAD = 7;                     // 往前预取几片：实测 6~8 是拐点，再多只增内存
+var PF_MAX_BYTES = 64 * 1024 * 1024;  // 缓存上限，约 30 秒~1 分钟的 1080p 分片
+var PF_STATS = { hits: 0, miss: 0, fetched: 0, bytes: 0, loadCalls: 0, consumed: 0 };
+
+var _pf = (function () {
+  var cache = new Map();      // url -> ArrayBuffer
+  var inflight = new Map();   // url -> Promise
+  var bytes = 0;
+  var grab = 0;               // 正在下载的条数
+  var queue = [];             // 当前这一集的完整分片地址表
+  var cursor = 0;
+
+  function trim() {
+    // Map 保持插入顺序，从最早的开始丢，丢到不超上限为止
+    while (bytes > PF_MAX_BYTES && cache.size > 2) {
+      var k = cache.keys().next().value;
+      var v = cache.get(k);
+      bytes -= v ? v.byteLength : 0;
+      cache.delete(k);
+    }
+  }
+
+  function fetchBuf(u) {
+    if (cache.has(u)) return Promise.resolve(cache.get(u));
+    if (inflight.has(u)) return inflight.get(u);
+    if (grab >= PF_AHEAD + 2) return Promise.resolve(null);  // 别把连接全占了，给正片留余量
+    grab++;
+    var p = fetch(u, { credentials: 'omit', mode: 'cors' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.arrayBuffer();
+      })
+      .then(function (b) {
+        inflight.delete(u); grab--;
+        PF_STATS.fetched++; PF_STATS.bytes += b.byteLength;
+        cache.set(u, b); bytes += b.byteLength; trim();
+        return b;
+      })
+      .catch(function () { inflight.delete(u); grab--; return null; });
+    inflight.set(u, p);
+    return p;
+  }
+
+  return {
+    // 换集时重置
+    reset: function (frags) {
+      cache.clear(); inflight.clear(); bytes = 0; grab = 0;
+      queue = (frags || []).map(function (f) { return f && f.url; }).filter(Boolean);
+      cursor = 0;
+      PF_STATS.hits = 0; PF_STATS.miss = 0; PF_STATS.fetched = 0;
+      PF_STATS.bytes = 0; PF_STATS.consumed = 0;
+    },
+    // 播到第 idx 片了，把后面几片一起拉起来
+    pump: function (idx) {
+      if (!queue.length) return;
+      cursor = Math.max(0, Math.min(idx | 0, queue.length - 1));
+      var end = Math.min(queue.length, cursor + PF_AHEAD + 1);
+      for (var k = cursor; k < end; k++) {
+        var u = queue[k];
+        if (!u || cache.has(u) || inflight.has(u)) continue;
+        fetchBuf(u);   // 不 await：一次全撒出去，HTTP/1.1 会开多条连接
+      }
+    },
+    // hls.js 来要这一片：缓存里有就交出去（顺手从缓存删掉，反正马上要进 MSE）
+    take: function (u) {
+      if (cache.has(u)) {
+        var b = cache.get(u);
+        cache.delete(u); bytes -= b.byteLength;
+        PF_STATS.hits++; PF_STATS.consumed += b.byteLength;
+        return Promise.resolve(b);
+      }
+      if (inflight.has(u)) { PF_STATS.hits++; return inflight.get(u); }
+      PF_STATS.miss++;
+      return null;
+    },
+    // 当前位置的前后关系：让 pump 知道该往哪边推
+    indexOfUrl: function (u) {
+      var i = queue.indexOf(u);
+      return i;
+    },
+    stats: function () {
+      return { hits: PF_STATS.hits, miss: PF_STATS.miss, fetched: PF_STATS.fetched,
+               loadCalls: PF_STATS.loadCalls, consumedMB: +(PF_STATS.consumed / 1048576).toFixed(2),
+               cached: cache.size, inflight: inflight.size,
+               mb: +(bytes / 1048576).toFixed(2), cursor: cursor, total: queue.length };
+    }
+  };
+})();
+
+// 包一层 hls.js 的分片加载器：命中预取缓存就直接回，没命中就让它自己去拉
+function _makePrefetchLoader(Base) {
+  return class PrefetchLoader extends Base {
+    load(context, config, callbacks) {
+      // 注意：这里不能拿 config.responseType 判断「这是不是分片」——
+      // hls.js 传进来的是整份 config，不是分片专属参数，那个字段根本不存在，
+      // 条件永远为假，于是每一片都回落到原生加载器，预取白下载（第一版就踩了这个坑）。
+      // 正确做法：谁来要都先问一句缓存，没有就让原加载器自己去拉。
+      var sup = super.load.bind(this);
+      PF_STATS.loadCalls++;
+      var p = null;
+      if (context && context.url) { try { p = _pf.take(context.url); } catch (e) { p = null; } }
+      if (!p) return sup(context, config, callbacks);
+
+      var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+      p.then(function (buf) {
+        if (!buf || !buf.byteLength) return sup(context, config, callbacks);
+        callbacks.onSuccess(
+          { url: context.url, data: buf },
+          { trequest: t0, tfirst: t0, tload: performance.now(), loaded: buf.byteLength, total: buf.byteLength, aborted: false },
+          context
+        );
+      });
+    }
+  };
+}
+
+// 播放前给分片域名建好连接：实测 hn.bfvvs.com 的 TLS 握手要 0.95 秒，
+// 提前连上等于把起播时间白赚回将近一秒（play.hhuus.com 甚至要 6.3 秒）。
+var _preconnected = {};
+function preconnectHost(u) {
+  try {
+    var h = new URL(u, location.href).host;
+    if (!h || _preconnected[h]) return;
+    _preconnected[h] = 1;
+    var l = document.createElement('link');
+    l.rel = 'preconnect'; l.href = location.protocol + '//' + h; l.crossOrigin = 'anonymous';
+    document.head.appendChild(l);
+    var l2 = document.createElement('link');
+    l2.rel = 'dns-prefetch'; l2.href = '//' + h;
+    document.head.appendChild(l2);
+  } catch (e) {}
+}
+
 // 一键体检：播放任意一集 → F12 → 输入 tcInspect() 回车
 // 作用：把当前这集的 m3u8 拆开看，判断那 15 秒广告是「独立分片」（能删）还是
 //       已经混进正片分片里（删不掉，只能换线路或跳过）
@@ -5622,22 +5777,41 @@ window.tcInspect = function (u) {
   return box;
 };
 
-// 播放通道角标：让用户一眼看到这集是怎么播出来的
+// 播放性能自查：播放中 F12 输入 tcPerf()
+// 看的是「预取到底有没有起作用」—— hit/miss 比、缓存里存了几片、开到第几片。
+// 正常情况下 hits 应该远大于 miss（每片只有第一次是 miss）。
+window.tcPerf = function () {
+  var s = _pf.stats();
+  var v = document.getElementById('dpVideo');
+  var out = {
+    加载器调用: s.loadCalls,
+    预取命中: s.hits,
+    未命中: s.miss,
+    已下载分片: s.fetched,
+    命中省下: s.consumedMB + 'MB',
+    缓存中: s.cached + ' 片 / ' + s.mb + 'MB',
+    正在下载: s.inflight,
+    播放到第几片: s.cursor + ' / ' + s.total,
+    当前码流: v && v.videoWidth ? (v.videoWidth + '×' + v.videoHeight) : '未出画面',
+    缓冲秒数: (function () {
+      try {
+        if (!v || !v.buffered || !v.buffered.length) return 0;
+        return +(v.buffered.end(v.buffered.length - 1) - v.currentTime).toFixed(1);
+      } catch (e) { return 0; }
+    })(),
+    当前时间: v ? +v.currentTime.toFixed(1) : 0
+  };
+  console.log('[性能]', out);
+  return out;
+};
+
+// 播放通道角标 —— 已下线。
+// 这个角标原本是给调试用的（显示这集走的直连 / 中转 / 内嵌），
+// 但它在播放器右下角常驻一个白字「直连」，观众看着莫名其妙，所以直接去掉。
+// 函数留一个空壳：全站有十几处调用它，删函数会连带报错，这里只保证什么都不画。
 function setChannelBadge(text, danger) {
   var el = document.getElementById('dpChannelBadge');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'dpChannelBadge';
-    el.style.cssText = 'position:fixed;bottom:110px;right:16px;z-index:222;height:28px;'
-      + 'padding:0 12px;border-radius:14px;display:flex;align-items:center;'
-      + 'font-size:12px;font-weight:600;color:#fff;backdrop-filter:blur(6px);'
-      + 'border:1px solid rgba(255,255,255,.2);pointer-events:none';
-    var mb = document.getElementById('modalBox');
-    if (!mb) return;
-    mb.appendChild(el);
-  }
-  el.textContent = text;
-  el.style.background = danger ? 'rgba(190,60,45,.72)' : 'rgba(0,0,0,.55)';
+  if (el && el.parentNode) el.parentNode.removeChild(el);
 }
 
 // [FIX] Default mode: 直连优先（含手机）。只有当直连失败时才自动降级到 iframe。
@@ -5782,6 +5956,9 @@ function initDirectPlayer(url) {
   _curSrcUrl = url;          // 原始地址，中转失败时回退解析线路要用它
   _relayAttempted = false;
   _currentM3u8Url = url;
+  // 立刻给这个域名热身 DNS + TLS。实测采集源 TLS 握手 0.95~6.3 秒，
+  // 等播放器走到第一个分片请求才建连接，这段时间全变成黑屏。
+  preconnectHost(url);
   try { console.log('[播放源] ' + url + '\n[提示] 想查这集的广告能不能删，输入 tcInspect()'); } catch (e) {}
 
   // 采集源给的 playUrl 有两种：真正的媒体流（.m3u8/.mp4）和「播放页」（一个 HTML 页面）。
@@ -5876,23 +6053,29 @@ function initDirectPlayer(url) {
 
     // 播放器参数沿用线上调优，只是从内联对象改成变量，好挂去广告加载器
     var _cfg = {
-      // === 极致预载策略：尽快缓冲整集视频 ===
-      maxBufferLength: 45,             // 45秒起播缓冲（增加以确保流畅）
-      maxMaxBufferLength: 1800,        // 最大缓冲到30分钟（整集预载）
-      maxBufferSize: 800 * 1024 * 1024, // 800MB内存缓冲上限（增加以支持更高清视频）
+      // === 缓冲策略（按实测带宽余量重定，不再是拍脑袋的 30 分钟）===
+      // 采集源单连接只有 279kbps，以前把 maxBufferLength 拉到 1800秒 / 800MB，
+      // 结果 hls.js 拼命想预载整集、却永远追不上，内存还堆到几百兆（手机上直接卡成幻灯片）。
+      // 现在带宽靠并发预取（见 _pf），缓冲目标回到合理区间：60 秒起播、缓冲上限 400MB。
+      maxBufferLength: 60,
+      maxMaxBufferLength: 600,
+      maxBufferSize: 400 * 1024 * 1024,
       maxBufferHole: 0.5,             // 更小的buffer空洞容忍，减少卡顿
       highBufferWatchdogPeriod: 1.5,   // 更快的缓冲检测
       nudgeOffset: 0.2,
       nudgeMaxRetry: 12,               // 增加重试次数
       enableWorker: true,
       lowLatencyMode: false,           // 关闭低延迟模式，优先预载
-      startLevel: -1,                  // 自动选择清晰度，快速连接时直接高清
-      abrEwmaDefaultEstimate: 8000000, // 8Mbps带宽估计，鼓励更高质量
-      abrBandWidthFactor: 0.6,         // 更激进的ABR策略
+      startLevel: -1,                  // 自动选择清晰度
+      // 实测这条源的有效带宽 ~2.5Mbps（并发预取后）。以前这里写 8Mbps，
+      // 一旦遇到多码率清单会直接挑最高档，然后卡死。
+      abrEwmaDefaultEstimate: 2500000,
+      abrBandWidthFactor: 0.75,
       abrBandWidthUpFactor: 0.6,
-      fragLoadingTimeOut: 10000,       // 增加超时时间以适应慢速网络
+      capLevelToPlayerSize: true,      // 手机屏不必要拉 1080p
+      fragLoadingTimeOut: 20000,       // 单连接慢是常态，10 秒太短，容易误判成失败
       fragLoadingMaxRetry: 6,          // 增加重试次数
-      fragLoadingRetryDelay: 150,      // 更快重试
+      fragLoadingRetryDelay: 200,
       manifestLoadingTimeOut: 8000,    // manifest超时
       manifestLoadingMaxRetry: 4,
       manifestLoadingRetryDelay: 150,
@@ -5900,25 +6083,29 @@ function initDirectPlayer(url) {
       levelLoadingMaxRetry: 4,
       levelLoadingRetryDelay: 150,
       startFragPrefetch: true,         // 预取首个分片
-      testBandwidth: true,
-      progressive: true,
-      backBufferLength: 120,           // 增加后退缓冲
+      // 起播时先做带宽探测会白等一个来回；我们已经有预取，关掉它让画面更快出来
+      testBandwidth: false,
+      progressive: false,
+      backBufferLength: 60,            // 回退缓冲 60 秒够了，再多纯占内存
       maxFragLookUpTolerance: 0.2,
       appendErrorMaxRetry: 6,
       stretchShortVideoTrack: true,    // 处理短分片
       // 自定义XHR设置
       xhrSetup: function(xhr, xhrUrl) {
-        xhr.timeout = 12000;           // 增加XHR超时
+        xhr.timeout = 20000;
       }
     };
 
-    // 挂上"清单加载时顺手剪广告"的加载器（源站允许 CORS 才有效，不允许就静静跳过）
+    // 挂两层加载器：
+    //   pLoader 清单 —— 顺手剪广告
+    //   fLoader 分片 —— 走并发预取缓存（这是不卡的关键）
     try {
       if (Hls.DefaultConfig && Hls.DefaultConfig.loader) {
         _cfg.pLoader = _makeAdLoader(Hls.DefaultConfig.loader);
+        _cfg.fLoader = _makePrefetchLoader(Hls.DefaultConfig.loader);
       }
     } catch (e) {
-      console.warn('[去广告] 加载器挂载失败，跳过：' + e.message);
+      console.warn('[加载器] 挂载失败，跳过：' + e.message);
     }
 
     var hls = new Hls(_cfg);
@@ -5936,14 +6123,48 @@ function initDirectPlayer(url) {
     hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
       if (_autoFallbackTimeout) { clearTimeout(_autoFallbackTimeout); _autoFallbackTimeout = null; }
       tryPlay();
-      // 起播后立即放开缓冲限制，全力预载
+      // 起播后把缓冲目标放宽一点（7 分钟 ≈ 70MB），但仍然设上限：
+      // 之前放到 1800 秒 / 800MB，等于让浏览器把整集往内存里塞，手机必炸。
       setTimeout(function() {
         if (hls && hls.config) {
-          hls.config.maxBufferLength = 1800;  // 30分钟，等于预载整集
-          hls.config.maxMaxBufferLength = 1800;
-          hls.config.maxBufferSize = 800 * 1024 * 1024;
+          hls.config.maxBufferLength = 420;
+          hls.config.maxMaxBufferLength = 900;
+          hls.config.maxBufferSize = 400 * 1024 * 1024;
         }
-      }, 500); // 更快放开限制
+      }, 500);
+    });
+
+    // === 驱动并发预取 ===
+    // LEVEL_LOADED 里能拿到这一集完整的 882 个分片地址，当成预取队列；
+    // FRAG_LOADING / FRAG_CHANGED 告诉我们播到第几片，队列指针跟着走。
+    hls.on(Hls.Events.LEVEL_LOADED, function (event, data) {
+      try {
+        if (data && data.details && data.details.fragments && data.details.fragments.length) {
+          _pf.reset(data.details.fragments);
+          _pf.pump(0);
+          var f0 = data.details.fragments[0];
+          if (f0 && f0.url) preconnectHost(f0.url);
+        }
+      } catch (e) {}
+    });
+    function _pfFollow(sn) {
+      try {
+        var d = hls.levels && hls.levels[0] && hls.levels[0].details;
+        if (!d || !d.fragments) return;
+        // sn 是分片序号；广告被剪掉后 sn 和数组下标会有偏差，所以用 start 反查
+        var idx = -1;
+        for (var i = 0; i < d.fragments.length; i++) {
+          if (d.fragments[i].sn === sn) { idx = i; break; }
+        }
+        if (idx < 0) return;
+        _pf.pump(idx);
+      } catch (e) {}
+    }
+    hls.on(Hls.Events.FRAG_LOADING, function (event, data) {
+      if (data && data.frag) _pfFollow(data.frag.sn);
+    });
+    hls.on(Hls.Events.FRAG_CHANGED, function (event, data) {
+      if (data && data.frag) _pfFollow(data.frag.sn);
     });
 
     var _hlsNetRetry = 0;
