@@ -15,6 +15,7 @@
 
 
 
+
 <link rel="preconnect" href="https://wsrv.nl" crossorigin>
 <link rel="dns-prefetch" href="//wsrv.nl">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -2513,9 +2514,21 @@ function scGoReset() { _scIdx = 0; }
 function paintHome() {
   var hp = document.getElementById('homePage');
   if (!hp || curCat !== 0) return;
-  hp.innerHTML = homeHTML();
+  var html = homeHTML();
+  // 内容没变就别重建 DOM。实时接口回来时经常只是同一批卡片重排一遍，
+  // 一重建所有 <img> 就变回「还没加载」，海报看着闪一下，滚到一半的位置也会跳。
+  if (hp.getAttribute('data-sig') === _sig(html)) return;
+  hp.setAttribute('data-sig', _sig(html));
+  hp.innerHTML = html;
   armPosterTimers(hp);
   scAuto();
+}
+
+// 轻量指纹：长度 + 稀疏采样，够判「同一份列表」了，不用把 500KB 字符串存起来比
+function _sig(s) {
+  var h = 5381;
+  for (var i = 0; i < s.length; i += 97) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return s.length + '.' + h;
 }
 
 /* 首页每次重绘后，给海报挂上「超时兜底」。
@@ -2565,12 +2578,14 @@ async function loadHome() {
     if (snap) { liveSetItems(snap.items.filter(contentOK)); LIVE.ts = snap.ts; }
   }
   var hadItems = LIVE.items.length > 0;
-  hp.innerHTML = homeHTML();
+  var _h0 = homeHTML();
+  hp.setAttribute('data-sig', _sig(_h0));
+  hp.innerHTML = _h0;
   scAuto();
 
   // ② 预置片库：内嵌数据同步套用（0 请求），网络上的更新版本后台悄悄替换
   loadHomeSeed();
-  if (!hadItems && LIVE.items.length) { hp.innerHTML = homeHTML(); scAuto(); }
+  if (!hadItems && LIVE.items.length) paintHome();
 
   // ③ 实时接口增量刷新（后台，不阻塞）
   liveFetch(false).then(function () {
