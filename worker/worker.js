@@ -249,6 +249,64 @@ export default {
         }
       }
 
+      // GET /img?url=xxx - 影视海报代理
+      //   豆瓣图必须带 Referer 才给，且浏览器 <img> 改不了 Referer；
+      //   采集源图床又常挂起。走这里统一补 Referer + 边缘缓存，海报才稳定。
+      if (path === '/img' && request.method === 'GET') {
+        const imgUrl = url.searchParams.get('url') || url.searchParams.get('u');
+        if (!imgUrl) {
+          return new Response('missing url', { status: 400, headers: corsHeaders });
+        }
+        let iu;
+        try {
+          iu = new URL(imgUrl);
+        } catch (e) {
+          return new Response('bad url', { status: 400, headers: corsHeaders });
+        }
+        if (iu.protocol !== 'http:' && iu.protocol !== 'https:') {
+          return new Response('protocol not allowed', { status: 400, headers: corsHeaders });
+        }
+
+        const cache = caches.default;
+        const ckey = new Request(url.origin + '/api/image-relay/img?url=' + encodeURIComponent(imgUrl), { method: 'GET' });
+        const hit = await cache.match(ckey);
+        if (hit) return hit;
+
+        // 豆瓣要「不带 Referer」才放行，其它图床反过来要带自家 Referer
+        const isDouban = /(^|\.)doubanio\.com$|(^|\.)douban\.com$/.test(iu.hostname);
+        const headers = {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        };
+        if (!isDouban) headers.Referer = iu.origin + '/';
+
+        try {
+          const up = await fetch(iu.href, { headers, redirect: 'follow' });
+          if (!up.ok) {
+            return new Response('upstream ' + up.status, { status: 502, headers: corsHeaders });
+          }
+          const ct = up.headers.get('content-type') || 'image/jpeg';
+          if (!/^image\//i.test(ct)) {
+            return new Response('not an image', { status: 502, headers: corsHeaders });
+          }
+          const buf = await up.arrayBuffer();
+          if (buf.byteLength > 4 * 1024 * 1024) {
+            return new Response('too large', { status: 502, headers: corsHeaders });
+          }
+          const res = new Response(buf, {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': ct,
+              'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+            },
+          });
+          await cache.put(ckey, res.clone());
+          return res;
+        } catch (err) {
+          return new Response('fetch failed: ' + err.message, { status: 502, headers: corsHeaders });
+        }
+      }
+
       // GET /m3u8-proxy?url=xxx - Proxy and filter M3U8 streams (remove ad segments)
       if (path === '/m3u8-proxy' && request.method === 'GET') {
         const targetUrl = url.searchParams.get('url');
