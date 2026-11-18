@@ -28,7 +28,8 @@
 <link rel="dns-prefetch" href="//api.allorigins.win">
 <link rel="dns-prefetch" href="//api.codetabs.com">
 <link rel="dns-prefetch" href="//corsproxy.io">
-<link rel="preconnect" href="https://api.allorigins.win" crossorigin>
+<link rel="dns-prefetch" href="//img3.doubanio.com">
+<link rel="dns-prefetch" href="//img9.doubanio.com">
 <link rel="preconnect" href="https://corsproxy.io" crossorigin>
 <link rel="preload" href="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js" as="script" crossorigin>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js" defer></script>
@@ -1168,11 +1169,10 @@ function getCachedImg(name) {
 }
 
 // === JSONP FETCH ===
-// 采集接口必须借 json2jsonp 取数据，一条要 9~14 秒；apiFetch 用 Promise.any 并发几条，
-// 先到的赢，剩下的还在路上跑。以前回调名是随机串、用完就删，迟到回来时名字没了，
-// 控制台就被 `Uncaught ReferenceError: _jpN_xxx is not defined` 刷满。
-// 现在回调名固定成 _jpOn_<id> 并且永远挂在 window 上：
-// 请求早结束了就没人接，函数本身照样在，迟到回调只是安静地走一遍空逻辑。
+// 采集接口本身的兜底通道。注：json2jsonp 那条已经干掉了——它在服务端用自己生成的
+// 随机回调名去请求上游，再把上游返回的 `_jp5_kzata({...})` 原样吐回来，
+// 我们这边根本没定义那个名字，控制台就被 `Uncaught ReferenceError: _jpN_xxx is not defined` 刷满。
+// 同源 /vod-proxy 既快一个数量级又没这毛病，够用了。
 var _jpId = 0;
 var _jpWait = {};                 // id → {resolve, timer}
 window.__jpDispatch = function (id, data) {
@@ -1209,10 +1209,8 @@ function jpFetch(url, timeout) {
 }
 
 const CORS_PROXIES = [
-  u => 'https://wscls.cn/api/vod-proxy?url=' + encodeURIComponent(u),
   u => 'https://wscls.cn/api/image-relay/vod-proxy?url=' + encodeURIComponent(u),
   u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
   u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u),
 ];
 async function proxyFetch(url) {
@@ -1224,12 +1222,6 @@ async function proxyFetch(url) {
     throw new Error('fail');
   })).catch(() => null);
   return results;
-}
-
-// 采集接口既不发 CORS 头、也忽略 callback 参数（直连和原生 JSONP 都拿不到数据）。
-// json2jsonp 会在服务端取回 JSON，再用 callback 包一层返回，脚本标签不受 CORS 限制。
-function jpEchoUrl(u) {
-  return 'https://json2jsonp.com/?url=' + encodeURIComponent(u);
 }
 
 // 自己的中转（配了 relay.txt 才有），一次拿原始 JSON，最快最稳
@@ -1244,7 +1236,7 @@ function relayApiFetch(u) {
 }
 
 // 同源中转：Worker 挂在 wscls.cn/api/image-relay 上，和页面同域，没有跨域问题，
-// 对方还带 5 分钟边缘缓存，比 json2jsonp 快一个数量级（实测 2s 内 vs 9~14s）。
+// 对方还带 5 分钟边缘缓存，实测 2s 内返回（原来走 json2jsonp 要 9~14s）。
 function sameOriginApiFetch(u) {
   return fetch(SAME_RELAY + '/vod-proxy?url=' + encodeURIComponent(u), { signal: AbortSignal.timeout(7000) })
     .then(function (r) {
@@ -1260,7 +1252,6 @@ async function apiFetch(url) {
     const d = await Promise.any([
       relayApiFetch(url),
       sameOriginApiFetch(url),
-      jpFetch(jpEchoUrl(url), 10000),
       jpFetch(url, 3500),
       proxyFetch(url).then(d => { if (!d) throw new Error('empty'); return d; }),
       fetch(url, { signal: AbortSignal.timeout(8000), mode: 'cors' })
@@ -2056,15 +2047,14 @@ function imgFallback(el) {
 function armImgTimer(el) {
   var old = el.getAttribute('data-timer');
   if (old) clearTimeout(+old);
+  // 挂监听之前先看一眼：图可能早就下完了，那样 onload 永远不会再来
+  if (el.complete && el.naturalWidth > 0) { revealImg(el); return; }
   var t = setTimeout(function () {
-    if (el.complete && el.naturalWidth > 0) return;
+    if (el.complete && el.naturalWidth > 0) { revealImg(el); return; }
     imgFallback(el);
   }, IMG_HARD_TIMEOUT);
   el.setAttribute('data-timer', String(t));
-  el.onload = function () {
-    clearTimeout(t);
-    el.removeAttribute('data-timer');
-  };
+  el.onload = function () { revealImg(el); };
 }
 function imgAttrs(origin) {
   return ' src="' + esc(livePic(origin)) + '" data-origin="' + esc(origin) + '" ' +
@@ -2532,12 +2522,21 @@ function armPosterTimers(root) {
         if (!en.isIntersecting) return;
         var el = en.target;
         _posterIO.unobserve(el);
-        if (el.complete && el.naturalWidth > 0) { el.style.opacity = '1'; return; }
+        // 图可能在我们观察之前就已经下完了（浏览器对同域图片会抢跑），
+        // 这时 onload 早就过去了，必须在这里补一次显形，否则永远停在透明状态
+        if (el.complete && el.naturalWidth > 0) { revealImg(el); return; }
         armImgTimer(el);
       });
-    }, { rootMargin: '220px 0px' });
+    }, { rootMargin: '320px 0px' });
   }
   for (var j = 0; j < imgs.length; j++) _posterIO.observe(imgs[j]);
+}
+
+// 海报真正显形：取消透明度过渡、撤掉定时器
+function revealImg(el) {
+  var t = el.getAttribute('data-timer');
+  if (t) { clearTimeout(+t); el.removeAttribute('data-timer'); }
+  el.style.opacity = '1';
 }
 
 async function loadHome() {
