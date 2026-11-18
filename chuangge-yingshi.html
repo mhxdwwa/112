@@ -5636,16 +5636,18 @@ var _pf = (function () {
     }
   }
 
+  // 普通下载：一条连接老实拉到底
+  function plainBuf(u) {
+    return fetch(u, { credentials: 'omit', mode: 'cors' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); });
+  }
+
   function fetchBuf(u) {
     if (cache.has(u)) return Promise.resolve(cache.get(u));
     if (inflight.has(u)) return inflight.get(u);
     if (grab >= PF_AHEAD + 2) return Promise.resolve(null);  // 别把连接全占了，给正片留余量
     grab++;
-    var p = fetch(u, { credentials: 'omit', mode: 'cors' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.arrayBuffer();
-      })
+    var p = plainBuf(u)
       .then(function (b) {
         inflight.delete(u); grab--;
         PF_STATS.fetched++; PF_STATS.bytes += b.byteLength;
@@ -5670,6 +5672,10 @@ var _pf = (function () {
     pump: function (idx) {
       if (!queue.length) return;
       cursor = Math.max(0, Math.min(idx | 0, queue.length - 1));
+      // 起播阶段（一片都还没下完）只伺候第 0 片。
+      // 浏览器对同一域名只有 6 条 HTTP/1.1 连接，要是一边拆 6 段拉首片、
+      // 一边又往前预取 7 片，首片的 6 段会排在预取后面等连接，
+      // 结果就是「分段明明更快，起播反而更慢」——这个坑实测过。
       var end = Math.min(queue.length, cursor + PF_AHEAD + 1);
       for (var k = cursor; k < end; k++) {
         var u = queue[k];
