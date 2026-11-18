@@ -202,7 +202,7 @@ img{max-width:100%}
 .player-area{position:absolute;inset:0;background:#000;overflow:hidden}
 .player-area iframe{width:100%;height:100%;border:none}
 /* Enhanced ad blocking: CSS-based prevention */
-.player-area > div:not(#adBlockOverlay):not(#uiDetectOverlay):not(.player-loading):not(.p-top):not(.p-side):not(.p-bottom):not(.p-bottom-btns):not(.p-next-btn):not(.p-open-btn):not(.p-fs-btn):not(.dp-controls):not(.dp-buffer-status):not(.dp-error){pointer-events:none!important;opacity:0!important;visibility:hidden!important}
+.player-area > div:not(#adBlockOverlay):not(#uiDetectOverlay):not(.player-loading):not(.dp-loading):not(.p-top):not(.p-side):not(.p-bottom):not(.p-bottom-btns):not(.p-next-btn):not(.p-open-btn):not(.p-fs-btn):not(.dp-controls):not(.dp-buffer-status):not(.dp-error){pointer-events:none!important;opacity:0!important;visibility:hidden!important}
 .player-area > a{display:none!important}
 /* Block common ad patterns globally */
 body > div[style*="position:fixed"][style*="z-index:9999"],
@@ -212,7 +212,7 @@ body > div[id*="ad"]:not(#adBlockOverlay):not(#uiDetectOverlay),
 body > div[class*="ad-"],
 body > div[id*="popup"],body > div[class*="popup"],
 body > div[id*="banner"],body > div[class*="banner"]{display:none!important;visibility:hidden!important;pointer-events:none!important}
-@media(max-width:768px){.player-area > div:not(#adBlockOverlay):not(#uiDetectOverlay):not(.player-loading):not(.dp-controls):not(.dp-buffer-status):not(.dp-error){z-index:auto!important}}
+@media(max-width:768px){.player-area > div:not(#adBlockOverlay):not(#uiDetectOverlay):not(.player-loading):not(.dp-loading):not(.dp-controls):not(.dp-buffer-status):not(.dp-error){z-index:auto!important}}
 .player-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-direction:column;gap:8px}
 
 /* Top bar */
@@ -392,6 +392,17 @@ body > div[id*="banner"],body > div[class*="banner"]{display:none!important;visi
 
 /* DIRECT PLAYER (HLS.js) */
 .direct-video{width:100%;height:100%;background:#000;outline:none}
+/* 起播遮罩：源站带宽有限，第一个分片 1MB 左右、单连接只有 126KB/s，
+   实测要 5~9 秒才出画面。这段时间以前是纯黑屏 + 一个「缓冲中」小圆点，
+   观众以为点坏了。这里给它一块明确的加载提示，并随时间升级文案。 */
+.dp-loading{position:absolute;inset:0;z-index:210;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#000;color:#fff;transition:opacity .26s}
+.dp-loading.out{opacity:0;pointer-events:none}
+.dp-loading-spin{width:34px;height:34px;border:3px solid rgba(255,255,255,.16);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
+.dp-loading-text{font-size:14px;font-weight:500;letter-spacing:.4px}
+.dp-loading-sub{font-size:12px;color:rgba(255,255,255,.5);text-align:center;padding:0 24px;line-height:1.7}
+.dp-loading-bar{width:190px;height:3px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden}
+.dp-loading-bar i{display:block;height:100%;width:38%;border-radius:2px;background:rgba(255,255,255,.7);animation:dpbar 1.5s ease-in-out infinite}
+@keyframes dpbar{0%{transform:translateX(-110%)}55%{transform:translateX(150%)}100%{transform:translateX(320%)}}
 .dp-controls{position:fixed;bottom:0;left:0;right:0;z-index:225;background:linear-gradient(transparent,rgba(0,0,0,.9));padding:10px 16px 14px;display:flex;flex-direction:column;gap:6px;opacity:0;transition:opacity .3s;pointer-events:none}
 .dp-controls.show{opacity:1;pointer-events:auto}
 .dp-progress-wrap{position:relative;height:6px;background:rgba(255,255,255,.15);border-radius:3px;cursor:pointer;overflow:visible}
@@ -3128,6 +3139,7 @@ function bestMatch(list, name) {
 
 function openPlayer(item) {
   _playerOpen = true; // 标记播放器已打开，暂停图片加载释放带宽
+  _raceDone = false;  // 每次新开一部剧，重新给「择优」一次机会
   // 打开播放器时，强制隐藏主页搜索区域，防止层级穿透或残留显示
   const hero = document.getElementById('heroSection');
   if (hero) hero.style.display = 'none';
@@ -4405,6 +4417,123 @@ function hideSuggest(id) {
 }
 
 // === MULTI-SOURCE MERGING ===
+/* ================= 多源择优 =================
+ * 同一部剧在多个采集站都有，线路质量差得远：实测有的单连接能跑 300KB/s，
+ * 有的一直趴在 100KB/s 以下。以前永远从第 0 条线路开播，等于把体验押在运气上。
+ * 这里在合并完线路后同时试一遍：谁能先用 64KB 吐出来就用谁。
+ * 只取 64KB，流量可忽略；整轮最多 4.5 秒，失败一律当作「没探到」。
+ */
+var _raceDone = false;
+
+function _probeRouteMs(epUrl, timeoutMs) {
+  return new Promise(function (resolve) {
+    var done = false, t0 = 0;
+    var timer = setTimeout(function () { if (!done) { done = true; resolve(Infinity); } }, timeoutMs);
+    function fin(v) { if (done) return; done = true; clearTimeout(timer); resolve(v); }
+    if (!epUrl) return fin(Infinity);
+    resolvePlayPage(epUrl).then(function (m3u8) {
+      if (!m3u8) return null;
+      return fetch(m3u8).then(function (r) { return r.ok ? r.text() : ''; }).then(function (txt) {
+        if (!txt) return null;
+        var base = m3u8.replace(/[^/]*$/, '');
+        var seg = '', lines = txt.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          var s = lines[i].trim();
+          if (s && s.charAt(0) !== '#') { seg = /^https?:/.test(s) ? s : base + s; break; }
+        }
+        if (!seg) return null;
+        t0 = Date.now();
+        // 只要前 64KB：分片大小差好几倍，比总时长不公平，比「吐数据的速度」才准
+        return fetch(seg, { headers: { Range: 'bytes=0-65535' } })
+          .then(function (r2) { return r2.arrayBuffer(); })
+          .then(function () { return Date.now() - t0; });
+      });
+    }).then(function (ms) {
+      fin(ms === null || ms === undefined ? Infinity : ms);
+    }).catch(function () { fin(Infinity); });
+  });
+}
+
+function pickFastestRoute() {
+  var cands = [], i;
+  for (i = 0; i < _playData.length && cands.length < 4; i++) {
+    // 当前这条正在下载中，不再重复探它 —— 判它快慢看「有没有出画面」就够了
+    if (i === _curRoute) continue;
+    var r = _playData[i];
+    if (!r || !r.episodes || !r.episodes.length) continue;
+    var ep = r.episodes[_curEpIndex] || r.episodes[0];
+    if (ep && ep.url) cands.push({ idx: i, url: ep.url });
+  }
+  if (!cands.length) return Promise.resolve(null);
+  return Promise.all(cands.map(function (c) {
+    return _probeRouteMs(c.url, 2200).then(function (ms) { return { idx: c.idx, ms: ms }; });
+  })).then(function (res) {
+    res.sort(function (a, b) { return a.ms - b.ms; });
+    console.log('[择优] ' + res.map(function (x) {
+      return '线路' + x.idx + '=' + (x.ms === Infinity ? '超时' : x.ms + 'ms');
+    }).join(' · '));
+    return { best: res[0], all: res };
+  });
+}
+
+async function autoPickRoute() {
+  try {
+    var v = document.getElementById('dpVideo');
+    // 已经有画面了，说明当前线路能用；这时候换源又要重新拉流、重新黑屏，纯亏
+    if (v && v.videoWidth > 0) return;
+    if (_playData.length < 2) return;
+
+    showAutoNextTip('正在挑选最快线路…');
+    var r = await pickFastestRoute();
+    if (!r || !r.best || r.best.ms === Infinity) return;
+    // 门槛：64KB 要在 0.9 秒内吐出来（约 70KB/s 以上）才值得切。
+    // 当前这条都还没出画面，随便换到一条同样慢的线，只会把黑屏时间拖更长。
+    if (r.best.ms > 900) { showAutoNextTip('其他线路也不快，先看着'); return; }
+
+    var v2 = document.getElementById('dpVideo');
+    if (v2 && v2.videoWidth > 0) return;   // 探的这几秒里画面出来了，就别动
+
+    var prev = _curRoute;
+    switchRoute(r.best.idx);
+    showAutoNextTip('已切到更快的线路（' + Math.round(r.best.ms) + 'ms 拿到首包）');
+
+    // 保险：新线路 6 秒还出不来画面，就退回原来那条。
+    // 探测只测了「首包快不快」，有的线路首包快但后面断流 —— 不能因为一次择优把能播的换丢了。
+    setTimeout(function () {
+      var vv = document.getElementById('dpVideo');
+      if (_curRoute !== r.best.idx) return;          // 用户自己又切了，不插手
+      if (vv && vv.videoWidth > 0) return;           // 已经出画面，正常
+      console.warn('[择优] 新线路 6 秒没出画面，退回原线路');
+      switchRoute(prev);
+    }, 6000);
+  } catch (e) {}
+}
+
+// 把攒到的线路推进 _playData，并刷新「资源线路」那一排按钮
+function _flushRoutes(bucket) {
+  if (!bucket.length) return 0;
+  const added = bucket.splice(0, bucket.length);
+  _playData.push(...added);
+  const routeContainer = document.querySelector('.p-controls');
+  if (routeContainer) {
+    let routePills = _playData.map((s, i) => '<span class="p-pill' + (i === _curRoute ? ' active' : '') + '" onclick="switchRoute(' + i + ')">' + esc(s.source) + '</span>').join('');
+    let routeRow = routeContainer.querySelector('[data-route-row]');
+    if (!routeRow) {
+      const firstRow = routeContainer.querySelector('.p-row');
+      routeRow = document.createElement('div');
+      routeRow.className = 'p-row';
+      routeRow.setAttribute('data-route-row', '1');
+      if (firstRow && firstRow.nextSibling) {
+        firstRow.parentNode.insertBefore(routeRow, firstRow.nextSibling);
+      } else {
+        routeContainer.appendChild(routeRow);
+      }
+    }
+    routeRow.innerHTML = '<span class="p-row-label">资源线路 (' + _playData.length + '个)</span>' + routePills;
+  }
+  return added.length;
+}
+
 async function mergeMultiSources(name) {
   const allRoutes = [];
   const seenSources = new Set();
@@ -4429,28 +4558,18 @@ async function mergeMultiSources(name) {
       }
     } catch(e) {}
   });
-  await Promise.all(promises);
-  if (allRoutes.length > 0) {
-    _playData.push(...allRoutes);
-    const routeContainer = document.querySelector('.p-controls');
-    if (routeContainer) {
-      let routePills = _playData.map((s,i) => '<span class="p-pill'+(i===_curRoute?' active':'')+'" onclick="switchRoute('+i+')">'+esc(s.source)+'</span>').join('');
-      let routeRow = routeContainer.querySelector('[data-route-row]');
-      if (!routeRow) {
-        const firstRow = routeContainer.querySelector('.p-row');
-        routeRow = document.createElement('div');
-        routeRow.className = 'p-row';
-        routeRow.setAttribute('data-route-row', '1');
-        if (firstRow && firstRow.nextSibling) {
-          firstRow.parentNode.insertBefore(routeRow, firstRow.nextSibling);
-        } else {
-          routeContainer.appendChild(routeRow);
-        }
-      }
-      routeRow.innerHTML = '<span class="p-row-label">资源线路 ('+_playData.length+'个)</span>' + routePills;
-    }
-    showAutoNextTip('已合并 ' + allRoutes.length + ' 条额外线路');
-  }
+  // 别为了等一个挂掉的采集站（apiFetch 最长 8 秒）把「择优」拖到天荒地老：
+  // 最多等 3 秒，先到的线路先进池子；剩下的回来再补一次。
+  await Promise.race([Promise.all(promises), new Promise(function (r) { setTimeout(r, 3000); })]);
+  const n1 = _flushRoutes(allRoutes);
+  if (n1) showAutoNextTip('已合并 ' + n1 + ' 条额外线路');
+  // 线路够了就试一遍谁最快（只在画面还没出来时做，避免打断正在看的人）
+  if (!_raceDone) { _raceDone = true; autoPickRoute(); }
+  // 迟到的线路继续补进来，但不再触发择优（那时人已经在看了）
+  Promise.all(promises).then(function () {
+    const n2 = _flushRoutes(allRoutes);
+    if (n2) showAutoNextTip('又补了 ' + n2 + ' 条线路');
+  });
 }
 
 // === SOURCE MANAGEMENT ===
@@ -5896,7 +6015,58 @@ function destroyHls() {
 
 function playerDirectHTML(url) {
   _currentM3u8Url = url;
-  return '<video class="direct-video" id="dpVideo" playsinline preload="auto" autoplay muted></video>';
+  return '<video class="direct-video" id="dpVideo" playsinline preload="auto" autoplay muted></video>'
+    + '<div class="dp-loading" id="dpLoading">'
+    +   '<div class="dp-loading-spin"></div>'
+    +   '<div class="dp-loading-text" id="dpLoadingText">正在加载视频…</div>'
+    +   '<div class="dp-loading-bar"><i></i></div>'
+    +   '<div class="dp-loading-sub" id="dpLoadingSub">正在连接片源</div>'
+    + '</div>';
+}
+
+// 起播遮罩的三段文案：3 秒内不催，6 秒提示慢，14 秒直接建议换线路。
+// 采集源就这样，快不了，但至少别让人对着黑屏瞎猜。
+var _dpLoadTimers = [];
+function dpLoadingSay(main, sub) {
+  var a = document.getElementById('dpLoadingText');
+  var b = document.getElementById('dpLoadingSub');
+  if (a && main) a.textContent = main;
+  if (b && sub !== undefined) b.textContent = sub;
+}
+function dpLoadingStart() {
+  dpLoadingClear();
+  _dpLoadTimers.push(setTimeout(function () {
+    dpLoadingSay('正在加载视频…', '片源带宽有限，通常需要 5~10 秒');
+  }, 3000));
+  _dpLoadTimers.push(setTimeout(function () {
+    dpLoadingSay('还在加载…', '这条线路偏慢，可在右侧「选集/线路」换一条');
+  }, 14000));
+  // 再久也别写「失败」—— 有些源就是慢，写失败纯属误导，改成继续安抚
+  _dpLoadTimers.push(setTimeout(function () {
+    dpLoadingSay('线路有点慢，仍在加载…', '右侧「选集/线路」可以换一条更快的');
+  }, 26000));
+}
+function dpLoadingClear() {
+  for (var i = 0; i < _dpLoadTimers.length; i++) clearTimeout(_dpLoadTimers[i]);
+  _dpLoadTimers = [];
+}
+function dpLoadingHide() {
+  dpLoadingClear();
+  var el = document.getElementById('dpLoading');
+  if (!el) return;
+  el.classList.add('out');
+  setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
+}
+function dpLoadingFail(msg) {
+  dpLoadingClear();
+  var el = document.getElementById('dpLoading');
+  if (!el) return;
+  el.classList.remove('out');
+  dpLoadingSay('加载失败', msg || '换一条线路试试');
+  var sp = el.querySelector('.dp-loading-spin');
+  if (sp) sp.style.display = 'none';
+  var bar = el.querySelector('.dp-loading-bar');
+  if (bar) bar.style.display = 'none';
 }
 
 function injectDPControls() {
@@ -5968,8 +6138,9 @@ function resolvePlayPage(pageUrl) {
       return m3u8;
     })
     .catch(function (e) {
+      // 失败不写缓存：以前这里把 null 也缓存了，等于一次网络抖动就把这条线路
+      // 永久判死，后面「多源择优」再去探它就直接拿到 null，白白错杀一条好线。
       console.warn('[播放] 解析失败：' + e.message);
-      _resolveCache[pageUrl] = null;
       return null;
     });
 }
@@ -6013,6 +6184,16 @@ function initDirectPlayer(url) {
   const video = document.getElementById('dpVideo');
   if(!video) return;
   _hlsVideo = video;
+
+  // 起播遮罩：一出画面就撤。
+  // 注意别监听 video 的 error 事件——hls.js 换源、重置 MediaSource 时它也会报 error，
+  // 但紧接着就自己恢复了。实测会在第 6 秒闪一下「加载失败」，其实正在加载，反而吓人。
+  dpLoadingStart();
+  try {
+    var _dpHideOnce = function () { dpLoadingHide(); };
+    video.addEventListener('loadeddata', _dpHideOnce);
+    video.addEventListener('playing', _dpHideOnce);
+  } catch (e) {}
 
   // Inject controls into modalBox (outside player-area overflow:hidden)
   injectDPControls();
