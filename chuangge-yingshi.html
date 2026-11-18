@@ -5683,11 +5683,12 @@ var _pf = (function () {
         fetchBuf(u);   // 不 await：一次全撒出去，HTTP/1.1 会开多条连接
       }
     },
-    // hls.js 来要这一片：缓存里有就交出去（顺手从缓存删掉，反正马上要进 MSE）
+    // hls.js 来要这一片：缓存里有就交出去。
+    // 交完不从缓存删：拖进度条来回跳时同一片经常要第二次，留着能秒开；
+    // 内存靠 trim() 的 64MB 上限兜住，不会无限涨。
     take: function (u) {
       if (cache.has(u)) {
         var b = cache.get(u);
-        cache.delete(u); bytes -= b.byteLength;
         PF_STATS.hits++; PF_STATS.consumed += b.byteLength;
         return Promise.resolve(b);
       }
@@ -5719,12 +5720,20 @@ function _makePrefetchLoader(Base) {
       // 正确做法：谁来要都先问一句缓存，没有就让原加载器自己去拉。
       var sup = super.load.bind(this);
       PF_STATS.loadCalls++;
+      // 每次 load 发一个令牌。拖进度条时 hls.js 会 abort 掉在途请求，
+      // 那个请求的 Promise 过一会儿才 resolve —— 如果照样 onSuccess 交回去，
+      // buffer-controller 会收到一个不属于当前位置的分片，抛 internalException，
+      // 整个播放器被判死、退回内嵌播放页（用户看到的就是「江湖路远」那一屏）。
+      var token = this._pfTok = {};
       var p = null;
       if (context && context.url) { try { p = _pf.take(context.url); } catch (e) { p = null; } }
       if (!p) return sup(context, config, callbacks);
 
+      var self = this;
       var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
       p.then(function (buf) {
+        if (self._pfTok !== token) return;   // 已经被 abort 或被新请求取代，丢弃
+        self._pfTok = null;
         if (!buf || !buf.byteLength) return sup(context, config, callbacks);
         callbacks.onSuccess(
           { url: context.url, data: buf },
@@ -5732,6 +5741,14 @@ function _makePrefetchLoader(Base) {
           context
         );
       });
+    }
+    abort() {
+      this._pfTok = null;   // 关键：让在途的预取结果作废
+      super.abort();
+    }
+    destroy() {
+      this._pfTok = null;
+      super.destroy();
     }
   };
 }
@@ -6175,12 +6192,24 @@ function initDirectPlayer(url) {
 
     var _hlsNetRetry = 0;
     var _hlsMediaRetry = 0;
+    var _hlsOtherRetry = 0;
     hls.on(Hls.Events.ERROR, function(event, data) {
       if (!data.fatal) return;
       // 记住当前播放位置，防止恢复后从头播放
       var savedPos = video.currentTime || 0;
       var wasPlaying = !video.paused;
       var detail = data.details || '';
+      // internalException 基本都出现在拖进度条时：分片请求被取消、缓冲区对不上号。
+      // 这种在原地停一下再 startLoad 就能好，以前直接判死刑甩到内嵌播放页（那边还有广告），
+      // 用户看到的就是「一快进整页变成别人的播放器」。这里给它两次自救机会。
+      if (detail === 'internalException' || data.type === Hls.ErrorTypes.OTHER_ERROR) {
+        if (_hlsOtherRetry < 2) {
+          _hlsOtherRetry++;
+          console.warn('[播放] ' + detail + '，原地重开加载（第 ' + _hlsOtherRetry + ' 次）');
+          try { hls.stopLoad(); hls.startLoad(savedPos); } catch (e) { _escalate('恢复失败'); }
+          return;
+        }
+      }
       switch(data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
           // manifest 拉不到，多半是 CORS 或防盗链 —— 重试没用，直接升级到中转
