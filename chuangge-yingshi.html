@@ -17,6 +17,7 @@
 
 
 
+
 <link rel="preconnect" href="https://wsrv.nl" crossorigin>
 <link rel="dns-prefetch" href="//wsrv.nl">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -1745,12 +1746,18 @@ function proxyImg(url) {
 }
 
 function cardHTML(item, idx, eager) {
-  let pic = item.pic;
-  if (!pic) pic = getCachedImg(item.name);
+  // 优先用榜单那张（B站 no 豆瓣）：比采集源图清晰、剧名对得上，而且 B站的是 23KB WebP 直连。
+  // 只有榜单里没这部剧时才退回采集源图床。
+  var src = '';
+  if (item.dpic) src = imgProxy(item.dpic);
+  else {
+    var pic = item.pic || getCachedImg(item.name);
+    if (pic) src = proxyImg(pic);
+  }
   const d = JSON.stringify(item).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
   const loadAttr = eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
-  const poster = pic
-    ? '<img src="'+proxyImg(pic)+'" alt="'+esc(item.name)+' 海报" '+loadAttr+' referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+  const poster = src
+    ? '<img src="'+src+'" alt="'+esc(item.name)+' 海报" '+loadAttr+' referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
       + '<div class="card-ph" style="display:none">'+esc(item.name)+'</div>'
     : '<div class="card-ph">'+esc(item.name)+'</div>';
   const scoreHtml = item.score && parseFloat(item.score) > 0 ? '<span class="card-score">'+esc(item.score)+'</span>' : '';
@@ -2658,7 +2665,11 @@ async function switchCat(idx) {
   document.getElementById('heroSection').style.display = 'none';
 
   // 立即用缓存数据渲染（含图片缓存预填充）
-  const curated = (_catCache[catName] && _catCache[catName].data) || [];
+  // 打底数据优先取首页片库里这个分类的条目 —— 那份带着豆瓣/B站的榜单名次，
+  // 否则分类页会全是采集源刚入库的杂片（动漫页清一色喜羊羊猪猪侠，和首页的银魂鬼灭完全对不上）
+  var seeded = (LIVE.items || []).filter(function (x) { return x.cat === catName; })
+    .sort(function (a, b) { return (a.rank || 9999) - (b.rank || 9999); });
+  const curated = seeded.length ? seeded : ((_catCache[catName] && _catCache[catName].data) || []);
   const imgCache = getImgCache();
   curated.forEach(function(item) {
     if (!item.pic && imgCache[item.name]) item.pic = imgCache[item.name];
