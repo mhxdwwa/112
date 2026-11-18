@@ -5705,6 +5705,28 @@ function _looksLikeMedia(u) {
   return true;
 }
 
+// 让 Worker 从播放页 HTML 里抠出真正的 m3u8。返回 null 表示解析不到。
+var _resolveCache = {};
+function resolvePlayPage(pageUrl) {
+  if (_resolveCache[pageUrl] !== undefined) return Promise.resolve(_resolveCache[pageUrl]);
+  var api = pickRelay('/resolve?url=' + encodeURIComponent(pageUrl));
+  return fetch(api, { signal: AbortSignal.timeout(12000) })
+    .then(function (r) {
+      if (!r.ok) throw new Error('resolve ' + r.status);
+      return r.json();
+    })
+    .then(function (d) {
+      var m3u8 = d && d.ok && d.m3u8 ? d.m3u8 : null;
+      _resolveCache[pageUrl] = m3u8;
+      return m3u8;
+    })
+    .catch(function (e) {
+      console.warn('[播放] 解析失败：' + e.message);
+      _resolveCache[pageUrl] = null;
+      return null;
+    });
+}
+
 function initDirectPlayer(url) {
   destroyHls();
   _curSrcUrl = url;          // 原始地址，中转失败时回退解析线路要用它
@@ -5713,14 +5735,28 @@ function initDirectPlayer(url) {
   try { console.log('[播放源] ' + url + '\n[提示] 想查这集的广告能不能删，输入 tcInspect()'); } catch (e) {}
 
   // 采集源给的 playUrl 有两种：真正的媒体流（.m3u8/.mp4）和「播放页」（一个 HTML 页面）。
-  // 后者塞进 <video> 永远不会报错、只会一直 readyState=0 黑屏，所以要认出来改用 iframe 嵌。
+  // 播放页塞进 <video> 永远不会报错、只会一直 readyState=0 黑屏。
+  // 正确做法：先让 Worker 把页面里的 m3u8 抠出来（页面里明文写着 var main = "…index.m3u8"），
+  // 拿到就照常走原生播放器——只有这样去广告才生效；实在抠不到才退回 iframe 内嵌。
   if (!_looksLikeMedia(url)) {
     var pa0 = document.getElementById('playerArea');
-    if (pa0) {
-      console.log('[播放] 这是播放页不是媒体流，改用内嵌播放');
-      pa0.innerHTML = _origPlayerIframe(url);
-      setChannelBadge('内嵌', true);
-    }
+    if (pa0) pa0.innerHTML = '<div class="player-loading">正在解析播放地址…</div>';
+    console.log('[播放] 这是播放页，先从页面里解析真实 m3u8');
+    var resolved = false;
+    resolvePlayPage(url).then(function (m3u8) {
+      if (!m3u8) {
+        console.log('[播放] 解析不到 m3u8，改用内嵌播放');
+        var pa1 = document.getElementById('playerArea');
+        if (pa1) { pa1.innerHTML = _origPlayerIframe(url); setChannelBadge('内嵌', true); }
+        return;
+      }
+      resolved = true;
+      console.log('[播放] 解析到真实流：' + m3u8.slice(0, 100));
+      // 地址换了，用真流重新走一遍（这次会命中 isM3u8 分支）
+      var pa2 = document.getElementById('playerArea');
+      if (pa2) pa2.innerHTML = playerDirectHTML(m3u8);
+      initDirectPlayer(m3u8);
+    });
     return;
   }
 
