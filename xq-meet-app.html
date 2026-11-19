@@ -398,15 +398,19 @@ td.note{width:54px}
 
 <script>
 /* ================= 嵌入引导（独立打开时全部不生效） ================= */
-/* 学勤管家「学校活动 · 校运会」用 iframe 内嵌本页时：
-   ?meet=<活动id>  以该活动的秩序册数据与成绩为准，成绩写回云端
-   &ro=1           只读模式（没有登分权限的老师） */
+/* 两种嵌入方式：
+   ① 学勤管家用 iframe[src] 打开本页：?meet=<活动id>&u=<教师名>[&ro=1]
+   ② 学勤管家用 iframe[srcdoc] 内嵌（推荐，单文件部署即可）：
+      宿主在本页 <head> 注入 window.MT_FORCE = {meet, u, ro}
+   两种方式都会把该活动的秩序册数据/成绩从 localStorage 的 xqmeet_boot_<id> 读进来 */
 var MT_Q = (function () {
   try { return new URLSearchParams(location.search); }
   catch (e) { return { get: function () { return null; } }; }
 })();
-var MT_MEET = MT_Q.get('meet') || '';
-var MT_RO = MT_Q.get('ro') === '1';
+var MT_FORCE = (typeof window !== 'undefined' && window.MT_FORCE && typeof window.MT_FORCE === 'object') ? window.MT_FORCE : null;
+var MT_MEET = (MT_FORCE && MT_FORCE.meet) || MT_Q.get('meet') || '';
+var MT_RO = MT_FORCE ? !!MT_FORCE.ro : (MT_Q.get('ro') === '1');
+var MT_U = (MT_FORCE && MT_FORCE.u) || MT_Q.get('u') || '';
 var MT_BOOT = null;
 (function () {
   if (!MT_MEET) return;
@@ -414,6 +418,11 @@ var MT_BOOT = null;
     var raw = localStorage.getItem('xqmeet_boot_' + MT_MEET);
     MT_BOOT = raw ? JSON.parse(raw) : null;
   } catch (e) { MT_BOOT = null; }
+})();
+/* 宿主指定了落点（如进入登分台直达「赛程」）时，先把 hash 设好 */
+(function () {
+  if (!MT_FORCE || !MT_FORCE.route) return;
+  try { if (!location.hash) location.hash = '#/' + MT_FORCE.route; } catch (e) { }
 })();
 /* 嵌入别的届次时，把顶栏标题/副标题换成该届运动会的信息 */
 function mtApplyMeta() {
@@ -453,6 +462,23 @@ const GRADE_LIST = ['初一', '初二', '初三'];
 
 function evTitle(ev) { return ev.grade + GEND[ev.gender] + ev.name; }
 function evFull(ev) { return evTitle(ev) + '（' + PHASE[ev.phase] + '）'; }
+
+/* 赛事元信息：导入别届秩序册时不能写死第三十二届的日期与项数 */
+function metaDays() {
+  const seen = [];
+  EVENTS.forEach(e => { if (e.date && seen.indexOf(e.date) < 0) seen.push(e.date); });
+  return seen.length ? seen : ['比赛日'];
+}
+function metaDates() {
+  if (META && META.dates) return META.dates;
+  const ds = metaDays();
+  return ds.length ? (ds[0] + (ds.length > 1 ? '—' + ds[ds.length - 1] : '')) : '';
+}
+function metaVenue() { return (META && META.venue) || ''; }
+function metaTitle() {
+  const s = ((META && META.school) || '') + ((META && META.meet) || '田径运动会');
+  return s || '校运会登分台';
+}
 
 /* ================= 校纪录（秩序册「历届田径运动会记录表」） ================= */
 const RECORDS = [
@@ -526,7 +552,7 @@ function mtCloudSave() {
         action: 'set',
         configKey: 'meet_' + MT_MEET + '_state',
         configData: S,
-        teacherName: (typeof MT_Q !== 'undefined' && MT_Q.get('u')) || window.MT_USER || ''
+        teacherName: (typeof MT_U !== 'undefined' && MT_U) || window.MT_USER || ''
       })
     }).then(function (r) { return r.json(); })
       .then(function (res) {
@@ -802,18 +828,30 @@ window.addEventListener('hashchange', render);
 function meetStatus() {
   const now = new Date();
   const d = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-  if (d < '2026-11-24') {
-    const days = Math.round((new Date('2026-11-24T00:00:00') - new Date(d + 'T00:00:00')) / 86400000);
+  // 从秩序册的日期里取比赛区间；取不到就不显示倒计时
+  const span = meetDateSpan();
+  if (!span) return { text: '共 ' + EVENTS.length + ' 个项目', on: false };
+  if (d < span[0]) {
+    const days = Math.round((new Date(span[0] + 'T00:00:00') - new Date(d + 'T00:00:00')) / 86400000);
     return { text: '距开幕 ' + days + ' 天', on: false };
   }
-  if (d > '2026-11-26') return { text: '运动会已结束', on: false };
+  if (d > span[1]) return { text: '运动会已结束', on: false };
   return { text: '比赛进行中', on: true };
+}
+function meetDateSpan() {
+  const src = metaDates();
+  const m = String(src).match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日(?:[—\-~至]+(\d{1,2})\s*日?)?/);
+  if (!m) return null;
+  const pad = n => String(n).padStart(2, '0');
+  const start = m[1] + '-' + pad(m[2]) + '-' + pad(m[3]);
+  const end = m[4] ? (m[1] + '-' + pad(m[2]) + '-' + pad(m[4])) : start;
+  return [start, end];
 }
 function todayEvents() {
   const now = new Date();
   const d = now.getMonth() + 1 + '月' + now.getDate() + '日';
   let list = EVENTS.filter(e => e.date === d);
-  if (!list.length) list = EVENTS.filter(e => e.date === '11月24日');
+  if (!list.length) list = EVENTS.filter(e => e.date === metaDays()[0]);
   return list.slice(0, 6);
 }
 function topClasses(n) {
@@ -826,14 +864,18 @@ function renderHome() {
   const todays = todayEvents();
   const top = topClasses(5);
   const max = Math.max(1, top[0] ? top[0].pts : 1);
+  const kindCnt = { '径赛': 0, '田赛': 0, '民族': 0 };
+  EVENTS.forEach(e => { kindCnt[e.kind] = (kindCnt[e.kind] || 0) + 1; });
+  const kindChip = ['径赛', '田赛', '民族'].filter(k => kindCnt[k] > 0).map(k => k + ' ' + kindCnt[k] + ' 项').join(' · ');
+  const heroSub = [metaDates(), metaVenue()].filter(Boolean).join(' · ');
   return `
   <section class="hero">
     <h2>比赛成绩登分台</h2>
-    <div class="sub">${META.dates} · ${META.venue}</div>
+    <div class="sub">${heroSub}</div>
     <div class="hero-meta">
       <span class="hero-chip">${status.on ? '● ' : ''}${status.text}</span>
-      <span class="hero-chip">径赛 8 项 · 田赛 4 项 · 民族 3 项</span>
-      <span class="hero-chip">23 个班级 · ${st.students} 名运动员</span>
+      <span class="hero-chip">${kindChip}</span>
+      <span class="hero-chip">${CLASS_LIST.length} 个班级 · ${st.students} 名运动员</span>
     </div>
     <div class="hero-count"><b>${st.doneEv}</b><span>/ ${st.allEvents} 项已录</span></div>
   </section>
@@ -885,7 +927,7 @@ function renderHome() {
 
   <div class="section-title"><h2>关于这份秩序册</h2><span class="sub">数据来源：秩序册</span></div>
   <div class="card pad" style="font-size:12.5px;color:var(--muted);line-height:1.8">
-    项目、时间、参赛名单均取自《九圩中学第三十二届田径运动会秩序册》。计分规则：个人项目前 6 名 7/6/5/4/3/2 分；接力与民族团队项目前 3 名 8/6/4 分；破纪录按所得名次积分乘 2。预赛只排名与标出晋级线，不积分。
+    项目、时间、参赛名单均取自《${metaTitle()}秩序册》。计分规则：个人项目前 6 名 7/6/5/4/3/2 分；接力与民族团队项目前 3 名 8/6/4 分；破纪录按所得名次积分乘 2。预赛只排名与标出晋级线，不积分。
   </div>`;
 }
 function drawHomeChart() {}
@@ -893,7 +935,7 @@ function drawHomeChart() {}
 /* ================= 视图：赛程 ================= */
 let schedFilter = '全部';
 function renderSchedule() {
-  const days = ['11月24日', '11月25日', '11月26日'];
+  const days = metaDays();
   const filter = schedFilter;
   const list = EVENTS.filter(e => filter === '全部' || e.grade === filter);
   const units = [];
