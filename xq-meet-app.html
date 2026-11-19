@@ -1,0 +1,2063 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#12352a">
+<title>九圩中学第三十二届校运会 · 登分台</title>
+<style>
+:root{
+  --paper:#f6f3ea;
+  --card:#fffdf7;
+  --ink:#16211c;
+  --muted:#6d7770;
+  --line:#e5dfd0;
+  --brand:#c23b28;
+  --brand-soft:#fbe9e4;
+  --green:#1b6a4f;
+  --green-deep:#12352a;
+  --green-soft:#e6f0ea;
+  --gold:#c8962b;
+  --gold-soft:#fbf2dc;
+  --blue:#2f6f8f;
+  --shadow:0 1px 2px rgba(22,33,28,.04),0 8px 24px -12px rgba(22,33,28,.18);
+  --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Source Han Sans SC",system-ui,-apple-system,sans-serif;
+  font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:calc(74px + env(safe-area-inset-bottom));
+  overflow-x:hidden;
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(900px 500px at 82% -10%,rgba(27,106,79,.10),transparent 60%),
+    radial-gradient(700px 420px at -10% 8%,rgba(194,59,40,.07),transparent 60%);
+}
+.app{max-width:980px;margin:0 auto;padding:0 14px}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+
+/* ============ 顶栏 ============ */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  margin:0;
+  padding:14px 14px 16px;
+  color:#f7f4ea;
+  background:
+    radial-gradient(120% 140% at 92% 0%,rgba(200,150,43,.30),transparent 55%),
+    linear-gradient(150deg,#0f2c23 0%,#174534 45%,#1b6a4f 100%);
+  box-shadow:0 10px 30px -18px rgba(18,53,42,.8);
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.topbar-inner{display:flex;align-items:center;gap:11px;max-width:952px;margin:0 auto}
+.brand-badge{
+  flex:0 0 auto;width:46px;height:46px;border-radius:14px;
+  display:grid;place-items:center;
+  background:linear-gradient(160deg,#fdf6e3,#efdcae);
+  color:#7a2a1c;font-weight:800;font-size:19px;letter-spacing:.5px;
+  border:1px solid rgba(255,255,255,.5);
+  box-shadow:inset 0 1px 0 #fff,0 6px 14px -6px rgba(0,0,0,.5);
+  position:relative;
+}
+.brand-badge small{position:absolute;bottom:4px;font-size:8px;font-weight:600;letter-spacing:1px;color:#9a6a20}
+.brand-text{min-width:0;flex:1}
+.brand-text h1{margin:0;font-size:16.5px;font-weight:700;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-text p{margin:2px 0 0;font-size:11.5px;color:rgba(255,255,255,.72);letter-spacing:1.4px}
+.top-status{flex:0 0 auto;font-size:11px;color:rgba(255,255,255,.7);display:flex;align-items:center;gap:5px}
+.dot{width:6px;height:6px;border-radius:50%;background:#8fe3b0;box-shadow:0 0 0 3px rgba(143,227,176,.16)}
+
+/* ============ 通用 ============ */
+.section-title{display:flex;align-items:baseline;justify-content:space-between;margin:20px 2px 10px}
+.section-title h2{margin:0;font-size:15px;letter-spacing:.5px}
+.section-title .sub{font-size:11.5px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:14px}
+.row{display:flex;gap:10px}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.h1{font-size:22px;font-weight:800;letter-spacing:.5px}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);white-space:nowrap}
+.tag.grade{color:var(--green);border-color:#bfd6c9;background:var(--green-soft)}
+.tag.girls{color:#a4527e;border-color:#e8cbdc;background:#faecf4}
+.tag.boys{color:#2f6f8f;border-color:#c9dde7;background:#eaf3f7}
+.tag.prelim{color:#8a6a12;border-color:#e7d9b0;background:var(--gold-soft)}
+.tag.final{color:var(--brand);border-color:#ecc4bc;background:var(--brand-soft)}
+.tag.team{color:#5b5480;border-color:#d6d2e8;background:#f0eef8}
+.tag.rec{color:#8a6a12;border-color:#e2cf98;background:linear-gradient(180deg,#fdf6e4,#f7ead0);font-weight:600}
+.qual-box{background:#fffdf6;border:1px solid #eadfc2;border-radius:14px;padding:12px 14px;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
+.qual-box .qh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.qual-box .qh b{font-size:13px;color:var(--ink)}
+.qual-box .ql{font-size:11.5px;color:var(--muted);line-height:1.6}
+.qual-chips{display:flex;flex-wrap:wrap;gap:5px}
+.qual-chips .qc{font-size:11px;padding:2px 7px;border-radius:999px;background:#f2efe7;color:#5d5a4e;border:1px solid #e6e0d0}
+.qual-chips .qc.on{background:var(--green-soft);border-color:#bfd6c9;color:var(--green)}
+.row-badge-rec{font-size:10px;color:#8a6a12;background:var(--gold-soft);border:1px solid #e2cf98;border-radius:999px;padding:1px 5px;margin-left:4px;white-space:nowrap}
+.name-edit{cursor:pointer}
+.name-edit .pen{display:inline-block;margin-left:4px;color:#b6ac93;font-size:11px;opacity:.75}
+.name-edit:active .pen{opacity:1;color:var(--green)}
+.pick-chip{font-size:11.5px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:#fff;color:#5d5a4e;cursor:pointer}
+.pick-chip.on{background:var(--green-soft);border-color:#bfd6c9;color:var(--green)}
+.pick-wrap{display:flex;flex-wrap:wrap;gap:6px;max-height:168px;overflow:auto;margin:10px 0 4px}
+
+/* ============ 概览 ============ */
+.hero{
+  position:relative;overflow:hidden;border-radius:20px;margin-top:14px;padding:18px;
+  background:linear-gradient(140deg,#174534,#12352a 55%,#0f2c23);
+  color:#f3efe3;box-shadow:0 18px 40px -24px rgba(18,53,42,.9);
+}
+.hero::after{
+  content:"";position:absolute;right:-46px;top:-52px;width:190px;height:190px;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%,rgba(200,150,43,.42),rgba(200,150,43,.06) 65%,transparent 70%);
+}
+.hero h2{margin:0;font-size:19px;letter-spacing:1px;font-weight:700}
+.hero .sub{margin-top:5px;font-size:12px;color:rgba(255,255,255,.7);letter-spacing:.8px}
+.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;position:relative;z-index:1}
+.hero-chip{
+  font-size:11.5px;padding:5px 10px;border-radius:999px;
+  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.88)
+}
+.hero-count{position:absolute;right:18px;bottom:14px;text-align:right;z-index:1}
+.hero-count b{font-size:26px;font-variant-numeric:tabular-nums;color:#f2d99b}
+.hero-count span{font-size:11px;color:rgba(255,255,255,.6);margin-left:4px}
+
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+.stat{padding:12px 12px 11px;border-radius:14px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow)}
+.stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.stat span{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.stat.a b{color:var(--green)} .stat.b b{color:var(--brand)} .stat.c b{color:var(--blue)} .stat.d b{color:var(--gold)}
+
+.today-list{display:flex;flex-direction:column}
+.today-item{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;padding:11px 14px;border-bottom:1px dashed var(--line)}
+.today-item:last-child{border-bottom:0}
+.today-item .t{font-variant-numeric:tabular-nums;font-size:13px;color:var(--green);font-weight:700}
+.today-item .n{font-size:13.5px;min-width:0}
+.today-item .n small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.pill{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--green-soft);color:var(--green);border:1px solid #bfd6c9}
+.pill.gray{background:#f1f0ea;color:var(--muted);border-color:var(--line)}
+.pill.red{background:var(--brand-soft);color:var(--brand);border-color:#ecc4bc}
+
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.quick-btn{
+  display:flex;align-items:center;gap:10px;padding:14px;border-radius:14px;border:1px solid var(--line);
+  background:var(--card);box-shadow:var(--shadow);cursor:pointer;text-align:left;font-size:13px;color:var(--ink)
+}
+.quick-btn .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--green-soft);color:var(--green);flex:0 0 auto}
+.quick-btn.alt .ic{background:var(--brand-soft);color:var(--brand)}
+.quick-btn b{display:block;font-size:13.5px}
+.quick-btn small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+
+/* ============ 赛程 ============ */
+.seg{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{
+  flex:0 0 auto;border:1px solid var(--line);background:#fff;color:var(--muted);
+  padding:7px 13px;border-radius:999px;font-size:12.5px;cursor:pointer;transition:.18s
+}
+.seg button.on{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 6px 16px -8px rgba(27,106,79,.8)}
+.day-block{margin-bottom:8px}
+.day-head{display:flex;align-items:center;gap:8px;margin:14px 2px 8px}
+.day-head b{font-size:13.5px}
+.day-head .line{flex:1;height:1px;background:var(--line)}
+
+.ev-card{
+  display:grid;grid-template-columns:60px 1fr auto;gap:12px;align-items:center;
+  padding:13px 14px;border-bottom:1px dashed var(--line);cursor:pointer;transition:background .15s
+}
+.ev-card:hover{background:#fbfaf4}
+.ev-card:last-child{border-bottom:0}
+.ev-time{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;color:var(--green);letter-spacing:.5px}
+.ev-time small{display:block;font-size:10px;font-weight:400;color:var(--muted);letter-spacing:0}
+.ev-main{min-width:0}
+.ev-main b{font-size:14px}
+.ev-main .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.ev-right{text-align:right;font-size:11px;color:var(--muted);min-width:64px}
+.ev-right .p{font-size:12px;color:var(--green);font-weight:700}
+.ev-right .p.zero{color:var(--muted);font-weight:400}
+
+/* ============ 登分页 ============ */
+.crumb{font-size:11.5px;color:var(--muted);margin:14px 2px 8px;display:flex;gap:6px;align-items:center;cursor:pointer}
+.ev-hero{padding:16px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(160deg,#fffdf7,#f6f2e6);box-shadow:var(--shadow)}
+.ev-hero h2{margin:0 0 4px;font-size:19px;letter-spacing:.6px}
+.ev-hero .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;border-radius:12px;border:1px solid var(--line);
+  background:#fff;color:var(--ink);padding:9px 13px;font-size:12.5px;cursor:pointer;transition:.16s;
+}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 10px 22px -12px rgba(194,59,40,.9)}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 10px 22px -12px rgba(27,106,79,.9)}
+.btn.ghost{background:transparent}
+.btn.mini{padding:6px 10px;font-size:11.5px;border-radius:10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.score-wrap{overflow-x:auto;border-radius:16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow)}
+table.score{border-collapse:collapse;width:100%}
+table.score th,table.score td{padding:7px 6px;border-bottom:1px solid #efeade;font-size:13px;text-align:left}
+table.score th{
+  position:sticky;top:0;background:#f4f1e6;color:#57635b;font-weight:600;font-size:11.5px;letter-spacing:.6px;z-index:2;
+  border-bottom:1px solid #e0d9c7
+}
+table.score td.idx{width:28px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:center}
+table.score td.name{font-weight:600;white-space:nowrap}
+table.score td.cls{width:46px;color:var(--muted);font-variant-numeric:tabular-nums}
+table.score input.sc{
+  width:100%;max-width:96px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;
+  font-size:14px;font-variant-numeric:tabular-nums;letter-spacing:.6px;text-align:center;color:var(--ink);
+  transition:.15s
+}
+table.score input.sc:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(27,106,79,.12)}
+table.score input.sc.filled{border-color:#c6d8cd;background:#f4faf6}
+table.score td.rank{width:44px;text-align:center}
+.rank-badge{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.r1{background:#fbe6b4;color:#8a6212} .r2{background:#e8ecef;color:#5c6873} .r3{background:#f3ddcb;color:#95572b}
+.rn{background:#f1f0e9;color:var(--muted)}
+td.pts{width:38px;text-align:center;font-weight:700;color:var(--brand);font-variant-numeric:tabular-nums}
+td.note{width:54px}
+.note-btn{border:1px dashed var(--line);background:transparent;border-radius:9px;padding:5px 8px;font-size:11px;color:var(--muted);cursor:pointer}
+.note-btn.on{border-style:solid;border-color:#e0b76a;background:var(--gold-soft);color:#8a6212}
+.empty-hint{padding:26px 16px;text-align:center;color:var(--muted);font-size:12.5px}
+.qual-hint{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;margin:10px 2px 0}
+
+/* ============ 榜单 ============ */
+.chart-card{padding:14px 10px 8px}
+.chart-card canvas{width:100%;height:190px;display:block}
+.rank-table{width:100%;border-collapse:collapse;font-size:13px}
+.rank-table th,.rank-table td{padding:9px 8px;border-bottom:1px solid #f0ebdf;text-align:right;font-variant-numeric:tabular-nums}
+.rank-table th{font-size:11px;color:var(--muted);font-weight:600;text-align:right;background:#faf8f1}
+.rank-table th:first-child,.rank-table td:first-child{text-align:left}
+.rank-table td.medal{color:var(--gold);font-weight:700}
+.rank-table tr.top1 td{background:linear-gradient(90deg,#fdf4dd,transparent)}
+
+.result-list{display:flex;flex-direction:column}
+.result-ev{padding:12px 14px;border-bottom:1px dashed var(--line);cursor:pointer}
+.result-ev:last-child{border-bottom:0}
+.result-ev .h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.result-ev .h b{font-size:13.5px}
+.result-ev .top3{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.result-ev .top3 i{font-style:normal;font-weight:700;color:var(--ink);margin-left:3px}
+.scroll-x{overflow-x:auto}
+
+/* ============ 学生 ============ */
+.search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 12px;box-shadow:var(--shadow)}
+.search input{flex:1;border:0;outline:none;font-size:14px;background:transparent;color:var(--ink)}
+.stu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;margin-top:12px}
+.stu-card{padding:11px 12px;border-radius:13px;border:1px solid var(--line);background:var(--card);cursor:pointer;transition:.15s;box-shadow:0 2px 10px -8px rgba(22,33,28,.4)}
+.stu-card:hover{border-color:#cbd8cd;transform:translateY(-1px)}
+.stu-card b{font-size:14px;display:block}
+.stu-card small{font-size:11px;color:var(--muted);display:block;margin-top:2px}
+.stu-events{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.stu-event{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fdfbf4}
+.stu-event .hd{display:flex;justify-content:space-between;font-size:12.5px;gap:8px}
+.stu-event .hd b{font-weight:600}
+.stu-event .val{font-variant-numeric:tabular-nums;font-weight:700;color:var(--green)}
+.stu-event .ft{font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:8px}
+
+/* ============ 抽屉/弹层 ============ */
+.sheet-mask{position:fixed;inset:0;background:rgba(16,26,21,.45);backdrop-filter:blur(3px);z-index:60;display:none}
+.sheet-mask.on{display:block}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:61;background:var(--card);
+  border-radius:22px 22px 0 0;padding:16px 18px calc(20px + env(safe-area-inset-bottom));
+  max-height:86vh;overflow:auto;transform:translateY(102%);transition:transform .28s cubic-bezier(.22,.9,.3,1);
+  max-width:980px;margin:0 auto;box-shadow:0 -20px 50px -20px rgba(0,0,0,.3)
+}
+.sheet.on{transform:translateY(0)}
+.sheet h3{margin:0 0 4px;font-size:16px}
+.sheet .grab{width:38px;height:4px;border-radius:3px;background:#ded9c9;margin:0 auto 12px}
+.kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.kv:last-child{border-bottom:0}
+
+/* ============ 拍照识别 ============ */
+.ocr-layer{position:fixed;inset:0;z-index:80;background:#0b1512;color:#eef4ec;display:none;flex-direction:column}
+.ocr-layer.on{display:flex}
+.ocr-head{display:flex;align-items:center;justify-content:space-between;padding:var(--pad,14px) 16px;padding-top:calc(14px + env(safe-area-inset-top))}
+.ocr-head b{font-size:14px;letter-spacing:.5px}
+.ocr-close{background:rgba(255,255,255,.12);border:0;color:#fff;width:34px;height:34px;border-radius:10px;font-size:16px;cursor:pointer}
+.ocr-stage{flex:1;position:relative;overflow:hidden;display:grid;place-items:center;padding:8px 14px}
+#ocrVideo,.ocr-shot{max-width:100%;max-height:100%;border-radius:10px;object-fit:contain}
+.ocr-guide{position:absolute;pointer-events:none;border:1.5px dashed rgba(240,214,150,.85);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.28)}
+.ocr-guide::before,.ocr-guide::after{content:"";position:absolute;width:22px;height:22px;border:2px solid rgba(240,214,150,.9);border-radius:8px}
+.ocr-guide::before{left:-2px;top:-2px;border-right:0;border-bottom:0}
+.ocr-guide::after{right:-2px;bottom:-2px;border-left:0;border-top:0}
+.ocr-tip{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:11.5px;color:rgba(255,255,255,.7);padding:0 20px}
+.ocr-foot{padding:12px 16px calc(18px + env(safe-area-inset-bottom));display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
+.shutter{width:64px;height:64px;border-radius:50%;border:3px solid rgba(255,255,255,.35);background:radial-gradient(circle,#fdf7e6 0 58%,#c8962b 60%);cursor:pointer;box-shadow:0 8px 24px -8px #000}
+.ocr-progress{position:absolute;inset:0;display:grid;place-items:center;background:rgba(8,18,14,.82);z-index:3;text-align:center;padding:20px}
+.ocr-progress .bar{width:200px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden;margin-top:12px}
+.ocr-progress .bar i{display:block;height:100%;background:#f0d296;width:0;transition:width .3s}
+.ocr-review{padding:12px 16px 0;overflow:auto;flex:1}
+.ocr-row{display:grid;grid-template-columns:52px 1fr 92px 28px;gap:8px;align-items:center;padding:9px 0;border-bottom:1px dashed rgba(255,255,255,.16)}
+.ocr-row .who{font-size:12.5px}
+.ocr-row .who small{display:block;font-size:10.5px;color:rgba(255,255,255,.55)}
+.ocr-row input.ocrv{width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;padding:6px 8px;font-size:13px;font-variant-numeric:tabular-nums;text-align:center}
+.ocr-row .conf{font-size:10px}
+.ocr-row input[type=checkbox]{width:18px;height:18px;accent-color:#c8962b}
+.ocr-chips{display:flex;gap:6px;overflow-x:auto;padding:6px 16px 0}
+.chip{flex:0 0 auto;font-size:11.5px;padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#eef4ec;cursor:pointer}
+.chip.on{background:#f0d296;color:#25301f;border-color:#f0d296}
+
+/* ============ 数据页 ============ */
+.data-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px dashed var(--line)}
+.data-item:last-child{border-bottom:0}
+.data-item .t b{font-size:13.5px}
+.data-item .t small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px}
+
+/* ============ 底部导航 ============ */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  background:rgba(255,253,247,.92);backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);
+  padding:6px 8px calc(6px + env(safe-area-inset-bottom));
+  box-shadow:0 -10px 30px -20px rgba(22,33,28,.5)
+}
+.tabbar-inner{max-width:980px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:2px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px 5px;border-radius:12px;color:#828b84;font-size:11px;background:transparent;border:0;cursor:pointer}
+.tab .ic{display:grid;place-items:center;width:26px;height:24px}
+.tab.on{color:var(--green);background:var(--green-soft);font-weight:600}
+.tab .ic svg{display:block}
+
+/* ============ 提示 ============ */
+#toast{
+  position:fixed;left:50%;bottom:96px;transform:translate(-50%,14px);z-index:120;
+  background:#16211c;color:#fdf9ee;font-size:12.5px;padding:9px 16px;border-radius:999px;
+  opacity:0;pointer-events:none;transition:.24s;box-shadow:0 12px 30px -12px rgba(0,0,0,.6);max-width:86vw;text-align:center
+}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:520px){
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:400px){
+  .quick{grid-template-columns:1fr}
+}
+@media (max-width:420px){
+  table.score th,table.score td{padding:6px 4px}
+  table.score input.sc{max-width:76px}
+  .brand-text h1{font-size:15px}
+}
+@media print{
+  .topbar,.tabbar,.toolbar,.crumb{display:none!important}
+  body{background:#fff;padding:0}
+  .card,.ev-hero{box-shadow:none;border-color:#ddd}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-badge">32<small>届</small></div>
+    <div class="brand-text">
+      <h1 id="mtTitle">九圩中学第三十二届田径运动会</h1>
+      <p id="mtSub">2026.11.24 — 11.26 · 田径场</p>
+    </div>
+    <div class="top-status"><span class="dot"></span><span id="saveState">已保存</span></div>
+  </div>
+</header>
+
+<div class="app"><main id="view"></main></div>
+
+<nav class="tabbar">
+  <div class="tabbar-inner" id="tabbar">
+    <button class="tab" data-go="#/home">
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg></span>
+      总览
+    </button>
+    <button class="tab" data-go="#/schedule">
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg></span>
+      赛程
+    </button>
+    <button class="tab" data-go="#/scan">
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2A2.5 2.5 0 0 1 17.5 20h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.4"/></svg></span>
+      拍照登分
+    </button>
+    <button class="tab" data-go="#/board">
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 4h10v4.5a5 5 0 0 1-10 0V4z"/><path d="M7 5.5H4.5V7a3 3 0 0 0 3 3M17 5.5h2.5V7a3 3 0 0 1-3 3M12 13.5V18M9 20h6"/></svg></span>
+      榜单
+    </button>
+    <button class="tab" data-go="#/students">
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6"/></svg></span>
+      学生
+    </button>
+  </div>
+</nav>
+
+<div class="sheet-mask" id="mask"></div>
+<div class="sheet" id="sheet"></div>
+
+<div class="ocr-layer" id="ocr"></div>
+<div id="toast"></div>
+
+<script>
+/* ================= 嵌入引导（独立打开时全部不生效） ================= */
+/* 学勤管家「学校活动 · 校运会」用 iframe 内嵌本页时：
+   ?meet=<活动id>  以该活动的秩序册数据与成绩为准，成绩写回云端
+   &ro=1           只读模式（没有登分权限的老师） */
+var MT_Q = (function () {
+  try { return new URLSearchParams(location.search); }
+  catch (e) { return { get: function () { return null; } }; }
+})();
+var MT_MEET = MT_Q.get('meet') || '';
+var MT_RO = MT_Q.get('ro') === '1';
+var MT_BOOT = null;
+(function () {
+  if (!MT_MEET) return;
+  try {
+    var raw = localStorage.getItem('xqmeet_boot_' + MT_MEET);
+    MT_BOOT = raw ? JSON.parse(raw) : null;
+  } catch (e) { MT_BOOT = null; }
+})();
+/* 嵌入别的届次时，把顶栏标题/副标题换成该届运动会的信息 */
+function mtApplyMeta() {
+  if (typeof MT_BOOT === 'undefined' || !MT_BOOT || !MT_BOOT.data || !MT_BOOT.data.meta) return;
+  var m = MT_BOOT.data.meta;
+  var t = document.getElementById('mtTitle'), s = document.getElementById('mtSub');
+  if (t) t.textContent = (m.school || '') + (m.meet || '田径运动会');
+  if (s) s.textContent = [m.dates, m.venue].filter(Boolean).join(' · ');
+  document.title = (t ? t.textContent : '校运会') + ' · 登分台';
+}
+
+</script>
+<script>
+let DATA = (typeof MT_BOOT !== "undefined" && MT_BOOT && MT_BOOT.data) ? MT_BOOT.data : {"meta":{"school":"九圩中学","meet":"第三十二届田径运动会","dates":"2026年11月24日—26日","venue":"九圩中学田径场"},"events":[{"date":"11月24日","ampm":"上午","time":"08:30","grade":"初三","gender":"女","name":"100米","phase":"预赛","raw":"100米预赛","kind":"径赛","team":false,"entries":[{"n":"韦艺鸿","c":"241"},{"n":"覃钰涵","c":"242"},{"n":"韦樱诗","c":"246"},{"n":"覃佳慧","c":"244"},{"n":"覃甜甜","c":"245"},{"n":"韦怡霏","c":"246"},{"n":"覃雨馨","c":"247"},{"n":"龙晓智","c":"241"},{"n":"韦雨祺","c":"242"},{"n":"韦金宏","c":"244"},{"n":"张容誓","c":"245"},{"n":"吴佳琪","c":"246"},{"n":"韦思宇","c":"243"},{"n":"韦春蕊","c":"247"},{"n":"段佳利","c":"241"},{"n":"覃欣慧","c":"242"},{"n":"韦依洁","c":"244"},{"n":"韦佳念","c":"245"}],"id":0},{"date":"11月24日","ampm":"上午","time":"08:45","grade":"初二","gender":"女","name":"100米","phase":"预赛","raw":"100米预赛","kind":"径赛","team":false,"entries":[{"n":"陈明慧","c":"251"},{"n":"覃丽烨","c":"253"},{"n":"邓佳青","c":"252"},{"n":"胡芷瑜","c":"254"},{"n":"覃钰潪","c":"255"},{"n":"覃芯钰","c":"256"},{"n":"韦连翠","c":"257"},{"n":"韦晴朗","c":"259"},{"n":"李星漫","c":"257"},{"n":"韦晰晨","c":"258"},{"n":"覃秋瑾","c":"255"},{"n":"韦炘蕊","c":"252"},{"n":"罗金铃","c":"251"},{"n":"覃佩浠","c":"253"},{"n":"覃桢瑕","c":"252"},{"n":"韦莲凤","c":"254"},{"n":"易海莹","c":"255"},{"n":"韦月青","c":"258"},{"n":"覃晓悦","c":"257"},{"n":"覃瑄韵","c":"251"},{"n":"王欣月","c":"259"},{"n":"覃海越","c":"258"},{"n":"黄慧婷","c":"253"}],"id":1},{"date":"11月24日","ampm":"上午","time":"09:00","grade":"初一","gender":"女","name":"100米","phase":"预赛","raw":"100米预赛","kind":"径赛","team":false,"entries":[{"n":"张梓琪","c":"261"},{"n":"覃槿溪","c":"262"},{"n":"韦诗语","c":"263"},{"n":"韦雅芙","c":"264"},{"n":"覃如如","c":"265"},{"n":"叶梓慧","c":"266"},{"n":"覃馨锐","c":"267"},{"n":"陈晨曦","c":"261"},{"n":"韦美莲","c":"262"},{"n":"莫欣锐","c":"263"},{"n":"韦馨淳","c":"264"},{"n":"吴媛媛","c":"265"},{"n":"陆冠龄","c":"266"},{"n":"韦叶倩","c":"267"},{"n":"张雅欣","c":"261"},{"n":"周海雪","c":"263"},{"n":"韦石婷","c":"264"},{"n":"覃楚钰","c":"262"},{"n":"覃茜茜","c":"265"},{"n":"覃龙梢","c":"266"},{"n":"韦青秀","c":"267"}],"id":2},{"date":"11月24日","ampm":"上午","time":"09:15","grade":"初三","gender":"男","name":"100米","phase":"预赛","raw":"100米预赛","kind":"径赛","team":false,"entries":[{"n":"龙泽润","c":"241"},{"n":"邓咏涛","c":"242"},{"n":"黄祖楠","c":"243"},{"n":"郭庭华","c":"244"},{"n":"覃嘉煜","c":"245"},{"n":"韦均濠","c":"246"},{"n":"韦明昊","c":"247"},{"n":"熊袭霖","c":"246"},{"n":"覃福朝","c":"241"},{"n":"韦益斌","c":"242"},{"n":"韩忠卫","c":"243"},{"n":"罗再宁","c":"244"},{"n":"覃宏辉","c":"245"},{"n":"韦宏玮","c":"246"},{"n":"吴再镒","c":"247"},{"n":"覃嘉年","c":"241"},{"n":"刘子澄","c":"242"},{"n":"李贤聪","c":"243"},{"n":"韦克甜","c":"244"}],"id":3},{"date":"11月24日","ampm":"上午","time":"09:30","grade":"初二","gender":"男","name":"100米","phase":"预赛","raw":"100米预赛","kind":"径赛","team":false,"entries":[{"n":"覃良钰","c":"251"},{"n":"覃炜烨","c":"253"},{"n":"覃忠镑","c":"252"},{"n":"吴章伟","c":"255"},{"n":"郭季昆","c":"256"},{"n":"袁煊承","c":"257"},{"n":"覃鹏革","c":"258"},{"n":"杨明竣","c":"259"},{"n":"刘茗名","c":"251"},{"n":"卢海优","c":"253"},{"n":"吕锦泉","c":"252"},{"n":"覃福晨","c":"254"},{"n":"陈长镪","c":"255"},{"n":"陆智豪","c":"256"},{"n":"韦金贝","c":"257"},{"n":"石韦明","c":"258"},{"n":"周钟涵","c":"259"},{"n":"颜永赫","c":"251"},{"n":"龙靖松","c":"258"},{"n":"韦增懿","c":"255"},{"n":"韦泽轩","c":"256"},{"n":"覃文保","c":"257"},{"n":"覃路铭","c":"253"},{"n":"郭代轩","c":"259"}],"id":4},{"date":"11月24日","ampm":"上午","time":"09:45","grade":"初一","gender":"男","name":"100米","phase":"预赛","raw":"100米预赛","kind":"径赛","team":false,"entries":[{"n":"杨宸宁","c":"261"},{"n":"张国浩","c":"262"},{"n":"覃羿翔","c":"263"},{"n":"覃子轩","c":"264"},{"n":"韦程睿","c":"265"},{"n":"王幸翔","c":"266"},{"n":"覃琦瑄","c":"267"},{"n":"韦勇益","c":"261"},{"n":"吕宇轩","c":"262"},{"n":"林睦倍","c":"263"},{"n":"陈铭朗","c":"264"},{"n":"韦佳宏","c":"265"},{"n":"覃德恩","c":"266"},{"n":"韦宏俊","c":"267"},{"n":"韦承宏","c":"261"},{"n":"罗海旺","c":"263"},{"n":"韦炳瑞","c":"264"},{"n":"韦叶楠","c":"262"},{"n":"韦俊鹏","c":"265"},{"n":"王仕翔","c":"266"},{"n":"韦文镀","c":"267"}],"id":5},{"date":"11月24日","ampm":"上午","time":"10:00","grade":"初三","gender":"女","name":"200米","phase":"预赛","raw":"200米预赛","kind":"径赛","team":false,"entries":[{"n":"韦艺鸿","c":"241"},{"n":"侯慧颖","c":"242"},{"n":"覃佳慧","c":"244"},{"n":"覃萩圆","c":"247"},{"n":"庞维盈","c":"245"},{"n":"覃雨馨","c":"247"},{"n":"龙凤群","c":"246"},{"n":"段佳利","c":"241"},{"n":"覃钰涵","c":"242"},{"n":"韦金宏","c":"244"},{"n":"朱智慧","c":"246"},{"n":"覃婷嫣","c":"241"},{"n":"韦思宇","c":"243"},{"n":"韦欣蕊","c":"244"},{"n":"吴唯玮","c":"246"}],"id":6},{"date":"11月24日","ampm":"上午","time":"10:15","grade":"初二","gender":"女","name":"200米","phase":"预赛","raw":"200米预赛","kind":"径赛","team":false,"entries":[{"n":"何雅涵","c":"259"},{"n":"韦璘丹","c":"258"},{"n":"吴慧琳","c":"257"},{"n":"覃钰潪","c":"255"},{"n":"覃芯钰","c":"256"},{"n":"韦雨萱","c":"252"},{"n":"梁馨心","c":"253"},{"n":"陈明慧","c":"251"},{"n":"郭禹彤","c":"259"},{"n":"韦雨璇","c":"258"},{"n":"覃玉桦","c":"257"},{"n":"覃语新","c":"256"},{"n":"覃秋瑾","c":"255"},{"n":"罗钰姗","c":"252"},{"n":"韦思佩","c":"253"},{"n":"覃増妮","c":"251"},{"n":"覃春岚","c":"251"},{"n":"覃晶瑩","c":"259"},{"n":"韦晰晨","c":"258"},{"n":"何梦玲","c":"255"},{"n":"覃春月","c":"256"},{"n":"周柳姗","c":"252"}],"id":7},{"date":"11月24日","ampm":"上午","time":"10:30","grade":"初一","gender":"女","name":"200米","phase":"预赛","raw":"200米预赛","kind":"径赛","team":false,"entries":[{"n":"韦佳妞","c":"261"},{"n":"覃芯霞","c":"262"},{"n":"朱素娜","c":"263"},{"n":"覃雅姿","c":"264"},{"n":"林琪茹","c":"264"},{"n":"王月月","c":"266"},{"n":"覃钰璇","c":"267"},{"n":"覃钰鲜","c":"261"},{"n":"陆晓蓓","c":"262"},{"n":"韦诗语","c":"263"},{"n":"韦馨淳","c":"264"},{"n":"覃丹丹","c":"265"},{"n":"陆冠龄","c":"266"},{"n":"覃钰凤","c":"267"},{"n":"佘嘉玟","c":"261"},{"n":"韦雨荷","c":"262"},{"n":"韦泓镱","c":"263"},{"n":"韦石婷","c":"264"},{"n":"韦佳馨","c":"265"},{"n":"覃龙梢","c":"266"},{"n":"杨梓涵","c":"267"}],"id":8},{"date":"11月24日","ampm":"上午","time":"10:45","grade":"初三","gender":"男","name":"200米","phase":"预赛","raw":"200米预赛","kind":"径赛","team":false,"entries":[{"n":"龙泽润","c":"241"},{"n":"刘子澄","c":"242"},{"n":"龚家宏","c":"246"},{"n":"覃振豪","c":"244"},{"n":"覃嘉煜","c":"245"},{"n":"符志磊","c":"246"},{"n":"陆杰庚","c":"247"},{"n":"覃宏辉","c":"245"}],"id":9},{"date":"11月24日","ampm":"上午","time":"11:00","grade":"初二","gender":"男","name":"200米","phase":"预赛","raw":"200米预赛","kind":"径赛","team":false,"entries":[{"n":"周钟涵","c":"259"},{"n":"韦文泰","c":"258"},{"n":"韦浩宇","c":"256"},{"n":"韦顺隆","c":"257"},{"n":"覃洪煊","c":"255"},{"n":"韦佳劲","c":"254"},{"n":"周盟勋","c":"252"},{"n":"卢海优","c":"253"},{"n":"覃广灿","c":"251"},{"n":"王幸圹","c":"259"},{"n":"覃鹏革","c":"258"},{"n":"吴昌桂","c":"257"},{"n":"邓政来","c":"256"},{"n":"韦增懿","c":"255"},{"n":"申育侨","c":"252"},{"n":"杨胡兴","c":"253"},{"n":"颜永赫","c":"251"},{"n":"覃忠亮","c":"259"},{"n":"卢煌强","c":"257"},{"n":"覃海竣","c":"251"},{"n":"韦柱瀚","c":"255"},{"n":"韦宇森","c":"256"},{"n":"覃忠镑","c":"252"}],"id":10},{"date":"11月24日","ampm":"上午","time":"11:15","grade":"初一","gender":"男","name":"200米","phase":"预赛","raw":"200米预赛","kind":"径赛","team":false,"entries":[{"n":"王凯迪","c":"261"},{"n":"韦叶楠","c":"262"},{"n":"罗佳宝","c":"263"},{"n":"覃舒翊","c":"264"},{"n":"龙开业","c":"265"},{"n":"覃忠炫","c":"266"},{"n":"覃琦瑄","c":"267"},{"n":"韦龙宇","c":"261"},{"n":"覃良燈","c":"262"},{"n":"梁庭彬","c":"263"},{"n":"唐啟棪","c":"264"},{"n":"韦智航","c":"265"},{"n":"龙昌桀","c":"266"},{"n":"龙学锋","c":"267"},{"n":"张洪珲","c":"261"},{"n":"覃怡舜","c":"262"},{"n":"覃红睿","c":"263"},{"n":"韦炳瑞","c":"264"},{"n":"兰宬锋","c":"265"},{"n":"王幸翔","c":"266"},{"n":"覃华达","c":"267"}],"id":11},{"date":"11月24日","ampm":"上午","time":"08:30","grade":"初二","gender":"男","name":"三级蛙跳","phase":"预赛","raw":"三级蛙跳预赛","kind":"田赛","team":false,"entries":[{"n":"覃良钰","c":"251"},{"n":"谭建钰","c":"251"},{"n":"郭万稳","c":"253"},{"n":"陆杰新","c":"253"},{"n":"韦金炫","c":"253"},{"n":"陆麒安","c":"252"},{"n":"李羽轩","c":"252"},{"n":"陆文浩","c":"252"},{"n":"韦佳劲","c":"254"},{"n":"覃靖鎝","c":"254"},{"n":"韦文博","c":"254"},{"n":"龙项友","c":"255"},{"n":"王永月","c":"255"},{"n":"韦清舰","c":"255"},{"n":"杨顺程","c":"257"},{"n":"韦金贝","c":"257"},{"n":"吴鹏烨","c":"257"},{"n":"覃国纯","c":"258"},{"n":"周俊宇","c":"258"},{"n":"龙靖松","c":"258"},{"n":"覃勇翔","c":"259"},{"n":"吴佳慷","c":"259"},{"n":"罗昌旭","c":"259"},{"n":"韦锦谆","c":"256"},{"n":"姚象昱","c":"256"},{"n":"韦宇浩","c":"256"}],"id":12},{"date":"11月24日","ampm":"上午","time":"08:30","grade":"初一","gender":"男","name":"实心球","phase":"预赛","raw":"实心球预赛","kind":"田赛","team":false,"entries":[{"n":"韦江德","c":"265"},{"n":"龙天福","c":"265"},{"n":"韦程睿","c":"265"},{"n":"韦佑祈","c":"262"},{"n":"覃鹏翔","c":"262"},{"n":"韦家宝","c":"262"},{"n":"韦承辰","c":"267"},{"n":"唐仲攀","c":"267"},{"n":"杨嘉睿","c":"267"},{"n":"陈铭朗","c":"264"},{"n":"郭浪橐","c":"264"},{"n":"覃仁添","c":"264"},{"n":"覃天業","c":"261"},{"n":"李曾銘","c":"261"},{"n":"覃增睿","c":"261"},{"n":"陈中骏","c":"266"},{"n":"李世豪","c":"266"},{"n":"覃佳","c":"266"},{"n":"周卫东","c":"263"},{"n":"覃元琪","c":"263"},{"n":"韦赵军","c":"263"}],"id":13},{"date":"11月24日","ampm":"上午","time":"08:30","grade":"初三","gender":"女","name":"跳高","phase":"决赛","raw":"跳高预决赛","kind":"田赛","team":false,"entries":[{"n":"覃城茜","c":"241"},{"n":"龙晓慧","c":"241"},{"n":"唐可佳","c":"241"},{"n":"覃钰涵","c":"242"},{"n":"韦雨祺","c":"242"},{"n":"覃金源","c":"242"},{"n":"周紫怡","c":"243"},{"n":"覃欣雅","c":"243"},{"n":"覃语欣","c":"244"},{"n":"陆虹林","c":"244"},{"n":"韦星宇","c":"244"},{"n":"冉思娴","c":"245"},{"n":"韦佳念","c":"245"},{"n":"覃湉轶","c":"245"},{"n":"朱智慧","c":"246"}],"id":14},{"date":"11月24日","ampm":"上午","time":"09:30","grade":"初三","gender":"男","name":"立定三级跳","phase":"预赛","raw":"立定三级跳预赛","kind":"田赛","team":false,"entries":[{"n":"覃仁科","c":"247"},{"n":"韦家林","c":"247"},{"n":"覃炎乐","c":"247"},{"n":"韦佳琪","c":"244"},{"n":"王振任","c":"244"},{"n":"陈俊同","c":"244"},{"n":"韦宇鹏","c":"243"},{"n":"覃黎好","c":"243"},{"n":"覃轩照","c":"243"},{"n":"刘宏博","c":"241"},{"n":"杨政颖","c":"241"},{"n":"王钰骋","c":"241"},{"n":"韦江宏","c":"245"},{"n":"陆红涛","c":"245"},{"n":"韦绍良","c":"246"},{"n":"覃溪","c":"246"},{"n":"罗新雷","c":"246"},{"n":"杨皓翔","c":"242"},{"n":"韦宇浩","c":"242"},{"n":"韦舒期","c":"242"}],"id":15},{"date":"11月24日","ampm":"上午","time":"09:30","grade":"初三","gender":"女","name":"实心球","phase":"预赛","raw":"实心球预赛","kind":"田赛","team":false,"entries":[{"n":"覃雪淞","c":"241"},{"n":"覃佳怡","c":"241"},{"n":"韦清萍","c":"241"},{"n":"覃孟江","c":"245"},{"n":"韦彦欣","c":"245"},{"n":"张容誓","c":"245"},{"n":"韦慧萱","c":"243"},{"n":"张诗语","c":"243"},{"n":"吕芳楠","c":"244"},{"n":"覃珍佳","c":"244"},{"n":"杨慧玲","c":"244"},{"n":"吴清雯","c":"247"},{"n":"覃小娟","c":"247"},{"n":"覃红媛","c":"246"},{"n":"龙凤群","c":"246"},{"n":"韦樱诗","c":"246"},{"n":"韦嘉琪","c":"242"},{"n":"何雨婷","c":"242"}],"id":16},{"date":"11月24日","ampm":"上午","time":"09:30","grade":"初一","gender":"女","name":"三级蛙跳","phase":"预赛","raw":"三级蛙跳预赛","kind":"田赛","team":false,"entries":[{"n":"林琪茹","c":"265"},{"n":"覃丹丹","c":"265"},{"n":"覃水晶","c":"265"},{"n":"覃钰鲜","c":"261"},{"n":"佘嘉玟","c":"261"},{"n":"覃铃瑄","c":"261"},{"n":"申嘉宁","c":"263"},{"n":"韦春森","c":"263"},{"n":"朱素娜","c":"263"},{"n":"吕春涵","c":"264"},{"n":"韦彩思","c":"264"},{"n":"覃雯鑫","c":"264"},{"n":"覃红盛","c":"262"},{"n":"蒙钰蝶","c":"262"},{"n":"覃子萌","c":"262"},{"n":"王月月","c":"266"},{"n":"莫雅菁","c":"266"},{"n":"韦素珍","c":"266"},{"n":"韦欣雅","c":"267"},{"n":"谢佳静","c":"267"},{"n":"韦佳妤","c":"267"}],"id":17},{"date":"11月24日","ampm":"上午","time":"09:50","grade":"初二","gender":"女","name":"立定三级跳","phase":"预赛","raw":"立定三级跳预赛","kind":"田赛","team":false,"entries":[{"n":"罗金铃","c":"251"},{"n":"龙羽碟","c":"251"},{"n":"韦铃宣","c":"253"},{"n":"韦嘉湲","c":"253"},{"n":"唐夏慧","c":"253"},{"n":"覃春钰","c":"252"},{"n":"覃薛梅","c":"252"},{"n":"王欣鑫","c":"252"},{"n":"田羽婷","c":"254"},{"n":"覃芳钰","c":"254"},{"n":"吴佳霖","c":"255"},{"n":"黄雅霜","c":"255"},{"n":"韦林佳","c":"255"},{"n":"韦先妙","c":"256"},{"n":"王梦媛","c":"256"},{"n":"陈思辰","c":"256"},{"n":"李星漫","c":"257"},{"n":"覃艳销","c":"257"},{"n":"覃晴","c":"257"},{"n":"韦佳嘉","c":"258"},{"n":"王婧棋","c":"258"},{"n":"覃柳萍","c":"258"},{"n":"杨真真","c":"259"},{"n":"陆杨洋","c":"259"},{"n":"吴佳佳","c":"259"}],"id":18},{"date":"11月24日","ampm":"上午","time":"10:30","grade":"初三","gender":"男","name":"实心球","phase":"预赛","raw":"实心球预赛","kind":"田赛","team":false,"entries":[{"n":"韦佳宁","c":"244"},{"n":"吴胜华","c":"244"},{"n":"陈育丰","c":"244"},{"n":"覃铭德","c":"242"},{"n":"韦益斌","c":"242"},{"n":"黄靖雄","c":"242"},{"n":"覃良榮","c":"247"},{"n":"张富雅","c":"247"},{"n":"张国林","c":"247"},{"n":"覃汉殷","c":"241"},{"n":"吴佳鑫","c":"241"},{"n":"覃德森","c":"241"},{"n":"何南涛","c":"245"},{"n":"刘孙诚","c":"245"},{"n":"刘明菠","c":"245"},{"n":"吴明禹","c":"246"},{"n":"韦嘉俊","c":"246"},{"n":"李枝建","c":"246"},{"n":"何义成","c":"243"},{"n":"李贤聪","c":"243"},{"n":"易廷峰","c":"243"}],"id":19},{"date":"11月24日","ampm":"上午","time":"10:30","grade":"初二","gender":"男","name":"立定三级跳","phase":"预赛","raw":"立定三级跳预赛","kind":"田赛","team":false,"entries":[{"n":"覃海竣","c":"251"},{"n":"韦鸿凯","c":"251"},{"n":"覃钟海","c":"251"},{"n":"韦浩宇","c":"253"},{"n":"韦金炫","c":"253"},{"n":"覃铭","c":"253"},{"n":"韦泰鸿","c":"259"},{"n":"覃鸿志","c":"259"},{"n":"李梓铭","c":"259"},{"n":"覃岳豪","c":"256"},{"n":"孔伟权","c":"256"},{"n":"韦国磊","c":"256"},{"n":"覃鸿日","c":"255"},{"n":"覃鸿泰","c":"255"},{"n":"龙项友","c":"255"},{"n":"覃国滔","c":"257"},{"n":"吴昌桂","c":"257"},{"n":"龙集庆","c":"257"},{"n":"石韦明","c":"258"},{"n":"覃增耀","c":"258"},{"n":"覃泳淇","c":"258"},{"n":"陆玺璟","c":"254"},{"n":"覃琮意","c":"254"},{"n":"韦烨涛","c":"254"},{"n":"覃忠铃","c":"252"},{"n":"覃良海","c":"252"},{"n":"蒙祖煊","c":"252"}],"id":20},{"date":"11月24日","ampm":"上午","time":"10:30","grade":"初一","gender":"男","name":"三级蛙跳","phase":"预赛","raw":"三级蛙跳预赛","kind":"田赛","team":false,"entries":[{"n":"覃仁佑","c":"261"},{"n":"张国浩","c":"262"},{"n":"韦炳宇","c":"263"},{"n":"李国萱","c":"263"},{"n":"覃博泉","c":"264"},{"n":"兰宬锋","c":"265"},{"n":"韦家淇","c":"264"},{"n":"唐仲苑","c":"265"},{"n":"符得峰","c":"266"},{"n":"韦佑庆","c":"261"},{"n":"韦明坤","c":"262"},{"n":"韦益佳","c":"263"},{"n":"韦炳瑞","c":"264"},{"n":"李思成","c":"265"},{"n":"刘恒铧","c":"266"},{"n":"杨艺朋","c":"266"},{"n":"韦智武","c":"267"},{"n":"岑文军","c":"267"},{"n":"覃天業","c":"261"},{"n":"杨琪玮","c":"262"},{"n":"韦佳君","c":"267"}],"id":21},{"date":"11月24日","ampm":"上午","time":"10:30","grade":"初二","gender":"女","name":"跳高","phase":"决赛","raw":"跳高预决赛","kind":"田赛","team":false,"entries":[{"n":"韦美秀","c":"258"},{"n":"覃筱喻","c":"258"},{"n":"韦晰晨","c":"258"},{"n":"陆雅琴","c":"253"},{"n":"覃思越","c":"253"},{"n":"黄慧婷","c":"253"},{"n":"覃梓涵","c":"252"},{"n":"龙玥媛","c":"252"},{"n":"韦欣怡","c":"252"},{"n":"韦海晨","c":"254"},{"n":"黄雅霜","c":"255"},{"n":"张欣悦","c":"255"},{"n":"吴佳霖","c":"255"},{"n":"韦莹慧","c":"256"},{"n":"覃嘉欣","c":"256"},{"n":"姜金秀","c":"256"},{"n":"罗银玲","c":"257"},{"n":"韦连翠","c":"257"},{"n":"覃佳瑶","c":"257"},{"n":"覃增妮","c":"251"},{"n":"韦仁荣","c":"251"},{"n":"覃诗懿","c":"251"}],"id":22},{"date":"11月24日","ampm":"下午","time":"14:30","grade":"初三","gender":"女","name":"800米","phase":"决赛","raw":"800米决赛","kind":"径赛","team":false,"entries":[{"n":"龙晓慧","c":"241"},{"n":"李沅芳","c":"241"},{"n":"李沅原","c":"241"},{"n":"韦伶蔚","c":"242"},{"n":"罗洪艳","c":"242"},{"n":"唐嘉缘","c":"242"},{"n":"韦依洁","c":"244"},{"n":"张云凤","c":"244"},{"n":"吴佳佳","c":"243"},{"n":"覃秋鱼","c":"243"},{"n":"韦佳怡","c":"243"},{"n":"陈俊雅","c":"245"},{"n":"覃礼缘","c":"245"},{"n":"冉玉莲","c":"246"},{"n":"冉冰冰","c":"246"},{"n":"莫影影","c":"246"},{"n":"周小由","c":"247"},{"n":"覃欣怡","c":"247"}],"id":23},{"date":"11月24日","ampm":"下午","time":"14:50","grade":"初二","gender":"女","name":"800米","phase":"决赛","raw":"800米决赛","kind":"径赛","team":false,"entries":[{"n":"韦秋","c":"251"},{"n":"韦玉珍","c":"251"},{"n":"梁梦琪","c":"251"},{"n":"覃丽雪","c":"253"},{"n":"莫近习","c":"253"},{"n":"蒙炎之","c":"253"},{"n":"韦炘蕊","c":"252"},{"n":"韦诗彤","c":"252"},{"n":"吴鑫","c":"252"},{"n":"田羽婷","c":"254"},{"n":"韦焱敏","c":"254"},{"n":"陆冠颖","c":"255"},{"n":"王红艳","c":"255"},{"n":"覃维","c":"255"},{"n":"韦顺美","c":"256"},{"n":"吕月鑫","c":"256"},{"n":"韦莹慧","c":"256"},{"n":"韦沙利","c":"257"},{"n":"覃佳瑶","c":"257"},{"n":"肖雨晨","c":"257"},{"n":"覃海越","c":"258"},{"n":"张珍珮","c":"258"},{"n":"段佳宏","c":"258"},{"n":"王雨诺","c":"259"}],"id":24},{"date":"11月24日","ampm":"下午","time":"15:10","grade":"初一","gender":"女","name":"800米","phase":"决赛","raw":"800米决赛","kind":"径赛","team":false,"entries":[{"n":"罗欣媛","c":"261"},{"n":"张雅欣","c":"261"},{"n":"韦湫煊","c":"261"},{"n":"覃楚钰","c":"262"},{"n":"韦美莲","c":"262"},{"n":"覃子萌","c":"262"},{"n":"周沛萱","c":"263"},{"n":"潘仪轩","c":"263"},{"n":"陆嘉怡","c":"266"},{"n":"覃佳颖","c":"266"},{"n":"韦佳亚","c":"267"},{"n":"韦佳妤","c":"267"},{"n":"覃夏萱","c":"267"}],"id":25},{"date":"11月24日","ampm":"下午","time":"15:30","grade":"初三","gender":"男","name":"1000米","phase":"决赛","raw":"1000米决赛","kind":"径赛","team":false,"entries":[{"n":"罗欣媛","c":"261"},{"n":"张雅欣","c":"261"},{"n":"韦湫煊","c":"261"},{"n":"覃楚钰","c":"262"},{"n":"韦美莲","c":"262"},{"n":"覃子萌","c":"262"},{"n":"陆嘉怡","c":"266"},{"n":"覃艳","c":"266"},{"n":"周沛萱","c":"263"},{"n":"潘仪轩","c":"263"},{"n":"韦泓镱","c":"263"},{"n":"韦艳娇","c":"264"},{"n":"覃咏琪","c":"264"},{"n":"姚秀林","c":"264"},{"n":"覃佳颖","c":"266"},{"n":"韦佳亚","c":"267"}],"id":26},{"date":"11月24日","ampm":"下午","time":"15:50","grade":"初二","gender":"男","name":"1000米","phase":"决赛","raw":"1000米决赛","kind":"径赛","team":false,"entries":[{"n":"韦润超","c":"257"},{"n":"韦佳员","c":"257"},{"n":"覃迪","c":"257"},{"n":"覃炜烨","c":"253"},{"n":"覃海斌","c":"253"},{"n":"韦其夆","c":"253"},{"n":"覃忠邦","c":"252"},{"n":"吕锦泉","c":"252"},{"n":"覃振展","c":"252"},{"n":"姚成朋","c":"251"},{"n":"覃启智","c":"251"},{"n":"谭雄元","c":"251"},{"n":"周佳辉","c":"255"},{"n":"韦柱瀚","c":"255"},{"n":"韦鸿杰","c":"255"},{"n":"姚象昱","c":"256"},{"n":"覃元炜","c":"256"},{"n":"韦清浩","c":"256"},{"n":"何政鑫","c":"254"},{"n":"韦佳劲","c":"254"},{"n":"龙祖熙","c":"254"},{"n":"覃程昱","c":"258"},{"n":"周俊宇","c":"258"},{"n":"韦俊鸿","c":"258"},{"n":"杨明竣","c":"259"},{"n":"赖浚铭","c":"259"},{"n":"何微微","c":"259"}],"id":27},{"date":"11月24日","ampm":"下午","time":"16:10","grade":"初一","gender":"男","name":"1000米","phase":"决赛","raw":"1000米决赛","kind":"径赛","team":false,"entries":[{"n":"易宣瑜","c":"261"},{"n":"覃孝博","c":"261"},{"n":"韦承宏","c":"261"},{"n":"韦云译","c":"262"},{"n":"韦明坤","c":"262"},{"n":"覃怡舜","c":"262"},{"n":"罗佳宝","c":"263"},{"n":"林睦倍","c":"263"},{"n":"董文学","c":"263"},{"n":"覃博泉","c":"264"},{"n":"韦明觐","c":"264"},{"n":"金城毅","c":"264"},{"n":"郭家豪","c":"265"},{"n":"罗新宇","c":"265"},{"n":"陆韦国","c":"265"},{"n":"覃尊敬","c":"266"},{"n":"覃忠炫","c":"266"},{"n":"王仕翔","c":"266"},{"n":"王振全","c":"267"},{"n":"熊世暄","c":"267"},{"n":"韦文镀","c":"267"}],"id":28},{"date":"11月24日","ampm":"下午","time":"16:30","grade":"初三","gender":"男","name":"4×200米接力","phase":"决赛","raw":"4×200米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"246"},{"n":"","c":"243"},{"n":"","c":"245"},{"n":"","c":"244"},{"n":"","c":"247"},{"n":"","c":"242"},{"n":"","c":"241"}],"id":29},{"date":"11月24日","ampm":"下午","time":"16:50","grade":"初二","gender":"男","name":"4×200米接力","phase":"决赛","raw":"4×200米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"258"},{"n":"","c":"251"},{"n":"","c":"254"},{"n":"","c":"255"},{"n":"","c":"252"},{"n":"","c":"253"},{"n":"","c":"259"},{"n":"","c":"256"},{"n":"","c":"257"}],"id":30},{"date":"11月24日","ampm":"下午","time":"17:10","grade":"初一","gender":"男","name":"4×200米接力","phase":"决赛","raw":"4×200米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"263"},{"n":"","c":"267"},{"n":"","c":"265"},{"n":"","c":"261"},{"n":"","c":"262"},{"n":"","c":"264"},{"n":"","c":"266"}],"id":31},{"date":"11月24日","ampm":"下午","time":"14:30","grade":"初一","gender":"女","name":"立定三级跳","phase":"预赛","raw":"立定三级跳预赛","kind":"田赛","team":false,"entries":[{"n":"覃钰鲜","c":"261"},{"n":"陈晨曦","c":"261"},{"n":"韦湫煊","c":"261"},{"n":"陆诗琪","c":"262"},{"n":"吴春虹","c":"262"},{"n":"韦芷微","c":"262"},{"n":"覃思莹","c":"267"},{"n":"谢佳静","c":"267"},{"n":"杨丽萍","c":"267"},{"n":"韦诗语","c":"263"},{"n":"覃心蕊","c":"263"},{"n":"李欣颖","c":"263"},{"n":"罗玉梦","c":"265"},{"n":"覃淑诊","c":"265"},{"n":"林美桦","c":"265"},{"n":"覃利媛","c":"266"},{"n":"韦佳莲","c":"266"},{"n":"莫雅菁","c":"266"},{"n":"谭巧","c":"264"},{"n":"吴佳思","c":"264"},{"n":"韦媛丹","c":"264"}],"id":32},{"date":"11月24日","ampm":"下午","time":"14:30","grade":"初二","gender":"女","name":"实心球","phase":"预赛","raw":"实心球预赛","kind":"田赛","team":false,"entries":[{"n":"覃婉清","c":"251"},{"n":"吴艳萍","c":"251"},{"n":"韦玉珍","c":"251"},{"n":"申念文","c":"253"},{"n":"覃丽静","c":"253"},{"n":"韦铃宣","c":"253"},{"n":"覃文娟","c":"252"},{"n":"林宝宝","c":"252"},{"n":"韦美灵","c":"252"},{"n":"田羽婷","c":"254"},{"n":"韦焱敏","c":"254"},{"n":"黄佳好","c":"254"},{"n":"覃妮妮","c":"255"},{"n":"韦思棉","c":"255"},{"n":"覃唯玲","c":"255"},{"n":"韦云轩","c":"257"},{"n":"覃雪柔","c":"257"},{"n":"罗佩真","c":"257"},{"n":"韦月青","c":"258"},{"n":"覃莹楸","c":"258"},{"n":"杨晓萱","c":"258"},{"n":"冉柳琴","c":"259"},{"n":"黄晨晨","c":"259"},{"n":"蒙美珍","c":"259"},{"n":"吴月芳","c":"256"},{"n":"吕芳煊","c":"256"},{"n":"陆柳嘉","c":"256"}],"id":33},{"date":"11月24日","ampm":"下午","time":"14:30","grade":"初三","gender":"女","name":"三级蛙跳","phase":"预赛","raw":"三级蛙跳预赛","kind":"田赛","team":false,"entries":[{"n":"覃城茜","c":"241"},{"n":"龙镜伊","c":"241"},{"n":"龙晓智","c":"241"},{"n":"刘芊惠","c":"242"},{"n":"覃金源","c":"242"},{"n":"韦惠文","c":"242"},{"n":"韦坊静","c":"243"},{"n":"韦雪","c":"243"},{"n":"韦佳芬","c":"243"},{"n":"姚秀丽","c":"244"},{"n":"李浚玉","c":"244"},{"n":"覃雨欣","c":"244"},{"n":"冉玉莲","c":"246"},{"n":"蒙春艳","c":"246"},{"n":"吴唯玮","c":"246"},{"n":"覃小娟","c":"247"},{"n":"覃萩圆","c":"247"}],"id":34},{"date":"11月24日","ampm":"下午","time":"14:30","grade":"初一","gender":"女","name":"跳高","phase":"决赛","raw":"跳高预决赛","kind":"田赛","team":false,"entries":[{"n":"张梓琪","c":"261"},{"n":"覃思梦","c":"261"},{"n":"韦佳妞","c":"261"},{"n":"覃槿溪","c":"262"},{"n":"韦雨荷","c":"262"},{"n":"韦欣彤","c":"262"},{"n":"覃愉鲜","c":"263"},{"n":"韦秋伊","c":"263"},{"n":"韦春森","c":"263"},{"n":"谭巧","c":"264"},{"n":"覃雨彤","c":"264"},{"n":"韦婷婷","c":"264"},{"n":"韦钰馨","c":"265"},{"n":"韦舒雅","c":"265"},{"n":"韦思甜","c":"265"},{"n":"陆菁叶","c":"266"},{"n":"陆雨轩","c":"266"},{"n":"吴小婷","c":"266"},{"n":"覃钰璇","c":"267"},{"n":"韦欣雅","c":"267"},{"n":"杨丽萍","c":"267"}],"id":35},{"date":"11月24日","ampm":"下午","time":"15:30","grade":"初三","gender":"男","name":"三级蛙跳","phase":"预赛","raw":"三级蛙跳预赛","kind":"田赛","team":false,"entries":[{"n":"覃嘉煜","c":"245"},{"n":"吕鸿涛","c":"245"},{"n":"张渝浩","c":"245"},{"n":"韦宇浩","c":"242"},{"n":"韦舒期","c":"242"},{"n":"杨皓翔","c":"242"},{"n":"韦瀚琨","c":"243"},{"n":"梁祖豪","c":"243"},{"n":"韦佳志","c":"243"},{"n":"王钰骋","c":"241"},{"n":"刘宏博","c":"241"},{"n":"杨政颖","c":"241"},{"n":"韦家林","c":"247"},{"n":"覃炎乐","c":"247"},{"n":"吴再镒","c":"247"},{"n":"粟子茗","c":"246"},{"n":"覃溪","c":"246"},{"n":"罗新雷","c":"246"},{"n":"韦佳琪","c":"244"},{"n":"陈俊同","c":"244"},{"n":"王振任","c":"244"}],"id":36},{"date":"11月24日","ampm":"下午","time":"15:30","grade":"初二","gender":"男","name":"实心球","phase":"预赛","raw":"实心球预赛","kind":"田赛","team":false,"entries":[{"n":"韦泰鸿","c":"259"},{"n":"赖浚铭","c":"259"},{"n":"李家诚","c":"259"},{"n":"韦茗洋","c":"253"},{"n":"覃天立","c":"253"},{"n":"韦建滔","c":"253"},{"n":"韦仙万","c":"252"},{"n":"韦尚恩","c":"252"},{"n":"梁洪瑞","c":"252"},{"n":"覃志文","c":"258"},{"n":"覃增耀","c":"258"},{"n":"韦文泰","c":"258"},{"n":"王炳富","c":"255"},{"n":"韦旺彤","c":"255"},{"n":"张朝榕","c":"255"},{"n":"郭季昆","c":"256"},{"n":"陆智豪","c":"256"},{"n":"覃俊铭","c":"256"},{"n":"杨顺程","c":"257"},{"n":"袁煊承","c":"257"},{"n":"兰天鑫","c":"257"},{"n":"杨德铭","c":"254"},{"n":"韦鸿煊","c":"254"},{"n":"董文锐","c":"254"},{"n":"刘茗名","c":"251"},{"n":"唐茗轩","c":"251"},{"n":"韦嘉佑","c":"251"}],"id":37},{"date":"11月24日","ampm":"下午","time":"15:30","grade":"初一","gender":"男","name":"立定三级跳","phase":"预赛","raw":"立定三级跳预赛","kind":"田赛","team":false,"entries":[{"n":"龙开业","c":"265"},{"n":"罗新宇","c":"265"},{"n":"郭家豪","c":"265"},{"n":"陆孟豪","c":"264"},{"n":"韦慧杰","c":"264"},{"n":"韦元洲","c":"264"},{"n":"韦炳宇","c":"263"},{"n":"罗海旺","c":"263"},{"n":"韦文杰","c":"263"},{"n":"符得峰","c":"266"},{"n":"杨艺朋","c":"266"},{"n":"覃海伟","c":"266"},{"n":"覃宣翔","c":"261"},{"n":"覃海锐","c":"261"},{"n":"冷振威","c":"261"},{"n":"余自德","c":"262"},{"n":"覃良燈","c":"262"},{"n":"覃建琀","c":"262"},{"n":"覃鸿茗","c":"267"},{"n":"冷宗成","c":"267"},{"n":"莫泓毅","c":"267"}],"id":38},{"date":"11月24日","ampm":"下午","time":"16:30","grade":"初三","gender":"女","name":"立定三级跳","phase":"预赛","raw":"立定三级跳预赛","kind":"田赛","team":false,"entries":[{"n":"唐可佳","c":"241"},{"n":"覃佳怡","c":"241"},{"n":"韦星婉","c":"241"},{"n":"韦人菲","c":"242"},{"n":"覃欣慧","c":"242"},{"n":"韦坊静","c":"243"},{"n":"韦佳芬","c":"243"},{"n":"覃韦潸","c":"243"},{"n":"蒙春艳","c":"246"},{"n":"韦星宇","c":"244"},{"n":"覃丰秋","c":"244"},{"n":"覃雨欣","c":"244"},{"n":"韦柳婷","c":"245"},{"n":"韦湘妮","c":"245"},{"n":"覃小娟","c":"247"},{"n":"覃萩圆","c":"247"}],"id":39},{"date":"11月24日","ampm":"下午","time":"16:30","grade":"初二","gender":"女","name":"三级蛙跳","phase":"预赛","raw":"三级蛙跳预赛","kind":"田赛","team":false,"entries":[{"n":"韦仁荣","c":"251"},{"n":"龙羽碟","c":"251"},{"n":"唐夏慧","c":"253"},{"n":"覃思越","c":"253"},{"n":"韦思佩","c":"253"},{"n":"韦诗彤","c":"252"},{"n":"韦炘蕊","c":"252"},{"n":"韦雨萱","c":"252"},{"n":"韦景怡","c":"254"},{"n":"易欣妍","c":"254"},{"n":"覃妮妮","c":"255"},{"n":"覃沁岚","c":"255"},{"n":"王红艳","c":"255"},{"n":"李星漫","c":"257"},{"n":"覃艳销","c":"257"},{"n":"肖雨晨","c":"257"},{"n":"覃莹楸","c":"258"},{"n":"覃柳萍","c":"258"},{"n":"韦佳嘉","c":"258"},{"n":"彭恬恬","c":"259"},{"n":"冉柳琴","c":"259"},{"n":"黄晨晨","c":"259"},{"n":"王梦媛","c":"256"},{"n":"韦先妙","c":"256"},{"n":"陈思辰","c":"256"}],"id":40},{"date":"11月24日","ampm":"下午","time":"16:30","grade":"初一","gender":"女","name":"实心球","phase":"预赛","raw":"实心球预赛","kind":"田赛","team":false,"entries":[{"n":"覃玲侦","c":"263"},{"n":"熊艺雅","c":"263"},{"n":"申嘉宁","c":"263"},{"n":"苏幕蓉","c":"262"},{"n":"覃佳琪","c":"262"},{"n":"张铁新","c":"262"},{"n":"罗玉梦","c":"265"},{"n":"覃淑诊","c":"265"},{"n":"韦泳依","c":"265"},{"n":"吴佳思","c":"264"},{"n":"韦伶穗","c":"264"},{"n":"覃咏琪","c":"264"},{"n":"覃洪缘","c":"267"},{"n":"覃馨锐","c":"267"},{"n":"杨丽萍","c":"267"},{"n":"陆菁叶","c":"266"},{"n":"唐海笑","c":"266"},{"n":"覃佳颖","c":"266"},{"n":"吕雨曈","c":"261"},{"n":"覃美玲","c":"261"},{"n":"陆家谊","c":"261"}],"id":41},{"date":"11月24日","ampm":"下午","time":"16:30","grade":"初一","gender":"男","name":"跳高","phase":"决赛","raw":"跳高预决赛","kind":"田赛","team":false,"entries":[{"n":"覃宣翔","c":"261"},{"n":"韦龙宇","c":"261"},{"n":"覃俊涵","c":"261"},{"n":"覃鹏翔","c":"262"},{"n":"吕宇轩","c":"262"},{"n":"韦宇昊","c":"262"},{"n":"梁庭彬","c":"263"},{"n":"覃锦杰","c":"263"},{"n":"韦咏滔","c":"263"},{"n":"唐啟棪","c":"264"},{"n":"覃敏佳","c":"264"},{"n":"韦明觐","c":"264"},{"n":"侯俊豪","c":"265"},{"n":"韦鑫智","c":"265"},{"n":"黄福涵","c":"265"},{"n":"韦佳弟","c":"266"},{"n":"覃海伟","c":"266"},{"n":"李朝桂","c":"266"},{"n":"覃泓茗","c":"267"},{"n":"岑文军","c":"267"},{"n":"韦一帆","c":"267"}],"id":42},{"date":"11月25日","ampm":"上午","time":"08:30","grade":"初一","gender":"女","name":"100米","phase":"决赛","raw":"100米决赛","kind":"径赛","team":false,"entries":[{"n":"张梓琪","c":"261"},{"n":"覃槿溪","c":"262"},{"n":"韦诗语","c":"263"},{"n":"韦雅芙","c":"264"},{"n":"覃如如","c":"265"},{"n":"叶梓慧","c":"266"},{"n":"覃馨锐","c":"267"},{"n":"陈晨曦","c":"261"},{"n":"韦美莲","c":"262"},{"n":"莫欣锐","c":"263"},{"n":"韦馨淳","c":"264"},{"n":"吴媛媛","c":"265"},{"n":"陆冠龄","c":"266"},{"n":"韦叶倩","c":"267"},{"n":"张雅欣","c":"261"},{"n":"周海雪","c":"263"},{"n":"韦石婷","c":"264"},{"n":"覃楚钰","c":"262"},{"n":"覃茜茜","c":"265"},{"n":"覃龙梢","c":"266"},{"n":"韦青秀","c":"267"}],"id":43},{"date":"11月25日","ampm":"上午","time":"08:45","grade":"初二","gender":"女","name":"100米","phase":"决赛","raw":"100米决赛","kind":"径赛","team":false,"entries":[{"n":"陈明慧","c":"251"},{"n":"覃丽烨","c":"253"},{"n":"邓佳青","c":"252"},{"n":"胡芷瑜","c":"254"},{"n":"覃钰潪","c":"255"},{"n":"覃芯钰","c":"256"},{"n":"韦连翠","c":"257"},{"n":"韦晴朗","c":"259"},{"n":"李星漫","c":"257"},{"n":"韦晰晨","c":"258"},{"n":"覃秋瑾","c":"255"},{"n":"韦炘蕊","c":"252"},{"n":"罗金铃","c":"251"},{"n":"覃佩浠","c":"253"},{"n":"覃桢瑕","c":"252"},{"n":"韦莲凤","c":"254"},{"n":"易海莹","c":"255"},{"n":"韦月青","c":"258"},{"n":"覃晓悦","c":"257"},{"n":"覃瑄韵","c":"251"},{"n":"王欣月","c":"259"},{"n":"覃海越","c":"258"},{"n":"黄慧婷","c":"253"}],"id":44},{"date":"11月25日","ampm":"上午","time":"09:00","grade":"初三","gender":"女","name":"100米","phase":"决赛","raw":"100米决赛","kind":"径赛","team":false,"entries":[{"n":"韦艺鸿","c":"241"},{"n":"覃钰涵","c":"242"},{"n":"韦樱诗","c":"246"},{"n":"覃佳慧","c":"244"},{"n":"覃甜甜","c":"245"},{"n":"韦怡霏","c":"246"},{"n":"覃雨馨","c":"247"},{"n":"龙晓智","c":"241"},{"n":"韦雨祺","c":"242"},{"n":"韦金宏","c":"244"},{"n":"张容誓","c":"245"},{"n":"吴佳琪","c":"246"},{"n":"韦思宇","c":"243"},{"n":"韦春蕊","c":"247"},{"n":"段佳利","c":"241"},{"n":"覃欣慧","c":"242"},{"n":"韦依洁","c":"244"},{"n":"韦佳念","c":"245"}],"id":45},{"date":"11月25日","ampm":"上午","time":"09:15","grade":"初一","gender":"男","name":"100米","phase":"决赛","raw":"100米决赛","kind":"径赛","team":false,"entries":[{"n":"杨宸宁","c":"261"},{"n":"张国浩","c":"262"},{"n":"覃羿翔","c":"263"},{"n":"覃子轩","c":"264"},{"n":"韦程睿","c":"265"},{"n":"王幸翔","c":"266"},{"n":"覃琦瑄","c":"267"},{"n":"韦勇益","c":"261"},{"n":"吕宇轩","c":"262"},{"n":"林睦倍","c":"263"},{"n":"陈铭朗","c":"264"},{"n":"韦佳宏","c":"265"},{"n":"覃德恩","c":"266"},{"n":"韦宏俊","c":"267"},{"n":"韦承宏","c":"261"},{"n":"罗海旺","c":"263"},{"n":"韦炳瑞","c":"264"},{"n":"韦叶楠","c":"262"},{"n":"韦俊鹏","c":"265"},{"n":"王仕翔","c":"266"},{"n":"韦文镀","c":"267"}],"id":46},{"date":"11月25日","ampm":"上午","time":"09:30","grade":"初二","gender":"男","name":"100米","phase":"决赛","raw":"100米决赛","kind":"径赛","team":false,"entries":[{"n":"覃良钰","c":"251"},{"n":"覃炜烨","c":"253"},{"n":"覃忠镑","c":"252"},{"n":"吴章伟","c":"255"},{"n":"郭季昆","c":"256"},{"n":"袁煊承","c":"257"},{"n":"覃鹏革","c":"258"},{"n":"杨明竣","c":"259"},{"n":"刘茗名","c":"251"},{"n":"卢海优","c":"253"},{"n":"吕锦泉","c":"252"},{"n":"覃福晨","c":"254"},{"n":"陈长镪","c":"255"},{"n":"陆智豪","c":"256"},{"n":"韦金贝","c":"257"},{"n":"石韦明","c":"258"},{"n":"周钟涵","c":"259"},{"n":"颜永赫","c":"251"},{"n":"龙靖松","c":"258"},{"n":"韦增懿","c":"255"},{"n":"韦泽轩","c":"256"},{"n":"覃文保","c":"257"},{"n":"覃路铭","c":"253"},{"n":"郭代轩","c":"259"}],"id":47},{"date":"11月25日","ampm":"上午","time":"09:45","grade":"初三","gender":"男","name":"100米","phase":"决赛","raw":"100米决赛","kind":"径赛","team":false,"entries":[{"n":"龙泽润","c":"241"},{"n":"邓咏涛","c":"242"},{"n":"黄祖楠","c":"243"},{"n":"郭庭华","c":"244"},{"n":"覃嘉煜","c":"245"},{"n":"韦均濠","c":"246"},{"n":"韦明昊","c":"247"},{"n":"熊袭霖","c":"246"},{"n":"覃福朝","c":"241"},{"n":"韦益斌","c":"242"},{"n":"韩忠卫","c":"243"},{"n":"罗再宁","c":"244"},{"n":"覃宏辉","c":"245"},{"n":"韦宏玮","c":"246"},{"n":"吴再镒","c":"247"},{"n":"覃嘉年","c":"241"},{"n":"刘子澄","c":"242"},{"n":"李贤聪","c":"243"},{"n":"韦克甜","c":"244"}],"id":48},{"date":"11月25日","ampm":"上午","time":"10:00","grade":"初一","gender":"女","name":"200米","phase":"决赛","raw":"200米决赛","kind":"径赛","team":false,"entries":[{"n":"韦佳妞","c":"261"},{"n":"覃芯霞","c":"262"},{"n":"朱素娜","c":"263"},{"n":"覃雅姿","c":"264"},{"n":"林琪茹","c":"264"},{"n":"王月月","c":"266"},{"n":"覃钰璇","c":"267"},{"n":"覃钰鲜","c":"261"},{"n":"陆晓蓓","c":"262"},{"n":"韦诗语","c":"263"},{"n":"韦馨淳","c":"264"},{"n":"覃丹丹","c":"265"},{"n":"陆冠龄","c":"266"},{"n":"覃钰凤","c":"267"},{"n":"佘嘉玟","c":"261"},{"n":"韦雨荷","c":"262"},{"n":"韦泓镱","c":"263"},{"n":"韦石婷","c":"264"},{"n":"韦佳馨","c":"265"},{"n":"覃龙梢","c":"266"},{"n":"杨梓涵","c":"267"}],"id":49},{"date":"11月25日","ampm":"上午","time":"10:15","grade":"初二","gender":"女","name":"200米","phase":"决赛","raw":"200米决赛","kind":"径赛","team":false,"entries":[{"n":"何雅涵","c":"259"},{"n":"韦璘丹","c":"258"},{"n":"吴慧琳","c":"257"},{"n":"覃钰潪","c":"255"},{"n":"覃芯钰","c":"256"},{"n":"韦雨萱","c":"252"},{"n":"梁馨心","c":"253"},{"n":"陈明慧","c":"251"},{"n":"郭禹彤","c":"259"},{"n":"韦雨璇","c":"258"},{"n":"覃玉桦","c":"257"},{"n":"覃语新","c":"256"},{"n":"覃秋瑾","c":"255"},{"n":"罗钰姗","c":"252"},{"n":"韦思佩","c":"253"},{"n":"覃増妮","c":"251"},{"n":"覃春岚","c":"251"},{"n":"覃晶瑩","c":"259"},{"n":"韦晰晨","c":"258"},{"n":"何梦玲","c":"255"},{"n":"覃春月","c":"256"},{"n":"周柳姗","c":"252"}],"id":50},{"date":"11月25日","ampm":"上午","time":"10:30","grade":"初三","gender":"女","name":"200米","phase":"决赛","raw":"200米决赛","kind":"径赛","team":false,"entries":[{"n":"韦艺鸿","c":"241"},{"n":"侯慧颖","c":"242"},{"n":"覃佳慧","c":"244"},{"n":"覃萩圆","c":"247"},{"n":"庞维盈","c":"245"},{"n":"覃雨馨","c":"247"},{"n":"龙凤群","c":"246"},{"n":"段佳利","c":"241"},{"n":"覃钰涵","c":"242"},{"n":"韦金宏","c":"244"},{"n":"朱智慧","c":"246"},{"n":"覃婷嫣","c":"241"},{"n":"韦思宇","c":"243"},{"n":"韦欣蕊","c":"244"},{"n":"吴唯玮","c":"246"}],"id":51},{"date":"11月25日","ampm":"上午","time":"10:45","grade":"初一","gender":"男","name":"200米","phase":"决赛","raw":"200米决赛","kind":"径赛","team":false,"entries":[{"n":"王凯迪","c":"261"},{"n":"韦叶楠","c":"262"},{"n":"罗佳宝","c":"263"},{"n":"覃舒翊","c":"264"},{"n":"龙开业","c":"265"},{"n":"覃忠炫","c":"266"},{"n":"覃琦瑄","c":"267"},{"n":"韦龙宇","c":"261"},{"n":"覃良燈","c":"262"},{"n":"梁庭彬","c":"263"},{"n":"唐啟棪","c":"264"},{"n":"韦智航","c":"265"},{"n":"龙昌桀","c":"266"},{"n":"龙学锋","c":"267"},{"n":"张洪珲","c":"261"},{"n":"覃怡舜","c":"262"},{"n":"覃红睿","c":"263"},{"n":"韦炳瑞","c":"264"},{"n":"兰宬锋","c":"265"},{"n":"王幸翔","c":"266"},{"n":"覃华达","c":"267"}],"id":52},{"date":"11月25日","ampm":"上午","time":"11:00","grade":"初二","gender":"男","name":"200米","phase":"决赛","raw":"200米决赛","kind":"径赛","team":false,"entries":[{"n":"周钟涵","c":"259"},{"n":"韦文泰","c":"258"},{"n":"韦浩宇","c":"256"},{"n":"韦顺隆","c":"257"},{"n":"覃洪煊","c":"255"},{"n":"韦佳劲","c":"254"},{"n":"周盟勋","c":"252"},{"n":"卢海优","c":"253"},{"n":"覃广灿","c":"251"},{"n":"王幸圹","c":"259"},{"n":"覃鹏革","c":"258"},{"n":"吴昌桂","c":"257"},{"n":"邓政来","c":"256"},{"n":"韦增懿","c":"255"},{"n":"申育侨","c":"252"},{"n":"杨胡兴","c":"253"},{"n":"颜永赫","c":"251"},{"n":"覃忠亮","c":"259"},{"n":"卢煌强","c":"257"},{"n":"覃海竣","c":"251"},{"n":"韦柱瀚","c":"255"},{"n":"韦宇森","c":"256"},{"n":"覃忠镑","c":"252"}],"id":53},{"date":"11月25日","ampm":"上午","time":"11:15","grade":"初三","gender":"男","name":"200米","phase":"决赛","raw":"200米决赛","kind":"径赛","team":false,"entries":[{"n":"龙泽润","c":"241"},{"n":"刘子澄","c":"242"},{"n":"龚家宏","c":"246"},{"n":"覃振豪","c":"244"},{"n":"覃嘉煜","c":"245"},{"n":"符志磊","c":"246"},{"n":"陆杰庚","c":"247"},{"n":"覃宏辉","c":"245"}],"id":54},{"date":"11月25日","ampm":"上午","time":"08:30","grade":"初三","gender":"男","name":"立定三级跳","phase":"决赛","raw":"立定三级跳决赛","kind":"田赛","team":false,"entries":[{"n":"覃仁科","c":"247"},{"n":"韦家林","c":"247"},{"n":"覃炎乐","c":"247"},{"n":"韦佳琪","c":"244"},{"n":"王振任","c":"244"},{"n":"陈俊同","c":"244"},{"n":"韦宇鹏","c":"243"},{"n":"覃黎好","c":"243"},{"n":"覃轩照","c":"243"},{"n":"刘宏博","c":"241"},{"n":"杨政颖","c":"241"},{"n":"王钰骋","c":"241"},{"n":"韦江宏","c":"245"},{"n":"陆红涛","c":"245"},{"n":"韦绍良","c":"246"},{"n":"覃溪","c":"246"},{"n":"罗新雷","c":"246"},{"n":"杨皓翔","c":"242"},{"n":"韦宇浩","c":"242"},{"n":"韦舒期","c":"242"}],"id":55},{"date":"11月25日","ampm":"上午","time":"08:30","grade":"初二","gender":"男","name":"三级蛙跳","phase":"决赛","raw":"三级蛙跳决赛","kind":"田赛","team":false,"entries":[{"n":"覃良钰","c":"251"},{"n":"谭建钰","c":"251"},{"n":"郭万稳","c":"253"},{"n":"陆杰新","c":"253"},{"n":"韦金炫","c":"253"},{"n":"陆麒安","c":"252"},{"n":"李羽轩","c":"252"},{"n":"陆文浩","c":"252"},{"n":"韦佳劲","c":"254"},{"n":"覃靖鎝","c":"254"},{"n":"韦文博","c":"254"},{"n":"龙项友","c":"255"},{"n":"王永月","c":"255"},{"n":"韦清舰","c":"255"},{"n":"杨顺程","c":"257"},{"n":"韦金贝","c":"257"},{"n":"吴鹏烨","c":"257"},{"n":"覃国纯","c":"258"},{"n":"周俊宇","c":"258"},{"n":"龙靖松","c":"258"},{"n":"覃勇翔","c":"259"},{"n":"吴佳慷","c":"259"},{"n":"罗昌旭","c":"259"},{"n":"韦锦谆","c":"256"},{"n":"姚象昱","c":"256"},{"n":"韦宇浩","c":"256"}],"id":56},{"date":"11月25日","ampm":"上午","time":"08:30","grade":"初一","gender":"男","name":"实心球","phase":"决赛","raw":"实心球决赛","kind":"田赛","team":false,"entries":[{"n":"韦江德","c":"265"},{"n":"龙天福","c":"265"},{"n":"韦程睿","c":"265"},{"n":"韦佑祈","c":"262"},{"n":"覃鹏翔","c":"262"},{"n":"韦家宝","c":"262"},{"n":"韦承辰","c":"267"},{"n":"唐仲攀","c":"267"},{"n":"杨嘉睿","c":"267"},{"n":"陈铭朗","c":"264"},{"n":"郭浪橐","c":"264"},{"n":"覃仁添","c":"264"},{"n":"覃天業","c":"261"},{"n":"李曾銘","c":"261"},{"n":"覃增睿","c":"261"},{"n":"陈中骏","c":"266"},{"n":"李世豪","c":"266"},{"n":"覃佳","c":"266"},{"n":"周卫东","c":"263"},{"n":"覃元琪","c":"263"},{"n":"韦赵军","c":"263"}],"id":57},{"date":"11月25日","ampm":"上午","time":"08:30","grade":"初三","gender":"男","name":"跳高","phase":"决赛","raw":"跳高预决赛","kind":"田赛","team":false,"entries":[{"n":"覃汉殷","c":"241"},{"n":"吴佳鑫","c":"241"},{"n":"龙泽润","c":"241"},{"n":"唐子卿","c":"242"},{"n":"蓝钰杰","c":"242"},{"n":"田语晨","c":"242"},{"n":"何义成","c":"243"},{"n":"李贤聪","c":"243"},{"n":"易廷峰","c":"243"},{"n":"吴胜华","c":"244"},{"n":"陈高","c":"244"},{"n":"陈育丰","c":"244"},{"n":"吕鸿涛","c":"245"},{"n":"罗麒麟","c":"245"},{"n":"韦绍良","c":"246"},{"n":"熊袭霖","c":"246"},{"n":"覃仁科","c":"247"},{"n":"韦政延","c":"247"}],"id":58},{"date":"11月25日","ampm":"上午","time":"09:30","grade":"初三","gender":"女","name":"实心球","phase":"决赛","raw":"实心球决赛","kind":"田赛","team":false,"entries":[{"n":"覃雪淞","c":"241"},{"n":"覃佳怡","c":"241"},{"n":"韦清萍","c":"241"},{"n":"覃孟江","c":"245"},{"n":"韦彦欣","c":"245"},{"n":"张容誓","c":"245"},{"n":"韦慧萱","c":"243"},{"n":"张诗语","c":"243"},{"n":"吕芳楠","c":"244"},{"n":"覃珍佳","c":"244"},{"n":"杨慧玲","c":"244"},{"n":"吴清雯","c":"247"},{"n":"覃小娟","c":"247"},{"n":"覃红媛","c":"246"},{"n":"龙凤群","c":"246"},{"n":"韦樱诗","c":"246"},{"n":"韦嘉琪","c":"242"},{"n":"何雨婷","c":"242"}],"id":59},{"date":"11月25日","ampm":"上午","time":"09:30","grade":"初二","gender":"女","name":"立定三级跳","phase":"决赛","raw":"立定三级跳决赛","kind":"田赛","team":false,"entries":[{"n":"罗金铃","c":"251"},{"n":"龙羽碟","c":"251"},{"n":"韦铃宣","c":"253"},{"n":"韦嘉湲","c":"253"},{"n":"唐夏慧","c":"253"},{"n":"覃春钰","c":"252"},{"n":"覃薛梅","c":"252"},{"n":"王欣鑫","c":"252"},{"n":"田羽婷","c":"254"},{"n":"覃芳钰","c":"254"},{"n":"吴佳霖","c":"255"},{"n":"黄雅霜","c":"255"},{"n":"韦林佳","c":"255"},{"n":"韦先妙","c":"256"},{"n":"王梦媛","c":"256"},{"n":"陈思辰","c":"256"},{"n":"李星漫","c":"257"},{"n":"覃艳销","c":"257"},{"n":"覃晴","c":"257"},{"n":"韦佳嘉","c":"258"},{"n":"王婧棋","c":"258"},{"n":"覃柳萍","c":"258"},{"n":"杨真真","c":"259"},{"n":"陆杨洋","c":"259"},{"n":"吴佳佳","c":"259"}],"id":60},{"date":"11月25日","ampm":"上午","time":"09:30","grade":"初一","gender":"女","name":"三级蛙跳","phase":"决赛","raw":"三级蛙跳决赛","kind":"田赛","team":false,"entries":[{"n":"林琪茹","c":"265"},{"n":"覃丹丹","c":"265"},{"n":"覃水晶","c":"265"},{"n":"覃钰鲜","c":"261"},{"n":"佘嘉玟","c":"261"},{"n":"覃铃瑄","c":"261"},{"n":"申嘉宁","c":"263"},{"n":"韦春森","c":"263"},{"n":"朱素娜","c":"263"},{"n":"吕春涵","c":"264"},{"n":"韦彩思","c":"264"},{"n":"覃雯鑫","c":"264"},{"n":"覃红盛","c":"262"},{"n":"蒙钰蝶","c":"262"},{"n":"覃子萌","c":"262"},{"n":"王月月","c":"266"},{"n":"莫雅菁","c":"266"},{"n":"韦素珍","c":"266"},{"n":"韦欣雅","c":"267"},{"n":"谢佳静","c":"267"},{"n":"韦佳妤","c":"267"}],"id":61},{"date":"11月25日","ampm":"上午","time":"10:30","grade":"初一","gender":"女","name":"立定三级跳","phase":"决赛","raw":"立定三级跳决赛","kind":"田赛","team":false,"entries":[{"n":"覃钰鲜","c":"261"},{"n":"陈晨曦","c":"261"},{"n":"韦湫煊","c":"261"},{"n":"陆诗琪","c":"262"},{"n":"吴春虹","c":"262"},{"n":"韦芷微","c":"262"},{"n":"覃思莹","c":"267"},{"n":"谢佳静","c":"267"},{"n":"杨丽萍","c":"267"},{"n":"韦诗语","c":"263"},{"n":"覃心蕊","c":"263"},{"n":"李欣颖","c":"263"},{"n":"罗玉梦","c":"265"},{"n":"覃淑诊","c":"265"},{"n":"林美桦","c":"265"},{"n":"覃利媛","c":"266"},{"n":"韦佳莲","c":"266"},{"n":"莫雅菁","c":"266"},{"n":"谭巧","c":"264"},{"n":"吴佳思","c":"264"},{"n":"韦媛丹","c":"264"}],"id":62},{"date":"11月25日","ampm":"上午","time":"10:30","grade":"初二","gender":"女","name":"实心球","phase":"决赛","raw":"实心球决赛","kind":"田赛","team":false,"entries":[{"n":"覃婉清","c":"251"},{"n":"吴艳萍","c":"251"},{"n":"韦玉珍","c":"251"},{"n":"申念文","c":"253"},{"n":"覃丽静","c":"253"},{"n":"韦铃宣","c":"253"},{"n":"覃文娟","c":"252"},{"n":"林宝宝","c":"252"},{"n":"韦美灵","c":"252"},{"n":"田羽婷","c":"254"},{"n":"韦焱敏","c":"254"},{"n":"黄佳好","c":"254"},{"n":"覃妮妮","c":"255"},{"n":"韦思棉","c":"255"},{"n":"覃唯玲","c":"255"},{"n":"韦云轩","c":"257"},{"n":"覃雪柔","c":"257"},{"n":"罗佩真","c":"257"},{"n":"韦月青","c":"258"},{"n":"覃莹楸","c":"258"},{"n":"杨晓萱","c":"258"},{"n":"冉柳琴","c":"259"},{"n":"黄晨晨","c":"259"},{"n":"蒙美珍","c":"259"},{"n":"吴月芳","c":"256"},{"n":"吕芳煊","c":"256"},{"n":"陆柳嘉","c":"256"}],"id":63},{"date":"11月25日","ampm":"上午","time":"10:30","grade":"初三","gender":"女","name":"三级蛙跳","phase":"决赛","raw":"三级蛙跳决赛","kind":"田赛","team":false,"entries":[{"n":"覃城茜","c":"241"},{"n":"龙镜伊","c":"241"},{"n":"龙晓智","c":"241"},{"n":"刘芊惠","c":"242"},{"n":"覃金源","c":"242"},{"n":"韦惠文","c":"242"},{"n":"韦坊静","c":"243"},{"n":"韦雪","c":"243"},{"n":"韦佳芬","c":"243"},{"n":"姚秀丽","c":"244"},{"n":"李浚玉","c":"244"},{"n":"覃雨欣","c":"244"},{"n":"冉玉莲","c":"246"},{"n":"蒙春艳","c":"246"},{"n":"吴唯玮","c":"246"},{"n":"覃小娟","c":"247"},{"n":"覃萩圆","c":"247"}],"id":64},{"date":"11月25日","ampm":"上午","time":"10:50","grade":"初二","gender":"男","name":"跳高","phase":"决赛","raw":"跳高预决赛","kind":"田赛","team":false,"entries":[{"n":"覃广灿","c":"251"},{"n":"覃钟海","c":"251"},{"n":"覃邦讯","c":"251"},{"n":"韦浩宇","c":"253"},{"n":"覃路铭","c":"253"},{"n":"覃增福","c":"253"},{"n":"韦大奎","c":"252"},{"n":"莫耀辉","c":"252"},{"n":"罗易恒","c":"252"},{"n":"何政鑫","c":"254"},{"n":"覃靖鎝","c":"254"},{"n":"覃洪煊","c":"255"},{"n":"覃栩杨","c":"255"},{"n":"韦瑛顺","c":"255"},{"n":"郭季昆","c":"256"},{"n":"韦泽轩","c":"256"},{"n":"覃元炜","c":"256"},{"n":"龙天鹏","c":"257"},{"n":"杨浩然","c":"257"},{"n":"吴鹏烨","c":"257"},{"n":"覃仁桐","c":"258"},{"n":"覃泳淇","c":"258"},{"n":"覃忠涛","c":"258"},{"n":"覃忠亮","c":"259"},{"n":"覃鸿志","c":"259"},{"n":"陆建行","c":"259"}],"id":65},{"date":"11月25日","ampm":"下午","time":"14:30","grade":"初三","gender":"男","name":"1500米","phase":"决赛","raw":"1500米决赛","kind":"径赛","team":false,"entries":[{"n":"覃福朝","c":"241"},{"n":"覃德森","c":"241"},{"n":"韦翼飞","c":"241"},{"n":"黄文涛","c":"242"},{"n":"陈永麒","c":"242"},{"n":"杨润峰","c":"243"},{"n":"覃城康","c":"243"},{"n":"覃安","c":"243"},{"n":"覃振豪","c":"244"},{"n":"覃圆帝","c":"244"}],"id":66},{"date":"11月25日","ampm":"下午","time":"14:50","grade":"初二","gender":"男","name":"1500米","phase":"决赛","raw":"1500米决赛","kind":"径赛","team":false,"entries":[{"n":"覃邦讯","c":"251"},{"n":"唐茗轩","c":"251"},{"n":"陈士伟","c":"253"},{"n":"韦其夆","c":"253"},{"n":"覃炜烨","c":"253"},{"n":"覃忠邦","c":"252"},{"n":"覃增浩","c":"252"},{"n":"肖万豪","c":"252"},{"n":"何政鑫","c":"254"},{"n":"苏保涵","c":"254"},{"n":"韦瑛顺","c":"255"},{"n":"韦柱瀚","c":"255"},{"n":"覃鸿泰","c":"255"},{"n":"罗沛贤","c":"256"},{"n":"覃儒浩","c":"256"},{"n":"韦润超","c":"257"},{"n":"韦佳员","c":"257"},{"n":"覃海潮","c":"258"},{"n":"罗力浩","c":"258"},{"n":"覃人辉","c":"258"},{"n":"赖浚铭","c":"259"},{"n":"覃勇翔","c":"259"},{"n":"覃金汇","c":"259"}],"id":67},{"date":"11月25日","ampm":"下午","time":"15:10","grade":"初一","gender":"男","name":"1500米","phase":"决赛","raw":"1500米决赛","kind":"径赛","team":false,"entries":[{"n":"张洪珲","c":"261"},{"n":"韦云译","c":"262"},{"n":"杨琪玮","c":"262"},{"n":"覃忠意","c":"262"},{"n":"韦赵军","c":"263"},{"n":"董文学","c":"263"},{"n":"覃华达","c":"267"},{"n":"韦文镀","c":"267"},{"n":"韦东青","c":"261"},{"n":"韦佳君","c":"264"},{"n":"覃子轩","c":"264"},{"n":"金城毅","c":"264"},{"n":"吴定柯","c":"265"},{"n":"韦翊泽","c":"265"},{"n":"覃鸿全","c":"265"},{"n":"熊世暄","c":"267"},{"n":"覃增睿","c":"261"},{"n":"覃忠炫","c":"266"},{"n":"龙昌桀","c":"266"},{"n":"吴秀萱","c":"266"}],"id":68},{"date":"11月25日","ampm":"下午","time":"15:30","grade":"初三","gender":"女","name":"1500米","phase":"决赛","raw":"1500米决赛","kind":"径赛","team":false,"entries":[{"n":"邓志京晶","c":"241"},{"n":"段佳利","c":"241"},{"n":"韦彤影","c":"241"},{"n":"吴佳欣","c":"242"},{"n":"符红雪","c":"243"},{"n":"姚秀丽","c":"244"},{"n":"覃佳慧","c":"244"},{"n":"张云凤","c":"244"},{"n":"潘思雅","c":"245"},{"n":"冉思娴","c":"245"},{"n":"冉玉莲","c":"246"},{"n":"冉冰冰","c":"246"},{"n":"莫影影","c":"246"}],"id":69},{"date":"11月25日","ampm":"下午","time":"15:50","grade":"初二","gender":"女","name":"1500米","phase":"决赛","raw":"1500米决赛","kind":"径赛","team":false,"entries":[{"n":"韦秋","c":"251"},{"n":"覃丽烨","c":"253"},{"n":"梁馨心","c":"253"},{"n":"覃珮浠","c":"253"},{"n":"容秀玉","c":"252"},{"n":"韦王海","c":"252"},{"n":"吴柳荧","c":"252"},{"n":"陆冠颖","c":"255"},{"n":"覃钰潪","c":"255"},{"n":"韦佳怡","c":"255"},{"n":"吴月芳","c":"256"},{"n":"陆柳嘉","c":"256"},{"n":"韦先妙","c":"256"},{"n":"覃雨婷","c":"258"},{"n":"韦欣怡","c":"258"},{"n":"崖安琪","c":"258"}],"id":70},{"date":"11月25日","ampm":"下午","time":"16:10","grade":"初一","gender":"女","name":"1500米","phase":"决赛","raw":"1500米决赛","kind":"径赛","team":false,"entries":[{"n":"韦贞羽","c":"261"},{"n":"佘嘉玟","c":"261"},{"n":"覃秋烨","c":"261"},{"n":"苏婉萍","c":"262"},{"n":"李秋婵","c":"262"},{"n":"吴春虹","c":"262"},{"n":"杨雯淼","c":"263"},{"n":"吴金凤","c":"266"},{"n":"韦惠茹","c":"264"},{"n":"陆思羽","c":"264"},{"n":"姚秀林","c":"264"},{"n":"覃水晶","c":"265"},{"n":"韦佳馨","c":"265"},{"n":"覃艺采","c":"265"},{"n":"韦素珍","c":"266"},{"n":"覃潘丽","c":"266"},{"n":"覃钰莹","c":"267"},{"n":"张雅茹","c":"267"},{"n":"覃钰凤","c":"267"}],"id":71},{"date":"11月25日","ampm":"下午","time":"16:20","grade":"初三","gender":"女","name":"4×200米接力","phase":"决赛","raw":"4×200米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"244"},{"n":"","c":"245"},{"n":"","c":"241"},{"n":"","c":"246"},{"n":"","c":"243"},{"n":"","c":"242"},{"n":"","c":"247"}],"id":72},{"date":"11月25日","ampm":"下午","time":"16:40","grade":"初二","gender":"女","name":"4×200米接力","phase":"决赛","raw":"4×200米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"256"},{"n":"","c":"258"},{"n":"","c":"254"},{"n":"","c":"257"},{"n":"","c":"253"},{"n":"","c":"251"},{"n":"","c":"259"},{"n":"","c":"252"},{"n":"","c":"255"}],"id":73},{"date":"11月25日","ampm":"下午","time":"17:00","grade":"初一","gender":"女","name":"4×200米接力","phase":"决赛","raw":"4×200米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"261"},{"n":"","c":"267"},{"n":"","c":"264"},{"n":"","c":"266"},{"n":"","c":"262"},{"n":"","c":"263"},{"n":"","c":"265"}],"id":74},{"date":"11月25日","ampm":"下午","time":"14:30","grade":"初三","gender":"男","name":"实心球","phase":"决赛","raw":"实心球决赛","kind":"田赛","team":false,"entries":[{"n":"韦佳宁","c":"244"},{"n":"吴胜华","c":"244"},{"n":"陈育丰","c":"244"},{"n":"覃铭德","c":"242"},{"n":"韦益斌","c":"242"},{"n":"黄靖雄","c":"242"},{"n":"覃良榮","c":"247"},{"n":"张富雅","c":"247"},{"n":"张国林","c":"247"},{"n":"覃汉殷","c":"241"},{"n":"吴佳鑫","c":"241"},{"n":"覃德森","c":"241"},{"n":"何南涛","c":"245"},{"n":"刘孙诚","c":"245"},{"n":"刘明菠","c":"245"},{"n":"吴明禹","c":"246"},{"n":"韦嘉俊","c":"246"},{"n":"李枝建","c":"246"},{"n":"何义成","c":"243"},{"n":"李贤聪","c":"243"},{"n":"易廷峰","c":"243"}],"id":75},{"date":"11月25日","ampm":"下午","time":"14:30","grade":"初二","gender":"男","name":"立定三级跳","phase":"决赛","raw":"实立定三级跳决赛","kind":"田赛","team":false,"entries":[{"n":"覃海竣","c":"251"},{"n":"韦鸿凯","c":"251"},{"n":"覃钟海","c":"251"},{"n":"韦浩宇","c":"253"},{"n":"韦金炫","c":"253"},{"n":"覃铭","c":"253"},{"n":"韦泰鸿","c":"259"},{"n":"覃鸿志","c":"259"},{"n":"李梓铭","c":"259"},{"n":"覃岳豪","c":"256"},{"n":"孔伟权","c":"256"},{"n":"韦国磊","c":"256"},{"n":"覃鸿日","c":"255"},{"n":"覃鸿泰","c":"255"},{"n":"龙项友","c":"255"},{"n":"覃国滔","c":"257"},{"n":"吴昌桂","c":"257"},{"n":"龙集庆","c":"257"},{"n":"石韦明","c":"258"},{"n":"覃增耀","c":"258"},{"n":"覃泳淇","c":"258"},{"n":"陆玺璟","c":"254"},{"n":"覃琮意","c":"254"},{"n":"韦烨涛","c":"254"},{"n":"覃忠铃","c":"252"},{"n":"覃良海","c":"252"},{"n":"蒙祖煊","c":"252"}],"id":76},{"date":"11月25日","ampm":"下午","time":"14:30","grade":"初一","gender":"男","name":"三级蛙跳","phase":"决赛","raw":"三级蛙跳决赛","kind":"田赛","team":false,"entries":[{"n":"覃仁佑","c":"261"},{"n":"张国浩","c":"262"},{"n":"韦炳宇","c":"263"},{"n":"李国萱","c":"263"},{"n":"覃博泉","c":"264"},{"n":"兰宬锋","c":"265"},{"n":"韦家淇","c":"264"},{"n":"唐仲苑","c":"265"},{"n":"符得峰","c":"266"},{"n":"韦佑庆","c":"261"},{"n":"韦明坤","c":"262"},{"n":"韦益佳","c":"263"},{"n":"韦炳瑞","c":"264"},{"n":"李思成","c":"265"},{"n":"刘恒铧","c":"266"},{"n":"杨艺朋","c":"266"},{"n":"韦智武","c":"267"},{"n":"岑文军","c":"267"},{"n":"覃天業","c":"261"},{"n":"杨琪玮","c":"262"},{"n":"韦佳君","c":"267"}],"id":77},{"date":"11月25日","ampm":"下午","time":"16:30","grade":"初二","gender":"男","name":"实心球","phase":"决赛","raw":"跳实心球决赛","kind":"田赛","team":false,"entries":[{"n":"韦泰鸿","c":"259"},{"n":"赖浚铭","c":"259"},{"n":"李家诚","c":"259"},{"n":"韦茗洋","c":"253"},{"n":"覃天立","c":"253"},{"n":"韦建滔","c":"253"},{"n":"韦仙万","c":"252"},{"n":"韦尚恩","c":"252"},{"n":"梁洪瑞","c":"252"},{"n":"覃志文","c":"258"},{"n":"覃增耀","c":"258"},{"n":"韦文泰","c":"258"},{"n":"王炳富","c":"255"},{"n":"韦旺彤","c":"255"},{"n":"张朝榕","c":"255"},{"n":"郭季昆","c":"256"},{"n":"陆智豪","c":"256"},{"n":"覃俊铭","c":"256"},{"n":"杨顺程","c":"257"},{"n":"袁煊承","c":"257"},{"n":"兰天鑫","c":"257"},{"n":"杨德铭","c":"254"},{"n":"韦鸿煊","c":"254"},{"n":"董文锐","c":"254"},{"n":"刘茗名","c":"251"},{"n":"唐茗轩","c":"251"},{"n":"韦嘉佑","c":"251"}],"id":78},{"date":"11月25日","ampm":"下午","time":"16:30","grade":"初一","gender":"男","name":"立定三级跳","phase":"决赛","raw":"立定三级跳决赛","kind":"田赛","team":false,"entries":[{"n":"龙开业","c":"265"},{"n":"罗新宇","c":"265"},{"n":"郭家豪","c":"265"},{"n":"陆孟豪","c":"264"},{"n":"韦慧杰","c":"264"},{"n":"韦元洲","c":"264"},{"n":"韦炳宇","c":"263"},{"n":"罗海旺","c":"263"},{"n":"韦文杰","c":"263"},{"n":"符得峰","c":"266"},{"n":"杨艺朋","c":"266"},{"n":"覃海伟","c":"266"},{"n":"覃宣翔","c":"261"},{"n":"覃海锐","c":"261"},{"n":"冷振威","c":"261"},{"n":"余自德","c":"262"},{"n":"覃良燈","c":"262"},{"n":"覃建琀","c":"262"},{"n":"覃鸿茗","c":"267"},{"n":"冷宗成","c":"267"},{"n":"莫泓毅","c":"267"}],"id":79},{"date":"11月26日","ampm":"上午","time":"08:30","grade":"初一","gender":"女","name":"400米","phase":"决赛","raw":"400米决赛","kind":"径赛","team":false,"entries":[{"n":"林薇","c":"261"},{"n":"韦欣彤","c":"262"},{"n":"周沛萱","c":"263"},{"n":"韦佳霓","c":"264"},{"n":"杨雨蝶","c":"265"},{"n":"覃艳","c":"266"},{"n":"覃钰莹","c":"267"},{"n":"张梓琪","c":"261"},{"n":"蒙钰蝶","c":"262"},{"n":"覃姿瑜","c":"263"},{"n":"韦艳娇","c":"264"},{"n":"韦雅柔","c":"265"},{"n":"陆嘉怡","c":"266"},{"n":"张雅茹","c":"267"},{"n":"覃铃瑄","c":"261"},{"n":"吕玉芬","c":"263"},{"n":"韦惠茹","c":"264"},{"n":"韦泳依","c":"265"},{"n":"韦佳亚","c":"267"},{"n":"韦芷微","c":"262"},{"n":"叶梓慧","c":"266"}],"id":80},{"date":"11月26日","ampm":"上午","time":"08:45","grade":"初二","gender":"女","name":"400米","phase":"决赛","raw":"400米决赛","kind":"径赛","team":false,"entries":[{"n":"覃春岚","c":"251"},{"n":"韦嘉湲","c":"253"},{"n":"韦笛","c":"254"},{"n":"吴慧琳","c":"257"},{"n":"覃江慧","c":"252"},{"n":"覃莹楸","c":"258"},{"n":"覃相煜","c":"259"},{"n":"梁梦琪","c":"251"},{"n":"陆雅琴","c":"253"},{"n":"兰慧轩","c":"252"},{"n":"覃沁岚","c":"255"},{"n":"张凯娣","c":"257"},{"n":"周洛冰","c":"258"},{"n":"覃子璇","c":"259"},{"n":"覃丽静","c":"253"},{"n":"韦丽","c":"252"},{"n":"张欣悦","c":"255"},{"n":"谭琼晰","c":"258"},{"n":"王雨诺","c":"259"},{"n":"苏玉童","c":"255"}],"id":81},{"date":"11月26日","ampm":"上午","time":"09:00","grade":"初三","gender":"女","name":"400米","phase":"决赛","raw":"400米决赛","kind":"径赛","team":false,"entries":[{"n":"李佳宜","c":"241"},{"n":"覃丰秋","c":"244"},{"n":"覃礼缘","c":"245"},{"n":"覃曼铱","c":"243"},{"n":"吴佳欣","c":"242"},{"n":"潘中璠","c":"247"},{"n":"覃韦潸","c":"243"},{"n":"韦慧萱","c":"241"},{"n":"韦依洁","c":"244"},{"n":"覃雅婷","c":"245"},{"n":"韦怡霏","c":"246"},{"n":"韦茜缘","c":"241"},{"n":"李月璐","c":"244"},{"n":"覃雅楠","c":"246"},{"n":"兰三妹","c":"247"}],"id":82},{"date":"11月26日","ampm":"上午","time":"09:15","grade":"初一","gender":"男","name":"400米","phase":"决赛","raw":"400米决赛","kind":"径赛","team":false,"entries":[{"n":"王凯迪","c":"261"},{"n":"韦云译","c":"262"},{"n":"林睦倍","c":"263"},{"n":"覃舒翊","c":"264"},{"n":"侯俊豪","c":"265"},{"n":"王幸翔","c":"266"},{"n":"王振全","c":"267"},{"n":"覃俊涵","c":"261"},{"n":"覃良燈","c":"262"},{"n":"覃锦杰","c":"263"},{"n":"唐啟棪","c":"264"},{"n":"覃意高","c":"265"},{"n":"覃德恩","c":"266"},{"n":"唐仲攀","c":"267"},{"n":"覃英国","c":"261"},{"n":"陈铭鑫","c":"263"},{"n":"韦家淇","c":"264"},{"n":"覃秉铨","c":"265"},{"n":"龙学锋","c":"267"},{"n":"陈中骏","c":"266"},{"n":"韦铉状","c":"262"}],"id":83},{"date":"11月26日","ampm":"上午","time":"09:30","grade":"初二","gender":"男","name":"400米","phase":"决赛","raw":"400米决赛","kind":"径赛","team":false,"entries":[{"n":"覃邦讯","c":"251"},{"n":"覃忠俊","c":"253"},{"n":"肖万豪","c":"252"},{"n":"吴章伟","c":"255"},{"n":"韦清浩","c":"256"},{"n":"覃汉郎","c":"254"},{"n":"韦顺隆","c":"257"},{"n":"吴秀东","c":"259"},{"n":"覃国纯","c":"258"},{"n":"覃忠亮","c":"259"},{"n":"刘生顺","c":"257"},{"n":"李富煜","c":"256"},{"n":"覃鸿日","c":"255"},{"n":"申育侨","c":"252"},{"n":"韦鸿","c":"253"},{"n":"韦嘉佑","c":"251"},{"n":"覃国洹","c":"259"},{"n":"韦俊鸿","c":"258"},{"n":"韦润超","c":"257"},{"n":"刘嘉伦","c":"255"},{"n":"覃忠邦","c":"252"},{"n":"郭万稳","c":"253"},{"n":"覃良钰","c":"251"},{"n":"覃忠涛","c":"258"},{"n":"黄朝栩","c":"256"}],"id":84},{"date":"11月26日","ampm":"上午","time":"09:45","grade":"初三","gender":"男","name":"400米","phase":"决赛","raw":"400米决赛","kind":"径赛","team":false,"entries":[{"n":"周义杰","c":"241"},{"n":"邓咏涛","c":"242"},{"n":"黄祖楠","c":"243"},{"n":"韦元勋","c":"246"},{"n":"韦嘉梁","c":"245"},{"n":"符志磊","c":"246"},{"n":"张国林","c":"247"},{"n":"陆文杉","c":"241"},{"n":"陈永麒","c":"242"},{"n":"杨润峰","c":"243"},{"n":"赖兆滨","c":"244"},{"n":"覃征武","c":"246"},{"n":"韦佳宁","c":"244"},{"n":"兰成鸿","c":"247"},{"n":"韦翼飞","c":"241"},{"n":"石宇纯","c":"242"},{"n":"梁庭超","c":"243"},{"n":"罗定高","c":"244"}],"id":85},{"date":"11月26日","ampm":"下午","time":"13:30","grade":"初三","gender":"男","name":"4×100米接力","phase":"决赛","raw":"4×100米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"241"},{"n":"","c":"242"},{"n":"","c":"243"},{"n":"","c":"244"},{"n":"","c":"245"},{"n":"","c":"246"},{"n":"","c":"247"}],"id":86},{"date":"11月26日","ampm":"下午","time":"13:50","grade":"初二","gender":"男","name":"4×100米接力","phase":"决赛","raw":"4×100米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"251"},{"n":"","c":"252"},{"n":"","c":"253"},{"n":"","c":"254"},{"n":"","c":"255"},{"n":"","c":"256"},{"n":"","c":"257"}],"id":87},{"date":"11月26日","ampm":"下午","time":"14:10","grade":"初一","gender":"男","name":"4×100米接力","phase":"决赛","raw":"4×100米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"261"},{"n":"","c":"262"},{"n":"","c":"263"},{"n":"","c":"264"},{"n":"","c":"265"},{"n":"","c":"266"},{"n":"","c":"267"}],"id":88},{"date":"11月26日","ampm":"下午","time":"14:30","grade":"初三","gender":"女","name":"4×100米接力","phase":"决赛","raw":"4×100米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"241"},{"n":"","c":"242"},{"n":"","c":"243"},{"n":"","c":"244"},{"n":"","c":"245"},{"n":"","c":"246"},{"n":"","c":"247"}],"id":89},{"date":"11月26日","ampm":"下午","time":"14:50","grade":"初二","gender":"女","name":"4×100米接力","phase":"决赛","raw":"4×100米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"251"},{"n":"","c":"252"},{"n":"","c":"253"},{"n":"","c":"254"},{"n":"","c":"255"},{"n":"","c":"256"},{"n":"","c":"257"}],"id":90},{"date":"11月26日","ampm":"下午","time":"15:10","grade":"初一","gender":"女","name":"4×100米接力","phase":"决赛","raw":"4×100米接力赛","kind":"径赛","team":true,"entries":[{"n":"","c":"261"},{"n":"","c":"262"},{"n":"","c":"263"},{"n":"","c":"264"},{"n":"","c":"265"},{"n":"","c":"266"},{"n":"","c":"267"}],"id":91}]};
+</script>
+<script>
+/* ================= 基础层 ================= */
+const EVENTS = DATA.events;
+const META = DATA.meta;
+const LS_KEY = 'jxmeet32_v1' + (typeof MT_MEET !== 'undefined' && MT_MEET ? '_' + MT_MEET : '');
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const GEND = { '男': '男子', '女': '女子', '男女': '男女' };
+const PHASE = { '预赛': '预赛', '决赛': '决赛' };
+const KIND = { '径赛': '径赛', '田赛': '田赛', '民族': '民族传统' };
+const PTS_SOLO = [7, 6, 5, 4, 3, 2];
+const PTS_TEAM = [8, 6, 4];
+
+function gradeOf(cls) {
+  const p = String(cls).slice(0, 2);
+  return p === '24' ? '初三' : p === '25' ? '初二' : p === '26' ? '初一' : '';
+}
+const CLASS_LIST = Array.from(new Set(EVENTS.flatMap(e => e.entries.map(x => x.c)))).sort();
+const GRADE_LIST = ['初一', '初二', '初三'];
+
+function evTitle(ev) { return ev.grade + GEND[ev.gender] + ev.name; }
+function evFull(ev) { return evTitle(ev) + '（' + PHASE[ev.phase] + '）'; }
+
+/* ================= 校纪录（秩序册「历届田径运动会记录表」） ================= */
+const RECORDS = [
+  { g: '男', name: '100米', v: 12.10, holder: '符家伟', cls: '22-2' },
+  { g: '女', name: '100米', v: 14.56, holder: '韦佳佳', cls: '16-7' },
+  { g: '男', name: '200米', v: 25.66, holder: '符家伟', cls: '22-2' },
+  { g: '女', name: '200米', v: 32.27, holder: '覃韦爱', cls: '22-2' },
+  { g: '男', name: '400米', v: 61.81, holder: '唐仁顺', cls: '21-2' },
+  { g: '女', name: '400米', v: 75.62, holder: '覃丽春', cls: '99-9' },
+  { g: '男', name: '800米', v: 155.21, holder: '郭代梓', cls: '16-6' },
+  { g: '女', name: '800米', v: 178.38, holder: '李春芳', cls: '97-5' },
+  { g: '男', name: '1000米', v: 190.00, holder: '龙竣宝', cls: '19-2' },
+  { g: '男', name: '1500米', v: 303.12, holder: '覃忠蕊', cls: '19-1' },
+  { g: '女', name: '1500米', v: 370.10, holder: '覃仁江', cls: '98-6' },
+  { g: '男', name: '跳高', v: 1.58, holder: '梁宝健', cls: '05-2' },
+  { g: '女', name: '跳高', v: 1.30, holder: '马蓉', cls: '99-3' },
+  { g: '男', name: '三级蛙跳', v: 8.95, holder: '覃元彪', cls: '22-6' },
+  { g: '女', name: '三级蛙跳', v: 7.25, holder: '梁慧钰', cls: '22-1' },
+  { g: '男', name: '实心球', v: 17.60, holder: '覃良驱', cls: '19-6', note: '后抛 2kg' },
+  { g: '女', name: '实心球', v: 11.40, holder: '陈彦澄', cls: '17-3', note: '后抛 2kg' },
+  { g: '男', name: '4×100米接力', v: 53.18, holder: '21-2 班队', cls: '21-2' },
+  { g: '女', name: '4×100米接力', v: 64.09, holder: '23-2 班队', cls: '23-2' },
+  { g: '男', name: '4×200米接力', v: 115.16, holder: '17-7 班队', cls: '17-7' },
+  { g: '女', name: '4×200米接力', v: 138.94, holder: '23-2 班队', cls: '23-2' }
+];
+function recordFor(ev) {
+  return RECORDS.find(r => r.g === ev.gender && r.name === ev.name) || null;
+}
+// 是否优于校纪录：径赛更小、田赛更大
+function beatsRecord(ev, val) {
+  const rec = recordFor(ev);
+  if (!rec || val == null) return false;
+  return ev.kind === '田赛' ? val > rec.v + 1e-9 : val < rec.v - 1e-9;
+}
+
+/* ================= 状态 ================= */
+let S = loadState();
+let CACHE = {};
+function loadState() {
+  let base = { results: {}, quals: {}, extra: {}, done: {}, settings: {}, renames: {} };
+  // 嵌入模式：优先用宿主（学勤管家）预置的云端成绩
+  if (typeof MT_BOOT !== 'undefined' && MT_BOOT && MT_BOOT.state && typeof MT_BOOT.state === 'object') {
+    return Object.assign({}, base, MT_BOOT.state);
+  }
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return Object.assign(base, JSON.parse(raw));
+  } catch (e) {}
+  return base;
+}
+let saveTimer = null;
+function save() {
+  CACHE = {};
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(S));
+      flashSaved();
+    } catch (e) { toast('本地存储失败：' + e.message); }
+    mtCloudSave();
+  }, 220);
+}
+/* 嵌入模式：成绩同步到学勤管家云端（同一个站点，走 /api/xq/config） */
+function mtCloudSave() {
+  if (typeof MT_MEET === 'undefined' || !MT_MEET) return;
+  try {
+    fetch('/api/xq/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'set',
+        configKey: 'meet_' + MT_MEET + '_state',
+        configData: S,
+        teacherName: (typeof MT_Q !== 'undefined' && MT_Q.get('u')) || window.MT_USER || ''
+      })
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.ok === false) toast('云端保存失败，已存本机');
+      })
+      .catch(function () { });
+  } catch (e) { }
+}
+function flashSaved() {
+  const el = $('#saveState');
+  if (!el) return;
+  el.textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5);
+}
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+/* ================= 成绩解析 ================= */
+function parseScore(raw, kind) {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  s = s.replace(/[，,。]/g, '.').replace(/[＂”″]/g, '"').replace(/[＇′’‘]/g, "'").replace(/：/g, ':').replace(/\s+/g, '');
+  let m = s.match(/(\d{1,2})'\s*(\d{1,2})(?:\.?[’'′"]?(\d{1,2}))?/);
+  if (m) {
+    const mm = +m[1], ss = +m[2], cc = m[3] ? +m[3] : 0;
+    let v = mm * 60 + ss + cc / 100;
+    if (ss >= 60) v = mm * 60 + ss;
+    return { value: v, unit: 's' };
+  }
+  m = s.match(/^(\d{1,2})["″”](\d{1,2})$/);
+  if (m) return { value: (+m[1]) + (+m[2]) / 100, unit: 's' };
+  m = s.match(/^(\d{1,2}):(\d{1,2})(?:\.(\d{1,2}))?$/);
+  if (m) {
+    const v = (+m[1]) * 60 + (+m[2]) + (m[3] ? (+m[3]) / 100 : 0);
+    return { value: v, unit: 's' };
+  }
+  m = s.match(/(\d+(?:\.\d+)?)(?:m|米)/i);
+  if (m) return { value: +m[1], unit: 'm' };
+  m = s.match(/(\d+(?:\.\d+)?)/);
+  if (m) {
+    let v = +m[1];
+    if (kind === '田赛' && v > 50) v = v / 100;
+    return { value: v, unit: kind === '田赛' ? 'm' : 's' };
+  }
+  return null;
+}
+function fmtSec(v) {
+  if (v == null) return '—';
+  if (v >= 60) {
+    let m = Math.floor(v / 60);
+    let s = v - m * 60;
+    if (s >= 59.995) { m += 1; s = 0; }
+    return m + "'" + (s < 10 ? '0' : '') + s.toFixed(2) + '"';
+  }
+  return v.toFixed(2) + '"';
+}
+function fmtScore(ev, r) {
+  if (r.rankManual != null && r.value == null) return '第' + r.rankManual + '名';
+  if (r.value == null) return '—';
+  return ev.kind === '田赛' ? r.value.value.toFixed(2) + ' m' : fmtSec(r.value.value);
+}
+
+/* ================= 事件行 ================= */
+function rowKey(x) { return x.n ? (x.c + '|' + x.n) : x.c; }
+// 决赛名单：优先用人工锁定名单，否则按预赛成绩自动取前 12/10 名
+function autoQualKeys(ev) {
+  const pre = prelimOf(ev);
+  if (!pre) return null;
+  const c = computeEvent(pre);
+  if (!c.scored) return null;
+  const n = ev.kind === '田赛' ? 10 : 12;
+  return c.rows.filter(r => r.rank && !r.dq)
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, n)
+    .map(r => r.cls + '|' + r.name);
+}
+function eventRows(ev) {
+  let quals = S.quals[ev.id];
+  if ((!quals || !quals.length) && ev.phase !== '预赛') quals = autoQualKeys(ev);
+  let list = ev.entries.map((x, i) => ({ x: x, ei: i, ej: -1 }));
+  if (quals && quals.length) list = list.filter(p => quals.indexOf(p.x.c + '|' + p.x.n) >= 0);
+  const baseLen = list.length;
+  (S.extra[ev.id] || []).forEach((x, j) => list.push({ x: x, ei: -1, ej: j }));
+  const res = S.results[ev.id] || {};
+  return list.map((p, i) => {
+    const x = p.x;
+    const k = p.ej >= 0 ? (rowKey(x) + '|x' + p.ej) : rowKey(x);
+    const r = res[k] || {};
+    return {
+      i, key: k, name: x.n, cls: x.c, ei: p.ei, ej: p.ej,
+      raw: r.raw || '', note: r.note || '', pb: false, dq: !!r.dq,
+      rankManual: r.rankManual != null ? r.rankManual : null,
+      value: r.dq ? null : parseScore(r.raw, ev.kind),
+      rank: null, pts: 0, adv: false
+    };
+  });
+}
+function computeEvent(ev) {
+  if (CACHE['e' + ev.id]) return CACHE['e' + ev.id];
+  const rows = eventRows(ev);
+  rows.forEach(r => { if (r.dq) { r.rank = null; r.pts = 0; } });
+  const scored = rows.filter(r => r.value != null && !r.dq);
+  const dir = ev.kind === '田赛' ? -1 : 1;
+  scored.sort((a, b) => dir * (a.value.value - b.value.value));
+  let lastV = null, lastRank = 0;
+  scored.forEach((r, i) => {
+    const v = r.value.value;
+    if (lastV !== null && Math.abs(v - lastV) < 1e-9) r.rank = lastRank;
+    else { r.rank = i + 1; lastRank = r.rank; lastV = v; }
+  });
+  // 手动名次（民族团队项目用）
+  rows.filter(r => r.value == null && r.rankManual != null && !r.dq)
+    .sort((a, b) => a.rankManual - b.rankManual)
+    .forEach(r => { r.rank = +r.rankManual; });
+
+  const isFinal = ev.phase !== '预赛';
+  const ptsArr = ev.team ? PTS_TEAM : PTS_SOLO;
+  // 破纪录：与校纪录比对，决赛（含直接决赛）自动标记；预赛只提示不计分
+  rows.forEach(r => {
+    if (r.value == null || r.dq) return;
+    if (beatsRecord(ev, r.value.value)) {
+      if (isFinal) r.pb = true; else r.pbPre = true;
+    }
+  });
+  rows.forEach(r => {
+    if (r.rank && isFinal) {
+      const base = ptsArr[r.rank - 1] || 0;
+      r.pts = r.pb ? base * 2 : base;
+    }
+    if (r.rank && !isFinal) r.adv = r.rank <= (ev.kind === '田赛' ? 10 : 12);
+  });
+  const out = { rows, isFinal, scored: scored.length, filled: rows.filter(r => r.raw || r.rankManual != null).length, total: rows.length };
+  CACHE['e' + ev.id] = out;
+  return out;
+}
+function eventDone(ev) {
+  const c = computeEvent(ev);
+  return c.filled > 0;
+}
+function prelimOf(ev) {
+  if (ev.phase === '预赛') return null;
+  return EVENTS.find(x => x.grade === ev.grade && x.gender === ev.gender && x.name === ev.name && x.phase === '预赛') || null;
+}
+function finalOf(ev) {
+  if (ev.phase !== '预赛') return null;
+  return EVENTS.find(x => x.grade === ev.grade && x.gender === ev.gender && x.name === ev.name && x.phase !== '预赛') || null;
+}
+
+/* ================= 班级总分 ================= */
+function standings(grade) {
+  const key = 'st' + grade;
+  if (CACHE[key]) return CACHE[key];
+  const map = {};
+  CLASS_LIST.filter(c => gradeOf(c) === grade).forEach(c => {
+    map[c] = { cls: c, name: c + '班', pts: 0, g: 0, s: 0, b: 0, pb: 0, items: 0 };
+  });
+  EVENTS.forEach(ev => {
+    if (ev.phase === '预赛') return;
+    const c = computeEvent(ev);
+    c.rows.forEach(r => {
+      if (!r.rank || !r.pts) return;
+      const row = map[r.cls];
+      if (!row) return;
+      row.pts += r.pts; row.items += 1;
+      if (r.rank === 1) row.g++; else if (r.rank === 2) row.s++; else if (r.rank === 3) row.b++;
+      if (r.pb) row.pb++;
+    });
+  });
+  const list = Object.values(map).sort((a, b) => b.pts - a.pts || b.g - a.g || b.s - a.s);
+  CACHE[key] = list;
+  return list;
+}
+
+/* ================= 学生索引 ================= */
+let STUDENTS = {};
+function buildStudents() {
+  STUDENTS = {};
+  EVENTS.forEach(ev => {
+    ev.entries.forEach(x => {
+      if (!x.n) return;
+      const k = x.c + '|' + x.n;
+      (STUDENTS[k] || (STUDENTS[k] = { name: x.n, cls: x.c, grade: gradeOf(x.c), evs: [] })).evs.push(ev.id);
+    });
+  });
+}
+// 名单改动（临时换人）：启动时先把上次保存的改名回放到秩序册名单上
+EVENTS.forEach(ev => ev.entries.forEach(e => { if (e.orig === undefined) e.orig = e.n; }));
+function applyRenames() {
+  Object.keys(S.renames || {}).forEach(k => {
+    const ev = EVENTS[+k];
+    if (!ev) return;
+    const m = S.renames[k] || {};
+    Object.keys(m).forEach(i => {
+      const idx = +i, e = ev.entries[idx];
+      if (e && m[i]) e.n = m[i];
+    });
+  });
+}
+applyRenames();
+buildStudents();
+function rebuildStudents() { buildStudents(); }
+function migrateKey(obj, oldK, newK) {
+  if (!obj || oldK === newK || obj[oldK] == null) return;
+  obj[newK] = obj[oldK];
+  delete obj[oldK];
+}
+// 临时换人：只改姓名，班级不变；已录成绩、晋级名单随之迁移
+function applyRename(evId, ei, ej, newName) {
+  const ev = EVENTS[evId];
+  const x = ej >= 0 ? (S.extra[evId] || [])[ej] : ev.entries[ei];
+  if (!x) return false;
+  const cls = x.c, oldName = x.n || '';
+  const oldK = oldName ? cls + '|' + oldName : cls;
+  const newK = newName ? cls + '|' + newName : cls;
+  if (ej >= 0) {
+    migrateKey(S.results[evId], oldK + '|x' + ej, newK + '|x' + ej);
+    x.n = newName;
+  } else {
+    migrateKey(S.results[evId], oldK, newK);
+    const q = S.quals[evId];
+    if (q && q.length) S.quals[evId] = q.map(k => (k === oldK ? newK : k));
+    (S.renames[evId] || (S.renames[evId] = {}))[ei] = newName;
+    x.n = newName;
+  }
+  rebuildStudents();
+  save();
+  return true;
+}
+
+/* ================= 全局统计 ================= */
+function globalStats() {
+  const allEvents = EVENTS.length;
+  let doneEv = 0, resultRows = 0, pts = 0;
+  EVENTS.forEach(ev => {
+    const c = computeEvent(ev);
+    if (c.filled > 0) doneEv++;
+    resultRows += c.scored;
+    if (ev.phase !== '预赛') c.rows.forEach(r => { if (r.pts) pts += r.pts; });
+  });
+  const stuSet = new Set();
+  EVENTS.forEach(ev => ev.entries.forEach(x => { if (x.n) stuSet.add(x.c + '|' + x.n); }));
+  return { allEvents, doneEv, resultRows, pts, students: stuSet.size };
+}
+
+/* ================= 路由 ================= */
+const ROUTES = { home: renderHome, schedule: renderSchedule, scan: renderScanChooser, board: renderBoard, students: renderStudents, data: renderData, event: renderEvent };
+function go(hash) { location.hash = hash; }
+function currentRoute() {
+  const h = (location.hash || '#/home').replace(/^#\/?/, '');
+  const parts = h.split('/');
+  return { name: parts[0] || 'home', arg: parts[1] };
+}
+function render() {
+  mtApplyMeta();
+  const r = currentRoute();
+  $('#tabbar').querySelectorAll('.tab').forEach(b => {
+    const g = b.dataset.go.replace('#/', '');
+    b.classList.toggle('on', g === r.name || (r.name === 'event' && g === 'schedule'));
+  });
+  const fn = ROUTES[r.name] || renderHome;
+  $('#view').innerHTML = fn(r.arg);
+  if (r.name === 'board') drawAllCharts();
+  if (r.name === 'students') renderStuList();
+}
+window.addEventListener('hashchange', render);
+
+/* ================= 视图：总览 ================= */
+function meetStatus() {
+  const now = new Date();
+  const d = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  if (d < '2026-11-24') {
+    const days = Math.round((new Date('2026-11-24T00:00:00') - new Date(d + 'T00:00:00')) / 86400000);
+    return { text: '距开幕 ' + days + ' 天', on: false };
+  }
+  if (d > '2026-11-26') return { text: '运动会已结束', on: false };
+  return { text: '比赛进行中', on: true };
+}
+function todayEvents() {
+  const now = new Date();
+  const d = now.getMonth() + 1 + '月' + now.getDate() + '日';
+  let list = EVENTS.filter(e => e.date === d);
+  if (!list.length) list = EVENTS.filter(e => e.date === '11月24日');
+  return list.slice(0, 6);
+}
+function topClasses(n) {
+  const all = GRADE_LIST.flatMap(g => standings(g).map(x => Object.assign({ grade: g }, x)));
+  return all.sort((a, b) => b.pts - a.pts || b.g - a.g).slice(0, n);
+}
+function renderHome() {
+  const st = globalStats();
+  const status = meetStatus();
+  const todays = todayEvents();
+  const top = topClasses(5);
+  const max = Math.max(1, top[0] ? top[0].pts : 1);
+  return `
+  <section class="hero">
+    <h2>比赛成绩登分台</h2>
+    <div class="sub">${META.dates} · ${META.venue}</div>
+    <div class="hero-meta">
+      <span class="hero-chip">${status.on ? '● ' : ''}${status.text}</span>
+      <span class="hero-chip">径赛 8 项 · 田赛 4 项 · 民族 3 项</span>
+      <span class="hero-chip">23 个班级 · ${st.students} 名运动员</span>
+    </div>
+    <div class="hero-count"><b>${st.doneEv}</b><span>/ ${st.allEvents} 项已录</span></div>
+  </section>
+
+  <div class="stat-grid">
+    <div class="stat a"><b>${st.students}</b><span>参赛运动员</span></div>
+    <div class="stat b"><b>${st.resultRows}</b><span>已录成绩</span></div>
+    <div class="stat c"><b>${st.doneEv}</b><span>已登分项目</span></div>
+    <div class="stat d"><b>${st.pts}</b><span>累计团体积分</span></div>
+  </div>
+
+  <div class="quick">
+    <button class="quick-btn" data-go="#/scan">
+      <span class="ic">${icoCam()}</span>
+      <span><b>拍照登分</b><small>拍成绩记录单，自动识别</small></span>
+    </button>
+    <button class="quick-btn alt" data-go="#/board">
+      <span class="ic">${icoTrophy()}</span>
+      <span><b>实时榜单</b><small>班级总分 · 项目名次</small></span>
+    </button>
+  </div>
+
+  <div class="section-title"><h2>今日赛程</h2><span class="sub">${todays[0] ? todays[0].date + ' ' + todays[0].ampm : ''}</span></div>
+  <div class="card today-list">
+    ${todays.map(e => {
+      const c = computeEvent(e);
+      return `<div class="today-item" data-go="#/event/${e.id}">
+        <div class="t num">${e.time}<small class="muted" style="display:block;font-weight:400;font-size:10px">${e.ampm}</small></div>
+        <div class="n">${evTitle(e)}<small>${KIND[e.kind]} · ${PHASE[e.phase]} · ${c.total} 人</small></div>
+        <div>${c.filled ? `<span class="pill">${c.filled}/${c.total}</span>` : '<span class="pill gray">未登分</span>'}</div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div class="section-title"><h2>班级总分</h2><span class="sub" data-go="#/board" style="cursor:pointer">查看完整榜单 ›</span></div>
+  <div class="card pad">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${top.map((c, i) => `
+        <div style="display:grid;grid-template-columns:20px 64px 1fr 48px;gap:8px;align-items:center">
+          <span class="num" style="color:var(--muted);font-size:12px">${i + 1}</span>
+          <span style="font-size:12.5px">${c.cls}<small class="muted"> · ${c.grade}</small></span>
+          <div style="height:8px;border-radius:5px;background:#efeade;overflow:hidden">
+            <i style="display:block;height:100%;width:${Math.round(c.pts / max * 100)}%;border-radius:5px;background:${i === 0 ? 'linear-gradient(90deg,#c8962b,#e5bd63)' : 'linear-gradient(90deg,#1b6a4f,#4f9b7c)'}"></i>
+          </div>
+          <span class="num" style="text-align:right;font-weight:700;font-size:12.5px">${c.pts}</span>
+        </div>`).join('') || '<div class="empty-hint">还没有录入成绩</div>'}
+    </div>
+  </div>
+
+  <div class="section-title"><h2>关于这份秩序册</h2><span class="sub">数据来源：秩序册</span></div>
+  <div class="card pad" style="font-size:12.5px;color:var(--muted);line-height:1.8">
+    项目、时间、参赛名单均取自《九圩中学第三十二届田径运动会秩序册》。计分规则：个人项目前 6 名 7/6/5/4/3/2 分；接力与民族团队项目前 3 名 8/6/4 分；破纪录按所得名次积分乘 2。预赛只排名与标出晋级线，不积分。
+  </div>`;
+}
+function drawHomeChart() {}
+
+/* ================= 视图：赛程 ================= */
+let schedFilter = '全部';
+function renderSchedule() {
+  const days = ['11月24日', '11月25日', '11月26日'];
+  const filter = schedFilter;
+  const list = EVENTS.filter(e => filter === '全部' || e.grade === filter);
+  const units = [];
+  days.forEach(d => {
+    ['上午', '下午'].forEach(a => {
+      const evs = list.filter(e => e.date === d && e.ampm === a);
+      if (evs.length) units.push({ d, a, evs: evs.sort((x, y) => x.time.localeCompare(y.time)) });
+    });
+  });
+  const totalDone = EVENTS.filter(eventDone).length;
+  return `
+  <div class="section-title" style="margin-top:16px"><h2>竞赛日程</h2><span class="sub">${totalDone}/${EVENTS.length} 项已登分</span></div>
+  <div class="seg">
+    ${['全部', '初一', '初二', '初三'].map(g => `<button data-sched="${g}" class="${g === filter ? 'on' : ''}">${g}</button>`).join('')}
+  </div>
+  ${units.map(u => `
+    <div class="day-block">
+      <div class="day-head"><b>${u.d}</b><span class="tag">${u.a}</span><span class="line"></span><span class="muted" style="font-size:11px">${u.evs.length} 项</span></div>
+      <div class="card">
+        ${u.evs.map(e => {
+          const c = computeEvent(e);
+          return `<div class="ev-card" data-go="#/event/${e.id}">
+            <div class="ev-time num">${e.time}<small>${KIND[e.kind]}</small></div>
+            <div class="ev-main">
+              <b>${evTitle(e)}</b>
+              <div class="tags">
+                <span class="tag ${e.phase === '预赛' ? 'prelim' : 'final'}">${PHASE[e.phase]}</span>
+                <span class="tag">${c.total} 人</span>
+                <span class="tag ${e.team ? 'team' : ''}">${e.team ? '团队' : '个人'}</span>
+              </div>
+            </div>
+            <div class="ev-right">
+              <div class="p ${c.filled ? '' : 'zero'}">${c.filled ? c.filled + '/' + c.total : '待录'}</div>
+              <div>${c.filled ? '已登分' : '未开始'}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('') || '<div class="empty-hint">没有符合条件项目</div>'}`;
+}
+
+/* ================= 视图：拍照登分选择 ================= */
+function renderScanChooser() {
+  const pending = EVENTS.filter(e => !eventDone(e)).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const recent = EVENTS.filter(eventDone).sort((a, b) => b.id - a.id).slice(0, 3);
+  return `
+  <div class="section-title" style="margin-top:16px"><h2>选择要登分的项目</h2><span class="sub">拍完即可识别</span></div>
+  <div class="card pad" style="margin-bottom:12px;display:flex;gap:10px;align-items:flex-start">
+    <span style="width:32px;height:32px;border-radius:10px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;flex:0 0 auto">${icoCam()}</span>
+    <div style="font-size:12px;color:var(--muted);line-height:1.75">
+      在项目页点「拍照识别」，对准裁判的成绩记录单拍一张，系统会自动切边、增强并识别姓名与成绩，识别结果可逐条校对后写入。手写体识别率有限，建议拍清楚、光线均匀、一行一人。
+    </div>
+  </div>
+  <div class="section-title"><h2>待登分</h2><span class="sub">${pending.length} 项</span></div>
+  <div class="card">
+    ${pending.slice(0, 40).map(e => `<div class="ev-card" data-go="#/event/${e.id}">
+      <div class="ev-time num">${e.time}<small>${e.date.replace('11月', '')} ${e.ampm === '上午' ? '上' : '下'}</small></div>
+      <div class="ev-main"><b>${evTitle(e)}</b><div class="tags"><span class="tag ${e.phase === '预赛' ? 'prelim' : 'final'}">${PHASE[e.phase]}</span><span class="tag">${computeEvent(e).total} 人</span></div></div>
+      <div class="ev-right"><div class="p zero">待录</div><div>点此进入</div></div>
+    </div>`).join('') || '<div class="empty-hint">全部项目已登分</div>'}
+  </div>`;
+}
+
+/* ================= 图标 ================= */
+function icoCam() { return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2A2.5 2.5 0 0 1 17.5 20h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.4"/></svg>'; }
+function icoTrophy() { return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4h10v4.5a5 5 0 0 1-10 0V4z"/><path d="M7 5.5H4.5V7a3 3 0 0 0 3 3M17 5.5h2.5V7a3 3 0 0 1-3 3M12 13.5V18M9 20h6"/></svg>'; }
+
+/* ================= 视图：项目登分 ================= */
+// 成绩优先排序：有名次的按名次，未出成绩的按原名单，弃权垫底
+function sortByResult(rows) {
+  const scored = rows.filter(r => r.rank != null).sort((a, b) => (a.rank - b.rank) || (a.i - b.i));
+  const pending = rows.filter(r => r.rank == null && !r.dq).sort((a, b) => a.i - b.i);
+  const dq = rows.filter(r => r.dq).sort((a, b) => a.i - b.i);
+  return scored.concat(pending, dq);
+}
+function recText(ev, rec) { return ev.kind === '田赛' ? rec.v.toFixed(2) + ' m' : fmtSec(rec.v); }
+function renderEvent(idStr) {
+  const ev = EVENTS[+idStr];
+  if (!ev) return '<div class="empty-hint">项目不存在</div>';
+  const RO = (typeof MT_RO !== 'undefined') && MT_RO;
+  const c = computeEvent(ev);
+  const isPre = ev.phase === '预赛';
+  const preEv = isPre ? null : prelimOf(ev);
+  const finEv = isPre ? finalOf(ev) : null;
+  const manual = S.quals[ev.id];
+  const isManual = !!(manual && manual.length);
+  const rec = recordFor(ev);
+  const line = ev.kind === '田赛' ? 10 : 12;
+  const auto = (!isPre && preEv) ? autoQualKeys(ev) : null;
+  const preRows = isPre ? c.rows : (preEv ? computeEvent(preEv).rows : []);
+  const sortOn = S.settings.sortResult !== false;
+  const viewRows = sortOn ? sortByResult(c.rows) : c.rows;
+  const rowsHtml = viewRows.map(r => rowHtml(ev, r, r.i, c)).join('');
+
+  let qbox = '';
+  if (preEv || finEv) {
+    const keys = isPre
+      ? preRows.filter(r => r.rank && !r.dq).sort((a, b) => a.rank - b.rank).slice(0, line).map(r => r.cls + '|' + r.name)
+      : (isManual ? manual : (auto || []));
+    const chips = keys.map(k => { const p = k.split('|'); return '<span class="qc">' + esc(p[1] || p[0]) + '</span>'; }).join('');
+    const state = isPre
+      ? (keys.length ? '已产生 ' + keys.length + ' 人晋级' : '还没录预赛成绩')
+      : (isManual ? '人工锁定 ' + manual.length + ' 人' : (auto ? '按预赛成绩自动 · ' + auto.length + ' 人' : '预赛未录，暂列全部名单'));
+    qbox = '<div class="qual-box">'
+      + '<div class="qh"><b>' + (isPre ? '决赛名单（前 ' + line + ' 名）' : '决赛名单') + '</b>'
+      + '<span class="tag ' + (isManual && !isPre ? 'prelim' : 'grade') + '">' + state + '</span></div>'
+      + (chips ? '<div class="qual-chips">' + chips + '</div>' : '')
+      + '<div class="row" style="gap:8px">'
+      + (isPre && finEv ? '<button class="btn mini" data-act="goto-event" data-ev="' + finEv.id + '">去决赛登分 ›</button>' : '')
+      + (!isPre && preEv ? '<button class="btn mini" data-act="goto-event" data-ev="' + preEv.id + '">查看预赛成绩</button>' : '')
+      + (!isPre ? '<button class="btn mini" data-act="lock-qual" data-id="' + ev.id + '">' + (isManual ? '恢复按预赛自动' : '锁定为当前名单') + '</button>' : '')
+      + '</div>'
+      + '<div class="ql">' + (isPre
+        ? '径赛前 12 名、田赛前 10 名进决赛；预赛只排名不积分，决赛名单会随预赛成绩自动更新。'
+        : '名单由预赛成绩自动生成；并列或裁判判定需要调整时，可「锁定为当前名单」后手动增删。')
+      + '</div></div>';
+  }
+
+  return `
+  <div class="crumb" data-go="#/schedule">‹ 返回赛程</div>
+  <div class="ev-hero">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div>
+        <h2>${evTitle(ev)}</h2>
+        <div class="muted" style="font-size:12px">${ev.date} ${ev.ampm} ${ev.time} · ${KIND[ev.kind]} · ${ev.team ? '团队项目' : '个人项目'}</div>
+      </div>
+      <span class="tag ${ev.phase === '预赛' ? 'prelim' : 'final'}">${PHASE[ev.phase]}</span>
+    </div>
+    <div class="meta">
+      <span class="tag grade">${ev.grade}组</span>
+      <span class="tag ${ev.gender === '女' ? 'girls' : ev.gender === '男' ? 'boys' : ''}">${GEND[ev.gender]}</span>
+      <span class="tag">${c.filled}/${c.total} 已登</span>
+      ${rec ? '<span class="tag rec">校纪录 ' + recText(ev, rec) + ' · ' + rec.holder + '</span>' : '<span class="tag">无校纪录对照</span>'}
+      ${isPre ? '<span class="tag">晋级线：' + (ev.kind === '田赛' ? '前 10 名' : '前 12 名') + '</span>' : ''}
+    </div>
+  </div>
+  ${qbox}
+
+  <div class="toolbar">
+    ${RO ? '<span class="tag grade">只读模式 · 仅可查看成绩</span>' : ''}
+    ${RO ? '' : `<button class="btn primary" data-act="scan" data-id="${ev.id}">${icoCam()} 拍照识别</button>
+    <button class="btn" data-act="paste" data-id="${ev.id}">粘贴识别文本</button>
+    <button class="btn" data-act="add" data-id="${ev.id}">添加运动员</button>`}
+    <button class="btn mini ${sortOn ? 'green' : ''}" data-act="sort-toggle" data-id="${ev.id}">${sortOn ? '✓ 按成绩排序' : '按名单顺序'}</button>
+    ${RO ? '' : `<button class="btn ghost" data-act="clear" data-id="${ev.id}">清空本项目</button>`}
+  </div>
+
+  <div class="score-wrap">
+    <table class="score">
+      <thead><tr>
+        <th style="text-align:center">序</th><th>${ev.team ? '参赛队' : '姓名'}</th>
+        <th>班级</th>
+        <th style="text-align:center">成绩</th><th style="text-align:center">名次</th><th style="text-align:center">积分</th><th style="text-align:center">标记</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  </div>
+  <div class="qual-hint">${ev.kind === '田赛' ? '田赛成绩单位米，如 4.35；可写 435（按厘米换算）' : '径赛成绩单位秒，如 13.52；也可写 1\'02"35 或 1:02.35'}</div>
+  `;
+}
+function rowHtml(ev, r, i, c) {
+  const RO = (typeof MT_RO !== 'undefined') && MT_RO;
+  const filled = !!r.raw || r.rankManual != null;
+  const rankCls = r.rank === 1 ? 'r1' : r.rank === 2 ? 'r2' : r.rank === 3 ? 'r3' : 'rn';
+  const noteTags = [r.adv ? '晋级' : '', r.dq ? '弃权' : ''].filter(Boolean).join('·');
+  const recTag = r.pb ? '<span class="row-badge-rec">破纪录</span>' : (r.pbPre ? '<span class="row-badge-rec">预赛破纪录</span>' : '');
+  return `<tr data-i="${i}" class="${r.adv ? 'adv' : ''}">
+    <td class="idx num">${i + 1}</td>
+    <td class="name ${RO ? '' : 'name-edit'}" ${RO ? '' : `data-act="rename" data-id="${ev.id}" data-i="${i}" title="点此改姓名（临时换人）"`}>${ev.team ? (r.name || (r.cls + ' 班队')) : (r.name || '<span class="muted">待补</span>')}${recTag}${RO ? '' : '<span class="pen">✎</span>'}</td>
+    <td class="cls num">${r.cls}</td>
+    <td style="text-align:center">
+      <input class="sc ${filled ? 'filled' : ''}" id="sc${i}" inputmode="decimal" autocomplete="off" ${RO ? 'readonly' : ''}
+        placeholder="${ev.kind === '田赛' ? '米' : '秒'}" value="${esc(r.raw)}"
+        data-score="${r.key}" data-ev="${ev.id}" data-i="${i}">
+    </td>
+    <td class="rank" id="rk${i}">${r.rank ? `<span class="rank-badge ${rankCls}">${r.rank}</span>` : '<span class="muted" style="font-size:11px">—</span>'}</td>
+    <td class="pts" id="pt${i}">${r.pts ? r.pts : ''}</td>
+    <td class="note">${RO ? `<span class="muted" style="font-size:11px">${noteTags || '—'}</span>` : `<button class="note-btn ${noteTags ? 'on' : ''}" data-act="note" data-id="${ev.id}" data-key="${esc(r.key)}" data-i="${i}">${noteTags || '标记'}</button>`}</td>
+  </tr>`;
+}
+function refreshRanks(evId) {
+  const ev = EVENTS[+evId];
+  const c = computeEvent(ev);
+  c.rows.forEach((r, i) => {
+    const rk = $('#rk' + i), pt = $('#pt' + i), sc = $('#sc' + i);
+    if (rk) {
+      const rc = r.rank === 1 ? 'r1' : r.rank === 2 ? 'r2' : r.rank === 3 ? 'r3' : 'rn';
+      rk.innerHTML = r.rank ? `<span class="rank-badge ${rc}">${r.rank}</span>` : '<span class="muted" style="font-size:11px">—</span>';
+    }
+    if (pt) pt.textContent = r.pts ? r.pts : '';
+    if (sc) sc.classList.toggle('filled', !!r.raw || r.rankManual != null);
+    const tr = sc && sc.closest('tr');
+    if (tr) {
+      tr.classList.toggle('adv', !!r.adv);
+      const nb = tr.querySelector('.note-btn');
+      if (nb) {
+        const tags = [r.adv ? '晋级' : '', r.dq ? '弃权' : ''].filter(Boolean).join('·');
+        nb.textContent = tags || '标记';
+        nb.classList.toggle('on', !!tags);
+      }
+    }
+  });
+}
+
+/* ================= 视图：榜单 ================= */
+let boardGrade = '初三';
+function renderBoard() {
+  const rows = standings(boardGrade);
+  const totalPts = rows.reduce((a, b) => a + b.pts, 0);
+  const done = EVENTS.filter(e => e.phase !== '预赛' && computeEvent(e).scored > 0)
+    .filter(e => e.grade === boardGrade)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  return `
+  <div class="section-title" style="margin-top:16px"><h2>实时榜单</h2><span class="sub">共 ${totalPts} 分已产生</span></div>
+  <div class="seg">${GRADE_LIST.map(g => `<button data-board="${g}" class="${g === boardGrade ? 'on' : ''}">${g}组</button>`).join('')}</div>
+
+  <div class="card chart-card">
+    <div style="display:flex;justify-content:space-between;padding:0 6px 6px">
+      <b style="font-size:13px">${boardGrade}班级总分</b>
+      <span class="muted" style="font-size:11px">${rows.length} 支代表队</span>
+    </div>
+    <canvas id="chartClass"></canvas>
+  </div>
+
+  <div class="card" style="margin-top:12px;overflow:hidden">
+    <table class="rank-table">
+      <thead><tr><th>名次 / 班级</th><th>总分</th><th>金</th><th>银</th><th>铜</th><th>破纪录</th></tr></thead>
+      <tbody>
+        ${rows.map((r, i) => `<tr class="${i === 0 && r.pts ? 'top1' : ''}">
+          <td><span class="num" style="display:inline-block;width:22px;color:var(--muted)">${i + 1}</span> <b>${r.cls}</b></td>
+          <td style="font-weight:700">${r.pts}</td>
+          <td class="medal">${r.g || ''}</td><td>${r.s || ''}</td><td>${r.b || ''}</td><td>${r.pb || ''}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title"><h2>项目成绩</h2><span class="sub">按比赛顺序</span></div>
+  <div class="card result-list">
+    ${done.map(e => {
+      const c = computeEvent(e);
+      const top = c.rows.filter(r => r.rank).sort((a, b) => a.rank - b.rank).slice(0, 3);
+      return `<div class="result-ev" data-act="evdetail" data-id="${e.id}">
+        <div class="h"><b>${evTitle(e)}</b><span class="tag">${e.date.replace('11月', '')} ${e.time}</span></div>
+        <div class="top3">${top.map(r => `<span>${r.rank}. ${r.name || r.cls}<i>${fmtScore(e, r)}</i></span>`).join('') || '<span class="muted">成绩未录完</span>'}</div>
+      </div>`;
+    }).join('') || '<div class="empty-hint">这个组别还没有项目成绩，去登分吧</div>'}
+  </div>
+  <div style="height:8px"></div>`;
+}
+function drawAllCharts() {
+  const cv = $('#chartClass');
+  if (cv) drawBarChart(cv, standings(boardGrade).map(r => ({ label: r.cls, value: r.pts })), { max: null });
+  else requestAnimationFrame(() => {
+    const c2 = $('#chartClass');
+    if (c2) drawBarChart(c2, standings(boardGrade).map(r => ({ label: r.cls, value: r.pts })), { max: null });
+  });
+}
+function drawBarChart(cv, items, opt) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight || 190;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  if (!items.length) return;
+  const padL = 30, padB = 30, padT = 18, padR = 6;
+  const maxV = Math.max(1, ...items.map(i => i.value));
+  const n = items.length;
+  const slot = (w - padL - padR) / n;
+  const bw = Math.min(30, slot * 0.6);
+  // grid
+  ctx.strokeStyle = '#eae4d5'; ctx.lineWidth = 1;
+  const ticks = 4;
+  for (let t = 0; t <= ticks; t++) {
+    const y = padT + (h - padT - padB) * t / ticks;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillStyle = '#98a097'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxV * (ticks - t) / ticks), padL - 5, y + 3);
+  }
+  items.forEach((it, i) => {
+    const bh = (h - padT - padB) * (it.value / maxV);
+    const x = padL + slot * i + (slot - bw) / 2;
+    const y = h - padB - bh;
+    const grd = ctx.createLinearGradient(0, y, 0, h - padB);
+    if (i === 0) { grd.addColorStop(0, '#e2b95f'); grd.addColorStop(1, '#c8962b'); }
+    else { grd.addColorStop(0, '#3f9a76'); grd.addColorStop(1, '#1b6a4f'); }
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x, y, bw, Math.max(bh, 1), 4) : ctx.rect(x, y, bw, Math.max(bh, 1));
+    ctx.fill();
+    ctx.fillStyle = '#5c6860'; ctx.font = '10.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(it.label, padL + slot * i + slot / 2, h - padB + 14);
+    if (it.value) {
+      ctx.fillStyle = '#16211c'; ctx.font = '600 11px system-ui';
+      ctx.fillText(it.value, padL + slot * i + slot / 2, y - 4);
+    }
+  });
+}
+
+/* ================= 视图：学生 ================= */
+let stuQuery = '';
+function uniqNames(s) { return new Set(s.evs.map(id => EVENTS[id].name)); }
+function renderStudents() {
+  return `
+  <div class="section-title" style="margin-top:16px"><h2>学生成绩档案</h2><span class="sub">${Object.keys(STUDENTS).length} 人</span></div>
+  <div class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#828b84" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+    <input id="stuInput" placeholder="输入姓名或班级，如 韦艺鸿 / 241" value="${esc(stuQuery)}">
+  </div>
+  <div id="stuList"></div>`;
+}
+function renderStuList() {
+  const q = stuQuery.trim();
+  let list = Object.values(STUDENTS);
+  if (q) list = list.filter(s => s.name.indexOf(q) >= 0 || s.cls.indexOf(q) >= 0);
+  list = list.slice(0, q ? 120 : 60);
+  const html = q && !list.length
+    ? '<div class="empty-hint">没有找到学生，换个名字试试</div>'
+    : `<div class="stu-grid">${list.map(s => `<div class="stu-card" data-act="stu" data-k="${esc(s.cls + '|' + s.name)}">
+        <b>${s.name}</b><small>${s.cls} · ${s.grade} · ${uniqNames(s).size} 个项目</small>
+      </div>`).join('')}</div>`;
+  const el = $('#stuList');
+  if (el) el.innerHTML = html;
+}
+function stuDetail(key) {
+  const s = STUDENTS[key];
+  if (!s) return;
+  const items = s.evs.map(id => {
+    const ev = EVENTS[id];
+    const c = computeEvent(ev);
+    const r = c.rows.find(x => x.name === s.name && x.cls === s.cls);
+    return { ev, r, c };
+  }).sort((a, b) => (a.ev.date + a.ev.time).localeCompare(b.ev.date + b.ev.time));
+  const pts = items.reduce((a, b) => a + (b.r && b.r.pts ? b.r.pts : 0), 0);
+  openSheet(`
+    <div class="grab"></div>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div><h3>${s.name}</h3><div class="muted" style="font-size:12px">${s.cls} 班 · ${s.grade}组 · ${uniqNames(s).size} 个项目</div></div>
+      <div style="text-align:right"><div class="h1" style="font-size:20px;color:var(--brand)">${pts || '—'}</div><div class="muted" style="font-size:11px">个人积分</div></div>
+    </div>
+    <div class="stu-events">
+      ${items.map(({ ev, r, c }) => `<div class="stu-event" data-go="#/event/${ev.id}">
+        <div class="hd"><b>${evTitle(ev)}</b><span class="val">${r && (r.raw || r.rankManual != null) ? fmtScore(ev, r) : '<span class="muted" style="font-weight:400">未录</span>'}</span></div>
+        <div class="ft"><span>${ev.date} ${ev.time}</span><span>${PHASE[ev.phase]}</span>${r && r.rank ? '<span>第 ' + r.rank + ' 名</span>' : ''}${r && r.pts ? '<span style="color:var(--brand)">' + r.pts + ' 分</span>' : ''}${r && r.pb ? '<span style="color:var(--gold)">破纪录</span>' : ''}</div>
+      </div>`).join('')}
+    </div>
+    <div style="height:8px"></div>
+  `);
+}
+
+/* ================= 视图：数据 ================= */
+function renderData() {
+  const st = globalStats();
+  return `
+  <div class="section-title" style="margin-top:16px"><h2>数据与设置</h2><span class="sub">成绩保存在本机浏览器</span></div>
+  <div class="card pad">
+    <div class="data-item">
+      <div class="t"><b>导出备份（JSON）</b><small>拷到别的手机/电脑可继续登分</small></div>
+      <button class="btn mini green" data-act="export">导出</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>导出成绩表（CSV）</b><small>可用 Excel / WPS 打开、打印</small></div>
+      <button class="btn mini" data-act="csv">导出</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>导入备份</b><small>选择此前导出的 .json 文件</small></div>
+      <label class="btn mini">选择文件<input type="file" accept="application/json,.json" id="importFile" hidden></label>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>打印成绩公告</b><small>当前榜单与已录项目成绩</small></div>
+      <button class="btn mini" data-act="print">打印</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>清空全部成绩</b><small>只清成绩，项目与名单不变</small></div>
+      <button class="btn mini" data-act="reset" style="color:var(--brand);border-color:#ecc4bc">清空</button>
+    </div>
+  </div>
+
+  <div class="section-title"><h2>数据概览</h2></div>
+  <div class="card pad" style="font-size:12.5px;line-height:1.9">
+    <div class="kv"><span>比赛项目</span><b class="num">${st.allEvents} 项</b></div>
+    <div class="kv"><span>参赛运动员</span><b class="num">${st.students} 人</b></div>
+    <div class="kv"><span>报名记录</span><b class="num">${EVENTS.reduce((a, e) => a + e.entries.length, 0)} 条</b></div>
+    <div class="kv"><span>已录项目</span><b class="num">${st.doneEv} 项</b></div>
+    <div class="kv"><span>已录成绩</span><b class="num">${st.resultRows} 条</b></div>
+  </div>
+
+  <div class="section-title"><h2>使用说明</h2></div>
+  <div class="card pad" style="font-size:12.5px;line-height:1.9;color:var(--muted)">
+    <p style="margin:0 0 8px"><b style="color:var(--ink)">1. 拍照登分</b>：进入项目 → 拍照识别 → 对准成绩单拍摄 → 核对识别结果 → 写入。识别按「姓名匹配 → 序号匹配 → 顺序填充」自动对应学生。</p>
+    <p style="margin:0 0 8px"><b style="color:var(--ink)">2. 手写识别率</b>：清晰、正楷、格子内的数字识别最好；连笔或涂抹较重的数字建议直接手动输入（点成绩格即可输入）。</p>
+    <p style="margin:0 0 8px"><b style="color:var(--ink)">3. 名次与积分</b>：输入成绩后自动排名、自动计分。预赛只排名并标出晋级线；决赛（含预决赛）才计分。</p>
+    <p style="margin:0 0 8px"><b style="color:var(--ink)">4. 预赛进决赛</b>：径赛预赛前 12 名、田赛前 10 名自动进入决赛名单，决赛页名单随预赛成绩实时更新，也可手动锁定后调整。</p>
+    <p style="margin:0 0 8px"><b style="color:var(--ink)">5. 破纪录</b>：系统按秩序册「历届记录表」里的校纪录自动比对，决赛成绩优于校纪录即自动标记并按名次积分翻倍；预赛破纪录只提示不计分。</p>
+    <p style="margin:0 0 8px"><b style="color:var(--ink)">6. 临时换人</b>：点表格里的姓名（带 ✎）即可改成替补学生的名字，班级不变；已录成绩、晋级名单、学生档案、班级总分都会自动跟着改，也可一键改回。</p>
+    <p style="margin:0"><b style="color:var(--ink)">7. 成绩排序</b>：项目一旦有成绩，表格默认按成绩先后排列（第一名在最上面，未出成绩的排后面、弃权垫底），点「✓ 按成绩排序」可一键切回秩序册名单顺序。</p>
+  </div>
+  <div style="height:10px"></div>`;
+}
+
+/* ================= 交互 ================= */
+document.addEventListener('click', e => {
+  const goEl = e.target.closest('[data-go]');
+  if (goEl) { closeSheet(); go(goEl.dataset.go); return; }
+  const tab = e.target.closest('[data-sched]');
+  if (tab) { schedFilter = tab.dataset.sched; render(); return; }
+  const bd = e.target.closest('[data-board]');
+  if (bd) { boardGrade = bd.dataset.board; render(); return; }
+  const act = e.target.closest('[data-act]');
+  if (!act) return;
+  const a = act.dataset.act;
+  if (a === 'scan') openOcr(+act.dataset.id);
+  else if (a === 'paste') openPaste(+act.dataset.id);
+  else if (a === 'prelim') applyPrelim(+act.dataset.id);
+  else if (a === 'goto-event') { location.hash = '#/event/' + act.dataset.ev; }
+  else if (a === 'lock-qual') toggleLockQual(+act.dataset.id);
+  else if (a === 'clear') clearEvent(+act.dataset.id);
+  else if (a === 'note') openNote(+act.dataset.id, act.dataset.key, act.dataset.i);
+  else if (a === 'add') openAdd(+act.dataset.id);
+  else if (a === 'rename') openRename(+act.dataset.id, +act.dataset.i);
+  else if (a === 'sort-toggle') {
+    if (S.settings.sortResult !== false) { S.settings.sortResult = false; save(); render(); toast('已切回秩序册名单顺序'); }
+    else { S.settings.sortResult = true; save(); render(); toast('已按成绩排序'); }
+  }
+  else if (a === 'note-help') toast('「标记」里可设弃权或手动给名次；破纪录由校纪录自动判定');
+  else if (a === 'stu') stuDetail(act.dataset.k);
+  else if (a === 'evdetail') eventDetailSheet(+act.dataset.id);
+  else if (a === 'export') exportJson();
+  else if (a === 'csv') exportCsv();
+  else if (a === 'reset') resetAll();
+  else if (a === 'print') window.print();
+  else if (a === 'sheet-close') closeSheet();
+});
+document.addEventListener('input', e => {
+  const inp = e.target.closest('[data-score]');
+  if (inp) {
+    const evId = +inp.dataset.ev, key = inp.dataset.score;
+    const res = S.results[evId] || (S.results[evId] = {});
+    const row = res[key] || (res[key] = {});
+    row.raw = inp.value;
+    save();
+    refreshRanks(evId);
+    return;
+  }
+  if (e.target.id === 'stuInput') { stuQuery = e.target.value; renderStuList(); }
+});
+$('#mask').addEventListener('click', closeSheet);
+document.addEventListener('change', e => {
+  if (e.target.id === 'importFile') importJson(e.target.files[0]);
+});
+function openSheet(html) {
+  $('#sheet').innerHTML = html;
+  $('#mask').classList.add('on');
+  $('#sheet').classList.add('on');
+}
+function closeSheet() {
+  $('#mask').classList.remove('on');
+  $('#sheet').classList.remove('on');
+}
+function openNote(evId, key, i) {
+  if (typeof MT_RO !== 'undefined' && MT_RO) { toast('只读模式：没有登分权限'); return; }
+  const ev = EVENTS[evId];
+  const c = computeEvent(ev);
+  const r = c.rows[+i];
+  const rec = recordFor(ev);
+  const recLine = !rec
+    ? '本项目秩序册无历史纪录，不参与破纪录判定'
+    : (r.pb || r.pbPre
+      ? '<span style="color:var(--gold);font-weight:600">已自动判定破纪录</span>「校纪录 ' + recText(ev, rec) + ' · ' + rec.holder + '」'
+      : '校纪录 ' + recText(ev, rec) + ' · ' + rec.holder + '，成绩优于它即自动标记破纪录');
+  openSheet(`
+    <div class="grab"></div>
+    <h3>${r.name || r.cls} · ${r.cls}</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">${evTitle(ev)} · 当前 ${fmtScore(ev, r)}</div>
+    <div style="background:#fffdf6;border:1px solid #eadfc2;border-radius:10px;padding:9px 12px;font-size:12px;line-height:1.6;margin-bottom:12px">${recLine}</div>
+    <div class="row" style="flex-wrap:wrap;gap:8px">
+      <button class="btn ${r.dq ? 'primary' : ''}" data-act="toggle-dq" data-id="${evId}" data-key="${esc(key)}">弃权 / 无成绩</button>
+      <button class="btn" data-act="toggle-clear" data-id="${evId}" data-key="${esc(key)}">清除弃权与名次</button>
+    </div>
+    <div style="margin-top:14px;font-size:12px;color:var(--muted)">民族团队项目无法用计时/距离排名时，可直接给名次：</div>
+    <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">
+      ${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<button class="btn mini" data-act="set-rank" data-id="${evId}" data-key="${esc(key)}" data-r="${n}">第 ${n} 名</button>`).join('')}
+    </div>
+    <div style="height:6px"></div>`);
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]');
+  if (!t) return;
+  const evId = +t.dataset.id, key = t.dataset.key;
+  const act = t.dataset.act;
+  if (['toggle-pb', 'toggle-dq', 'toggle-clear', 'set-rank'].indexOf(act) < 0) return;
+  const res = S.results[evId] || (S.results[evId] = {});
+  const row = res[key] || (res[key] = {});
+  if (act === 'toggle-dq') row.dq = !row.dq;
+  if (act === 'set-rank') row.rankManual = +t.dataset.r;
+  if (act === 'toggle-clear') { delete row.dq; delete row.rankManual; }
+  save();
+  closeSheet();
+  render();
+  toast('已更新标记');
+});
+function openAdd(evId) {
+  if (typeof MT_RO !== 'undefined' && MT_RO) { toast('只读模式：没有登分权限'); return; }
+  const ev = EVENTS[evId];
+  openSheet(`
+    <div class="grab"></div>
+    <h3>添加运动员</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:12px">${evTitle(ev)} · 用于临时补报或秩序册遗漏</div>
+    <div class="row" style="gap:8px">
+      <input id="addName" placeholder="姓名" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px">
+      <select id="addCls" style="border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px">
+        ${CLASS_LIST.filter(c => gradeOf(c) === ev.grade).map(c => `<option value="${c}">${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn green" data-act="do-add" data-id="${evId}">添加</button>
+      <button class="btn" data-act="sheet-close">取消</button>
+    </div>
+    <div style="height:6px"></div>`);
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act="do-add"]');
+  if (!t) return;
+  const evId = +t.dataset.id;
+  const n = $('#addName').value.trim();
+  const cls = $('#addCls').value;
+  if (!n) { toast('请填写姓名'); return; }
+  (S.extra[evId] || (S.extra[evId] = [])).push({ n, c: cls });
+  save(); closeSheet(); render();
+  toast('已添加 ' + n);
+});
+function applyPrelim(evId) {
+  const ev = EVENTS[evId];
+  const pre = prelimOf(ev);
+  if (!pre) return;
+  const c = computeEvent(pre);
+  const n = ev.kind === '田赛' ? 10 : 12;
+  const top = c.rows.filter(r => r.rank).sort((a, b) => a.rank - b.rank).slice(0, n);
+  if (!top.length) { toast('预赛还没有成绩，先录预赛'); return; }
+  S.quals[evId] = top.map(r => r.cls + '|' + r.name);
+  save(); render();
+  toast('已带入预赛前 ' + top.length + ' 名');
+}
+function toggleLockQual(evId) {
+  const ev = EVENTS[evId];
+  if (S.quals[evId] && S.quals[evId].length) {
+    delete S.quals[evId];
+    save(); render();
+    toast('已恢复按预赛成绩自动生成决赛名单');
+    return;
+  }
+  const keys = autoQualKeys(ev);
+  if (!keys || !keys.length) { toast('预赛还没有成绩，无法锁定名单'); return; }
+  S.quals[evId] = keys;
+  save(); render();
+  toast('已锁定当前 ' + keys.length + ' 人决赛名单');
+}
+function openRename(evId, i) {
+  if (typeof MT_RO !== 'undefined' && MT_RO) { toast('只读模式：没有登分权限'); return; }
+  const ev = EVENTS[evId];
+  const r = computeEvent(ev).rows[+i];
+  if (!r) return;
+  const mates = Object.values(STUDENTS).filter(s => s.cls === r.cls && s.name !== r.name).map(s => s.name);
+  openSheet(`
+    <div class="grab"></div>
+    <h3>临时换人 / 改姓名</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">${evTitle(ev)} · ${r.cls} 班 · 班级不变，只改姓名，已录成绩与晋级名单会自动跟着走</div>
+    <input id="rnName" value="${esc(r.name || '')}" placeholder="${ev.team ? '队伍名称，可留空' : '新上场学生姓名'}"
+      style="width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:15px">
+    <div class="row" style="margin-top:12px">
+      <button class="btn green" data-act="do-rename" data-id="${evId}" data-i="${i}">确认替换</button>
+      <button class="btn" data-act="sheet-close">取消</button>
+    </div>
+    ${mates.length ? `<div class="muted" style="font-size:11.5px;margin-top:12px">或从 ${r.cls} 班名单里点选：</div><div class="pick-wrap">${mates.map(n => `<button class="pick-chip" data-act="pick-name" data-n="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}
+    <div style="height:6px"></div>`);
+}
+document.addEventListener('click', e => {
+  const pk = e.target.closest('[data-act="pick-name"]');
+  if (pk) {
+    const inp = $('#rnName');
+    if (inp) inp.value = pk.dataset.n;
+    $$('.pick-chip').forEach(c => c.classList.toggle('on', c === pk));
+    return;
+  }
+  const t = e.target.closest('[data-act="do-rename"]');
+  if (!t) return;
+  const nm = ($('#rnName').value || '').trim();
+  const evId = +t.dataset.id, i = +t.dataset.i;
+  const row = computeEvent(EVENTS[evId]).rows[i];
+  if (!row) return;
+  if (!nm && !EVENTS[evId].team) { toast('请填写姓名'); return; }
+  applyRename(evId, row.ei, row.ej, nm);
+  closeSheet(); render();
+  toast(nm ? '已替换为 ' + nm : '已恢复为班级队名');
+});
+function clearEvent(evId) {
+  if (typeof MT_RO !== 'undefined' && MT_RO) { toast('只读模式：没有登分权限'); return; }
+  openSheet(`
+    <div class="grab"></div>
+    <h3>清空本项目成绩？</h3>
+    <div class="muted" style="font-size:12.5px;margin:6px 0 14px">${evTitle(EVENTS[evId])} 的所有成绩与标记都会被清空，名单保留。</div>
+    <div class="row"><button class="btn primary" data-act="do-clear" data-id="${evId}">确认清空</button><button class="btn" data-act="sheet-close">取消</button></div>
+    <div style="height:6px"></div>`);
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act="do-clear"]');
+  if (!t) return;
+  const evId = +t.dataset.id;
+  delete S.results[evId]; delete S.quals[evId];
+  save(); closeSheet(); render(); toast('已清空');
+});
+function resetAll() {
+  if (typeof MT_RO !== 'undefined' && MT_RO) { toast('只读模式：没有登分权限'); return; }
+  openSheet(`
+    <div class="grab"></div>
+    <h3>清空全部成绩？</h3>
+    <div class="muted" style="font-size:12.5px;margin:6px 0 14px">所有项目已录成绩都会删除且无法恢复，建议先导出备份。</div>
+    <div class="row"><button class="btn primary" data-act="do-reset">确认清空</button><button class="btn" data-act="sheet-close">取消</button></div>
+    <div style="height:6px"></div>`);
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act="do-reset"]');
+  if (!t) return;
+  S.results = {}; S.quals = {}; S.extra = {}; S.done = {}; S.renames = {};
+  EVENTS.forEach(ev => ev.entries.forEach(e => { e.n = e.orig; }));
+  rebuildStudents();
+  save(); closeSheet(); render(); toast('已清空全部成绩与临时换人');
+});
+function eventDetailSheet(evId) {
+  const ev = EVENTS[evId];
+  const c = computeEvent(ev);
+  const rows = c.rows.filter(r => r.rank || r.value).sort((a, b) => (a.rank || 99) - (b.rank || 99));
+  openSheet(`
+    <div class="grab"></div>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div><h3>${evTitle(ev)}</h3><div class="muted" style="font-size:12px">${ev.date} ${ev.time} · ${PHASE[ev.phase]} · ${rows.length} 条成绩</div></div>
+      <span class="tag ${ev.phase === '预赛' ? 'prelim' : 'final'}">${ev.phase}</span>
+    </div>
+    <table class="rank-table" style="margin-top:10px">
+      <thead><tr><th>名次</th><th>姓名</th><th>班级</th><th>成绩</th><th>积分</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><span class="rank-badge ${r.rank === 1 ? 'r1' : r.rank === 2 ? 'r2' : r.rank === 3 ? 'r3' : 'rn'}">${r.rank || '-'}</span></td>
+        <td style="text-align:left">${r.name || r.cls}${r.pb ? ' <span style="color:var(--gold);font-size:11px">破纪录</span>' : ''}</td>
+        <td>${r.cls}</td><td style="font-weight:600">${fmtScore(ev, r)}</td><td style="color:var(--brand)">${r.pts || ''}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div class="row" style="margin-top:12px"><button class="btn" data-act="sheet-close">关闭</button></div>
+    <div style="height:6px"></div>`);
+}
+
+/* ================= 导入导出 ================= */
+function exportJson() {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, '九圩中学第32届校运会_成绩备份_' + dateStamp() + '.json');
+  toast('备份已导出');
+}
+function exportCsv() {
+  const lines = [];
+  lines.push(['项目', '组别', '性别', '阶段', '日期', '时间', '名次', '姓名', '班级', '成绩', '积分', '破纪录', '弃权'].join(','));
+  EVENTS.forEach(ev => {
+    const c = computeEvent(ev);
+    if (!c.filled) return;
+    sortByResult(c.rows).forEach(r => {
+      if (!r.raw && r.rankManual == null && !r.dq) return;
+      lines.push([ev.name, ev.grade, GEND[ev.gender], PHASE[ev.phase], ev.date, ev.time, r.rank || '', r.name || '', r.cls, fmtScore(ev, r), r.pts || '', r.pb ? '是' : '', r.dq ? '是' : '']
+        .map(x => '"' + String(x).replace(/"/g, '""') + '"').join(','));
+    });
+  });
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  downloadBlob(blob, '九圩中学第32届校运会_成绩表_' + dateStamp() + '.csv');
+  toast('成绩表已导出');
+}
+function dateStamp() {
+  const d = new Date();
+  return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+function importJson(file) {
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const obj = JSON.parse(fr.result);
+      if (!obj || typeof obj !== 'object' || !obj.results) throw new Error('文件格式不对');
+      S = Object.assign({ results: {}, quals: {}, extra: {}, done: {}, settings: {}, renames: {} }, obj);
+      if (!S.renames) S.renames = {};
+      EVENTS.forEach(ev => ev.entries.forEach(e => { e.n = e.orig; }));
+      applyRenames();
+      rebuildStudents();
+      save(); render(); toast('导入成功');
+    } catch (err) { toast('导入失败：' + err.message); }
+  };
+  fr.readAsText(file);
+}
+
+/* ================= 启动 ================= */
+render();
+
+/* ================= 拍照识别 ================= */
+const OCR = { evId: null, stream: null, step: 'camera', source: null, matches: [], mode: 'auto', tone: 'bw' };
+let TESS_LOADING = null;
+
+function ocrLayer() { return $('#ocr'); }
+function openOcr(evId) {
+  if (typeof MT_RO !== 'undefined' && MT_RO) { toast('只读模式：没有登分权限'); return; }
+  const ev = EVENTS[evId];
+  OCR.evId = evId; OCR.step = 'camera'; OCR.matches = []; OCR.tone = 'bw'; OCR.mode = 'auto';
+  const layer = ocrLayer();
+  layer.classList.add('on');
+  layer.innerHTML = cameraUI(ev);
+  bindCamera();
+  startCamera();
+}
+function cameraUI(ev) {
+  return `
+  <div class="ocr-head">
+    <b>拍照识分 · ${evTitle(ev)}</b>
+    <button class="ocr-close" data-ocr="close">✕</button>
+  </div>
+  <div class="ocr-chips">
+    <button class="chip on" data-tone="bw">二值化增强</button>
+    <button class="chip" data-tone="gray">灰度增强</button>
+    <button class="chip" data-tone="raw">原图</button>
+  </div>
+  <div class="ocr-stage">
+    <video id="ocrVideo" playsinline muted autoplay></video>
+    <div class="ocr-guide" id="ocrGuide"></div>
+    <div class="ocr-tip" id="ocrTip">对准成绩记录单，让表格落在框内 · 一行一人最准</div>
+    <div id="ocrProg" style="display:none" class="ocr-progress">
+      <div>
+        <div style="font-size:13px" id="ocrProgText">正在识别…</div>
+        <div class="bar"><i id="ocrProgBar"></i></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:10px" id="ocrProgSub">首次使用需加载识别模型</div>
+      </div>
+    </div>
+  </div>
+  <div class="ocr-foot" id="ocrFoot">
+    <button class="btn" data-ocr="upload" style="background:transparent;color:#dfe8e0;border-color:rgba(255,255,255,.2)">相册/文件</button>
+    <button class="shutter" data-ocr="shoot" aria-label="拍照"></button>
+    <button class="btn" data-ocr="paste" style="background:transparent;color:#dfe8e0;border-color:rgba(255,255,255,.2)">粘贴文本</button>
+  </div>
+  <input type="file" id="ocrFile" accept="image/*" capture="environment" hidden>`;
+}
+function bindCamera() {
+  const guide = $('#ocrGuide');
+  const stage = document.querySelector('.ocr-stage');
+  if (guide && stage) {
+    const box = stage.getBoundingClientRect();
+    const w = Math.min(box.width - 28, 720);
+    const h = Math.min(box.height - 60, w * 1.28);
+    guide.style.width = w + 'px';
+    guide.style.height = h + 'px';
+    guide.style.left = ((box.width - w) / 2) + 'px';
+    guide.style.top = ((box.height - h) / 2) + 'px';
+  }
+}
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    OCR.stream = stream;
+    const v = $('#ocrVideo');
+    if (!v) { stream.getTracks().forEach(t => t.stop()); return; }
+    v.srcObject = stream;
+    await v.play().catch(() => {});
+    v.style.width = '100%';
+  } catch (err) {
+    const v = $('#ocrVideo');
+    if (v) v.style.display = 'none';
+    const tip = $('#ocrTip');
+    if (tip) tip.innerHTML = '摄像头不可用（' + (err.name || '错误') + '）<br>可点下方「相册/文件」选择成绩单照片';
+    const st = document.querySelector('.ocr-stage');
+    if (st && !$('#camFallback')) {
+      const d = document.createElement('div');
+      d.id = 'camFallback';
+      d.style.cssText = 'position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:rgba(255,255,255,.75);font-size:12.5px;padding:0 30px;line-height:1.8';
+      d.innerHTML = '<div><div style="font-size:44px;opacity:.5;margin-bottom:10px">▣</div>当前环境没有可用摄像头<br>点底部「相册/文件」上传成绩单照片<br><span style="color:#f0d296">电脑端建议用手机拍摄后传图</span></div>';
+      st.appendChild(d);
+    }
+  }
+}
+function stopCamera() {
+  if (OCR.stream) { OCR.stream.getTracks().forEach(t => t.stop()); OCR.stream = null; }
+}
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-ocr]');
+  const tone = e.target.closest('[data-tone]');
+  if (tone) {
+    OCR.tone = tone.dataset.tone;
+    document.querySelectorAll('[data-tone]').forEach(b => b.classList.toggle('on', b === tone));
+    if (OCR.matches.length && OCR.source) reReview();
+    return;
+  }
+  if (!t) return;
+  const act = t.dataset.ocr;
+  if (act === 'close') { closeOcr(); }
+  else if (act === 'shoot') { shoot(); }
+  else if (act === 'upload') { const f = $('#ocrFile'); if (f) f.click(); }
+  else if (act === 'paste') { showPasteInOcr(); }
+  else if (act === 'apply') { applyMatches(); }
+  else if (act === 'retry') { backToCamera(); }
+  else if (act === 'toggleAll') {
+    const all = document.querySelectorAll('.ocr-row input[type=checkbox]');
+    const on = Array.from(all).every(x => x.checked);
+    all.forEach(x => { x.checked = !on; });
+    t.textContent = on ? '全选' : '全不选';
+  }
+});
+document.addEventListener('change', async e => {
+  if (e.target.id === 'ocrFile' && e.target.files && e.target.files[0]) {
+    const file = e.target.files[0];
+    const img = new Image();
+    img.onload = () => {
+      const src = document.createElement('canvas');
+      const maxW = 1700;
+      const s = Math.min(1, maxW / img.width);
+      src.width = Math.round(img.width * s);
+      src.height = Math.round(img.height * s);
+      src.getContext('2d').drawImage(img, 0, 0, src.width, src.height);
+      recognizeFromCanvas(src);
+    };
+    img.src = URL.createObjectURL(file);
+  }
+});
+function shoot() {
+  const v = $('#ocrVideo'), guide = $('#ocrGuide');
+  if (!v || !v.videoWidth) { toast('还没有画面，试试「相册/文件」'); return; }
+  const disp = v.getBoundingClientRect();
+  const gr = guide.getBoundingClientRect();
+  const scale = Math.min(disp.width / v.videoWidth, disp.height / v.videoHeight);
+  const offX = disp.left + (disp.width - v.videoWidth * scale) / 2;
+  const offY = disp.top + (disp.height - v.videoHeight * scale) / 2;
+  let sx = (gr.left - offX) / scale, sy = (gr.top - offY) / scale;
+  let sw = gr.width / scale, sh = gr.height / scale;
+  sx = Math.max(0, sx); sy = Math.max(0, sy);
+  sw = Math.min(v.videoWidth - sx, sw); sh = Math.min(v.videoHeight - sy, sh);
+  const c = document.createElement('canvas');
+  c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext('2d').drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  recognizeFromCanvas(c);
+}
+function backToCamera() {
+  const ev = EVENTS[OCR.evId];
+  OCR.step = 'camera';
+  ocrLayer().innerHTML = cameraUI(ev);
+  bindCamera();
+  startCamera();
+}
+async function recognizeFromCanvas(src) {
+  OCR.source = src;
+  const stage = document.querySelector('.ocr-stage');
+  if (stage) {
+    stage.innerHTML = '';
+    const img = new Image();
+    img.src = src.toDataURL('image/jpeg', 0.92);
+    img.className = 'ocr-shot';
+    stage.appendChild(img);
+    const prog = document.createElement('div');
+    prog.className = 'ocr-progress';
+    prog.id = 'ocrProg';
+    prog.innerHTML = '<div><div style="font-size:13px" id="ocrProgText">正在增强图像…</div><div class="bar"><i id="ocrProgBar"></i></div><div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:10px" id="ocrProgSub">首次使用需加载中文识别模型（约十几 MB）</div></div>';
+    stage.appendChild(prog);
+  }
+  stopCamera();
+  const foot = $('#ocrFoot');
+  if (foot) foot.innerHTML = '<button class="btn" data-ocr="close" style="background:transparent;color:#dfe8e0;border-color:rgba(255,255,255,.2)">取消</button>';
+  try {
+    const prepared = preprocess(src, OCR.tone);
+    setProg(0.05, '图像已增强，准备识别', '');
+    const text = await runTesseract(prepared);
+    OCR.text = text;
+    buildMatches(text);
+    showReview();
+  } catch (err) {
+    console.error(err);
+    const p = $('#ocrProg');
+    if (p) {
+      p.innerHTML = `<div><div style="font-size:13px;color:#f0d296">识别引擎没能启动</div>
+        <div style="font-size:11.5px;color:rgba(255,255,255,.7);margin-top:8px;line-height:1.8;max-width:260px;margin-left:auto;margin-right:auto">${esc(err.message || '网络或浏览器限制')}<br>可以直接手动录，或用「粘贴文本」把号码贴进来。</div>
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn" data-ocr="retry" style="background:transparent;color:#dfe8e0;border-color:rgba(255,255,255,.25)">重拍</button>
+          <button class="btn" data-ocr="paste" style="background:transparent;color:#dfe8e0;border-color:rgba(255,255,255,.25)">粘贴文本</button>
+          <button class="btn" data-ocr="close" style="background:#f0d296;color:#20301f;border-color:#f0d296">手动录入</button>
+        </div></div>`;
+    }
+  }
+}
+function setProg(p, text, sub) {
+  const bar = $('#ocrProgBar'), tx = $('#ocrProgText'), sb = $('#ocrProgSub');
+  if (bar) bar.style.width = Math.round(p * 100) + '%';
+  if (tx && text) tx.textContent = text;
+  if (sb && sub != null) sb.textContent = sub;
+}
+function preprocess(src, tone) {
+  const maxW = 1800;
+  const s = Math.min(2, maxW / Math.max(1, src.width));
+  const c = document.createElement('canvas');
+  c.width = Math.round(src.width * s);
+  c.height = Math.round(src.height * s);
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    d[i] = d[i + 1] = d[i + 2] = g;
+  }
+  // Otsu
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < d.length; i += 4) hist[d[i]]++;
+  const total = d.length / 4;
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let sumB = 0, wB = 0, best = 0, thr = 128;
+  for (let i = 0; i < 256; i++) {
+    wB += hist[i];
+    if (!wB) continue;
+    const wF = total - wB;
+    if (!wF) break;
+    sumB += i * hist[i];
+    const mB = sumB / wB, mF = (sum - sumB) / wF;
+    const v = wB * wF * (mB - mF) * (mB - mF);
+    if (v > best) { best = v; thr = i; }
+  }
+  for (let i = 0; i < d.length; i += 4) {
+    if (tone === 'raw') continue;
+    if (tone === 'bw') {
+      const v = d[i] > thr ? 255 : 0;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    } else {
+      let v = (d[i] - thr) * 2.2 + 150;
+      v = Math.max(0, Math.min(255, v));
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve();
+  if (TESS_LOADING) return TESS_LOADING;
+  TESS_LOADING = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://fastly.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    s.onload = () => res();
+    s.onerror = () => rej(new Error('识别引擎加载失败（需联网）'));
+    document.head.appendChild(s);
+    setTimeout(() => { if (!window.Tesseract) rej(new Error('识别引擎加载超时（需联网）')); }, 25000);
+  });
+  return TESS_LOADING;
+}
+async function runTesseract(canvas) {
+  await loadTesseract();
+  setProg(0.12, '加载识别模型…', '首次使用需要下载约十几 MB，请保持联网');
+  let worker;
+  const langs = ['chi_sim+eng', 'eng'];
+  let lastErr;
+  for (const lang of langs) {
+    try {
+      worker = await Tesseract.createWorker(lang, 1, {
+        logger: m => {
+          if (typeof m.progress === 'number') {
+            const p = 0.12 + m.progress * 0.8;
+            const map = { 'loading language traineddata': '下载识别模型', 'initializing api': '初始化引擎', 'recognizing text': '正在识别文字' };
+            setProg(p, map[m.status] || m.status, '');
+          }
+        }
+      });
+      const { data } = await worker.recognize(canvas);
+      await worker.terminate();
+      return data.text || '';
+    } catch (err) {
+      lastErr = err;
+      try { if (worker) await worker.terminate(); } catch (e) {}
+      worker = null;
+    }
+  }
+  throw new Error('识别失败：' + (lastErr && lastErr.message ? lastErr.message : '未知错误'));
+}
+/* ---- 文本解析 ---- */
+function stripNoise(line) {
+  let s = (' ' + line).replace(/2[4-6][1-9]/g, '  ').replace(/\u3000/g, ' ');
+  s = s.replace(/^\s*(\d{1,2})\s*[、，,．.]?\s*(?=[^\d\s.])/, ' ');
+  return s.replace(/\s+/g, ' ').trim();
+}
+function extractVal(line, kind) {
+  const s = stripNoise(line);
+  let m = s.match(/(\d{1,2})\s*['′’]\s*(\d{1,2})(?:\s*["″”]?\s*(\d{1,2}))?/);
+  if (m) return m[1] + "'" + m[2] + (m[3] ? '"' + m[3] : '');
+  m = s.match(/(\d{1,2})\s*[:：]\s*(\d{2})(?:[.．]\s*(\d{1,2}))?/);
+  if (m) return m[1] + ':' + m[2] + (m[3] ? '.' + m[3] : '');
+  m = s.match(/\d{1,3}[.．,，]\d{1,2}/);
+  if (m) return m[0].replace(/[．,，]/g, '.');
+  m = s.match(/\d+(?:[.．]\d+)?\s*(?:m|米)/i);
+  if (m) return m[0].replace(/[．]/g, '.');
+  m = s.match(/\d{1,4}/g);
+  if (m && m.length) {
+    // 取最可能是成绩的数字：排除 1~9 的小序号
+    const cand = m.filter(x => x.length >= 2).pop() || m.pop();
+    return cand;
+  }
+  return null;
+}
+function buildMatches(text) {
+  const ev = EVENTS[OCR.evId];
+  const rows = eventRows(ev);
+  const nameIdx = {};
+  rows.forEach((r, i) => { if (r.name) (nameIdx[r.name] || (nameIdx[r.name] = [])).push(i); });
+  const lines = String(text).split(/\r?\n/).map(x => x.trim()).filter(x => x.length > 0);
+  const used = new Set();
+  const out = [];
+  lines.forEach(line => {
+    const v = extractVal(line, ev.kind);
+    if (v == null) return;
+    let idx = -1, conf = 0.35, why = '顺位';
+    const clsM = (' ' + line).match(/2[4-6][1-9]/);
+    let nm = null;
+    Object.keys(nameIdx).forEach(n => { if (line.indexOf(n) >= 0 && (!nm || n.length > nm.length)) nm = n; });
+    if (nm && OCR.mode !== 'index') {
+      const list = nameIdx[nm];
+      const cand = list.find(i => !used.has(i)) != null ? list.find(i => !used.has(i)) : list[0];
+      idx = cand; conf = 0.9; why = '姓名';
+      if (clsM && rows[idx].cls === clsM[0]) conf = 0.99;
+    }
+    if (idx < 0 && clsM) {
+      const list = rows.map((r, i) => r.cls === clsM[0] ? i : -1).filter(i => i >= 0 && !used.has(i));
+      if (list.length === 1) { idx = list[0]; conf = 0.72; why = '班级'; }
+    }
+    if (idx < 0) {
+      const m = line.match(/^(\d{1,2})\s*[、，,．.]?\s+/);
+      if (m) { const n = +m[1] - 1; if (rows[n] && !used.has(n)) { idx = n; conf = 0.62; why = '序号'; } }
+    }
+    if (idx < 0) {
+      idx = rows.findIndex((r, i) => !used.has(i) && !r.raw);
+    }
+    if (idx < 0) return;
+    used.add(idx);
+    out.push({ idx, raw: v, conf, why, line });
+  });
+  OCR.matches = out;
+}
+function showReview() {
+  const ev = EVENTS[OCR.evId];
+  const rows = eventRows(ev);
+  const body = OCR.matches.map((m, k) => {
+    const r = rows[m.idx];
+    const lvl = m.conf >= 0.85 ? '高' : m.conf >= 0.6 ? '中' : '低';
+    const color = m.conf >= 0.85 ? '#8fe3b0' : m.conf >= 0.6 ? '#f0d296' : '#f0a08e';
+    return `<div class="ocr-row">
+      <div style="font-size:10.5px;color:rgba(255,255,255,.5)" class="num">${k + 1}</div>
+      <div class="who">${r.name || r.cls}<small>${r.cls} · ${m.why}</small></div>
+      <input class="ocrv" value="${esc(m.raw)}" data-m="${k}" inputmode="decimal">
+      <div style="text-align:right"><span class="conf" style="color:${color}">${lvl}</span><br><input type="checkbox" checked data-c="${k}"></div>
+    </div>`;
+  }).join('');
+  ocrLayer().innerHTML = `
+    <div class="ocr-head">
+      <b>核对识别结果</b>
+      <button class="ocr-close" data-ocr="close">✕</button>
+    </div>
+    <div class="ocr-chips">
+      <span class="chip on" style="cursor:default">共识别 ${OCR.matches.length} 条 / ${rows.length} 人</span>
+      <button class="chip" data-ocr="toggleAll">全选/全不选</button>
+      <button class="chip" data-ocr="retry">重拍</button>
+    </div>
+    <div class="ocr-review">
+      ${body || '<div class="empty-hint" style="color:#dfe8e0">没有识别到有效成绩，换个角度重拍，或改用「粘贴文本」</div>'}
+      <div style="height:10px"></div>
+    <div style="font-size:11px;color:rgba(255,255,255,.55);padding:6px 0 2px">识别原文：</div>
+    <textarea readonly style="width:100%;height:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:10px;color:rgba(255,255,255,.7);font-size:11px;padding:8px">${esc(OCR.text || '')}</textarea>
+    </div>
+    <div class="ocr-foot">
+      <button class="btn" data-ocr="retry" style="background:transparent;color:#dfe8e0;border-color:rgba(255,255,255,.2)">重拍</button>
+      <button class="btn" data-ocr="apply" style="background:#c23b28;border-color:#c23b28;color:#fff">写入成绩（${OCR.matches.length}）</button>
+    </div>`;
+  document.querySelectorAll('[data-m]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const k = +e.target.dataset.m;
+      if (OCR.matches[k]) OCR.matches[k].raw = e.target.value;
+    });
+  });
+}
+function reReview() {
+  if (!OCR.source) return;
+  // 换增强方式后重识别
+  recognizeFromCanvas(OCR.source);
+}
+function showPasteInOcr() {
+  const ev = EVENTS[OCR.evId];
+  ocrLayer().innerHTML = `
+    <div class="ocr-head"><b>粘贴识别文本 · ${evTitle(ev)}</b><button class="ocr-close" data-ocr="close">✕</button></div>
+    <div class="ocr-review">
+      <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.8;margin-bottom:10px">
+        把成绩单上的文字粘进来，一行一人即可。支持「1 韦艺鸿 13.52」「韦艺鸿 13.52」「241 13.52」等写法。
+      </div>
+      <textarea id="pasteBox" placeholder="1 韦艺鸿 13.52&#10;2 覃钰涵 13.78&#10;3 韦樱诗 14.02" style="width:100%;height:46vh;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:12px;color:#eef4ec;font-size:13.5px;padding:12px;line-height:1.8"></textarea>
+    </div>
+    <div class="ocr-foot">
+      <button class="btn" data-ocr="parsePaste" style="background:#c23b28;border-color:#c23b28;color:#fff">解析</button>
+      <button class="btn" data-ocr="retry" style="background:transparent;color:#dfe8e0;border-color:rgba(255,255,255,.2)">返回拍照</button>
+    </div>`;
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-ocr="parsePaste"]');
+  if (!t) return;
+  const txt = ($('#pasteBox') || {}).value || '';
+  if (!txt.trim()) { toast('先粘贴一些文字'); return; }
+  OCR.text = txt;
+  buildMatches(txt);
+  showReview();
+});
+function applyMatches() {
+  const ev = EVENTS[OCR.evId];
+  const rows = eventRows(ev);
+  const res = S.results[ev.id] || (S.results[ev.id] = {});
+  let n = 0;
+  document.querySelectorAll('[data-c]').forEach(cb => {
+    if (!cb.checked) return;
+    const k = +cb.dataset.c;
+    const m = OCR.matches[k];
+    if (!m) return;
+    const inp = document.querySelector('[data-m="' + k + '"]');
+    const val = inp ? inp.value.trim() : m.raw;
+    if (!val) return;
+    const key = rows[m.idx].key;
+    (res[key] || (res[key] = {})).raw = val;
+    n++;
+  });
+  save();
+  closeOcr();
+  render();
+  toast('已写入 ' + n + ' 条成绩');
+}
+function closeOcr() {
+  stopCamera();
+  ocrLayer().classList.remove('on');
+  ocrLayer().innerHTML = '';
+  OCR.source = null; OCR.matches = []; OCR.text = '';
+}
+function openPaste(evId) {
+  if (typeof MT_RO !== 'undefined' && MT_RO) { toast('只读模式：没有登分权限'); return; }
+  OCR.evId = evId;
+  ocrLayer().classList.add('on');
+  showPasteInOcr();
+}
+
+/* 图片点击放大（成绩预览） */
+document.addEventListener('click', e => {
+  if (e.target.classList && e.target.classList.contains('ocr-shot')) {
+    const w = window.open('', '_blank');
+    if (w) w.document.write('<img src="' + e.target.src + '" style="max-width:100%">');
+  }
+});
+
+render();
+</script>
+</body>
+</html>

@@ -1756,6 +1756,69 @@ tbody tr:last-child td { border-bottom: none; }
   }
 }
 </script>
+<style id="saStyles">
+/* ================= 学校活动 · 样式（全部加 sa- 前缀，避免与主站样式冲突） ================= */
+.sa-wrap{max-width:1080px;margin:0 auto;padding:4px 2px 24px}
+.sa-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:6px 0 14px}
+.sa-head h2{margin:0;font-size:20px;color:#0F172A;letter-spacing:-.01em}
+.sa-head p{margin:4px 0 0;font-size:12.5px;color:#64748B}
+.sa-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.sa-tab{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1px solid #E2E8F0;background:#fff;color:#475569;font-size:13.5px;cursor:pointer;transition:.15s}
+.sa-tab:hover{border-color:#CBD5E1;background:#F8FAFC}
+.sa-tab.on{background:#2563EB;border-color:#2563EB;color:#fff;box-shadow:0 6px 16px -8px rgba(37,99,235,.7)}
+.sa-tab .sa-x{font-size:11px;opacity:.55;padding:0 2px}
+.sa-tab.add{border-style:dashed;color:#2563EB;background:#EFF6FF;border-color:#BFDBFE}
+.sa-card{background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 10px -6px rgba(15,23,42,.18)}
+.sa-card-hd{display:flex;gap:12px;align-items:flex-start}
+.sa-trophy{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#FEF3C7,#FDE68A);font-size:20px;flex:none}
+.sa-trophy.bball{background:linear-gradient(145deg,#FFE4E6,#FECDD3)}
+.sa-trophy.generic{background:linear-gradient(145deg,#E0F2FE,#BAE6FD)}
+.sa-title{font-size:16px;font-weight:600;color:#0F172A;line-height:1.35}
+.sa-sub{font-size:12px;color:#64748B;margin-top:3px;line-height:1.6}
+.sa-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:#EFF6FF;color:#1D4ED8;border:1px solid #DBEAFE;white-space:nowrap}
+.sa-badge.gray{background:#F1F5F9;color:#64748B;border-color:#E2E8F0}
+.sa-badge.warn{background:#FEF3C7;color:#B45309;border-color:#FDE68A}
+.sa-card-ft{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px dashed #E2E8F0}
+.sa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:9px;border:1px solid #E2E8F0;background:#fff;color:#334155;font-size:13px;cursor:pointer;transition:.15s}
+.sa-btn:hover{background:#F8FAFC;border-color:#CBD5E1}
+.sa-btn.primary{background:#2563EB;border-color:#2563EB;color:#fff}
+.sa-btn.primary:hover{background:#1D4ED8}
+.sa-btn.ghost{background:transparent;color:#64748B}
+.sa-btn.danger{color:#B91C1C;border-color:#FECACA;background:#FEF2F2}
+.sa-btn.mini{padding:6px 10px;font-size:12px}
+.sa-empty{padding:40px 20px;text-align:center;color:#64748B;font-size:13px;background:#fff;border:1px dashed #E2E8F0;border-radius:16px}
+.sa-empty b{display:block;color:#0F172A;font-size:15px;margin-bottom:6px}
+.sa-note{font-size:12px;color:#64748B;background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:10px 12px;line-height:1.7;margin:0 0 14px}
+.sa-frame-wrap{display:flex;flex-direction:column;height:calc(100vh - 132px);min-height:520px}
+.sa-frame-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.sa-frame-bar .sa-btn{margin:0}
+.sa-frame-bar .sa-fb-title{font-size:14.5px;font-weight:600;color:#0F172A}
+.sa-frame{flex:1;width:100%;border:1px solid #E2E8F0;border-radius:14px;background:#F8F5EC;overflow:hidden}
+.sa-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.45);padding:18px}
+.sa-modal-box{background:#fff;border-radius:16px;padding:18px;width:min(560px,96vw);max-height:86vh;overflow:auto;box-shadow:0 20px 50px -20px rgba(0,0,0,.4)}
+.sa-modal-box h3{margin:0 0 6px;font-size:16.5px;color:#0F172A}
+.sa-modal-box .sa-mh{font-size:12.5px;color:#64748B;margin-bottom:12px;line-height:1.7}
+.sa-input{width:100%;border:1px solid #E2E8F0;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+.sa-input:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.sa-modal-ft{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.sa-teach-wrap{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;padding:4px 0}
+.sa-teach{font-size:12.5px;padding:6px 11px;border-radius:999px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer}
+.sa-teach.on{background:#ECFDF5;border-color:#A7F3D0;color:#047857;font-weight:600}
+.sa-loading{padding:36px;text-align:center;color:#64748B;font-size:13px}
+.sa-loading i{display:inline-block;width:16px;height:16px;border:2px solid #CBD5E1;border-top-color:#2563EB;border-radius:50%;animation:sa-spin .8s linear infinite;vertical-align:-3px;margin-right:8px}
+@keyframes sa-spin{to{transform:rotate(360deg)}}
+.sa-kpi{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.sa-kpi div{background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:10px 14px;min-width:104px}
+.sa-kpi b{display:block;font-size:18px;color:#0F172A;line-height:1.2}
+.sa-kpi span{font-size:11.5px;color:#64748B}
+@media (max-width:720px){
+  .sa-wrap{padding:0 2px 20px}
+  .sa-frame-wrap{height:calc(100vh - 118px);min-height:460px}
+  .sa-card{padding:14px}
+  .sa-tabs .sa-tab{padding:7px 12px;font-size:13px}
+}
+
+</style>
 </head>
 <body>
 
@@ -5031,6 +5094,11 @@ function buildSidebar() {
     html += `</div>`;
   }
   
+  // 学校活动（校运会 / 篮球比赛 / 其他活动）
+  if (typeof schoolActivityNavHtml === 'function') {
+    html += schoolActivityNavHtml();
+  }
+
   nav.innerHTML = html;
   applyDbChatDot();
 }
@@ -6121,6 +6189,7 @@ function navigate(pageId) {
     'duty-roster': '值日安排',
     'deskboard': '班级桌面管理',
     'download': '软件下载',
+    'school-activities': '学校活动',
   };
   document.getElementById('headerTitle').textContent = titles[pageId] || '';
   document.getElementById('headerBreadcrumb').textContent = `首页 / ${titles[pageId] || ''}`;
@@ -6181,6 +6250,7 @@ function renderPage(pageId) {
     'data-fill': renderDataFill,
     'deskboard': renderDeskboardConsole,
     'download': renderDownloadPage,
+    'school-activities': renderSchoolActivities,
   };
   if (renderers[pageId]) {
     content.innerHTML = renderers[pageId]();
@@ -21490,5 +21560,728 @@ function escapeHtml(str) {
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"spa":2}' crossorigin="anonymous"></script>
+<script id="saModule">
+/* ============================================================
+   学校活动（校运会 / 篮球比赛 / 其他活动）
+   —— 右侧分栏：活动分栏 + 赛事卡片 + 内嵌登分台（iframe，不跳转页面）
+   —— 权限：管理员可指定登分老师，被指定的老师可编辑，其余老师只读
+   —— 数据：秩序册与成绩都存云端（/api/xq/config），多台设备看到同一份
+   ============================================================ */
+var SA_KEY = 'school_activities_v1';
+var SA = { loaded: false, loading: false, tabs: [], meets: [], tab: 'sports', view: 'list', meetId: null, err: '' };
+var SA_PICK = null;          // 当前正在指定老师的赛事 id
+
+function saDefaults() {
+  return {
+    tabs: [
+      { id: 'sports', name: '校运会' },
+      { id: 'basket', name: '篮球比赛' },
+      { id: 'other', name: '其他活动' }
+    ],
+    meets: [{
+      id: 'meet32', tab: 'sports', title: '第三十二届田径运动会',
+      sub: '2026.11.24—11.26 · 九圩中学田径场 · 92 个项目', kind: 'track',
+      builtin: true, editors: [], createdAt: '2026-11-19'
+    }]
+  };
+}
+function saUser() {
+  return (typeof xqCurrentUser !== 'undefined' && xqCurrentUser) ? xqCurrentUser : {};
+}
+function saIsAdmin() {
+  try { return (typeof isXqAdmin === 'function') && isXqAdmin(); } catch (e) { return false; }
+}
+function saCanEdit(m) {
+  if (!m) return false;
+  if (saIsAdmin()) return true;
+  var u = saUser().teacherName || '';
+  return !!(u && m.editors && m.editors.indexOf(u) >= 0);
+}
+function saTabName(id) {
+  var t = SA.tabs.find(function (x) { return x.id === id; });
+  return t ? t.name : id;
+}
+function saNow() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function saClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+/* ---------- 云端读写 ---------- */
+async function saLoad(force) {
+  if (SA.loading) return;
+  if (SA.loaded && !force) return;
+  SA.loading = true;
+  var d = saDefaults();
+  try {
+    var r = await xqApi('config', { action: 'get' });
+    var raw = (r && r.ok && r.config && r.config[SA_KEY] && r.config[SA_KEY].data) || null;
+    if (raw && typeof raw === 'object') {
+      if (Array.isArray(raw.tabs) && raw.tabs.length) {
+        var seen = {};
+        var tabs = [];
+        d.tabs.concat(raw.tabs).forEach(function (t) {
+          if (!t || !t.id || seen[t.id]) return;
+          seen[t.id] = 1; tabs.push({ id: t.id, name: t.name || t.id });
+        });
+        d.tabs = tabs;
+      }
+      if (Array.isArray(raw.meets)) {
+        var have = {};
+        d.meets.forEach(function (m) { have[m.id] = 1; });
+        raw.meets.forEach(function (m) {
+          if (!m || !m.id) return;
+          if (have[m.id]) {
+            var bm = d.meets.find(function (x) { return x.id === m.id; });
+            if (bm) { bm.editors = Array.isArray(m.editors) ? m.editors : []; }
+            return;
+          }
+          d.meets.push(m);
+        });
+      }
+    }
+  } catch (e) {
+    try {
+      var l = localStorage.getItem('xq_' + SA_KEY);
+      if (l) { var ld = JSON.parse(l); if (ld && ld.tabs) { d.tabs = ld.tabs; d.meets = (ld.meets || []).concat(d.meets); } }
+    } catch (_) { }
+  }
+  SA.tabs = d.tabs;
+  SA.meets = d.meets;
+  if (!SA.tabs.some(function (t) { return t.id === SA.tab; })) SA.tab = SA.tabs[0] ? SA.tabs[0].id : 'sports';
+  SA.loaded = true;
+  SA.loading = false;
+  saRefresh();
+}
+async function saSave() {
+  var payload = { tabs: SA.tabs, meets: SA.meets.map(function (m) {
+    return { id: m.id, tab: m.tab, title: m.title, sub: m.sub, kind: m.kind, builtin: !!m.builtin,
+      editors: m.editors || [], createdAt: m.createdAt, imported: !!m.imported, counts: m.counts || null };
+  }) };
+  try { localStorage.setItem('xq_' + SA_KEY, JSON.stringify(payload)); } catch (e) { }
+  try {
+    var r = await xqApi('config', { action: 'set', configKey: SA_KEY, configData: payload,
+      teacherName: saUser().teacherName || '' });
+    if (r && r.ok === false) { saToast('保存到云端失败：' + (r.error || '未知错误')); return false; }
+    return true;
+  } catch (e) { saToast('保存到云端失败：' + e.message); return false; }
+}
+async function saPutData(key, data) {
+  var r = await xqApi('config', { action: 'set', configKey: key, configData: data, teacherName: saUser().teacherName || '' });
+  if (r && r.ok === false) throw new Error(r.error || '云端保存失败');
+  return true;
+}
+function saRefresh() {
+  if (typeof currentPage !== 'undefined' && currentPage === 'school-activities') {
+    try { renderPage('school-activities'); } catch (e) { }
+  }
+}
+function saToast(msg) {
+  try {
+    if (typeof showToast === 'function') { showToast(msg); return; }
+  } catch (e) { }
+  try {
+    var t = document.createElement('div');
+    t.textContent = msg;
+    t.style.cssText = 'position:fixed;left:50%;bottom:38px;transform:translateX(-50%);background:#0F172A;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:10001';
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2200);
+  } catch (e) { alert(msg); }
+}
+
+/* ---------- 左侧「学校活动」分栏 ---------- */
+function schoolActivityNavHtml() {
+  var ico = '<span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/><path d="M8 13h3M8 17h6"/></svg></span>';
+  return '<div class="sidebar-section">'
+    + '<div class="sidebar-section-title">学校活动</div>'
+    + '<div class="sidebar-item" data-page="school-activities" onclick="navigate(\'school-activities\')">'
+    + ico + '<span>学校活动</span>'
+    + '</div></div>';
+}
+
+/* ---------- 右侧页面 ---------- */
+function renderSchoolActivities() {
+  if (!SA.loaded) { saLoad(); }
+  if (!SA.loaded) {
+    return '<div class="sa-wrap"><div class="sa-loading"><i></i>正在加载学校活动…</div></div>';
+  }
+  if (SA.view === 'meet' && SA.meetId) return saRenderMeetView();
+  return saRenderList();
+}
+
+function saRenderList() {
+  var fixedTabs = ['sports', 'basket', 'other'];
+  var tabs = SA.tabs.map(function (t) {
+    var fixed = fixedTabs.indexOf(t.id) >= 0;
+    return '<div class="sa-tab ' + (t.id === SA.tab ? 'on' : '') + '" data-sa="tab" data-id="' + t.id + '">'
+      + '<span>' + saEsc(t.name) + '</span>'
+      + ((SA.tabs.length > 1 && !fixed) ? '<span class="sa-x" data-sa="tab-del" data-id="' + t.id + '" title="删除该分栏">×</span>' : '')
+      + '</div>';
+  }).join('');
+  tabs += '<div class="sa-tab add" data-sa="tab-add">＋ 添加活动分栏</div>';
+
+  var meets = SA.meets.filter(function (m) { return m.tab === SA.tab; });
+  var cards = meets.length ? meets.map(saMeetCard).join('') : '';
+
+  var body;
+  var me = saIsAdmin() ? '' : '<div class="sa-note" style="background:#F8FAFC;border-color:#E2E8F0;color:#64748B">导入秩序册、指定登分老师、新建活动都由管理员操作；你在这里可以查看全部名单和成绩。</div>';
+  if (SA.tab === 'sports') {
+    body = (cards || saEmptyBlock('还没有导入本届校运会', '管理员点「导入秩序册」，把 Word 秩序册传上来，系统会自动把项目、时间、各班名单读出来。'))
+      + (saIsAdmin() ? '<div class="sa-card"><div class="sa-card-ft" style="border-top:0;margin-top:0;padding-top:0">'
+        + '<button class="sa-btn primary" data-sa="import">📖 导入 / 更新秩序册（.docx）</button>'
+        + '<button class="sa-btn" data-sa="import-json">📄 导入已有赛事数据（.json）</button>'
+        + '<span class="sa-sub" style="align-self:center">导入后即刻生成项目表与各班参赛名单，无需再手工录入</span>'
+        + '</div></div>' : me);
+  } else if (SA.tab === 'basket') {
+    body = (cards || saEmptyBlock('篮球比赛分栏已建好', '管理员可以「新建赛事」后进入登分台；比赛模板（比分 / 得分榜）会在后续版本接入。'))
+      + (saIsAdmin() ? saNewMeetBar() : me);
+  } else {
+    body = (cards || saEmptyBlock(saTabName(SA.tab), '这个分栏还没有活动。管理员可以新建活动，标题自定（如：文艺汇演、跳绳比赛）。'))
+      + (saIsAdmin() ? saNewMeetBar() : me);
+  }
+
+  var kpi = '<div class="sa-kpi">'
+    + '<div><b>' + SA.meets.length + '</b><span>已建赛事</span></div>'
+    + '<div><b>' + SA.tabs.length + '</b><span>活动分栏</span></div>'
+    + '<div><b>' + SA.meets.reduce(function (a, m) { return a + ((m.editors && m.editors.length) ? 1 : 0); }, 0) + '</b><span>已指定登分老师</span></div>'
+    + '</div>';
+
+  var note = saIsAdmin()
+    ? '<div class="sa-note">你是管理员：可以导入秩序册、指定每个赛事的登分老师（被指定的老师才能改成绩），其他老师打开只能查看。</div>'
+    : '<div class="sa-note">成绩只有被指定的登分老师可以修改；其他老师打开都是只读，可以查看项目、名次、班级总分。</div>';
+
+  return '<div class="sa-wrap">'
+    + '<div class="sa-head"><div><h2>学校活动</div><p>校运会、篮球比赛等活动的名单与成绩都在这里统一管理</p></div></div>'
+    + note + kpi
+    + '<div class="sa-tabs">' + tabs + '</div>'
+    + body
+    + '</div>';
+}
+
+function saEmptyBlock(title, desc) {
+  return '<div class="sa-empty"><b>' + saEsc(title) + '</b>' + saEsc(desc) + '</div>';
+}
+function saNewMeetBar() {
+  return '<div class="sa-card"><div class="sa-card-ft" style="border-top:0;margin-top:0;padding-top:0">'
+    + '<button class="sa-btn primary" data-sa="new-meet">＋ 新建活动 / 赛事</button>'
+    + '<span class="sa-sub" style="align-self:center">新建后可导入该活动的名单数据，再进入登分台</span>'
+    + '</div></div>';
+}
+function saMeetCard(m) {
+  var kind = m.kind === 'basket' ? 'bball' : (m.kind === 'track' ? '' : 'generic');
+  var icon = m.kind === 'basket' ? '🏀' : (m.kind === 'track' ? '🏆' : '🎯');
+  var editorTxt = (m.editors && m.editors.length)
+    ? '<span class="sa-badge">登分老师：' + m.editors.map(saEsc).join('、') + '</span>'
+    : '<span class="sa-badge warn">未指定登分老师</span>';
+  var canEdit = saCanEdit(m);
+  var btns = '<button class="sa-btn primary" data-sa="open" data-id="' + m.id + '">进入登分台 ›</button>';
+  if (canEdit) {
+    btns += '<button class="sa-btn" data-sa="import" data-id="' + m.id + '">导入 / 更新秩序册</button>';
+  }
+  if (saIsAdmin()) {
+    btns += '<button class="sa-btn" data-sa="teachers" data-id="' + m.id + '">指定登分老师</button>';
+    if (!m.builtin) btns += '<button class="sa-btn danger mini" data-sa="meet-del" data-id="' + m.id + '">删除赛事</button>';
+  }
+  if (!canEdit) btns += '<span class="sa-badge gray" style="align-self:center">你当前是只读权限</span>';
+  return '<div class="sa-card">'
+    + '<div class="sa-card-hd"><div class="sa-trophy ' + kind + '">' + icon + '</div>'
+    + '<div style="flex:1;min-width:0"><div class="sa-title">' + saEsc(m.title) + '</div>'
+    + '<div class="sa-sub">' + saEsc(m.sub || '') + (m.counts ? ' · ' + m.counts.events + ' 个项目 / ' + m.counts.entries + ' 人次' : '') + '</div>'
+    + '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">' + editorTxt
+    + (m.builtin ? '<span class="sa-badge gray">系统内置</span>' : '<span class="sa-badge gray">已导入</span>')
+    + '</div></div></div>'
+    + '<div class="sa-card-ft">' + btns + '</div></div>';
+}
+
+function saRenderMeetView() {
+  var m = SA.meets.find(function (x) { return x.id === SA.meetId; });
+  if (!m) { SA.view = 'list'; return saRenderList(); }
+  var ro = saCanEdit(m) ? '' : '&ro=1';
+  var src = 'xq-meet-app.html?meet=' + encodeURIComponent(m.id)
+    + '&u=' + encodeURIComponent(saUser().teacherName || '') + ro + '&t=' + Date.now();
+  return '<div class="sa-wrap"><div class="sa-frame-wrap">'
+    + '<div class="sa-frame-bar">'
+    + '<button class="sa-btn mini" data-sa="back">‹ 返回活动列表</button>'
+    + '<span class="sa-fb-title">' + saEsc(m.title) + '</span>'
+    + '<span class="sa-badge ' + (saCanEdit(m) ? '' : 'gray') + '">' + (saCanEdit(m) ? '登分权限' : '只读查看') + '</span>'
+    + '<span class="sa-sub">成绩改动会自动保存到云端，其他老师刷新后即可看到</span>'
+    + '</div>'
+    + '<iframe class="sa-frame" src="' + src + '" referrerpolicy="same-origin"></iframe>'
+    + '</div></div>';
+}
+
+function saEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* ---------- 打开登分台（先取云端数据，写进本机 boot 缓存） ---------- */
+async function saOpenMeet(id) {
+  var m = SA.meets.find(function (x) { return x.id === id; });
+  if (!m) return;
+  SA.view = 'meet'; SA.meetId = id;
+  saRefresh();
+  try {
+    var r = await xqApi('config', { action: 'get' });
+    var cfg = (r && r.ok && r.config) || {};
+    var dKey = 'meet_' + id + '_data', sKey = 'meet_' + id + '_state';
+    var data = (cfg[dKey] && cfg[dKey].data) || null;
+    var state = (cfg[sKey] && cfg[sKey].data) || null;
+    localStorage.setItem('xqmeet_boot_' + id, JSON.stringify({ data: data, state: state }));
+    if (!data && !m.builtin) {
+      SA.view = 'list'; saRefresh();
+      saToast('该活动还没有名单数据，请先导入秩序册');
+      return;
+    }
+  } catch (e) { }
+  saRefresh();
+}
+
+/* ---------- 导入秩序册 ---------- */
+function saPickFile(meetId) {
+  var inp = document.getElementById('saFileInput');
+  if (!inp) {
+    inp = document.createElement('input');
+    inp.type = 'file';
+    inp.id = 'saFileInput';
+    inp.accept = '.docx,.json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/json';
+    inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.addEventListener('change', function () { saOnFile(inp); });
+  }
+  inp._meetId = meetId || null;
+  inp.value = '';
+  inp.click();
+}
+async function saOnFile(inp) {
+  var f = inp.files && inp.files[0];
+  if (!f) return;
+  var meetId = inp._meetId;
+  if (/\.json$/i.test(f.name)) { saImportJson(f, meetId); return; }
+  saToast('正在读取秩序册…');
+  try {
+    var parsed = await saParseDocx(f);
+    if (!parsed || !parsed.events.length) throw new Error('没有识别到比赛项目，请确认是秩序册文档');
+    await saApplyMeetData(parsed, meetId, f.name);
+  } catch (e) {
+    saToast('导入失败：' + e.message);
+  }
+}
+async function saImportJson(f, meetId) {
+  saToast('正在读取数据…');
+  try {
+    var text = await f.text();
+    var obj = JSON.parse(text);
+    if (!obj || !obj.events || !obj.events.length) throw new Error('JSON 里没有 events 数据');
+    await saApplyMeetData({ meta: obj.meta || {}, events: obj.events }, meetId, f.name);
+  } catch (e) { saToast('导入失败：' + e.message); }
+}
+async function saApplyMeetData(parsed, meetId, fileName) {
+  var entries = parsed.events.reduce(function (a, e) { return a + (e.entries ? e.entries.length : 0); }, 0);
+  var m = meetId ? SA.meets.find(function (x) { return x.id === meetId; }) : null;
+  var isNew = false;
+  if (!m) {
+    isNew = true;
+    m = {
+      id: 'meet' + Date.now().toString(36), tab: SA.tab,
+      title: (parsed.meta && parsed.meta.meet) || String(fileName || '新赛事').replace(/\.(docx|json)$/i, ''),
+      sub: [(parsed.meta && parsed.meta.dates) || '', (parsed.meta && parsed.meta.venue) || ''].filter(Boolean).join(' · '),
+      kind: SA.tab === 'basket' ? 'basket' : (SA.tab === 'sports' ? 'track' : 'generic'),
+      editors: saIsAdmin() && saUser().teacherName ? [saUser().teacherName] : [],
+      createdAt: saNow(), imported: true
+    };
+    SA.meets.push(m);
+  }
+  m.counts = { events: parsed.events.length, entries: entries };
+  m.updatedAt = saNow();
+  if (parsed.meta && parsed.meta.dates && !m.sub) m.sub = parsed.meta.dates;
+  await saPutData('meet_' + m.id + '_data', { meta: parsed.meta || {}, events: parsed.events });
+  var ok = await saSave();
+  SA.tab = m.tab;
+  saRefresh();
+  saToast(ok ? '导入成功：' + parsed.events.length + ' 个项目 / ' + entries + ' 人次' : '名单已导入，但活动列表未同步到云端');
+}
+
+/* ---------- 指定登分老师 ---------- */
+function saEditTeachers(id) {
+  var m = SA.meets.find(function (x) { return x.id === id; });
+  if (!m) return;
+  SA_PICK = id;
+  var names = [];
+  try { names = Object.keys(xqCredentials || {}).filter(Boolean).sort(); } catch (e) { names = []; }
+  if (!names.length) {
+    try { names = Object.keys(JSON.parse(localStorage.getItem('xq_credentials') || '{}')).sort(); } catch (e) { }
+  }
+  var editors = (m.editors || []).slice();
+  var chips = names.map(function (n) {
+    var on = editors.indexOf(n) >= 0;
+    return '<div class="sa-teach ' + (on ? 'on' : '') + '" data-sa="pick" data-n="' + saEsc(n) + '">' + saEsc(n) + '</div>';
+  }).join('');
+  saModal('<h3>指定登分老师</h3>'
+    + '<div class="sa-mh">赛事：' + saEsc(m.title) + '<br>被指定的老师可以登分（可编辑）；其他老师打开只能查看。</div>'
+    + '<div class="sa-teach-wrap" id="saTeacherWrap">' + (chips || '<div class="sa-sub">没有读到教师名单，可在下面手动输入姓名</div>') + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:12px"><input class="sa-input" id="saTeachAdd" placeholder="手动添加姓名，如：韦老师">'
+    + '<button class="sa-btn" data-sa="pick-add">添加</button></div>'
+    + '<div class="sa-modal-ft"><button class="sa-btn" data-sa="modal-close">取消</button>'
+    + '<button class="sa-btn primary" data-sa="pick-save">保存</button></div>');
+}
+function saPickToggle(el) {
+  if (!el) return;
+  el.classList.toggle('on');
+}
+function saPickAdd() {
+  var inp = document.getElementById('saTeachAdd');
+  var wrap = document.getElementById('saTeacherWrap');
+  var n = (inp && inp.value || '').trim();
+  if (!n || !wrap) return;
+  if (wrap.querySelector('[data-n="' + n.replace(/"/g, '&quot;') + '"]')) { inp.value = ''; return; }
+  var d = document.createElement('div');
+  d.className = 'sa-teach on';
+  d.setAttribute('data-sa', 'pick');
+  d.setAttribute('data-n', n);
+  d.textContent = n;
+  wrap.appendChild(d);
+  inp.value = '';
+}
+async function saPickSave() {
+  var wrap = document.getElementById('saTeacherWrap');
+  var m = SA.meets.find(function (x) { return x.id === SA_PICK; });
+  if (!m || !wrap) return;
+  m.editors = Array.from(wrap.querySelectorAll('.sa-teach.on')).map(function (el) { return el.dataset.n; });
+  saCloseModal();
+  await saSave();
+  saRefresh();
+  saToast(m.editors.length ? '已指定 ' + m.editors.length + ' 位登分老师' : '已清空登分老师（只有管理员可编辑）');
+}
+
+/* ---------- 弹窗 ---------- */
+function saModal(inner) {
+  saCloseModal();
+  var box = document.createElement('div');
+  box.className = 'sa-modal';
+  box.id = 'saModal';
+  box.innerHTML = '<div class="sa-modal-box">' + inner + '</div>';
+  box.addEventListener('click', function (e) { if (e.target === box) saCloseModal(); });
+  document.body.appendChild(box);
+}
+function saCloseModal() {
+  var m = document.getElementById('saModal');
+  if (m) m.remove();
+}
+function saPrompt(title, hint, value, onOk) {
+  saModal('<h3>' + saEsc(title) + '</h3><div class="sa-mh">' + saEsc(hint || '') + '</div>'
+    + '<input class="sa-input" id="saPromptInput" value="' + saEsc(value || '') + '">'
+    + '<div class="sa-modal-ft"><button class="sa-btn" data-sa="modal-close">取消</button>'
+    + '<button class="sa-btn primary" data-sa="prompt-ok">确定</button></div>');
+  SA_PROMPT_OK = onOk;
+  setTimeout(function () {
+    var i = document.getElementById('saPromptInput');
+    if (i) { i.focus(); i.select(); i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saPromptOk(); } }); }
+  }, 30);
+}
+function saPromptOk() {
+  var i = document.getElementById('saPromptInput');
+  var v = (i && i.value || '').trim();
+  if (!v) return;
+  saCloseModal();
+  if (typeof SA_PROMPT_OK === 'function') SA_PROMPT_OK(v);
+}
+var SA_PROMPT_OK = null;
+
+/* ---------- 事件委托 ---------- */
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-sa]');
+  if (!t) return;
+  var act = t.dataset.sa;
+  var id = t.dataset.id;
+  if (act === 'tab-del') {
+    e.stopPropagation();
+    if (!saIsAdmin()) { saToast('只有管理员可以删除分栏'); return; }
+    if (['sports', 'basket', 'other'].indexOf(id) >= 0) { saToast('系统默认分栏不能删除'); return; }
+    if (SA.tabs.length <= 1) return;
+    SA.tabs = SA.tabs.filter(function (x) { return x.id !== id; });
+    SA.meets = SA.meets.filter(function (m) { return m.tab !== id; });
+    if (SA.tab === id) SA.tab = SA.tabs[0].id;
+    saSave(); saRefresh();
+    return;
+  }
+  if (act === 'tab') { SA.tab = id; SA.view = 'list'; saRefresh(); return; }
+  if (act === 'tab-add') {
+    if (!saIsAdmin()) { saToast('只有管理员可以新增分栏'); return; }
+    saPrompt('添加活动分栏', '例如：文艺汇演、跳绳比赛、班级拔河', '', function (name) {
+      SA.tabs.push({ id: 'act' + Date.now().toString(36), name: name });
+      SA.tab = SA.tabs[SA.tabs.length - 1].id;
+      saSave(); saRefresh();
+    });
+    return;
+  }
+  if (act === 'open') { saOpenMeet(id); return; }
+  if (act === 'back') { SA.view = 'list'; SA.meetId = null; saRefresh(); return; }
+  if (act === 'import') { saPickFile(id || null); return; }
+  if (act === 'import-json') { saPickFile(null); return; }
+  if (act === 'teachers') { saEditTeachers(id); return; }
+  if (act === 'meet-del') {
+    if (!saIsAdmin()) return;
+    var m = SA.meets.find(function (x) { return x.id === id; });
+    saPrompt('删除赛事', '将删除「' + (m ? m.title : '') + '」的活动卡片（云端成绩数据保留，可重新导入）。如确定，请输入 DELETE', '', function (v) {
+      if (v !== 'DELETE') { saToast('未删除'); return; }
+      SA.meets = SA.meets.filter(function (x) { return x.id !== id; });
+      saSave(); saRefresh(); saToast('已删除');
+    });
+    return;
+  }
+  if (act === 'new-meet') {
+    if (!saIsAdmin()) { saToast('只有管理员可以新建活动'); return; }
+    saPrompt('新建活动', '填写活动名称，例如：2027 年元旦文艺汇演', '', function (name) {
+      SA.meets.push({
+        id: 'meet' + Date.now().toString(36), tab: SA.tab, title: name,
+        sub: '', kind: SA.tab === 'basket' ? 'basket' : (SA.tab === 'sports' ? 'track' : 'generic'),
+        editors: saIsAdmin() && saUser().teacherName ? [saUser().teacherName] : [],
+        createdAt: saNow(), imported: false
+      });
+      saSave(); saRefresh();
+    });
+    return;
+  }
+  if (act === 'pick') { saPickToggle(t); return; }
+  if (act === 'pick-add') { saPickAdd(); return; }
+  if (act === 'pick-save') { saPickSave(); return; }
+  if (act === 'modal-close') { saCloseModal(); return; }
+  if (act === 'prompt-ok') { saPromptOk(); return; }
+}, true);
+
+/* ============================================================
+   秩序册解析（.docx → 项目 / 时间 / 各班名单）
+   规则与《九圩中学第三十二届田径运动会秩序册》一致：
+   · 日程表段落：2026 年 11 月 24 日上午第一场径赛项目 / 08:30 初三女子 100 米预赛
+   · 起点名单表格：项目表头行 + 姓名行 + 班级号行
+   ============================================================ */
+function saXmlDecode(s) {
+  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
+function saNodeText(xml) {
+  var out = '';
+  var re = /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g, m;
+  while ((m = re.exec(xml))) out += m[1];
+  return saXmlDecode(out).replace(/\u00a0/g, ' ').trim();
+}
+function saFindTblEnd(xml, start) {
+  var re = /<w:tbl(?:\s[^>]*)?>|<\/w:tbl>/g;
+  re.lastIndex = start;
+  var depth = 0, m;
+  while ((m = re.exec(xml))) {
+    if (m[0].charAt(1) === '/') { depth--; if (depth === 0) return re.lastIndex; }
+    else depth++;
+  }
+  return xml.length;
+}
+function saDocLines(xml) {
+  var lines = [];
+  var pushParas = function (chunk) {
+    var re = /<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, m;
+    while ((m = re.exec(chunk))) {
+      var t = saNodeText(m[0]);
+      if (t) lines.push(t);
+    }
+  };
+  var pushRows = function (chunk) {
+    var re = /<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g, m;
+    while ((m = re.exec(chunk))) {
+      var cells = [], cre = /<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/g, cm;
+      while ((cm = cre.exec(m[0]))) cells.push(saNodeText(cm[0]));
+      var nonEmpty = cells.filter(function (c) { return c; });
+      if (nonEmpty.length) lines.push(cells.join(' | '));
+    }
+  };
+  var i = 0;
+  while (i < xml.length) {
+    var open = xml.indexOf('<w:tbl', i);
+    if (open < 0) { pushParas(xml.slice(i)); break; }
+    pushParas(xml.slice(i, open));
+    var end = saFindTblEnd(xml, open);
+    pushRows(xml.slice(open, end));
+    i = end;
+  }
+  return lines;
+}
+var SA_EVENT_NAMES = ['100米', '200米', '400米', '800米', '1000米', '1500米', '4×100米接力', '4×200米接力',
+  '跳高', '三级蛙跳', '立定三级跳', '实心球', '高杆绣球', '背篓绣球', '拔河'];
+function saNormName(s) {
+  s = String(s).replace(/\s+/g, '').replace(/\*/g, '×').replace(/X/g, '×').replace(/x/g, '×');
+  s = s.replace(/接力赛/g, '接力').replace(/预决赛/g, '').replace(/预赛/g, '').replace(/决赛/g, '');
+  s = s.replace(/男女/g, '').replace(/实立定/g, '立定');
+  if (s.indexOf('4×100') === 0) return '4×100米接力';
+  if (s.indexOf('4×200') === 0) return '4×200米接力';
+  if (s.indexOf('2×200') === 0) return '4×200米接力';
+  if (s.indexOf('实心球') >= 0) return '实心球';
+  if (s.indexOf('三级蛙跳') >= 0) return '三级蛙跳';
+  if (s.indexOf('立定三级跳') >= 0) return '立定三级跳';
+  if (s.indexOf('跳高') >= 0) return '跳高';
+  if (s.indexOf('高杆绣球') >= 0) return '高杆绣球';
+  if (s.indexOf('背篓绣球') >= 0) return '背篓绣球';
+  if (s.indexOf('拔河') >= 0) return '拔河';
+  var ds = ['1500', '1000', '800', '400', '200', '100'];
+  for (var i = 0; i < ds.length; i++) {
+    if (s.indexOf(ds[i] + '米') === 0 || s.indexOf(ds[i]) === 0) return ds[i] + '米';
+  }
+  return s;
+}
+function saKindOf(n) {
+  if (['跳高', '三级蛙跳', '立定三级跳', '实心球'].indexOf(n) >= 0) return '田赛';
+  if (['高杆绣球', '背篓绣球', '拔河'].indexOf(n) >= 0) return '民族';
+  return '径赛';
+}
+function saParseLines(lines) {
+  var gName = /^[\u4e00-\u9fa5]{2,4}$/;
+  var idxs = [];
+  lines.forEach(function (l, i) { if (String(l).trim() === '竞赛日程表') idxs.push(i); });
+  var aStart = idxs.length ? idxs[0] : 0;
+  var aEnd = idxs.length > 1 ? idxs[1] : lines.length;
+
+  /* Part A 日程 */
+  var A = [], cur = null;
+  for (var i = aStart; i < aEnd; i++) {
+    var l = String(lines[i]).trim().replace(/\|/g, '').replace(/｜/g, '');
+    if (!l) continue;
+    var hd = l.match(/\d{4}\s*年\s*(\d+)\s*月\s*(\d+)\s*日\s*(上午|下午)[^第]*第?([一二三四五六])\s*场\s*(径赛|田赛)项目/);
+    if (hd) { cur = { date: hd[1] + '月' + hd[2] + '日', ampm: hd[3] }; continue; }
+    if (!cur) continue;
+    var ev = l.match(/^(\d{1,2})[:：]\s*(\d{2})\s*(初一|初二|初三)\s*(男女|男子|女子|男|女)\s*(.+)$/);
+    if (!ev) continue;
+    var rest = ev[5].replace(/\s+/g, '');
+    var gender = rest.indexOf('男女') >= 0 ? '男女' : (ev[4].indexOf('男') >= 0 ? '男' : '女');
+    var name = saNormName(rest);
+    if (SA_EVENT_NAMES.indexOf(name) < 0) continue;
+    A.push({
+      date: cur.date, ampm: cur.ampm,
+      time: (ev[1].length < 2 ? '0' + ev[1] : ev[1]) + ':' + ev[2],
+      grade: ev[3], gender: gender, name: name,
+      phase: rest.indexOf('预赛') >= 0 ? '预赛' : '决赛', raw: rest
+    });
+  }
+
+  /* Part B 名单 */
+  var ENT = {}, pend = [], key = null;
+  for (var j = aEnd; j < lines.length; j++) {
+    var raw = String(lines[j]).trim();
+    if (!raw || raw === '===TABLE===' || raw === '===ENDTABLE===') continue;
+    var cells = raw.split(/[|｜]/).map(function (c) { return c.trim(); });
+    var ne = cells.filter(function (c) { return c; });
+    if (!ne.length) continue;
+
+    var sJoin = ne.join('');
+    sJoin = sJoin.replace(/[（(][\s\S]*/, '').replace(/^\d{1,2}\s*[:：]\s*\d{2}/, '').replace(/\s/g, '');
+    var hd = sJoin.match(/(初一|初二|初三)(男女|男子|女子|男|女)(.*)$/);
+    if (hd && /(米|跳|实心球|绣球|拔河)/.test(hd[3]) && hd[3].length < 25 && !gName.test(sJoin)) {
+      var nm = saNormName(hd[3].trim());
+      if (SA_EVENT_NAMES.indexOf(nm) >= 0) {
+        var g2 = hd[2].indexOf('男女') >= 0 ? '男女' : (hd[2].indexOf('男') >= 0 ? '男' : '女');
+        key = hd[1] + '|' + g2 + '|' + nm + '|' + (hd[3].indexOf('预赛') >= 0 ? '预赛' : '决赛');
+        pend = [];
+        continue;
+      }
+    }
+    if (ne.length >= 2 && ne.every(function (c) { return gName.test(c); }) && ne.indexOf('姓名') < 0) {
+      pend = ne; continue;
+    }
+    if (pend.length && key && ne.length === pend.length && ne.every(function (c) { return /^\d{2,3}$/.test(c); })) {
+      for (var k = 0; k < pend.length; k++) {
+        var c0 = ne[k], cls = c0.length === 2 ? ('26' + c0.slice(1)) : c0;
+        var num = parseInt(cls, 10);
+        if (!(num >= 240 && num <= 268)) continue;
+        var list = ENT[key] || (ENT[key] = []);
+        var dup = list.some(function (x) { return x.n === pend[k] && x.c === cls; });
+        if (!dup) list.push({ n: pend[k], c: cls });
+      }
+      pend = []; continue;
+    }
+    if (key && key.indexOf('接力') >= 0 && ne.length >= 3 && ne.every(function (c) { return /^\d{3}$/.test(c); })) {
+      var list2 = ENT[key] || (ENT[key] = []);
+      ne.forEach(function (c) { if (!list2.some(function (x) { return x.c === c; })) list2.push({ n: '', c: c }); });
+    }
+  }
+
+  /* 合并 */
+  var events = [], seen = {};
+  A.forEach(function (a) {
+    var k = a.grade + '|' + a.gender + '|' + a.name + '|' + a.phase;
+    if (seen[k]) return;
+    seen[k] = 1;
+    var e = {
+      date: a.date, ampm: a.ampm, time: a.time, grade: a.grade, gender: a.gender,
+      name: a.name, phase: a.phase, raw: a.raw,
+      kind: saKindOf(a.name),
+      team: ['4×100米接力', '4×200米接力', '拔河', '高杆绣球', '背篓绣球'].indexOf(a.name) >= 0
+    };
+    var ent = ENT[k] || [];
+    if (!ent.length && !e.team) {
+      var other = a.phase === '预赛' ? '决赛' : '预赛';
+      ent = ENT[a.grade + '|' + a.gender + '|' + a.name + '|' + other] || [];
+    }
+    if (!ent.length && e.team) {
+      var pref = { '初一': '26', '初二': '25', '初三': '24' }[a.grade] || '24';
+      for (var t = 1; t <= 7; t++) ent.push({ n: '', c: pref + t });
+    }
+    e.entries = ent.slice();
+    events.push(e);
+  });
+
+  /* 清洗：上午不应出现在 12 点后；去重；重编 id */
+  events = events.filter(function (e) {
+    var h = parseInt(String(e.time).split(':')[0], 10) || 0;
+    return !(e.ampm === '上午' && h >= 12);
+  });
+  events.forEach(function (e, i2) {
+    e.id = i2;
+    var CLS_FIX = { '146': '246' };   // 秩序册里个别班级号笔误
+    var s2 = {}, out = [];
+    e.entries.forEach(function (x) {
+      x.c = CLS_FIX[x.c] || x.c;
+      var kk = x.n + '|' + x.c;
+      if (s2[kk]) return;
+      s2[kk] = 1; out.push(x);
+    });
+    e.entries = out;
+  });
+
+  /* meta */
+  var school = '', meetTitle = '', year = '';
+  for (var q = 0; q < Math.min(lines.length, 80); q++) {
+    var t2 = String(lines[q]).trim();
+    if (!school) { var sm = t2.match(/([\u4e00-\u9fa5]{2,6}中学)/); if (sm) school = sm[1]; }
+    if (!meetTitle) { var mm = t2.match(/第[一二三四五六七八九十百零〇\d]+届[\u4e00-\u9fa5]*运动会/); if (mm) meetTitle = mm[0]; }
+    if (!year) { var ym = t2.match(/(20\d{2})\s*年/); if (ym) year = ym[1]; }
+  }
+  var dates = [];
+  events.forEach(function (e) { if (dates.indexOf(e.date) < 0) dates.push(e.date); });
+  var dateTxt = '';
+  if (dates.length) {
+    var y = year || String(new Date().getFullYear());
+    dateTxt = y + '年' + dates[0] + (dates.length > 1 ? '—' + dates[dates.length - 1].replace(/.*月/, '') : '');
+  }
+  var venue = '';
+  for (var v = 0; v < lines.length; v++) {
+    var lv = String(lines[v]);
+    if (/比赛地点|地\s*点/.test(lv) && /(田径场|操场|运动场|体育馆)/.test(lv)) {
+      var vm = lv.match(/([\u4e00-\u9fa5]{2,8}(?:田径场|操场|运动场|体育馆))/);
+      if (vm) { venue = vm[1]; break; }
+    }
+  }
+  return { meta: { school: school, meet: meetTitle || '校运会', dates: dateTxt, venue: venue || '田径场' }, events: events };
+}
+
+async function saParseDocx(file) {
+  if (typeof JSZip === 'undefined') throw new Error('缺少 JSZip，请检查网络后刷新页面');
+  var zip = await JSZip.loadAsync(file);
+  var entry = zip.file('word/document.xml');
+  if (!entry) throw new Error('这不是 .docx 文件');
+  var xml = await entry.async('string');
+  var lines = saDocLines(xml);
+  return saParseLines(lines);
+}
+
+</script>
 </body>
 </html>
