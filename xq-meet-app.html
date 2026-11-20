@@ -91,6 +91,8 @@ button{font-family:inherit}
 .tag.final{color:var(--brand);border-color:#ecc4bc;background:var(--brand-soft)}
 .tag.team{color:#5b5480;border-color:#d6d2e8;background:#f0eef8}
 .tag.rec{color:#8a6a12;border-color:#e2cf98;background:linear-gradient(180deg,#fdf6e4,#f7ead0);font-weight:600}
+.tag.award{color:#8a6a12;border-color:#e2cf98;background:var(--gold-soft)}
+.tag[data-act="scoring"]{cursor:pointer}
 .qual-box{background:#fffdf6;border:1px solid #eadfc2;border-radius:14px;padding:12px 14px;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
 .qual-box .qh{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .qual-box .qh b{font-size:13px;color:var(--ink)}
@@ -309,6 +311,8 @@ td.note{width:54px}
 .data-item:last-child{border-bottom:0}
 .data-item .t b{font-size:13.5px}
 .data-item .t small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.pen-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:12.5px;line-height:1.5}
+.pen-row:last-child{border-bottom:0}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px}
 
 /* ============ 底部导航 ============ */
@@ -452,6 +456,17 @@ const PHASE = { '预赛': '预赛', '决赛': '决赛' };
 const KIND = { '径赛': '径赛', '田赛': '田赛', '民族': '民族传统', '教师': '教师活动' };
 const PTS_SOLO = [7, 6, 5, 4, 3, 2];
 const PTS_TEAM = [8, 6, 4];
+/* 项目级分值：S.scoring[evId] 覆盖默认值；分值个数即录取名额 */
+function defaultScoring(ev) { return (ev && ev.team) ? PTS_TEAM.slice() : PTS_SOLO.slice(); }
+function scoringOf(ev) {
+  const custom = (S && S.scoring && S.scoring[ev.id]);
+  if (Array.isArray(custom) && custom.length) return custom.slice().sort((a, b) => b - a);
+  return defaultScoring(ev);
+}
+function parseScoring(str) {
+  const arr = String(str || '').split(/[,，、\/\s]+/).map(x => parseFloat(x)).filter(x => !isNaN(x) && x >= 0);
+  return arr.slice(0, 12);
+}
 
 function gradeOf(cls) {
   const p = String(cls).slice(0, 2);
@@ -583,49 +598,110 @@ function beatsRecord(ev, val) {
 /* ================= 状态 ================= */
 let S = loadState();
 let CACHE = {};
+function normalizeState(obj) {
+  const base = { results: {}, quals: {}, extra: {}, done: {}, settings: {}, renames: {}, scoring: {}, audit: [], penalties: [], awards: [] };
+  const s = Object.assign(base, obj || {});
+  if (!s.scoring || typeof s.scoring !== 'object') s.scoring = {};
+  if (!Array.isArray(s.audit)) s.audit = [];
+  if (!Array.isArray(s.penalties)) s.penalties = [];
+  if (!Array.isArray(s.awards)) s.awards = [];
+  return s;
+}
 function loadState() {
-  let base = { results: {}, quals: {}, extra: {}, done: {}, settings: {}, renames: {} };
   // 嵌入模式：优先用宿主（学勤管家）预置的云端成绩
   if (typeof MT_BOOT !== 'undefined' && MT_BOOT && MT_BOOT.state && typeof MT_BOOT.state === 'object') {
-    return Object.assign({}, base, MT_BOOT.state);
+    return normalizeState(MT_BOOT.state);
   }
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return Object.assign(base, JSON.parse(raw));
+    if (raw) return normalizeState(JSON.parse(raw));
   } catch (e) {}
-  return base;
+  return normalizeState();
 }
 let saveTimer = null;
+function persistNow() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(S));
+    flashSaved();
+  } catch (e) { toast('本地存储失败：' + e.message); }
+  mtCloudSave();
+}
 function save() {
   CACHE = {};
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(S));
-      flashSaved();
-    } catch (e) { toast('本地存储失败：' + e.message); }
-    mtCloudSave();
-  }, 220);
+  saveTimer = setTimeout(persistNow, 220);
+}
+/* 关闭/切后台前立即落盘，避免防抖窗口内的最后几条成绩丢失 */
+function flushSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; persistNow(); }
+}
+window.addEventListener('pagehide', flushSave);
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushSave(); });
+/* 审计日志：记录谁在何时做了什么 */
+function audit(act, detail) {
+  try {
+    const who = (typeof MT_U !== 'undefined' && MT_U) || window.MT_USER || '本机';
+    (S.audit || (S.audit = [])).push({
+      ts: new Date().toLocaleString('zh-CN', { hour12: false }),
+      by: who, act: act, detail: String(detail == null ? '' : detail).slice(0, 120)
+    });
+    if (S.audit.length > 1000) S.audit = S.audit.slice(-1000);
+  } catch (e) {}
+}
+/* 多人登分防互覆：记录载入时的基线，同步时只把本机真正改动过的项目覆盖到云端最新状态 */
+let BASE = null;
+function captureBaseline() {
+  BASE = {
+    results: JSON.parse(JSON.stringify(S.results || {})),
+    quals: JSON.parse(JSON.stringify(S.quals || {})),
+    extra: JSON.parse(JSON.stringify(S.extra || {})),
+    renames: JSON.parse(JSON.stringify(S.renames || {}))
+  };
+}
+function changedIds(field) {
+  const cur = S[field] || {}, base = (BASE && BASE[field]) || {};
+  const ids = {};
+  Object.keys(cur).forEach(id => ids[id] = 1);
+  Object.keys(base).forEach(id => ids[id] = 1);
+  return Object.keys(ids).filter(id => JSON.stringify(cur[id]) !== JSON.stringify(base[id]));
 }
 /* 嵌入模式：成绩同步到学勤管家云端（同一个站点，走 /api/xq/config） */
 function mtCloudSave() {
   if (typeof MT_MEET === 'undefined' || !MT_MEET) return;
+  const key = 'meet_' + MT_MEET + '_state';
+  const who = (typeof MT_U !== 'undefined' && MT_U) || window.MT_USER || '';
+  function push(state) {
+    return fetch('/api/xq/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set', configKey: key, configData: state, teacherName: who })
+    }).then(r => r.json()).then(res => { if (res && res.ok === false) toast('云端保存失败，已存本机'); });
+  }
   try {
-    fetch('/api/xq/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'set',
-        configKey: 'meet_' + MT_MEET + '_state',
-        configData: S,
-        teacherName: (typeof MT_U !== 'undefined' && MT_U) || window.MT_USER || ''
+    // 先取云端最新状态，按项目合并本机改动，避免整份覆盖其他裁判的成绩
+    fetch('/api/xq/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get' }) })
+      .then(r => r.json())
+      .then(res => {
+        const cfg = (res && res.ok && res.config) || {};
+        const remote = (cfg[key] && cfg[key].data) || null;
+        if (!remote || !BASE) return push(S);
+        const merged = normalizeState(Object.assign({}, remote));
+        ['results', 'quals', 'extra', 'renames'].forEach(f => {
+          changedIds(f).forEach(id => { merged[f][id] = (S[f] || {})[id]; });
+        });
+        // 配置类字段以本机为准（分值设置、扣分、奖次）
+        merged.settings = S.settings; merged.scoring = S.scoring;
+        merged.penalties = S.penalties; merged.awards = S.awards;
+        // 审计日志按 时间+操作+详情 去重合并，避免每次保存重复堆积
+        const seen = {}, auditAll = (remote.audit || []).concat(S.audit || []);
+        merged.audit = auditAll.filter(a => {
+          const k = (a.ts || '') + '|' + (a.act || '') + '|' + (a.detail || '');
+          if (seen[k]) return false; seen[k] = 1; return true;
+        }).slice(-1000);
+        // 不改写本机 S：避免异步期间的新编辑被覆盖，基线保持在载入时刻
+        return push(merged);
       })
-    }).then(function (r) { return r.json(); })
-      .then(function (res) {
-        if (res && res.ok === false) toast('云端保存失败，已存本机');
-      })
-      .catch(function () { });
-  } catch (e) { }
+      .catch(() => push(S));
+  } catch (e) { try { push(S); } catch (e2) {} }
 }
 function flashSaved() {
   const el = $('#saveState');
@@ -740,7 +816,7 @@ function computeEvent(ev) {
     .forEach(r => { r.rank = +r.rankManual; });
 
   const isFinal = ev.phase !== '预赛';
-  const ptsArr = ev.team ? PTS_TEAM : PTS_SOLO;
+  const ptsArr = scoringOf(ev);
   // 破纪录：与校纪录比对，决赛（含直接决赛）自动标记；预赛只提示不计分
   rows.forEach(r => {
     if (r.value == null || r.dq) return;
@@ -792,7 +868,20 @@ function standings(grade) {
       if (r.pb) row.pb++;
     });
   });
+  // 冒名顶替等扣分：按班级从团体总分扣除
+  (S.penalties || []).forEach(p => {
+    const row = map[p.cls];
+    if (row) row.pts -= (parseFloat(p.pts) || 0);
+  });
   const list = Object.values(map).sort((a, b) => b.pts - a.pts || b.g - a.g || b.s - a.s);
+  // 团体总分奖：初一/初三取前 3，初二取前 4（个人奖项覆盖取前3/前4）
+  const quota = { '初一': 3, '初二': 4, '初三': 3 }[grade] || 3;
+  list.forEach((r, i) => {
+    r.rank = i + 1;
+    const manual = (S.awards || []).find(a => a.cls === r.cls);
+    r.award = (i < quota && r.pts > 0) ? ('第 ' + (i + 1) + ' 名') : '';
+    if (manual && manual.award) r.award = manual.award;
+  });
   CACHE[key] = list;
   return list;
 }
@@ -824,6 +913,7 @@ function applyRenames() {
 }
 applyRenames();
 buildStudents();
+captureBaseline();
 function rebuildStudents() { buildStudents(); }
 function migrateKey(obj, oldK, newK) {
   if (!obj || oldK === newK || obj[oldK] == null) return;
@@ -1031,6 +1121,7 @@ function renderSchedule() {
                 <span class="tag ${e.phase === '预赛' ? 'prelim' : 'final'}">${PHASE[e.phase]}</span>
                 <span class="tag">${c.total} 人</span>
                 <span class="tag ${e.team ? 'team' : ''}">${e.team ? '团队' : '个人'}</span>
+                <span class="tag award">取${scoringOf(e).length} · ${scoringOf(e).join('/')}</span>
               </div>
             </div>
             <div class="ev-right">
@@ -1136,6 +1227,7 @@ function renderEvent(idStr) {
       <span class="tag">${c.filled}/${c.total} 已登</span>
       ${rec ? '<span class="tag rec">校纪录 ' + recText(ev, rec) + ' · ' + rec.holder + '</span>' : '<span class="tag">无校纪录对照</span>'}
       ${isPre ? '<span class="tag">晋级线：' + (ev.kind === '田赛' ? '前 10 名' : '前 12 名') + '</span>' : ''}
+      ${RO ? '' : `<span class="tag grade" data-act="scoring" data-id="${ev.id}" style="cursor:pointer" title="点击设置本项目分值">分值 ${scoringOf(ev).join(',')} · 取${scoringOf(ev).length}名 ✎</span>`}
     </div>
   </div>
   ${qbox}
@@ -1176,10 +1268,10 @@ function rowHtml(ev, r, i, c) {
       ${ev.kind === '民族'
         ? `<input class="sc ${filled ? 'filled' : ''}" id="sc${i}" inputmode="numeric" autocomplete="off" ${RO ? 'readonly' : ''}
         placeholder="名次" value="${r.rankManual != null ? r.rankManual : ''}"
-        data-score="${r.key}" data-ev="${ev.id}" data-i="${i}" data-rankonly="1">`
+        data-score="${r.key}" data-ev="${ev.id}" data-i="${i}" data-rankonly="1" data-prev="${r.rankManual != null ? r.rankManual : ''}">`
         : `<input class="sc ${filled ? 'filled' : ''}" id="sc${i}" inputmode="decimal" autocomplete="off" ${RO ? 'readonly' : ''}
         placeholder="${ev.kind === '田赛' ? '米' : '秒'}" value="${esc(r.raw)}"
-        data-score="${r.key}" data-ev="${ev.id}" data-i="${i}">`}
+        data-score="${r.key}" data-ev="${ev.id}" data-i="${i}" data-prev="${esc(r.raw)}">`}
     </td>
     <td class="rank" id="rk${i}">${r.rank ? `<span class="rank-badge ${rankCls}">${r.rank}</span>` : '<span class="muted" style="font-size:11px">—</span>'}</td>
     <td class="pts" id="pt${i}">${r.pts ? r.pts : ''}</td>
@@ -1232,12 +1324,13 @@ function renderBoard() {
 
   <div class="card" style="margin-top:12px;overflow:hidden">
     <table class="rank-table">
-      <thead><tr><th>名次 / 班级</th><th>总分</th><th>金</th><th>银</th><th>铜</th><th>破纪录</th></tr></thead>
+      <thead><tr><th>名次 / 班级</th><th>总分</th><th>金</th><th>银</th><th>铜</th><th>破纪录</th><th>团体奖</th></tr></thead>
       <tbody>
         ${rows.map((r, i) => `<tr class="${i === 0 && r.pts ? 'top1' : ''}">
           <td><span class="num" style="display:inline-block;width:22px;color:var(--muted)">${i + 1}</span> <b>${r.cls}</b></td>
           <td style="font-weight:700">${r.pts}</td>
           <td class="medal">${r.g || ''}</td><td>${r.s || ''}</td><td>${r.b || ''}</td><td>${r.pb || ''}</td>
+          <td>${r.award ? '<span class="tag award">' + escXml(r.award) + '</span>' : ''}</td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -1372,8 +1465,32 @@ function renderData() {
       <button class="btn mini" data-act="csv">导出</button>
     </div>
     <div class="data-item">
-      <div class="t"><b>导入备份</b><small>选择此前导出的 .json 文件</small></div>
+      <div class="t"><b>导出完整数据包（Excel）</b><small>概况·名单·成绩·总分榜·晋级·校纪录·进度·扣分·日志，多工作表</small></div>
+      <button class="btn mini green" data-act="export-xls">导出</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>导出全量快照（JSON）</b><small>含赛事信息·名单·成绩·校纪录·规程·设置，可独立存档</small></div>
+      <button class="btn mini" data-act="export-full">导出</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>导入备份</b><small>选择此前导出的 .json 文件（含全量快照）</small></div>
       <label class="btn mini">选择文件<input type="file" accept="application/json,.json" id="importFile" hidden></label>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>扣分登记</b><small>冒名顶替等舞弊扣团体总分 10 分</small></div>
+      <button class="btn mini" data-act="penalty">登记</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>报名合规检查</b><small>每人限报 2 个单项（集体项目不计）</small></div>
+      <button class="btn mini" data-act="check-entry">检查</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>团体奖次</b><small>初一/初三前 3、初二前 4；可手工调整</small></div>
+      <button class="btn mini" data-act="awards">设置</button>
+    </div>
+    <div class="data-item">
+      <div class="t"><b>操作日志</b><small>谁在何时改了成绩/名单/分值</small></div>
+      <button class="btn mini" data-act="audit">查看</button>
     </div>
     <div class="data-item">
       <div class="t"><b>打印成绩公告</b><small>当前榜单与已录项目成绩</small></div>
@@ -1407,6 +1524,162 @@ function renderData() {
   <div style="height:10px"></div>`;
 }
 
+/* ================= 项目级分值设置 ================= */
+function openScoring(evId) {
+  const ev = EVENTS[evId];
+  if (!ev) return;
+  const cur = scoringOf(ev);
+  const isCustom = !!(S.scoring && S.scoring[evId]);
+  openSheet(`
+    <div class="grab"></div>
+    <h3>${escXml(evTitle(ev))} · 分值设置</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:12px">写几个分值，就录取几名。积分按名次从高到低排列，超出名额不计分。</div>
+    <div class="row" style="gap:8px;align-items:center">
+      <input id="scoringInput" value="${cur.join(',')}" placeholder="7,6,5,4,3,2" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px">
+    </div>
+    <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn mini" data-act="fill-scoring" data-v="7,6,5,4,3,2">个人 取6</button>
+      <button class="btn mini" data-act="fill-scoring" data-v="8,6,4">团队 取3</button>
+      <button class="btn mini" data-act="fill-scoring" data-v="9,7,6,5,4,3,2,1">取8</button>
+    </div>
+    <div class="row" style="gap:8px;margin-top:14px">
+      <button class="btn green" data-act="save-scoring" data-id="${evId}">保存</button>
+      ${isCustom ? '<button class="btn" data-act="reset-scoring" data-id="' + evId + '">恢复默认</button>' : ''}
+      <button class="btn" data-act="sheet-close">取消</button>
+    </div>
+    <div style="height:6px"></div>`);
+}
+function saveScoring(evId) {
+  const inp = $('#scoringInput');
+  const arr = parseScoring(inp ? inp.value : '');
+  if (!arr.length) { toast('请至少填写一个分值'); return; }
+  S.scoring[evId] = arr;
+  CACHE = {};
+  audit('修改项目分值', '项目 #' + evId + ' → ' + arr.join(','));
+  save(); closeSheet(); render(); toast('分值已保存：取 ' + arr.length + ' 名');
+}
+function resetScoring(evId) {
+  delete S.scoring[evId];
+  CACHE = {};
+  audit('恢复默认分值', '项目 #' + evId);
+  save(); closeSheet(); render(); toast('已恢复默认分值');
+}
+function fillScoring(v) { const inp = $('#scoringInput'); if (inp) inp.value = v; }
+
+/* ================= 扣分登记（冒名顶替等舞弊） ================= */
+function openPenalty() {
+  const list = (S.penalties || []).map((p, i) => `
+    <div class="pen-row">
+      <span><b>${escXml(p.cls)}</b> 扣 ${escXml(p.pts)} 分 · ${escXml(p.reason || '')}</span>
+      <button class="btn mini" data-act="del-penalty" data-k="${i}">删除</button>
+    </div>`).join('') || '<div class="muted" style="font-size:12px">暂无扣分记录</div>';
+  openSheet(`
+    <div class="grab"></div>
+    <h3>扣分登记</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">规程：冒名顶替等弄虚作假，扣团体总分 10 分。</div>
+    <div class="row" style="gap:8px">
+      <select id="penCls" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px">
+        ${CLASS_LIST.map(c => '<option value="' + c + '">' + c + '</option>').join('')}
+      </select>
+      <input id="penPts" type="number" value="10" style="width:70px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px">
+    </div>
+    <input id="penReason" placeholder="原因（如：冒名顶替）" value="冒名顶替" style="width:100%;box-sizing:border-box;margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px">
+    <div class="row" style="gap:8px;margin-top:12px">
+      <button class="btn primary" data-act="save-penalty">登记扣分</button>
+      <button class="btn" data-act="sheet-close">关闭</button>
+    </div>
+    <div class="section-title" style="margin:16px 0 8px"><h2 style="font-size:13px">已登记</h2></div>
+    ${list}
+    <div style="height:6px"></div>`);
+}
+function savePenalty() {
+  const cls = $('#penCls').value, pts = parseFloat($('#penPts').value) || 0;
+  const reason = ($('#penReason').value || '').trim();
+  if (!cls || !pts) { toast('请填写班级和扣分'); return; }
+  S.penalties.push({ ts: new Date().toLocaleString('zh-CN', { hour12: false }), cls, pts, reason, by: (typeof MT_U !== 'undefined' && MT_U) || window.MT_USER || '本机' });
+  audit('登记扣分', cls + ' 扣 ' + pts + ' 分：' + reason);
+  CACHE = {}; save(); openPenalty(); render(); toast('扣分已登记');
+}
+function delPenalty(k) {
+  const p = S.penalties[+k];
+  if (p) audit('删除扣分', p.cls + ' ' + p.pts + ' 分');
+  S.penalties.splice(+k, 1);
+  CACHE = {}; save(); openPenalty(); render(); toast('已删除');
+}
+
+/* ================= 报名合规检查（每人限报 2 个单项） ================= */
+function checkEntries() {
+  const counts = {};
+  EVENTS.forEach(ev => {
+    if (ev.team || ev.grade === '教师') return; // 集体项目不计入限报
+    ev.entries.forEach(x => {
+      if (!x.n) return;
+      const k = x.c + '|' + x.n;
+      const list = counts[k] || (counts[k] = []);
+      // 预赛/决赛是同一单项的两个阶段，按项目名去重，避免误报
+      if (list.indexOf(ev.name) < 0) list.push(ev.name);
+    });
+  });
+  const over = Object.keys(counts).filter(k => counts[k].length > 2);
+  const bad = over.filter(k => counts[k].length > 3);
+  const lines = over.map(k => {
+    const p = k.split('|');
+    const n = counts[k].length;
+    const flag = n > 3 ? '超出' : '加报名额';
+    return `<div class="pen-row"><span><b>${escXml(p[0])} ${escXml(p[1])}</b> 报 ${n} 项 <span class="tag ${n > 3 ? 'final' : 'grade'}">${flag}</span>：${escXml(counts[k].join('、'))}</span></div>`;
+  }).join('');
+  openSheet(`
+    <div class="grab"></div>
+    <h3>报名合规检查</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">规程：每人限报 2 个单项，每班另有 2 个"加报名额"可报第 3 项，集体项目不计。${over.length} 人报 3 项（可能用了加报名额），其中 ${bad.length} 人报 4 项以上需核对。</div>
+    ${lines || '<div class="muted" style="font-size:12px">✓ 全部符合限报规定</div>'}
+    <div class="row" style="gap:8px;margin-top:14px"><button class="btn" data-act="sheet-close">关闭</button></div>
+    <div style="height:6px"></div>`);
+}
+
+/* ================= 团体奖次手工调整 ================= */
+function openAwards() {
+  const rows = GRADE_LIST.map(g => standings(g).slice(0, 6).map((r, i) => {
+    const m = (S.awards || []).find(a => a.cls === r.cls);
+    return `<div class="pen-row"><span>${escXml(g)} 第${i + 1} <b>${escXml(r.cls)}</b> ${r.pts}分</span>
+      <input class="awardIn" data-cls="${r.cls}" value="${escXml(m ? m.award : (r.award || ''))}" placeholder="奖次" style="width:90px;border:1px solid var(--line);border-radius:8px;padding:6px;font-size:13px"></div>`;
+  }).join('')).join('');
+  openSheet(`
+    <div class="grab"></div>
+    <h3>团体奖次</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">默认：初一/初三前 3、初二前 4 自动授予奖次。可在此手工修改（留空取消）。</div>
+    ${rows || '<div class="muted" style="font-size:12px">尚未录入成绩</div>'}
+    <div class="row" style="gap:8px;margin-top:14px">
+      <button class="btn green" data-act="save-awards">保存</button>
+      <button class="btn" data-act="sheet-close">关闭</button>
+    </div>
+    <div style="height:6px"></div>`);
+}
+function saveAwards() {
+  const ins = document.querySelectorAll('.awardIn');
+  const next = [];
+  ins.forEach(inp => {
+    const v = inp.value.trim();
+    if (v) next.push({ cls: inp.dataset.cls, award: v });
+  });
+  S.awards = next;
+  audit('调整团体奖次', next.length + ' 个班级');
+  CACHE = {}; save(); closeSheet(); render(); toast('奖次已保存');
+}
+
+/* ================= 操作日志 ================= */
+function showAudit() {
+  const logs = (S.audit || []).slice(-200).reverse().map(a => `
+    <div class="pen-row"><span style="font-size:11.5px">${escXml(a.ts || '')} · ${escXml(a.by || '')} · <b>${escXml(a.act || '')}</b> ${escXml(a.detail || '')}</span></div>`).join('') || '<div class="muted" style="font-size:12px">暂无操作记录</div>';
+  openSheet(`
+    <div class="grab"></div>
+    <h3>操作日志</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">最近 200 条（完整记录见导出的完整数据包）。</div>
+    ${logs}
+    <div class="row" style="gap:8px;margin-top:14px"><button class="btn" data-act="sheet-close">关闭</button></div>
+    <div style="height:6px"></div>`);
+}
+
 /* ================= 交互 ================= */
 document.addEventListener('click', e => {
   const goEl = e.target.closest('[data-go]');
@@ -1420,10 +1693,10 @@ document.addEventListener('click', e => {
   const a = act.dataset.act;
   if (a === 'scan') openOcr(+act.dataset.id);
   else if (a === 'paste') openPaste(+act.dataset.id);
-  else if (a === 'prelim') applyPrelim(+act.dataset.id);
+  else if (a === 'prelim') { audit('导入预赛名次', '项目 #' + act.dataset.id); applyPrelim(+act.dataset.id); }
   else if (a === 'goto-event') { location.hash = '#/event/' + act.dataset.ev; }
-  else if (a === 'lock-qual') toggleLockQual(+act.dataset.id);
-  else if (a === 'clear') clearEvent(+act.dataset.id);
+  else if (a === 'lock-qual') { audit('锁定/解锁晋级名单', '项目 #' + act.dataset.id); toggleLockQual(+act.dataset.id); }
+  else if (a === 'clear') { audit('清空项目成绩', '项目 #' + act.dataset.id); clearEvent(+act.dataset.id); }
   else if (a === 'note') openNote(+act.dataset.id, act.dataset.key, act.dataset.i);
   else if (a === 'add') openAdd(+act.dataset.id);
   else if (a === 'rename') openRename(+act.dataset.id, +act.dataset.i);
@@ -1436,6 +1709,19 @@ document.addEventListener('click', e => {
   else if (a === 'evdetail') eventDetailSheet(+act.dataset.id);
   else if (a === 'export') exportJson();
   else if (a === 'csv') exportCsv();
+  else if (a === 'export-xls') exportFullExcel();
+  else if (a === 'export-full') exportFullJson();
+  else if (a === 'penalty') openPenalty();
+  else if (a === 'del-penalty') { delPenalty(act.dataset.k); }
+  else if (a === 'check-entry') checkEntries();
+  else if (a === 'awards') openAwards();
+  else if (a === 'save-awards') saveAwards();
+  else if (a === 'audit') showAudit();
+  else if (a === 'scoring') openScoring(+act.dataset.id);
+  else if (a === 'save-scoring') saveScoring(+act.dataset.id);
+  else if (a === 'reset-scoring') resetScoring(+act.dataset.id);
+  else if (a === 'fill-scoring') fillScoring(act.dataset.v);
+  else if (a === 'save-penalty') savePenalty();
   else if (a === 'reset') resetAll();
   else if (a === 'print') window.print();
   else if (a === 'sheet-close') closeSheet();
@@ -1463,6 +1749,11 @@ document.addEventListener('input', e => {
 $('#mask').addEventListener('click', closeSheet);
 document.addEventListener('change', e => {
   if (e.target.id === 'importFile') importJson(e.target.files[0]);
+  const sc = e.target.closest && e.target.closest('[data-score]');
+  if (sc && sc.dataset.prev !== undefined && sc.value !== sc.dataset.prev) {
+    audit('录入/修改成绩', '项目 #' + sc.dataset.ev + ' · ' + (sc.dataset.prev || '空') + ' → ' + (sc.value || '空'));
+    sc.dataset.prev = sc.value;
+  }
 });
 function openSheet(html) {
   $('#sheet').innerHTML = html;
@@ -1510,6 +1801,7 @@ document.addEventListener('click', e => {
   if (act === 'toggle-dq') row.dq = !row.dq;
   if (act === 'set-rank') row.rankManual = +t.dataset.r;
   if (act === 'toggle-clear') { delete row.dq; delete row.rankManual; }
+  audit('标记成绩', '项目 #' + evId + ' ' + ({'toggle-dq':'弃权','set-rank':'手动名次','toggle-clear':'清除标记','toggle-pb':'破纪录'}[act] || act));
   save();
   closeSheet();
   render();
@@ -1542,6 +1834,7 @@ document.addEventListener('click', e => {
   const cls = $('#addCls').value;
   if (!n) { toast('请填写姓名'); return; }
   (S.extra[evId] || (S.extra[evId] = [])).push({ n, c: cls });
+  audit('添加运动员', '项目 #' + evId + ' ' + cls + ' ' + n);
   save(); closeSheet(); render();
   toast('已添加 ' + n);
 });
@@ -1606,6 +1899,7 @@ document.addEventListener('click', e => {
   if (!row) return;
   if (!nm && !EVENTS[evId].team) { toast('请填写姓名'); return; }
   applyRename(evId, row.ei, row.ej, nm);
+  audit('临时换人', '项目 #' + evId + ' → ' + (nm || '恢复原名'));
   closeSheet(); render();
   toast(nm ? '已替换为 ' + nm : '已恢复为班级队名');
 });
@@ -1637,9 +1931,10 @@ function resetAll() {
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-act="do-reset"]');
   if (!t) return;
+  audit('清空全部成绩', '共 ' + Object.keys(S.results).length + ' 个项目');
   S.results = {}; S.quals = {}; S.extra = {}; S.done = {}; S.renames = {};
   EVENTS.forEach(ev => ev.entries.forEach(e => { e.n = e.orig; }));
-  rebuildStudents();
+  rebuildStudents(); captureBaseline();
   save(); closeSheet(); render(); toast('已清空全部成绩与临时换人');
 });
 function eventDetailSheet(evId) {
@@ -1686,6 +1981,145 @@ function exportCsv() {
   downloadBlob(blob, '九圩中学第32届校运会_成绩表_' + dateStamp() + '.csv');
   toast('成绩表已导出');
 }
+
+/* ---------- 完整数据包：赛事信息 + 规程（供导出复用的统一口径） ---------- */
+function meetInfo() {
+  const m = (typeof DATA !== 'undefined' && DATA && DATA.meta) ? DATA.meta : {};
+  const st = globalStats();
+  return {
+    school: m.school || '', meet: m.meet || '校运会', dates: m.dates || '', venue: m.venue || '',
+    exportedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+    events: st.allEvents, students: st.students, doneEvents: st.doneEv, resultRows: st.resultRows, points: st.pts
+  };
+}
+function rulesInfo() {
+  return {
+    solo: PTS_SOLO.slice(), team: PTS_TEAM.slice(),
+    trackQualify: 12, fieldQualify: 10,
+    recordMultiplier: 2,
+    groupAwards: { '初一': 3, '初二': 4, '初三': 3 },
+    note: '个人前6名7/6/5/4/3/2；接力与民族团队前3名8/6/4；破纪录按名次积分×2；径赛前12、田赛前10进决赛；项目可单独设置分值覆盖默认值'
+  };
+}
+function fullSnapshot() {
+  const scoring = {};
+  EVENTS.forEach(ev => { scoring[ev.id] = scoringOf(ev).slice(); });
+  return {
+    format: 'xq-meet-full-snapshot', version: 1,
+    exportedAt: new Date().toISOString(),
+    meta: meetInfo(), rules: rulesInfo(),
+    data: (typeof DATA !== 'undefined' ? DATA : null),
+    records: (typeof RECORDS_GRADE !== 'undefined' ? RECORDS_GRADE : null),
+    scoring: scoring,
+    state: JSON.parse(JSON.stringify(S))
+  };
+}
+function exportFullJson() {
+  const snap = fullSnapshot();
+  const name = (snap.meta.school || '校运会') + '第32届校运会_全量快照_' + dateStamp() + '.json';
+  downloadBlob(new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' }), name);
+  toast('全量快照已导出');
+}
+
+/* ---------- 完整数据包：Excel（SpreadsheetML 2003，多工作表，Excel/WPS 可直接打开） ---------- */
+function escXml(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+function cellXml(v, isNum) {
+  if (v == null || v === '') return '<Cell/>';
+  if (isNum && !isNaN(parseFloat(v))) return '<Cell><Data ss:Type="Number">' + parseFloat(v) + '</Data></Cell>';
+  return '<Cell><Data ss:Type="String">' + escXml(v) + '</Data></Cell>';
+}
+function sheetXml(name, header, rows, numCols) {
+  numCols = numCols || [];
+  const head = '<Row>' + header.map(h => cellXml(h, false)).join('') + '</Row>';
+  const body = rows.map(r => '<Row>' + r.map((v, i) => cellXml(v, numCols.indexOf(i) >= 0)).join('') + '</Row>').join('');
+  return '<Worksheet ss:Name="' + escXml(name).slice(0, 31) + '"><Table>' + head + body + '</Table></Worksheet>';
+}
+function exportFullExcel() {
+  const info = meetInfo(), rules = rulesInfo();
+  const sheets = [];
+
+  sheets.push(sheetXml('赛事概况', ['项目', '内容'], [
+    ['学校', info.school], ['运动会', info.meet], ['比赛日期', info.dates], ['比赛地点', info.venue],
+    ['导出时间', info.exportedAt], ['比赛项目', info.events], ['参赛运动员', info.students],
+    ['已登项目', info.doneEvents], ['已录成绩', info.resultRows], ['已产生积分', info.points]
+  ]));
+
+  sheets.push(sheetXml('计分规程', ['项目', '内容'], [
+    ['个人项目分值', rules.solo.join(',')], ['接力/团队分值', rules.team.join(',')],
+    ['径赛进决赛', '前 ' + rules.trackQualify + ' 名'], ['田赛进决赛', '前 ' + rules.fieldQualify + ' 名'],
+    ['破纪录', '按名次积分 × ' + rules.recordMultiplier],
+    ['团体总分奖', '初一/初三取前3，初二取前4'], ['说明', rules.note]
+  ]));
+
+  const roster = [];
+  EVENTS.forEach(ev => ev.entries.forEach((x, i) => roster.push([
+    ev.date, ev.time, ev.grade, GEND[ev.gender], ev.name, PHASE[ev.phase], i + 1, x.n || '（团队）', x.c
+  ])));
+  sheets.push(sheetXml('报名名单', ['日期', '时间', '组别', '性别', '项目', '阶段', '序号', '姓名', '班级'], roster, [6]));
+
+  const detail = [];
+  EVENTS.forEach(ev => {
+    const c = computeEvent(ev);
+    if (!c.filled) return;
+    sortByResult(c.rows).forEach(r => {
+      if (!r.raw && r.rankManual == null && !r.dq) return;
+      detail.push([ev.date, ev.grade, GEND[ev.gender], ev.name, PHASE[ev.phase],
+        r.rank || '', r.name || '（团队）', r.cls, fmtScore(ev, r), r.pts || '',
+        r.pb ? '是' : '', r.dq ? '是' : '', r.adv ? '是' : '', r.note || '']);
+    });
+  });
+  sheets.push(sheetXml('成绩明细', ['日期', '组别', '性别', '项目', '阶段', '名次', '姓名', '班级', '成绩', '积分', '破纪录', '弃权', '晋级', '备注'], detail, [5, 9, 10]));
+
+  const board = [];
+  GRADE_LIST.forEach(g => {
+    standings(g).forEach((r, i) => {
+      const award = r.award || '';
+      board.push([g, i + 1, r.cls, r.pts, r.g, r.s, r.b, r.pb, award,
+        Array.isArray(S.awards) ? (S.awards.find(a => a.cls === r.cls) || {}).note || '' : '']);
+    });
+  });
+  sheets.push(sheetXml('班级总分榜', ['组别', '名次', '班级', '总分', '金', '银', '铜', '破纪录', '团体奖', '备注'], board, [1, 3, 4, 5, 6, 7, 8]));
+
+  const qual = [];
+  EVENTS.forEach(ev => {
+    if (ev.phase !== '预赛' || computeEvent(ev).filled === 0) return;
+    const fin = finalOf(ev);
+    const keys = (fin && S.quals[fin.id] && S.quals[fin.id].length) ? S.quals[fin.id]
+      : autoQualKeys(fin || ev) || [];
+    keys.forEach((k, i) => { const p = k.split('|'); qual.push([ev.grade, ev.name, i + 1, p[1] || '', p[0]]); });
+  });
+  sheets.push(sheetXml('晋级名单', ['组别', '项目', '名次', '姓名', '班级'], qual, [2]));
+
+  const recs = [];
+  if (typeof RECORDS_GRADE !== 'undefined' && RECORDS_GRADE) {
+    GRADE_LIST.forEach(g => (RECORDS_GRADE[g] || []).forEach(r => recs.push([g, GEND[r.g] || r.g, r.name, r.v, r.holder, r.cls])));
+  }
+  sheets.push(sheetXml('校纪录', ['组别', '性别', '项目', '纪录', '保持者', '班级'], recs, [3]));
+
+  const prog = [];
+  EVENTS.forEach(ev => {
+    const c = computeEvent(ev);
+    prog.push([ev.date, ev.grade, GEND[ev.gender], ev.name, PHASE[ev.phase], c.total, c.filled,
+      c.total ? Math.round(c.filled / c.total * 100) + '%' : '0%', scoringOf(ev).join(',')]);
+  });
+  sheets.push(sheetXml('登分进度', ['日期', '组别', '性别', '项目', '阶段', '应录', '已录', '完成率', '分值设置'], prog, [5, 6]));
+
+  const pens = (S.penalties || []).map(p => [p.ts || '', p.cls, p.pts, p.reason || '', p.by || '']);
+  sheets.push(sheetXml('扣分记录', ['时间', '班级', '扣分', '原因', '操作人'], pens, [2]));
+
+  const logs = (S.audit || []).slice(-500).map(a => [a.ts || '', a.by || '', a.act || '', a.detail || '']);
+  sheets.push(sheetXml('操作日志', ['时间', '操作人', '操作', '详情'], logs));
+
+  const xml = '<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n' +
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' +
+    'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' + sheets.join('') + '</Workbook>';
+  const name = (info.school || '校运会') + '第32届校运会_完整数据包_' + dateStamp() + '.xls';
+  downloadBlob(new Blob(['\ufeff' + xml], { type: 'application/vnd.ms-excel;charset=utf-8' }), name);
+  toast('完整数据包已导出（' + sheets.length + ' 个工作表）');
+}
 function dateStamp() {
   const d = new Date();
   return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
@@ -1703,12 +2137,17 @@ function importJson(file) {
   fr.onload = () => {
     try {
       const obj = JSON.parse(fr.result);
-      if (!obj || typeof obj !== 'object' || !obj.results) throw new Error('文件格式不对');
-      S = Object.assign({ results: {}, quals: {}, extra: {}, done: {}, settings: {}, renames: {} }, obj);
+      if (!obj || typeof obj !== 'object') throw new Error('文件格式不对');
+      // 兼容两种格式：旧版备份（顶层即 S）与全量快照（成绩在 state 下）
+      const src = (obj.format === 'xq-meet-full-snapshot' && obj.state) ? obj.state : obj;
+      if (!src.results) throw new Error('文件格式不对');
+      S = normalizeState(src);
       if (!S.renames) S.renames = {};
       EVENTS.forEach(ev => ev.entries.forEach(e => { e.n = e.orig; }));
       applyRenames();
       rebuildStudents();
+      captureBaseline();
+      audit('导入备份', '从 JSON 快照恢复成绩');
       save(); render(); toast('导入成功');
     } catch (err) { toast('导入失败：' + err.message); }
   };
