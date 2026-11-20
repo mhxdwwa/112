@@ -1481,7 +1481,7 @@ function renderData() {
       <button class="btn mini" data-act="penalty">登记</button>
     </div>
     <div class="data-item">
-      <div class="t"><b>报名合规检查</b><small>每人限报 2 个单项（集体项目不计）</small></div>
+      <div class="t"><b>报名项数提醒</b><small>按规程提示兼项情况，仅供参考，不作限制</small></div>
       <button class="btn mini" data-act="check-entry">检查</button>
     </div>
     <div class="data-item">
@@ -1607,32 +1607,31 @@ function delPenalty(k) {
   CACHE = {}; save(); openPenalty(); render(); toast('已删除');
 }
 
-/* ================= 报名合规检查（每人限报 2 个单项） ================= */
+/* ================= 报名项数提醒（仅提示，不作限制） ================= */
 function checkEntries() {
   const counts = {};
   EVENTS.forEach(ev => {
-    if (ev.team || ev.grade === '教师') return; // 集体项目不计入限报
+    if (ev.team || ev.grade === '教师') return; // 集体项目不计入项数
     ev.entries.forEach(x => {
       if (!x.n) return;
       const k = x.c + '|' + x.n;
       const list = counts[k] || (counts[k] = []);
-      // 预赛/决赛是同一单项的两个阶段，按项目名去重，避免误报
+      // 预赛/决赛是同一单项的两个阶段，按项目名去重，避免重复计数
       if (list.indexOf(ev.name) < 0) list.push(ev.name);
     });
   });
-  const over = Object.keys(counts).filter(k => counts[k].length > 2);
-  const bad = over.filter(k => counts[k].length > 3);
-  const lines = over.map(k => {
+  const multi = Object.keys(counts).filter(k => counts[k].length > 2)
+    .sort((a, b) => counts[b].length - counts[a].length || a.localeCompare(b, 'zh'));
+  const lines = multi.map(k => {
     const p = k.split('|');
     const n = counts[k].length;
-    const flag = n > 3 ? '超出' : '加报名额';
-    return `<div class="pen-row"><span><b>${escXml(p[0])} ${escXml(p[1])}</b> 报 ${n} 项 <span class="tag ${n > 3 ? 'final' : 'grade'}">${flag}</span>：${escXml(counts[k].join('、'))}</span></div>`;
+    return `<div class="pen-row"><span><b>${escXml(p[0])} ${escXml(p[1])}</b> 共报 ${n} 项 <span class="tag grade">参考</span>：${escXml(counts[k].join('、'))}</span></div>`;
   }).join('');
   openSheet(`
     <div class="grab"></div>
-    <h3>报名合规检查</h3>
-    <div class="muted" style="font-size:12px;margin-bottom:10px">规程：每人限报 2 个单项，每班另有 2 个"加报名额"可报第 3 项，集体项目不计。${over.length} 人报 3 项（可能用了加报名额），其中 ${bad.length} 人报 4 项以上需核对。</div>
-    ${lines || '<div class="muted" style="font-size:12px">✓ 全部符合限报规定</div>'}
+    <h3>报名项数提醒</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">规程参考：每人限报 2 个单项，每班另有 2 个"加报名额"，集体项目不计。以下只是把报 3 项及以上的同学列出来供你核对，<b>系统不会拦截、不影响登分和算分</b>。</div>
+    ${lines || '<div class="muted" style="font-size:12px">✓ 没有报 3 项及以上的同学</div>'}
     <div class="row" style="gap:8px;margin-top:14px"><button class="btn" data-act="sheet-close">关闭</button></div>
     <div style="height:6px"></div>`);
 }
