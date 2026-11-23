@@ -16077,7 +16077,11 @@ try {
   }
 } catch (e) {}
 
-// 先从服务器加载所有配置，再恢复会话或显示登录界面
+// 先同步恢复会话（纯本地、瞬时），让刷新后立即显示已登录界面；
+// 云端配置改为后台加载（约数秒），加载完成后再补一次数据刷新。
+var xqSessionRestored = false;
+try { xqSessionRestored = restoreSession(); } catch (e) { console.warn('[XQ] restoreSession error:', e); }
+
 (async () => {
   // 从服务器加载完整配置（包括 setupTeaching、凭证等）
   // 这样即使没有会话，登录时也能检查教师名单
@@ -16085,10 +16089,14 @@ try {
   console.log('[XQ] Config loaded from server');
   console.log('[XQ] setupTeaching length:', setupTeaching.length);
   console.log('[XQ] Credentials loaded, users:', Object.keys(xqCredentials).length);
-  
-  // 尝试恢复之前的登录会话
-  if (!restoreSession()) {
-    // 没有可恢复的会话，显示登录界面
+
+  if (xqSessionRestored) {
+    // 会话已提前恢复：配置就绪后补刷新依赖配置的视图（班级/侧边栏/当前页）
+    try { refreshCurrentUserClass(); } catch (e) {}
+    try { buildSidebar(); } catch (e) {}
+    try { navigate(getDefaultPage()); } catch (e) {}
+  } else {
+    // 没有可恢复的会话，配置就绪后显示登录界面（此时教师名单已可用）
     checkLoginState();
   }
 })();
