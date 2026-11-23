@@ -16077,26 +16077,46 @@ try {
   }
 } catch (e) {}
 
-// 先同步恢复会话（纯本地、瞬时），让刷新后立即显示已登录界面；
-// 云端配置改为后台加载（约数秒），加载完成后再补一次数据刷新。
-var xqSessionRestored = false;
-try { xqSessionRestored = restoreSession(); } catch (e) { console.warn('[XQ] restoreSession error:', e); }
+// 阶段1：瞬时恢复「已登录外壳」（纯本地、不依赖云端配置），刷新后立即看到已进入账号。
+// 主内容区的完整渲染由阶段2负责：配置加载后调用原样不动的 restoreSession()，
+// 确保最终显示的页面与之前完全一致（同一函数、同一路径）。
+var xqHasSession = false;
+try {
+  var _sessRaw = localStorage.getItem('xq_session');
+  if (_sessRaw) {
+    var _sess = JSON.parse(_sessRaw);
+    if (_sess.user && _sess.role) {
+      xqHasSession = true;
+      currentRole = _sess.role;
+      xqCurrentUser = _sess.user;
+      USERS[_sess.role] = {
+        name: _sess.user.teacherName,
+        role: _sess.user.role === 'leader' ? '校领导' :
+              _sess.user.role === 'headteacher' ? '班主任' :
+              _sess.user.role === 'worker' ? '维修人员' : '科任老师',
+        avatar: _sess.user.teacherName.charAt(0)
+      };
+      document.getElementById('loginPage').classList.add('hidden');
+      document.getElementById('app').classList.add('visible');
+      document.getElementById('sidebarAvatar').textContent = _sess.user.teacherName.charAt(0);
+      document.getElementById('sidebarName').textContent = _sess.user.teacherName;
+      document.getElementById('sidebarRole').textContent = _sess.user.role === 'leader' ? '校领导' :
+                                                          _sess.user.role === 'headteacher' ? '班主任' :
+                                                          _sess.user.role === 'worker' ? '维修人员' : '科任老师';
+    }
+  }
+} catch (e) { console.warn('[XQ] shell restore error:', e); xqHasSession = false; }
 
 (async () => {
-  // 从服务器加载完整配置（包括 setupTeaching、凭证等）
+  // 阶段2：从服务器加载完整配置（包括 setupTeaching、凭证等）
   // 这样即使没有会话，登录时也能检查教师名单
   await xqLoadAllConfig();
   console.log('[XQ] Config loaded from server');
   console.log('[XQ] setupTeaching length:', setupTeaching.length);
   console.log('[XQ] Credentials loaded, users:', Object.keys(xqCredentials).length);
 
-  if (xqSessionRestored) {
-    // 会话已提前恢复：配置就绪后补刷新依赖配置的视图（班级/侧边栏/当前页）
-    try { refreshCurrentUserClass(); } catch (e) {}
-    try { buildSidebar(); } catch (e) {}
-    try { navigate(getDefaultPage()); } catch (e) {}
-  } else {
-    // 没有可恢复的会话，配置就绪后显示登录界面（此时教师名单已可用）
+  // 与原版逻辑等价：会话恢复成功则渲染全部内容；否则显示登录界面。
+  if (!xqHasSession || !restoreSession()) {
     checkLoginState();
   }
 })();
