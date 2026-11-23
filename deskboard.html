@@ -2410,6 +2410,11 @@ table.tbl tr.is-today td.seq { color: var(--accent); font-weight: 700; }
     document.getElementById('xqChatClose').addEventListener('click', function () { chatToggle(false); });
     document.getElementById('xqChatSend').addEventListener('click', chatSendText);
     document.getElementById('xqChatText').addEventListener('input', chatAutosize);
+    /* 中文/日文输入法组字阶段可能不派发 input，或 value 未及时更新，
+       导致「输入了文字但发送按钮仍灰色」。补输入法结束与按键兜底。 */
+    ['compositionend', 'keyup', 'change', 'paste'].forEach(function (ev) {
+      document.getElementById('xqChatText').addEventListener(ev, chatAutosize);
+    });
     document.getElementById('xqChatText').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSendText(); }
     });
