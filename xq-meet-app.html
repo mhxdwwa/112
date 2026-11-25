@@ -218,6 +218,13 @@ table.score input.sc{
 }
 table.score input.sc:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(27,106,79,.12)}
 table.score input.sc.filled{border-color:#c6d8cd;background:#f4faf6}
+/* 径赛成绩：分/秒快捷输入按钮 */
+.cell-score{display:flex;flex-direction:column;align-items:center;gap:4px}
+.unit-keys{display:flex;gap:6px;justify-content:center}
+.unit-key{border:1px solid var(--line);background:#f7faf8;color:var(--green);border-radius:7px;
+  min-width:26px;height:24px;padding:0 6px;font-size:14px;line-height:1;cursor:pointer;user-select:none}
+.unit-key:active{background:#e3f0e9;transform:scale(.96)}
+@media(max-width:520px){.unit-key{min-width:30px;height:28px;font-size:15px}}
 table.score td.rank{width:44px;text-align:center}
 .rank-badge{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
 .r1{background:#fbe6b4;color:#8a6212} .r2{background:#e8ecef;color:#5c6873} .r3{background:#f3ddcb;color:#95572b}
@@ -752,10 +759,13 @@ function parseScore(raw, kind) {
 function fmtSec(v) {
   if (v == null) return '—';
   if (v >= 60) {
-    let m = Math.floor(v / 60);
-    let s = v - m * 60;
-    if (s >= 59.995) { m += 1; s = 0; }
-    return m + "'" + (s < 10 ? '0' : '') + s.toFixed(2) + '"';
+    // 以百分秒为单位取整，避免浮点误差；显示 分'秒″百分秒
+    let cs = Math.round(v * 100);
+    let m = Math.floor(cs / 6000);
+    let rest = cs - m * 6000;
+    let sec = Math.floor(rest / 100);
+    let frac = rest - sec * 100;
+    return m + "'" + String(sec).padStart(2, '0') + '″' + String(frac).padStart(2, '0');
   }
   return v.toFixed(2) + '"';
 }
@@ -1277,9 +1287,11 @@ function rowHtml(ev, r, i, c) {
         ? `<input class="sc ${filled ? 'filled' : ''}" id="sc${i}" inputmode="numeric" autocomplete="off" ${RO ? 'readonly' : ''}
         placeholder="名次" value="${r.rankManual != null ? r.rankManual : ''}"
         data-score="${r.key}" data-ev="${ev.id}" data-i="${i}" data-rankonly="1" data-prev="${r.rankManual != null ? r.rankManual : ''}">`
-        : `<input class="sc ${filled ? 'filled' : ''}" id="sc${i}" inputmode="decimal" autocomplete="off" ${RO ? 'readonly' : ''}
+        : `<div class="cell-score"><input class="sc ${filled ? 'filled' : ''}" id="sc${i}" inputmode="decimal" autocomplete="off" ${RO ? 'readonly' : ''}
         placeholder="${ev.kind === '田赛' ? '米' : '秒'}" value="${esc(r.raw)}"
-        data-score="${r.key}" data-ev="${ev.id}" data-i="${i}" data-prev="${esc(r.raw)}">`}
+        data-score="${r.key}" data-ev="${ev.id}" data-i="${i}" data-prev="${esc(r.raw)}">${
+          (!RO && ev.kind !== '田赛') ? `<div class="unit-keys"><button type="button" class="unit-key" data-unit="′" data-target="sc${i}" title="分">′</button><button type="button" class="unit-key" data-unit="″" data-target="sc${i}" title="秒">″</button></div>` : ''
+        }</div>`}
     </td>
     <td class="rank" id="rk${i}">${r.rank ? `<span class="rank-badge ${rankCls}">${r.rank}</span>` : '<span class="muted" style="font-size:11px">—</span>'}</td>
     <td class="pts" id="pt${i}">${r.pts ? r.pts : ''}</td>
@@ -1739,6 +1751,23 @@ document.addEventListener('click', e => {
   else if (a === 'print') window.print();
   else if (a === 'sheet-close') closeSheet();
 });
+/* 径赛成绩分/秒快捷按钮：插入到输入框光标处并保存 */
+document.addEventListener('click', e => {
+  const kb = e.target.closest && e.target.closest('[data-unit]');
+  if (!kb) return;
+  const inp = document.getElementById(kb.dataset.target);
+  if (!inp || inp.readOnly) return;
+  e.preventDefault();
+  const sym = kb.dataset.unit;
+  const start = typeof inp.selectionStart === 'number' ? inp.selectionStart : inp.value.length;
+  const end = typeof inp.selectionEnd === 'number' ? inp.selectionEnd : start;
+  inp.value = inp.value.slice(0, start) + sym + inp.value.slice(end);
+  const pos = start + sym.length;
+  inp.focus();
+  try { inp.setSelectionRange(pos, pos); } catch (_) {}
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
 document.addEventListener('input', e => {
   const inp = e.target.closest('[data-score]');
   if (inp) {
