@@ -2181,6 +2181,12 @@ async function xqLoadAllConfig() {
         localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
         console.log('[XQ] Loaded credentials, users:', Object.keys(xqCredentials).length);
       }
+      // 加载使用记录（与凭证分开，避免被整表同步覆盖）
+      if (result.config.xq_used_users && result.config.xq_used_users.data) {
+        xqUsedUsers = result.config.xq_used_users.data || {};
+        localStorage.setItem('xq_used_users', JSON.stringify(xqUsedUsers));
+        console.log('[XQ] Loaded usage records, users:', Object.keys(xqUsedUsers).length);
+      }
       // 如果有 setupTeaching，应用授课分配数据
       if (setupTeaching.length > 0) {
         applyTeachingDataFromSetup();
@@ -4064,6 +4070,10 @@ async function hashPassword(password) {
 // 凭证存储: { "吴胜闯": { passwordHash, role, classes, subject }, ... }
 let xqCredentials = {};
 
+// 使用记录独立于凭证：凭证是整表同步，会把别人写的使用标记冲掉；
+// 这里按教师姓名单独存一格，后端合并后管理员能看到所有人的状态。
+let xqUsedUsers = {};
+
 // 从服务器加载凭证（优先服务器，降级到 localStorage）
 async function xqLoadCredentials() {
   // 先从 localStorage 加载（快速响应）
@@ -4138,20 +4148,52 @@ async function xqSaveCredentials(userNameToUpdate) {
   return { ok: true };
 }
 
-// 是否使用过本系统：登录成功 / 恢复会话 / 扫码登录都会写入 usedAt，随凭证同步到云端
+// 是否使用过本系统：使用记录按姓名单独存，管理员能看到所有教师/工人的状态
 function xqUserUsed(name) {
+  if (!name) return false;
+  if (xqUsedUsers && xqUsedUsers[name]) return true;
+  // 兼容旧数据：以前写在凭证里的 usedAt
   const c = xqCredentials && xqCredentials[name];
   return !!(c && (c.usedAt || c.lastUsedAt));
 }
 async function xqMarkUsed(name) {
   try {
-    if (!name || !xqCredentials || !xqCredentials[name]) return;
-    if (xqCredentials[name].usedAt) return; // 只记首次，避免每次登录都写云端
-    xqCredentials[name].usedAt = new Date().toISOString();
-    localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
-    await xqSaveCredentials(name);
+    if (!name) return;
+    if (xqUsedUsers[name]) return; // 已标记，本地直接返回，不再写云端
+    const at = new Date().toISOString();
+    xqUsedUsers[name] = at;
+    localStorage.setItem('xq_used_users', JSON.stringify(xqUsedUsers));
+    // 只提交自己这一格，后端按姓名合并，不会覆盖别人
+    const result = await xqApi('config', {
+      action: 'set',
+      configKey: 'xq_used_users',
+      configData: { [name]: at },
+      teacherName: name
+    });
+    if (!result || !result.ok) {
+      console.warn('[XQ] Failed to sync usage record:', result && result.error);
+    }
+    // 兼容旧字段，但不再走凭证整表同步，避免冲掉别的标记
+    if (xqCredentials && xqCredentials[name] && !xqCredentials[name].usedAt) {
+      xqCredentials[name].usedAt = at;
+      localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
+    }
   } catch (e) {
-    console.warn('[XQ] Failed to mark credential usage:', e);
+    console.warn('[XQ] Failed to mark usage:', e);
+  }
+}
+// 管理员进入密码管理页时刷新一次，看到其他教师刚产生的记录
+async function xqRefreshUsedUsers() {
+  try {
+    const res = await xqApi('config', { action: 'get' });
+    const data = res && res.ok && res.config && res.config.xq_used_users && res.config.xq_used_users.data;
+    if (data && typeof data === 'object') {
+      xqUsedUsers = data;
+      localStorage.setItem('xq_used_users', JSON.stringify(xqUsedUsers));
+      if (currentPage === 'password-mgmt' && typeof renderPage === 'function') renderPage('password-mgmt');
+    }
+  } catch (e) {
+    console.warn('[XQ] Failed to refresh usage records:', e);
   }
 }
 
@@ -6198,6 +6240,10 @@ function closeMobileSidebar() {
 
 function navigate(pageId) {
   currentPage = pageId;
+  // 实际进入任意页面都算使用过系统；已标记时本地直接返回
+  if (xqCurrentUser && xqCurrentUser.teacherName) xqMarkUsed(xqCurrentUser.teacherName);
+  // 管理员进密码管理页时取一次云端最新使用记录
+  if (pageId === 'password-mgmt') xqRefreshUsedUsers();
   document.querySelectorAll('.sidebar-item').forEach(el => {
     el.classList.toggle('active', el.dataset.page === pageId);
   });
@@ -10795,7 +10841,7 @@ function renderPasswordMgmt() {
         <div style="background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px">
           <div style="font-size:13px;color:var(--warning-dark)">
             <strong>提示：</strong>勾选需要重置密码的人员，点击"重置密码"按钮后，选中人员的密码将被重置为默认密码 <code style="background:#fff;padding:2px 6px;border-radius:4px">123456</code>，下次登录时将要求修改新密码
-            <div style="margin-top:6px;font-size:12px;color:var(--gray-500)"><span style="display:inline-block;width:12px;height:12px;border:2px solid #f59e0b;background:#fffbeb;border-radius:3px;vertical-align:-2px;margin-right:5px"></span>黄色外框表示此人已使用过本系统（登录、恢复会话或自行设置/修改过密码）。</div>
+            <div style="margin-top:6px;font-size:12px;color:var(--gray-500)"><span style="display:inline-block;width:12px;height:12px;border:2px solid #f59e0b;background:#fffbeb;border-radius:3px;vertical-align:-2px;margin-right:5px"></span>黄色外框表示此人已使用过本系统（登录、进入任意页面、恢复会话或自行修改过密码）。</div>
           </div>
         </div>
         ${teacherSection}
@@ -16109,6 +16155,12 @@ try {
   const cached = localStorage.getItem('xq_credentials');
   if (cached) {
     xqCredentials = JSON.parse(cached);
+  }
+} catch (e) {}
+try {
+  const cachedUsed = localStorage.getItem('xq_used_users');
+  if (cachedUsed) {
+    xqUsedUsers = JSON.parse(cachedUsed);
   }
 } catch (e) {}
 
