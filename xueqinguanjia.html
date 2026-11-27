@@ -4138,6 +4138,23 @@ async function xqSaveCredentials(userNameToUpdate) {
   return { ok: true };
 }
 
+// 是否使用过本系统：登录成功 / 恢复会话 / 扫码登录都会写入 usedAt，随凭证同步到云端
+function xqUserUsed(name) {
+  const c = xqCredentials && xqCredentials[name];
+  return !!(c && (c.usedAt || c.lastUsedAt));
+}
+async function xqMarkUsed(name) {
+  try {
+    if (!name || !xqCredentials || !xqCredentials[name]) return;
+    if (xqCredentials[name].usedAt) return; // 只记首次，避免每次登录都写云端
+    xqCredentials[name].usedAt = new Date().toISOString();
+    localStorage.setItem('xq_credentials', JSON.stringify(xqCredentials));
+    await xqSaveCredentials(name);
+  } catch (e) {
+    console.warn('[XQ] Failed to mark credential usage:', e);
+  }
+}
+
 // 检查凭证系统是否已初始化（至少管理员有密码）
 function isCredentialsInitialized() {
   return xqCredentials[XQ_ADMIN_NAME] && xqCredentials[XQ_ADMIN_NAME].passwordHash;
@@ -4615,6 +4632,9 @@ function doLogin() {
     
     // 保存登录状态到 localStorage
     saveSession();
+
+    // 标记该教师已使用过本系统（密码管理页黄色外框）
+    xqMarkUsed(name);
     
     // 启动定期云同步（确保已登录教师能看到班主任的最新修改）
     startPeriodicSync();
@@ -4697,6 +4717,9 @@ function restoreSession() {
     }
     
     console.log('[XQ] Session restored for:', session.user.teacherName);
+
+    // 恢复会话也算使用过本系统
+    xqMarkUsed(session.user.teacherName);
     
     // 启动定期云同步（确保已登录教师能看到班主任的最新修改）
     startPeriodicSync();
@@ -4764,6 +4787,9 @@ function initAppAfterLogin() {
   
   // 启动定期云同步
   startPeriodicSync();
+
+  // 扫码登录也算使用过本系统
+  xqMarkUsed(xqCurrentUser && xqCurrentUser.teacherName);
 
   /* ★ v3.14：登录完成（含恢复会话）后，把上次没推上去的改动补推一次。
      以前这种情况只能靠用户自己想起来点「保存到云端」，一刷新就当没改过。 */
@@ -10708,7 +10734,13 @@ function renderPasswordMgmt() {
       const roleIcon = t.role === 'leader' ? '🔵' :
                        t.role === 'headteacher' ? '🟢' :
                        t.role === 'worker' ? '🔧' : '⚪';
-      html += `<label class="teacher-chip" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--gray-50);border-radius:8px;cursor:pointer;border:1.5px solid var(--gray-200);transition:all 0.15s;user-select:none" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--gray-200)'" onclick="setTimeout(()=>{const cb=this.querySelector('input');if(cb.checked){this.style.borderColor='var(--primary)';this.style.background='var(--primary-bg)'}else{this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50)'}},0)">
+      const used = xqUserUsed(t.name);
+      const baseBorder = used ? '#f59e0b' : 'var(--gray-200)';
+      const baseBg = used ? '#fffbeb' : 'var(--gray-50)';
+      const onBorder = used ? '#d97706' : 'var(--primary)';
+      const onBg = used ? '#fef3c7' : 'var(--primary-bg)';
+      const tip = used ? ' title="使用过本系统"' : '';
+      html += `<label class="teacher-chip"${tip} style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:${baseBg};border-radius:8px;cursor:pointer;border:${used ? '2px' : '1.5px'} solid ${baseBorder};transition:all 0.15s;user-select:none" onmouseover="this.style.borderColor='${used ? '#d97706' : 'var(--primary-light)'}'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='${baseBorder}'" onclick="setTimeout(()=>{const cb=this.querySelector('input');if(cb.checked){this.style.borderColor='${onBorder}';this.style.background='${onBg}'}else{this.style.borderColor='${baseBorder}';this.style.background='${baseBg}'}},0)">
         <input type="checkbox" class="${checkboxClass}" data-name="${t.name}" style="width:15px;height:15px;margin:0;accent-color:var(--primary)" onclick="event.stopPropagation()">
         <span style="font-size:13px;font-weight:500;color:var(--gray-700)">${roleIcon} ${t.name}</span>
         <span style="font-size:11px;color:var(--gray-400)">${t.title}</span>
@@ -10763,6 +10795,7 @@ function renderPasswordMgmt() {
         <div style="background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px">
           <div style="font-size:13px;color:var(--warning-dark)">
             <strong>提示：</strong>勾选需要重置密码的人员，点击"重置密码"按钮后，选中人员的密码将被重置为默认密码 <code style="background:#fff;padding:2px 6px;border-radius:4px">123456</code>，下次登录时将要求修改新密码
+            <div style="margin-top:6px;font-size:12px;color:var(--gray-500)"><span style="display:inline-block;width:12px;height:12px;border:2px solid #f59e0b;background:#fffbeb;border-radius:3px;vertical-align:-2px;margin-right:5px"></span>黄色外框表示此人已使用过本系统（登录、恢复会话或自行设置/修改过密码）。</div>
           </div>
         </div>
         ${teacherSection}
@@ -10786,8 +10819,9 @@ function selectAllTeachers(select) {
         label.style.borderColor = 'var(--primary)';
         label.style.background = 'var(--primary-bg)';
       } else {
-        label.style.borderColor = 'var(--gray-200)';
-        label.style.background = 'var(--gray-50)';
+        const used = xqUserUsed(cb.dataset.name);
+        label.style.borderColor = used ? '#f59e0b' : 'var(--gray-200)';
+        label.style.background = used ? '#fffbeb' : 'var(--gray-50)';
       }
     }
   });
@@ -10802,8 +10836,9 @@ function selectAllWorkers(select) {
         label.style.borderColor = 'var(--primary)';
         label.style.background = 'var(--primary-bg)';
       } else {
-        label.style.borderColor = 'var(--gray-200)';
-        label.style.background = 'var(--gray-50)';
+        const used = xqUserUsed(cb.dataset.name);
+        label.style.borderColor = used ? '#f59e0b' : 'var(--gray-200)';
+        label.style.background = used ? '#fffbeb' : 'var(--gray-50)';
       }
     }
   });
