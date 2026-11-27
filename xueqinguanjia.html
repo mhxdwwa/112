@@ -4182,16 +4182,66 @@ async function xqMarkUsed(name) {
     console.warn('[XQ] Failed to mark usage:', e);
   }
 }
-// 管理员进入密码管理页时刷新一次，看到其他教师刚产生的记录
+// 从云端现有数据补回历史使用者：座位表/班干部/课程表/值日等由教师本人保存，
+// 个人课表按姓名保存，强制改密标记被清除说明本人改过密码——这些都是可靠的使用痕迹。
+function xqCollectUsedEvidence(config) {
+  const out = {};
+  const put = (n, t) => {
+    if (!n || !/^[\u4e00-\u9fa5·]{2,5}$/.test(n)) return;
+    if (!out[n] || (t && t < out[n])) out[n] = t || out[n];
+  };
+  const teacherKeys = /^(seating_|cadres_|class_timetable$|personal_timetable$|discipline$|duty$|repair$|collection$)/;
+  Object.keys(config || {}).forEach(k => {
+    const row = config[k] || {};
+    if (teacherKeys.test(k) && row.updatedBy) put(row.updatedBy, row.updatedAt);
+  });
+  (function walk(o) {
+    if (!o || typeof o !== 'object') return;
+    Object.keys(o).forEach(k => {
+      if (/^[\u4e00-\u9fa5·]{2,5}$/.test(k)) put(k, '');
+      walk(o[k]);
+    });
+  })((config.personal_timetable || {}).data);
+  const creds = (config.credentials || {}).data || {};
+  const batchAt = '2026-11-16T04:42:10.601Z';
+  Object.keys(creds).forEach(n => {
+    const c = creds[n];
+    if (!c || c.mustChangePassword || c.role === 'admin' || c.role === 'leader') return;
+    if (c.updatedAt && c.updatedAt !== batchAt) put(n, c.updatedAt);
+  });
+  return out;
+}
+
+// 管理员进入密码管理页时刷新：拉使用记录 + 自动补回历史痕迹，看到所有用过系统的人
 async function xqRefreshUsedUsers() {
   try {
     const res = await xqApi('config', { action: 'get' });
-    const data = res && res.ok && res.config && res.config.xq_used_users && res.config.xq_used_users.data;
-    if (data && typeof data === 'object') {
-      xqUsedUsers = data;
-      localStorage.setItem('xq_used_users', JSON.stringify(xqUsedUsers));
-      if (currentPage === 'password-mgmt' && typeof renderPage === 'function') renderPage('password-mgmt');
+    const cfg = (res && res.ok && res.config) || {};
+    const data = cfg.xq_used_users && cfg.xq_used_users.data;
+    if (data && typeof data === 'object') xqUsedUsers = data;
+
+    if (typeof isXqAdmin === 'function' && isXqAdmin()) {
+      const evidence = xqCollectUsedEvidence(cfg);
+      const added = {};
+      Object.keys(evidence).forEach(n => {
+        if (!xqUsedUsers[n]) {
+          const t = evidence[n] || new Date().toISOString();
+          xqUsedUsers[n] = t;
+          added[n] = t;
+        }
+      });
+      if (Object.keys(added).length) {
+        const r = await xqApi('config', {
+          action: 'set',
+          configKey: 'xq_used_users',
+          configData: added,
+          teacherName: XQ_ADMIN_NAME
+        });
+        if (!r || !r.ok) console.warn('[XQ] Failed to sync recovered usage:', r && r.error);
+      }
     }
+    localStorage.setItem('xq_used_users', JSON.stringify(xqUsedUsers));
+    if (currentPage === 'password-mgmt' && typeof renderPage === 'function') renderPage('password-mgmt');
   } catch (e) {
     console.warn('[XQ] Failed to refresh usage records:', e);
   }
