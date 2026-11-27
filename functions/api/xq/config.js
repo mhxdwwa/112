@@ -32,7 +32,7 @@ function isTeacherAllowedKey(key) {
   if (!key) return false;
   if (key.startsWith('seating_') || key.startsWith('cadres_')) return true;
   // 教师可以保存课程表、纪律留言、值日安排、维修申报、收集数据
-  const teacherAllowedKeys = ['class_timetable', 'personal_timetable', 'discipline', 'discipline_hidden', 'duty', 'repair', 'collection', 'user_links'];
+  const teacherAllowedKeys = ['class_timetable', 'personal_timetable', 'discipline', 'discipline_hidden', 'duty', 'repair', 'collection', 'user_links', 'xq_used_users'];
   return teacherAllowedKeys.includes(key);
 }
 
@@ -138,6 +138,17 @@ export const onRequestPost = async ({ request, env }) => {
       }
     }
 
+    /* 使用记录：所有教师/工人共用一条记录（{姓名: 首次使用时间}）。
+       谁使用只写自己那一格，按姓名合并，不能覆盖别人；管理员同样按姓名合并。 */
+    if (configKey === 'xq_used_users' && teacherName && configData && typeof configData === 'object') {
+      const existUsed = await sbSelect(env, 'xq_school_config', 'config_data', 'config_key=eq.xq_used_users');
+      const allUsed = (existUsed.data && existUsed.data[0] && existUsed.data[0].config_data) || {};
+      dataToSave = Object.assign({}, allUsed);
+      Object.keys(configData).forEach(k => {
+        if (isAdmin(body) || k === teacherName) dataToSave[k] = configData[k];
+      });
+    }
+
     const updateResult = await sbUpdate(
       env, 
       'xq_school_config', 
@@ -181,11 +192,20 @@ export const onRequestPost = async ({ request, env }) => {
 
     let successCount = 0;
     for (const [key, data] of Object.entries(configs)) {
+      let dataToSave = data;
+      if (key === 'xq_used_users' && teacherName && data && typeof data === 'object') {
+        const existUsed = await sbSelect(env, 'xq_school_config', 'config_data', 'config_key=eq.xq_used_users');
+        const allUsed = (existUsed.data && existUsed.data[0] && existUsed.data[0].config_data) || {};
+        dataToSave = Object.assign({}, allUsed);
+        Object.keys(data).forEach(k => {
+          if (isAdmin(body) || k === teacherName) dataToSave[k] = data[k];
+        });
+      }
       const updateResult = await sbUpdate(
         env,
         'xq_school_config',
         { 
-          config_data: data, 
+          config_data: dataToSave, 
           updated_by_name: teacherName,
           updated_at: new Date().toISOString()
         },
@@ -195,7 +215,7 @@ export const onRequestPost = async ({ request, env }) => {
       if (updateResult.error || !updateResult.data || updateResult.data.length === 0) {
         await sbInsert(env, 'xq_school_config', [{
           config_key: key,
-          config_data: data,
+          config_data: dataToSave,
           updated_by_name: teacherName
         }]);
       }
